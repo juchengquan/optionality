@@ -1,0 +1,67 @@
+notification:
+  gmail:
+    user: "your_address@gmail.com"
+    password: "your gmail app password" # get your Google app password  here: https://myaccount.google.com/apppasswords
+    subject: "💰 Options Holding Report"
+    from_address: "your_address@gmail.com"
+    to_address: ["your_address@gmail.com"]
+  file:
+    file_path: "./output_holdings.html"
+
+code_information:
+    type: index
+    name: SPX
+    market: US
+
+option_holdings:
+- strategy: icon_condor
+  strike_date: "2025-03-31"
+  volume: 5
+  entry_price: -2.5
+  warning_threshold:
+    delta: 0.40
+
+  options: 
+  - type: PUT
+    direction: long
+    strike_price: 5500
+  - type: PUT
+    direction: short
+    strike_price: 5505
+  - type: CALL
+    direction: short
+    strike_price: 5700
+  - type: CALL
+    direction: long
+    strike_price: 5705
+
+- strategy: call_spread
+  strike_date: "2025-03-31"
+  volume: 10
+  entry_price: -1.2
+  warning_threshold:
+    delta: 0.55
+
+  options: 
+  - type: CALL
+    direction: short
+    strike_price: 6200
+  - type: CALL
+    direction: long
+    strike_price: 6100
+
+- strategy: put_spread
+  strike_date: "2025-04-04"
+  volume: 5
+  entry_price: -1.45
+  warning_threshold:
+    delta: 0.35
+
+  options: 
+  - type: PUT
+    direction: long
+    strike_price: 5525
+  - type: PUT
+    direction: short
+    strike_price: 5625
+  

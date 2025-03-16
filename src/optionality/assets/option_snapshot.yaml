@@ -1,0 +1,55 @@
+get_option_chain:
+- name
+# - lot_size
+# - stock_type
+- option_type
+# - stock_owner
+# - strike_time
+- strike_price
+# - suspension
+# - stock_id  
+# - index_option_type
+- code
+
+get_market_snapshot:
+# - name
+# - update_time
+# - last_price
+# - open_price
+# - high_price
+# - low_price
+# - prev_close_price
+# - volume
+- option_delta
+- option_implied_volatility
+
+- ask_price
+- bid_price
+# - ask_vol
+# - bid_vol
+# - amplitude
+# - avg_price
+# - bid_ask_ratio
+# - volume_ratio
+# - highest52weeks_price
+# - lowest52weeks_price
+# - highest_history_price
+# - lowest_history_price
+# - close_price_5min
+# - after_volume
+# - after_turnover
+
+# - option_valid
+# - option_type
+# - strike_time
+# - option_strike_price
+# - option_contract_size
+# - option_open_interest
+
+# - option_premium
+- option_gamma
+- option_vega
+- option_theta
+- option_rho
+
+- code

@@ -1,0 +1,39 @@
+[build-system]
+requires = [
+    "setuptools",
+    "wheel",
+]
+build-backend="setuptools.build_meta"
+
+[project]
+name = "optionality"
+version = "0.0.1"
+requires-python = ">=3.11"
+authors = [
+    {name="juchengquan"}
+]
+classifiers = [
+    "Protramming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT LIcense",
+    "Operation System :: OS Independent",
+]
+
+dependencies = [
+    "yfinance",
+    "tqdm",
+    "moomoo-api",
+    "pandas >= 2",
+    "PyYAML >= 6",
+    "pydantic[email]"
+]
+
+[project.optional-dependencies]
+all = []
+
+[tool.setuptools]
+packages = [
+    "optionality",
+]
+
+[tool.setuptools.package-dir]
+"optionality" = "src/optionality"

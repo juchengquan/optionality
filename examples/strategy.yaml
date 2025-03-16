@@ -1,0 +1,36 @@
+notification:
+  gmail:
+    user: "your_address@gmail.com"
+    password: "your gmail app password" # get your Google app password  here: https://myaccount.google.com/apppasswords
+    subject: "💰 Options Holding Report"
+    from_address: "your_address@gmail.com"
+    to_address: ["your_address@gmail.com"]
+  file:
+    file_path: "./output_holdings.html"
+
+code_information:
+  type: index
+  name: SPX
+  market: US
+
+option_strategy:
+  strategy: icon_condor
+
+  expiry_date_distance:
+    min: 5
+    max: 20
+  
+  options:
+  - option_type: PUT
+    filter:
+      delta_min: -0.15
+      delta_max: -0.05
+    stride: 25
+
+  - option_type: CALL
+    filter:
+      delta_min: 0.05
+      delta_max: 0.15
+    stride: 25
+
+
