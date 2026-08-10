@@ -107,16 +107,7 @@ def _error_text(err: Exception) -> str:
     return str(err)
 
 
-@router.get("")
-def ui_dashboard(
-    request: Request,
-    session: SessionDep,
-    settings: SettingsDep,
-    session_factory: Annotated[object, Depends(get_session_factory)],
-    sweeper: Annotated[object, Depends(get_sweeper)],
-    worker: Annotated[object, Depends(get_worker)],
-    error: str | None = None,
-):
+def _live_context(request: Request, session, settings, session_factory, sweeper, worker) -> dict:
     quotes, quotes_error = [], None
     try:
         quotes = watchlist_quotes(session_factory, settings, sweeper.fetcher, include_combos=True)
@@ -133,20 +124,44 @@ def ui_dashboard(
         "failures": sweeper.consecutive_failures,
         "queue": worker.queue_depth(),
     }
-    response = templates.TemplateResponse(
-        request,
-        "ui.html",
-        {
-            "rows": _quote_rows(quotes),
-            "muted": muted,
-            "fields": UI_FIELDS,
-            "fetched": fetched,
-            "health": health,
-            "error": error,
-            "quotes_error": quotes_error,
-            "root_path": request.scope.get("root_path", ""),
-        },
-    )
+    return {
+        "rows": _quote_rows(quotes),
+        "muted": muted,
+        "fetched": fetched,
+        "health": health,
+        "quotes_error": quotes_error,
+        "root_path": request.scope.get("root_path", ""),
+    }
+
+
+@router.get("")
+def ui_dashboard(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    session_factory: Annotated[object, Depends(get_session_factory)],
+    sweeper: Annotated[object, Depends(get_sweeper)],
+    worker: Annotated[object, Depends(get_worker)],
+    error: str | None = None,
+):
+    context = _live_context(request, session, settings, session_factory, sweeper, worker)
+    context.update({"fields": UI_FIELDS, "error": error})
+    response = templates.TemplateResponse(request, "ui.html", context)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@router.get("/table")
+def ui_table_fragment(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    session_factory: Annotated[object, Depends(get_session_factory)],
+    sweeper: Annotated[object, Depends(get_sweeper)],
+    worker: Annotated[object, Depends(get_worker)],
+):
+    context = _live_context(request, session, settings, session_factory, sweeper, worker)
+    response = templates.TemplateResponse(request, "ui_table.html", context)
     response.headers["Cache-Control"] = "no-store"
     return response
 
