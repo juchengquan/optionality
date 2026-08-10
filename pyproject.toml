@@ -43,5 +43,9 @@ dev = [
 [tool.ruff]
 line-length = 120
 
+[tool.ruff.lint.per-file-ignores]
+# the worker's job is to survive any job failure and record it; blind catches are the design
+"src/optionality/service/worker.py" = ["BLE001"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
