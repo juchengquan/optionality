@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from sqlalchemy import select
 
+from optionality.apis.aux import build_spx_code
 from optionality.core import fetch_snapshot
 from optionality.notification.telegram import send_telegram_message
 from optionality.service.models import Monitor, utcnow
@@ -20,10 +21,34 @@ DEGRADED_AFTER = 5
 WATCHLIST_ORDER = (Monitor.option_type, Monitor.strike_date, Monitor.strike)
 
 
+def monitor_leg_codes(monitor: Monitor) -> list[str]:
+    if not monitor.legs:
+        return [monitor.code]
+    return [build_spx_code(monitor.strike_date, leg["option_type"], leg["strike"]) for leg in monitor.legs]
+
+
+def monitor_value(monitor: Monitor, by_code: dict) -> float | None:
+    """Signed sum over legs; None if ANY leg is missing — no partial sums, ever."""
+    if not monitor.legs:
+        record = by_code.get(monitor.code)
+        value = record.get(monitor.field) if record else None
+        return float(value) if value is not None else None
+    total = 0.0
+    for leg, code in zip(monitor.legs, monitor_leg_codes(monitor), strict=True):
+        record = by_code.get(code)
+        value = record.get(monitor.field) if record else None
+        if value is None:
+            return None
+        total += leg["sign"] * value
+    return total
+
+
 def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot) -> list[dict]:
     """Live snapshot for every enabled monitor — one API call for the whole watchlist."""
     with session_factory() as session:
-        monitors = session.scalars(select(Monitor).where(Monitor.enabled).order_by(*WATCHLIST_ORDER)).all()
+        monitors = session.scalars(
+            select(Monitor).where(Monitor.enabled, Monitor.legs.is_(None)).order_by(*WATCHLIST_ORDER)
+        ).all()
     if not monitors:
         return []
     codes = list({m.code for m in monitors})
@@ -84,7 +109,7 @@ class MonitorSweeper:
             self._record_success()
             return
 
-        codes = list({m.code for m in active})
+        codes = sorted({code for m in active for code in monitor_leg_codes(m)})
         try:
             records = self.fetcher(codes, opend_host=self.settings.opend_host, opend_port=self.settings.opend_port)
         except Exception:
@@ -97,17 +122,17 @@ class MonitorSweeper:
         now = utcnow()
         with self.session_factory() as session:
             for monitor in active:
-                record = by_code.get(monitor.code)
-                value = record.get(monitor.field) if record else None
+                value = monitor_value(monitor, by_code)
                 if value is None:
-                    logger.warning("no %s for %s in snapshot", monitor.field, monitor.code)
+                    logger.warning("no complete %s for %s in snapshot", monitor.field, monitor.code)
                     continue
 
                 db_monitor = session.get(Monitor, monitor.id)
                 db_monitor.last_value = float(value)
                 db_monitor.last_checked_at = now
 
-                name = record.get("name") or monitor.code
+                record = by_code.get(monitor.code)
+                name = (record.get("name") if record else None) or monitor.code
                 above = monitor.direction != "below"
                 breached = abs(value) >= monitor.threshold if above else abs(value) <= monitor.threshold
                 if above:

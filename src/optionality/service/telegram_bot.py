@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.core import fetch_snapshot
 from optionality.service.models import Monitor
-from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
+from optionality.service.monitor import WATCHLIST_ORDER, monitor_leg_codes, watchlist_quotes
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time_short
 
@@ -23,7 +23,10 @@ HELP_TEXT = """Commands:
 /greeks — live delta/gamma/theta for every watched code
 /vol — live IV/vega for every watched code
 /watch <date> <CALL|PUT> <strike> <threshold> [field] [above|below] — add a monitor
-/unwatch <code, id prefix, or contract like 260918 C8100> — remove a monitor
+/watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below] — watch a combo (e.g. a condor)
+/unwatch <name, code, id prefix, or contract like 260918 C8100> — remove a monitor
+/combo <name> — per-leg breakdown of a combo
+/threshold <name or contract> <value> — change a monitor's threshold
 /snapshot <date> <CALL|PUT> <strike> — live quote
 (dates: YYYY-MM-DD or YYYYMMDD)
 /health — service status
@@ -66,7 +69,10 @@ BOT_COMMANDS = [
     {"command": "greeks", "description": "Live delta/gamma/theta for every watched code"},
     {"command": "vol", "description": "Live IV/vega for every watched code"},
     {"command": "watch", "description": "Add a monitor: DATE CALL|PUT strike threshold"},
-    {"command": "unwatch", "description": "Remove a monitor by code or id prefix"},
+    {"command": "watchcombo", "description": "Watch a combo: NAME DATE ±Cstrike ±Pstrike ... threshold"},
+    {"command": "unwatch", "description": "Remove a monitor by name, code, or id prefix"},
+    {"command": "combo", "description": "Per-leg breakdown of a combo"},
+    {"command": "threshold", "description": "Change a monitor's threshold: NAME|contract value"},
     {"command": "snapshot", "description": "Live quote: DATE CALL|PUT strike"},
     {"command": "health", "description": "Queue and sweep status"},
     {"command": "help", "description": "Show usage"},
@@ -166,8 +172,14 @@ class TelegramBot(threading.Thread):
             return self._cmd_vol()
         if command == "watch":
             return self._cmd_watch(args)
+        if command == "watchcombo":
+            return self._cmd_watchcombo(args)
+        if command == "combo":
+            return self._cmd_combo(args)
         if command == "unwatch":
             return self._cmd_unwatch(args)
+        if command == "threshold":
+            return self._cmd_threshold(args)
         if command == "snapshot":
             return self._cmd_snapshot(args)
         if command == "health":
@@ -289,19 +301,128 @@ class TelegramBot(threading.Thread):
         sign = "≤" if direction == "below" else "≥"
         return f"Watching {code}: alarm when abs({field}) {sign} {threshold}"
 
-    def _cmd_unwatch(self, args: list[str]) -> str:
+    _LEG_TOKEN = re.compile(r"^([+-])([CP])(\d+(?:\.\d+)?)$")
+
+    def _cmd_watchcombo(self, args: list[str]) -> str:
+        usage = "Usage: /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below]"
+        if len(args) < 5:
+            return usage
+        name = args[0]
+        try:
+            strike_date = normalize_strike_date(args[1])
+        except ValueError:
+            return usage
+
+        legs, i = [], 2
+        while i < len(args) and (m := self._LEG_TOKEN.match(args[i].upper())):
+            legs.append(
+                {
+                    "sign": 1 if m.group(1) == "+" else -1,
+                    "option_type": "CALL" if m.group(2) == "C" else "PUT",
+                    "strike": float(m.group(3)),
+                }
+            )
+            i += 1
+        if len(legs) < 2 or i >= len(args):
+            return usage
+        try:
+            threshold = float(args[i])
+        except ValueError:
+            return usage
+        field, direction = "mid_price", "above"
+        for extra in args[i + 1 : i + 3]:
+            if extra.lower() in ("above", "below"):
+                direction = extra.lower()
+            else:
+                field = extra
+
+        with self.session_factory() as session:
+            if session.scalar(select(Monitor).where(Monitor.code == name, Monitor.field == field)):
+                return f"Already watching {name} ({field})."
+            session.add(
+                Monitor(
+                    code=name,
+                    strike_date=strike_date,
+                    option_type="CMB",
+                    strike=0.0,
+                    field=field,
+                    threshold=threshold,
+                    direction=direction,
+                    legs=legs,
+                )
+            )
+            session.commit()
+        sign = "≤" if direction == "below" else "≥"
+        return f"Watching combo {name} ({len(legs)} legs): alarm when abs({field}) {sign} {threshold}"
+
+    def _cmd_combo(self, args: list[str]) -> str:
         if not args:
-            return "Usage: /unwatch <code, id prefix, or contract like 260918 C8100>"
+            return "Usage: /combo <name>"
+        with self.session_factory() as session:
+            monitor = session.scalar(select(Monitor).where(Monitor.code == args[0], Monitor.legs.is_not(None)))
+        if monitor is None:
+            return f"No combo named '{args[0]}'."
+        codes = monitor_leg_codes(monitor)
+        try:
+            records = self.fetcher(
+                sorted(set(codes)), opend_host=self.settings.opend_host, opend_port=self.settings.opend_port
+            )
+        except Exception as err:
+            return f"Combo failed: {err}"
+        by_code = {r.get("code"): r for r in records}
+
+        rows, total, complete = [], 0.0, True
+        for leg, code in zip(monitor.legs, codes, strict=True):
+            record = by_code.get(code)
+            value = record.get(monitor.field) if record else None
+            sign_str = "+" if leg["sign"] > 0 else "-"
+            if value is None:
+                rows.append([sign_str, _short_code(code), "—"])
+                complete = False
+            else:
+                total += leg["sign"] * value
+                rows.append([sign_str, _short_code(code), _fmt_value(monitor.field, value)])
+        total_cell = _fmt_value(monitor.field, round(total, 4)) if complete else "incomplete"
+        rows.append(["", "total", total_cell])
+        return _table(["", "leg", _FIELD_SHORT.get(monitor.field, monitor.field)], rows)
+
+    @staticmethod
+    def _identifier_conditions(args: list[str]):
         token = args[0]
         joined = "".join(args).upper()
-        conditions = [Monitor.code == joined, Monitor.id.startswith(token)]
+        conditions = [Monitor.code == joined, Monitor.code == token, Monitor.id.startswith(token)]
         short = re.fullmatch(r"(\d{6})([CP])(\d+)", joined)
         if short:
             conditions.append(Monitor.code == f"US.SPXW{short.group(1)}{short.group(2)}{short.group(3)}000")
+        return conditions
+
+    def _cmd_threshold(self, args: list[str]) -> str:
+        if len(args) < 2:
+            return "Usage: /threshold <name, code, id prefix, or contract> <value>"
+        try:
+            value = float(args[-1])
+        except ValueError:
+            return "Usage: /threshold <name, code, id prefix, or contract> <value>"
         with self.session_factory() as session:
-            matches = session.scalars(select(Monitor).where(or_(*conditions))).all()
+            matches = session.scalars(select(Monitor).where(or_(*self._identifier_conditions(args[:-1])))).all()
             if not matches:
-                return f"No monitor matches '{token}'."
+                return f"No monitor matches '{' '.join(args[:-1])}'."
+            if len(matches) > 1:
+                return "Ambiguous — matches: " + ", ".join(m.code for m in matches)
+            monitor = matches[0]
+            monitor.threshold = value
+            code, direction, field = monitor.code, monitor.direction, monitor.field
+            session.commit()
+        sign = "≤" if direction == "below" else "≥"
+        return f"{code}: alarm when abs({field}) {sign} {value}"
+
+    def _cmd_unwatch(self, args: list[str]) -> str:
+        if not args:
+            return "Usage: /unwatch <name, code, id prefix, or contract like 260918 C8100>"
+        with self.session_factory() as session:
+            matches = session.scalars(select(Monitor).where(or_(*self._identifier_conditions(args)))).all()
+            if not matches:
+                return f"No monitor matches '{' '.join(args)}'."
             if len(matches) > 1:
                 return "Ambiguous — matches: " + ", ".join(m.id[:8] for m in matches)
             code = matches[0].code

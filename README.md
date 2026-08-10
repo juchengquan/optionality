@@ -99,7 +99,13 @@ A background sweep polls the whole watchlist every `MONITOR_INTERVAL_SECONDS` (d
 `abs(value) >= threshold` (direction `above`, the default) or `abs(value) <= threshold` (direction `below` —
 e.g. a profit-target alert when a spread's `mid_price` decays to your exit level), and re-arm after the value
 retreats 5% past the threshold — one Telegram message per episode, plus a recovery message. Run failures also
-alert via Telegram (after the automatic retry), with gmail as an optional additional channel per config. Monitors on expired contracts are auto-disabled. If 5 consecutive sweeps fail
+alert via Telegram (after the automatic retry), with gmail as an optional additional channel per config.
+
+**Combo monitors** watch a signed sum over multiple legs (single expiry): value = Σ sign×field per leg, with the
+same abs/direction/hysteresis semantics. Sign conventions: for a close-cost profit target put `+` on legs you
+sold and `-` on legs you bought (default field `mid_price`); for a net-delta tilt watch use position signs
+(`-` shorts, `+` longs) with field `option_delta` and direction `above`. If any leg is missing from a sweep the
+combo is skipped — no partial sums. All legs join the same single snapshot call per sweep. Monitors on expired contracts are auto-disabled. If 5 consecutive sweeps fail
 (e.g. OpenD logged out), you get one "monitoring degraded" Telegram alert and a recovery note when it heals;
 sweep state is visible under `monitor` in `/health`.
 
@@ -116,6 +122,8 @@ only — messages from any other chat are ignored). Available commands:
 /greeks                                        live delta, gamma, theta
 /vol                                           live IV, vega
 /watch 2026-12-18 CALL 6500 0.6 [field] [above|below]   add a monitor (dates: YYYY-MM-DD or YYYYMMDD)
+/watchcombo sep-condor 20260918 +C8100 -C8150 10 below  watch a combo: signed sum over legs (single expiry)
+/combo sep-condor                                       per-leg breakdown with the signed total
 /unwatch 261218 C6500                          remove (by contract, code, or id prefix)
 /snapshot 2026-12-18 CALL 6500                 live quote for any contract
 /health                                        queue + sweep status

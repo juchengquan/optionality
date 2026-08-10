@@ -1,7 +1,7 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,37 @@ class MonitorIn(BaseModel):
             raise ValueError(f"invalid strike_date '{value}': use YYYY-MM-DD or YYYYMMDD") from err
 
 
+class ComboLegIn(BaseModel):
+    sign: Literal[1, -1]
+    option_type: Literal["CALL", "PUT"]
+    strike: float
+
+
+class ComboMonitorIn(BaseModel):
+    name: str
+    strike_date: str
+    legs: list[ComboLegIn] = Field(min_length=2)
+    field: str = "mid_price"
+    threshold: float
+    direction: Literal["above", "below"] = "above"
+    enabled: bool = True
+
+    @field_validator("strike_date")
+    @classmethod
+    def _normalize_date(cls, value: str) -> str:
+        try:
+            return normalize_strike_date(value)
+        except ValueError as err:
+            raise ValueError(f"invalid strike_date '{value}': use YYYY-MM-DD or YYYYMMDD") from err
+
+
+class MonitorPatch(BaseModel):
+    threshold: float | None = None
+    direction: Literal["above", "below"] | None = None
+    field: str | None = None
+    enabled: bool | None = None
+
+
 def _build_code(payload: MonitorIn) -> str:
     try:
         return build_spx_code(payload.strike_date, payload.option_type, payload.strike)
@@ -53,6 +84,7 @@ def _to_dict(row: Monitor, tz: str) -> dict:
         "field": row.field,
         "threshold": row.threshold,
         "direction": row.direction,
+        "legs": row.legs,
         "enabled": row.enabled,
         "triggered": row.triggered,
         "last_value": row.last_value,
@@ -99,11 +131,33 @@ def create_monitor(payload: MonitorIn, session: SessionDep, settings: SettingsDe
     return _to_dict(row, settings.display_tz)
 
 
+@router.post("/combo", status_code=201)
+def create_combo_monitor(payload: ComboMonitorIn, session: SessionDep, settings: SettingsDep):
+    if session.scalar(select(Monitor).where(Monitor.code == payload.name, Monitor.field == payload.field)):
+        raise HTTPException(status_code=409, detail=f"monitor for ({payload.name}, {payload.field}) already exists")
+    row = Monitor(
+        code=payload.name,
+        strike_date=payload.strike_date,
+        option_type="CMB",
+        strike=0.0,
+        field=payload.field,
+        threshold=payload.threshold,
+        direction=payload.direction,
+        legs=[leg.model_dump() for leg in payload.legs],
+        enabled=payload.enabled,
+    )
+    session.add(row)
+    session.commit()
+    return _to_dict(row, settings.display_tz)
+
+
 @router.put("/{monitor_id}")
 def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep, settings: SettingsDep):
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")
+    if row.legs:
+        raise HTTPException(status_code=422, detail="combo monitors cannot be edited in place; delete and recreate")
     code = _build_code(payload)
     conflict = session.scalar(
         select(Monitor).where(Monitor.code == code, Monitor.field == payload.field, Monitor.id != monitor_id)
@@ -118,6 +172,27 @@ def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep, set
     row.threshold = payload.threshold
     row.direction = payload.direction
     row.enabled = payload.enabled
+    session.commit()
+    return _to_dict(row, settings.display_tz)
+
+
+@router.patch("/{monitor_id}")
+def patch_monitor(monitor_id: str, payload: MonitorPatch, session: SessionDep, settings: SettingsDep):
+    changes = payload.model_dump(exclude_none=True)
+    if not changes:
+        raise HTTPException(status_code=422, detail="nothing to update")
+    row = session.get(Monitor, monitor_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    new_field = changes.get("field", row.field)
+    if new_field != row.field:
+        conflict = session.scalar(
+            select(Monitor).where(Monitor.code == row.code, Monitor.field == new_field, Monitor.id != monitor_id)
+        )
+        if conflict:
+            raise HTTPException(status_code=409, detail=f"monitor for ({row.code}, {new_field}) already exists")
+    for key, value in changes.items():
+        setattr(row, key, value)
     session.commit()
     return _to_dict(row, settings.display_tz)
 

@@ -80,6 +80,71 @@ def test_monitors_quotes_endpoint(client_factory):
     assert quotes[0]["threshold"] == 0.6
 
 
+COMBO_PAYLOAD = {
+    "name": "sep-condor",
+    "legs": [
+        {"sign": 1, "option_type": "CALL", "strike": 8100},
+        {"sign": -1, "option_type": "CALL", "strike": 8150},
+    ],
+    "threshold": 10,
+    "direction": "below",
+}
+
+
+def test_combo_monitor_create_and_guardrails(client_factory):
+    client = client_factory()
+    payload = {**COMBO_PAYLOAD, "strike_date": _future()}
+
+    created = client.post("/monitors/combo", json=payload, headers=AUTH)
+    assert created.status_code == 201
+    data = created.json()
+    assert data["code"] == "sep-condor"
+    assert data["field"] == "mid_price"  # combo default field
+    assert len(data["legs"]) == 2
+
+    assert client.post("/monitors/combo", json=payload, headers=AUTH).status_code == 409  # duplicate name
+
+    one_leg = {**payload, "name": "x", "legs": payload["legs"][:1]}
+    assert client.post("/monitors/combo", json=one_leg, headers=AUTH).status_code == 422  # min 2 legs
+
+    single_leg_payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    mid = data["id"]
+    assert client.put(f"/monitors/{mid}", json=single_leg_payload, headers=AUTH).status_code == 422  # no in-place edit
+
+    listed = client.get("/monitors", headers=AUTH).json()
+    assert any(m["code"] == "sep-condor" for m in listed)
+    assert client.delete(f"/monitors/{mid}", headers=AUTH).status_code == 204
+
+
+def test_patch_monitor_safe_fields(client_factory):
+    client = client_factory()
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    mid = client.post("/monitors", json=payload, headers=AUTH).json()["id"]
+
+    patched = client.patch(f"/monitors/{mid}", json={"threshold": 0.5, "direction": "below"}, headers=AUTH)
+    assert patched.status_code == 200
+    assert patched.json()["threshold"] == 0.5
+    assert patched.json()["direction"] == "below"
+
+    assert client.patch(f"/monitors/{mid}", json={}, headers=AUTH).status_code == 422  # nothing to update
+    assert client.patch("/monitors/nope", json={"threshold": 1}, headers=AUTH).status_code == 404
+
+    combo = client.post("/monitors/combo", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH).json()
+    combo_patch = client.patch(f"/monitors/{combo['id']}", json={"threshold": 25}, headers=AUTH)
+    assert combo_patch.status_code == 200  # combos ARE patchable for safe fields
+    assert combo_patch.json()["threshold"] == 25
+    assert combo_patch.json()["legs"] == combo["legs"]  # legs untouched
+
+
+def test_patch_field_conflict(client_factory):
+    client = client_factory()
+    base = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    client.post("/monitors", json=base, headers=AUTH)
+    other = client.post("/monitors", json={**base, "field": "mid_price", "threshold": 30}, headers=AUTH).json()
+    resp = client.patch(f"/monitors/{other['id']}", json={"field": "option_delta"}, headers=AUTH)
+    assert resp.status_code == 409  # (code, option_delta) already taken
+
+
 def test_direction_below_monitor(client_factory):
     client = client_factory()
     payload = {

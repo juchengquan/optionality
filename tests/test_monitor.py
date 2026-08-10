@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import select
 
 from optionality.service.models import Monitor
@@ -177,6 +178,88 @@ def test_missing_field_is_skipped_not_crashed(session_factory):
     assert recorder.messages == []
     with session_factory() as s:
         assert s.get(Monitor, mid).last_value is None
+
+
+def _mk_combo(session_factory, **kw):
+    defaults = {
+        "code": "sep-condor",
+        "strike_date": _future(),
+        "option_type": "CMB",
+        "strike": 0.0,
+        "field": "mid_price",
+        "threshold": 10.0,
+        "direction": "below",
+        "legs": [
+            {"sign": 1, "option_type": "CALL", "strike": 8100.0},
+            {"sign": -1, "option_type": "CALL", "strike": 8150.0},
+        ],
+    }
+    defaults.update(kw)
+    with session_factory() as s:
+        m = Monitor(**defaults)
+        s.add(m)
+        s.commit()
+        return m.id
+
+
+def test_combo_signed_sum_breach_and_single_fetch(session_factory):
+    from optionality.apis.aux import build_spx_code
+
+    mid = _mk_combo(session_factory)
+    date = _future()
+    c8100, c8150 = build_spx_code(date, "CALL", 8100), build_spx_code(date, "CALL", 8150)
+    fetched = []
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        fetched.append(sorted(codes))
+        return [
+            {"code": c8100, "mid_price": 26.4},
+            {"code": c8150, "mid_price": 19.25},
+        ]
+
+    recorder = Recorder()
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
+    sweeper.sweep()
+
+    assert len(fetched) == 1  # both legs in ONE snapshot call
+    assert sorted([c8100, c8150]) == fetched[0]
+    assert len(recorder.messages) == 1  # 26.4 - 19.25 = 7.15 <= 10: breach
+    assert "sep-condor" in recorder.messages[0]
+    assert "7.15" in recorder.messages[0]
+    with session_factory() as s:
+        m = s.get(Monitor, mid)
+        assert m.triggered is True
+        assert m.last_value == pytest.approx(7.15)
+
+
+def test_combo_skipped_when_any_leg_missing(session_factory):
+    from optionality.apis.aux import build_spx_code
+
+    mid = _mk_combo(session_factory)
+    c8100 = build_spx_code(_future(), "CALL", 8100)
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c8100, "mid_price": 26.4}]  # 8150 leg missing entirely
+
+    recorder = Recorder()
+    MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder).sweep()
+
+    assert recorder.messages == []  # no partial sums, no alarm
+    with session_factory() as s:
+        m = s.get(Monitor, mid)
+        assert m.last_value is None
+        assert m.triggered is False
+
+
+def test_watchlist_quotes_excludes_combos(session_factory):
+    _mk_monitor(session_factory)
+    _mk_combo(session_factory)
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_delta": 0.1} for c in codes]
+
+    quotes = watchlist_quotes(session_factory, SETTINGS, fetcher)
+    assert [q["code"] for q in quotes] == [CODE]  # combo absent from single-leg tables
 
 
 def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
