@@ -37,6 +37,17 @@ def test_monitor_crud_roundtrip(client_factory):
     assert client.get("/monitors", headers=AUTH).json() == []
 
 
+def test_list_ordered_calls_then_puts_by_date(client_factory):
+    client = client_factory()
+    for payload in [
+        {"strike_date": _future(), "option_type": "PUT", "strike": 6425, "threshold": 0.5},
+        {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6},
+    ]:
+        client.post("/monitors", json=payload, headers=AUTH)
+    listed = client.get("/monitors", headers=AUTH).json()
+    assert [m["option_type"] for m in listed] == ["CALL", "PUT"]
+
+
 def test_compact_date_is_normalized_to_dashed(client_factory):
     client = client_factory()
     compact = _future().replace("-", "")

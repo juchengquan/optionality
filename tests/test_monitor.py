@@ -168,6 +168,17 @@ def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
     assert quotes[0]["snapshot"]["option_delta"] == 0.91
 
 
+def test_watchlist_quotes_ordered_by_type_then_date(session_factory):
+    near = (datetime.now(UTC).date() + timedelta(days=10)).isoformat()
+    far = (datetime.now(UTC).date() + timedelta(days=40)).isoformat()
+    _mk_monitor(session_factory, code="P-NEAR", option_type="PUT", strike_date=near)
+    _mk_monitor(session_factory, code="C-FAR", option_type="CALL", strike_date=far)
+    _mk_monitor(session_factory, code="C-NEAR", option_type="CALL", strike_date=near)
+
+    quotes = watchlist_quotes(session_factory, SETTINGS, lambda codes, opend_host=None, opend_port=None: [])
+    assert [q["code"] for q in quotes] == ["C-NEAR", "C-FAR", "P-NEAR"]
+
+
 def test_watchlist_quotes_empty_without_fetch(session_factory):
     calls = []
 

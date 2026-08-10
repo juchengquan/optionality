@@ -144,6 +144,18 @@ def test_snapshot_command_uses_fetcher(session_factory):
     assert "0.512345" not in api.sent[-1]  # rounded to three decimals, not raw
 
 
+def test_monitors_ordered_calls_then_puts_by_date(session_factory):
+    bot, api = _make_bot(session_factory)
+    far = (datetime.now(UTC).date() + timedelta(days=40)).isoformat()
+    bot.handle_update(_update(f"/watch {_future()} PUT 6425 0.5"))
+    bot.handle_update(_update(f"/watch {far} CALL 8100 0.6"))
+    bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
+    bot.handle_update(_update("/monitors"))
+    reply = api.sent[-1]
+    near_call, far_call, put = reply.index("C6500"), reply.index("C8100"), reply.index("P6425")
+    assert near_call < far_call < put
+
+
 def test_greeks_command_table(session_factory):
     def fetcher(codes, opend_host=None, opend_port=None):
         return [

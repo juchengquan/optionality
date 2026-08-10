@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.core import fetch_snapshot
 from optionality.service.models import Monitor
-from optionality.service.monitor import watchlist_quotes
+from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
 from optionality.service.settings import Settings
 
 logger = logging.getLogger("optionality.telegram_bot")
@@ -167,7 +167,7 @@ class TelegramBot(threading.Thread):
 
     def _cmd_monitors(self) -> str:
         with self.session_factory() as session:
-            monitors = session.scalars(select(Monitor).order_by(Monitor.created_at)).all()
+            monitors = session.scalars(select(Monitor).order_by(*WATCHLIST_ORDER)).all()
         if not monitors:
             return "Watchlist is empty. Add one with /watch."
         rows = []
