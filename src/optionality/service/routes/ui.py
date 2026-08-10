@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -26,7 +26,22 @@ from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
 router = APIRouter(prefix="/ui", tags=["ui"], include_in_schema=False)
+static_router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+# a plain route, NOT a StaticFiles mount: mounts only match the root_path-prefixed
+# spelling, which a path-stripping proxy (tailscale serve) never sends
+@static_router.get("/static/htmx.min.js")
+def htmx_asset():
+    return FileResponse(
+        _STATIC_DIR / "htmx.min.js",
+        media_type="text/javascript",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -69,6 +84,7 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
             "alarm": f"{q['field']} {sign} {q['threshold']}" + (" 🔔" if q["triggered"] else ""),
             "triggered": q["triggered"],
             "threshold": q["threshold"],
+            "compare": q["compare"],
             "delta": _fmt(snap.get("option_delta")),
             "gamma": _fmt(snap.get("option_gamma")),
             "theta": _fmt(snap.get("option_theta")),
@@ -107,16 +123,7 @@ def _error_text(err: Exception) -> str:
     return str(err)
 
 
-@router.get("")
-def ui_dashboard(
-    request: Request,
-    session: SessionDep,
-    settings: SettingsDep,
-    session_factory: Annotated[object, Depends(get_session_factory)],
-    sweeper: Annotated[object, Depends(get_sweeper)],
-    worker: Annotated[object, Depends(get_worker)],
-    error: str | None = None,
-):
+def _live_context(request: Request, session, settings, session_factory, sweeper, worker) -> dict:
     quotes, quotes_error = [], None
     try:
         quotes = watchlist_quotes(session_factory, settings, sweeper.fetcher, include_combos=True)
@@ -133,20 +140,44 @@ def ui_dashboard(
         "failures": sweeper.consecutive_failures,
         "queue": worker.queue_depth(),
     }
-    response = templates.TemplateResponse(
-        request,
-        "ui.html",
-        {
-            "rows": _quote_rows(quotes),
-            "muted": muted,
-            "fields": UI_FIELDS,
-            "fetched": fetched,
-            "health": health,
-            "error": error,
-            "quotes_error": quotes_error,
-            "root_path": request.scope.get("root_path", ""),
-        },
-    )
+    return {
+        "rows": _quote_rows(quotes),
+        "muted": muted,
+        "fetched": fetched,
+        "health": health,
+        "quotes_error": quotes_error,
+        "root_path": request.scope.get("root_path", ""),
+    }
+
+
+@router.get("")
+def ui_dashboard(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    session_factory: Annotated[object, Depends(get_session_factory)],
+    sweeper: Annotated[object, Depends(get_sweeper)],
+    worker: Annotated[object, Depends(get_worker)],
+    error: str | None = None,
+):
+    context = _live_context(request, session, settings, session_factory, sweeper, worker)
+    context.update({"fields": UI_FIELDS, "error": error, "refresh_seconds": settings.ui_refresh_seconds})
+    response = templates.TemplateResponse(request, "ui.html", context)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@router.get("/table")
+def ui_table_fragment(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    session_factory: Annotated[object, Depends(get_session_factory)],
+    sweeper: Annotated[object, Depends(get_sweeper)],
+    worker: Annotated[object, Depends(get_worker)],
+):
+    context = _live_context(request, session, settings, session_factory, sweeper, worker)
+    response = templates.TemplateResponse(request, "ui_table.html", context)
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -162,6 +193,7 @@ def ui_create_monitor(
     threshold: Annotated[float, Form()],
     field: Annotated[str, Form()] = "option_delta",
     direction: Annotated[str, Form()] = "above",
+    compare: Annotated[str, Form()] = "abs",
 ):
     try:
         payload = MonitorIn(
@@ -171,6 +203,7 @@ def ui_create_monitor(
             field=field,
             threshold=threshold,
             direction=direction,
+            compare=compare,
         )
         create_monitor(payload, session, settings)
     except (ValidationError, HTTPException) as err:
@@ -201,6 +234,7 @@ async def ui_create_combo(request: Request, session: SessionDep, settings: Setti
             field=form.get("field", "mid_price"),
             threshold=float(form.get("threshold", "0")),
             direction=form.get("direction", "above"),
+            compare=form.get("compare", "abs"),
         )
         _create_combo(payload, session, settings)
     except (ValidationError, HTTPException, ValueError) as err:

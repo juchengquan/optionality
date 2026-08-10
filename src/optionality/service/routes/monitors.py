@@ -1,7 +1,7 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,9 +24,18 @@ class MonitorIn(BaseModel):
     option_type: Literal["CALL", "PUT"]
     strike: float
     field: str = "option_delta"
-    threshold: float = Field(gt=0)  # abs-comparison: non-positive thresholds never/always fire
+    threshold: float
     direction: Literal["above", "below"] = "above"
+    compare: Literal["abs", "signed"] = "abs"
     enabled: bool = True
+
+    @model_validator(mode="after")
+    def _check_threshold(self):
+        if self.compare == "abs" and self.threshold <= 0:
+            raise ValueError("threshold must be positive when compare='abs' (values are compared as absolutes)")
+        if self.compare == "signed" and self.threshold == 0:
+            raise ValueError("signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01")
+        return self
 
     @field_validator("strike_date")
     @classmethod
@@ -48,9 +57,18 @@ class ComboMonitorIn(BaseModel):
     strike_date: str
     legs: list[ComboLegIn] = Field(min_length=2)
     field: str = "mid_price"
-    threshold: float = Field(gt=0)
+    threshold: float
     direction: Literal["above", "below"] = "above"
+    compare: Literal["abs", "signed"] = "abs"
     enabled: bool = True
+
+    @model_validator(mode="after")
+    def _check_threshold(self):
+        if self.compare == "abs" and self.threshold <= 0:
+            raise ValueError("threshold must be positive when compare='abs' (values are compared as absolutes)")
+        if self.compare == "signed" and self.threshold == 0:
+            raise ValueError("signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01")
+        return self
 
     @field_validator("strike_date")
     @classmethod
@@ -62,9 +80,10 @@ class ComboMonitorIn(BaseModel):
 
 
 class MonitorPatch(BaseModel):
-    threshold: float | None = Field(default=None, gt=0)
+    threshold: float | None = None
     direction: Literal["above", "below"] | None = None
     field: str | None = None
+    compare: Literal["abs", "signed"] | None = None
     enabled: bool | None = None
 
 
@@ -85,6 +104,7 @@ def _to_dict(row: Monitor, tz: str) -> dict:
         "field": row.field,
         "threshold": row.threshold,
         "direction": row.direction,
+        "compare": row.compare,
         "legs": row.legs,
         "enabled": row.enabled,
         "triggered": row.triggered,
@@ -112,8 +132,46 @@ def get_watchlist_quotes(
         raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
 
 
+_MONITOR_EXAMPLES = {
+    "single-leg": {
+        "summary": "Single-leg monitor",
+        "description": "Watch one contract's field against a threshold.",
+        "value": {
+            "strike_date": "2026-09-18",
+            "option_type": "CALL",
+            "strike": 8100,
+            "field": "option_delta",
+            "threshold": 0.6,
+            "direction": "above",
+        },
+    },
+    "combo": {
+        "summary": "Combo monitor (e.g. iron condor)",
+        "description": "Signed sum over legs; + on sold legs and - on bought legs watches the cost to close.",
+        "value": {
+            "name": "sep-condor",
+            "strike_date": "2026-09-18",
+            "legs": [
+                {"sign": 1, "option_type": "CALL", "strike": 8100},
+                {"sign": -1, "option_type": "CALL", "strike": 8150},
+                {"sign": 1, "option_type": "PUT", "strike": 7800},
+                {"sign": -1, "option_type": "PUT", "strike": 7750},
+            ],
+            "field": "mid_price",
+            "threshold": 30,
+            "direction": "below",
+        },
+    },
+}
+
+
 @router.post("", status_code=201)
-def create_monitor(payload: MonitorIn | ComboMonitorIn, session: SessionDep, settings: SettingsDep):
+def create_monitor(
+    payload: Annotated[MonitorIn | ComboMonitorIn, Body(openapi_examples=_MONITOR_EXAMPLES)],
+    session: SessionDep,
+    settings: SettingsDep,
+):
+    """Create a monitor — the payload shape decides: single-leg (option_type + strike) or combo (name + legs)."""
     if isinstance(payload, ComboMonitorIn):
         return _create_combo(payload, session, settings)
     code = _build_code(payload)
@@ -127,6 +185,7 @@ def create_monitor(payload: MonitorIn | ComboMonitorIn, session: SessionDep, set
         field=payload.field,
         threshold=payload.threshold,
         direction=payload.direction,
+        compare=payload.compare,
         enabled=payload.enabled,
     )
     session.add(row)
@@ -145,6 +204,7 @@ def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings)
         field=payload.field,
         threshold=payload.threshold,
         direction=payload.direction,
+        compare=payload.compare,
         legs=[leg.model_dump() for leg in payload.legs],
         enabled=payload.enabled,
     )
@@ -173,6 +233,7 @@ def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep, set
     row.field = payload.field
     row.threshold = payload.threshold
     row.direction = payload.direction
+    row.compare = payload.compare
     row.enabled = payload.enabled
     session.commit()
     return _to_dict(row, settings.display_tz)
@@ -186,6 +247,12 @@ def patch_monitor(monitor_id: str, payload: MonitorPatch, session: SessionDep, s
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")
+    new_compare = changes.get("compare", row.compare)
+    new_threshold = changes.get("threshold", row.threshold)
+    if new_compare == "abs" and new_threshold <= 0:
+        raise HTTPException(status_code=422, detail="threshold must be positive when compare='abs'")
+    if new_compare == "signed" and new_threshold == 0:
+        raise HTTPException(status_code=422, detail="signed threshold cannot be 0; use e.g. ±0.01")
     new_field = changes.get("field", row.field)
     if new_field != row.field:
         conflict = session.scalar(

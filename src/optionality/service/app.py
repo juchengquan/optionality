@@ -73,4 +73,5 @@ def create_app(settings: Settings | None = None, runner=None, snapshot_fetcher=N
     app.include_router(monitors.router)
     app.include_router(monitors.quotes_router)
     app.include_router(ui.router)
+    app.include_router(ui.static_router)
     return app

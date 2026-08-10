@@ -22,8 +22,8 @@ HELP_TEXT = """Commands:
 /quotes — live prices (mid, bid/ask) for every watched code
 /greeks — live delta/gamma/theta for every watched code
 /vol — live IV/vega for every watched code
-/watch <date> <CALL|PUT> <strike> <threshold> [field] [above|below] — add a monitor
-/watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below] — watch a combo (e.g. a condor)
+/watch <date> <CALL|PUT> <strike> <threshold> [field] [above|below] [signed] — add a monitor
+/watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below] [signed] — watch a combo
 /unwatch <name, code, id prefix, or contract like 260918 C8100> — remove a monitor
 /combo <name> — per-leg breakdown of a combo
 /threshold <name or contract> <value> — change a monitor's threshold
@@ -34,6 +34,20 @@ HELP_TEXT = """Commands:
 
 
 _FIELD_FORMATS = {"option_delta": ".3f", "option_implied_volatility": ".3f"}
+
+
+def _threshold_error(threshold: float, compare: str) -> str | None:
+    if compare == "abs" and threshold <= 0:
+        return "Threshold must be positive — abs monitors compare magnitudes. Add 'signed' to compare raw values."
+    if compare == "signed" and threshold == 0:
+        return "Signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01."
+    return None
+
+
+def _rule_text(prefix: str, field: str, threshold: float, direction: str, compare: str) -> str:
+    sign = "≤" if direction == "below" else "≥"
+    metric = field if compare == "signed" else f"abs({field})"
+    return f"{prefix}: alarm when {metric} {sign} {threshold}"
 
 
 def _fmt_value(key: str, value) -> str:
@@ -276,14 +290,17 @@ class TelegramBot(threading.Thread):
             code = build_spx_code(strike_date, option_type, strike)
         except ValueError:
             return usage
-        if threshold <= 0:
-            return "Threshold must be positive — values are compared as absolutes (abs(value) vs threshold)."
-        field, direction = "option_delta", "above"
-        for extra in args[4:6]:
-            if extra.lower() in ("above", "below"):
-                direction = extra.lower()
+        field, direction, compare = "option_delta", "above", "abs"
+        for extra in args[4:7]:
+            low = extra.lower()
+            if low in ("above", "below"):
+                direction = low
+            elif low == "signed":
+                compare = "signed"
             else:
                 field = extra
+        if error := _threshold_error(threshold, compare):
+            return error
 
         with self.session_factory() as session:
             if session.scalar(select(Monitor).where(Monitor.code == code, Monitor.field == field)):
@@ -297,11 +314,11 @@ class TelegramBot(threading.Thread):
                     field=field,
                     threshold=threshold,
                     direction=direction,
+                    compare=compare,
                 )
             )
             session.commit()
-        sign = "≤" if direction == "below" else "≥"
-        return f"Watching {code}: alarm when abs({field}) {sign} {threshold}"
+        return _rule_text(f"Watching {code}", field, threshold, direction, compare)
 
     _LEG_TOKEN = re.compile(r"^([+-])([CP])(\d+(?:\.\d+)?)$")
 
@@ -331,14 +348,17 @@ class TelegramBot(threading.Thread):
             threshold = float(args[i])
         except ValueError:
             return usage
-        if threshold <= 0:
-            return "Threshold must be positive — values are compared as absolutes (abs(value) vs threshold)."
-        field, direction = "mid_price", "above"
-        for extra in args[i + 1 : i + 3]:
-            if extra.lower() in ("above", "below"):
-                direction = extra.lower()
+        field, direction, compare = "mid_price", "above", "abs"
+        for extra in args[i + 1 : i + 4]:
+            low = extra.lower()
+            if low in ("above", "below"):
+                direction = low
+            elif low == "signed":
+                compare = "signed"
             else:
                 field = extra
+        if error := _threshold_error(threshold, compare):
+            return error
 
         with self.session_factory() as session:
             if session.scalar(select(Monitor).where(Monitor.code == name, Monitor.field == field)):
@@ -352,12 +372,12 @@ class TelegramBot(threading.Thread):
                     field=field,
                     threshold=threshold,
                     direction=direction,
+                    compare=compare,
                     legs=legs,
                 )
             )
             session.commit()
-        sign = "≤" if direction == "below" else "≥"
-        return f"Watching combo {name} ({len(legs)} legs): alarm when abs({field}) {sign} {threshold}"
+        return _rule_text(f"Watching combo {name} ({len(legs)} legs)", field, threshold, direction, compare)
 
     def _cmd_combo(self, args: list[str]) -> str:
         if not args:
@@ -407,8 +427,6 @@ class TelegramBot(threading.Thread):
             value = float(args[-1])
         except ValueError:
             return "Usage: /threshold <name, code, id prefix, or contract> <value>"
-        if value <= 0:
-            return "Threshold must be positive — values are compared as absolutes (abs(value) vs threshold)."
         with self.session_factory() as session:
             matches = session.scalars(select(Monitor).where(or_(*self._identifier_conditions(args[:-1])))).all()
             if not matches:
@@ -416,11 +434,12 @@ class TelegramBot(threading.Thread):
             if len(matches) > 1:
                 return "Ambiguous — matches: " + ", ".join(m.code for m in matches)
             monitor = matches[0]
+            if error := _threshold_error(value, monitor.compare):
+                return error
             monitor.threshold = value
-            code, direction, field = monitor.code, monitor.direction, monitor.field
+            code, direction, field, compare = monitor.code, monitor.direction, monitor.field, monitor.compare
             session.commit()
-        sign = "≤" if direction == "below" else "≥"
-        return f"{code}: alarm when abs({field}) {sign} {value}"
+        return _rule_text(code, field, value, direction, compare)
 
     def _cmd_unwatch(self, args: list[str]) -> str:
         if not args:

@@ -4,10 +4,10 @@ import pytest
 from sqlalchemy import select
 
 from optionality.service.models import Monitor
-from optionality.service.monitor import DEGRADED_AFTER, MonitorSweeper, watchlist_quotes
+from optionality.service.monitor import MonitorSweeper, watchlist_quotes
 from optionality.service.settings import Settings
 
-SETTINGS = Settings(telegram_bot_token="t", telegram_chat_id="c")
+SETTINGS = Settings(telegram_bot_token="t", telegram_chat_id="c", alarm_cooldown_seconds=0)
 
 CODE = "US.SPXW261218C6500000"
 
@@ -78,23 +78,23 @@ def test_abs_comparison_covers_negative_put_delta(session_factory):
     assert len(recorder.messages) == 1
 
 
-def test_hysteresis_rearm_cycle(session_factory):
+def test_exact_threshold_rearm_cycle(session_factory):
     _mk_monitor(session_factory, threshold=0.6)
     values = {CODE: 0.61}
     sweeper, recorder = _make_sweeper(session_factory, values)
 
     sweeper.sweep()  # breach -> alarm
-    values[CODE] = 0.59
-    sweeper.sweep()  # inside hysteresis band (>= 0.57): stays triggered, silent
     assert len(recorder.messages) == 1
 
-    values[CODE] = 0.55
-    sweeper.sweep()  # below 0.6*0.95: recovery message, re-armed
+    values[CODE] = 0.59
+    sweeper.sweep()  # back across the exact threshold: bell clears, recovery message
     assert len(recorder.messages) == 2
     assert "back below" in recorder.messages[1]
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)).triggered is False
 
     values[CODE] = 0.61
-    sweeper.sweep()  # re-armed: fires again
+    sweeper.sweep()  # re-armed at the threshold: fires again
     assert len(recorder.messages) == 3
 
 
@@ -112,14 +112,74 @@ def test_below_direction_breach_and_rearm(session_factory):
     assert len(recorder.messages) == 1
     assert "fell" in recorder.messages[0]
 
-    values[CODE] = 30.5  # inside hysteresis band (<= 31.5): stays triggered, silent
-    sweeper.sweep()
-    assert len(recorder.messages) == 1
-
-    values[CODE] = 32.0  # above 30*1.05: recovery, re-armed
+    values[CODE] = 30.5  # back above the exact threshold: bell clears, recovery message
     sweeper.sweep()
     assert len(recorder.messages) == 2
     assert "back above" in recorder.messages[1]
+
+    values[CODE] = 26.0  # re-armed: fires again
+    sweeper.sweep()
+    assert len(recorder.messages) == 3
+
+
+def test_signed_below_negative_threshold_cycle(session_factory):
+    # a long bear call spread: value is negative; alert when it falls to ≤ -4.05, in the user's own signs
+    _mk_combo(session_factory, threshold=-4.05, direction="below", compare="signed")
+    values = {"leg1": 0.0}
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "mid_price": values["leg1"] if c.endswith("C8100000") else values["leg2"]} for c in codes]
+
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
+
+    values.update(leg1=26.4, leg2=30.3)  # sum +26.4 - 30.3 = -3.9: above -4.05, no breach
+    sweeper.sweep()
+    assert recorder.messages == []
+
+    values.update(leg2=30.7)  # sum -4.3 <= -4.05: breach
+    sweeper.sweep()
+    assert len(recorder.messages) == 1
+    assert "-4.300" in recorder.messages[0]
+
+    values.update(leg2=30.35)  # sum -3.95 back above -4.05: bell clears, recovery message
+    sweeper.sweep()
+    assert len(recorder.messages) == 2
+
+
+def test_alarm_cooldown_suppresses_flapping_messages(session_factory):
+    mid = _mk_monitor(session_factory, threshold=0.6)
+    values = {CODE: 0.61}
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": CODE, "name": CODE, "option_delta": values[CODE]}]
+
+    settings = Settings(telegram_bot_token="t", telegram_chat_id="c", alarm_cooldown_seconds=120)
+    sweeper = MonitorSweeper(session_factory, settings, fetcher=fetcher, sender=recorder)
+
+    sweeper.sweep()  # breach -> alarm sent
+    assert len(recorder.messages) == 1
+
+    values[CODE] = 0.59
+    sweeper.sweep()  # bell clears, but recovery message suppressed by cooldown
+    with session_factory() as s:
+        assert s.get(Monitor, mid).triggered is False  # display stays truthful
+    assert len(recorder.messages) == 1
+
+    values[CODE] = 0.61
+    sweeper.sweep()  # re-breach inside cooldown: bell on, still silent
+    with session_factory() as s:
+        assert s.get(Monitor, mid).triggered is True
+    assert len(recorder.messages) == 1
+
+    with session_factory() as s:  # cooldown expires
+        m = s.get(Monitor, mid)
+        m.last_alarm_at = datetime.now(UTC) - timedelta(seconds=300)
+        s.commit()
+    values[CODE] = 0.55
+    sweeper.sweep()  # next transition may speak again
+    assert len(recorder.messages) == 2
 
 
 def test_expired_monitor_auto_disabled_and_not_fetched(session_factory):
@@ -151,11 +211,11 @@ def test_watchdog_degraded_and_recovery(session_factory):
     recorder = Recorder()
     sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
 
-    for _ in range(DEGRADED_AFTER + 1):
+    for _ in range(SETTINGS.degraded_after_failures + 1):
         sweeper.sweep()
     degraded = [m for m in recorder.messages if "degraded" in m]
     assert len(degraded) == 1  # edge-triggered, not once per failure
-    assert sweeper.consecutive_failures == DEGRADED_AFTER + 1
+    assert sweeper.consecutive_failures == SETTINGS.degraded_after_failures + 1
     assert sweeper.last_sweep_ok is False
 
     state["fail"] = False

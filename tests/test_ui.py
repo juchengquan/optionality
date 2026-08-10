@@ -20,9 +20,61 @@ def test_dashboard_renders(client_factory):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert resp.headers["cache-control"] == "no-store"
-    assert 'http-equiv="refresh" content="30"' in resp.text  # 30s auto-refresh
+    assert 'http-equiv="refresh"' not in resp.text  # full-page reload is gone: it wiped form input
+    assert "htmx.min.js" in resp.text
+    assert 'hx-trigger="every 30s' in resp.text  # partial refresh of the live fragment instead
     assert "Add monitor" in resp.text
     assert "Add combo" in resp.text
+
+
+def test_refresh_interval_comes_from_settings(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher, ui_refresh_seconds=7)
+    assert 'hx-trigger="every 7s' in client.get("/ui", headers=AUTH).text
+
+
+def test_table_fragment_is_forms_free(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    client.post("/monitors", json=payload, headers=AUTH)
+    resp = client.get("/ui/table", headers=AUTH)
+    assert resp.status_code == 200
+    assert "8100.00C" in resp.text or "C8100000" in resp.text
+    assert "fetched at" in resp.text
+    assert "Add monitor" not in resp.text  # creation forms live outside the refreshing fragment
+    assert "htmx.min.js" not in resp.text  # fragment, not a full document
+
+
+def test_htmx_asset_served(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    resp = client.get("/static/htmx.min.js", headers=AUTH)
+    assert resp.status_code == 200
+    assert "htmx" in resp.text[:200]
+
+
+def test_htmx_asset_served_behind_path_stripping_proxy(client_factory):
+    # regression: with ROOT_PATH set, a StaticFiles Mount only matched the prefixed
+    # spelling — which a stripping proxy never sends — so the asset 404'd in production
+    client = client_factory(token="", root_path="/api")
+    resp = client.get("/static/htmx.min.js")
+    assert resp.status_code == 200
+    assert "htmx" in resp.text[:200]
+
+
+def test_mode_column_shows_compare(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    signed = {
+        "strike_date": _future(),
+        "option_type": "CALL",
+        "strike": 8100,
+        "field": "mid_price",
+        "threshold": -4.05,
+        "direction": "below",
+        "compare": "signed",
+    }
+    client.post("/monitors", json=signed, headers=AUTH)
+    page = client.get("/ui", headers=AUTH)
+    assert "<th>mode</th>" in page.text
+    assert "<td>signed</td>" in page.text
 
 
 def test_create_monitor_via_form(client_factory):
