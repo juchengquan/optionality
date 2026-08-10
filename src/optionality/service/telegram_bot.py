@@ -24,6 +24,13 @@ HELP_TEXT = """Commands:
 /health — service status
 /help — this message"""
 
+
+def _fmt_value(key: str, value) -> str:
+    if key == "option_delta" and isinstance(value, int | float):
+        return f"{value:.3f}"
+    return str(value)
+
+
 BOT_COMMANDS = [
     {"command": "monitors", "description": "List the watchlist with live state"},
     {"command": "quotes", "description": "Live quotes for every watched code"},
@@ -158,7 +165,7 @@ class TelegramBot(threading.Thread):
                 continue
             name = snap.get("name") or q["code"]
             parts = [
-                f"{label} {snap[key]}"
+                f"{label} {_fmt_value(key, snap[key])}"
                 for label, key in [
                     ("delta", "option_delta"),
                     ("IV", "option_implied_volatility"),
@@ -245,7 +252,7 @@ class TelegramBot(threading.Thread):
             "last_price",
             "option_theta",
         ]
-        lines = [f"{f}: {r[f]}" for f in fields if r.get(f) is not None]
+        lines = [f"{f}: {_fmt_value(f, r[f])}" for f in fields if r.get(f) is not None]
         return f"{name}\n" + "\n".join(lines)
 
     def _cmd_health(self) -> str:

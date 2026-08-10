@@ -102,10 +102,10 @@ class MonitorSweeper:
                 name = record.get("name") or monitor.code
                 if abs(value) >= monitor.threshold and not db_monitor.triggered:
                     db_monitor.triggered = True
-                    self._notify(f"⚠️ {name}: {monitor.field} {value:.4f} crossed ≥ {monitor.threshold}")
+                    self._notify(f"⚠️ {name}: {monitor.field} {value:.3f} crossed ≥ {monitor.threshold}")
                 elif db_monitor.triggered and abs(value) < monitor.threshold * (1 - REARM_HYSTERESIS):
                     db_monitor.triggered = False
-                    self._notify(f"✅ {name}: {monitor.field} {value:.4f} back below {monitor.threshold}")
+                    self._notify(f"✅ {name}: {monitor.field} {value:.3f} back below {monitor.threshold}")
             session.commit()
 
     def _record_failure(self) -> None:

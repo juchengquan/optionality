@@ -104,11 +104,12 @@ def test_unwatch_by_code_and_by_id_prefix(session_factory):
 
 def test_snapshot_command_uses_fetcher(session_factory):
     def fetcher(codes, opend_host=None, opend_port=None):
-        return [{"code": codes[0], "name": "SPXW TEST", "option_delta": 0.51, "bid_price": 1.0, "ask_price": 2.0}]
+        return [{"code": codes[0], "name": "SPXW TEST", "option_delta": 0.512345, "bid_price": 1.0, "ask_price": 2.0}]
 
     bot, api = _make_bot(session_factory, fetcher=fetcher)
     bot.handle_update(_update(f"/snapshot {_future()} CALL 6500"))
-    assert "0.51" in api.sent[-1]
+    assert "option_delta: 0.512" in api.sent[-1]
+    assert "0.512345" not in api.sent[-1]  # rounded to three decimals, not raw
 
 
 def test_non_command_text_gets_help(session_factory):
@@ -150,6 +151,6 @@ def test_quotes_command_reports_watched_codes(session_factory):
 
     bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
     bot.handle_update(_update("/quotes"))
-    assert "0.42" in api.sent[-1]
+    assert "delta 0.420" in api.sent[-1]  # delta always shown with three decimals
     assert "C6500000" in api.sent[-1]
     assert "mid 1.5" in api.sent[-1]
