@@ -1,13 +1,16 @@
 from typing import Annotated, Literal
 
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from optionality.apis.aux import build_spx_code, normalize_strike_date
+from optionality.notification import full_html_document
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
-from optionality.service.models import Monitor
+from optionality.service.models import Monitor, utcnow
 from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
@@ -110,6 +113,44 @@ def get_watchlist_quotes(
         return watchlist_quotes(session_factory, settings, sweeper.fetcher)
     except Exception as err:
         raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
+
+
+@quotes_router.get("/quotes.html")
+def get_watchlist_quotes_html(
+    session_factory: Annotated[object, Depends(get_session_factory)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    sweeper: Annotated[object, Depends(get_sweeper)],
+):
+    try:
+        quotes = watchlist_quotes(session_factory, settings, sweeper.fetcher)
+    except Exception as err:
+        raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
+
+    heading = f"<h2>Watchlist quotes</h2><p>as of {display_time(utcnow(), settings.display_tz)}</p>"
+    if not quotes:
+        return HTMLResponse(full_html_document(heading + "<p>Watchlist is empty.</p>"))
+
+    rows = []
+    for q in quotes:
+        snap = q["snapshot"] or {}
+        sign = "≤" if q["direction"] == "below" else "≥"
+        rows.append(
+            {
+                "contract": snap.get("name") or q["code"],
+                "alarm": f"{q['field']} {sign} {q['threshold']}" + (" 🔔" if q["triggered"] else ""),
+                "delta": snap.get("option_delta"),
+                "gamma": snap.get("option_gamma"),
+                "theta": snap.get("option_theta"),
+                "vega": snap.get("option_vega"),
+                "IV": snap.get("option_implied_volatility"),
+                "mid": snap.get("mid_price"),
+                "bid": snap.get("bid_price"),
+                "ask": snap.get("ask_price"),
+                "updated": snap.get("update_time"),
+            }
+        )
+    table = pd.DataFrame(rows).to_html(index=False, na_rep="—", float_format=lambda v: f"{v:.4g}")
+    return HTMLResponse(full_html_document(heading + table))
 
 
 @router.post("", status_code=201)

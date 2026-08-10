@@ -168,6 +168,27 @@ def test_timestamps_rendered_in_display_tz(client_factory):
     assert created["created_at"].endswith("+08:00")
 
 
+def test_quotes_html_renders_watchlist(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [
+            {"code": c, "name": "SPXW TEST", "option_delta": 0.33, "mid_price": 27.55, "bid_price": 27.2} for c in codes
+        ]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    empty = client.get("/quotes.html", headers=AUTH)
+    assert empty.status_code == 200
+    assert "empty" in empty.text.lower()
+
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    client.post("/monitors", json=payload, headers=AUTH)
+    resp = client.get("/quotes.html", headers=AUTH)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "SPXW TEST" in resp.text
+    assert "27.55" in resp.text
+    assert "option_delta ≥ 0.6" in resp.text  # monitor context alongside live data
+
+
 def test_health_exposes_monitor_sweep_state(client_factory):
     client = client_factory()
     data = client.get("/health").json()
