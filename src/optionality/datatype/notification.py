@@ -2,8 +2,6 @@ from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class GmailConfig(BaseModel):
-    user: EmailStr
-    password: str
     subject: str
     from_address: EmailStr
     to_address: list[EmailStr]

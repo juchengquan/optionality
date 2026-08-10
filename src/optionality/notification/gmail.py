@@ -1,18 +1,16 @@
+import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-default_css_style = """<style>
-div {
-    font-size: 12pt;
-}
-</style>
-"""
+from .html_maker import full_html_document
 
 
-def _email_login(settings):
-    user = settings["user"]
-    pwd = settings["password"]
+def _email_login():
+    user = os.environ.get("GMAIL_USER")
+    pwd = os.environ.get("GMAIL_APP_PASSWORD")
+    if not user or not pwd:
+        raise RuntimeError("GMAIL_USER and GMAIL_APP_PASSWORD environment variables must be set")
 
     server = smtplib.SMTP("smtp.gmail.com", 587)
     server.ehlo()
@@ -23,11 +21,7 @@ def _email_login(settings):
 
 
 def send_gmail_notification(setting: dict, body_message: str):
-    all_html = f"""<html>
-    <head>{default_css_style}</head>
-    <body>{body_message}</body>
-    </html>
-    """
+    all_html = full_html_document(body_message)
 
     msg = MIMEMultipart()
 
@@ -36,9 +30,8 @@ def send_gmail_notification(setting: dict, body_message: str):
 
     msg["Subject"] = setting["subject"]
 
-    # Record the MIME types of both parts - text/plain and text/html.
     msg.attach(MIMEText(all_html, "html"))
 
-    server = _email_login(setting)
+    server = _email_login()
     server.sendmail(setting["from_address"], setting["to_address"], msg.as_string())
     server.close()

@@ -2,6 +2,17 @@ import re
 
 import pandas as pd
 
+default_css_style = """<style>
+div {
+    font-size: 12pt;
+}
+</style>
+"""
+
+
+def full_html_document(body: str) -> str:
+    return f"<html>\n    <head>{default_css_style}</head>\n    <body>{body}</body>\n    </html>\n    "
+
 
 def build_html_message(df_summary: pd.DataFrame, dt_details: dict, df_warning: pd.DataFrame | None = None):
     summary_html = _gen_summary_html(df_summary)
