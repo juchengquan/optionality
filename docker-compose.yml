@@ -1,0 +1,31 @@
+services:
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OPEND_HOST: ${OPEND_HOST:-host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # Linux hosts only: put the extracted moomoo OpenD Ubuntu build in ./opend
+  # (download from moomoo's OpenAPI page; includes the OpenD binary and OpenD.xml).
+  # Start with: docker compose --profile opend-docker up -d
+  # First login may require a verification code: docker attach optionality-opend
+  opend:
+    profiles: ["opend-docker"]
+    image: ubuntu:24.04
+    container_name: optionality-opend
+    working_dir: /opt/opend
+    volumes:
+      - ./opend:/opt/opend
+    command: ["./OpenD"]
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

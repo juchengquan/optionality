@@ -17,9 +17,9 @@ Optionality is a small, simple yet effective tool aimed at providing a report to
    git clone https://github.com/juchengquan/optionality.git
    ```
 
-2. **Install Dependencies**:
+2. **Install Dependencies** (requires [uv](https://docs.astral.sh/uv/)):
    ```bash
-   pip install -e .
+   uv sync
    ```
 
 3. **Configure Settings**:
@@ -35,6 +35,42 @@ Optionality is a small, simple yet effective tool aimed at providing a report to
    ```
    The results will be saved locally or sent via email address if set in the config file.
 
+
+## Hosted service
+
+Run optionality as an always-on service: scheduled scans email HTML reports; ad-hoc runs are triggered over the API (expose it inside your tailnet only, e.g. with `tailscale serve`).
+
+### Setup
+
+1. `cp .env.example .env` and fill in the values.
+2. Start OpenD:
+   - **macOS / bare-metal host:** run OpenD on the host, keep `OPEND_HOST=host.docker.internal`.
+   - **Linux host, Docker:** extract the OpenD Ubuntu build into `./opend`, set `OPEND_HOST=opend`, add `--profile opend-docker` to compose commands. First login may prompt for a verification code: `docker attach optionality-opend`.
+3. `docker compose up -d --build`
+4. Health check: `curl http://localhost:8000/health` — `"opend": true` means the gateway is reachable.
+
+### Everyday use
+
+```bash
+AUTH="Authorization: Bearer $API_TOKEN"
+# store a config (body = the YAML document as JSON)
+curl -X POST localhost:8000/configs -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"name": "spx-holdings", "task_type": "holdings", "body": {...}}'
+# schedule it for 09:35 ET every weekday
+curl -X POST localhost:8000/schedules -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"cron_expr": "35 9 * * mon-fri", "task_type": "holdings", "config_name": "spx-holdings"}'
+# ad-hoc run + report
+curl -X POST localhost:8000/runs -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"task": "holdings", "config": "spx-holdings"}'
+curl localhost:8000/runs/<run_id>/report.html -H "$AUTH"
+```
+
+### Runbook
+
+- **Scheduled reports stopped and healthchecks.io alerted:** check `docker compose ps`, then `curl :8000/health`. If `"opend": false`, OpenD is down or logged out — restart/re-login it (this is the most common failure).
+- **Failure email arrived:** the run failed twice (one automatic retry). The email includes the error; `GET /runs?status=failed` has details.
+- **Debugging the pipeline without the service:** `uv run python main.py -t holdings -f examples/strategy.yaml` uses the same core code against a local OpenD.
+- **Schema changes:** `uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head` (fresh databases are created automatically at startup).
 
 ## License
 
