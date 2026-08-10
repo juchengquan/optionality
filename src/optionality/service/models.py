@@ -67,6 +67,8 @@ class Monitor(Base):
     field: Mapped[str] = mapped_column(String(50), default="option_delta")
     threshold: Mapped[float]
     direction: Mapped[str] = mapped_column(String(5), default="above", server_default="above")  # "above" | "below"
+    # combo monitors: [{"sign": 1|-1, "option_type": "CALL"|"PUT", "strike": float}, ...]; None = single-leg
+    legs: Mapped[list | None] = mapped_column(JSON, default=None)
     enabled: Mapped[bool] = mapped_column(default=True)
     triggered: Mapped[bool] = mapped_column(default=False)
     last_value: Mapped[float | None] = mapped_column(default=None)

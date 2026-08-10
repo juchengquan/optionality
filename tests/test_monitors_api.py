@@ -80,6 +80,42 @@ def test_monitors_quotes_endpoint(client_factory):
     assert quotes[0]["threshold"] == 0.6
 
 
+COMBO_PAYLOAD = {
+    "name": "sep-condor",
+    "legs": [
+        {"sign": 1, "option_type": "CALL", "strike": 8100},
+        {"sign": -1, "option_type": "CALL", "strike": 8150},
+    ],
+    "threshold": 10,
+    "direction": "below",
+}
+
+
+def test_combo_monitor_create_and_guardrails(client_factory):
+    client = client_factory()
+    payload = {**COMBO_PAYLOAD, "strike_date": _future()}
+
+    created = client.post("/monitors/combo", json=payload, headers=AUTH)
+    assert created.status_code == 201
+    data = created.json()
+    assert data["code"] == "sep-condor"
+    assert data["field"] == "mid_price"  # combo default field
+    assert len(data["legs"]) == 2
+
+    assert client.post("/monitors/combo", json=payload, headers=AUTH).status_code == 409  # duplicate name
+
+    one_leg = {**payload, "name": "x", "legs": payload["legs"][:1]}
+    assert client.post("/monitors/combo", json=one_leg, headers=AUTH).status_code == 422  # min 2 legs
+
+    single_leg_payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    mid = data["id"]
+    assert client.put(f"/monitors/{mid}", json=single_leg_payload, headers=AUTH).status_code == 422  # no in-place edit
+
+    listed = client.get("/monitors", headers=AUTH).json()
+    assert any(m["code"] == "sep-condor" for m in listed)
+    assert client.delete(f"/monitors/{mid}", headers=AUTH).status_code == 204
+
+
 def test_direction_below_monitor(client_factory):
     client = client_factory()
     payload = {

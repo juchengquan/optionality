@@ -63,6 +63,52 @@ def test_watch_compact_date_is_normalized(session_factory):
         assert s.scalar(select(Monitor)).strike_date == _future()
 
 
+def test_watchcombo_creates_and_combo_shows_breakdown(session_factory):
+    from optionality.apis.aux import build_spx_code
+
+    date = _future()
+    c8100, c8150 = build_spx_code(date, "CALL", 8100), build_spx_code(date, "CALL", 8150)
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        prices = {c8100: 26.4, c8150: 19.25}
+        return [{"code": c, "mid_price": prices[c]} for c in codes if c in prices]
+
+    bot, api = _make_bot(session_factory, fetcher=fetcher)
+    bot.handle_update(_update(f"/watchcombo sep-condor {date} +C8100 -C8150 10 below"))
+    assert "sep-condor" in api.sent[-1]
+    assert "≤" in api.sent[-1]
+    with session_factory() as s:
+        m = s.scalar(select(Monitor))
+        assert m.code == "sep-condor"
+        assert m.field == "mid_price"
+        assert m.direction == "below"
+        assert [leg["sign"] for leg in m.legs] == [1, -1]
+
+    bot.handle_update(_update("/combo sep-condor"))
+    reply = api.sent[-1]
+    assert reply.startswith("<pre>")
+    assert "26.4" in reply
+    assert "19.25" in reply
+    assert "total" in reply
+    assert "7.15" in reply  # 26.4 - 19.25
+
+    bot.handle_update(_update("/monitors"))
+    assert "sep-condor" in api.sent[-1]
+
+    bot.handle_update(_update("/unwatch sep-condor"))
+    assert "removed" in api.sent[-1].lower()
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)) is None
+
+
+def test_watchcombo_bad_args(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watchcombo broken {_future()} +C8100 10"))  # only one leg
+    assert "usage" in api.sent[-1].lower()
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)) is None
+
+
 def test_watch_with_direction_below(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update(f"/watch {_future()} CALL 8100 30 mid_price below"))
@@ -256,7 +302,19 @@ def test_register_commands_publishes_menu(session_factory):
     method, params = api.calls[-1]
     assert method == "setMyCommands"
     names = [c["command"] for c in json.loads(params["commands"])]
-    assert names == ["monitors", "quotes", "greeks", "vol", "watch", "unwatch", "snapshot", "health", "help"]
+    assert names == [
+        "monitors",
+        "quotes",
+        "greeks",
+        "vol",
+        "watch",
+        "watchcombo",
+        "unwatch",
+        "combo",
+        "snapshot",
+        "health",
+        "help",
+    ]
     descriptions = [c["description"] for c in json.loads(params["commands"])]
     assert all(descriptions)
 
