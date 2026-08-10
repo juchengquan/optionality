@@ -126,7 +126,11 @@ def get_watchlist_quotes_html(
     except Exception as err:
         raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
 
-    heading = f"<h2>Watchlist quotes</h2><p>as of {display_time(utcnow(), settings.display_tz)}</p>"
+    fetched = next(
+        (q["snapshot"]["fetched_at"] for q in quotes if q.get("snapshot")),
+        display_time(utcnow(), settings.display_tz),
+    )
+    heading = f"<h2>Watchlist quotes</h2><p>fetched at {fetched}</p>"
     if not quotes:
         return HTMLResponse(full_html_document(heading + "<p>Watchlist is empty.</p>"))
 

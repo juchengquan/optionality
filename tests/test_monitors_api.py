@@ -197,9 +197,12 @@ def test_quotes_html_renders_watchlist(client_factory):
     resp = client.get("/quotes.html", headers=AUTH)
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
+    assert "SPWX TEST" not in resp.text  # guard against typo'd assertion passing vacuously
     assert "SPXW TEST" in resp.text
     assert "27.55" in resp.text
     assert "option_delta ≥ 0.6" in resp.text  # monitor context alongside live data
+    assert "fetched at" in resp.text
+    assert "+08:00" in resp.text  # the fetch timestamp in display tz
 
 
 def test_quotes_html_includes_combo_row(client_factory):
