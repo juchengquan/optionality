@@ -8,7 +8,7 @@ from optionality.core import fetch_snapshot
 from optionality.notification.telegram import send_telegram_message
 from optionality.service.models import Monitor, utcnow
 from optionality.service.settings import Settings
-from optionality.service.timefmt import market_time_to_display
+from optionality.service.timefmt import display_time, market_time_to_display
 
 logger = logging.getLogger("optionality.monitor")
 
@@ -27,48 +27,69 @@ def monitor_leg_codes(monitor: Monitor) -> list[str]:
     return [build_spx_code(monitor.strike_date, leg["option_type"], leg["strike"]) for leg in monitor.legs]
 
 
-def monitor_value(monitor: Monitor, by_code: dict) -> float | None:
-    """Signed sum over legs; None if ANY leg is missing — no partial sums, ever."""
-    if not monitor.legs:
-        record = by_code.get(monitor.code)
-        value = record.get(monitor.field) if record else None
-        return float(value) if value is not None else None
+def combo_field_sum(monitor: Monitor, by_code: dict, field: str) -> float | None:
+    """Signed sum of one field over a combo's legs; None if ANY leg is missing — no partial sums, ever."""
     total = 0.0
     for leg, code in zip(monitor.legs, monitor_leg_codes(monitor), strict=True):
         record = by_code.get(code)
-        value = record.get(monitor.field) if record else None
+        value = record.get(field) if record else None
         if value is None:
             return None
         total += leg["sign"] * value
     return total
 
 
-def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot) -> list[dict]:
-    """Live snapshot for every enabled monitor — one API call for the whole watchlist."""
+def monitor_value(monitor: Monitor, by_code: dict) -> float | None:
+    if not monitor.legs:
+        record = by_code.get(monitor.code)
+        value = record.get(monitor.field) if record else None
+        return float(value) if value is not None else None
+    return combo_field_sum(monitor, by_code, monitor.field)
+
+
+# greeks are linear, so signed sums are the greeks OF the combo's value; IV is not additive
+COMBO_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")
+
+
+def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot, include_combos=False) -> list[dict]:
+    """Live snapshot for every enabled monitor — one API call for the whole watchlist.
+
+    Combo entries (include_combos=True) carry their signed-sum under "combo_value" and no
+    per-contract snapshot; summing other fields under the combo's signs would fabricate
+    plausible-but-wrong aggregates.
+    """
+    query = select(Monitor).where(Monitor.enabled).order_by(*WATCHLIST_ORDER)
+    if not include_combos:
+        query = query.where(Monitor.legs.is_(None))
     with session_factory() as session:
-        monitors = session.scalars(
-            select(Monitor).where(Monitor.enabled, Monitor.legs.is_(None)).order_by(*WATCHLIST_ORDER)
-        ).all()
+        monitors = session.scalars(query).all()
     if not monitors:
         return []
-    codes = list({m.code for m in monitors})
+    codes = sorted({code for m in monitors for code in monitor_leg_codes(m)})
     records = fetcher(codes, opend_host=settings.opend_host, opend_port=settings.opend_port)
+    fetched_at = display_time(utcnow(), settings.display_tz)
     for record in records:
         if record.get("update_time"):
             record["update_time"] = market_time_to_display(record["update_time"], settings.display_tz)
+        record["fetched_at"] = fetched_at  # the honest "data as-of"; update_time is only the last trade
     by_code = {r.get("code"): r for r in records}
-    return [
-        {
+    entries = []
+    for m in monitors:
+        entry = {
             "code": m.code,
             "field": m.field,
             "threshold": m.threshold,
             "direction": m.direction,
             "triggered": m.triggered,
             "last_value": m.last_value,
-            "snapshot": by_code.get(m.code),
+            "snapshot": None if m.legs else by_code.get(m.code),
         }
-        for m in monitors
-    ]
+        if m.legs:
+            entry["legs"] = m.legs
+            entry["combo_value"] = monitor_value(m, by_code)
+            entry["combo_greeks"] = {f: combo_field_sum(m, by_code, f) for f in COMBO_GREEK_FIELDS}
+        entries.append(entry)
+    return entries
 
 
 class MonitorSweeper:

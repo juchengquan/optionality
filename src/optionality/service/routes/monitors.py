@@ -1,18 +1,31 @@
+import html
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from optionality.apis.aux import build_spx_code, normalize_strike_date
+from optionality.notification import full_html_document
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
-from optionality.service.models import Monitor
+from optionality.service.models import Monitor, utcnow
 from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
+quotes_router = APIRouter(tags=["quotes"])
+
+_QUOTES_CSS = """<style>
+table { border-collapse: collapse; }
+th, td { border: 1px solid #aaa; padding: 4px 10px; text-align: right; white-space: nowrap; }
+th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+td.hl { background: #fff3cd; font-weight: 600; }
+tr.triggered td { background: #f8d7da; }
+tr.triggered td.hl { background: #f5c2c7; }
+</style>"""
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -23,7 +36,7 @@ class MonitorIn(BaseModel):
     option_type: Literal["CALL", "PUT"]
     strike: float
     field: str = "option_delta"
-    threshold: float
+    threshold: float = Field(gt=0)  # abs-comparison: non-positive thresholds never/always fire
     direction: Literal["above", "below"] = "above"
     enabled: bool = True
 
@@ -47,7 +60,7 @@ class ComboMonitorIn(BaseModel):
     strike_date: str
     legs: list[ComboLegIn] = Field(min_length=2)
     field: str = "mid_price"
-    threshold: float
+    threshold: float = Field(gt=0)
     direction: Literal["above", "below"] = "above"
     enabled: bool = True
 
@@ -61,7 +74,7 @@ class ComboMonitorIn(BaseModel):
 
 
 class MonitorPatch(BaseModel):
-    threshold: float | None = None
+    threshold: float | None = Field(default=None, gt=0)
     direction: Literal["above", "below"] | None = None
     field: str | None = None
     enabled: bool | None = None
@@ -99,20 +112,113 @@ def list_monitors(session: SessionDep, settings: SettingsDep):
     return [_to_dict(r, settings.display_tz) for r in rows]
 
 
-@router.get("/quotes")
+@quotes_router.get("/quotes")
 def get_watchlist_quotes(
     session_factory: Annotated[object, Depends(get_session_factory)],
     settings: Annotated[object, Depends(get_settings)],
     sweeper: Annotated[object, Depends(get_sweeper)],
 ):
     try:
-        return watchlist_quotes(session_factory, settings, sweeper.fetcher)
+        return watchlist_quotes(session_factory, settings, sweeper.fetcher, include_combos=True)
     except Exception as err:
         raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
 
 
+@quotes_router.get("/quotes.html")
+def get_watchlist_quotes_html(
+    session_factory: Annotated[object, Depends(get_session_factory)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    sweeper: Annotated[object, Depends(get_sweeper)],
+):
+    try:
+        quotes = watchlist_quotes(session_factory, settings, sweeper.fetcher, include_combos=True)
+    except Exception as err:
+        raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
+
+    fetched = next(
+        (q["snapshot"]["fetched_at"] for q in quotes if q.get("snapshot")),
+        display_time(utcnow(), settings.display_tz),
+    )
+    heading = f"<h2>Watchlist quotes</h2><p>fetched at {fetched}</p>"
+    if not quotes:
+        return HTMLResponse(
+            full_html_document(heading + "<p>Watchlist is empty.</p>"), headers={"Cache-Control": "no-store"}
+        )
+
+    field_column = {
+        "option_delta": "delta",
+        "option_gamma": "gamma",
+        "option_theta": "theta",
+        "option_vega": "vega",
+        "option_implied_volatility": "IV",
+        "mid_price": "mid",
+    }
+    rows = []
+    for q in quotes:
+        snap = q["snapshot"] or {}
+        sign = "≤" if q["direction"] == "below" else "≥"
+        row = {
+            "contract": snap.get("name") or q["code"],
+            "alarm": f"{q['field']} {sign} {q['threshold']}" + (" 🔔" if q["triggered"] else ""),
+            "delta": snap.get("option_delta"),
+            "gamma": snap.get("option_gamma"),
+            "theta": snap.get("option_theta"),
+            "vega": snap.get("option_vega"),
+            "IV": snap.get("option_implied_volatility"),
+            "mid": snap.get("mid_price"),
+            "bid": snap.get("bid_price"),
+            "ask": snap.get("ask_price"),
+            "last trade": snap.get("update_time"),
+            "fetched": fetched,
+        }
+        if "legs" in q:
+            # combo: signed sums under the combo's own leg signs — the greeks OF its value.
+            # IV/bid/ask stay blank: IVs don't add, and combo bid/ask is execution-dependent.
+            for greek_field, greek_value in q["combo_greeks"].items():
+                if greek_value is not None:
+                    row[field_column[greek_field]] = greek_value
+            column = field_column.get(q["field"])
+            if column and q["combo_value"] is not None:
+                row[column] = q["combo_value"]
+        rows.append(row)
+    columns = [
+        "contract",
+        "alarm",
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "IV",
+        "mid",
+        "bid",
+        "ask",
+        "last trade",
+        "fetched",
+    ]
+    header = "".join(f"<th>{c}</th>" for c in columns)
+    body = []
+    for q, row in zip(quotes, rows, strict=True):
+        cells = []
+        for column in columns:
+            value = row.get(column)
+            if value is None:
+                text = "—"
+            elif isinstance(value, float):
+                text = f"{value:.4g}"
+            else:
+                text = html.escape(str(value))
+            css = ' class="hl"' if column in ("delta", "mid") else ""
+            cells.append(f"<td{css}>{text}</td>")
+        tr_css = ' class="triggered"' if q["triggered"] else ""
+        body.append(f"<tr{tr_css}>{''.join(cells)}</tr>")
+    table = "<table><thead><tr>" + header + "</tr></thead><tbody>" + "".join(body) + "</tbody></table>"
+    return HTMLResponse(full_html_document(_QUOTES_CSS + heading + table), headers={"Cache-Control": "no-store"})
+
+
 @router.post("", status_code=201)
-def create_monitor(payload: MonitorIn, session: SessionDep, settings: SettingsDep):
+def create_monitor(payload: MonitorIn | ComboMonitorIn, session: SessionDep, settings: SettingsDep):
+    if isinstance(payload, ComboMonitorIn):
+        return _create_combo(payload, session, settings)
     code = _build_code(payload)
     if session.scalar(select(Monitor).where(Monitor.code == code, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({code}, {payload.field}) already exists")
@@ -131,8 +237,7 @@ def create_monitor(payload: MonitorIn, session: SessionDep, settings: SettingsDe
     return _to_dict(row, settings.display_tz)
 
 
-@router.post("/combo", status_code=201)
-def create_combo_monitor(payload: ComboMonitorIn, session: SessionDep, settings: SettingsDep):
+def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings):
     if session.scalar(select(Monitor).where(Monitor.code == payload.name, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({payload.name}, {payload.field}) already exists")
     row = Monitor(

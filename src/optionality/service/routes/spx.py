@@ -5,17 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from optionality.apis.aux import build_spx_code
 from optionality.core import fetch_snapshot
 from optionality.service.deps import get_settings
+from optionality.service.models import utcnow
 from optionality.service.settings import Settings
-from optionality.service.timefmt import market_time_to_display
+from optionality.service.timefmt import display_time, market_time_to_display
 
 router = APIRouter(prefix="/spx", tags=["spx"])
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-@router.get("/snapshot")
-def spx_snapshot(strike_date: str, option_type: Literal["CALL", "PUT"], strike: float, settings: SettingsDep):
-    """Live per-contract snapshot for an SPX weekly option.
+@router.get("/quote")
+def spx_quote(strike_date: str, option_type: Literal["CALL", "PUT"], strike: float, settings: SettingsDep):
+    """Live quote for one SPX weekly option contract.
 
     Makes one bounded OpenD call directly (outside the worker queue): a single
     snapshot does not meaningfully compete with a run's QPS budget, and queueing
@@ -36,4 +37,5 @@ def spx_snapshot(strike_date: str, option_type: Literal["CALL", "PUT"], strike: 
     snapshot = records[0]
     if snapshot.get("update_time"):
         snapshot["update_time"] = market_time_to_display(snapshot["update_time"], settings.display_tz)
+    snapshot["fetched_at"] = display_time(utcnow(), settings.display_tz)
     return {"code": code, "snapshot": snapshot}

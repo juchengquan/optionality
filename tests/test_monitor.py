@@ -262,6 +262,54 @@ def test_watchlist_quotes_excludes_combos(session_factory):
     assert [q["code"] for q in quotes] == [CODE]  # combo absent from single-leg tables
 
 
+def test_watchlist_quotes_include_combos_computes_value(session_factory):
+    from optionality.apis.aux import build_spx_code
+
+    _mk_monitor(session_factory)
+    _mk_combo(session_factory)
+    date = _future()
+    prices = {
+        CODE: 26.4,
+        build_spx_code(date, "CALL", 8100): 26.4,
+        build_spx_code(date, "CALL", 8150): 19.25,
+    }
+    fetched = []
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        fetched.append(codes)
+        return [{"code": c, "mid_price": prices[c], "option_delta": 0.1} for c in codes if c in prices]
+
+    quotes = watchlist_quotes(session_factory, SETTINGS, fetcher, include_combos=True)
+    assert len(fetched) == 1  # still ONE snapshot call for singles + combo legs
+    combo = next(q for q in quotes if q["code"] == "sep-condor")
+    assert combo["combo_value"] == pytest.approx(7.15)  # 26.4 - 19.25
+    assert combo["snapshot"] is None
+    single = next(q for q in quotes if q["code"] == CODE)
+    assert single["snapshot"]["mid_price"] == 26.4
+
+
+def test_combo_greeks_are_signed_sums_and_iv_excluded(session_factory):
+    from optionality.apis.aux import build_spx_code
+
+    _mk_combo(session_factory)
+    date = _future()
+    legs = {
+        build_spx_code(date, "CALL", 8100): {"option_delta": 0.166, "option_gamma": 0.0002, "option_theta": -1.10},
+        build_spx_code(date, "CALL", 8150): {"option_delta": 0.129, "option_gamma": 0.0001, "option_theta": -0.95},
+    }
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "mid_price": 1.0, "option_implied_volatility": 22.0, **legs[c]} for c in codes]
+
+    combo = watchlist_quotes(session_factory, SETTINGS, fetcher, include_combos=True)[0]
+    greeks = combo["combo_greeks"]
+    assert greeks["option_delta"] == pytest.approx(0.037)  # +0.166 - 0.129: delta OF the combo value
+    assert greeks["option_gamma"] == pytest.approx(0.0001)
+    assert greeks["option_theta"] == pytest.approx(-0.15)
+    assert "option_implied_volatility" not in greeks  # IVs don't add
+    assert greeks["option_vega"] is None  # missing on legs -> None, not partial sum
+
+
 def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
     _mk_monitor(session_factory)
 
@@ -273,6 +321,7 @@ def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
     assert quotes[0]["code"] == CODE
     assert quotes[0]["threshold"] == 0.6
     assert quotes[0]["snapshot"]["option_delta"] == 0.91
+    assert "fetched_at" in quotes[0]["snapshot"]  # call-time stamp: the honest "data as-of"
 
 
 def test_watchlist_quotes_ordered_by_type_then_date(session_factory):

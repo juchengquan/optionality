@@ -276,6 +276,8 @@ class TelegramBot(threading.Thread):
             code = build_spx_code(strike_date, option_type, strike)
         except ValueError:
             return usage
+        if threshold <= 0:
+            return "Threshold must be positive — values are compared as absolutes (abs(value) vs threshold)."
         field, direction = "option_delta", "above"
         for extra in args[4:6]:
             if extra.lower() in ("above", "below"):
@@ -329,6 +331,8 @@ class TelegramBot(threading.Thread):
             threshold = float(args[i])
         except ValueError:
             return usage
+        if threshold <= 0:
+            return "Threshold must be positive — values are compared as absolutes (abs(value) vs threshold)."
         field, direction = "mid_price", "above"
         for extra in args[i + 1 : i + 3]:
             if extra.lower() in ("above", "below"):
@@ -403,6 +407,8 @@ class TelegramBot(threading.Thread):
             value = float(args[-1])
         except ValueError:
             return "Usage: /threshold <name, code, id prefix, or contract> <value>"
+        if value <= 0:
+            return "Threshold must be positive — values are compared as absolutes (abs(value) vs threshold)."
         with self.session_factory() as session:
             matches = session.scalars(select(Monitor).where(or_(*self._identifier_conditions(args[:-1])))).all()
             if not matches:
