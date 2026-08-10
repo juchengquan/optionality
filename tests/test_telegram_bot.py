@@ -101,6 +101,24 @@ def test_watchcombo_creates_and_combo_shows_breakdown(session_factory):
         assert s.scalar(select(Monitor)) is None
 
 
+def test_threshold_command_updates_by_name_or_label(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watchcombo sep-condor {_future()} +C8100 -C8150 10 below"))
+    bot.handle_update(_update("/threshold sep-condor 25"))
+    assert "25" in api.sent[-1]
+    with session_factory() as s:
+        assert s.scalar(select(Monitor).where(Monitor.code == "sep-condor")).threshold == 25.0
+
+    bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
+    bot.handle_update(_update(f"/threshold {_yymmdd()} C6500 0.5"))
+    assert "0.5" in api.sent[-1]
+    with session_factory() as s:
+        assert s.scalar(select(Monitor).where(Monitor.code != "sep-condor")).threshold == 0.5
+
+    bot.handle_update(_update("/threshold ghost 1"))
+    assert "no monitor" in api.sent[-1].lower()
+
+
 def test_watchcombo_bad_args(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update(f"/watchcombo broken {_future()} +C8100 10"))  # only one leg
@@ -311,6 +329,7 @@ def test_register_commands_publishes_menu(session_factory):
         "watchcombo",
         "unwatch",
         "combo",
+        "threshold",
         "snapshot",
         "health",
         "help",

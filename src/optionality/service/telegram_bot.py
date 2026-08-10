@@ -26,6 +26,7 @@ HELP_TEXT = """Commands:
 /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below] — watch a combo (e.g. a condor)
 /unwatch <name, code, id prefix, or contract like 260918 C8100> — remove a monitor
 /combo <name> — per-leg breakdown of a combo
+/threshold <name or contract> <value> — change a monitor's threshold
 /snapshot <date> <CALL|PUT> <strike> — live quote
 (dates: YYYY-MM-DD or YYYYMMDD)
 /health — service status
@@ -71,6 +72,7 @@ BOT_COMMANDS = [
     {"command": "watchcombo", "description": "Watch a combo: NAME DATE ±Cstrike ±Pstrike ... threshold"},
     {"command": "unwatch", "description": "Remove a monitor by name, code, or id prefix"},
     {"command": "combo", "description": "Per-leg breakdown of a combo"},
+    {"command": "threshold", "description": "Change a monitor's threshold: NAME|contract value"},
     {"command": "snapshot", "description": "Live quote: DATE CALL|PUT strike"},
     {"command": "health", "description": "Queue and sweep status"},
     {"command": "help", "description": "Show usage"},
@@ -176,6 +178,8 @@ class TelegramBot(threading.Thread):
             return self._cmd_combo(args)
         if command == "unwatch":
             return self._cmd_unwatch(args)
+        if command == "threshold":
+            return self._cmd_threshold(args)
         if command == "snapshot":
             return self._cmd_snapshot(args)
         if command == "health":
@@ -382,19 +386,43 @@ class TelegramBot(threading.Thread):
         rows.append(["", "total", total_cell])
         return _table(["", "leg", _FIELD_SHORT.get(monitor.field, monitor.field)], rows)
 
-    def _cmd_unwatch(self, args: list[str]) -> str:
-        if not args:
-            return "Usage: /unwatch <code, id prefix, or contract like 260918 C8100>"
+    @staticmethod
+    def _identifier_conditions(args: list[str]):
         token = args[0]
         joined = "".join(args).upper()
         conditions = [Monitor.code == joined, Monitor.code == token, Monitor.id.startswith(token)]
         short = re.fullmatch(r"(\d{6})([CP])(\d+)", joined)
         if short:
             conditions.append(Monitor.code == f"US.SPXW{short.group(1)}{short.group(2)}{short.group(3)}000")
+        return conditions
+
+    def _cmd_threshold(self, args: list[str]) -> str:
+        if len(args) < 2:
+            return "Usage: /threshold <name, code, id prefix, or contract> <value>"
+        try:
+            value = float(args[-1])
+        except ValueError:
+            return "Usage: /threshold <name, code, id prefix, or contract> <value>"
         with self.session_factory() as session:
-            matches = session.scalars(select(Monitor).where(or_(*conditions))).all()
+            matches = session.scalars(select(Monitor).where(or_(*self._identifier_conditions(args[:-1])))).all()
             if not matches:
-                return f"No monitor matches '{token}'."
+                return f"No monitor matches '{' '.join(args[:-1])}'."
+            if len(matches) > 1:
+                return "Ambiguous — matches: " + ", ".join(m.code for m in matches)
+            monitor = matches[0]
+            monitor.threshold = value
+            code, direction, field = monitor.code, monitor.direction, monitor.field
+            session.commit()
+        sign = "≤" if direction == "below" else "≥"
+        return f"{code}: alarm when abs({field}) {sign} {value}"
+
+    def _cmd_unwatch(self, args: list[str]) -> str:
+        if not args:
+            return "Usage: /unwatch <name, code, id prefix, or contract like 260918 C8100>"
+        with self.session_factory() as session:
+            matches = session.scalars(select(Monitor).where(or_(*self._identifier_conditions(args)))).all()
+            if not matches:
+                return f"No monitor matches '{' '.join(args)}'."
             if len(matches) > 1:
                 return "Ambiguous — matches: " + ", ".join(m.id[:8] for m in matches)
             code = matches[0].code

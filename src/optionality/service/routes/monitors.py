@@ -60,6 +60,13 @@ class ComboMonitorIn(BaseModel):
             raise ValueError(f"invalid strike_date '{value}': use YYYY-MM-DD or YYYYMMDD") from err
 
 
+class MonitorPatch(BaseModel):
+    threshold: float | None = None
+    direction: Literal["above", "below"] | None = None
+    field: str | None = None
+    enabled: bool | None = None
+
+
 def _build_code(payload: MonitorIn) -> str:
     try:
         return build_spx_code(payload.strike_date, payload.option_type, payload.strike)
@@ -165,6 +172,27 @@ def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep, set
     row.threshold = payload.threshold
     row.direction = payload.direction
     row.enabled = payload.enabled
+    session.commit()
+    return _to_dict(row, settings.display_tz)
+
+
+@router.patch("/{monitor_id}")
+def patch_monitor(monitor_id: str, payload: MonitorPatch, session: SessionDep, settings: SettingsDep):
+    changes = payload.model_dump(exclude_none=True)
+    if not changes:
+        raise HTTPException(status_code=422, detail="nothing to update")
+    row = session.get(Monitor, monitor_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    new_field = changes.get("field", row.field)
+    if new_field != row.field:
+        conflict = session.scalar(
+            select(Monitor).where(Monitor.code == row.code, Monitor.field == new_field, Monitor.id != monitor_id)
+        )
+        if conflict:
+            raise HTTPException(status_code=409, detail=f"monitor for ({row.code}, {new_field}) already exists")
+    for key, value in changes.items():
+        setattr(row, key, value)
     session.commit()
     return _to_dict(row, settings.display_tz)
 

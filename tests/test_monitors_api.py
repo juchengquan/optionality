@@ -116,6 +116,35 @@ def test_combo_monitor_create_and_guardrails(client_factory):
     assert client.delete(f"/monitors/{mid}", headers=AUTH).status_code == 204
 
 
+def test_patch_monitor_safe_fields(client_factory):
+    client = client_factory()
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    mid = client.post("/monitors", json=payload, headers=AUTH).json()["id"]
+
+    patched = client.patch(f"/monitors/{mid}", json={"threshold": 0.5, "direction": "below"}, headers=AUTH)
+    assert patched.status_code == 200
+    assert patched.json()["threshold"] == 0.5
+    assert patched.json()["direction"] == "below"
+
+    assert client.patch(f"/monitors/{mid}", json={}, headers=AUTH).status_code == 422  # nothing to update
+    assert client.patch("/monitors/nope", json={"threshold": 1}, headers=AUTH).status_code == 404
+
+    combo = client.post("/monitors/combo", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH).json()
+    combo_patch = client.patch(f"/monitors/{combo['id']}", json={"threshold": 25}, headers=AUTH)
+    assert combo_patch.status_code == 200  # combos ARE patchable for safe fields
+    assert combo_patch.json()["threshold"] == 25
+    assert combo_patch.json()["legs"] == combo["legs"]  # legs untouched
+
+
+def test_patch_field_conflict(client_factory):
+    client = client_factory()
+    base = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    client.post("/monitors", json=base, headers=AUTH)
+    other = client.post("/monitors", json={**base, "field": "mid_price", "threshold": 30}, headers=AUTH).json()
+    resp = client.patch(f"/monitors/{other['id']}", json={"field": "option_delta"}, headers=AUTH)
+    assert resp.status_code == 409  # (code, option_delta) already taken
+
+
 def test_direction_below_monitor(client_factory):
     client = client_factory()
     payload = {
