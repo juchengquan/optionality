@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from tests.conftest import AUTH
 
 
@@ -221,7 +223,7 @@ def test_quotes_html_includes_combo_row(client_factory):
 
     quotes = client.get("/quotes", headers=AUTH).json()  # combos now included in JSON too
     combo = next(q for q in quotes if q["code"] == "sep-condor")
-    assert combo["combo_value"] == 7.15
+    assert combo["combo_value"] == pytest.approx(7.15)
     assert "combo_greeks" in combo
 
 
