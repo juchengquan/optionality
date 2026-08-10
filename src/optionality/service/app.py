@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from optionality.core import run_task
 from optionality.service.db import init_db, make_engine, make_session_factory
-from optionality.service.routes import health
+from optionality.service.routes import configs, health
 from optionality.service.scheduler import build_scheduler, refresh_jobs
 from optionality.service.settings import Settings
 from optionality.service.worker import Worker
@@ -44,4 +44,5 @@ def create_app(settings: Settings | None = None, runner=None) -> FastAPI:
         return await call_next(request)
 
     app.include_router(health.router)
+    app.include_router(configs.router)
     return app
