@@ -9,6 +9,7 @@ from optionality.service.monitor import MonitorSweeper
 from optionality.service.routes import configs, health, monitors, runs, schedules, spx
 from optionality.service.scheduler import build_scheduler, refresh_jobs
 from optionality.service.settings import Settings
+from optionality.service.telegram_bot import TelegramBot
 from optionality.service.worker import Worker
 
 
@@ -26,7 +27,11 @@ def create_app(settings: Settings | None = None, runner=None, snapshot_fetcher=N
             seconds=settings.monitor_interval_seconds,
             id="monitor-sweep",
         )
+        if app.state.telegram_bot is not None:
+            app.state.telegram_bot.start()
         yield
+        if app.state.telegram_bot is not None:
+            app.state.telegram_bot.stop()
         app.state.scheduler.shutdown(wait=False)
         app.state.worker.stop()
 
@@ -40,6 +45,15 @@ def create_app(settings: Settings | None = None, runner=None, snapshot_fetcher=N
     app.state.worker = Worker(app.state.session_factory, settings, runner=runner or run_task)
     app.state.scheduler = build_scheduler()
     app.state.sweeper = MonitorSweeper(app.state.session_factory, settings, fetcher=snapshot_fetcher or fetch_snapshot)
+    app.state.telegram_bot = None
+    if settings.telegram_bot_token and settings.telegram_chat_id:
+        app.state.telegram_bot = TelegramBot(
+            app.state.session_factory,
+            settings,
+            fetcher=snapshot_fetcher or fetch_snapshot,
+            sweeper=app.state.sweeper,
+            worker=app.state.worker,
+        )
 
     @app.middleware("http")
     async def bearer_auth(request: Request, call_next):

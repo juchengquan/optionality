@@ -90,6 +90,20 @@ sweep state is visible under `monitor` in `/health`.
 for an existing one) and put the token in `.env` as `TELEGRAM_BOT_TOKEN`. Then send your bot any message and run
 `curl "https://api.telegram.org/bot<TOKEN>/getUpdates"` — the `"chat":{"id": ...}` number is `TELEGRAM_CHAT_ID`.
 
+**Two-way bot:** when both Telegram vars are set, the service also long-polls the bot for commands (owner chat
+only — messages from any other chat are ignored). Available commands:
+
+```
+/monitors                                      list the watchlist with live state
+/watch 2026-12-18 CALL 6500 0.6 [field]        add a monitor
+/unwatch US.SPXW261218C6500000                 remove (by code or id prefix)
+/snapshot 2026-12-18 CALL 6500                 live quote
+/health                                        queue + sweep status
+```
+
+Only one service instance may poll a given bot token at a time (Telegram getUpdates is single-consumer) — don't
+run the local server and the Docker deployment simultaneously with the same bot.
+
 ### Runbook
 
 - **Scheduled reports stopped and healthchecks.io alerted:** check `docker compose ps`, then `curl :8000/health`. If `"opend": false`, OpenD is down or logged out — restart/re-login it (this is the most common failure).

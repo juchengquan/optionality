@@ -47,6 +47,7 @@ line-length = 120
 # the worker's and sweeper's job is to survive any failure and record it; blind catches are the design
 "src/optionality/service/worker.py" = ["BLE001"]
 "src/optionality/service/monitor.py" = ["BLE001"]
+"src/optionality/service/telegram_bot.py" = ["BLE001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
