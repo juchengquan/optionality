@@ -161,7 +161,7 @@ def ui_dashboard(
     error: str | None = None,
 ):
     context = _live_context(request, session, settings, session_factory, sweeper, worker)
-    context.update({"fields": UI_FIELDS, "error": error})
+    context.update({"fields": UI_FIELDS, "error": error, "refresh_seconds": settings.ui_refresh_seconds})
     response = templates.TemplateResponse(request, "ui.html", context)
     response.headers["Cache-Control"] = "no-store"
     return response

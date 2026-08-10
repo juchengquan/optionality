@@ -12,8 +12,6 @@ from optionality.service.timefmt import display_time, market_time_to_display
 
 logger = logging.getLogger("optionality.monitor")
 
-DEGRADED_AFTER = 5
-
 # display order everywhere the watchlist is listed: CALLs before PUTs, then by expiry, then strike
 WATCHLIST_ORDER = (Monitor.option_type, Monitor.strike_date, Monitor.strike)
 
@@ -187,11 +185,13 @@ class MonitorSweeper:
     def _record_failure(self) -> None:
         self.last_sweep_ok = False
         self.consecutive_failures += 1
-        if self.consecutive_failures == DEGRADED_AFTER:
-            self._notify(f"⚠️ monitoring degraded: {DEGRADED_AFTER} consecutive sweep failures (OpenD unreachable?)")
+        if self.consecutive_failures == self.settings.degraded_after_failures:
+            self._notify(
+                f"⚠️ monitoring degraded: {self.consecutive_failures} consecutive sweep failures (OpenD unreachable?)"
+            )
 
     def _record_success(self) -> None:
-        if self.consecutive_failures >= DEGRADED_AFTER:
+        if self.consecutive_failures >= self.settings.degraded_after_failures:
             self._notify("✅ monitoring recovered")
         self.consecutive_failures = 0
         self.last_sweep_ok = True

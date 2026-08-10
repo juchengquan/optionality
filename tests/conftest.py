@@ -81,13 +81,16 @@ def client_factory(tmp_path):
 
     clients = []
 
-    def make(token="tok", runner=_stub_runner, opend_port=1, root_path="", snapshot_fetcher=None):
+    def make(
+        token="tok", runner=_stub_runner, opend_port=1, root_path="", snapshot_fetcher=None, ui_refresh_seconds=30
+    ):
         settings = Settings(
             db_path=str(tmp_path / "app.db"),
             api_token=token,
             opend_port=opend_port,
             root_path=root_path,
             display_tz="Asia/Singapore",
+            ui_refresh_seconds=ui_refresh_seconds,
         )
         client = TestClient(create_app(settings=settings, runner=runner, snapshot_fetcher=snapshot_fetcher))
         client.__enter__()  # run lifespan (starts worker + scheduler)

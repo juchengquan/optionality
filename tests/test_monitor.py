@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from optionality.service.models import Monitor
-from optionality.service.monitor import DEGRADED_AFTER, MonitorSweeper, watchlist_quotes
+from optionality.service.monitor import MonitorSweeper, watchlist_quotes
 from optionality.service.settings import Settings
 
 SETTINGS = Settings(telegram_bot_token="t", telegram_chat_id="c", alarm_cooldown_seconds=0)
@@ -211,11 +211,11 @@ def test_watchdog_degraded_and_recovery(session_factory):
     recorder = Recorder()
     sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
 
-    for _ in range(DEGRADED_AFTER + 1):
+    for _ in range(SETTINGS.degraded_after_failures + 1):
         sweeper.sweep()
     degraded = [m for m in recorder.messages if "degraded" in m]
     assert len(degraded) == 1  # edge-triggered, not once per failure
-    assert sweeper.consecutive_failures == DEGRADED_AFTER + 1
+    assert sweeper.consecutive_failures == SETTINGS.degraded_after_failures + 1
     assert sweeper.last_sweep_ok is False
 
     state["fail"] = False

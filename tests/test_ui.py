@@ -27,6 +27,11 @@ def test_dashboard_renders(client_factory):
     assert "Add combo" in resp.text
 
 
+def test_refresh_interval_comes_from_settings(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher, ui_refresh_seconds=7)
+    assert 'hx-trigger="every 7s' in client.get("/ui", headers=AUTH).text
+
+
 def test_table_fragment_is_forms_free(client_factory):
     client = client_factory(snapshot_fetcher=_fetcher)
     payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
