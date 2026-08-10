@@ -1,6 +1,6 @@
+import html
 from typing import Annotated, Literal
 
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
@@ -17,6 +17,15 @@ from optionality.service.timefmt import display_time
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
 quotes_router = APIRouter(tags=["quotes"])
+
+_QUOTES_CSS = """<style>
+table { border-collapse: collapse; }
+th, td { border: 1px solid #aaa; padding: 4px 10px; text-align: right; white-space: nowrap; }
+th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+td.hl { background: #fff3cd; font-weight: 600; }
+tr.triggered td { background: #f8d7da; }
+tr.triggered td.hl { background: #f5c2c7; }
+</style>"""
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -172,8 +181,38 @@ def get_watchlist_quotes_html(
             if column and q["combo_value"] is not None:
                 row[column] = q["combo_value"]
         rows.append(row)
-    table = pd.DataFrame(rows).to_html(index=False, na_rep="—", float_format=lambda v: f"{v:.4g}")
-    return HTMLResponse(full_html_document(heading + table), headers={"Cache-Control": "no-store"})
+    columns = [
+        "contract",
+        "alarm",
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "IV",
+        "mid",
+        "bid",
+        "ask",
+        "last trade",
+        "fetched",
+    ]
+    header = "".join(f"<th>{c}</th>" for c in columns)
+    body = []
+    for q, row in zip(quotes, rows, strict=True):
+        cells = []
+        for column in columns:
+            value = row.get(column)
+            if value is None:
+                text = "—"
+            elif isinstance(value, float):
+                text = f"{value:.4g}"
+            else:
+                text = html.escape(str(value))
+            css = ' class="hl"' if column in ("delta", "mid") else ""
+            cells.append(f"<td{css}>{text}</td>")
+        tr_css = ' class="triggered"' if q["triggered"] else ""
+        body.append(f"<tr{tr_css}>{''.join(cells)}</tr>")
+    table = "<table><thead><tr>" + header + "</tr></thead><tbody>" + "".join(body) + "</tbody></table>"
+    return HTMLResponse(full_html_document(_QUOTES_CSS + heading + table), headers={"Cache-Control": "no-store"})
 
 
 @router.post("", status_code=201)

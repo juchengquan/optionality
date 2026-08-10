@@ -209,6 +209,31 @@ def test_quotes_html_renders_watchlist(client_factory):
     assert resp.headers["cache-control"] == "no-store"  # a live dashboard must never be browser-cached
 
 
+def test_quotes_html_highlights_key_columns_and_triggered_rows(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_delta": 0.9, "mid_price": 26.4} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    client.post("/monitors", json=payload, headers=AUTH)
+
+    resp = client.get("/quotes.html", headers=AUTH)
+    assert 'class="hl"' in resp.text  # delta and mid cells carry the highlight class
+    assert resp.text.count('class="hl"') == 2  # one row: exactly its delta + mid cells
+    assert 'class="triggered"' not in resp.text  # nothing triggered yet
+
+    from sqlalchemy import select
+
+    from optionality.service.models import Monitor
+
+    sf = client.app.state.session_factory
+    with sf() as s:
+        s.scalar(select(Monitor)).triggered = True
+        s.commit()
+    resp = client.get("/quotes.html", headers=AUTH)
+    assert 'class="triggered"' in resp.text  # triggered row is visually flagged
+
+
 def test_quotes_html_includes_combo_row(client_factory):
     def fetcher(codes, opend_host=None, opend_port=None):
         prices = dict.fromkeys(codes, 26.4)
