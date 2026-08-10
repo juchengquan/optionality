@@ -182,6 +182,57 @@ def test_alarm_cooldown_suppresses_flapping_messages(session_factory):
     assert len(recorder.messages) == 2
 
 
+def test_reminder_repeats_while_breached(session_factory):
+    mid = _mk_monitor(session_factory, threshold=0.6)
+    values = {CODE: 0.7}
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": CODE, "name": CODE, "option_delta": values[CODE]}]
+
+    settings = Settings(
+        telegram_bot_token="t", telegram_chat_id="c", alarm_cooldown_seconds=0, alarm_repeat_seconds=1800
+    )
+    sweeper = MonitorSweeper(session_factory, settings, fetcher=fetcher, sender=recorder)
+
+    sweeper.sweep()  # breach alarm
+    sweeper.sweep()  # still breached, inside the repeat window: silent
+    assert len(recorder.messages) == 1
+
+    with session_factory() as s:  # pretend 31 minutes pass
+        s.get(Monitor, mid).last_alarm_at = datetime.now(UTC) - timedelta(seconds=1860)
+        s.commit()
+    sweeper.sweep()
+    assert len(recorder.messages) == 2
+    assert "still" in recorder.messages[1]
+    assert "reminder" in recorder.messages[1]
+
+    sweeper.sweep()  # window reset by the reminder: silent again
+    assert len(recorder.messages) == 2
+
+    values[CODE] = 0.5  # recovery still works normally
+    sweeper.sweep()
+    assert len(recorder.messages) == 3
+    assert "back below" in recorder.messages[2]
+
+
+def test_reminder_disabled_when_repeat_zero(session_factory):
+    mid = _mk_monitor(session_factory, threshold=0.6)
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": CODE, "name": CODE, "option_delta": 0.7}]
+
+    settings = Settings(telegram_bot_token="t", telegram_chat_id="c", alarm_cooldown_seconds=0, alarm_repeat_seconds=0)
+    sweeper = MonitorSweeper(session_factory, settings, fetcher=fetcher, sender=recorder)
+    sweeper.sweep()
+    with session_factory() as s:
+        s.get(Monitor, mid).last_alarm_at = datetime.now(UTC) - timedelta(days=1)
+        s.commit()
+    sweeper.sweep()
+    assert len(recorder.messages) == 1  # edge alarm only; 0 = reminders off
+
+
 def test_expired_monitor_auto_disabled_and_not_fetched(session_factory):
     mid = _mk_monitor(session_factory, strike_date=_past())
     calls = []
