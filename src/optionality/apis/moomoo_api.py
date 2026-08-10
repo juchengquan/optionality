@@ -13,9 +13,9 @@ from optionality.apis.aux import (
 from optionality.datatype import OptionHoldingsConfig, OptionStrategiesConfig
 
 
-def get_client():
+def get_client(host: str = "127.0.0.1", port: int = 11111):
     try:
-        client = OpenQuoteContext(host="127.0.0.1", port=11111)
+        client = OpenQuoteContext(host=host, port=port)
         return client
     except Exception as err:
         raise RuntimeError("Client connection failed!") from err
