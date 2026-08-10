@@ -21,6 +21,15 @@ HELP_TEXT = """Commands:
 /health — service status
 /help — this message"""
 
+BOT_COMMANDS = [
+    {"command": "monitors", "description": "List the watchlist with live state"},
+    {"command": "watch", "description": "Add a monitor: DATE CALL|PUT strike threshold"},
+    {"command": "unwatch", "description": "Remove a monitor by code or id prefix"},
+    {"command": "snapshot", "description": "Live quote: DATE CALL|PUT strike"},
+    {"command": "health", "description": "Queue and sweep status"},
+    {"command": "help", "description": "Show usage"},
+]
+
 
 class TelegramBot(threading.Thread):
     """Long-polls getUpdates and answers commands — from the owner chat only.
@@ -52,7 +61,16 @@ class TelegramBot(threading.Thread):
             raise RuntimeError(f"telegram {method} failed: {payload}")
         return payload["result"]
 
+    def _register_commands(self) -> None:
+        # publishes the "/" autocomplete menu in the Telegram client
+        self.api("setMyCommands", {"commands": json.dumps(BOT_COMMANDS)})
+
     def run(self) -> None:
+        try:
+            self._register_commands()
+        except Exception:
+            logger.exception("telegram setMyCommands failed")
+
         # drain the backlog so a service restart doesn't replay old commands
         try:
             last = self.api("getUpdates", {"offset": -1, "timeout": 0})

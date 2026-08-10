@@ -14,8 +14,10 @@ def _future() -> str:
 class FakeApi:
     def __init__(self):
         self.sent = []
+        self.calls = []
 
     def __call__(self, method, params):
+        self.calls.append((method, params))
         if method == "sendMessage":
             self.sent.append(params["text"])
             return {}
@@ -104,3 +106,16 @@ def test_non_command_text_gets_help(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update("hello there"))
     assert "/watch" in api.sent[-1]
+
+
+def test_register_commands_publishes_menu(session_factory):
+    import json
+
+    bot, api = _make_bot(session_factory)
+    bot._register_commands()
+    method, params = api.calls[-1]
+    assert method == "setMyCommands"
+    names = [c["command"] for c in json.loads(params["commands"])]
+    assert names == ["monitors", "watch", "unwatch", "snapshot", "health", "help"]
+    descriptions = [c["description"] for c in json.loads(params["commands"])]
+    assert all(descriptions)
