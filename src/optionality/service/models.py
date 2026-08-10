@@ -66,6 +66,7 @@ class Monitor(Base):
     strike: Mapped[float]
     field: Mapped[str] = mapped_column(String(50), default="option_delta")
     threshold: Mapped[float]
+    direction: Mapped[str] = mapped_column(String(5), default="above", server_default="above")  # "above" | "below"
     enabled: Mapped[bool] = mapped_column(default=True)
     triggered: Mapped[bool] = mapped_column(default=False)
     last_value: Mapped[float | None] = mapped_column(default=None)

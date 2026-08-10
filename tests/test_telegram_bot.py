@@ -63,6 +63,20 @@ def test_watch_compact_date_is_normalized(session_factory):
         assert s.scalar(select(Monitor)).strike_date == _future()
 
 
+def test_watch_with_direction_below(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watch {_future()} CALL 8100 30 mid_price below"))
+    assert "watching" in api.sent[-1].lower()
+    assert "≤" in api.sent[-1]
+    with session_factory() as s:
+        m = s.scalar(select(Monitor))
+        assert m.direction == "below"
+        assert m.field == "mid_price"
+
+    bot.handle_update(_update("/monitors"))
+    assert "≤30" in api.sent[-1]  # threshold cell carries the direction
+
+
 def test_watch_with_bad_args_replies_usage(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update("/watch nope"))

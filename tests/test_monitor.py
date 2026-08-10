@@ -97,6 +97,30 @@ def test_hysteresis_rearm_cycle(session_factory):
     assert len(recorder.messages) == 3
 
 
+def test_below_direction_breach_and_rearm(session_factory):
+    _mk_monitor(session_factory, direction="below", threshold=30.0, field="mid_price")
+    values = {CODE: 26.4}
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": CODE, "name": CODE, "mid_price": values[CODE]}]
+
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
+
+    sweeper.sweep()  # 26.4 <= 30: profit target hit
+    assert len(recorder.messages) == 1
+    assert "fell" in recorder.messages[0]
+
+    values[CODE] = 30.5  # inside hysteresis band (<= 31.5): stays triggered, silent
+    sweeper.sweep()
+    assert len(recorder.messages) == 1
+
+    values[CODE] = 32.0  # above 30*1.05: recovery, re-armed
+    sweeper.sweep()
+    assert len(recorder.messages) == 2
+    assert "back above" in recorder.messages[1]
+
+
 def test_expired_monitor_auto_disabled_and_not_fetched(session_factory):
     mid = _mk_monitor(session_factory, strike_date=_past())
     calls = []
