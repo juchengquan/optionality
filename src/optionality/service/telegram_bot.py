@@ -28,9 +28,13 @@ HELP_TEXT = """Commands:
 /help — this message"""
 
 
+_FIELD_FORMATS = {"option_delta": ".3f", "option_implied_volatility": ".3f"}
+
+
 def _fmt_value(key: str, value) -> str:
-    if key == "option_delta" and isinstance(value, int | float):
-        return f"{value:.3f}"
+    fmt = _FIELD_FORMATS.get(key)
+    if fmt and isinstance(value, int | float):
+        return f"{value:{fmt}}"
     return str(value)
 
 
@@ -177,8 +181,8 @@ class TelegramBot(threading.Thread):
                 state = "off"
             if m.last_value is None:
                 last = "—"
-            elif m.field == "option_delta":
-                last = f"{m.last_value:.3f}"
+            elif m.field in _FIELD_FORMATS:
+                last = _fmt_value(m.field, m.last_value)
             else:
                 last = f"{m.last_value:.4f}"
             rows.append([_short_code(m.code), _FIELD_SHORT.get(m.field, m.field), last, str(m.threshold), state])
@@ -217,7 +221,9 @@ class TelegramBot(threading.Thread):
             delta = _fmt_value("option_delta", snap["option_delta"]) if snap.get("option_delta") is not None else "—"
             theta = f"{snap['option_theta']:.2f}" if snap.get("option_theta") is not None else "—"
             iv = (
-                f"{snap['option_implied_volatility']:.1f}" if snap.get("option_implied_volatility") is not None else "—"
+                _fmt_value("option_implied_volatility", snap["option_implied_volatility"])
+                if snap.get("option_implied_volatility") is not None
+                else "—"
             )
             contract = _short_code(q["code"]) + (" 🔔" if q["triggered"] else "")
             rows.append([contract, delta, theta, iv])

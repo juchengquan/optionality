@@ -136,12 +136,23 @@ def test_unwatch_by_code_and_by_id_prefix(session_factory):
 
 def test_snapshot_command_uses_fetcher(session_factory):
     def fetcher(codes, opend_host=None, opend_port=None):
-        return [{"code": codes[0], "name": "SPXW TEST", "option_delta": 0.512345, "bid_price": 1.0, "ask_price": 2.0}]
+        return [
+            {
+                "code": codes[0],
+                "name": "SPXW TEST",
+                "option_delta": 0.512345,
+                "option_implied_volatility": 21.45678,
+                "bid_price": 1.0,
+                "ask_price": 2.0,
+            }
+        ]
 
     bot, api = _make_bot(session_factory, fetcher=fetcher)
     bot.handle_update(_update(f"/snapshot {_future()} CALL 6500"))
     assert "option_delta: 0.512" in api.sent[-1]
     assert "0.512345" not in api.sent[-1]  # rounded to three decimals, not raw
+    assert "option_implied_volatility: 21.457" in api.sent[-1]
+    assert "21.45678" not in api.sent[-1]
 
 
 def test_monitors_ordered_calls_then_puts_by_date(session_factory):
@@ -179,8 +190,7 @@ def test_greeks_command_table(session_factory):
     assert f"{_yymmdd()} C8100" in reply
     assert "0.166" in reply  # delta, three decimals
     assert "-1.12" in reply  # theta, two decimals
-    assert "22.0" in reply  # IV, one decimal
-    assert "22.012" not in reply
+    assert "22.012" in reply  # IV, three decimals
     assert api.calls[-1][1].get("parse_mode") == "HTML"
 
 
