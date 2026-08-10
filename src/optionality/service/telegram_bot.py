@@ -6,7 +6,7 @@ import urllib.request
 
 from sqlalchemy import select
 
-from optionality.apis.aux import build_spx_code
+from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.core import fetch_snapshot
 from optionality.service.models import Monitor
 from optionality.service.monitor import watchlist_quotes
@@ -17,9 +17,10 @@ logger = logging.getLogger("optionality.telegram_bot")
 HELP_TEXT = """Commands:
 /monitors — list the watchlist with live state
 /quotes — live quotes for every watched code
-/watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field] — add a monitor
+/watch <date> <CALL|PUT> <strike> <threshold> [field] — add a monitor
 /unwatch <code or id prefix> — remove a monitor
-/snapshot <YYYY-MM-DD> <CALL|PUT> <strike> — live quote
+/snapshot <date> <CALL|PUT> <strike> — live quote
+(dates: YYYY-MM-DD or YYYYMMDD)
 /health — service status
 /help — this message"""
 
@@ -174,10 +175,11 @@ class TelegramBot(threading.Thread):
         usage = "Usage: /watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field]"
         if len(args) < 4:
             return usage
-        strike_date, option_type = args[0], args[1].upper()
+        option_type = args[1].upper()
         if option_type not in ("CALL", "PUT"):
             return usage
         try:
+            strike_date = normalize_strike_date(args[0])
             strike, threshold = float(args[2]), float(args[3])
             code = build_spx_code(strike_date, option_type, strike)
         except ValueError:

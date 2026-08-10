@@ -54,6 +54,15 @@ def test_watch_creates_monitor_and_duplicate_is_reported(session_factory):
     assert "already" in api.sent[-1].lower()
 
 
+def test_watch_compact_date_is_normalized(session_factory):
+    bot, api = _make_bot(session_factory)
+    compact = _future().replace("-", "")
+    bot.handle_update(_update(f"/watch {compact} CALL 6500 0.6"))
+    assert "watching" in api.sent[-1].lower()
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)).strike_date == _future()
+
+
 def test_watch_with_bad_args_replies_usage(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update("/watch nope"))

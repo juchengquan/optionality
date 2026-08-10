@@ -1,11 +1,11 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from optionality.apis.aux import build_spx_code
+from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
 from optionality.service.models import Monitor
 from optionality.service.monitor import watchlist_quotes
@@ -22,6 +22,14 @@ class MonitorIn(BaseModel):
     field: str = "option_delta"
     threshold: float
     enabled: bool = True
+
+    @field_validator("strike_date")
+    @classmethod
+    def _normalize_date(cls, value: str) -> str:
+        try:
+            return normalize_strike_date(value)
+        except ValueError as err:
+            raise ValueError(f"invalid strike_date '{value}': use YYYY-MM-DD or YYYYMMDD") from err
 
 
 def _build_code(payload: MonitorIn) -> str:

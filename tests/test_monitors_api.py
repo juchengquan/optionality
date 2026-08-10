@@ -37,6 +37,15 @@ def test_monitor_crud_roundtrip(client_factory):
     assert client.get("/monitors", headers=AUTH).json() == []
 
 
+def test_compact_date_is_normalized_to_dashed(client_factory):
+    client = client_factory()
+    compact = _future().replace("-", "")
+    payload = {"strike_date": compact, "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    created = client.post("/monitors", json=payload, headers=AUTH)
+    assert created.status_code == 201
+    assert created.json()["strike_date"] == _future()  # stored dashed regardless of input
+
+
 def test_monitor_validation(client_factory):
     client = client_factory()
     bad_date = {"strike_date": "18-12-2026", "option_type": "CALL", "strike": 6500, "threshold": 0.6}
