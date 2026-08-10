@@ -88,6 +88,8 @@ curl localhost:8000/runs/<run_id>/details -H "$AUTH"
 curl "localhost:8000/spx/quote?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
 # live quotes for every watched code
 curl localhost:8000/quotes -H "$AUTH"
+# browser dashboard with add/edit/mute/delete forms (also /quotes.html for the read-only table)
+open https://<machine>.<tailnet>.ts.net/api/ui
 # watch a contract: Telegram alarm when abs(option_delta) crosses 0.6
 curl -X POST localhost:8000/monitors -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"strike_date": "2026-12-18", "option_type": "CALL", "strike": 6500, "threshold": 0.6}'
