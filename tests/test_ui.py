@@ -55,6 +55,23 @@ def test_htmx_asset_served_behind_path_stripping_proxy(client_factory):
     assert "htmx" in resp.text[:200]
 
 
+def test_mode_column_shows_compare(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    signed = {
+        "strike_date": _future(),
+        "option_type": "CALL",
+        "strike": 8100,
+        "field": "mid_price",
+        "threshold": -4.05,
+        "direction": "below",
+        "compare": "signed",
+    }
+    client.post("/monitors", json=signed, headers=AUTH)
+    page = client.get("/ui", headers=AUTH)
+    assert "<th>mode</th>" in page.text
+    assert "<td>signed</td>" in page.text
+
+
 def test_create_monitor_via_form(client_factory):
     client = client_factory(snapshot_fetcher=_fetcher)
     form = {

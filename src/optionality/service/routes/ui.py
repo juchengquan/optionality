@@ -84,6 +84,7 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
             "alarm": f"{q['field']} {sign} {q['threshold']}" + (" 🔔" if q["triggered"] else ""),
             "triggered": q["triggered"],
             "threshold": q["threshold"],
+            "compare": q["compare"],
             "delta": _fmt(snap.get("option_delta")),
             "gamma": _fmt(snap.get("option_gamma")),
             "theta": _fmt(snap.get("option_theta")),
