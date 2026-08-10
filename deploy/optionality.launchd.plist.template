@@ -14,7 +14,7 @@
         <string>--factory</string>
         <string>optionality.service.app:create_app</string>
         <string>--host</string>
-        <string>0.0.0.0</string>
+        <string>127.0.0.1</string>
         <string>--port</string>
         <string>8000</string>
     </array>
