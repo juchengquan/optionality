@@ -109,10 +109,13 @@ for an existing one) and put the token in `.env` as `TELEGRAM_BOT_TOKEN`. Then s
 only — messages from any other chat are ignored). Available commands:
 
 ```
-/monitors                                      list the watchlist with live state
-/watch 2026-12-18 CALL 6500 0.6 [field]        add a monitor
-/unwatch US.SPXW261218C6500000                 remove (by code or id prefix)
-/snapshot 2026-12-18 CALL 6500                 live quote
+/monitors                                      watchlist with sweep state (last, thr, armed/🔔)
+/quotes                                        live prices: mid, bid/ask
+/greeks                                        live delta, gamma, theta
+/vol                                           live IV, vega
+/watch 2026-12-18 CALL 6500 0.6 [field]        add a monitor (dates: YYYY-MM-DD or YYYYMMDD)
+/unwatch 261218 C6500                          remove (by contract, code, or id prefix)
+/snapshot 2026-12-18 CALL 6500                 live quote for any contract
 /health                                        queue + sweep status
 ```
 

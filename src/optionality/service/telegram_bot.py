@@ -18,9 +18,9 @@ logger = logging.getLogger("optionality.telegram_bot")
 
 HELP_TEXT = """Commands:
 /monitors — list the watchlist with live state
-/quotes — live quotes for every watched code
-/greeks — live delta/theta/IV for every watched code
-/greeks2 — live gamma/vega for every watched code
+/quotes — live prices (mid, bid/ask) for every watched code
+/greeks — live delta/gamma/theta for every watched code
+/vol — live IV/vega for every watched code
 /watch <date> <CALL|PUT> <strike> <threshold> [field] — add a monitor
 /unwatch <code, id prefix, or contract like 260918 C8100> — remove a monitor
 /snapshot <date> <CALL|PUT> <strike> — live quote
@@ -61,9 +61,9 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
 
 BOT_COMMANDS = [
     {"command": "monitors", "description": "List the watchlist with live state"},
-    {"command": "quotes", "description": "Live quotes for every watched code"},
-    {"command": "greeks", "description": "Live delta/theta/IV for every watched code"},
-    {"command": "greeks2", "description": "Live gamma/vega for every watched code"},
+    {"command": "quotes", "description": "Live prices (mid, bid/ask) for every watched code"},
+    {"command": "greeks", "description": "Live delta/gamma/theta for every watched code"},
+    {"command": "vol", "description": "Live IV/vega for every watched code"},
     {"command": "watch", "description": "Add a monitor: DATE CALL|PUT strike threshold"},
     {"command": "unwatch", "description": "Remove a monitor by code or id prefix"},
     {"command": "snapshot", "description": "Live quote: DATE CALL|PUT strike"},
@@ -161,8 +161,8 @@ class TelegramBot(threading.Thread):
             return self._cmd_quotes()
         if command == "greeks":
             return self._cmd_greeks()
-        if command == "greeks2":
-            return self._cmd_greeks2()
+        if command == "vol":
+            return self._cmd_vol()
         if command == "watch":
             return self._cmd_watch(args)
         if command == "unwatch":
@@ -202,15 +202,14 @@ class TelegramBot(threading.Thread):
         rows = []
         for q in quotes:
             snap = q["snapshot"] or {}
-            delta = _fmt_value("option_delta", snap["option_delta"]) if snap.get("option_delta") is not None else "—"
             mid = str(snap["mid_price"]) if snap.get("mid_price") is not None else "—"
             if snap.get("bid_price") is not None and snap.get("ask_price") is not None:
                 bid_ask = f"{snap['bid_price']}/{snap['ask_price']}"
             else:
                 bid_ask = "—"
             contract = _short_code(q["code"]) + (" 🔔" if q["triggered"] else "")
-            rows.append([contract, delta, mid, bid_ask])
-        return _table(["contract", "delta", "mid", "bid/ask"], rows)
+            rows.append([contract, mid, bid_ask])
+        return _table(["contract", "mid", "bid/ask"], rows)
 
     def _cmd_greeks(self) -> str:
         try:
@@ -223,32 +222,32 @@ class TelegramBot(threading.Thread):
         for q in quotes:
             snap = q["snapshot"] or {}
             delta = _fmt_value("option_delta", snap["option_delta"]) if snap.get("option_delta") is not None else "—"
+            # SPX gammas are ~1e-4, so five decimals; .3f would render every gamma as 0.000
+            gamma = f"{snap['option_gamma']:.5f}" if snap.get("option_gamma") is not None else "—"
             theta = f"{snap['option_theta']:.2f}" if snap.get("option_theta") is not None else "—"
-            iv = (
-                _fmt_value("option_implied_volatility", snap["option_implied_volatility"])
-                if snap.get("option_implied_volatility") is not None
-                else "—"
-            )
             contract = _short_code(q["code"]) + (" 🔔" if q["triggered"] else "")
-            rows.append([contract, delta, theta, iv])
-        return _table(["contract", "delta", "theta", "IV"], rows)
+            rows.append([contract, delta, gamma, theta])
+        return _table(["contract", "delta", "gamma", "theta"], rows)
 
-    def _cmd_greeks2(self) -> str:
+    def _cmd_vol(self) -> str:
         try:
             quotes = watchlist_quotes(self.session_factory, self.settings, self.fetcher)
         except Exception as err:
-            return f"Greeks failed: {err}"
+            return f"Vol failed: {err}"
         if not quotes:
             return "Watchlist is empty. Add one with /watch."
         rows = []
         for q in quotes:
             snap = q["snapshot"] or {}
-            # SPX gammas are ~1e-4, so five decimals; .3f would render every gamma as 0.000
-            gamma = f"{snap['option_gamma']:.5f}" if snap.get("option_gamma") is not None else "—"
+            iv = (
+                _fmt_value("option_implied_volatility", snap["option_implied_volatility"])
+                if snap.get("option_implied_volatility") is not None
+                else "—"
+            )
             vega = f"{snap['option_vega']:.2f}" if snap.get("option_vega") is not None else "—"
             contract = _short_code(q["code"]) + (" 🔔" if q["triggered"] else "")
-            rows.append([contract, gamma, vega])
-        return _table(["contract", "gamma", "vega"], rows)
+            rows.append([contract, iv, vega])
+        return _table(["contract", "IV", "vega"], rows)
 
     def _cmd_watch(self, args: list[str]) -> str:
         usage = "Usage: /watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field]"

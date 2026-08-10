@@ -173,6 +173,7 @@ def test_greeks_command_table(session_factory):
             {
                 "code": c,
                 "option_delta": 0.166096,
+                "option_gamma": 0.000124194,
                 "option_theta": -1.117809,
                 "option_implied_volatility": 22.012,
             }
@@ -189,27 +190,28 @@ def test_greeks_command_table(session_factory):
     assert reply.startswith("<pre>")
     assert f"{_yymmdd()} C8100" in reply
     assert "0.166" in reply  # delta, three decimals
+    assert "0.00012" in reply  # gamma, five decimals
     assert "-1.12" in reply  # theta, two decimals
-    assert "22.012" in reply  # IV, three decimals
+    assert "22.012" not in reply  # IV moved to /vol
     assert api.calls[-1][1].get("parse_mode") == "HTML"
 
 
-def test_greeks2_command_table(session_factory):
+def test_vol_command_table(session_factory):
     def fetcher(codes, opend_host=None, opend_port=None):
-        return [{"code": c, "option_gamma": 0.000124194, "option_vega": 5.894970} for c in codes]
+        return [{"code": c, "option_implied_volatility": 22.012345, "option_vega": 5.894970} for c in codes]
 
     bot, api = _make_bot(session_factory, fetcher=fetcher)
-    bot.handle_update(_update("/greeks2"))
+    bot.handle_update(_update("/vol"))
     assert "empty" in api.sent[-1].lower()
 
     bot.handle_update(_update(f"/watch {_future()} CALL 8100 0.6"))
-    bot.handle_update(_update("/greeks2"))
+    bot.handle_update(_update("/vol"))
     reply = api.sent[-1]
     assert reply.startswith("<pre>")
     assert f"{_yymmdd()} C8100" in reply
-    assert "0.00012" in reply  # gamma, five decimals — .3f would show 0.000
+    assert "22.012" in reply  # IV, three decimals
+    assert "22.012345" not in reply
     assert "5.89" in reply  # vega, two decimals
-    assert "5.894970" not in reply
     assert api.calls[-1][1].get("parse_mode") == "HTML"
 
 
@@ -227,7 +229,7 @@ def test_register_commands_publishes_menu(session_factory):
     method, params = api.calls[-1]
     assert method == "setMyCommands"
     names = [c["command"] for c in json.loads(params["commands"])]
-    assert names == ["monitors", "quotes", "greeks", "greeks2", "watch", "unwatch", "snapshot", "health", "help"]
+    assert names == ["monitors", "quotes", "greeks", "vol", "watch", "unwatch", "snapshot", "health", "help"]
     descriptions = [c["description"] for c in json.loads(params["commands"])]
     assert all(descriptions)
 
@@ -254,8 +256,8 @@ def test_quotes_command_reports_watched_codes(session_factory):
     bot.handle_update(_update("/quotes"))
     reply = api.sent[-1]
     assert reply.startswith("<pre>")
-    assert "0.420" in reply  # delta with three decimals
     assert f"{_yymmdd()} C6500" in reply
     assert "1.5" in reply  # mid column
     assert "1.0/2.0" in reply  # bid/ask column
+    assert "0.42" not in reply  # delta lives in /greeks now; /quotes is a pure price view
     assert api.calls[-1][1].get("parse_mode") == "HTML"
