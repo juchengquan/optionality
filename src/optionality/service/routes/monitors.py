@@ -160,6 +160,7 @@ def get_watchlist_quotes_html(
             "bid": snap.get("bid_price"),
             "ask": snap.get("ask_price"),
             "last trade": snap.get("update_time"),
+            "fetched": fetched,
         }
         if "legs" in q:
             # combo: signed sums under the combo's own leg signs — the greeks OF its value.

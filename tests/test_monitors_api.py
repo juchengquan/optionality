@@ -204,6 +204,7 @@ def test_quotes_html_renders_watchlist(client_factory):
     assert "27.55" in resp.text
     assert "option_delta ≥ 0.6" in resp.text  # monitor context alongside live data
     assert "fetched at" in resp.text
+    assert "<th>fetched</th>" in resp.text  # fetch time as a table column too
     assert "+08:00" in resp.text  # the fetch timestamp in display tz
     assert resp.headers["cache-control"] == "no-store"  # a live dashboard must never be browser-cached
 
