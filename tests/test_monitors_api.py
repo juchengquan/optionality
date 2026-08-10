@@ -158,6 +158,15 @@ def test_patch_field_conflict(client_factory):
     assert resp.status_code == 409  # (code, option_delta) already taken
 
 
+def test_openapi_documents_both_monitor_shapes(client_factory):
+    client = client_factory()
+    spec = client.get("/openapi.json", headers=AUTH).json()
+    body = spec["paths"]["/monitors"]["post"]["requestBody"]["content"]["application/json"]
+    assert set(body["examples"]) == {"single-leg", "combo"}  # swagger shows a dropdown with both
+    assert "legs" in body["examples"]["combo"]["value"]
+    assert "option_type" in body["examples"]["single-leg"]["value"]
+
+
 def test_direction_below_monitor(client_factory):
     client = client_factory()
     payload = {

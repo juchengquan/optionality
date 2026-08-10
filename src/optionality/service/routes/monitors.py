@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -112,8 +112,46 @@ def get_watchlist_quotes(
         raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
 
 
+_MONITOR_EXAMPLES = {
+    "single-leg": {
+        "summary": "Single-leg monitor",
+        "description": "Watch one contract's field against a threshold.",
+        "value": {
+            "strike_date": "2026-09-18",
+            "option_type": "CALL",
+            "strike": 8100,
+            "field": "option_delta",
+            "threshold": 0.6,
+            "direction": "above",
+        },
+    },
+    "combo": {
+        "summary": "Combo monitor (e.g. iron condor)",
+        "description": "Signed sum over legs; + on sold legs and - on bought legs watches the cost to close.",
+        "value": {
+            "name": "sep-condor",
+            "strike_date": "2026-09-18",
+            "legs": [
+                {"sign": 1, "option_type": "CALL", "strike": 8100},
+                {"sign": -1, "option_type": "CALL", "strike": 8150},
+                {"sign": 1, "option_type": "PUT", "strike": 7800},
+                {"sign": -1, "option_type": "PUT", "strike": 7750},
+            ],
+            "field": "mid_price",
+            "threshold": 30,
+            "direction": "below",
+        },
+    },
+}
+
+
 @router.post("", status_code=201)
-def create_monitor(payload: MonitorIn | ComboMonitorIn, session: SessionDep, settings: SettingsDep):
+def create_monitor(
+    payload: Annotated[MonitorIn | ComboMonitorIn, Body(openapi_examples=_MONITOR_EXAMPLES)],
+    session: SessionDep,
+    settings: SettingsDep,
+):
+    """Create a monitor — the payload shape decides: single-leg (option_type + strike) or combo (name + legs)."""
     if isinstance(payload, ComboMonitorIn):
         return _create_combo(payload, session, settings)
     code = _build_code(payload)
