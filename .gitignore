@@ -174,3 +174,7 @@ _examples/
 .DS_Store
 *.ipynb
 *.html
+
+# optionality service
+data/
+opend/
