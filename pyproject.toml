@@ -1,21 +1,18 @@
 [build-system]
-requires = [
-    "setuptools",
-    "wheel",
-]
-build-backend="setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "optionality"
 version = "0.0.1"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
     {name="juchengquan"}
 ]
 classifiers = [
-    "Protramming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT LIcense",
-    "Operation System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
 ]
 
 dependencies = [
@@ -30,10 +27,11 @@ dependencies = [
 [project.optional-dependencies]
 all = []
 
-[tool.setuptools]
-packages = [
-    "optionality",
+[dependency-groups]
+dev = [
+    "ruff"
 ]
 
-[tool.setuptools.package-dir]
-"optionality" = "src/optionality"
+
+[tool.ruff]
+line-length = 120

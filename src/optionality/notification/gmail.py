@@ -1,6 +1,6 @@
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 default_css_style = """<style>
 div {
@@ -9,10 +9,11 @@ div {
 </style>
 """
 
-def _email_login(settings):    
+
+def _email_login(settings):
     user = settings["user"]
     pwd = settings["password"]
-    
+
     server = smtplib.SMTP("smtp.gmail.com", 587)
     server.ehlo()
     server.starttls()
@@ -22,27 +23,22 @@ def _email_login(settings):
 
 
 def send_gmail_notification(setting: dict, body_message: str):
-    all_html = """<html>
-    <head>{style}</head>
+    all_html = f"""<html>
+    <head>{default_css_style}</head>
     <body>{body_message}</body>
     </html>
-    """.format(style=default_css_style, body_message=body_message)
+    """
 
     msg = MIMEMultipart()
 
-    msg['From'] = setting["from_address"]
-    msg['To'] = setting["to_address"] if isinstance(setting, str) else ";".join(setting["to_address"])  # type: ignore
-    
-    msg['Subject'] = setting["subject"]
+    msg["From"] = setting["from_address"]
+    msg["To"] = setting["to_address"] if isinstance(setting, str) else ";".join(setting["to_address"])
+
+    msg["Subject"] = setting["subject"]
 
     # Record the MIME types of both parts - text/plain and text/html.
-    msg.attach(MIMEText(all_html, 'html'))
-    
+    msg.attach(MIMEText(all_html, "html"))
+
     server = _email_login(setting)
-    server.sendmail(
-        setting["from_address"],  # type: ignore
-        setting["to_address"],  # type: ignore
-        msg.as_string()
-    )
+    server.sendmail(setting["from_address"], setting["to_address"], msg.as_string())
     server.close()
-    
