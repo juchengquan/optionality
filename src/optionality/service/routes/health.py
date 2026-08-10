@@ -9,6 +9,7 @@ from optionality.service.deps import get_session, get_settings, get_sweeper, get
 from optionality.service.models import Run
 from optionality.service.monitor import MonitorSweeper
 from optionality.service.settings import Settings
+from optionality.service.timefmt import display_time
 from optionality.service.worker import Worker
 
 router = APIRouter(tags=["health"])
@@ -42,7 +43,7 @@ def health(
             "id": last.id,
             "task_type": last.task_type,
             "status": last.status,
-            "created_at": str(last.created_at),
+            "created_at": display_time(last.created_at, settings.display_tz),
         }
 
     return {
@@ -51,7 +52,7 @@ def health(
         "queue_depth": worker.queue_depth(),
         "last_run": last_run,
         "monitor": {
-            "last_sweep_at": str(sweeper.last_sweep_at) if sweeper.last_sweep_at else None,
+            "last_sweep_at": display_time(sweeper.last_sweep_at, settings.display_tz),
             "last_sweep_ok": sweeper.last_sweep_ok,
             "consecutive_failures": sweeper.consecutive_failures,
         },

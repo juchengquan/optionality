@@ -179,6 +179,17 @@ def test_watchlist_quotes_ordered_by_type_then_date(session_factory):
     assert [q["code"] for q in quotes] == ["C-NEAR", "C-FAR", "P-NEAR"]
 
 
+def test_watchlist_quotes_converts_market_update_time(session_factory):
+    _mk_monitor(session_factory)
+    settings = Settings(telegram_bot_token="t", telegram_chat_id="c", display_tz="Asia/Singapore")
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": CODE, "update_time": "2026-08-09 20:15:00", "option_delta": 0.1}]
+
+    quotes = watchlist_quotes(session_factory, settings, fetcher)
+    assert quotes[0]["snapshot"]["update_time"] == "2026-08-10 08:15:00+08:00"
+
+
 def test_watchlist_quotes_empty_without_fetch(session_factory):
     calls = []
 

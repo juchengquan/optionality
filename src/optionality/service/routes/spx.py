@@ -6,6 +6,7 @@ from optionality.apis.aux import build_spx_code
 from optionality.core import fetch_snapshot
 from optionality.service.deps import get_settings
 from optionality.service.settings import Settings
+from optionality.service.timefmt import market_time_to_display
 
 router = APIRouter(prefix="/spx", tags=["spx"])
 
@@ -32,4 +33,7 @@ def spx_snapshot(strike_date: str, option_type: Literal["CALL", "PUT"], strike: 
 
     if not records:
         raise HTTPException(status_code=404, detail=f"no data for {code}")
-    return {"code": code, "snapshot": records[0]}
+    snapshot = records[0]
+    if snapshot.get("update_time"):
+        snapshot["update_time"] = market_time_to_display(snapshot["update_time"], settings.display_tz)
+    return {"code": code, "snapshot": snapshot}

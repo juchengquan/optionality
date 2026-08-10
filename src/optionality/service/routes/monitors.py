@@ -9,10 +9,13 @@ from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
 from optionality.service.models import Monitor
 from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
+from optionality.service.settings import Settings
+from optionality.service.timefmt import display_time
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 class MonitorIn(BaseModel):
@@ -39,7 +42,7 @@ def _build_code(payload: MonitorIn) -> str:
         raise HTTPException(status_code=422, detail=f"invalid strike_date: {err}") from err
 
 
-def _to_dict(row: Monitor) -> dict:
+def _to_dict(row: Monitor, tz: str) -> dict:
     return {
         "id": row.id,
         "code": row.code,
@@ -51,14 +54,15 @@ def _to_dict(row: Monitor) -> dict:
         "enabled": row.enabled,
         "triggered": row.triggered,
         "last_value": row.last_value,
-        "last_checked_at": str(row.last_checked_at) if row.last_checked_at else None,
-        "created_at": str(row.created_at),
+        "last_checked_at": display_time(row.last_checked_at, tz),
+        "created_at": display_time(row.created_at, tz),
     }
 
 
 @router.get("")
-def list_monitors(session: SessionDep):
-    return [_to_dict(r) for r in session.scalars(select(Monitor).order_by(*WATCHLIST_ORDER)).all()]
+def list_monitors(session: SessionDep, settings: SettingsDep):
+    rows = session.scalars(select(Monitor).order_by(*WATCHLIST_ORDER)).all()
+    return [_to_dict(r, settings.display_tz) for r in rows]
 
 
 @router.get("/quotes")
@@ -74,7 +78,7 @@ def get_watchlist_quotes(
 
 
 @router.post("", status_code=201)
-def create_monitor(payload: MonitorIn, session: SessionDep):
+def create_monitor(payload: MonitorIn, session: SessionDep, settings: SettingsDep):
     code = _build_code(payload)
     if session.scalar(select(Monitor).where(Monitor.code == code, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({code}, {payload.field}) already exists")
@@ -89,11 +93,11 @@ def create_monitor(payload: MonitorIn, session: SessionDep):
     )
     session.add(row)
     session.commit()
-    return _to_dict(row)
+    return _to_dict(row, settings.display_tz)
 
 
 @router.put("/{monitor_id}")
-def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep):
+def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep, settings: SettingsDep):
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")
@@ -111,7 +115,7 @@ def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep):
     row.threshold = payload.threshold
     row.enabled = payload.enabled
     session.commit()
-    return _to_dict(row)
+    return _to_dict(row, settings.display_tz)
 
 
 @router.delete("/{monitor_id}", status_code=204)

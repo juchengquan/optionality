@@ -80,6 +80,13 @@ def test_monitors_quotes_endpoint(client_factory):
     assert quotes[0]["threshold"] == 0.6
 
 
+def test_timestamps_rendered_in_display_tz(client_factory):
+    client = client_factory()
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    created = client.post("/monitors", json=payload, headers=AUTH).json()
+    assert created["created_at"].endswith("+08:00")
+
+
 def test_health_exposes_monitor_sweep_state(client_factory):
     client = client_factory()
     data = client.get("/health").json()

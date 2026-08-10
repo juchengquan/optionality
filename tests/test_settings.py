@@ -17,10 +17,12 @@ def test_monitor_and_telegram_from_env(monkeypatch):
     monkeypatch.setenv("MONITOR_INTERVAL_SECONDS", "30")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
+    monkeypatch.setenv("DISPLAY_TZ", "Asia/Singapore")
     s = Settings.from_env()
     assert s.monitor_interval_seconds == 30
     assert s.telegram_bot_token == "tok"
     assert s.telegram_chat_id == "42"
+    assert s.display_tz == "Asia/Singapore"
 
 
 def test_from_env(monkeypatch):

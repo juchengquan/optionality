@@ -7,8 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from optionality.notification import full_html_document
-from optionality.service.deps import get_session, get_session_factory, get_worker
+from optionality.service.deps import get_session, get_session_factory, get_settings, get_worker
 from optionality.service.models import ConfigDoc, Report, Run
+from optionality.service.settings import Settings
+from optionality.service.timefmt import display_time
 from optionality.service.worker import Worker, create_run
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -16,6 +18,7 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 SessionDep = Annotated[Session, Depends(get_session)]
 SessionFactoryDep = Annotated[object, Depends(get_session_factory)]
 WorkerDep = Annotated[Worker, Depends(get_worker)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 class RunIn(BaseModel):
@@ -24,7 +27,7 @@ class RunIn(BaseModel):
     notify: bool = False
 
 
-def _to_dict(row: Run) -> dict:
+def _to_dict(row: Run, tz: str) -> dict:
     return {
         "id": row.id,
         "task_type": row.task_type,
@@ -34,9 +37,9 @@ def _to_dict(row: Run) -> dict:
         "attempt": row.attempt,
         "status": row.status,
         "error": row.error,
-        "created_at": str(row.created_at),
-        "started_at": str(row.started_at) if row.started_at else None,
-        "finished_at": str(row.finished_at) if row.finished_at else None,
+        "created_at": display_time(row.created_at, tz),
+        "started_at": display_time(row.started_at, tz),
+        "finished_at": display_time(row.finished_at, tz),
     }
 
 
@@ -62,19 +65,19 @@ def trigger_run(payload: RunIn, session: SessionDep, session_factory: SessionFac
 
 
 @router.get("")
-def list_runs(session: SessionDep, status: str | None = None, limit: int = 50):
+def list_runs(session: SessionDep, settings: SettingsDep, status: str | None = None, limit: int = 50):
     query = select(Run).order_by(Run.created_at.desc()).limit(min(limit, 500))
     if status:
         query = query.where(Run.status == status)
-    return [_to_dict(r) for r in session.scalars(query).all()]
+    return [_to_dict(r, settings.display_tz) for r in session.scalars(query).all()]
 
 
 @router.get("/{run_id}")
-def get_run(run_id: str, session: SessionDep):
+def get_run(run_id: str, session: SessionDep, settings: SettingsDep):
     row = session.get(Run, run_id)
     if row is None:
         raise HTTPException(status_code=404, detail="run not found")
-    return _to_dict(row)
+    return _to_dict(row, settings.display_tz)
 
 
 def _get_report(run_id: str, session: Session) -> Report:
