@@ -132,7 +132,9 @@ def get_watchlist_quotes_html(
     )
     heading = f"<h2>Watchlist quotes</h2><p>fetched at {fetched}</p>"
     if not quotes:
-        return HTMLResponse(full_html_document(heading + "<p>Watchlist is empty.</p>"))
+        return HTMLResponse(
+            full_html_document(heading + "<p>Watchlist is empty.</p>"), headers={"Cache-Control": "no-store"}
+        )
 
     field_column = {
         "option_delta": "delta",
@@ -170,7 +172,7 @@ def get_watchlist_quotes_html(
                 row[column] = q["combo_value"]
         rows.append(row)
     table = pd.DataFrame(rows).to_html(index=False, na_rep="—", float_format=lambda v: f"{v:.4g}")
-    return HTMLResponse(full_html_document(heading + table))
+    return HTMLResponse(full_html_document(heading + table), headers={"Cache-Control": "no-store"})
 
 
 @router.post("", status_code=201)
