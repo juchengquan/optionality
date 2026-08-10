@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
 from optionality.service.models import Monitor
-from optionality.service.monitor import watchlist_quotes
+from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
 
@@ -58,7 +58,7 @@ def _to_dict(row: Monitor) -> dict:
 
 @router.get("")
 def list_monitors(session: SessionDep):
-    return [_to_dict(r) for r in session.scalars(select(Monitor).order_by(Monitor.id)).all()]
+    return [_to_dict(r) for r in session.scalars(select(Monitor).order_by(*WATCHLIST_ORDER)).all()]
 
 
 @router.get("/quotes")

@@ -15,11 +15,14 @@ logger = logging.getLogger("optionality.monitor")
 REARM_HYSTERESIS = 0.05
 DEGRADED_AFTER = 5
 
+# display order everywhere the watchlist is listed: CALLs before PUTs, then by expiry, then strike
+WATCHLIST_ORDER = (Monitor.option_type, Monitor.strike_date, Monitor.strike)
+
 
 def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot) -> list[dict]:
     """Live snapshot for every enabled monitor — one API call for the whole watchlist."""
     with session_factory() as session:
-        monitors = session.scalars(select(Monitor).where(Monitor.enabled).order_by(Monitor.created_at)).all()
+        monitors = session.scalars(select(Monitor).where(Monitor.enabled).order_by(*WATCHLIST_ORDER)).all()
     if not monitors:
         return []
     codes = list({m.code for m in monitors})
