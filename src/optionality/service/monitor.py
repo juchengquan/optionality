@@ -76,6 +76,7 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
     entries = []
     for m in monitors:
         entry = {
+            "id": m.id,
             "code": m.code,
             "field": m.field,
             "threshold": m.threshold,

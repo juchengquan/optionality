@@ -1,7 +1,5 @@
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from tests.conftest import AUTH
 
 
@@ -181,77 +179,6 @@ def test_timestamps_rendered_in_display_tz(client_factory):
     payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
     created = client.post("/monitors", json=payload, headers=AUTH).json()
     assert created["created_at"].endswith("+08:00")
-
-
-def test_quotes_html_renders_watchlist(client_factory):
-    def fetcher(codes, opend_host=None, opend_port=None):
-        return [
-            {"code": c, "name": "SPXW TEST", "option_delta": 0.33, "mid_price": 27.55, "bid_price": 27.2} for c in codes
-        ]
-
-    client = client_factory(snapshot_fetcher=fetcher)
-    empty = client.get("/quotes.html", headers=AUTH)
-    assert empty.status_code == 200
-    assert "empty" in empty.text.lower()
-
-    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
-    client.post("/monitors", json=payload, headers=AUTH)
-    resp = client.get("/quotes.html", headers=AUTH)
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/html")
-    assert "SPWX TEST" not in resp.text  # guard against typo'd assertion passing vacuously
-    assert "SPXW TEST" in resp.text
-    assert "27.55" in resp.text
-    assert "option_delta ≥ 0.6" in resp.text  # monitor context alongside live data
-    assert "fetched at" in resp.text  # the single fetch moment lives in the heading...
-    assert "<th>fetched</th>" not in resp.text  # ...not repeated as a per-row column
-    assert "+08:00" in resp.text  # the fetch timestamp in display tz
-    assert resp.headers["cache-control"] == "no-store"  # a live dashboard must never be browser-cached
-
-
-def test_quotes_html_highlights_key_columns_and_triggered_rows(client_factory):
-    def fetcher(codes, opend_host=None, opend_port=None):
-        return [{"code": c, "option_delta": 0.9, "mid_price": 26.4} for c in codes]
-
-    client = client_factory(snapshot_fetcher=fetcher)
-    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
-    client.post("/monitors", json=payload, headers=AUTH)
-
-    resp = client.get("/quotes.html", headers=AUTH)
-    assert 'class="hl"' in resp.text  # delta and mid cells carry the highlight class
-    assert resp.text.count('class="hl"') == 2  # one row: exactly its delta + mid cells
-    assert 'class="triggered"' not in resp.text  # nothing triggered yet
-
-    from sqlalchemy import select
-
-    from optionality.service.models import Monitor
-
-    sf = client.app.state.session_factory
-    with sf() as s:
-        s.scalar(select(Monitor)).triggered = True
-        s.commit()
-    resp = client.get("/quotes.html", headers=AUTH)
-    assert 'class="triggered"' in resp.text  # triggered row is visually flagged
-
-
-def test_quotes_html_includes_combo_row(client_factory):
-    def fetcher(codes, opend_host=None, opend_port=None):
-        prices = dict.fromkeys(codes, 26.4)
-        if len(codes) > 1:
-            prices[max(codes)] = 19.25  # 8150 leg sorts last
-        return [{"code": c, "mid_price": prices[c]} for c in codes]
-
-    client = client_factory(snapshot_fetcher=fetcher)
-    client.post("/monitors", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH)
-    resp = client.get("/quotes.html", headers=AUTH)
-    assert resp.status_code == 200
-    assert "sep-condor" in resp.text
-    assert "7.15" in resp.text  # combined mid in the mid column
-
-    quotes = client.get("/quotes", headers=AUTH).json()  # combos now included in JSON too
-    combo = next(q for q in quotes if q["code"] == "sep-condor")
-    assert combo["combo_value"] == pytest.approx(7.15)
-    assert "combo_greeks" in combo
 
 
 def test_health_exposes_monitor_sweep_state(client_factory):

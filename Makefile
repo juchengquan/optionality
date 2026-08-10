@@ -13,8 +13,9 @@ format:
 test:
 	uv run pytest
 
+# 127.0.0.1: reachable only via the tailscale serve proxy (and localhost); never the LAN
 serve:
-	uv run --env-file .env uvicorn --factory optionality.service.app:create_app --host 0.0.0.0 --port 8000
+	uv run --env-file .env uvicorn --factory optionality.service.app:create_app --host 127.0.0.1 --port 8000
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:
