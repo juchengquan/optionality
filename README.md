@@ -40,6 +40,10 @@ Optionality is a small, simple yet effective tool aimed at providing a report to
 
 Run optionality as an always-on service: scheduled scans email HTML reports; ad-hoc runs are triggered over the API (expose it inside your tailnet only, e.g. with `tailscale serve`).
 
+To serve under a path prefix — `tailscale serve --bg --set-path /api http://127.0.0.1:8000` — set `ROOT_PATH=/api`
+in `.env` so FastAPI generates prefixed URLs (otherwise `/docs` loads but can't fetch `openapi.json`). With
+`ROOT_PATH` set, open Swagger through the proxy URL (`https://<machine>.<tailnet>.ts.net/api/docs`), not localhost.
+
 ### Setup
 
 1. `cp .env.example .env` and fill in the values.

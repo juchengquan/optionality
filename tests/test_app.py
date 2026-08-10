@@ -20,3 +20,9 @@ def test_valid_token_is_accepted(client_factory):
     client = client_factory()
     resp = client.get("/health", headers=AUTH)
     assert resp.status_code == 200
+
+
+def test_root_path_prefixes_openapi_url_for_reverse_proxy(client_factory):
+    client = client_factory(token="", root_path="/api")
+    html = client.get("/docs").text
+    assert "'/api/openapi.json'" in html

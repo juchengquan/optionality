@@ -30,7 +30,7 @@ def create_app(settings: Settings | None = None, runner=None, snapshot_fetcher=N
         app.state.scheduler.shutdown(wait=False)
         app.state.worker.stop()
 
-    app = FastAPI(title="optionality", lifespan=lifespan)
+    app = FastAPI(title="optionality", lifespan=lifespan, root_path=settings.root_path)
 
     engine = make_engine(settings.db_path)
     init_db(engine)
