@@ -172,15 +172,27 @@ class MonitorSweeper:
                     if self._alarm_allowed(db_monitor, now):
                         db_monitor.last_alarm_at = now
                         self._notify(f"✅ {name}: {monitor.field} {value:.3f} {recover_word} {monitor.threshold}")
+                elif db_monitor.triggered and breached:
+                    # a persisting breach re-alarms on a fixed cadence so it can't be missed once and forgotten
+                    repeat = self.settings.alarm_repeat_seconds
+                    sign = breach_word.split()[-1]
+                    if repeat and self._seconds_since_alarm(db_monitor, now) >= repeat:
+                        db_monitor.last_alarm_at = now
+                        self._notify(
+                            f"⚠️ {name}: {monitor.field} {value:.3f} still {sign} {monitor.threshold} (reminder)"
+                        )
             session.commit()
 
-    def _alarm_allowed(self, monitor: Monitor, now: datetime) -> bool:
+    def _seconds_since_alarm(self, monitor: Monitor, now: datetime) -> float:
         last = monitor.last_alarm_at
         if last is None:
-            return True
+            return float("inf")
         if last.tzinfo is None:
             last = last.replace(tzinfo=UTC)  # SQLite round-trips lose tzinfo; stored values are UTC
-        return (now - last).total_seconds() >= self.settings.alarm_cooldown_seconds
+        return (now - last).total_seconds()
+
+    def _alarm_allowed(self, monitor: Monitor, now: datetime) -> bool:
+        return self._seconds_since_alarm(monitor, now) >= self.settings.alarm_cooldown_seconds
 
     def _record_failure(self) -> None:
         self.last_sweep_ok = False
