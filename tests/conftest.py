@@ -37,3 +37,19 @@ def holdings_body():
 @pytest.fixture
 def strategy_body():
     return STRATEGY_BODY
+
+
+@pytest.fixture
+def engine(tmp_path):
+    from optionality.service.db import init_db, make_engine
+
+    eng = make_engine(str(tmp_path / "test.db"))
+    init_db(eng)
+    return eng
+
+
+@pytest.fixture
+def session_factory(engine):
+    from optionality.service.db import make_session_factory
+
+    return make_session_factory(engine)
