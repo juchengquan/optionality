@@ -67,7 +67,24 @@ curl localhost:8000/runs/<run_id>/report.html -H "$AUTH"
 curl localhost:8000/runs/<run_id>/details -H "$AUTH"
 # live snapshot of one SPX weekly contract (single OpenD call)
 curl "localhost:8000/spx/snapshot?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
+# watch a contract: Telegram alarm when abs(option_delta) crosses 0.6
+curl -X POST localhost:8000/monitors -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"strike_date": "2026-12-18", "option_type": "CALL", "strike": 6500, "threshold": 0.6}'
+curl localhost:8000/monitors -H "$AUTH"   # live watchlist dashboard (last_value, triggered)
 ```
+
+### Delta monitors
+
+A background sweep polls the whole watchlist every `MONITOR_INTERVAL_SECONDS` (default 60s, 24×7) with **one**
+`get_market_snapshot` call, so the moomoo rate limit is never a concern. Alarms are edge-triggered on
+`abs(value) >= threshold` and re-arm after the value falls 5% below the threshold — one Telegram message per
+episode, plus a recovery message. Monitors on expired contracts are auto-disabled. If 5 consecutive sweeps fail
+(e.g. OpenD logged out), you get one "monitoring degraded" Telegram alert and a recovery note when it heals;
+sweep state is visible under `monitor` in `/health`.
+
+**Telegram setup:** create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`, or `/mybots` → API Token
+for an existing one) and put the token in `.env` as `TELEGRAM_BOT_TOKEN`. Then send your bot any message and run
+`curl "https://api.telegram.org/bot<TOKEN>/getUpdates"` — the `"chat":{"id": ...}` number is `TELEGRAM_CHAT_ID`.
 
 ### Runbook
 
