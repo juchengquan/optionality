@@ -43,32 +43,42 @@ def monitor_value(monitor: Monitor, by_code: dict) -> float | None:
     return total
 
 
-def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot) -> list[dict]:
-    """Live snapshot for every enabled monitor — one API call for the whole watchlist."""
+def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot, include_combos=False) -> list[dict]:
+    """Live snapshot for every enabled monitor — one API call for the whole watchlist.
+
+    Combo entries (include_combos=True) carry their signed-sum under "combo_value" and no
+    per-contract snapshot; summing other fields under the combo's signs would fabricate
+    plausible-but-wrong aggregates.
+    """
+    query = select(Monitor).where(Monitor.enabled).order_by(*WATCHLIST_ORDER)
+    if not include_combos:
+        query = query.where(Monitor.legs.is_(None))
     with session_factory() as session:
-        monitors = session.scalars(
-            select(Monitor).where(Monitor.enabled, Monitor.legs.is_(None)).order_by(*WATCHLIST_ORDER)
-        ).all()
+        monitors = session.scalars(query).all()
     if not monitors:
         return []
-    codes = list({m.code for m in monitors})
+    codes = sorted({code for m in monitors for code in monitor_leg_codes(m)})
     records = fetcher(codes, opend_host=settings.opend_host, opend_port=settings.opend_port)
     for record in records:
         if record.get("update_time"):
             record["update_time"] = market_time_to_display(record["update_time"], settings.display_tz)
     by_code = {r.get("code"): r for r in records}
-    return [
-        {
+    entries = []
+    for m in monitors:
+        entry = {
             "code": m.code,
             "field": m.field,
             "threshold": m.threshold,
             "direction": m.direction,
             "triggered": m.triggered,
             "last_value": m.last_value,
-            "snapshot": by_code.get(m.code),
+            "snapshot": None if m.legs else by_code.get(m.code),
         }
-        for m in monitors
-    ]
+        if m.legs:
+            entry["legs"] = m.legs
+            entry["combo_value"] = monitor_value(m, by_code)
+        entries.append(entry)
+    return entries
 
 
 class MonitorSweeper:

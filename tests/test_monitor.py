@@ -262,6 +262,32 @@ def test_watchlist_quotes_excludes_combos(session_factory):
     assert [q["code"] for q in quotes] == [CODE]  # combo absent from single-leg tables
 
 
+def test_watchlist_quotes_include_combos_computes_value(session_factory):
+    from optionality.apis.aux import build_spx_code
+
+    _mk_monitor(session_factory)
+    _mk_combo(session_factory)
+    date = _future()
+    prices = {
+        CODE: 26.4,
+        build_spx_code(date, "CALL", 8100): 26.4,
+        build_spx_code(date, "CALL", 8150): 19.25,
+    }
+    fetched = []
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        fetched.append(codes)
+        return [{"code": c, "mid_price": prices[c], "option_delta": 0.1} for c in codes if c in prices]
+
+    quotes = watchlist_quotes(session_factory, SETTINGS, fetcher, include_combos=True)
+    assert len(fetched) == 1  # still ONE snapshot call for singles + combo legs
+    combo = next(q for q in quotes if q["code"] == "sep-condor")
+    assert combo["combo_value"] == pytest.approx(7.15)  # 26.4 - 19.25
+    assert combo["snapshot"] is None
+    single = next(q for q in quotes if q["code"] == CODE)
+    assert single["snapshot"]["mid_price"] == 26.4
+
+
 def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
     _mk_monitor(session_factory)
 

@@ -122,7 +122,7 @@ def get_watchlist_quotes_html(
     sweeper: Annotated[object, Depends(get_sweeper)],
 ):
     try:
-        quotes = watchlist_quotes(session_factory, settings, sweeper.fetcher)
+        quotes = watchlist_quotes(session_factory, settings, sweeper.fetcher, include_combos=True)
     except Exception as err:
         raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
 
@@ -130,25 +130,38 @@ def get_watchlist_quotes_html(
     if not quotes:
         return HTMLResponse(full_html_document(heading + "<p>Watchlist is empty.</p>"))
 
+    field_column = {
+        "option_delta": "delta",
+        "option_gamma": "gamma",
+        "option_theta": "theta",
+        "option_vega": "vega",
+        "option_implied_volatility": "IV",
+        "mid_price": "mid",
+    }
     rows = []
     for q in quotes:
         snap = q["snapshot"] or {}
         sign = "≤" if q["direction"] == "below" else "≥"
-        rows.append(
-            {
-                "contract": snap.get("name") or q["code"],
-                "alarm": f"{q['field']} {sign} {q['threshold']}" + (" 🔔" if q["triggered"] else ""),
-                "delta": snap.get("option_delta"),
-                "gamma": snap.get("option_gamma"),
-                "theta": snap.get("option_theta"),
-                "vega": snap.get("option_vega"),
-                "IV": snap.get("option_implied_volatility"),
-                "mid": snap.get("mid_price"),
-                "bid": snap.get("bid_price"),
-                "ask": snap.get("ask_price"),
-                "updated": snap.get("update_time"),
-            }
-        )
+        row = {
+            "contract": snap.get("name") or q["code"],
+            "alarm": f"{q['field']} {sign} {q['threshold']}" + (" 🔔" if q["triggered"] else ""),
+            "delta": snap.get("option_delta"),
+            "gamma": snap.get("option_gamma"),
+            "theta": snap.get("option_theta"),
+            "vega": snap.get("option_vega"),
+            "IV": snap.get("option_implied_volatility"),
+            "mid": snap.get("mid_price"),
+            "bid": snap.get("bid_price"),
+            "ask": snap.get("ask_price"),
+            "updated": snap.get("update_time"),
+        }
+        if "legs" in q:
+            # combo: only its own signed sum is honest — other columns would be
+            # sign-convention-dependent aggregates masquerading as position greeks
+            column = field_column.get(q["field"])
+            if column and q["combo_value"] is not None:
+                row[column] = q["combo_value"]
+        rows.append(row)
     table = pd.DataFrame(rows).to_html(index=False, na_rep="—", float_format=lambda v: f"{v:.4g}")
     return HTMLResponse(full_html_document(heading + table))
 

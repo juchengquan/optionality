@@ -189,6 +189,22 @@ def test_quotes_html_renders_watchlist(client_factory):
     assert "option_delta ≥ 0.6" in resp.text  # monitor context alongside live data
 
 
+def test_quotes_html_includes_combo_row(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        prices = dict.fromkeys(codes, 26.4)
+        if len(codes) > 1:
+            prices[max(codes)] = 19.25  # 8150 leg sorts last
+        return [{"code": c, "mid_price": prices[c]} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    client.post("/monitors", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH)
+    resp = client.get("/quotes.html", headers=AUTH)
+    assert resp.status_code == 200
+    assert "sep-condor" in resp.text
+    assert "7.15" in resp.text  # combined mid in the mid column
+    assert client.get("/quotes", headers=AUTH).json() == []  # JSON endpoint still single-leg only
+
+
 def test_health_exposes_monitor_sweep_state(client_factory):
     client = client_factory()
     data = client.get("/health").json()
