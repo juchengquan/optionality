@@ -42,6 +42,7 @@ def test_table_fragment_is_forms_free(client_factory):
     assert "fetched at" in resp.text
     assert "Add monitor" not in resp.text  # creation forms live outside the refreshing fragment
     assert "htmx.min.js" not in resp.text  # fragment, not a full document
+    assert "<th>actions</th><th>last trade</th>" in resp.text  # last trade sits at the far edge
 
 
 def test_htmx_asset_served(client_factory):
