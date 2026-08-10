@@ -110,7 +110,7 @@ def get_watchlist_quotes(
     sweeper: Annotated[object, Depends(get_sweeper)],
 ):
     try:
-        return watchlist_quotes(session_factory, settings, sweeper.fetcher)
+        return watchlist_quotes(session_factory, settings, sweeper.fetcher, include_combos=True)
     except Exception as err:
         raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
 
@@ -160,8 +160,11 @@ def get_watchlist_quotes_html(
             "last trade": snap.get("update_time"),
         }
         if "legs" in q:
-            # combo: only its own signed sum is honest — other columns would be
-            # sign-convention-dependent aggregates masquerading as position greeks
+            # combo: signed sums under the combo's own leg signs — the greeks OF its value.
+            # IV/bid/ask stay blank: IVs don't add, and combo bid/ask is execution-dependent.
+            for greek_field, greek_value in q["combo_greeks"].items():
+                if greek_value is not None:
+                    row[field_column[greek_field]] = greek_value
             column = field_column.get(q["field"])
             if column and q["combo_value"] is not None:
                 row[column] = q["combo_value"]

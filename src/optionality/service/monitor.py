@@ -27,20 +27,28 @@ def monitor_leg_codes(monitor: Monitor) -> list[str]:
     return [build_spx_code(monitor.strike_date, leg["option_type"], leg["strike"]) for leg in monitor.legs]
 
 
-def monitor_value(monitor: Monitor, by_code: dict) -> float | None:
-    """Signed sum over legs; None if ANY leg is missing — no partial sums, ever."""
-    if not monitor.legs:
-        record = by_code.get(monitor.code)
-        value = record.get(monitor.field) if record else None
-        return float(value) if value is not None else None
+def combo_field_sum(monitor: Monitor, by_code: dict, field: str) -> float | None:
+    """Signed sum of one field over a combo's legs; None if ANY leg is missing — no partial sums, ever."""
     total = 0.0
     for leg, code in zip(monitor.legs, monitor_leg_codes(monitor), strict=True):
         record = by_code.get(code)
-        value = record.get(monitor.field) if record else None
+        value = record.get(field) if record else None
         if value is None:
             return None
         total += leg["sign"] * value
     return total
+
+
+def monitor_value(monitor: Monitor, by_code: dict) -> float | None:
+    if not monitor.legs:
+        record = by_code.get(monitor.code)
+        value = record.get(monitor.field) if record else None
+        return float(value) if value is not None else None
+    return combo_field_sum(monitor, by_code, monitor.field)
+
+
+# greeks are linear, so signed sums are the greeks OF the combo's value; IV is not additive
+COMBO_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")
 
 
 def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot, include_combos=False) -> list[dict]:
@@ -79,6 +87,7 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
         if m.legs:
             entry["legs"] = m.legs
             entry["combo_value"] = monitor_value(m, by_code)
+            entry["combo_greeks"] = {f: combo_field_sum(m, by_code, f) for f in COMBO_GREEK_FIELDS}
         entries.append(entry)
     return entries
 

@@ -218,7 +218,11 @@ def test_quotes_html_includes_combo_row(client_factory):
     assert resp.status_code == 200
     assert "sep-condor" in resp.text
     assert "7.15" in resp.text  # combined mid in the mid column
-    assert client.get("/quotes", headers=AUTH).json() == []  # JSON endpoint still single-leg only
+
+    quotes = client.get("/quotes", headers=AUTH).json()  # combos now included in JSON too
+    combo = next(q for q in quotes if q["code"] == "sep-condor")
+    assert combo["combo_value"] == 7.15
+    assert "combo_greeks" in combo
 
 
 def test_health_exposes_monitor_sweep_state(client_factory):
