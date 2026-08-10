@@ -20,7 +20,7 @@ def test_dashboard_renders(client_factory):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     assert resp.headers["cache-control"] == "no-store"
-    assert 'http-equiv="refresh"' in resp.text  # 60s auto-refresh
+    assert 'http-equiv="refresh" content="30"' in resp.text  # 30s auto-refresh
     assert "Add monitor" in resp.text
     assert "Add combo" in resp.text
 
