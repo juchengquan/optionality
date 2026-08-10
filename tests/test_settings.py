@@ -1,0 +1,28 @@
+from optionality.service.settings import Settings
+
+
+def test_defaults():
+    s = Settings()
+    assert s.opend_host == "127.0.0.1"
+    assert s.opend_port == 11111
+    assert s.api_token == ""
+    assert s.retry_delay_seconds == 300
+    assert s.db_path == "data/optionality.db"
+
+
+def test_from_env(monkeypatch):
+    monkeypatch.setenv("OPTIONALITY_DB_PATH", "/tmp/x.db")
+    monkeypatch.setenv("OPEND_HOST", "opend")
+    monkeypatch.setenv("OPEND_PORT", "22222")
+    monkeypatch.setenv("API_TOKEN", "sekrit")
+    monkeypatch.setenv("HEALTHCHECK_URL", "https://hc.example/ping")
+    monkeypatch.setenv("RETRY_DELAY_SECONDS", "10")
+    s = Settings.from_env()
+    assert s == Settings(
+        db_path="/tmp/x.db",
+        opend_host="opend",
+        opend_port=22222,
+        api_token="sekrit",
+        healthcheck_url="https://hc.example/ping",
+        retry_delay_seconds=10,
+    )

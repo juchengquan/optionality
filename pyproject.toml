@@ -21,7 +21,11 @@ dependencies = [
     "moomoo-api",
     "pandas >= 2",
     "PyYAML >= 6",
-    "pydantic[email]"
+    "pydantic[email]",
+    "fastapi>=0.141.1",
+    "uvicorn>=0.52.1",
+    "sqlalchemy>=2",
+    "apscheduler>=3.10,<4",
 ]
 
 [project.optional-dependencies]
@@ -29,9 +33,15 @@ all = []
 
 [dependency-groups]
 dev = [
-    "ruff"
+    "alembic>=1.19.1",
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff",
 ]
 
 
 [tool.ruff]
 line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

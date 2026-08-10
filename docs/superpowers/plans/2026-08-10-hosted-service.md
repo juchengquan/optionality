@@ -952,13 +952,13 @@ def test_scheduled_failure_schedules_retry(session_factory, holdings_body, monke
 
 def test_final_scheduled_failure_sends_failure_email(session_factory, holdings_body, monkeypatch):
     body = dict(holdings_body)
-    body["notification"] = {
-        "gmail": {"subject": "report", "from_address": "a@b.co", "to_address": ["a@b.co"]}
-    }
+    body["notification"] = {"gmail": {"subject": "report", "from_address": "a@b.co", "to_address": ["a@b.co"]}}
     _insert_config(session_factory, body)
     emails = []
     monkeypatch.setattr(worker_mod, "send_gmail_notification", lambda setting, msg: emails.append((setting, msg)))
-    rid = create_run(session_factory, task_type="holdings", config_name="c1", trigger="schedule", notify=True, attempt=2)
+    rid = create_run(
+        session_factory, task_type="holdings", config_name="c1", trigger="schedule", notify=True, attempt=2
+    )
 
     Worker(session_factory, SETTINGS, runner=_boom_runner)._execute(rid)
 
@@ -1001,7 +1001,9 @@ from optionality.service.settings import Settings
 _STOP = "__stop__"
 
 
-def create_run(session_factory, *, task_type: str, config_name: str, trigger: str, notify: bool, attempt: int = 1) -> str:
+def create_run(
+    session_factory, *, task_type: str, config_name: str, trigger: str, notify: bool, attempt: int = 1
+) -> str:
     run_id = uuid4().hex
     with session_factory() as session:
         session.add(
@@ -1473,7 +1475,12 @@ def health(session: Session = Depends(get_session), settings=Depends(get_setting
     last = session.scalar(select(Run).order_by(Run.created_at.desc()).limit(1))
     last_run = None
     if last is not None:
-        last_run = {"id": last.id, "task_type": last.task_type, "status": last.status, "created_at": str(last.created_at)}
+        last_run = {
+            "id": last.id,
+            "task_type": last.task_type,
+            "status": last.status,
+            "created_at": str(last.created_at),
+        }
 
     return {
         "db": db_ok,
