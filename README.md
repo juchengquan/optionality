@@ -63,6 +63,10 @@ curl -X POST localhost:8000/schedules -H "$AUTH" -H 'Content-Type: application/j
 curl -X POST localhost:8000/runs -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"task": "holdings", "config": "spx-holdings"}'
 curl localhost:8000/runs/<run_id>/report.html -H "$AUTH"
+# per-contract rows from a stored report (optionally ?code=US.SPXW...)
+curl localhost:8000/runs/<run_id>/details -H "$AUTH"
+# live snapshot of one SPX weekly contract (single OpenD call)
+curl "localhost:8000/spx/snapshot?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
 ```
 
 ### Runbook
