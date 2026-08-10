@@ -15,6 +15,8 @@ def test_monitor_crud_roundtrip(client_factory):
     assert created.status_code == 201
     data = created.json()
     mid = data["id"]
+    assert isinstance(mid, str)
+    assert len(mid) == 32  # uuid4 hex, like run ids — not a guessable sequence
     assert data["code"].startswith("US.SPXW")
     assert data["code"].endswith("C6500000")
     assert data["field"] == "option_delta"

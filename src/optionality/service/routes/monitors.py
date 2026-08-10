@@ -72,7 +72,7 @@ def create_monitor(payload: MonitorIn, session: SessionDep):
 
 
 @router.put("/{monitor_id}")
-def update_monitor(monitor_id: int, payload: MonitorIn, session: SessionDep):
+def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep):
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")
@@ -94,7 +94,7 @@ def update_monitor(monitor_id: int, payload: MonitorIn, session: SessionDep):
 
 
 @router.delete("/{monitor_id}", status_code=204)
-def delete_monitor(monitor_id: int, session: SessionDep):
+def delete_monitor(monitor_id: str, session: SessionDep):
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")

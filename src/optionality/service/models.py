@@ -1,7 +1,12 @@
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+def random_id() -> str:
+    return uuid4().hex
 
 
 def utcnow() -> datetime:
@@ -54,7 +59,7 @@ class Monitor(Base):
     __tablename__ = "monitors"
     __table_args__ = (UniqueConstraint("code", "field", name="uq_monitor_code_field"),)
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=random_id)
     code: Mapped[str] = mapped_column(String(50), index=True)
     strike_date: Mapped[str] = mapped_column(String(10))
     option_type: Mapped[str] = mapped_column(String(4))
