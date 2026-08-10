@@ -84,8 +84,10 @@ curl -X POST localhost:8000/runs -H "$AUTH" -H 'Content-Type: application/json' 
 curl localhost:8000/runs/<run_id>/report.html -H "$AUTH"
 # per-contract rows from a stored report (optionally ?code=US.SPXW...)
 curl localhost:8000/runs/<run_id>/details -H "$AUTH"
-# live snapshot of one SPX weekly contract (single OpenD call)
-curl "localhost:8000/spx/snapshot?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
+# live quote of one SPX weekly contract (single OpenD call)
+curl "localhost:8000/spx/quote?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
+# live quotes for every watched code
+curl localhost:8000/quotes -H "$AUTH"
 # watch a contract: Telegram alarm when abs(option_delta) crosses 0.6
 curl -X POST localhost:8000/monitors -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"strike_date": "2026-12-18", "option_type": "CALL", "strike": 6500, "threshold": 0.6}'

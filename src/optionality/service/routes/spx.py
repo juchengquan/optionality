@@ -13,9 +13,9 @@ router = APIRouter(prefix="/spx", tags=["spx"])
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-@router.get("/snapshot")
-def spx_snapshot(strike_date: str, option_type: Literal["CALL", "PUT"], strike: float, settings: SettingsDep):
-    """Live per-contract snapshot for an SPX weekly option.
+@router.get("/quote")
+def spx_quote(strike_date: str, option_type: Literal["CALL", "PUT"], strike: float, settings: SettingsDep):
+    """Live quote for one SPX weekly option contract.
 
     Makes one bounded OpenD call directly (outside the worker queue): a single
     snapshot does not meaningfully compete with a run's QPS budget, and queueing

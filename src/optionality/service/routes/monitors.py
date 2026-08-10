@@ -13,6 +13,7 @@ from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
+quotes_router = APIRouter(tags=["quotes"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -99,7 +100,7 @@ def list_monitors(session: SessionDep, settings: SettingsDep):
     return [_to_dict(r, settings.display_tz) for r in rows]
 
 
-@router.get("/quotes")
+@quotes_router.get("/quotes")
 def get_watchlist_quotes(
     session_factory: Annotated[object, Depends(get_session_factory)],
     settings: Annotated[object, Depends(get_settings)],
@@ -112,7 +113,9 @@ def get_watchlist_quotes(
 
 
 @router.post("", status_code=201)
-def create_monitor(payload: MonitorIn, session: SessionDep, settings: SettingsDep):
+def create_monitor(payload: MonitorIn | ComboMonitorIn, session: SessionDep, settings: SettingsDep):
+    if isinstance(payload, ComboMonitorIn):
+        return _create_combo(payload, session, settings)
     code = _build_code(payload)
     if session.scalar(select(Monitor).where(Monitor.code == code, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({code}, {payload.field}) already exists")
@@ -131,8 +134,7 @@ def create_monitor(payload: MonitorIn, session: SessionDep, settings: SettingsDe
     return _to_dict(row, settings.display_tz)
 
 
-@router.post("/combo", status_code=201)
-def create_combo_monitor(payload: ComboMonitorIn, session: SessionDep, settings: SettingsDep):
+def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings):
     if session.scalar(select(Monitor).where(Monitor.code == payload.name, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({payload.name}, {payload.field}) already exists")
     row = Monitor(

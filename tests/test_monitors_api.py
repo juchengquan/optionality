@@ -70,11 +70,11 @@ def test_monitors_quotes_endpoint(client_factory):
         return [{"code": c, "name": "X", "option_delta": 0.33} for c in codes]
 
     client = client_factory(snapshot_fetcher=fetcher)
-    assert client.get("/monitors/quotes", headers=AUTH).json() == []
+    assert client.get("/quotes", headers=AUTH).json() == []
 
     payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
     client.post("/monitors", json=payload, headers=AUTH)
-    quotes = client.get("/monitors/quotes", headers=AUTH).json()
+    quotes = client.get("/quotes", headers=AUTH).json()
     assert len(quotes) == 1
     assert quotes[0]["snapshot"]["option_delta"] == 0.33
     assert quotes[0]["threshold"] == 0.6
@@ -95,17 +95,17 @@ def test_combo_monitor_create_and_guardrails(client_factory):
     client = client_factory()
     payload = {**COMBO_PAYLOAD, "strike_date": _future()}
 
-    created = client.post("/monitors/combo", json=payload, headers=AUTH)
+    created = client.post("/monitors", json=payload, headers=AUTH)
     assert created.status_code == 201
     data = created.json()
     assert data["code"] == "sep-condor"
     assert data["field"] == "mid_price"  # combo default field
     assert len(data["legs"]) == 2
 
-    assert client.post("/monitors/combo", json=payload, headers=AUTH).status_code == 409  # duplicate name
+    assert client.post("/monitors", json=payload, headers=AUTH).status_code == 409  # duplicate name
 
     one_leg = {**payload, "name": "x", "legs": payload["legs"][:1]}
-    assert client.post("/monitors/combo", json=one_leg, headers=AUTH).status_code == 422  # min 2 legs
+    assert client.post("/monitors", json=one_leg, headers=AUTH).status_code == 422  # min 2 legs
 
     single_leg_payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
     mid = data["id"]
@@ -129,7 +129,7 @@ def test_patch_monitor_safe_fields(client_factory):
     assert client.patch(f"/monitors/{mid}", json={}, headers=AUTH).status_code == 422  # nothing to update
     assert client.patch("/monitors/nope", json={"threshold": 1}, headers=AUTH).status_code == 404
 
-    combo = client.post("/monitors/combo", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH).json()
+    combo = client.post("/monitors", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH).json()
     combo_patch = client.patch(f"/monitors/{combo['id']}", json={"threshold": 25}, headers=AUTH)
     assert combo_patch.status_code == 200  # combos ARE patchable for safe fields
     assert combo_patch.json()["threshold"] == 25
