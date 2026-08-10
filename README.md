@@ -96,8 +96,10 @@ curl localhost:8000/monitors -H "$AUTH"   # live watchlist dashboard (last_value
 
 A background sweep polls the whole watchlist every `MONITOR_INTERVAL_SECONDS` (default 60s, 24×7) with **one**
 `get_market_snapshot` call, so the moomoo rate limit is never a concern. Alarms are edge-triggered on
-`abs(value) >= threshold` and re-arm after the value falls 5% below the threshold — one Telegram message per
-episode, plus a recovery message. Monitors on expired contracts are auto-disabled. If 5 consecutive sweeps fail
+`abs(value) >= threshold` (direction `above`, the default) or `abs(value) <= threshold` (direction `below` —
+e.g. a profit-target alert when a spread's `mid_price` decays to your exit level), and re-arm after the value
+retreats 5% past the threshold — one Telegram message per episode, plus a recovery message. Run failures also
+alert via Telegram (after the automatic retry), with gmail as an optional additional channel per config. Monitors on expired contracts are auto-disabled. If 5 consecutive sweeps fail
 (e.g. OpenD logged out), you get one "monitoring degraded" Telegram alert and a recovery note when it heals;
 sweep state is visible under `monitor` in `/health`.
 
@@ -113,7 +115,7 @@ only — messages from any other chat are ignored). Available commands:
 /quotes                                        live prices: mid, bid/ask
 /greeks                                        live delta, gamma, theta
 /vol                                           live IV, vega
-/watch 2026-12-18 CALL 6500 0.6 [field]        add a monitor (dates: YYYY-MM-DD or YYYYMMDD)
+/watch 2026-12-18 CALL 6500 0.6 [field] [above|below]   add a monitor (dates: YYYY-MM-DD or YYYYMMDD)
 /unwatch 261218 C6500                          remove (by contract, code, or id prefix)
 /snapshot 2026-12-18 CALL 6500                 live quote for any contract
 /health                                        queue + sweep status

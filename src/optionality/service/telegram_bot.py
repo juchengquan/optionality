@@ -22,7 +22,7 @@ HELP_TEXT = """Commands:
 /quotes — live prices (mid, bid/ask) for every watched code
 /greeks — live delta/gamma/theta for every watched code
 /vol — live IV/vega for every watched code
-/watch <date> <CALL|PUT> <strike> <threshold> [field] — add a monitor
+/watch <date> <CALL|PUT> <strike> <threshold> [field] [above|below] — add a monitor
 /unwatch <code, id prefix, or contract like 260918 C8100> — remove a monitor
 /snapshot <date> <CALL|PUT> <strike> — live quote
 (dates: YYYY-MM-DD or YYYYMMDD)
@@ -190,7 +190,8 @@ class TelegramBot(threading.Thread):
                 last = _fmt_value(m.field, m.last_value)
             else:
                 last = f"{m.last_value:.4f}"
-            rows.append([_short_code(m.code), _FIELD_SHORT.get(m.field, m.field), last, str(m.threshold), state])
+            thr = f"{'≤' if m.direction == 'below' else '≥'}{m.threshold}"
+            rows.append([_short_code(m.code), _FIELD_SHORT.get(m.field, m.field), last, thr, state])
         return _table(["contract", "field", "last", "thr", "state"], rows)
 
     def _cmd_quotes(self) -> str:
@@ -251,7 +252,7 @@ class TelegramBot(threading.Thread):
         return _table(["contract", "IV", "vega"], rows)
 
     def _cmd_watch(self, args: list[str]) -> str:
-        usage = "Usage: /watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field]"
+        usage = "Usage: /watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field] [above|below]"
         if len(args) < 4:
             return usage
         option_type = args[1].upper()
@@ -263,7 +264,12 @@ class TelegramBot(threading.Thread):
             code = build_spx_code(strike_date, option_type, strike)
         except ValueError:
             return usage
-        field = args[4] if len(args) > 4 else "option_delta"
+        field, direction = "option_delta", "above"
+        for extra in args[4:6]:
+            if extra.lower() in ("above", "below"):
+                direction = extra.lower()
+            else:
+                field = extra
 
         with self.session_factory() as session:
             if session.scalar(select(Monitor).where(Monitor.code == code, Monitor.field == field)):
@@ -276,10 +282,12 @@ class TelegramBot(threading.Thread):
                     strike=strike,
                     field=field,
                     threshold=threshold,
+                    direction=direction,
                 )
             )
             session.commit()
-        return f"Watching {code}: alarm when abs({field}) ≥ {threshold}"
+        sign = "≤" if direction == "below" else "≥"
+        return f"Watching {code}: alarm when abs({field}) {sign} {threshold}"
 
     def _cmd_unwatch(self, args: list[str]) -> str:
         if not args:

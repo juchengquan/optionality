@@ -24,6 +24,7 @@ class MonitorIn(BaseModel):
     strike: float
     field: str = "option_delta"
     threshold: float
+    direction: Literal["above", "below"] = "above"
     enabled: bool = True
 
     @field_validator("strike_date")
@@ -51,6 +52,7 @@ def _to_dict(row: Monitor, tz: str) -> dict:
         "strike": row.strike,
         "field": row.field,
         "threshold": row.threshold,
+        "direction": row.direction,
         "enabled": row.enabled,
         "triggered": row.triggered,
         "last_value": row.last_value,
@@ -89,6 +91,7 @@ def create_monitor(payload: MonitorIn, session: SessionDep, settings: SettingsDe
         strike=payload.strike,
         field=payload.field,
         threshold=payload.threshold,
+        direction=payload.direction,
         enabled=payload.enabled,
     )
     session.add(row)
@@ -113,6 +116,7 @@ def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep, set
     row.strike = payload.strike
     row.field = payload.field
     row.threshold = payload.threshold
+    row.direction = payload.direction
     row.enabled = payload.enabled
     session.commit()
     return _to_dict(row, settings.display_tz)

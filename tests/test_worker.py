@@ -85,6 +85,22 @@ def test_final_scheduled_failure_sends_failure_email(session_factory, holdings_b
     assert "OpenD" in msg  # logged-out hint
 
 
+def test_final_failure_sends_telegram_alert_without_gmail(session_factory, holdings_body, monkeypatch):
+    _insert_config(session_factory, holdings_body)  # file-only notification, no gmail block
+    alerts = []
+    monkeypatch.setattr(worker_mod, "send_telegram_message", lambda token, chat, text: alerts.append(text))
+    settings = Settings(retry_delay_seconds=0, telegram_bot_token="t", telegram_chat_id="42")
+    rid = create_run(
+        session_factory, task_type="holdings", config_name="c1", trigger="schedule", notify=True, attempt=2
+    )
+
+    Worker(session_factory, settings, runner=_boom_runner)._execute(rid)
+
+    assert len(alerts) == 1
+    assert "failed" in alerts[0]
+    assert "OpenD" in alerts[0]  # logged-out hint
+
+
 def test_healthcheck_ping_only_for_scheduled_success(session_factory, holdings_body, monkeypatch):
     _insert_config(session_factory, holdings_body)
     pings = []

@@ -37,6 +37,7 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
             "code": m.code,
             "field": m.field,
             "threshold": m.threshold,
+            "direction": m.direction,
             "triggered": m.triggered,
             "last_value": m.last_value,
             "snapshot": by_code.get(m.code),
@@ -107,12 +108,20 @@ class MonitorSweeper:
                 db_monitor.last_checked_at = now
 
                 name = record.get("name") or monitor.code
-                if abs(value) >= monitor.threshold and not db_monitor.triggered:
+                above = monitor.direction != "below"
+                breached = abs(value) >= monitor.threshold if above else abs(value) <= monitor.threshold
+                if above:
+                    rearmed = abs(value) < monitor.threshold * (1 - REARM_HYSTERESIS)
+                    breach_word, recover_word = "crossed ≥", "back below"
+                else:
+                    rearmed = abs(value) > monitor.threshold * (1 + REARM_HYSTERESIS)
+                    breach_word, recover_word = "fell ≤", "back above"
+                if breached and not db_monitor.triggered:
                     db_monitor.triggered = True
-                    self._notify(f"⚠️ {name}: {monitor.field} {value:.3f} crossed ≥ {monitor.threshold}")
-                elif db_monitor.triggered and abs(value) < monitor.threshold * (1 - REARM_HYSTERESIS):
+                    self._notify(f"⚠️ {name}: {monitor.field} {value:.3f} {breach_word} {monitor.threshold}")
+                elif db_monitor.triggered and rearmed:
                     db_monitor.triggered = False
-                    self._notify(f"✅ {name}: {monitor.field} {value:.3f} back below {monitor.threshold}")
+                    self._notify(f"✅ {name}: {monitor.field} {value:.3f} {recover_word} {monitor.threshold}")
             session.commit()
 
     def _record_failure(self) -> None:

@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from optionality.core import load_config, run_task, send_notifications
 from optionality.notification.gmail import send_gmail_notification
+from optionality.notification.telegram import send_telegram_message
 from optionality.service.models import ConfigDoc, Report, Run, utcnow
 from optionality.service.settings import Settings
 
@@ -134,14 +135,26 @@ class Worker(threading.Thread):
             )
             self._schedule_retry(self.settings.retry_delay_seconds, retry_id)
         else:
-            self._send_failure_email(run, err)
+            self._send_failure_alert(run, err)
 
     def _schedule_retry(self, delay: float, run_id: str) -> None:
         timer = threading.Timer(delay, self.submit, args=(run_id,))
         timer.daemon = True
         timer.start()
 
-    def _send_failure_email(self, run: Run, err: Exception) -> None:
+    def _send_failure_alert(self, run: Run, err: Exception) -> None:
+        hint = ""
+        if "connect" in str(err).lower():
+            hint = " The OpenD gateway may be logged out or unreachable — check OpenD on the host."
+
+        if self.settings.telegram_bot_token and self.settings.telegram_chat_id:
+            text = f"❌ optionality {run.task_type} run failed ({run.config_name}, attempt {run.attempt}): {err}.{hint}"
+            try:
+                send_telegram_message(self.settings.telegram_bot_token, self.settings.telegram_chat_id, text)
+            except Exception:
+                logger.exception("telegram failure alert for run %s could not be sent", run.id)
+
+        # gmail alert additionally, when the config carries a gmail block
         with self.session_factory() as session:
             config_row = session.scalar(select(ConfigDoc).where(ConfigDoc.name == run.config_name))
         if config_row is None:
@@ -154,9 +167,6 @@ class Worker(threading.Thread):
         if gmail is None:
             return
 
-        hint = ""
-        if "connect" in str(err).lower():
-            hint = " The OpenD gateway may be logged out or unreachable — check OpenD on the host."
         setting = gmail.model_dump()
         setting["subject"] = f"❌ optionality {run.task_type} run failed"
         message = (

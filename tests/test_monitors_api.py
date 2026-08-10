@@ -80,6 +80,22 @@ def test_monitors_quotes_endpoint(client_factory):
     assert quotes[0]["threshold"] == 0.6
 
 
+def test_direction_below_monitor(client_factory):
+    client = client_factory()
+    payload = {
+        "strike_date": _future(),
+        "option_type": "CALL",
+        "strike": 8100,
+        "field": "mid_price",
+        "threshold": 30,
+        "direction": "below",
+    }
+    created = client.post("/monitors", json=payload, headers=AUTH)
+    assert created.status_code == 201
+    assert created.json()["direction"] == "below"
+    assert client.post("/monitors", json={**payload, "direction": "sideways"}, headers=AUTH).status_code == 422
+
+
 def test_timestamps_rendered_in_display_tz(client_factory):
     client = client_factory()
     payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
