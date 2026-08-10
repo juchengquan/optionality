@@ -299,6 +299,7 @@ def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
     assert quotes[0]["code"] == CODE
     assert quotes[0]["threshold"] == 0.6
     assert quotes[0]["snapshot"]["option_delta"] == 0.91
+    assert "fetched_at" in quotes[0]["snapshot"]  # call-time stamp: the honest "data as-of"
 
 
 def test_watchlist_quotes_ordered_by_type_then_date(session_factory):

@@ -65,6 +65,19 @@ def test_monitor_validation(client_factory):
     assert client.post("/monitors", json=bad_type, headers=AUTH).status_code == 422
 
 
+def test_negative_threshold_rejected_everywhere(client_factory):
+    client = client_factory()
+    base = {"strike_date": _future(), "option_type": "CALL", "strike": 6500}
+    # abs-comparison makes non-positive thresholds never-firing (below) or always-firing (above)
+    assert client.post("/monitors", json={**base, "threshold": -4.05}, headers=AUTH).status_code == 422
+    assert client.post("/monitors", json={**base, "threshold": 0}, headers=AUTH).status_code == 422
+    combo = {**COMBO_PAYLOAD, "strike_date": _future(), "threshold": -1}
+    assert client.post("/monitors", json=combo, headers=AUTH).status_code == 422
+
+    mid = client.post("/monitors", json={**base, "threshold": 0.6}, headers=AUTH).json()["id"]
+    assert client.patch(f"/monitors/{mid}", json={"threshold": -1}, headers=AUTH).status_code == 422
+
+
 def test_monitors_quotes_endpoint(client_factory):
     def fetcher(codes, opend_host=None, opend_port=None):
         return [{"code": c, "name": "X", "option_delta": 0.33} for c in codes]

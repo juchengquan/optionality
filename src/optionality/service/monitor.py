@@ -8,7 +8,7 @@ from optionality.core import fetch_snapshot
 from optionality.notification.telegram import send_telegram_message
 from optionality.service.models import Monitor, utcnow
 from optionality.service.settings import Settings
-from optionality.service.timefmt import market_time_to_display
+from optionality.service.timefmt import display_time, market_time_to_display
 
 logger = logging.getLogger("optionality.monitor")
 
@@ -59,9 +59,11 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
         return []
     codes = sorted({code for m in monitors for code in monitor_leg_codes(m)})
     records = fetcher(codes, opend_host=settings.opend_host, opend_port=settings.opend_port)
+    fetched_at = display_time(utcnow(), settings.display_tz)
     for record in records:
         if record.get("update_time"):
             record["update_time"] = market_time_to_display(record["update_time"], settings.display_tz)
+        record["fetched_at"] = fetched_at  # the honest "data as-of"; update_time is only the last trade
     by_code = {r.get("code"): r for r in records}
     entries = []
     for m in monitors:

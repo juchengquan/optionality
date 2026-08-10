@@ -149,6 +149,22 @@ def test_watch_with_bad_args_replies_usage(session_factory):
         assert s.scalar(select(Monitor)) is None
 
 
+def test_negative_threshold_rejected_in_bot(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watch {_future()} CALL 6500 -0.5"))
+    assert "positive" in api.sent[-1].lower()
+    bot.handle_update(_update(f"/watchcombo x {_future()} +C8100 -C8150 -4.05"))
+    assert "positive" in api.sent[-1].lower()
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)) is None
+
+    bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
+    bot.handle_update(_update(f"/threshold {_yymmdd()} C6500 0"))
+    assert "positive" in api.sent[-1].lower()
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)).threshold == 0.6  # unchanged
+
+
 def _yymmdd() -> str:
     return _future().replace("-", "")[2:]
 

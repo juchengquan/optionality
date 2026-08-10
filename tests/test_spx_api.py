@@ -25,6 +25,7 @@ def test_snapshot_endpoint_builds_code_and_returns_data(client_factory, monkeypa
     assert data["code"] == "US.SPXW261218C6500000"
     assert data["snapshot"]["last_price"] == 12.3
     assert data["snapshot"]["update_time"] == "2026-08-10 08:15:00+08:00"  # ET parsed, SGT emitted
+    assert data["snapshot"]["fetched_at"].endswith("+08:00")  # call-time stamp alongside last-trade time
 
 
 def test_snapshot_endpoint_validates_params(client_factory):

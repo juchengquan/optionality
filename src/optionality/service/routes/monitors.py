@@ -27,7 +27,7 @@ class MonitorIn(BaseModel):
     option_type: Literal["CALL", "PUT"]
     strike: float
     field: str = "option_delta"
-    threshold: float
+    threshold: float = Field(gt=0)  # abs-comparison: non-positive thresholds never/always fire
     direction: Literal["above", "below"] = "above"
     enabled: bool = True
 
@@ -51,7 +51,7 @@ class ComboMonitorIn(BaseModel):
     strike_date: str
     legs: list[ComboLegIn] = Field(min_length=2)
     field: str = "mid_price"
-    threshold: float
+    threshold: float = Field(gt=0)
     direction: Literal["above", "below"] = "above"
     enabled: bool = True
 
@@ -65,7 +65,7 @@ class ComboMonitorIn(BaseModel):
 
 
 class MonitorPatch(BaseModel):
-    threshold: float | None = None
+    threshold: float | None = Field(default=None, gt=0)
     direction: Literal["above", "below"] | None = None
     field: str | None = None
     enabled: bool | None = None
@@ -153,7 +153,7 @@ def get_watchlist_quotes_html(
             "mid": snap.get("mid_price"),
             "bid": snap.get("bid_price"),
             "ask": snap.get("ask_price"),
-            "updated": snap.get("update_time"),
+            "last trade": snap.get("update_time"),
         }
         if "legs" in q:
             # combo: only its own signed sum is honest — other columns would be
