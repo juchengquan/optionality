@@ -1,10 +1,12 @@
+import html
 import json
 import logging
+import re
 import threading
 import urllib.parse
 import urllib.request
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.core import fetch_snapshot
@@ -18,7 +20,7 @@ HELP_TEXT = """Commands:
 /monitors — list the watchlist with live state
 /quotes — live quotes for every watched code
 /watch <date> <CALL|PUT> <strike> <threshold> [field] — add a monitor
-/unwatch <code or id prefix> — remove a monitor
+/unwatch <code, id prefix, or contract like 260918 C8100> — remove a monitor
 /snapshot <date> <CALL|PUT> <strike> — live quote
 (dates: YYYY-MM-DD or YYYYMMDD)
 /health — service status
@@ -29,6 +31,26 @@ def _fmt_value(key: str, value) -> str:
     if key == "option_delta" and isinstance(value, int | float):
         return f"{value:.3f}"
     return str(value)
+
+
+_SPXW_CODE = re.compile(r"US\.SPXW(\d{6})([CP])(\d+?)000$")
+
+_FIELD_SHORT = {"option_delta": "delta", "mid_price": "mid", "option_implied_volatility": "IV"}
+
+
+def _short_code(code: str) -> str:
+    m = _SPXW_CODE.match(code)
+    if not m:
+        return code
+    return f"{m.group(1)} {m.group(2)}{m.group(3)}"
+
+
+def _table(headers: list[str], rows: list[list[str]]) -> str:
+    # Telegram has no table markup; a <pre> block with space-aligned columns is the idiom
+    escaped = [[html.escape(str(cell)) for cell in row] for row in [headers, *rows]]
+    widths = [max(len(row[i]) for row in escaped) for i in range(len(headers))]
+    lines = ["  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in escaped]
+    return "<pre>" + "\n".join(lines) + "</pre>"
 
 
 BOT_COMMANDS = [
@@ -115,7 +137,10 @@ class TelegramBot(threading.Thread):
             return
         reply = self._dispatch(text)
         if reply:
-            self.api("sendMessage", {"chat_id": chat_id, "text": reply})
+            params = {"chat_id": chat_id, "text": reply}
+            if reply.startswith("<pre>"):
+                params["parse_mode"] = "HTML"
+            self.api("sendMessage", params)
 
     def _dispatch(self, text: str) -> str:
         parts = text.split()
@@ -141,19 +166,19 @@ class TelegramBot(threading.Thread):
             monitors = session.scalars(select(Monitor).order_by(Monitor.created_at)).all()
         if not monitors:
             return "Watchlist is empty. Add one with /watch."
-        lines = []
+        rows = []
         for m in monitors:
-            state = "🔔 triggered" if m.triggered else "armed"
+            state = "🔔" if m.triggered else "armed"
             if not m.enabled:
-                state = "disabled"
+                state = "off"
             if m.last_value is None:
                 last = "—"
             elif m.field == "option_delta":
                 last = f"{m.last_value:.3f}"
             else:
                 last = f"{m.last_value:.4f}"
-            lines.append(f"{m.id[:8]}  {m.code}\n    {m.field} last={last} thr={m.threshold} [{state}]")
-        return "\n".join(lines)
+            rows.append([_short_code(m.code), _FIELD_SHORT.get(m.field, m.field), last, str(m.threshold), state])
+        return _table(["contract", "field", "last", "thr", "state"], rows)
 
     def _cmd_quotes(self) -> str:
         try:
@@ -162,27 +187,18 @@ class TelegramBot(threading.Thread):
             return f"Quotes failed: {err}"
         if not quotes:
             return "Watchlist is empty. Add one with /watch."
-        lines = []
+        rows = []
         for q in quotes:
-            snap = q["snapshot"]
-            if not snap:
-                lines.append(f"{q['code']}: no data")
-                continue
-            name = snap.get("name") or q["code"]
-            parts = [
-                f"{label} {_fmt_value(key, snap[key])}"
-                for label, key in [
-                    ("delta", "option_delta"),
-                    ("IV", "option_implied_volatility"),
-                    ("mid", "mid_price"),
-                    ("bid", "bid_price"),
-                    ("ask", "ask_price"),
-                ]
-                if snap.get(key) is not None
-            ]
-            marker = " 🔔" if q["triggered"] else ""
-            lines.append(f"{name}{marker}\n    " + " | ".join(parts))
-        return "\n".join(lines)
+            snap = q["snapshot"] or {}
+            delta = _fmt_value("option_delta", snap["option_delta"]) if snap.get("option_delta") is not None else "—"
+            mid = str(snap["mid_price"]) if snap.get("mid_price") is not None else "—"
+            if snap.get("bid_price") is not None and snap.get("ask_price") is not None:
+                bid_ask = f"{snap['bid_price']}/{snap['ask_price']}"
+            else:
+                bid_ask = "—"
+            contract = _short_code(q["code"]) + (" 🔔" if q["triggered"] else "")
+            rows.append([contract, delta, mid, bid_ask])
+        return _table(["contract", "delta", "mid", "bid/ask"], rows)
 
     def _cmd_watch(self, args: list[str]) -> str:
         usage = "Usage: /watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field]"
@@ -217,12 +233,15 @@ class TelegramBot(threading.Thread):
 
     def _cmd_unwatch(self, args: list[str]) -> str:
         if not args:
-            return "Usage: /unwatch <code or id prefix>"
+            return "Usage: /unwatch <code, id prefix, or contract like 260918 C8100>"
         token = args[0]
+        joined = "".join(args).upper()
+        conditions = [Monitor.code == joined, Monitor.id.startswith(token)]
+        short = re.fullmatch(r"(\d{6})([CP])(\d+)", joined)
+        if short:
+            conditions.append(Monitor.code == f"US.SPXW{short.group(1)}{short.group(2)}{short.group(3)}000")
         with self.session_factory() as session:
-            matches = session.scalars(
-                select(Monitor).where((Monitor.code == token.upper()) | Monitor.id.startswith(token))
-            ).all()
+            matches = session.scalars(select(Monitor).where(or_(*conditions))).all()
             if not matches:
                 return f"No monitor matches '{token}'."
             if len(matches) > 1:

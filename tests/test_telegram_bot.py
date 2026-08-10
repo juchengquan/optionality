@@ -71,13 +71,45 @@ def test_watch_with_bad_args_replies_usage(session_factory):
         assert s.scalar(select(Monitor)) is None
 
 
-def test_monitors_lists_watchlist(session_factory):
+def _yymmdd() -> str:
+    return _future().replace("-", "")[2:]
+
+
+def test_monitors_lists_watchlist_as_table(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update("/monitors"))
     assert "empty" in api.sent[-1].lower()
     bot.handle_update(_update(f"/watch {_future()} PUT 6425 0.5"))
     bot.handle_update(_update("/monitors"))
-    assert "P6425000" in api.sent[-1]
+    reply = api.sent[-1]
+    assert reply.startswith("<pre>")
+    assert reply.endswith("</pre>")
+    assert f"{_yymmdd()} P6425" in reply  # short contract label, not the full moomoo code
+    assert "armed" in reply
+    assert api.calls[-1][1].get("parse_mode") == "HTML"
+
+
+def test_help_stays_plain_text(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update("/help"))
+    assert "parse_mode" not in api.calls[-1][1]  # plain replies must not be HTML-parsed
+
+
+def test_short_code_labels():
+    from optionality.service.telegram_bot import _short_code
+
+    assert _short_code("US.SPXW260918C8100000") == "260918 C8100"
+    assert _short_code("US.SPXW261218P6425000") == "261218 P6425"
+    assert _short_code("US.WEIRD123") == "US.WEIRD123"  # non-SPXW codes pass through
+
+
+def test_unwatch_by_short_label(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
+    bot.handle_update(_update(f"/unwatch {_yymmdd()} C6500"))
+    assert "removed" in api.sent[-1].lower()
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)) is None
 
 
 def test_unwatch_by_code_and_by_id_prefix(session_factory):
@@ -151,6 +183,10 @@ def test_quotes_command_reports_watched_codes(session_factory):
 
     bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
     bot.handle_update(_update("/quotes"))
-    assert "delta 0.420" in api.sent[-1]  # delta always shown with three decimals
-    assert "C6500000" in api.sent[-1]
-    assert "mid 1.5" in api.sent[-1]
+    reply = api.sent[-1]
+    assert reply.startswith("<pre>")
+    assert "0.420" in reply  # delta with three decimals
+    assert f"{_yymmdd()} C6500" in reply
+    assert "1.5" in reply  # mid column
+    assert "1.0/2.0" in reply  # bid/ask column
+    assert api.calls[-1][1].get("parse_mode") == "HTML"
