@@ -17,9 +17,9 @@ Optionality is a small, simple yet effective tool aimed at providing a report to
    git clone https://github.com/juchengquan/optionality.git
    ```
 
-2. **Install Dependencies**:
+2. **Install Dependencies** (requires [uv](https://docs.astral.sh/uv/)):
    ```bash
-   pip install -e .
+   uv sync
    ```
 
 3. **Configure Settings**:
@@ -35,6 +35,81 @@ Optionality is a small, simple yet effective tool aimed at providing a report to
    ```
    The results will be saved locally or sent via email address if set in the config file.
 
+
+## Hosted service
+
+Run optionality as an always-on service: scheduled scans email HTML reports; ad-hoc runs are triggered over the API (expose it inside your tailnet only, e.g. with `tailscale serve`).
+
+To serve under a path prefix — `tailscale serve --bg --set-path /api http://127.0.0.1:8000` — set `ROOT_PATH=/api`
+in `.env` so FastAPI generates prefixed URLs (otherwise `/docs` loads but can't fetch `openapi.json`). With
+`ROOT_PATH` set, open Swagger through the proxy URL (`https://<machine>.<tailnet>.ts.net/api/docs`), not localhost.
+
+### Setup
+
+1. `cp .env.example .env` and fill in the values.
+2. Start OpenD:
+   - **macOS / bare-metal host:** run OpenD on the host, keep `OPEND_HOST=host.docker.internal`.
+   - **Linux host, Docker:** extract the OpenD Ubuntu build into `./opend`, set `OPEND_HOST=opend`, add `--profile opend-docker` to compose commands. First login may prompt for a verification code: `docker attach optionality-opend`.
+3. `docker compose up -d --build`
+4. Health check: `curl http://localhost:8000/health` — `"opend": true` means the gateway is reachable.
+
+### Everyday use
+
+```bash
+AUTH="Authorization: Bearer $API_TOKEN"
+# store a config (body = the YAML document as JSON)
+curl -X POST localhost:8000/configs -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"name": "spx-holdings", "task_type": "holdings", "body": {...}}'
+# schedule it for 09:35 ET every weekday
+curl -X POST localhost:8000/schedules -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"cron_expr": "35 9 * * mon-fri", "task_type": "holdings", "config_name": "spx-holdings"}'
+# ad-hoc run + report
+curl -X POST localhost:8000/runs -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"task": "holdings", "config": "spx-holdings"}'
+curl localhost:8000/runs/<run_id>/report.html -H "$AUTH"
+# per-contract rows from a stored report (optionally ?code=US.SPXW...)
+curl localhost:8000/runs/<run_id>/details -H "$AUTH"
+# live snapshot of one SPX weekly contract (single OpenD call)
+curl "localhost:8000/spx/snapshot?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
+# watch a contract: Telegram alarm when abs(option_delta) crosses 0.6
+curl -X POST localhost:8000/monitors -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"strike_date": "2026-12-18", "option_type": "CALL", "strike": 6500, "threshold": 0.6}'
+curl localhost:8000/monitors -H "$AUTH"   # live watchlist dashboard (last_value, triggered)
+```
+
+### Delta monitors
+
+A background sweep polls the whole watchlist every `MONITOR_INTERVAL_SECONDS` (default 60s, 24×7) with **one**
+`get_market_snapshot` call, so the moomoo rate limit is never a concern. Alarms are edge-triggered on
+`abs(value) >= threshold` and re-arm after the value falls 5% below the threshold — one Telegram message per
+episode, plus a recovery message. Monitors on expired contracts are auto-disabled. If 5 consecutive sweeps fail
+(e.g. OpenD logged out), you get one "monitoring degraded" Telegram alert and a recovery note when it heals;
+sweep state is visible under `monitor` in `/health`.
+
+**Telegram setup:** create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`, or `/mybots` → API Token
+for an existing one) and put the token in `.env` as `TELEGRAM_BOT_TOKEN`. Then send your bot any message and run
+`curl "https://api.telegram.org/bot<TOKEN>/getUpdates"` — the `"chat":{"id": ...}` number is `TELEGRAM_CHAT_ID`.
+
+**Two-way bot:** when both Telegram vars are set, the service also long-polls the bot for commands (owner chat
+only — messages from any other chat are ignored). Available commands:
+
+```
+/monitors                                      list the watchlist with live state
+/watch 2026-12-18 CALL 6500 0.6 [field]        add a monitor
+/unwatch US.SPXW261218C6500000                 remove (by code or id prefix)
+/snapshot 2026-12-18 CALL 6500                 live quote
+/health                                        queue + sweep status
+```
+
+Only one service instance may poll a given bot token at a time (Telegram getUpdates is single-consumer) — don't
+run the local server and the Docker deployment simultaneously with the same bot.
+
+### Runbook
+
+- **Scheduled reports stopped and healthchecks.io alerted:** check `docker compose ps`, then `curl :8000/health`. If `"opend": false`, OpenD is down or logged out — restart/re-login it (this is the most common failure).
+- **Failure email arrived:** the run failed twice (one automatic retry). The email includes the error; `GET /runs?status=failed` has details.
+- **Debugging the pipeline without the service:** `uv run python main.py -t holdings -f examples/strategy.yaml` uses the same core code against a local OpenD.
+- **Schema changes:** `uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head` (fresh databases are created automatically at startup).
 
 ## License
 

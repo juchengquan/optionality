@@ -1,21 +1,18 @@
 [build-system]
-requires = [
-    "setuptools",
-    "wheel",
-]
-build-backend="setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "optionality"
 version = "0.0.1"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
     {name="juchengquan"}
 ]
 classifiers = [
-    "Protramming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT LIcense",
-    "Operation System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
 ]
 
 dependencies = [
@@ -24,16 +21,33 @@ dependencies = [
     "moomoo-api",
     "pandas >= 2",
     "PyYAML >= 6",
-    "pydantic[email]"
+    "pydantic[email]",
+    "fastapi>=0.141.1",
+    "uvicorn>=0.52.1",
+    "sqlalchemy>=2",
+    "apscheduler>=3.10,<4",
 ]
 
 [project.optional-dependencies]
 all = []
 
-[tool.setuptools]
-packages = [
-    "optionality",
+[dependency-groups]
+dev = [
+    "alembic>=1.19.1",
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff",
 ]
 
-[tool.setuptools.package-dir]
-"optionality" = "src/optionality"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+# the worker's and sweeper's job is to survive any failure and record it; blind catches are the design
+"src/optionality/service/worker.py" = ["BLE001"]
+"src/optionality/service/monitor.py" = ["BLE001"]
+"src/optionality/service/telegram_bot.py" = ["BLE001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

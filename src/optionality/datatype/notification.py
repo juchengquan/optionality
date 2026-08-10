@@ -1,16 +1,17 @@
-from pydantic import BaseModel, EmailStr
-from typing import List, Literal
+from pydantic import BaseModel, ConfigDict, EmailStr
+
 
 class GmailConfig(BaseModel):
-    user: EmailStr
-    password: str
     subject: str
-    from_address: EmailStr 
-    to_address: List[EmailStr]
+    from_address: EmailStr
+    to_address: list[EmailStr]
+
 
 class FileConfig(BaseModel):
     file_path: str
 
+
 class NotificationConfig(BaseModel):
-    gmail: GmailConfig
-    file: FileConfig
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    gmail: GmailConfig | None = None
+    file: FileConfig | None = None

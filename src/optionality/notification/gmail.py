@@ -1,18 +1,17 @@
+import os
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-default_css_style = """<style>
-div {
-    font-size: 12pt;
-}
-</style>
-"""
+from .html_maker import full_html_document
 
-def _email_login(settings):    
-    user = settings["user"]
-    pwd = settings["password"]
-    
+
+def _email_login():
+    user = os.environ.get("GMAIL_USER")
+    pwd = os.environ.get("GMAIL_APP_PASSWORD")
+    if not user or not pwd:
+        raise RuntimeError("GMAIL_USER and GMAIL_APP_PASSWORD environment variables must be set")
+
     server = smtplib.SMTP("smtp.gmail.com", 587)
     server.ehlo()
     server.starttls()
@@ -22,27 +21,17 @@ def _email_login(settings):
 
 
 def send_gmail_notification(setting: dict, body_message: str):
-    all_html = """<html>
-    <head>{style}</head>
-    <body>{body_message}</body>
-    </html>
-    """.format(style=default_css_style, body_message=body_message)
+    all_html = full_html_document(body_message)
 
     msg = MIMEMultipart()
 
-    msg['From'] = setting["from_address"]
-    msg['To'] = setting["to_address"] if isinstance(setting, str) else ";".join(setting["to_address"])  # type: ignore
-    
-    msg['Subject'] = setting["subject"]
+    msg["From"] = setting["from_address"]
+    msg["To"] = setting["to_address"] if isinstance(setting, str) else ";".join(setting["to_address"])
 
-    # Record the MIME types of both parts - text/plain and text/html.
-    msg.attach(MIMEText(all_html, 'html'))
-    
-    server = _email_login(setting)
-    server.sendmail(
-        setting["from_address"],  # type: ignore
-        setting["to_address"],  # type: ignore
-        msg.as_string()
-    )
+    msg["Subject"] = setting["subject"]
+
+    msg.attach(MIMEText(all_html, "html"))
+
+    server = _email_login()
+    server.sendmail(setting["from_address"], setting["to_address"], msg.as_string())
     server.close()
-    

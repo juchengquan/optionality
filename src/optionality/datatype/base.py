@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr
-from typing import List, Literal
+from typing import Literal
+
+from pydantic import BaseModel
 
 from .notification import NotificationConfig
 
@@ -9,13 +10,16 @@ class CodeInformation(BaseModel):
     name: str
     market: str
 
+
 class Option(BaseModel):
     type: Literal["CALL", "PUT"]
     direction: Literal["long", "short"]
     strike_price: float
 
+
 class _OptionHoldingWarningThreshold(BaseModel):
     delta: float
+
 
 class OptionHolding(BaseModel):
     strategy: str
@@ -23,34 +27,41 @@ class OptionHolding(BaseModel):
     volume: int
     entry_price: float
     warning_threshold: _OptionHoldingWarningThreshold
-    options: List[Option]
+    options: list[Option]
+
 
 class ExpiryDateDistance(BaseModel):
     min: int
     max: int
 
+
 class OptionFilter(BaseModel):
     delta_min: float
     delta_max: float
+
 
 class OptionStrategyOption(BaseModel):
     option_type: Literal["CALL", "PUT"]
     filter: OptionFilter
     stride: int
 
+
 class OptionStrategy(BaseModel):
     strategy: str
     expiry_date_distance: ExpiryDateDistance
-    options: List[OptionStrategyOption]
+    options: list[OptionStrategyOption]
 
 
 class OptionHoldingsConfig(BaseModel):
     notification: NotificationConfig
     code_information: CodeInformation
-    option_holdings: List[OptionHolding]
+    option_holdings: list[OptionHolding]
+
 
 class OptionStrategiesConfig(BaseModel):
     notification: NotificationConfig
     code_information: CodeInformation
     option_strategy: OptionStrategy
+
+
 ###
