@@ -23,3 +23,7 @@ def get_worker(request: Request):
 
 def get_scheduler(request: Request):
     return request.app.state.scheduler
+
+
+def get_sweeper(request: Request):
+    return request.app.state.sweeper

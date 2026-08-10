@@ -30,6 +30,13 @@ def test_refresh_jobs_loads_enabled_only(session_factory, holdings_body):
     assert scheduler.get_job(f"schedule-{enabled_id}") is not None
 
 
+def test_refresh_jobs_preserves_non_schedule_jobs(session_factory):
+    scheduler = build_scheduler()
+    scheduler.add_job(lambda: None, "interval", seconds=3600, id="monitor-sweep")
+    refresh_jobs(scheduler, session_factory, Worker(session_factory, Settings()))
+    assert scheduler.get_job("monitor-sweep") is not None
+
+
 def test_fire_schedule_creates_and_submits_run(session_factory, holdings_body):
     with session_factory() as s:
         s.add(ConfigDoc(name="c1", task_type="holdings", body=holdings_body))

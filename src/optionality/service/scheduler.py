@@ -47,7 +47,10 @@ def fire_schedule(schedule_id: int, session_factory, worker: Worker) -> None:
 
 
 def refresh_jobs(scheduler: BackgroundScheduler, session_factory, worker: Worker) -> int:
-    scheduler.remove_all_jobs()
+    # only reload schedule-* jobs; the monitor-sweep interval job must survive refreshes
+    for job in scheduler.get_jobs():
+        if job.id.startswith("schedule-"):
+            scheduler.remove_job(job.id)
     with session_factory() as session:
         rows = session.scalars(select(Schedule).where(Schedule.enabled)).all()
     for row in rows:

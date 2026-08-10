@@ -8,6 +8,19 @@ def test_defaults():
     assert s.api_token == ""
     assert s.retry_delay_seconds == 300
     assert s.db_path == "data/optionality.db"
+    assert s.monitor_interval_seconds == 60
+    assert s.telegram_bot_token == ""
+    assert s.telegram_chat_id == ""
+
+
+def test_monitor_and_telegram_from_env(monkeypatch):
+    monkeypatch.setenv("MONITOR_INTERVAL_SECONDS", "30")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
+    s = Settings.from_env()
+    assert s.monitor_interval_seconds == 30
+    assert s.telegram_bot_token == "tok"
+    assert s.telegram_chat_id == "42"
 
 
 def test_from_env(monkeypatch):

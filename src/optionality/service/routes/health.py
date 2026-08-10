@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from optionality.service.deps import get_session, get_settings, get_worker
+from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
 from optionality.service.models import Run
+from optionality.service.monitor import MonitorSweeper
 from optionality.service.settings import Settings
 from optionality.service.worker import Worker
 
@@ -26,6 +27,7 @@ def health(
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     worker: Annotated[Worker, Depends(get_worker)],
+    sweeper: Annotated[MonitorSweeper, Depends(get_sweeper)],
 ):
     try:
         session.execute(text("SELECT 1"))
@@ -48,4 +50,9 @@ def health(
         "opend": _opend_reachable(settings.opend_host, settings.opend_port),
         "queue_depth": worker.queue_depth(),
         "last_run": last_run,
+        "monitor": {
+            "last_sweep_at": str(sweeper.last_sweep_at) if sweeper.last_sweep_at else None,
+            "last_sweep_ok": sweeper.last_sweep_ok,
+            "consecutive_failures": sweeper.consecutive_failures,
+        },
     }

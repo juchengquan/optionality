@@ -10,6 +10,9 @@ class Settings:
     api_token: str = ""
     healthcheck_url: str = ""
     retry_delay_seconds: int = 300
+    monitor_interval_seconds: int = 60
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -20,4 +23,7 @@ class Settings:
             api_token=os.environ.get("API_TOKEN", cls.api_token),
             healthcheck_url=os.environ.get("HEALTHCHECK_URL", cls.healthcheck_url),
             retry_delay_seconds=int(os.environ.get("RETRY_DELAY_SECONDS", cls.retry_delay_seconds)),
+            monitor_interval_seconds=int(os.environ.get("MONITOR_INTERVAL_SECONDS", cls.monitor_interval_seconds)),
+            telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", cls.telegram_bot_token),
+            telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID", cls.telegram_chat_id),
         )
