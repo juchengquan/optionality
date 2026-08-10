@@ -39,6 +39,23 @@ def test_trigger_run_end_to_end(client_factory, holdings_body):
     assert runs[0]["id"] == run_id
 
 
+def test_run_details_endpoint_with_code_filter(client_factory, holdings_body):
+    client = client_factory()
+    _mk_config(client, holdings_body)
+    run_id = client.post("/runs", json={"task": "holdings", "config": "spx"}, headers=AUTH).json()["run_id"]
+    assert _wait_terminal(client, run_id) == "succeeded"
+
+    details = client.get(f"/runs/{run_id}/details", headers=AUTH).json()
+    assert len(details) == 2
+    assert details[0]["code"] == "US.SPXW261218C6500000"
+
+    filtered = client.get(f"/runs/{run_id}/details?code=US.SPXW261218P6425000", headers=AUTH).json()
+    assert len(filtered) == 1
+    assert filtered[0]["mid_price"] == 12.4
+
+    assert client.get(f"/runs/{run_id}/details?code=US.NOPE", headers=AUTH).json() == []
+
+
 def test_unknown_config_404_and_task_mismatch_422(client_factory, holdings_body):
     client = client_factory()
     _mk_config(client, holdings_body)

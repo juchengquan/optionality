@@ -92,7 +92,7 @@ class Worker(threading.Thread):
             session.add(
                 Report(
                     run_id=run.id,
-                    summary={"summary": result.summary, "warnings": result.warnings},
+                    summary={"summary": result.summary, "warnings": result.warnings, "details": result.details},
                     html=result.html,
                 )
             )

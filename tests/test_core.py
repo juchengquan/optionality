@@ -34,6 +34,44 @@ def test_run_task_holdings_builds_report_and_closes_client(monkeypatch, holdings
     assert "Summary:" in result.html
     assert result.summary[0]["strategy"] == "iron_condor"
     assert result.warnings[0]["code"] == "X"
+    assert result.details == [{"strike_date": "2026-12-18", "group": "ab12", "code": "X", "mid_price": 1.0}]
+    assert fake.closed
+
+
+def test_fetch_snapshot_returns_records_and_closes_client():
+    class FakeSnapClient:
+        def __init__(self):
+            self.closed = False
+            self.requested = None
+
+        def get_market_snapshot(self, codes):
+            self.requested = codes
+            return 0, pd.DataFrame([{"code": codes[0], "last_price": 12.3}])
+
+        def close(self):
+            self.closed = True
+
+    fake = FakeSnapClient()
+    records = core.fetch_snapshot(["US.SPXW261218C6500000"], client_factory=lambda host, port: fake)
+    assert records == [{"code": "US.SPXW261218C6500000", "last_price": 12.3}]
+    assert fake.requested == ["US.SPXW261218C6500000"]
+    assert fake.closed
+
+
+def test_fetch_snapshot_raises_on_api_error():
+    class FailingClient:
+        def __init__(self):
+            self.closed = False
+
+        def get_market_snapshot(self, codes):
+            return -1, "quota exceeded"
+
+        def close(self):
+            self.closed = True
+
+    fake = FailingClient()
+    with pytest.raises(RuntimeError, match="quota exceeded"):
+        core.fetch_snapshot(["X"], client_factory=lambda host, port: fake)
     assert fake.closed
 
 

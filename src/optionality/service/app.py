@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from optionality.core import run_task
 from optionality.service.db import init_db, make_engine, make_session_factory
-from optionality.service.routes import configs, health, runs, schedules
+from optionality.service.routes import configs, health, runs, schedules, spx
 from optionality.service.scheduler import build_scheduler, refresh_jobs
 from optionality.service.settings import Settings
 from optionality.service.worker import Worker
@@ -47,4 +47,5 @@ def create_app(settings: Settings | None = None, runner=None) -> FastAPI:
     app.include_router(configs.router)
     app.include_router(schedules.router)
     app.include_router(runs.router)
+    app.include_router(spx.router)
     return app

@@ -27,6 +27,12 @@ def _if_end_of_month(dt_str):
     return tomorrows_month != todays_month
 
 
+def build_spx_code(strike_date: str, option_type: str, strike: float) -> str:
+    d = date.fromisoformat(strike_date)
+    letter = "C" if option_type.upper() == "CALL" else "P"
+    return f"US.SPXW{d.strftime('%y%m%d')}{letter}{int(strike)}000"
+
+
 def _get_code_name(r, code_name: CodeInformation):
     option_type = "C" if r.type.upper() == "CALL" else "P"
 

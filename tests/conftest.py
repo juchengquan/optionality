@@ -61,7 +61,15 @@ AUTH = {"Authorization": "Bearer tok"}
 def _stub_runner(task, config, client_factory=None, opend_host=None, opend_port=None):
     from optionality.core import RunResult
 
-    return RunResult(html="<p>stub</p>", summary=[{"strike_date": "2026-12-18"}], warnings=None)
+    return RunResult(
+        html="<p>stub</p>",
+        summary=[{"strike_date": "2026-12-18"}],
+        warnings=None,
+        details=[
+            {"strike_date": "2026-12-18", "group": "ab12", "code": "US.SPXW261218C6500000", "mid_price": 1377.6},
+            {"strike_date": "2026-12-18", "group": "ab12", "code": "US.SPXW261218P6425000", "mid_price": 12.4},
+        ],
+    )
 
 
 @pytest.fixture

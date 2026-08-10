@@ -89,6 +89,14 @@ def get_report(run_id: str, session: SessionDep):
     return _get_report(run_id, session).summary
 
 
+@router.get("/{run_id}/details")
+def get_run_details(run_id: str, session: SessionDep, code: str | None = None):
+    details = _get_report(run_id, session).summary.get("details") or []
+    if code:
+        details = [d for d in details if d.get("code") == code]
+    return details
+
+
 @router.get("/{run_id}/report.html")
 def get_report_html(run_id: str, session: SessionDep):
     return HTMLResponse(full_html_document(_get_report(run_id, session).html))
