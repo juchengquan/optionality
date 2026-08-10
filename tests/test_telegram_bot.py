@@ -149,6 +149,27 @@ def test_watch_with_bad_args_replies_usage(session_factory):
         assert s.scalar(select(Monitor)) is None
 
 
+def test_signed_keyword_in_bot(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watchcombo bear-cs {_future()} -C8100 +C8150 -4.05 signed below"))
+    assert "-4.05" in api.sent[-1]
+    with session_factory() as s:
+        m = s.scalar(select(Monitor))
+        assert m.compare == "signed"
+        assert m.threshold == -4.05
+        assert m.direction == "below"
+
+    bot.handle_update(_update("/threshold bear-cs -5"))
+    assert "-5" in api.sent[-1]
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)).threshold == -5.0
+
+    bot.handle_update(_update("/threshold bear-cs 0"))
+    assert "0" in api.sent[-1].lower() and "signed" in api.sent[-1].lower()  # zero rejected for signed
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)).threshold == -5.0  # unchanged
+
+
 def test_negative_threshold_rejected_in_bot(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update(f"/watch {_future()} CALL 6500 -0.5"))

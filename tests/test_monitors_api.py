@@ -65,6 +65,37 @@ def test_monitor_validation(client_factory):
     assert client.post("/monitors", json=bad_type, headers=AUTH).status_code == 422
 
 
+def test_signed_compare_mode(client_factory):
+    client = client_factory()
+    payload = {
+        "strike_date": _future(),
+        "option_type": "CALL",
+        "strike": 8100,
+        "field": "mid_price",
+        "threshold": -4.05,
+        "direction": "below",
+        "compare": "signed",
+    }
+    created = client.post("/monitors", json=payload, headers=AUTH)
+    assert created.status_code == 201  # negative thresholds are legal in signed mode
+    assert created.json()["compare"] == "signed"
+    mid = created.json()["id"]
+
+    assert client.patch(f"/monitors/{mid}", json={"threshold": -5}, headers=AUTH).status_code == 200
+    assert client.patch(f"/monitors/{mid}", json={"threshold": 0}, headers=AUTH).status_code == 422  # zero band
+
+    zero = {**payload, "strike": 8150, "threshold": 0}
+    assert client.post("/monitors", json=zero, headers=AUTH).status_code == 422
+
+    abs_monitor = {"strike_date": _future(), "option_type": "PUT", "strike": 7800, "threshold": 0.6}
+    amid = client.post("/monitors", json=abs_monitor, headers=AUTH).json()["id"]
+    assert amid  # abs default unchanged
+    assert client.patch(f"/monitors/{amid}", json={"threshold": -1}, headers=AUTH).status_code == 422
+    assert (
+        client.patch(f"/monitors/{amid}", json={"compare": "signed", "threshold": -1}, headers=AUTH).status_code == 200
+    )
+
+
 def test_negative_threshold_rejected_everywhere(client_factory):
     client = client_factory()
     base = {"strike_date": _future(), "option_type": "CALL", "strike": 6500}

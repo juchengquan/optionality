@@ -81,6 +81,7 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
             "field": m.field,
             "threshold": m.threshold,
             "direction": m.direction,
+            "compare": m.compare,
             "triggered": m.triggered,
             "last_value": m.last_value,
             "snapshot": None if m.legs else by_code.get(m.code),
@@ -156,12 +157,17 @@ class MonitorSweeper:
                 record = by_code.get(monitor.code)
                 name = (record.get("name") if record else None) or monitor.code
                 above = monitor.direction != "below"
-                breached = abs(value) >= monitor.threshold if above else abs(value) <= monitor.threshold
+                # abs mode compares magnitude; signed compares the raw value (negative thresholds legal).
+                # one hysteresis formula covers both: the band is a fraction of the threshold's magnitude
+                metric = value if monitor.compare == "signed" else abs(value)
+                band = REARM_HYSTERESIS * abs(monitor.threshold)
                 if above:
-                    rearmed = abs(value) < monitor.threshold * (1 - REARM_HYSTERESIS)
+                    breached = metric >= monitor.threshold
+                    rearmed = metric < monitor.threshold - band
                     breach_word, recover_word = "crossed ≥", "back below"
                 else:
-                    rearmed = abs(value) > monitor.threshold * (1 + REARM_HYSTERESIS)
+                    breached = metric <= monitor.threshold
+                    rearmed = metric > monitor.threshold + band
                     breach_word, recover_word = "fell ≤", "back above"
                 if breached and not db_monitor.triggered:
                     db_monitor.triggered = True

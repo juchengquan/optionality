@@ -122,6 +122,35 @@ def test_below_direction_breach_and_rearm(session_factory):
     assert "back above" in recorder.messages[1]
 
 
+def test_signed_below_negative_threshold_cycle(session_factory):
+    # a long bear call spread: value is negative; alert when it falls to ≤ -4.05, in the user's own signs
+    _mk_combo(session_factory, threshold=-4.05, direction="below", compare="signed")
+    values = {"leg1": 0.0}
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "mid_price": values["leg1"] if c.endswith("C8100000") else values["leg2"]} for c in codes]
+
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
+
+    values.update(leg1=26.4, leg2=30.3)  # sum +26.4 - 30.3 = -3.9: above -4.05, no breach
+    sweeper.sweep()
+    assert recorder.messages == []
+
+    values.update(leg2=30.7)  # sum -4.3 <= -4.05: breach
+    sweeper.sweep()
+    assert len(recorder.messages) == 1
+    assert "-4.300" in recorder.messages[0]
+
+    values.update(leg2=30.35)  # sum -3.95, above -4.05 but inside band (-4.05 + 0.2 = -3.8475): silent
+    sweeper.sweep()
+    assert len(recorder.messages) == 1
+
+    values.update(leg2=30.1)  # sum -3.7 > -3.8475: recovery, re-armed
+    sweeper.sweep()
+    assert len(recorder.messages) == 2
+
+
 def test_expired_monitor_auto_disabled_and_not_fetched(session_factory):
     mid = _mk_monitor(session_factory, strike_date=_past())
     calls = []

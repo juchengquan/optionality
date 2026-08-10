@@ -192,6 +192,7 @@ def ui_create_monitor(
     threshold: Annotated[float, Form()],
     field: Annotated[str, Form()] = "option_delta",
     direction: Annotated[str, Form()] = "above",
+    compare: Annotated[str, Form()] = "abs",
 ):
     try:
         payload = MonitorIn(
@@ -201,6 +202,7 @@ def ui_create_monitor(
             field=field,
             threshold=threshold,
             direction=direction,
+            compare=compare,
         )
         create_monitor(payload, session, settings)
     except (ValidationError, HTTPException) as err:
@@ -231,6 +233,7 @@ async def ui_create_combo(request: Request, session: SessionDep, settings: Setti
             field=form.get("field", "mid_price"),
             threshold=float(form.get("threshold", "0")),
             direction=form.get("direction", "above"),
+            compare=form.get("compare", "abs"),
         )
         _create_combo(payload, session, settings)
     except (ValidationError, HTTPException, ValueError) as err:
