@@ -146,7 +146,12 @@ class TelegramBot(threading.Thread):
             state = "🔔 triggered" if m.triggered else "armed"
             if not m.enabled:
                 state = "disabled"
-            last = f"{m.last_value:.4f}" if m.last_value is not None else "—"
+            if m.last_value is None:
+                last = "—"
+            elif m.field == "option_delta":
+                last = f"{m.last_value:.3f}"
+            else:
+                last = f"{m.last_value:.4f}"
             lines.append(f"{m.id[:8]}  {m.code}\n    {m.field} last={last} thr={m.threshold} [{state}]")
         return "\n".join(lines)
 
