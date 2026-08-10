@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import pytest
 
 from optionality.notification import full_html_document
@@ -5,7 +7,7 @@ from optionality.notification import gmail as gmail_mod
 
 
 class FakeSMTP:
-    instances = []
+    instances: ClassVar[list] = []
 
     def __init__(self, host, port):
         self.host, self.port = host, port
