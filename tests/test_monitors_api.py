@@ -203,8 +203,8 @@ def test_quotes_html_renders_watchlist(client_factory):
     assert "SPXW TEST" in resp.text
     assert "27.55" in resp.text
     assert "option_delta ≥ 0.6" in resp.text  # monitor context alongside live data
-    assert "fetched at" in resp.text
-    assert "<th>fetched</th>" in resp.text  # fetch time as a table column too
+    assert "fetched at" in resp.text  # the single fetch moment lives in the heading...
+    assert "<th>fetched</th>" not in resp.text  # ...not repeated as a per-row column
     assert "+08:00" in resp.text  # the fetch timestamp in display tz
     assert resp.headers["cache-control"] == "no-store"  # a live dashboard must never be browser-cached
 
