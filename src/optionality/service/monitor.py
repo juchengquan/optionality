@@ -16,6 +16,28 @@ REARM_HYSTERESIS = 0.05
 DEGRADED_AFTER = 5
 
 
+def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot) -> list[dict]:
+    """Live snapshot for every enabled monitor — one API call for the whole watchlist."""
+    with session_factory() as session:
+        monitors = session.scalars(select(Monitor).where(Monitor.enabled).order_by(Monitor.created_at)).all()
+    if not monitors:
+        return []
+    codes = list({m.code for m in monitors})
+    records = fetcher(codes, opend_host=settings.opend_host, opend_port=settings.opend_port)
+    by_code = {r.get("code"): r for r in records}
+    return [
+        {
+            "code": m.code,
+            "field": m.field,
+            "threshold": m.threshold,
+            "triggered": m.triggered,
+            "last_value": m.last_value,
+            "snapshot": by_code.get(m.code),
+        }
+        for m in monitors
+    ]
+
+
 class MonitorSweeper:
     def __init__(self, session_factory, settings: Settings, fetcher=fetch_snapshot, sender=send_telegram_message):
         self.session_factory = session_factory
@@ -80,10 +102,10 @@ class MonitorSweeper:
                 name = record.get("name") or monitor.code
                 if abs(value) >= monitor.threshold and not db_monitor.triggered:
                     db_monitor.triggered = True
-                    self._notify(f"⚠️ {name}: {monitor.field} {value:.4f} crossed ≥ {monitor.threshold}")
+                    self._notify(f"⚠️ {name}: {monitor.field} {value:.3f} crossed ≥ {monitor.threshold}")
                 elif db_monitor.triggered and abs(value) < monitor.threshold * (1 - REARM_HYSTERESIS):
                     db_monitor.triggered = False
-                    self._notify(f"✅ {name}: {monitor.field} {value:.4f} back below {monitor.threshold}")
+                    self._notify(f"✅ {name}: {monitor.field} {value:.3f} back below {monitor.threshold}")
             session.commit()
 
     def _record_failure(self) -> None:

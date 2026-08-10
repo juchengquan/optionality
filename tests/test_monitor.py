@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from optionality.service.models import Monitor
-from optionality.service.monitor import DEGRADED_AFTER, MonitorSweeper
+from optionality.service.monitor import DEGRADED_AFTER, MonitorSweeper, watchlist_quotes
 from optionality.service.settings import Settings
 
 SETTINGS = Settings(telegram_bot_token="t", telegram_chat_id="c")
@@ -153,6 +153,30 @@ def test_missing_field_is_skipped_not_crashed(session_factory):
     assert recorder.messages == []
     with session_factory() as s:
         assert s.get(Monitor, mid).last_value is None
+
+
+def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
+    _mk_monitor(session_factory)
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": CODE, "name": "SPXW TEST", "option_delta": 0.91, "bid_price": 1365.6}]
+
+    quotes = watchlist_quotes(session_factory, SETTINGS, fetcher)
+    assert len(quotes) == 1
+    assert quotes[0]["code"] == CODE
+    assert quotes[0]["threshold"] == 0.6
+    assert quotes[0]["snapshot"]["option_delta"] == 0.91
+
+
+def test_watchlist_quotes_empty_without_fetch(session_factory):
+    calls = []
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        calls.append(codes)
+        return []
+
+    assert watchlist_quotes(session_factory, SETTINGS, fetcher) == []
+    assert calls == []  # no monitors -> no API call
 
 
 def test_unconfigured_telegram_suppresses_send(session_factory):

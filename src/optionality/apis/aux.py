@@ -27,6 +27,11 @@ def _if_end_of_month(dt_str):
     return tomorrows_month != todays_month
 
 
+def normalize_strike_date(strike_date: str) -> str:
+    # accepts both 2026-12-18 and 20261218; always returns the dashed form
+    return date.fromisoformat(strike_date).isoformat()
+
+
 def build_spx_code(strike_date: str, option_type: str, strike: float) -> str:
     d = date.fromisoformat(strike_date)
     letter = "C" if option_type.upper() == "CALL" else "P"

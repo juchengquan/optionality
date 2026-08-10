@@ -1,13 +1,14 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from optionality.apis.aux import build_spx_code
-from optionality.service.deps import get_session
+from optionality.apis.aux import build_spx_code, normalize_strike_date
+from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
 from optionality.service.models import Monitor
+from optionality.service.monitor import watchlist_quotes
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
 
@@ -21,6 +22,14 @@ class MonitorIn(BaseModel):
     field: str = "option_delta"
     threshold: float
     enabled: bool = True
+
+    @field_validator("strike_date")
+    @classmethod
+    def _normalize_date(cls, value: str) -> str:
+        try:
+            return normalize_strike_date(value)
+        except ValueError as err:
+            raise ValueError(f"invalid strike_date '{value}': use YYYY-MM-DD or YYYYMMDD") from err
 
 
 def _build_code(payload: MonitorIn) -> str:
@@ -50,6 +59,18 @@ def _to_dict(row: Monitor) -> dict:
 @router.get("")
 def list_monitors(session: SessionDep):
     return [_to_dict(r) for r in session.scalars(select(Monitor).order_by(Monitor.id)).all()]
+
+
+@router.get("/quotes")
+def get_watchlist_quotes(
+    session_factory: Annotated[object, Depends(get_session_factory)],
+    settings: Annotated[object, Depends(get_settings)],
+    sweeper: Annotated[object, Depends(get_sweeper)],
+):
+    try:
+        return watchlist_quotes(session_factory, settings, sweeper.fetcher)
+    except Exception as err:
+        raise HTTPException(status_code=502, detail=f"OpenD call failed: {err}") from err
 
 
 @router.post("", status_code=201)

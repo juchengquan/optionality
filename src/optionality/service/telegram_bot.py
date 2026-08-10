@@ -6,20 +6,40 @@ import urllib.request
 
 from sqlalchemy import select
 
-from optionality.apis.aux import build_spx_code
+from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.core import fetch_snapshot
 from optionality.service.models import Monitor
+from optionality.service.monitor import watchlist_quotes
 from optionality.service.settings import Settings
 
 logger = logging.getLogger("optionality.telegram_bot")
 
 HELP_TEXT = """Commands:
 /monitors — list the watchlist with live state
-/watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field] — add a monitor
+/quotes — live quotes for every watched code
+/watch <date> <CALL|PUT> <strike> <threshold> [field] — add a monitor
 /unwatch <code or id prefix> — remove a monitor
-/snapshot <YYYY-MM-DD> <CALL|PUT> <strike> — live quote
+/snapshot <date> <CALL|PUT> <strike> — live quote
+(dates: YYYY-MM-DD or YYYYMMDD)
 /health — service status
 /help — this message"""
+
+
+def _fmt_value(key: str, value) -> str:
+    if key == "option_delta" and isinstance(value, int | float):
+        return f"{value:.3f}"
+    return str(value)
+
+
+BOT_COMMANDS = [
+    {"command": "monitors", "description": "List the watchlist with live state"},
+    {"command": "quotes", "description": "Live quotes for every watched code"},
+    {"command": "watch", "description": "Add a monitor: DATE CALL|PUT strike threshold"},
+    {"command": "unwatch", "description": "Remove a monitor by code or id prefix"},
+    {"command": "snapshot", "description": "Live quote: DATE CALL|PUT strike"},
+    {"command": "health", "description": "Queue and sweep status"},
+    {"command": "help", "description": "Show usage"},
+]
 
 
 class TelegramBot(threading.Thread):
@@ -52,7 +72,16 @@ class TelegramBot(threading.Thread):
             raise RuntimeError(f"telegram {method} failed: {payload}")
         return payload["result"]
 
+    def _register_commands(self) -> None:
+        # publishes the "/" autocomplete menu in the Telegram client
+        self.api("setMyCommands", {"commands": json.dumps(BOT_COMMANDS)})
+
     def run(self) -> None:
+        try:
+            self._register_commands()
+        except Exception:
+            logger.exception("telegram setMyCommands failed")
+
         # drain the backlog so a service restart doesn't replay old commands
         try:
             last = self.api("getUpdates", {"offset": -1, "timeout": 0})
@@ -95,6 +124,8 @@ class TelegramBot(threading.Thread):
 
         if command == "monitors":
             return self._cmd_monitors()
+        if command == "quotes":
+            return self._cmd_quotes()
         if command == "watch":
             return self._cmd_watch(args)
         if command == "unwatch":
@@ -115,18 +146,53 @@ class TelegramBot(threading.Thread):
             state = "🔔 triggered" if m.triggered else "armed"
             if not m.enabled:
                 state = "disabled"
-            last = f"{m.last_value:.4f}" if m.last_value is not None else "—"
+            if m.last_value is None:
+                last = "—"
+            elif m.field == "option_delta":
+                last = f"{m.last_value:.3f}"
+            else:
+                last = f"{m.last_value:.4f}"
             lines.append(f"{m.id[:8]}  {m.code}\n    {m.field} last={last} thr={m.threshold} [{state}]")
+        return "\n".join(lines)
+
+    def _cmd_quotes(self) -> str:
+        try:
+            quotes = watchlist_quotes(self.session_factory, self.settings, self.fetcher)
+        except Exception as err:
+            return f"Quotes failed: {err}"
+        if not quotes:
+            return "Watchlist is empty. Add one with /watch."
+        lines = []
+        for q in quotes:
+            snap = q["snapshot"]
+            if not snap:
+                lines.append(f"{q['code']}: no data")
+                continue
+            name = snap.get("name") or q["code"]
+            parts = [
+                f"{label} {_fmt_value(key, snap[key])}"
+                for label, key in [
+                    ("delta", "option_delta"),
+                    ("IV", "option_implied_volatility"),
+                    ("mid", "mid_price"),
+                    ("bid", "bid_price"),
+                    ("ask", "ask_price"),
+                ]
+                if snap.get(key) is not None
+            ]
+            marker = " 🔔" if q["triggered"] else ""
+            lines.append(f"{name}{marker}\n    " + " | ".join(parts))
         return "\n".join(lines)
 
     def _cmd_watch(self, args: list[str]) -> str:
         usage = "Usage: /watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field]"
         if len(args) < 4:
             return usage
-        strike_date, option_type = args[0], args[1].upper()
+        option_type = args[1].upper()
         if option_type not in ("CALL", "PUT"):
             return usage
         try:
+            strike_date = normalize_strike_date(args[0])
             strike, threshold = float(args[2]), float(args[3])
             code = build_spx_code(strike_date, option_type, strike)
         except ValueError:
@@ -182,8 +248,16 @@ class TelegramBot(threading.Thread):
             return f"No data for {code}."
         r = records[0]
         name = r.get("name") or code
-        fields = ["option_delta", "option_implied_volatility", "bid_price", "ask_price", "last_price", "option_theta"]
-        lines = [f"{f}: {r[f]}" for f in fields if r.get(f) is not None]
+        fields = [
+            "option_delta",
+            "option_implied_volatility",
+            "mid_price",
+            "bid_price",
+            "ask_price",
+            "last_price",
+            "option_theta",
+        ]
+        lines = [f"{f}: {_fmt_value(f, r[f])}" for f in fields if r.get(f) is not None]
         return f"{name}\n" + "\n".join(lines)
 
     def _cmd_health(self) -> str:
