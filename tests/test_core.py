@@ -46,16 +46,29 @@ def test_fetch_snapshot_returns_records_and_closes_client():
 
         def get_market_snapshot(self, codes):
             self.requested = codes
-            return 0, pd.DataFrame([{"code": codes[0], "last_price": 12.3}])
+            return 0, pd.DataFrame([{"code": codes[0], "last_price": 12.3, "bid_price": 10.0, "ask_price": 11.0}])
 
         def close(self):
             self.closed = True
 
     fake = FakeSnapClient()
     records = core.fetch_snapshot(["US.SPXW261218C6500000"], client_factory=lambda host, port: fake)
-    assert records == [{"code": "US.SPXW261218C6500000", "last_price": 12.3}]
+    assert records[0]["last_price"] == 12.3
+    assert records[0]["mid_price"] == 10.5  # computed from bid/ask
     assert fake.requested == ["US.SPXW261218C6500000"]
     assert fake.closed
+
+
+def test_fetch_snapshot_skips_mid_without_both_sides():
+    class OneSidedClient:
+        def get_market_snapshot(self, codes):
+            return 0, pd.DataFrame([{"code": codes[0], "bid_price": 10.0, "ask_price": None}])
+
+        def close(self):
+            pass
+
+    records = core.fetch_snapshot(["X"], client_factory=lambda host, port: OneSidedClient())
+    assert "mid_price" not in records[0]
 
 
 def test_fetch_snapshot_raises_on_api_error():

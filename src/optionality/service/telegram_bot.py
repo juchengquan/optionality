@@ -162,6 +162,7 @@ class TelegramBot(threading.Thread):
                 for label, key in [
                     ("delta", "option_delta"),
                     ("IV", "option_implied_volatility"),
+                    ("mid", "mid_price"),
                     ("bid", "bid_price"),
                     ("ask", "ask_price"),
                 ]
@@ -235,7 +236,15 @@ class TelegramBot(threading.Thread):
             return f"No data for {code}."
         r = records[0]
         name = r.get("name") or code
-        fields = ["option_delta", "option_implied_volatility", "bid_price", "ask_price", "last_price", "option_theta"]
+        fields = [
+            "option_delta",
+            "option_implied_volatility",
+            "mid_price",
+            "bid_price",
+            "ask_price",
+            "last_price",
+            "option_theta",
+        ]
         lines = [f"{f}: {r[f]}" for f in fields if r.get(f) is not None]
         return f"{name}\n" + "\n".join(lines)
 

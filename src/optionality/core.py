@@ -87,7 +87,12 @@ def fetch_snapshot(
         ret, data = client.get_market_snapshot(codes)
         if ret != 0:
             raise RuntimeError(f"snapshot API failed: {data}")
-        return _records(data)
+        records = _records(data)
+        for record in records:
+            bid, ask = record.get("bid_price"), record.get("ask_price")
+            if bid is not None and ask is not None:
+                record["mid_price"] = (bid + ask) / 2
+        return records
     finally:
         client.close()
 

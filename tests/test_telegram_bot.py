@@ -133,7 +133,14 @@ def test_register_commands_publishes_menu(session_factory):
 def test_quotes_command_reports_watched_codes(session_factory):
     def fetcher(codes, opend_host=None, opend_port=None):
         return [
-            {"code": c, "name": f"NAME {c[-8:]}", "option_delta": 0.42, "bid_price": 1.0, "ask_price": 2.0}
+            {
+                "code": c,
+                "name": f"NAME {c[-8:]}",
+                "option_delta": 0.42,
+                "bid_price": 1.0,
+                "ask_price": 2.0,
+                "mid_price": 1.5,
+            }
             for c in codes
         ]
 
@@ -145,3 +152,4 @@ def test_quotes_command_reports_watched_codes(session_factory):
     bot.handle_update(_update("/quotes"))
     assert "0.42" in api.sent[-1]
     assert "C6500000" in api.sent[-1]
+    assert "mid 1.5" in api.sent[-1]
