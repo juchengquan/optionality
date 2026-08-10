@@ -215,6 +215,19 @@ def test_vol_command_table(session_factory):
     assert api.calls[-1][1].get("parse_mode") == "HTML"
 
 
+def test_health_command_shows_local_sweep_time(session_factory):
+    from optionality.service.monitor import MonitorSweeper
+
+    settings = Settings(telegram_bot_token="t", telegram_chat_id="42", display_tz="Asia/Singapore")
+    sweeper = MonitorSweeper(session_factory, settings)
+    sweeper.last_sweep_at = datetime(2026, 8, 10, 3, 35, tzinfo=UTC)
+    sweeper.last_sweep_ok = True
+    api = FakeApi()
+    bot = TelegramBot(session_factory, settings, api=api, sweeper=sweeper)
+    bot.handle_update(_update("/health"))
+    assert "2026-08-10 11:35 +08" in api.sent[-1]
+
+
 def test_non_command_text_gets_help(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update("hello there"))

@@ -13,6 +13,7 @@ from optionality.core import fetch_snapshot
 from optionality.service.models import Monitor
 from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
 from optionality.service.settings import Settings
+from optionality.service.timefmt import display_time_short
 
 logger = logging.getLogger("optionality.telegram_bot")
 
@@ -333,6 +334,7 @@ class TelegramBot(threading.Thread):
         if self.worker is not None:
             lines.append(f"queue depth: {self.worker.queue_depth()}")
         if self.sweeper is not None:
-            lines.append(f"last sweep: {self.sweeper.last_sweep_at or 'never'} (ok={self.sweeper.last_sweep_ok})")
+            sweep_at = display_time_short(self.sweeper.last_sweep_at, self.settings.display_tz) or "never"
+            lines.append(f"last sweep: {sweep_at} (ok={self.sweeper.last_sweep_ok})")
             lines.append(f"consecutive sweep failures: {self.sweeper.consecutive_failures}")
         return "Service is up.\n" + "\n".join(lines) if lines else "Service is up."

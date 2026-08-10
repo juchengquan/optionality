@@ -14,7 +14,9 @@ def test_snapshot_endpoint_builds_code_and_returns_data(client_factory, monkeypa
     monkeypatch.setattr(
         spx_mod,
         "fetch_snapshot",
-        lambda codes, opend_host=None, opend_port=None: [{"code": codes[0], "last_price": 12.3}],
+        lambda codes, opend_host=None, opend_port=None: [
+            {"code": codes[0], "last_price": 12.3, "update_time": "2026-08-09 20:15:00"}
+        ],
     )
     client = client_factory()
     resp = client.get("/spx/snapshot?strike_date=2026-12-18&option_type=CALL&strike=6500", headers=AUTH)
@@ -22,6 +24,7 @@ def test_snapshot_endpoint_builds_code_and_returns_data(client_factory, monkeypa
     data = resp.json()
     assert data["code"] == "US.SPXW261218C6500000"
     assert data["snapshot"]["last_price"] == 12.3
+    assert data["snapshot"]["update_time"] == "2026-08-10 08:15:00+08:00"  # ET parsed, SGT emitted
 
 
 def test_snapshot_endpoint_validates_params(client_factory):

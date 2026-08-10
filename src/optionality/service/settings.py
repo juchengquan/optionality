@@ -14,6 +14,7 @@ class Settings:
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     root_path: str = ""  # URL prefix when served behind a path-stripping reverse proxy, e.g. "/api"
+    display_tz: str = ""  # timezone for displayed timestamps, e.g. "Asia/Singapore"; empty = host timezone
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -28,4 +29,5 @@ class Settings:
             telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", cls.telegram_bot_token),
             telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID", cls.telegram_chat_id),
             root_path=os.environ.get("ROOT_PATH", cls.root_path),
+            display_tz=os.environ.get("DISPLAY_TZ", cls.display_tz),
         )
