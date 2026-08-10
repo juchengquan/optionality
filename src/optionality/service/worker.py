@@ -172,6 +172,6 @@ class Worker(threading.Thread):
         if not self.settings.healthcheck_url:
             return
         try:
-            urllib.request.urlopen(self.settings.healthcheck_url, timeout=10)  # noqa: S310
+            urllib.request.urlopen(self.settings.healthcheck_url, timeout=10)
         except Exception:
             logger.warning("healthcheck ping failed")
