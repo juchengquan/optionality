@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -26,7 +26,22 @@ from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
 router = APIRouter(prefix="/ui", tags=["ui"], include_in_schema=False)
+static_router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+# a plain route, NOT a StaticFiles mount: mounts only match the root_path-prefixed
+# spelling, which a path-stripping proxy (tailscale serve) never sends
+@static_router.get("/static/htmx.min.js")
+def htmx_asset():
+    return FileResponse(
+        _STATIC_DIR / "htmx.min.js",
+        media_type="text/javascript",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]

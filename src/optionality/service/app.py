@@ -1,9 +1,7 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from optionality.core import fetch_snapshot, run_task
 from optionality.service.db import init_db, make_engine, make_session_factory
@@ -75,5 +73,5 @@ def create_app(settings: Settings | None = None, runner=None, snapshot_fetcher=N
     app.include_router(monitors.router)
     app.include_router(monitors.quotes_router)
     app.include_router(ui.router)
-    app.mount("/static", StaticFiles(directory=str(Path(__file__).resolve().parent / "static")), name="static")
+    app.include_router(ui.static_router)
     return app

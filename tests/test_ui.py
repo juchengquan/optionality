@@ -46,6 +46,15 @@ def test_htmx_asset_served(client_factory):
     assert "htmx" in resp.text[:200]
 
 
+def test_htmx_asset_served_behind_path_stripping_proxy(client_factory):
+    # regression: with ROOT_PATH set, a StaticFiles Mount only matched the prefixed
+    # spelling — which a stripping proxy never sends — so the asset 404'd in production
+    client = client_factory(token="", root_path="/api")
+    resp = client.get("/static/htmx.min.js")
+    assert resp.status_code == 200
+    assert "htmx" in resp.text[:200]
+
+
 def test_create_monitor_via_form(client_factory):
     client = client_factory(snapshot_fetcher=_fetcher)
     form = {
