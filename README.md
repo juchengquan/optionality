@@ -53,6 +53,21 @@ in `.env` so FastAPI generates prefixed URLs (otherwise `/docs` loads but can't 
 3. `docker compose up -d --build`
 4. Health check: `curl http://localhost:8000/health` — `"opend": true` means the gateway is reachable.
 
+### Running natively on macOS (launchd)
+
+On a Mac host (where OpenD runs anyway) you can skip Docker and install the service as a launchd agent —
+it starts at login and restarts on crash:
+
+```bash
+make launchd-install     # render deploy/optionality.launchd.plist.template and start the agent
+make launchd-restart     # restart, e.g. after git pull
+make launchd-uninstall   # stop and remove
+make logs                # tail ~/Library/Logs/optionality.log
+```
+
+Enable automatic login (System Settings → Users & Groups) so the agent — and OpenD — come back after an
+unattended reboot.
+
 ### Everyday use
 
 ```bash
