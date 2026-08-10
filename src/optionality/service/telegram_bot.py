@@ -9,12 +9,14 @@ from sqlalchemy import select
 from optionality.apis.aux import build_spx_code
 from optionality.core import fetch_snapshot
 from optionality.service.models import Monitor
+from optionality.service.monitor import watchlist_quotes
 from optionality.service.settings import Settings
 
 logger = logging.getLogger("optionality.telegram_bot")
 
 HELP_TEXT = """Commands:
 /monitors — list the watchlist with live state
+/quotes — live quotes for every watched code
 /watch <YYYY-MM-DD> <CALL|PUT> <strike> <threshold> [field] — add a monitor
 /unwatch <code or id prefix> — remove a monitor
 /snapshot <YYYY-MM-DD> <CALL|PUT> <strike> — live quote
@@ -23,6 +25,7 @@ HELP_TEXT = """Commands:
 
 BOT_COMMANDS = [
     {"command": "monitors", "description": "List the watchlist with live state"},
+    {"command": "quotes", "description": "Live quotes for every watched code"},
     {"command": "watch", "description": "Add a monitor: DATE CALL|PUT strike threshold"},
     {"command": "unwatch", "description": "Remove a monitor by code or id prefix"},
     {"command": "snapshot", "description": "Live quote: DATE CALL|PUT strike"},
@@ -113,6 +116,8 @@ class TelegramBot(threading.Thread):
 
         if command == "monitors":
             return self._cmd_monitors()
+        if command == "quotes":
+            return self._cmd_quotes()
         if command == "watch":
             return self._cmd_watch(args)
         if command == "unwatch":
@@ -135,6 +140,34 @@ class TelegramBot(threading.Thread):
                 state = "disabled"
             last = f"{m.last_value:.4f}" if m.last_value is not None else "—"
             lines.append(f"{m.id[:8]}  {m.code}\n    {m.field} last={last} thr={m.threshold} [{state}]")
+        return "\n".join(lines)
+
+    def _cmd_quotes(self) -> str:
+        try:
+            quotes = watchlist_quotes(self.session_factory, self.settings, self.fetcher)
+        except Exception as err:
+            return f"Quotes failed: {err}"
+        if not quotes:
+            return "Watchlist is empty. Add one with /watch."
+        lines = []
+        for q in quotes:
+            snap = q["snapshot"]
+            if not snap:
+                lines.append(f"{q['code']}: no data")
+                continue
+            name = snap.get("name") or q["code"]
+            parts = [
+                f"{label} {snap[key]}"
+                for label, key in [
+                    ("delta", "option_delta"),
+                    ("IV", "option_implied_volatility"),
+                    ("bid", "bid_price"),
+                    ("ask", "ask_price"),
+                ]
+                if snap.get(key) is not None
+            ]
+            marker = " 🔔" if q["triggered"] else ""
+            lines.append(f"{name}{marker}\n    " + " | ".join(parts))
         return "\n".join(lines)
 
     def _cmd_watch(self, args: list[str]) -> str:

@@ -45,6 +45,21 @@ def test_monitor_validation(client_factory):
     assert client.post("/monitors", json=bad_type, headers=AUTH).status_code == 422
 
 
+def test_monitors_quotes_endpoint(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "name": "X", "option_delta": 0.33} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    assert client.get("/monitors/quotes", headers=AUTH).json() == []
+
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    client.post("/monitors", json=payload, headers=AUTH)
+    quotes = client.get("/monitors/quotes", headers=AUTH).json()
+    assert len(quotes) == 1
+    assert quotes[0]["snapshot"]["option_delta"] == 0.33
+    assert quotes[0]["threshold"] == 0.6
+
+
 def test_health_exposes_monitor_sweep_state(client_factory):
     client = client_factory()
     data = client.get("/health").json()

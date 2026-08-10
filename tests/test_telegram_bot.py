@@ -116,6 +116,23 @@ def test_register_commands_publishes_menu(session_factory):
     method, params = api.calls[-1]
     assert method == "setMyCommands"
     names = [c["command"] for c in json.loads(params["commands"])]
-    assert names == ["monitors", "watch", "unwatch", "snapshot", "health", "help"]
+    assert names == ["monitors", "quotes", "watch", "unwatch", "snapshot", "health", "help"]
     descriptions = [c["description"] for c in json.loads(params["commands"])]
     assert all(descriptions)
+
+
+def test_quotes_command_reports_watched_codes(session_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [
+            {"code": c, "name": f"NAME {c[-8:]}", "option_delta": 0.42, "bid_price": 1.0, "ask_price": 2.0}
+            for c in codes
+        ]
+
+    bot, api = _make_bot(session_factory, fetcher=fetcher)
+    bot.handle_update(_update("/quotes"))
+    assert "empty" in api.sent[-1].lower()
+
+    bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
+    bot.handle_update(_update("/quotes"))
+    assert "0.42" in api.sent[-1]
+    assert "C6500000" in api.sent[-1]

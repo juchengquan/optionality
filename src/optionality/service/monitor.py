@@ -16,6 +16,28 @@ REARM_HYSTERESIS = 0.05
 DEGRADED_AFTER = 5
 
 
+def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot) -> list[dict]:
+    """Live snapshot for every enabled monitor — one API call for the whole watchlist."""
+    with session_factory() as session:
+        monitors = session.scalars(select(Monitor).where(Monitor.enabled).order_by(Monitor.created_at)).all()
+    if not monitors:
+        return []
+    codes = list({m.code for m in monitors})
+    records = fetcher(codes, opend_host=settings.opend_host, opend_port=settings.opend_port)
+    by_code = {r.get("code"): r for r in records}
+    return [
+        {
+            "code": m.code,
+            "field": m.field,
+            "threshold": m.threshold,
+            "triggered": m.triggered,
+            "last_value": m.last_value,
+            "snapshot": by_code.get(m.code),
+        }
+        for m in monitors
+    ]
+
+
 class MonitorSweeper:
     def __init__(self, session_factory, settings: Settings, fetcher=fetch_snapshot, sender=send_telegram_message):
         self.session_factory = session_factory
