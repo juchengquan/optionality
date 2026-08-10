@@ -32,6 +32,23 @@ def test_refresh_interval_comes_from_settings(client_factory):
     assert 'hx-trigger="every 7s' in client.get("/ui", headers=AUTH).text
 
 
+def test_refresh_selector_sets_cookie_and_overrides_env(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)  # env default 30
+    resp = client.post("/ui/refresh", data={"refresh": "15"}, headers=AUTH, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.cookies.get("ui_refresh") == "15"
+    assert 'hx-trigger="every 15s' in client.get("/ui", headers=AUTH).text  # cookie beats env
+
+    client.post("/ui/refresh", data={"refresh": "1"}, headers=AUTH)  # clamped to the floor
+    assert 'hx-trigger="every 5s' in client.get("/ui", headers=AUTH).text
+
+
+def test_garbage_refresh_cookie_falls_back_to_env(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    client.cookies.set("ui_refresh", "banana")
+    assert 'hx-trigger="every 30s' in client.get("/ui", headers=AUTH).text
+
+
 def test_table_fragment_is_forms_free(client_factory):
     client = client_factory(snapshot_fetcher=_fetcher)
     payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}

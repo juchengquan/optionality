@@ -106,6 +106,14 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
     return rows
 
 
+def _refresh_seconds(request: Request, settings: Settings) -> int:
+    # viewer preference (cookie) beats the .env default; clamped to sane bounds
+    try:
+        return max(5, min(3600, int(request.cookies.get("ui_refresh"))))
+    except (TypeError, ValueError):
+        return settings.ui_refresh_seconds
+
+
 def _redirect(request: Request, error: str | None = None) -> RedirectResponse:
     url = f"{request.scope.get('root_path', '')}/ui"
     if error:
@@ -161,7 +169,7 @@ def ui_dashboard(
     error: str | None = None,
 ):
     context = _live_context(request, session, settings, session_factory, sweeper, worker)
-    context.update({"fields": UI_FIELDS, "error": error, "refresh_seconds": settings.ui_refresh_seconds})
+    context.update({"fields": UI_FIELDS, "error": error, "refresh_seconds": _refresh_seconds(request, settings)})
     response = templates.TemplateResponse(request, "ui.html", context)
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -179,6 +187,13 @@ def ui_table_fragment(
     context = _live_context(request, session, settings, session_factory, sweeper, worker)
     response = templates.TemplateResponse(request, "ui_table.html", context)
     response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@router.post("/refresh")
+def ui_set_refresh(request: Request, refresh: Annotated[int, Form()]):
+    response = _redirect(request)
+    response.set_cookie("ui_refresh", str(max(5, min(3600, refresh))), max_age=31536000, samesite="lax")
     return response
 
 
