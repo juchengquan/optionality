@@ -74,6 +74,7 @@ class Monitor(Base):
     triggered: Mapped[bool] = mapped_column(default=False)
     last_value: Mapped[float | None] = mapped_column(default=None)
     last_checked_at: Mapped[datetime | None] = mapped_column(default=None)
+    last_alarm_at: Mapped[datetime | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 

@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 
@@ -12,9 +12,6 @@ from optionality.service.timefmt import display_time, market_time_to_display
 
 logger = logging.getLogger("optionality.monitor")
 
-# re-arm only after the value falls this fraction below the threshold, so a
-# value oscillating right at the line doesn't alarm on every crossing
-REARM_HYSTERESIS = 0.05
 DEGRADED_AFTER = 5
 
 # display order everywhere the watchlist is listed: CALLs before PUTs, then by expiry, then strike
@@ -158,24 +155,34 @@ class MonitorSweeper:
                 name = (record.get("name") if record else None) or monitor.code
                 above = monitor.direction != "below"
                 # abs mode compares magnitude; signed compares the raw value (negative thresholds legal).
-                # one hysteresis formula covers both: the band is a fraction of the threshold's magnitude
+                # the triggered flag flips truthfully at the exact threshold; message flapping is
+                # prevented by the per-monitor alarm cooldown, not by a value band
                 metric = value if monitor.compare == "signed" else abs(value)
-                band = REARM_HYSTERESIS * abs(monitor.threshold)
                 if above:
                     breached = metric >= monitor.threshold
-                    rearmed = metric < monitor.threshold - band
                     breach_word, recover_word = "crossed ≥", "back below"
                 else:
                     breached = metric <= monitor.threshold
-                    rearmed = metric > monitor.threshold + band
                     breach_word, recover_word = "fell ≤", "back above"
                 if breached and not db_monitor.triggered:
                     db_monitor.triggered = True
-                    self._notify(f"⚠️ {name}: {monitor.field} {value:.3f} {breach_word} {monitor.threshold}")
-                elif db_monitor.triggered and rearmed:
+                    if self._alarm_allowed(db_monitor, now):
+                        db_monitor.last_alarm_at = now
+                        self._notify(f"⚠️ {name}: {monitor.field} {value:.3f} {breach_word} {monitor.threshold}")
+                elif db_monitor.triggered and not breached:
                     db_monitor.triggered = False
-                    self._notify(f"✅ {name}: {monitor.field} {value:.3f} {recover_word} {monitor.threshold}")
+                    if self._alarm_allowed(db_monitor, now):
+                        db_monitor.last_alarm_at = now
+                        self._notify(f"✅ {name}: {monitor.field} {value:.3f} {recover_word} {monitor.threshold}")
             session.commit()
+
+    def _alarm_allowed(self, monitor: Monitor, now: datetime) -> bool:
+        last = monitor.last_alarm_at
+        if last is None:
+            return True
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=UTC)  # SQLite round-trips lose tzinfo; stored values are UTC
+        return (now - last).total_seconds() >= self.settings.alarm_cooldown_seconds
 
     def _record_failure(self) -> None:
         self.last_sweep_ok = False

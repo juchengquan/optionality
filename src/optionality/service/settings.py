@@ -11,6 +11,7 @@ class Settings:
     healthcheck_url: str = ""
     retry_delay_seconds: int = 300
     monitor_interval_seconds: int = 60
+    alarm_cooldown_seconds: int = 120  # min gap between a monitor's telegram messages (flap protection)
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     root_path: str = ""  # URL prefix when served behind a path-stripping reverse proxy, e.g. "/api"
@@ -26,6 +27,7 @@ class Settings:
             healthcheck_url=os.environ.get("HEALTHCHECK_URL", cls.healthcheck_url),
             retry_delay_seconds=int(os.environ.get("RETRY_DELAY_SECONDS", cls.retry_delay_seconds)),
             monitor_interval_seconds=int(os.environ.get("MONITOR_INTERVAL_SECONDS", cls.monitor_interval_seconds)),
+            alarm_cooldown_seconds=int(os.environ.get("ALARM_COOLDOWN_SECONDS", cls.alarm_cooldown_seconds)),
             telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", cls.telegram_bot_token),
             telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID", cls.telegram_chat_id),
             root_path=os.environ.get("ROOT_PATH", cls.root_path),
