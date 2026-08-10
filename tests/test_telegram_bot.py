@@ -144,6 +144,34 @@ def test_snapshot_command_uses_fetcher(session_factory):
     assert "0.512345" not in api.sent[-1]  # rounded to three decimals, not raw
 
 
+def test_greeks_command_table(session_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [
+            {
+                "code": c,
+                "option_delta": 0.166096,
+                "option_theta": -1.117809,
+                "option_implied_volatility": 22.012,
+            }
+            for c in codes
+        ]
+
+    bot, api = _make_bot(session_factory, fetcher=fetcher)
+    bot.handle_update(_update("/greeks"))
+    assert "empty" in api.sent[-1].lower()
+
+    bot.handle_update(_update(f"/watch {_future()} CALL 8100 0.6"))
+    bot.handle_update(_update("/greeks"))
+    reply = api.sent[-1]
+    assert reply.startswith("<pre>")
+    assert f"{_yymmdd()} C8100" in reply
+    assert "0.166" in reply  # delta, three decimals
+    assert "-1.12" in reply  # theta, two decimals
+    assert "22.0" in reply  # IV, one decimal
+    assert "22.012" not in reply
+    assert api.calls[-1][1].get("parse_mode") == "HTML"
+
+
 def test_non_command_text_gets_help(session_factory):
     bot, api = _make_bot(session_factory)
     bot.handle_update(_update("hello there"))
@@ -158,7 +186,7 @@ def test_register_commands_publishes_menu(session_factory):
     method, params = api.calls[-1]
     assert method == "setMyCommands"
     names = [c["command"] for c in json.loads(params["commands"])]
-    assert names == ["monitors", "quotes", "watch", "unwatch", "snapshot", "health", "help"]
+    assert names == ["monitors", "quotes", "greeks", "watch", "unwatch", "snapshot", "health", "help"]
     descriptions = [c["description"] for c in json.loads(params["commands"])]
     assert all(descriptions)
 
