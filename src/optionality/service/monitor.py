@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 
@@ -161,14 +161,29 @@ class MonitorSweeper:
         self.last_sweep_at = utcnow()
         today = self.last_sweep_at.date()
 
+        # expiry lifecycle: mute with a notice on expiry, delete quietly after the grace period.
+        # (nothing else is ever auto-deleted; unknown-contract quarantines are kept for inspection)
+        retention = self.settings.expired_retention_days
+        cutoff = today - timedelta(days=retention)
         with self.session_factory() as session:
-            monitors = session.scalars(select(Monitor).where(Monitor.enabled)).all()
+            monitors = session.scalars(select(Monitor)).all()
             active = []
             for monitor in monitors:
-                if date.fromisoformat(monitor.strike_date) < today:
-                    monitor.enabled = False
-                    logger.info("monitor %s (%s) expired; disabled", monitor.id, monitor.code)
-                else:
+                expiry = date.fromisoformat(monitor.strike_date)
+                if expiry < cutoff:
+                    if monitor.enabled:  # retention=0 path: never got the muted notice
+                        self._notify(f"ℹ️ monitor {monitor.code} expired ({monitor.strike_date}) — removed")
+                    logger.info("monitor %s (%s) expired %s; deleted", monitor.id, monitor.code, monitor.strike_date)
+                    session.delete(monitor)
+                elif expiry < today:
+                    if monitor.enabled:
+                        monitor.enabled = False
+                        logger.info("monitor %s (%s) expired; muted", monitor.id, monitor.code)
+                        self._notify(
+                            f"ℹ️ monitor {monitor.code} expired ({monitor.strike_date}) — muted; "
+                            f"auto-removes in {retention} days"
+                        )
+                elif monitor.enabled:
                     active.append(monitor)
             session.commit()
 

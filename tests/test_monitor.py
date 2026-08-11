@@ -250,6 +250,45 @@ def test_expired_monitor_auto_disabled_and_not_fetched(session_factory):
         assert s.get(Monitor, mid).enabled is False
 
 
+def test_expiry_notice_then_grace_deletion(session_factory):
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_delta": 0.1} for c in codes]
+
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
+
+    fresh_id = _mk_monitor(session_factory, strike_date=_past())  # expired yesterday
+    sweeper.sweep()
+    with session_factory() as s:
+        m = s.get(Monitor, fresh_id)
+        assert m is not None and m.enabled is False  # muted, still present (inside grace)
+    assert any("expired" in msg and "muted" in msg for msg in recorder.messages)
+
+    sweeper.sweep()  # second sweep: still inside grace, no repeat notice
+    assert sum("expired" in msg for msg in recorder.messages) == 1
+
+    old = (datetime.now(UTC).date() - timedelta(days=10)).isoformat()
+    ancient_id = _mk_monitor(session_factory, code="US.SPXW250101C5000000", strike_date=old)
+    sweeper.sweep()
+    with session_factory() as s:
+        assert s.get(Monitor, ancient_id) is None  # beyond the 7-day grace: deleted
+        assert s.get(Monitor, fresh_id) is not None  # yesterday's still within grace
+
+
+def test_expiry_retention_zero_deletes_immediately(session_factory):
+    recorder = Recorder()
+    settings = Settings(
+        telegram_bot_token="t", telegram_chat_id="c", alarm_cooldown_seconds=0, expired_retention_days=0
+    )
+    sweeper = MonitorSweeper(session_factory, settings, fetcher=lambda c, **k: [], sender=recorder)
+    mid = _mk_monitor(session_factory, strike_date=_past())
+    sweeper.sweep()
+    with session_factory() as s:
+        assert s.get(Monitor, mid) is None
+    assert any("expired" in msg and "removed" in msg for msg in recorder.messages)
+
+
 def test_watchdog_degraded_and_recovery(session_factory):
     _mk_monitor(session_factory)
     state = {"fail": True}

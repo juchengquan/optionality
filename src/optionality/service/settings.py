@@ -15,6 +15,7 @@ class Settings:
     alarm_repeat_seconds: int = 1800  # reminder cadence while a breach persists; 0 disables reminders
     ui_refresh_seconds: int = 30  # dashboard live-region poll interval
     degraded_after_failures: int = 5  # consecutive sweep failures before the degraded telegram alert
+    expired_retention_days: int = 7  # muted-expired monitors are auto-deleted this many days after expiry
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     root_path: str = ""  # URL prefix when served behind a path-stripping reverse proxy, e.g. "/api"
@@ -34,6 +35,7 @@ class Settings:
             alarm_repeat_seconds=int(os.environ.get("ALARM_REPEAT_SECONDS", cls.alarm_repeat_seconds)),
             ui_refresh_seconds=int(os.environ.get("UI_REFRESH_SECONDS", cls.ui_refresh_seconds)),
             degraded_after_failures=int(os.environ.get("DEGRADED_AFTER_FAILURES", cls.degraded_after_failures)),
+            expired_retention_days=int(os.environ.get("EXPIRED_RETENTION_DAYS", cls.expired_retention_days)),
             telegram_bot_token=os.environ.get("TELEGRAM_BOT_TOKEN", cls.telegram_bot_token),
             telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID", cls.telegram_chat_id),
             root_path=os.environ.get("ROOT_PATH", cls.root_path),
