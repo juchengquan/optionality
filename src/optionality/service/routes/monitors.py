@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
 from optionality.service.models import Monitor
-from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
+from optionality.service.monitor import WATCHLIST_ORDER, verify_contracts, watchlist_quotes
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
@@ -17,6 +17,14 @@ quotes_router = APIRouter(tags=["quotes"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+SweeperDep = Annotated[object, Depends(get_sweeper)]
+
+
+def _require_existing(codes: list[str], settings: Settings, sweeper) -> None:
+    # strict gate: everything in the monitors table has been verified to exist on moomoo
+    error = verify_contracts(codes, settings, sweeper.fetcher)
+    if error:
+        raise HTTPException(status_code=422, detail=error)
 
 
 class MonitorIn(BaseModel):
@@ -170,13 +178,15 @@ def create_monitor(
     payload: Annotated[MonitorIn | ComboMonitorIn, Body(openapi_examples=_MONITOR_EXAMPLES)],
     session: SessionDep,
     settings: SettingsDep,
+    sweeper: SweeperDep,
 ):
     """Create a monitor — the payload shape decides: single-leg (option_type + strike) or combo (name + legs)."""
     if isinstance(payload, ComboMonitorIn):
-        return _create_combo(payload, session, settings)
+        return _create_combo(payload, session, settings, sweeper)
     code = _build_code(payload)
     if session.scalar(select(Monitor).where(Monitor.code == code, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({code}, {payload.field}) already exists")
+    _require_existing([code], settings, sweeper)
     row = Monitor(
         code=code,
         strike_date=payload.strike_date,
@@ -193,9 +203,11 @@ def create_monitor(
     return _to_dict(row, settings.display_tz)
 
 
-def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings):
+def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings, sweeper):
     if session.scalar(select(Monitor).where(Monitor.code == payload.name, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({payload.name}, {payload.field}) already exists")
+    leg_codes = [build_spx_code(payload.strike_date, leg.option_type, leg.strike) for leg in payload.legs]
+    _require_existing(sorted(set(leg_codes)), settings, sweeper)
     row = Monitor(
         code=payload.name,
         strike_date=payload.strike_date,
@@ -214,13 +226,17 @@ def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings)
 
 
 @router.put("/{monitor_id}")
-def update_monitor(monitor_id: str, payload: MonitorIn, session: SessionDep, settings: SettingsDep):
+def update_monitor(
+    monitor_id: str, payload: MonitorIn, session: SessionDep, settings: SettingsDep, sweeper: SweeperDep
+):
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")
     if row.legs:
         raise HTTPException(status_code=422, detail="combo monitors cannot be edited in place; delete and recreate")
     code = _build_code(payload)
+    if code != row.code:
+        _require_existing([code], settings, sweeper)
     conflict = session.scalar(
         select(Monitor).where(Monitor.code == code, Monitor.field == payload.field, Monitor.id != monitor_id)
     )

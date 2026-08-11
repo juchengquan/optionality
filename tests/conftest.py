@@ -72,6 +72,11 @@ def _stub_runner(task, config, client_factory=None, opend_host=None, opend_port=
     )
 
 
+def _echo_fetcher(codes, opend_host=None, opend_port=None):
+    # permissive default: every requested contract "exists"
+    return [{"code": c} for c in codes]
+
+
 @pytest.fixture
 def client_factory(tmp_path):
     from fastapi.testclient import TestClient
@@ -84,6 +89,7 @@ def client_factory(tmp_path):
     def make(
         token="tok", runner=_stub_runner, opend_port=1, root_path="", snapshot_fetcher=None, ui_refresh_seconds=30
     ):
+        snapshot_fetcher = snapshot_fetcher or _echo_fetcher  # never let tests touch the real moomoo SDK
         settings = Settings(
             db_path=str(tmp_path / "app.db"),
             api_token=token,

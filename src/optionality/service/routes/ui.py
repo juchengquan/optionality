@@ -142,10 +142,11 @@ def _live_context(request: Request, session, settings, session_factory, sweeper,
         display_time(utcnow(), settings.display_tz),
     )
     muted = session.scalars(select(Monitor).where(~Monitor.enabled).order_by(*WATCHLIST_ORDER)).all()
+    alarms_label, alarms_bad = sweeper.alarm_state()
     health = {
         "opend": _opend_reachable(settings.opend_host, settings.opend_port),
-        "sweep_ok": sweeper.last_sweep_ok,
-        "failures": sweeper.consecutive_failures,
+        "alarms": alarms_label,
+        "alarms_bad": alarms_bad,
         "queue": worker.queue_depth(),
     }
     return {
@@ -209,6 +210,7 @@ def ui_create_monitor(
     field: Annotated[str, Form()] = "option_delta",
     direction: Annotated[str, Form()] = "above",
     compare: Annotated[str, Form()] = "abs",
+    sweeper: Annotated[object, Depends(get_sweeper)] = None,
 ):
     try:
         payload = MonitorIn(
@@ -220,14 +222,19 @@ def ui_create_monitor(
             direction=direction,
             compare=compare,
         )
-        create_monitor(payload, session, settings)
+        create_monitor(payload, session, settings, sweeper)
     except (ValidationError, HTTPException) as err:
         return _redirect(request, error=_error_text(err))
     return _redirect(request)
 
 
 @router.post("/combos")
-async def ui_create_combo(request: Request, session: SessionDep, settings: SettingsDep):
+async def ui_create_combo(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: Annotated[object, Depends(get_sweeper)] = None,
+):
     form = await request.form()
     try:
         legs = []
@@ -251,7 +258,7 @@ async def ui_create_combo(request: Request, session: SessionDep, settings: Setti
             direction=form.get("direction", "above"),
             compare=form.get("compare", "abs"),
         )
-        _create_combo(payload, session, settings)
+        _create_combo(payload, session, settings, sweeper)
     except (ValidationError, HTTPException, ValueError) as err:
         return _redirect(request, error=_error_text(err))
     return _redirect(request)

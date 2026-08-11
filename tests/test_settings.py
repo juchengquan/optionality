@@ -13,6 +13,7 @@ def test_defaults():
     assert s.alarm_repeat_seconds == 1800
     assert s.ui_refresh_seconds == 30
     assert s.degraded_after_failures == 5
+    assert s.expired_retention_days == 7
     assert s.telegram_bot_token == ""
     assert s.telegram_chat_id == ""
 
@@ -23,6 +24,7 @@ def test_monitor_and_telegram_from_env(monkeypatch):
     monkeypatch.setenv("ALARM_REPEAT_SECONDS", "600")
     monkeypatch.setenv("UI_REFRESH_SECONDS", "15")
     monkeypatch.setenv("DEGRADED_AFTER_FAILURES", "3")
+    monkeypatch.setenv("EXPIRED_RETENTION_DAYS", "14")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
     monkeypatch.setenv("DISPLAY_TZ", "Asia/Singapore")
@@ -32,6 +34,7 @@ def test_monitor_and_telegram_from_env(monkeypatch):
     assert s.alarm_repeat_seconds == 600
     assert s.ui_refresh_seconds == 15
     assert s.degraded_after_failures == 3
+    assert s.expired_retention_days == 14
     assert s.telegram_bot_token == "tok"
     assert s.telegram_chat_id == "42"
     assert s.display_tz == "Asia/Singapore"

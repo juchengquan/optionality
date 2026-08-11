@@ -250,6 +250,45 @@ def test_expired_monitor_auto_disabled_and_not_fetched(session_factory):
         assert s.get(Monitor, mid).enabled is False
 
 
+def test_expiry_notice_then_grace_deletion(session_factory):
+    recorder = Recorder()
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_delta": 0.1} for c in codes]
+
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=fetcher, sender=recorder)
+
+    fresh_id = _mk_monitor(session_factory, strike_date=_past())  # expired yesterday
+    sweeper.sweep()
+    with session_factory() as s:
+        m = s.get(Monitor, fresh_id)
+        assert m is not None and m.enabled is False  # muted, still present (inside grace)
+    assert any("expired" in msg and "muted" in msg for msg in recorder.messages)
+
+    sweeper.sweep()  # second sweep: still inside grace, no repeat notice
+    assert sum("expired" in msg for msg in recorder.messages) == 1
+
+    old = (datetime.now(UTC).date() - timedelta(days=10)).isoformat()
+    ancient_id = _mk_monitor(session_factory, code="US.SPXW250101C5000000", strike_date=old)
+    sweeper.sweep()
+    with session_factory() as s:
+        assert s.get(Monitor, ancient_id) is None  # beyond the 7-day grace: deleted
+        assert s.get(Monitor, fresh_id) is not None  # yesterday's still within grace
+
+
+def test_expiry_retention_zero_deletes_immediately(session_factory):
+    recorder = Recorder()
+    settings = Settings(
+        telegram_bot_token="t", telegram_chat_id="c", alarm_cooldown_seconds=0, expired_retention_days=0
+    )
+    sweeper = MonitorSweeper(session_factory, settings, fetcher=lambda c, **k: [], sender=recorder)
+    mid = _mk_monitor(session_factory, strike_date=_past())
+    sweeper.sweep()
+    with session_factory() as s:
+        assert s.get(Monitor, mid) is None
+    assert any("expired" in msg and "removed" in msg for msg in recorder.messages)
+
+
 def test_watchdog_degraded_and_recovery(session_factory):
     _mk_monitor(session_factory)
     state = {"fail": True}
@@ -481,3 +520,90 @@ def test_unconfigured_telegram_suppresses_send(session_factory):
     assert sent == []  # alarm suppressed, no crash
     with session_factory() as s:
         assert s.scalar(select(Monitor)).triggered is True  # state still tracked
+
+
+UNKNOWN_ERR = "snapshot API failed: Unknown stock. SPXW260918C99999000"
+POISON = "US.SPXW260918C99999000"
+
+
+def _poisonable_fetcher(good_value=0.7):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        if POISON in codes:
+            raise RuntimeError(UNKNOWN_ERR)
+        return [{"code": c, "name": c, "option_delta": good_value} for c in codes]
+
+    return fetcher
+
+
+def test_fetch_resilient_drops_named_culprit():
+    from optionality.service.monitor import fetch_resilient
+
+    records, bad = fetch_resilient([POISON, CODE], SETTINGS, _poisonable_fetcher())
+    assert bad == [POISON]
+    assert [r["code"] for r in records] == [CODE]
+
+
+def test_fetch_resilient_reraises_generic_errors():
+    from optionality.service.monitor import fetch_resilient
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        raise RuntimeError("Client connection failed!")
+
+    with pytest.raises(RuntimeError, match="connection failed"):
+        fetch_resilient([CODE], SETTINGS, fetcher)
+
+
+def test_sweep_quarantines_poison_and_keeps_alarming(session_factory):
+    good_id = _mk_monitor(session_factory, threshold=0.6)
+    poison_id = _mk_monitor(session_factory, code=POISON, strike=99999.0)
+    recorder = Recorder()
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=_poisonable_fetcher(), sender=recorder)
+
+    sweeper.sweep()
+
+    with session_factory() as s:
+        assert s.get(Monitor, poison_id).enabled is False  # quarantined, not deleted
+        assert s.get(Monitor, good_id).triggered is True  # good monitor still evaluated same sweep
+    disabled_msgs = [m for m in recorder.messages if "disabled" in m]
+    breach_msgs = [m for m in recorder.messages if "crossed" in m]
+    assert len(disabled_msgs) == 1
+    assert POISON.removeprefix("US.") in disabled_msgs[0] or POISON in disabled_msgs[0]
+    assert len(breach_msgs) == 1
+    assert sweeper.last_sweep_ok is True  # containment: not a sweep failure
+
+
+def test_watchlist_quotes_survives_poison(session_factory):
+    _mk_monitor(session_factory)
+    _mk_monitor(session_factory, code=POISON, strike=99999.0)
+    quotes = watchlist_quotes(session_factory, SETTINGS, _poisonable_fetcher(), include_combos=True)
+    good = next(q for q in quotes if q["code"] == CODE)
+    assert good["snapshot"]["option_delta"] == 0.7
+    poisoned = next(q for q in quotes if q["code"] == POISON)
+    assert poisoned["snapshot"] is None
+    assert poisoned["error"] == "unknown contract"
+
+
+def test_verify_contracts_paths():
+    from optionality.service.monitor import verify_contracts
+
+    assert verify_contracts([CODE], SETTINGS, _poisonable_fetcher()) is None
+    unknown = verify_contracts([POISON], SETTINGS, _poisonable_fetcher())
+    assert "does not exist" in unknown
+
+    def down(codes, opend_host=None, opend_port=None):
+        raise RuntimeError("Client connection failed!")
+
+    unreachable = verify_contracts([CODE], SETTINGS, down)
+    assert "unreachable" in unreachable
+
+
+def test_alarm_state_labels(session_factory):
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=lambda c, **k: [], sender=Recorder())
+    assert sweeper.alarm_state() == ("starting", False)
+    sweeper.last_sweep_ok = True
+    assert sweeper.alarm_state() == ("active", False)
+    sweeper.last_sweep_ok = False
+    sweeper.consecutive_failures = 1
+    assert sweeper.alarm_state() == ("STALLED (1 failed sweep)", True)
+    sweeper.consecutive_failures = 3
+    assert sweeper.alarm_state() == ("STALLED (3 failed sweeps)", True)
