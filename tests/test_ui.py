@@ -32,6 +32,13 @@ def test_refresh_interval_comes_from_settings(client_factory):
     assert 'hx-trigger="every 7s' in client.get("/ui", headers=AUTH).text
 
 
+def test_refresh_selector_offers_fast_options(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    page = client.get("/ui", headers=AUTH).text
+    for opt in (5, 10, 15, 30, 60, 120):
+        assert f'value="{opt}"' in page
+
+
 def test_refresh_selector_sets_cookie_and_overrides_env(client_factory):
     client = client_factory(snapshot_fetcher=_fetcher)  # env default 30
     resp = client.post("/ui/refresh", data={"refresh": "15"}, headers=AUTH, follow_redirects=False)
