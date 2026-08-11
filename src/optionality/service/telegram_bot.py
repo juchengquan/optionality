@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.core import fetch_snapshot
 from optionality.service.models import Monitor
-from optionality.service.monitor import WATCHLIST_ORDER, monitor_leg_codes, watchlist_quotes
+from optionality.service.monitor import WATCHLIST_ORDER, monitor_leg_codes, verify_contracts, watchlist_quotes
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time_short
 
@@ -302,6 +302,8 @@ class TelegramBot(threading.Thread):
         if error := _threshold_error(threshold, compare):
             return error
 
+        if error := verify_contracts([code], self.settings, self.fetcher):
+            return error
         with self.session_factory() as session:
             if session.scalar(select(Monitor).where(Monitor.code == code, Monitor.field == field)):
                 return f"Already watching {code} ({field})."
@@ -358,6 +360,9 @@ class TelegramBot(threading.Thread):
             else:
                 field = extra
         if error := _threshold_error(threshold, compare):
+            return error
+        leg_codes = sorted({build_spx_code(strike_date, leg["option_type"], leg["strike"]) for leg in legs})
+        if error := verify_contracts(leg_codes, self.settings, self.fetcher):
             return error
 
         with self.session_factory() as session:

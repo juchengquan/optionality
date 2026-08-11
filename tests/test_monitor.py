@@ -481,3 +481,78 @@ def test_unconfigured_telegram_suppresses_send(session_factory):
     assert sent == []  # alarm suppressed, no crash
     with session_factory() as s:
         assert s.scalar(select(Monitor)).triggered is True  # state still tracked
+
+
+UNKNOWN_ERR = "snapshot API failed: Unknown stock. SPXW260918C99999000"
+POISON = "US.SPXW260918C99999000"
+
+
+def _poisonable_fetcher(good_value=0.7):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        if POISON in codes:
+            raise RuntimeError(UNKNOWN_ERR)
+        return [{"code": c, "name": c, "option_delta": good_value} for c in codes]
+
+    return fetcher
+
+
+def test_fetch_resilient_drops_named_culprit():
+    from optionality.service.monitor import fetch_resilient
+
+    records, bad = fetch_resilient([POISON, CODE], SETTINGS, _poisonable_fetcher())
+    assert bad == [POISON]
+    assert [r["code"] for r in records] == [CODE]
+
+
+def test_fetch_resilient_reraises_generic_errors():
+    from optionality.service.monitor import fetch_resilient
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        raise RuntimeError("Client connection failed!")
+
+    with pytest.raises(RuntimeError, match="connection failed"):
+        fetch_resilient([CODE], SETTINGS, fetcher)
+
+
+def test_sweep_quarantines_poison_and_keeps_alarming(session_factory):
+    good_id = _mk_monitor(session_factory, threshold=0.6)
+    poison_id = _mk_monitor(session_factory, code=POISON, strike=99999.0)
+    recorder = Recorder()
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=_poisonable_fetcher(), sender=recorder)
+
+    sweeper.sweep()
+
+    with session_factory() as s:
+        assert s.get(Monitor, poison_id).enabled is False  # quarantined, not deleted
+        assert s.get(Monitor, good_id).triggered is True  # good monitor still evaluated same sweep
+    disabled_msgs = [m for m in recorder.messages if "disabled" in m]
+    breach_msgs = [m for m in recorder.messages if "crossed" in m]
+    assert len(disabled_msgs) == 1
+    assert POISON.removeprefix("US.") in disabled_msgs[0] or POISON in disabled_msgs[0]
+    assert len(breach_msgs) == 1
+    assert sweeper.last_sweep_ok is True  # containment: not a sweep failure
+
+
+def test_watchlist_quotes_survives_poison(session_factory):
+    _mk_monitor(session_factory)
+    _mk_monitor(session_factory, code=POISON, strike=99999.0)
+    quotes = watchlist_quotes(session_factory, SETTINGS, _poisonable_fetcher(), include_combos=True)
+    good = next(q for q in quotes if q["code"] == CODE)
+    assert good["snapshot"]["option_delta"] == 0.7
+    poisoned = next(q for q in quotes if q["code"] == POISON)
+    assert poisoned["snapshot"] is None
+    assert poisoned["error"] == "unknown contract"
+
+
+def test_verify_contracts_paths():
+    from optionality.service.monitor import verify_contracts
+
+    assert verify_contracts([CODE], SETTINGS, _poisonable_fetcher()) is None
+    unknown = verify_contracts([POISON], SETTINGS, _poisonable_fetcher())
+    assert "does not exist" in unknown
+
+    def down(codes, opend_host=None, opend_port=None):
+        raise RuntimeError("Client connection failed!")
+
+    unreachable = verify_contracts([CODE], SETTINGS, down)
+    assert "unreachable" in unreachable

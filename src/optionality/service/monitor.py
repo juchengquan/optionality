@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import UTC, date, datetime
 
 from sqlalchemy import select
@@ -45,6 +46,51 @@ def monitor_value(monitor: Monitor, by_code: dict) -> float | None:
 # greeks are linear, so signed sums are the greeks OF the combo's value; IV is not additive
 COMBO_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")
 
+_UNKNOWN_CODE = re.compile(r"Unknown stock\.?\s+([A-Z0-9.]+)")
+
+
+def fetch_resilient(codes: list[str], settings: Settings, fetcher=fetch_snapshot) -> tuple[list[dict], list[str]]:
+    """Batch snapshot that survives unknown contracts.
+
+    moomoo rejects the WHOLE batch when any code is unknown, naming the culprit;
+    we drop it and retry so one bad contract can't take the watchlist hostage.
+    Any other error (connection, quota) re-raises untouched — containment only
+    engages on the deterministic named-culprit case.
+    """
+    remaining = list(codes)
+    bad: list[str] = []
+    while remaining:
+        try:
+            return fetcher(remaining, opend_host=settings.opend_host, opend_port=settings.opend_port), bad
+        except Exception as err:
+            match = _UNKNOWN_CODE.search(str(err))
+            if not match:
+                raise
+            culprit = match.group(1).rstrip(".")
+            hits = [c for c in remaining if c == culprit or c.endswith(culprit)]
+            if not hits:
+                raise  # can't map the culprit to our codes; treat as generic failure
+            for code in hits:
+                remaining.remove(code)
+                bad.append(code)
+            logger.warning("dropping unknown contract from batch: %s", ", ".join(hits))
+    return [], bad
+
+
+def verify_contracts(codes: list[str], settings: Settings, fetcher=fetch_snapshot) -> str | None:
+    """Return an error message unless every code is a verified, existing contract."""
+    try:
+        records, bad = fetch_resilient(codes, settings, fetcher)
+    except Exception as err:
+        return f"cannot verify contract: OpenD unreachable ({err})"
+    if bad:
+        return f"contract does not exist: {', '.join(bad)} — check strike and expiry"
+    returned = {r.get("code") for r in records}
+    missing = [c for c in codes if c not in returned]
+    if missing:
+        return f"contract does not exist: {', '.join(missing)} — check strike and expiry"
+    return None
+
 
 def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot, include_combos=False) -> list[dict]:
     """Live snapshot for every enabled monitor — one API call for the whole watchlist.
@@ -61,7 +107,8 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
     if not monitors:
         return []
     codes = sorted({code for m in monitors for code in monitor_leg_codes(m)})
-    records = fetcher(codes, opend_host=settings.opend_host, opend_port=settings.opend_port)
+    records, bad_codes = fetch_resilient(codes, settings, fetcher)
+    bad_set = set(bad_codes)
     fetched_at = display_time(utcnow(), settings.display_tz)
     for record in records:
         if record.get("update_time"):
@@ -85,6 +132,8 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
             entry["legs"] = m.legs
             entry["combo_value"] = monitor_value(m, by_code)
             entry["combo_greeks"] = {f: combo_field_sum(m, by_code, f) for f in COMBO_GREEK_FIELDS}
+        if bad_set.intersection(monitor_leg_codes(m)):
+            entry["error"] = "unknown contract"
         entries.append(entry)
     return entries
 
@@ -129,12 +178,15 @@ class MonitorSweeper:
 
         codes = sorted({code for m in active for code in monitor_leg_codes(m)})
         try:
-            records = self.fetcher(codes, opend_host=self.settings.opend_host, opend_port=self.settings.opend_port)
+            records, bad_codes = fetch_resilient(codes, self.settings, self.fetcher)
         except Exception:
             logger.exception("monitor sweep snapshot failed")
             self._record_failure()
             return
         self._record_success()
+
+        if bad_codes:
+            active = self._quarantine_unknown(active, set(bad_codes))
 
         by_code = {r.get("code"): r for r in records}
         now = utcnow()
@@ -182,6 +234,23 @@ class MonitorSweeper:
                             f"⚠️ {name}: {monitor.field} {value:.3f} still {sign} {monitor.threshold} (reminder)"
                         )
             session.commit()
+
+    def _quarantine_unknown(self, active: list[Monitor], bad_set: set[str]) -> list[Monitor]:
+        """Disable (never delete) monitors whose contracts moomoo doesn't recognize."""
+        surviving = []
+        with self.session_factory() as session:
+            for monitor in active:
+                hits = sorted(bad_set.intersection(monitor_leg_codes(monitor)))
+                if not hits:
+                    surviving.append(monitor)
+                    continue
+                session.get(Monitor, monitor.id).enabled = False
+                logger.warning("monitor %s (%s) disabled: unknown contract %s", monitor.id, monitor.code, hits)
+                self._notify(
+                    f"⚠️ monitor {monitor.code} disabled: unknown contract {', '.join(hits)} (delisted or never existed)"
+                )
+            session.commit()
+        return surviving
 
     def _seconds_since_alarm(self, monitor: Monitor, now: datetime) -> float:
         last = monitor.last_alarm_at

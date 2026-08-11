@@ -226,3 +226,41 @@ def test_health_exposes_monitor_sweep_state(client_factory):
     data = client.get("/health").json()
     assert data["monitor"]["consecutive_failures"] == 0
     assert data["monitor"]["last_sweep_at"] is None
+
+
+def test_creation_rejects_unknown_contract(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        bad = [c for c in codes if "99999" in c]
+        if bad:
+            raise RuntimeError(f"snapshot API failed: Unknown stock. {bad[0].removeprefix('US.')}")
+        return [{"code": c} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 99999, "threshold": 0.5}
+    resp = client.post("/monitors", json=payload, headers=AUTH)
+    assert resp.status_code == 422
+    assert "does not exist" in resp.json()["detail"]
+    assert client.get("/monitors", headers=AUTH).json() == []  # nothing persisted
+
+    combo = {
+        "name": "bad-combo",
+        "strike_date": _future(),
+        "legs": [
+            {"sign": 1, "option_type": "CALL", "strike": 8100},
+            {"sign": -1, "option_type": "CALL", "strike": 99999},
+        ],
+        "threshold": 10,
+    }
+    assert client.post("/monitors", json=combo, headers=AUTH).status_code == 422
+    assert client.get("/monitors", headers=AUTH).json() == []
+
+
+def test_creation_rejects_when_opend_unreachable(client_factory):
+    def down(codes, opend_host=None, opend_port=None):
+        raise RuntimeError("Client connection failed!")
+
+    client = client_factory(snapshot_fetcher=down)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.5}
+    resp = client.post("/monitors", json=payload, headers=AUTH)
+    assert resp.status_code == 422
+    assert "unreachable" in resp.json()["detail"]

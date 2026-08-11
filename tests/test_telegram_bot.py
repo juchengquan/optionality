@@ -24,10 +24,14 @@ class FakeApi:
         return []
 
 
+def _echo_fetcher(codes, opend_host=None, opend_port=None):
+    return [{"code": c} for c in codes]
+
+
 def _make_bot(session_factory, fetcher=None):
     api = FakeApi()
     settings = Settings(telegram_bot_token="t", telegram_chat_id="42")
-    bot = TelegramBot(session_factory, settings, api=api, fetcher=fetcher)
+    bot = TelegramBot(session_factory, settings, api=api, fetcher=fetcher or _echo_fetcher)
     return bot, api
 
 
@@ -402,3 +406,14 @@ def test_quotes_command_reports_watched_codes(session_factory):
     assert "1.0/2.0" in reply  # bid/ask column
     assert "0.42" not in reply  # delta lives in /greeks now; /quotes is a pure price view
     assert api.calls[-1][1].get("parse_mode") == "HTML"
+
+
+def test_watch_rejects_unknown_contract(session_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        raise RuntimeError("snapshot API failed: Unknown stock. " + codes[0].removeprefix("US."))
+
+    bot, api = _make_bot(session_factory, fetcher=fetcher)
+    bot.handle_update(_update(f"/watch {_future()} CALL 99999 0.5"))
+    assert "does not exist" in api.sent[-1]
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)) is None
