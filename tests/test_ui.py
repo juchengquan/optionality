@@ -197,3 +197,20 @@ def test_row_actions_threshold_mute_delete(client_factory):
     client.post(f"/ui/monitors/{mid}/delete", data={}, headers=AUTH)
     with sf() as s:
         assert s.get(Monitor, mid) is None
+
+
+def test_health_strip_shows_alarm_state(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    page = client.get("/ui", headers=AUTH)
+    assert "alarms:" in page.text
+    assert "starting" in page.text  # no sweep has run in a fresh app
+    assert "sweep ok" not in page.text  # jargon retired
+    assert "consecutive failures" not in page.text
+
+    client.app.state.sweeper.last_sweep_ok = True
+    assert "active" in client.get("/ui", headers=AUTH).text
+
+    client.app.state.sweeper.last_sweep_ok = False
+    client.app.state.sweeper.consecutive_failures = 3
+    page = client.get("/ui", headers=AUTH)
+    assert "STALLED (3 failed sweeps)" in page.text

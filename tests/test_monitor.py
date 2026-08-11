@@ -595,3 +595,15 @@ def test_verify_contracts_paths():
 
     unreachable = verify_contracts([CODE], SETTINGS, down)
     assert "unreachable" in unreachable
+
+
+def test_alarm_state_labels(session_factory):
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=lambda c, **k: [], sender=Recorder())
+    assert sweeper.alarm_state() == ("starting", False)
+    sweeper.last_sweep_ok = True
+    assert sweeper.alarm_state() == ("active", False)
+    sweeper.last_sweep_ok = False
+    sweeper.consecutive_failures = 1
+    assert sweeper.alarm_state() == ("STALLED (1 failed sweep)", True)
+    sweeper.consecutive_failures = 3
+    assert sweeper.alarm_state() == ("STALLED (3 failed sweeps)", True)

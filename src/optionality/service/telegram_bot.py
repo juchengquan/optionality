@@ -493,7 +493,7 @@ class TelegramBot(threading.Thread):
         if self.worker is not None:
             lines.append(f"queue depth: {self.worker.queue_depth()}")
         if self.sweeper is not None:
-            sweep_at = display_time_short(self.sweeper.last_sweep_at, self.settings.display_tz) or "never"
-            lines.append(f"last sweep: {sweep_at} (ok={self.sweeper.last_sweep_ok})")
-            lines.append(f"consecutive sweep failures: {self.sweeper.consecutive_failures}")
+            label, _bad = self.sweeper.alarm_state()
+            sweep_at = display_time_short(self.sweeper.last_sweep_at, self.settings.display_tz)
+            lines.append(f"alarms: {label}" + (f" — last sweep {sweep_at}" if sweep_at else ""))
         return "Service is up.\n" + "\n".join(lines) if lines else "Service is up."

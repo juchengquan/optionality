@@ -142,10 +142,11 @@ def _live_context(request: Request, session, settings, session_factory, sweeper,
         display_time(utcnow(), settings.display_tz),
     )
     muted = session.scalars(select(Monitor).where(~Monitor.enabled).order_by(*WATCHLIST_ORDER)).all()
+    alarms_label, alarms_bad = sweeper.alarm_state()
     health = {
         "opend": _opend_reachable(settings.opend_host, settings.opend_port),
-        "sweep_ok": sweeper.last_sweep_ok,
-        "failures": sweeper.consecutive_failures,
+        "alarms": alarms_label,
+        "alarms_bad": alarms_bad,
         "queue": worker.queue_depth(),
     }
     return {

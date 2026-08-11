@@ -148,6 +148,15 @@ class MonitorSweeper:
         self.last_sweep_at: datetime | None = None
         self.last_sweep_ok: bool | None = None
 
+    def alarm_state(self) -> tuple[str, bool]:
+        """Human label for the alarm engine's health: (label, is_bad)."""
+        if self.last_sweep_ok is None:
+            return "starting", False
+        if self.last_sweep_ok:
+            return "active", False
+        n = self.consecutive_failures
+        return f"STALLED ({n} failed sweep{'s' if n != 1 else ''})", True
+
     def _notify(self, text: str) -> None:
         if not (self.settings.telegram_bot_token and self.settings.telegram_chat_id):
             logger.info("telegram not configured; alarm suppressed: %s", text)
