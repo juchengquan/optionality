@@ -264,3 +264,39 @@ def test_creation_rejects_when_opend_unreachable(client_factory):
     resp = client.post("/monitors", json=payload, headers=AUTH)
     assert resp.status_code == 422
     assert "unreachable" in resp.json()["detail"]
+
+
+def test_rename_combo_preserves_state(client_factory):
+    client = client_factory()
+    combo = client.post("/monitors", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH).json()
+    mid = combo["id"]
+
+    sf = client.app.state.session_factory
+    from optionality.service.models import Monitor
+
+    with sf() as s:  # simulate a live, triggered monitor with history
+        m = s.get(Monitor, mid)
+        m.triggered, m.last_value = True, 7.15
+        s.commit()
+
+    renamed = client.patch(f"/monitors/{mid}", json={"name": "sep-condor-v2"}, headers=AUTH)
+    assert renamed.status_code == 200
+    data = renamed.json()
+    assert data["code"] == "sep-condor-v2"
+    assert data["triggered"] is True  # state survives the rename (recreation would have lost it)
+    assert data["last_value"] == 7.15
+    assert data["legs"] == combo["legs"]
+    assert data["created_at"] == combo["created_at"]
+
+
+def test_rename_rejects_single_leg_and_collisions(client_factory):
+    client = client_factory()
+    single = {"strike_date": _future(), "option_type": "CALL", "strike": 6500, "threshold": 0.6}
+    single_id = client.post("/monitors", json=single, headers=AUTH).json()["id"]
+    resp = client.patch(f"/monitors/{single_id}", json={"name": "nope"}, headers=AUTH)
+    assert resp.status_code == 422
+    assert "combo" in resp.json()["detail"]
+
+    a = client.post("/monitors", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH).json()
+    b = client.post("/monitors", json={**COMBO_PAYLOAD, "name": "other", "strike_date": _future()}, headers=AUTH).json()
+    assert client.patch(f"/monitors/{b['id']}", json={"name": a["code"]}, headers=AUTH).status_code == 409

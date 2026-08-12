@@ -371,6 +371,7 @@ def test_register_commands_publishes_menu(session_factory):
         "unwatch",
         "combo",
         "threshold",
+        "rename",
         "snapshot",
         "health",
         "help",
@@ -417,3 +418,18 @@ def test_watch_rejects_unknown_contract(session_factory):
     assert "does not exist" in api.sent[-1]
     with session_factory() as s:
         assert s.scalar(select(Monitor)) is None
+
+
+def test_rename_command(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watchcombo old-name {_future()} +C8100 -C8150 10 below"))
+    bot.handle_update(_update("/rename old-name new-name"))
+    assert "new-name" in api.sent[-1]
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)).code == "new-name"
+
+    bot.handle_update(_update("/rename ghost whatever"))
+    assert "no combo" in api.sent[-1].lower()
+
+    bot.handle_update(_update("/rename new-name"))
+    assert "usage" in api.sent[-1].lower()
