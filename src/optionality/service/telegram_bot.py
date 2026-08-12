@@ -27,6 +27,7 @@ HELP_TEXT = """Commands:
 /unwatch <name, code, id prefix, or contract like 260918 C8100> — remove a monitor
 /combo <name> — per-leg breakdown of a combo
 /threshold <name or contract> <value> — change a monitor's threshold
+/rename <old> <new> — rename a combo (keeps its alarm state and history)
 /snapshot <date> <CALL|PUT> <strike> — live quote
 (dates: YYYY-MM-DD or YYYYMMDD)
 /health — service status
@@ -87,6 +88,7 @@ BOT_COMMANDS = [
     {"command": "unwatch", "description": "Remove a monitor by name, code, or id prefix"},
     {"command": "combo", "description": "Per-leg breakdown of a combo"},
     {"command": "threshold", "description": "Change a monitor's threshold: NAME|contract value"},
+    {"command": "rename", "description": "Rename a combo: OLD NEW"},
     {"command": "snapshot", "description": "Live quote: DATE CALL|PUT strike"},
     {"command": "health", "description": "Queue and sweep status"},
     {"command": "help", "description": "Show usage"},
@@ -194,6 +196,8 @@ class TelegramBot(threading.Thread):
             return self._cmd_unwatch(args)
         if command == "threshold":
             return self._cmd_threshold(args)
+        if command == "rename":
+            return self._cmd_rename(args)
         if command == "snapshot":
             return self._cmd_snapshot(args)
         if command == "health":
@@ -445,6 +449,22 @@ class TelegramBot(threading.Thread):
             code, direction, field, compare = monitor.code, monitor.direction, monitor.field, monitor.compare
             session.commit()
         return _rule_text(code, field, value, direction, compare)
+
+    def _cmd_rename(self, args: list[str]) -> str:
+        if len(args) != 2:
+            return "Usage: /rename <old combo name> <new name>"
+        old, new = args
+        with self.session_factory() as session:
+            monitor = session.scalar(select(Monitor).where(Monitor.code == old, Monitor.legs.is_not(None)))
+            if monitor is None:
+                return f"No combo named '{old}'."
+            if session.scalar(
+                select(Monitor).where(Monitor.code == new, Monitor.field == monitor.field, Monitor.id != monitor.id)
+            ):
+                return f"'{new}' is already taken."
+            monitor.code = new
+            session.commit()
+        return f"Renamed {old} → {new} (alarm state and history kept)."
 
     def _cmd_unwatch(self, args: list[str]) -> str:
         if not args:

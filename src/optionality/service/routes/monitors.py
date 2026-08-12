@@ -88,6 +88,7 @@ class ComboMonitorIn(BaseModel):
 
 
 class MonitorPatch(BaseModel):
+    name: str | None = None  # combos only: the name IS the code; single-leg codes are contract-derived
     threshold: float | None = None
     direction: Literal["above", "below"] | None = None
     field: str | None = None
@@ -263,6 +264,19 @@ def patch_monitor(monitor_id: str, payload: MonitorPatch, session: SessionDep, s
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")
+
+    new_name = changes.pop("name", None)
+    if new_name is not None:
+        if not row.legs:
+            raise HTTPException(
+                status_code=422,
+                detail="only combo monitors can be renamed; a single-leg code is derived from its contract",
+            )
+        if new_name != row.code and session.scalar(
+            select(Monitor).where(Monitor.code == new_name, Monitor.field == row.field, Monitor.id != monitor_id)
+        ):
+            raise HTTPException(status_code=409, detail=f"monitor for ({new_name}, {row.field}) already exists")
+        row.code = new_name
     new_compare = changes.get("compare", row.compare)
     new_threshold = changes.get("threshold", row.threshold)
     if new_compare == "abs" and new_threshold <= 0:

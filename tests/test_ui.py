@@ -221,3 +221,23 @@ def test_health_strip_shows_alarm_state(client_factory):
     client.app.state.sweeper.consecutive_failures = 3
     page = client.get("/ui", headers=AUTH)
     assert "STALLED (3 failed sweeps)" in page.text
+
+
+def test_ui_rename_combo(client_factory):
+    client = client_factory(snapshot_fetcher=_fetcher)
+    combo = {
+        "name": "web-combo",
+        "strike_date": _future(),
+        "legs": [
+            {"sign": 1, "option_type": "CALL", "strike": 8100},
+            {"sign": -1, "option_type": "CALL", "strike": 8150},
+        ],
+        "threshold": 10,
+    }
+    mid = client.post("/monitors", json=combo, headers=AUTH).json()["id"]
+    page = client.get("/ui", headers=AUTH).text
+    assert 'name="name"' in page and "/rename" in page  # rename box only in the combo row
+
+    resp = client.post(f"/ui/monitors/{mid}/rename", data={"name": "web-combo-v2"}, headers=AUTH)
+    assert resp.status_code == 200
+    assert "web-combo-v2" in resp.text

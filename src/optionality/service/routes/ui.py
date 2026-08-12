@@ -85,6 +85,8 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
             "triggered": q["triggered"],
             "threshold": q["threshold"],
             "compare": q["compare"],
+            "is_combo": "legs" in q,
+            "name": q["code"],
             "delta": _fmt(snap.get("option_delta")),
             "gamma": _fmt(snap.get("option_gamma")),
             "theta": _fmt(snap.get("option_theta")),
@@ -274,6 +276,21 @@ def ui_set_threshold(
 ):
     try:
         patch_monitor(monitor_id, MonitorPatch(threshold=threshold), session, settings)
+    except (ValidationError, HTTPException) as err:
+        return _redirect(request, error=_error_text(err))
+    return _redirect(request)
+
+
+@router.post("/monitors/{monitor_id}/rename")
+def ui_rename_monitor(
+    request: Request,
+    monitor_id: str,
+    session: SessionDep,
+    settings: SettingsDep,
+    name: Annotated[str, Form()],
+):
+    try:
+        patch_monitor(monitor_id, MonitorPatch(name=name.strip()), session, settings)
     except (ValidationError, HTTPException) as err:
         return _redirect(request, error=_error_text(err))
     return _redirect(request)
