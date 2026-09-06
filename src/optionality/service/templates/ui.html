@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>optionality</title>
+<style>
+body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem; color: #222; }
+h2 { margin-bottom: 0.2rem; }
+.meta { color: #666; margin: 0 0 1rem; }
+.banner { background: #f8d7da; border: 1px solid #d9534f; padding: 0.5rem 1rem; margin-bottom: 1rem; }
+table { border-collapse: collapse; margin-bottom: 1.5rem; }
+th, td { border: 1px solid #aaa; padding: 4px 10px; text-align: right; white-space: nowrap; }
+th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+td.hl { background: #fff3cd; font-weight: 600; }
+tr.triggered td { background: #f8d7da; }
+tr.triggered td.hl { background: #f5c2c7; }
+td.actions { text-align: left; }
+td.actions form { display: inline; }
+input[type=number] { width: 5.5rem; }
+fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0; padding: 0.8rem 1rem; }
+legend { font-weight: 600; }
+label { display: block; margin: 0.3rem 0; }
+button { cursor: pointer; }
+.health { color: #444; font-size: 0.9rem; margin-bottom: 1.2rem; }
+.health .bad { color: #c00; font-weight: 700; }
+</style>
+<script src="{{ root_path }}/static/htmx.min.js"></script>
+</head>
+<body>
+<h2>optionality watchlist</h2>
+{% if error %}<div class="banner">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ root_path }}/ui/refresh" class="health">
+  refresh every
+  <select name="refresh">
+    {% for opt in [5, 10, 15, 30, 60, 120] %}
+    <option value="{{ opt }}"{% if opt == refresh_seconds %} selected{% endif %}>{{ opt }}s</option>
+    {% endfor %}
+  </select>
+  <button>set</button>
+  (this browser only)
+</form>
+
+{# the live region re-fetches itself; the poll skips a beat while focus is inside it,
+   so mid-typing in a row's threshold box is never wiped either #}
+<div id="live"
+     hx-get="{{ root_path }}/ui/table"
+     hx-trigger="every {{ refresh_seconds }}s [!document.activeElement.closest('#live')]"
+     hx-swap="innerHTML">
+{% include "ui_table.html" %}
+</div>
+
+<fieldset>
+<legend>Add monitor</legend>
+<form method="post" action="{{ root_path }}/ui/monitors">
+  <label>expiry <input type="date" name="strike_date" required></label>
+  <label>type
+    <select name="option_type"><option>CALL</option><option>PUT</option></select>
+  </label>
+  <label>strike <input type="number" name="strike" step="any" required></label>
+  <label>field
+    <select name="field">{% for f in fields %}<option value="{{ f }}">{{ f }}</option>{% endfor %}</select>
+  </label>
+  <label>threshold <input type="number" name="threshold" step="any" required></label>
+  <label>direction
+    <select name="direction"><option>above</option><option>below</option></select>
+  </label>
+  <label>compare
+    <select name="compare"><option value="abs">abs</option><option value="signed">signed</option></select>
+  </label>
+  <button>watch</button>
+</form>
+</fieldset>
+
+<fieldset>
+<legend>Add combo</legend>
+<form method="post" action="{{ root_path }}/ui/combos">
+  <label>name <input type="text" name="name" required></label>
+  <label>expiry <input type="date" name="strike_date" required></label>
+  {% for i in range(1, 7) %}
+  <label>leg {{ i }}
+    <select name="sign_{{ i }}"><option>+</option><option>-</option></select>
+    <select name="option_type_{{ i }}"><option>CALL</option><option>PUT</option></select>
+    <input type="number" name="strike_{{ i }}" step="any" placeholder="strike (blank = skip)">
+  </label>
+  {% endfor %}
+  <label>field
+    <select name="field"><option value="mid_price">mid_price</option>{% for f in fields %}{% if f != "mid_price" %}<option value="{{ f }}">{{ f }}</option>{% endif %}{% endfor %}</select>
+  </label>
+  <label>threshold <input type="number" name="threshold" step="any" required></label>
+  <label>direction
+    <select name="direction"><option>above</option><option>below</option></select>
+  </label>
+  <label>compare
+    <select name="compare"><option value="abs">abs</option><option value="signed">signed</option></select>
+  </label>
+  <button>watch combo</button>
+</form>
+</fieldset>
+
+</body>
+</html>
