@@ -38,7 +38,7 @@ Optionality is a small, simple yet effective tool aimed at providing a report to
 
 Run optionality as an always-on service: scheduled scans email HTML reports; ad-hoc runs are triggered over the API (expose it inside your tailnet only, e.g. with `tailscale serve`).
 
-To serve under a path prefix — `tailscale serve --bg --set-path /api http://127.0.0.1:8000` — set `ROOT_PATH=/api`
+To serve under a path prefix — `tailscale serve --bg --set-path /api http://127.0.0.1:31415` — set `ROOT_PATH=/api`
 in `.env` so FastAPI generates prefixed URLs (otherwise `/docs` loads but can't fetch `openapi.json`). With
 `ROOT_PATH` set, open Swagger through the proxy URL (`https://<machine>.<tailnet>.ts.net/api/docs`), not localhost.
 
@@ -49,7 +49,7 @@ in `.env` so FastAPI generates prefixed URLs (otherwise `/docs` loads but can't 
    - **macOS / bare-metal host:** run OpenD on the host, keep `OPEND_HOST=host.docker.internal`.
    - **Linux host, Docker:** extract the OpenD Ubuntu build into `./opend`, set `OPEND_HOST=opend`, add `--profile opend-docker` to compose commands. First login may prompt for a verification code: `docker attach optionality-opend`.
 3. `docker compose up -d --build`
-4. Health check: `curl http://localhost:8000/health` — `"opend": true` means the gateway is reachable.
+4. Health check: `curl http://localhost:31415/health` — `"opend": true` means the gateway is reachable.
 
 ### Running natively on macOS (launchd)
 
@@ -71,27 +71,27 @@ unattended reboot.
 ```bash
 AUTH="Authorization: Bearer $API_TOKEN"
 # store a config (body = the YAML document as JSON)
-curl -X POST localhost:8000/configs -H "$AUTH" -H 'Content-Type: application/json' \
+curl -X POST localhost:31415/configs -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name": "spx-holdings", "task_type": "holdings", "body": {...}}'
 # schedule it for 09:35 ET every weekday
-curl -X POST localhost:8000/schedules -H "$AUTH" -H 'Content-Type: application/json' \
+curl -X POST localhost:31415/schedules -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"cron_expr": "35 9 * * mon-fri", "task_type": "holdings", "config_name": "spx-holdings"}'
 # ad-hoc run + report
-curl -X POST localhost:8000/runs -H "$AUTH" -H 'Content-Type: application/json' \
+curl -X POST localhost:31415/runs -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"task": "holdings", "config": "spx-holdings"}'
-curl localhost:8000/runs/<run_id>/report.html -H "$AUTH"
+curl localhost:31415/runs/<run_id>/report.html -H "$AUTH"
 # per-contract rows from a stored report (optionally ?code=US.SPXW...)
-curl localhost:8000/runs/<run_id>/details -H "$AUTH"
+curl localhost:31415/runs/<run_id>/details -H "$AUTH"
 # live quote of one SPX weekly contract (single OpenD call)
-curl "localhost:8000/spx/quote?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
+curl "localhost:31415/spx/quote?strike_date=2026-12-18&option_type=CALL&strike=6500" -H "$AUTH"
 # live quotes for every watched code
-curl localhost:8000/quotes -H "$AUTH"
+curl localhost:31415/quotes -H "$AUTH"
 # browser dashboard with add/edit/mute/delete forms
 open https://<machine>.<tailnet>.ts.net/api/ui
 # watch a contract: Telegram alarm when abs(option_delta) crosses 0.6
-curl -X POST localhost:8000/monitors -H "$AUTH" -H 'Content-Type: application/json' \
+curl -X POST localhost:31415/monitors -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"strike_date": "2026-12-18", "option_type": "CALL", "strike": 6500, "threshold": 0.6}'
-curl localhost:8000/monitors -H "$AUTH"   # live watchlist dashboard (last_value, triggered)
+curl localhost:31415/monitors -H "$AUTH"   # live watchlist dashboard (last_value, triggered)
 ```
 
 ### Delta monitors
@@ -146,7 +146,7 @@ run the local server and the Docker deployment simultaneously with the same bot.
 
 ### Runbook
 
-- **Scheduled reports stopped and healthchecks.io alerted:** check `docker compose ps`, then `curl :8000/health`. If `"opend": false`, OpenD is down or logged out — restart/re-login it (this is the most common failure).
+- **Scheduled reports stopped and healthchecks.io alerted:** check `docker compose ps`, then `curl :31415/health`. If `"opend": false`, OpenD is down or logged out — restart/re-login it (this is the most common failure).
 - **Failure email arrived:** the run failed twice (one automatic retry). The email includes the error; `GET /runs?status=failed` has details.
 - **Debugging the pipeline without the service:** `uv run python main.py -t holdings -f examples/strategy.yaml` uses the same core code against a local OpenD.
 - **Schema changes:** `uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head` (fresh databases are created automatically at startup).
