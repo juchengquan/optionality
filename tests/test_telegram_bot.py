@@ -274,7 +274,7 @@ def test_snapshot_command_uses_fetcher(session_factory):
     assert "21.45678" not in api.sent[-1]
 
 
-def test_monitors_ordered_calls_then_puts_by_date(session_factory):
+def test_monitors_grouped_by_expiry_then_calls_before_puts(session_factory):
     bot, api = _make_bot(session_factory)
     far = (datetime.now(UTC).date() + timedelta(days=40)).isoformat()
     bot.handle_update(_update(f"/watch {_future()} PUT 6425 0.5"))
@@ -282,8 +282,9 @@ def test_monitors_ordered_calls_then_puts_by_date(session_factory):
     bot.handle_update(_update(f"/watch {_future()} CALL 6500 0.6"))
     bot.handle_update(_update("/monitors"))
     reply = api.sent[-1]
-    near_call, far_call, put = reply.index("C6500"), reply.index("C8100"), reply.index("P6425")
-    assert near_call < far_call < put
+    near_call, near_put, far_call = reply.index("C6500"), reply.index("P6425"), reply.index("C8100")
+    # expiry groups first, so a condor's legs stay together instead of splitting across CALL/PUT blocks
+    assert near_call < near_put < far_call
 
 
 def test_greeks_command_table(session_factory):

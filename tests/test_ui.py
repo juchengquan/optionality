@@ -241,3 +241,95 @@ def test_ui_rename_combo(client_factory):
     resp = client.post(f"/ui/monitors/{mid}/rename", data={"name": "web-combo-v2"}, headers=AUTH)
     assert resp.status_code == 200
     assert "web-combo-v2" in resp.text
+
+
+def _greeks_fetcher(codes, opend_host=None, opend_port=None):
+    return [
+        {
+            "code": c,
+            "option_delta": 0.33,
+            "option_gamma": 0.011,
+            "option_theta": -0.44,
+            "option_vega": 0.55,
+            "option_implied_volatility": 0.18,
+            "mid_price": 26.4,
+            "bid_price": 26.1,
+            "ask_price": 26.7,
+        }
+        for c in codes
+    ]
+
+
+UNKNOWN_ERR = "snapshot API failed: Unknown stock. SPXW260918C99999000"
+POISON = "US.SPXW260918C99999000"
+
+
+def _poison_fetcher(codes, opend_host=None, opend_port=None):
+    if POISON in codes:
+        raise RuntimeError(UNKNOWN_ERR)
+    return _greeks_fetcher(codes)
+
+
+def test_combo_row_shows_expiry_and_legs(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    expiry = _future()
+    combo = {
+        "name": "condor-a",
+        "strike_date": expiry,
+        "legs": [
+            {"sign": 1, "option_type": "CALL", "strike": 8100},
+            {"sign": -1, "option_type": "CALL", "strike": 8150},
+            {"sign": -1, "option_type": "PUT", "strike": 7900},
+            {"sign": 1, "option_type": "PUT", "strike": 7850},
+        ],
+        "threshold": 10,
+    }
+    client.post("/monitors", json=combo, headers=AUTH)
+    page = client.get("/ui", headers=AUTH).text
+    # the legs ARE the combo's identity; a name alone is meaningless three weeks later
+    assert "+C8100 -C8150 -P7900 +P7850" in page
+    assert expiry in page  # and which expiry it belongs to — only the name showed before
+
+
+def test_highlight_marks_the_monitored_field(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    payload = {
+        "strike_date": _future(),
+        "option_type": "CALL",
+        "strike": 8100,
+        "field": "option_theta",
+        "threshold": -0.5,
+        "compare": "signed",
+    }
+    client.post("/monitors", json=payload, headers=AUTH)
+    row = client.get("/ui/table", headers=AUTH).text
+    assert '<td class="hl">-0.44</td>' in row  # theta drives the alarm, so theta is highlighted
+    assert '<td class="hl">0.33</td>' not in row  # delta no longer highlighted unconditionally
+    assert '<td class="hl">26.4</td>' not in row  # nor mid
+
+
+def test_unknown_contract_is_visible_on_the_row(client_factory):
+    client = client_factory(snapshot_fetcher=_poison_fetcher)
+    sf = client.app.state.session_factory
+    with sf() as s:  # inserted directly: creation probes reject non-existent contracts
+        s.add(
+            Monitor(
+                code=POISON,
+                strike_date=_future(),
+                option_type="CALL",
+                strike=99999.0,
+                field="option_delta",
+                threshold=0.6,
+            )
+        )
+        s.commit()
+    row = client.get("/ui/table", headers=AUTH).text
+    # a vanished contract must not read as "OpenD is briefly slow"
+    assert "unknown contract" in row
+
+
+def test_dashboard_supports_dark_mode_and_aligned_numerals(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    page = client.get("/ui", headers=AUTH).text
+    assert "prefers-color-scheme: dark" in page  # the US session is overnight in DISPLAY_TZ
+    assert "tabular-nums" in page  # %.4g gives ragged decimals; columns must still scan

@@ -65,6 +65,12 @@ _FIELD_COLUMN = {
 }
 
 
+def _leg_summary(legs: list[dict]) -> str:
+    """+C8100 -C8150 -P7900 +P7850 — the signs are what the signed-sum engine keys off,
+    so seeing them is how a leg entered backwards gets caught."""
+    return " ".join(f"{'+' if leg['sign'] > 0 else '-'}{leg['option_type'][0]}{leg['strike']:g}" for leg in legs)
+
+
 def _fmt(value) -> str:
     if value is None:
         return "—"
@@ -87,6 +93,10 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
             "compare": q["compare"],
             "is_combo": "legs" in q,
             "name": q["code"],
+            "strike_date": q["strike_date"],
+            "error": q.get("error"),
+            "field_column": _FIELD_COLUMN.get(q["field"]),  # the column the alarm actually watches
+            "legs": _leg_summary(q["legs"]) if "legs" in q else "",
             "delta": _fmt(snap.get("option_delta")),
             "gamma": _fmt(snap.get("option_gamma")),
             "theta": _fmt(snap.get("option_theta")),

@@ -300,3 +300,29 @@ def test_rename_rejects_single_leg_and_collisions(client_factory):
     a = client.post("/monitors", json={**COMBO_PAYLOAD, "strike_date": _future()}, headers=AUTH).json()
     b = client.post("/monitors", json={**COMBO_PAYLOAD, "name": "other", "strike_date": _future()}, headers=AUTH).json()
     assert client.patch(f"/monitors/{b['id']}", json={"name": a["code"]}, headers=AUTH).status_code == 409
+
+
+def test_list_groups_by_expiry_with_combos_first(client_factory):
+    client = client_factory()
+    near = _future()
+    far = (datetime.now(UTC).date() + timedelta(days=45)).isoformat()
+    for payload in [
+        {"strike_date": far, "option_type": "CALL", "strike": 8100, "threshold": 0.6},
+        {"strike_date": near, "option_type": "PUT", "strike": 6425, "threshold": 0.5},
+        {"strike_date": near, "option_type": "CALL", "strike": 6500, "threshold": 0.6},
+        {
+            "name": "near-condor",
+            "strike_date": near,
+            "threshold": 10,
+            "legs": [
+                {"sign": 1, "option_type": "CALL", "strike": 6500},
+                {"sign": -1, "option_type": "CALL", "strike": 6600},
+            ],
+        },
+    ]:
+        client.post("/monitors", json=payload, headers=AUTH)
+
+    listed = client.get("/monitors", headers=AUTH).json()
+    assert [m["strike_date"] for m in listed] == [near, near, near, far]  # expiry groups
+    assert listed[0]["code"] == "near-condor"  # the combo leads its own expiry, not the CALL/PUT gap
+    assert [m["option_type"] for m in listed[1:3]] == ["CALL", "PUT"]

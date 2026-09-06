@@ -5,25 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>optionality</title>
 <style>
-body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem; color: #222; }
+/* light is the base; only the tokens change in dark. color-scheme lets native
+   controls (date picker, selects, scrollbars) follow along without restyling them. */
+:root {
+  color-scheme: light dark;
+  --bg: #fff; --fg: #222; --muted: #666; --line: #aaa;
+  --hl: #fff3cd; --trig: #f8d7da; --trig-hl: #f5c2c7;
+  --banner-bg: #f8d7da; --banner-line: #d9534f; --bad: #c00;
+  --badge-bg: #d9534f; --badge-fg: #fff;
+}
+/* the US session runs 21:30-04:00 in DISPLAY_TZ=Asia/Singapore — this screen is read at night */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --fg: #d7dae0; --muted: #8b929c; --line: #383d46;
+    --hl: #4a3f18; --trig: #4a2126; --trig-hl: #63272e;
+    --banner-bg: #4a2126; --banner-line: #b4515a; --bad: #ff8080;
+    --badge-bg: #b4515a; --badge-fg: #fff;
+  }
+}
+body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem;
+       color: var(--fg); background: var(--bg); }
 h2 { margin-bottom: 0.2rem; }
-.meta { color: #666; margin: 0 0 1rem; }
-.banner { background: #f8d7da; border: 1px solid #d9534f; padding: 0.5rem 1rem; margin-bottom: 1rem; }
+.meta { color: var(--muted); margin: 0 0 1rem; }
+.banner { background: var(--banner-bg); border: 1px solid var(--banner-line); padding: 0.5rem 1rem; margin-bottom: 1rem; }
 table { border-collapse: collapse; margin-bottom: 1.5rem; }
-th, td { border: 1px solid #aaa; padding: 4px 10px; text-align: right; white-space: nowrap; }
+/* tabular-nums: %.4g yields 0.5981 beside 0.06 beside 1.234; ragged digits defeat scanning a column */
+th, td { border: 1px solid var(--line); padding: 4px 10px; text-align: right; white-space: nowrap;
+         font-variant-numeric: tabular-nums; }
 th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
-td.hl { background: #fff3cd; font-weight: 600; }
-tr.triggered td { background: #f8d7da; }
-tr.triggered td.hl { background: #f5c2c7; }
+td.hl { background: var(--hl); font-weight: 600; }
+tr.triggered td { background: var(--trig); }
+tr.triggered td.hl { background: var(--trig-hl); }
 td.actions { text-align: left; }
 td.actions form { display: inline; }
+.legs { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
+.badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.7rem;
+         padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
 input[type=number] { width: 5.5rem; }
-fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0; padding: 0.8rem 1rem; }
+fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0; padding: 0.8rem 1rem;
+           border: 1px solid var(--line); }
 legend { font-weight: 600; }
 label { display: block; margin: 0.3rem 0; }
 button { cursor: pointer; }
-.health { color: #444; font-size: 0.9rem; margin-bottom: 1.2rem; }
-.health .bad { color: #c00; font-weight: 700; }
+.health { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.2rem; }
+.health .bad { color: var(--bad); font-weight: 700; }
 </style>
 <script src="{{ root_path }}/static/htmx.min.js"></script>
 </head>

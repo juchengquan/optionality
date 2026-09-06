@@ -474,7 +474,7 @@ def test_watchlist_quotes_merges_monitor_and_snapshot(session_factory):
     assert "fetched_at" in quotes[0]["snapshot"]  # call-time stamp: the honest "data as-of"
 
 
-def test_watchlist_quotes_ordered_by_type_then_date(session_factory):
+def test_watchlist_quotes_grouped_by_expiry_then_type(session_factory):
     near = (datetime.now(UTC).date() + timedelta(days=10)).isoformat()
     far = (datetime.now(UTC).date() + timedelta(days=40)).isoformat()
     _mk_monitor(session_factory, code="P-NEAR", option_type="PUT", strike_date=near)
@@ -482,7 +482,7 @@ def test_watchlist_quotes_ordered_by_type_then_date(session_factory):
     _mk_monitor(session_factory, code="C-NEAR", option_type="CALL", strike_date=near)
 
     quotes = watchlist_quotes(session_factory, SETTINGS, lambda codes, opend_host=None, opend_port=None: [])
-    assert [q["code"] for q in quotes] == ["C-NEAR", "C-FAR", "P-NEAR"]
+    assert [q["code"] for q in quotes] == ["C-NEAR", "P-NEAR", "C-FAR"]  # expiry groups, calls before puts
 
 
 def test_watchlist_quotes_converts_market_update_time(session_factory):
