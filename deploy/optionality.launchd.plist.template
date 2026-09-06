@@ -16,7 +16,7 @@
         <string>--host</string>
         <string>127.0.0.1</string>
         <string>--port</string>
-        <string>8000</string>
+        <string>31415</string>
     </array>
     <key>WorkingDirectory</key>
     <string>__REPO__</string>
