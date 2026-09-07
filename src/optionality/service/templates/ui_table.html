@@ -51,14 +51,14 @@
 <p>Watchlist is empty.</p>
 {% endif %}
 
-{% if muted %}
-<h3>Muted</h3>
+{% for group in muted_groups %}
+<h3>{{ group.label }}</h3>
 <table>
   <thead><tr><th>contract</th><th>field</th><th>thr</th><th>actions</th></tr></thead>
   <tbody>
-  {% for m in muted %}
+  {% for m in group.rows %}
     <tr>
-      <td>{{ m.code }}</td>
+      <td>{{ m.code }}{% if m.note %}<div class="legs">{{ m.note }}</div>{% endif %}</td>
       <td>{{ m.field }}</td>
       <td>{{ m.threshold }}</td>
       <td class="actions">
@@ -69,4 +69,4 @@
   {% endfor %}
   </tbody>
 </table>
-{% endif %}
+{% endfor %}

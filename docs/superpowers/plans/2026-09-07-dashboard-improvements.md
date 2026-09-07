@@ -97,10 +97,10 @@ Consequence accepted: the dashboard shows data up to one sweep interval old, and
 
 ## PR 4 — `disabled_reason`
 
-- [ ] 4.1 `Monitor.disabled_reason`: nullable `"manual" | "expired" | "unknown-contract"`. Alembic batch-mode
+- [x] 4.1 `Monitor.disabled_reason`: nullable `"manual" | "expired" | "unknown-contract"`. Alembic batch-mode
       revision; existing rows backfill NULL and render as "unknown". Squash before merge.
-- [ ] 4.2 Set it at all three disable sites: `_quarantine_unknown`, the expiry-mute path, and the UI/API toggle.
-- [ ] 4.3 Muted table groups by reason and shows expired rows their remaining days before
+- [x] 4.2 Set it at all three disable sites: `_quarantine_unknown`, the expiry-mute path, and the UI/API toggle.
+- [x] 4.3 Muted table groups by reason and shows expired rows their remaining days before
       `EXPIRED_RETENTION_DAYS` deletes them — the only auto-delete in the system, currently with no on-screen
       warning. Quarantine reason genuinely cannot be inferred from the DB; a quarantined row is identical to a
       hand-muted one, which is why this needs a column rather than a heuristic.

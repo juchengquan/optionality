@@ -71,6 +71,9 @@ class Monitor(Base):
     # combo monitors: [{"sign": 1|-1, "option_type": "CALL"|"PUT", "strike": float}, ...]; None = single-leg
     legs: Mapped[list | None] = mapped_column(JSON, default=None)
     enabled: Mapped[bool] = mapped_column(default=True)
+    # why enabled is False: "manual" | "expired" | "unknown-contract". NULL on rows that
+    # predate the column, and cleared whenever a monitor is re-enabled.
+    disabled_reason: Mapped[str | None] = mapped_column(String(20), default=None)
     triggered: Mapped[bool] = mapped_column(default=False)
     last_value: Mapped[float | None] = mapped_column(default=None)
     last_checked_at: Mapped[datetime | None] = mapped_column(default=None)

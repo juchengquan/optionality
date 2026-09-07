@@ -234,6 +234,7 @@ class MonitorSweeper:
                 elif expiry < today:
                     if monitor.enabled:
                         monitor.enabled = False
+                        monitor.disabled_reason = "expired"
                         logger.info("monitor %s (%s) expired; muted", monitor.id, monitor.code)
                         self._notify(
                             f"ℹ️ monitor {monitor.code} expired ({monitor.strike_date}) — muted; "
@@ -316,7 +317,9 @@ class MonitorSweeper:
                 if not hits:
                     surviving.append(monitor)
                     continue
-                session.get(Monitor, monitor.id).enabled = False
+                disabled = session.get(Monitor, monitor.id)
+                disabled.enabled = False
+                disabled.disabled_reason = "unknown-contract"
                 logger.warning("monitor %s (%s) disabled: unknown contract %s", monitor.id, monitor.code, hits)
                 self._notify(
                     f"⚠️ monitor {monitor.code} disabled: unknown contract {', '.join(hits)} (delisted or never existed)"

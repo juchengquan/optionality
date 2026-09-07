@@ -116,6 +116,7 @@ def _to_dict(row: Monitor, tz: str) -> dict:
         "compare": row.compare,
         "legs": row.legs,
         "enabled": row.enabled,
+        "disabled_reason": row.disabled_reason,
         "triggered": row.triggered,
         "last_value": row.last_value,
         "last_checked_at": display_time(row.last_checked_at, tz),
@@ -198,6 +199,7 @@ def create_monitor(
         direction=payload.direction,
         compare=payload.compare,
         enabled=payload.enabled,
+        disabled_reason=None if payload.enabled else "manual",
     )
     session.add(row)
     session.commit()
@@ -220,6 +222,7 @@ def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings,
         compare=payload.compare,
         legs=[leg.model_dump() for leg in payload.legs],
         enabled=payload.enabled,
+        disabled_reason=None if payload.enabled else "manual",
     )
     session.add(row)
     session.commit()
@@ -292,6 +295,8 @@ def patch_monitor(monitor_id: str, payload: MonitorPatch, session: SessionDep, s
             raise HTTPException(status_code=409, detail=f"monitor for ({row.code}, {new_field}) already exists")
     for key, value in changes.items():
         setattr(row, key, value)
+    if "enabled" in changes:
+        row.disabled_reason = None if row.enabled else "manual"
     session.commit()
     return _to_dict(row, settings.display_tz)
 

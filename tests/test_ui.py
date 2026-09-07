@@ -462,3 +462,60 @@ def test_add_form_resets_on_success_but_keeps_input_on_error(client_factory):
     bad = dict(good, strike_date="not-a-date")
     err = client.post("/ui/monitors", data=bad, headers=AUTH, follow_redirects=False)
     assert 'id="add-monitor"' not in err.text  # input left alone so it can be corrected
+
+
+def test_manual_mute_records_its_reason_and_unmuting_clears_it(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    mid = client.post("/monitors", json=payload, headers=AUTH).json()["id"]
+    sf = client.app.state.session_factory
+
+    client.post(f"/ui/monitors/{mid}/toggle", data={}, headers=AUTH)
+    with sf() as s:
+        assert s.get(Monitor, mid).disabled_reason == "manual"
+
+    client.post(f"/ui/monitors/{mid}/toggle", data={}, headers=AUTH)
+    with sf() as s:
+        row = s.get(Monitor, mid)
+        assert row.enabled is True
+        assert row.disabled_reason is None  # re-enabling must not leave a stale reason behind
+
+
+def test_muted_table_groups_by_reason_and_counts_down_to_deletion(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    sf = client.app.state.session_factory
+    expired_on = (datetime.now(UTC).date() - timedelta(days=2)).isoformat()
+    with sf() as s:
+        s.add(
+            Monitor(
+                id="a" * 32,
+                code="US.SPXW260101C1000000",
+                strike_date=expired_on,
+                option_type="CALL",
+                strike=1000.0,
+                field="option_delta",
+                threshold=0.6,
+                enabled=False,
+                disabled_reason="expired",
+            )
+        )
+        s.add(
+            Monitor(
+                id="b" * 32,
+                code="legacy-row",
+                strike_date=_future(),
+                option_type="CALL",
+                strike=2000.0,
+                field="option_delta",
+                threshold=0.6,
+                enabled=False,
+            )
+        )
+        s.commit()
+
+    page = client.get("/ui", headers=AUTH).text
+    assert "Expired" in page  # grouped by reason, not one undifferentiated list
+    assert "Reason not recorded" in page  # pre-migration rows say so rather than guessing
+    assert "Muted" not in page.replace("Muted by you", "")  # the old catch-all heading is gone
+    # EXPIRED_RETENTION_DAYS is 7 and it expired 2 days ago: deleted once 8 days have passed
+    assert "auto-deletes in 6 days" in page

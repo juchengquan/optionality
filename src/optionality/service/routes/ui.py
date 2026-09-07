@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -128,6 +129,43 @@ def _refresh_options(settings: Settings) -> list[int]:
     return sorted({floor} | {opt for opt in _REFRESH_PRESETS if opt >= floor})
 
 
+# most alarming first: a vanished contract needs attention, one you muted yourself does not
+_DISABLED_GROUPS = (
+    ("unknown-contract", "Unknown contract"),
+    ("expired", "Expired"),
+    ("manual", "Muted by you"),
+    (None, "Reason not recorded"),  # rows disabled before the column existed
+)
+
+
+def _retention_note(monitor: Monitor, settings: Settings) -> str:
+    """Days left before the sweep deletes this expired monitor.
+
+    The sweep deletes once expiry < today - EXPIRED_RETENTION_DAYS, so the last surviving
+    day is expiry + retention: remaining = retention + 1 - days_since_expiry.
+    """
+    days_gone = (datetime.now(UTC).date() - date.fromisoformat(monitor.strike_date)).days
+    remaining = settings.expired_retention_days + 1 - days_gone
+    if remaining <= 0:
+        return "auto-deletes on the next sweep"
+    return f"auto-deletes in {remaining} day{'s' if remaining != 1 else ''}"
+
+
+def _muted_groups(monitors, settings: Settings) -> list[dict]:
+    by_reason: dict[str | None, list[dict]] = {}
+    for m in monitors:
+        by_reason.setdefault(m.disabled_reason, []).append(
+            {
+                "id": m.id,
+                "code": m.code,
+                "field": m.field,
+                "threshold": m.threshold,
+                "note": _retention_note(m, settings) if m.disabled_reason == "expired" else "",
+            }
+        )
+    return [{"label": label, "rows": by_reason[reason]} for reason, label in _DISABLED_GROUPS if reason in by_reason]
+
+
 def _refresh_seconds(request: Request, settings: Settings) -> int:
     # viewer preference (cookie) beats the .env default; never faster than the sweep behind it
     floor = settings.monitor_interval_seconds
@@ -171,7 +209,7 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
     }
     return {
         "rows": _quote_rows(quotes),
-        "muted": muted,
+        "muted_groups": _muted_groups(muted, settings),
         "fetched": fetched,
         "health": health,
         "quotes_error": quotes_error,
@@ -359,6 +397,9 @@ def ui_toggle_monitor(
     if row is None:
         return _mutation_response(request, session, settings, sweeper, worker, error="monitor not found")
     row.enabled = not row.enabled
+    # a re-enabled monitor must not keep a stale reason; the sweep re-quarantines it if the
+    # contract is still unknown, which is what makes the unmute badge meaningful
+    row.disabled_reason = None if row.enabled else "manual"
     session.commit()
     return _mutation_response(request, session, settings, sweeper, worker)
 
