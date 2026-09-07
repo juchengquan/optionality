@@ -123,10 +123,12 @@ _REFRESH_PRESETS = (5, 10, 15, 30, 60, 120)
 
 
 def _refresh_options(settings: Settings) -> list[int]:
-    # the page renders the last sweep, so polling faster than MONITOR_INTERVAL_SECONDS
-    # would redraw identical data while implying it were fresh
-    floor = settings.monitor_interval_seconds
-    return sorted({floor} | {opt for opt in _REFRESH_PRESETS if opt >= floor})
+    # deliberately NOT clamped to MONITOR_INTERVAL_SECONDS: the sweep decides how fresh the
+    # data is, the poll decides how soon the page shows the newest sweep. A poll that just
+    # misses a sweep leaves stale-looking data up for nearly two intervals, so a faster poll
+    # cuts display latency even though it cannot make the data newer — and it is free, since
+    # the page reads the sweep's cache instead of calling OpenD.
+    return sorted({settings.ui_refresh_seconds} | set(_REFRESH_PRESETS))
 
 
 # most alarming first: a vanished contract needs attention, one you muted yourself does not
@@ -167,12 +169,11 @@ def _muted_groups(monitors, settings: Settings) -> list[dict]:
 
 
 def _refresh_seconds(request: Request, settings: Settings) -> int:
-    # viewer preference (cookie) beats the .env default; never faster than the sweep behind it
-    floor = settings.monitor_interval_seconds
+    # viewer preference (cookie) beats the .env default; clamped only to sane bounds
     try:
-        return max(floor, min(3600, int(request.cookies.get("ui_refresh"))))
+        return max(5, min(3600, int(request.cookies.get("ui_refresh"))))
     except (TypeError, ValueError):
-        return max(floor, settings.ui_refresh_seconds)
+        return settings.ui_refresh_seconds
 
 
 def _redirect(request: Request) -> RedirectResponse:
@@ -211,6 +212,7 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
         "rows": _quote_rows(quotes),
         "muted_groups": _muted_groups(muted, settings),
         "fetched": fetched,
+        "sweep_seconds": settings.monitor_interval_seconds,
         "health": health,
         "quotes_error": quotes_error,
         "root_path": request.scope.get("root_path", ""),
@@ -277,8 +279,7 @@ def ui_table_fragment(
 @router.post("/refresh")
 def ui_set_refresh(request: Request, settings: SettingsDep, refresh: Annotated[int, Form()]):
     response = _redirect(request)
-    clamped = max(settings.monitor_interval_seconds, min(3600, refresh))
-    response.set_cookie("ui_refresh", str(clamped), max_age=31536000, samesite="lax")
+    response.set_cookie("ui_refresh", str(max(5, min(3600, refresh))), max_age=31536000, samesite="lax")
     return response
 
 
