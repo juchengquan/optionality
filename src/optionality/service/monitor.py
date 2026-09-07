@@ -13,8 +13,10 @@ from optionality.service.timefmt import display_time, market_time_to_display
 
 logger = logging.getLogger("optionality.monitor")
 
-# display order everywhere the watchlist is listed: CALLs before PUTs, then by expiry, then strike
-WATCHLIST_ORDER = (Monitor.option_type, Monitor.strike_date, Monitor.strike)
+# display order everywhere the watchlist is listed (dashboard, bot /monitors, GET /monitors):
+# expiry groups first, combos ahead of the singles inside each (legs IS NULL sorts False->0 first),
+# so a condor's legs stay beside its combo row instead of splitting across the CALL and PUT blocks
+WATCHLIST_ORDER = (Monitor.strike_date, Monitor.legs.is_(None), Monitor.option_type, Monitor.strike)
 
 
 def monitor_leg_codes(monitor: Monitor) -> list[str]:
@@ -120,6 +122,7 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
         entry = {
             "id": m.id,
             "code": m.code,
+            "strike_date": m.strike_date,
             "field": m.field,
             "threshold": m.threshold,
             "direction": m.direction,

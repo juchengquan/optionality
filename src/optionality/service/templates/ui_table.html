@@ -1,0 +1,72 @@
+<p class="meta">fetched at {{ fetched }}</p>
+{% if quotes_error %}<div class="banner">Live quotes unavailable: {{ quotes_error }}</div>{% endif %}
+
+<div class="health">
+  OpenD: <span class="{{ '' if health.opend else 'bad' }}">{{ 'up' if health.opend else 'DOWN' }}</span>
+  · alarms: <span class="{{ 'bad' if health.alarms_bad else '' }}">{{ health.alarms }}</span>
+  · queue: {{ health.queue }}
+</div>
+
+{% if rows %}
+<table>
+  <thead><tr>
+    <th>contract</th><th>alarm</th><th>mode</th><th>delta</th><th>gamma</th><th>theta</th><th>vega</th>
+    <th>IV</th><th>mid</th><th>bid</th><th>ask</th><th>actions</th><th>last trade</th>
+  </tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr{% if row.triggered %} class="triggered"{% endif %}>
+      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}
+        {#- a combo's legs ARE its identity: the name alone says nothing about expiry or signs -#}
+        {% if row.legs %}<div class="legs">{{ row.strike_date }} · {{ row.legs }}</div>{% endif -%}
+      </td>
+      <td>{{ row.alarm }}</td>
+      <td>{{ row.compare }}</td>
+      {#- hl marks the column the alarm actually watches, not a hardcoded delta/mid pair -#}
+      {% for col in ["delta", "gamma", "theta", "vega", "iv", "mid"] %}
+      <td{% if row.field_column == col %} class="hl"{% endif %}>{{ row[col] }}</td>
+      {%- endfor %}
+      <td>{{ row.bid }}</td>
+      <td>{{ row.ask }}</td>
+      <td class="actions">
+        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
+          <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required>
+          <button>set</button>
+        </form>
+        {% if row.is_combo %}
+        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/rename">
+          <input type="text" name="name" value="{{ row.name }}" size="14" required>
+          <button>rename</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
+        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
+      </td>
+      <td>{{ row.last_trade }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Watchlist is empty.</p>
+{% endif %}
+
+{% if muted %}
+<h3>Muted</h3>
+<table>
+  <thead><tr><th>contract</th><th>field</th><th>thr</th><th>actions</th></tr></thead>
+  <tbody>
+  {% for m in muted %}
+    <tr>
+      <td>{{ m.code }}</td>
+      <td>{{ m.field }}</td>
+      <td>{{ m.threshold }}</td>
+      <td class="actions">
+        <form method="post" action="{{ root_path }}/ui/monitors/{{ m.id }}/toggle"><button>unmute</button></form>
+        <form method="post" action="{{ root_path }}/ui/monitors/{{ m.id }}/delete"><button>delete</button></form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
