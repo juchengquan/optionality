@@ -94,29 +94,37 @@ def verify_contracts(codes: list[str], settings: Settings, fetcher=fetch_snapsho
     return None
 
 
-def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot, include_combos=False) -> list[dict]:
-    """Live snapshot for every enabled monitor — one API call for the whole watchlist.
-
-    Combo entries (include_combos=True) carry their signed-sum under "combo_value" and no
-    per-contract snapshot; summing other fields under the combo's signs would fabricate
-    plausible-but-wrong aggregates.
-    """
+def enabled_monitors(session_factory, include_combos: bool = False) -> list[Monitor]:
     query = select(Monitor).where(Monitor.enabled).order_by(*WATCHLIST_ORDER)
     if not include_combos:
         query = query.where(Monitor.legs.is_(None))
     with session_factory() as session:
-        monitors = session.scalars(query).all()
-    if not monitors:
-        return []
-    codes = sorted({code for m in monitors for code in monitor_leg_codes(m)})
-    records, bad_codes = fetch_resilient(codes, settings, fetcher)
-    bad_set = set(bad_codes)
-    fetched_at = display_time(utcnow(), settings.display_tz)
-    for record in records:
+        return list(session.scalars(query).all())
+
+
+def _display_records(records: list[dict], settings: Settings, fetched_at: datetime) -> dict:
+    """Index records by code, with display-tz timestamps stamped on.
+
+    Copies rather than mutates: the sweeper's cached records get rendered on every
+    dashboard poll, and market_time_to_display is not idempotent.
+    """
+    stamped = display_time(fetched_at, settings.display_tz)
+    by_code = {}
+    for raw in records:
+        record = dict(raw)
         if record.get("update_time"):
             record["update_time"] = market_time_to_display(record["update_time"], settings.display_tz)
-        record["fetched_at"] = fetched_at  # the honest "data as-of"; update_time is only the last trade
-    by_code = {r.get("code"): r for r in records}
+        record["fetched_at"] = stamped  # the honest "data as-of"; update_time is only the last trade
+        by_code[record.get("code")] = record
+    return by_code
+
+
+def build_entries(monitors: list[Monitor], by_code: dict, bad_set: set[str]) -> list[dict]:
+    """Watchlist entries for a set of monitors against an already-fetched batch of records.
+
+    Combo entries carry their signed-sum under "combo_value" and no per-contract snapshot;
+    summing other fields under the combo's signs would fabricate plausible-but-wrong aggregates.
+    """
     entries = []
     for m in monitors:
         entry = {
@@ -141,6 +149,20 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
     return entries
 
 
+def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot, include_combos=False) -> list[dict]:
+    """Live snapshot for every enabled monitor — one API call for the whole watchlist.
+
+    Used by the bot's /quotes family, which is a documented live-call exception. The
+    dashboard does NOT come through here; it renders MonitorSweeper.cached_quotes().
+    """
+    monitors = enabled_monitors(session_factory, include_combos)
+    if not monitors:
+        return []
+    codes = sorted({code for m in monitors for code in monitor_leg_codes(m)})
+    records, bad_codes = fetch_resilient(codes, settings, fetcher)
+    return build_entries(monitors, _display_records(records, settings, utcnow()), set(bad_codes))
+
+
 class MonitorSweeper:
     def __init__(self, session_factory, settings: Settings, fetcher=fetch_snapshot, sender=send_telegram_message):
         self.session_factory = session_factory
@@ -150,6 +172,11 @@ class MonitorSweeper:
         self.consecutive_failures = 0
         self.last_sweep_at: datetime | None = None
         self.last_sweep_ok: bool | None = None
+        # the last successful batch, kept so the dashboard can render the same instant the
+        # alarm engine evaluated instead of fetching a second, slightly different one
+        self.last_records: list[dict] = []
+        self.last_bad_codes: list[str] = []
+        self.last_fetch_at: datetime | None = None
 
     def alarm_state(self) -> tuple[str, bool]:
         """Human label for the alarm engine's health: (label, is_bad)."""
@@ -159,6 +186,23 @@ class MonitorSweeper:
             return "active", False
         n = self.consecutive_failures
         return f"STALLED ({n} failed sweep{'s' if n != 1 else ''})", True
+
+    def cached_quotes(self, include_combos: bool = True) -> tuple[list[dict], str | None]:
+        """Watchlist entries built from the LAST SWEEP's records — no OpenD call.
+
+        The dashboard renders these so a row's value and its 🔔 come from one instant:
+        `triggered` is written by the sweep, and showing a fresher quote beside it makes
+        the alarm engine look wrong when it is not. A monitor created since the last
+        sweep has no record yet and renders as "—" until the next one.
+
+        Returns (entries, fetched_display); fetched_display is None before the first sweep.
+        """
+        monitors = enabled_monitors(self.session_factory, include_combos)
+        if self.last_fetch_at is None:
+            return build_entries(monitors, {}, set()), None
+        by_code = _display_records(self.last_records, self.settings, self.last_fetch_at)
+        fetched = display_time(self.last_fetch_at, self.settings.display_tz)
+        return build_entries(monitors, by_code, set(self.last_bad_codes)), fetched
 
     def _notify(self, text: str) -> None:
         if not (self.settings.telegram_bot_token and self.settings.telegram_chat_id):
@@ -211,6 +255,7 @@ class MonitorSweeper:
             self._record_failure()
             return
         self._record_success()
+        self.last_records, self.last_bad_codes, self.last_fetch_at = records, bad_codes, utcnow()
 
         if bad_codes:
             active = self._quarantine_unknown(active, set(bad_codes))

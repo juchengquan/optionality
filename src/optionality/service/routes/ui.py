@@ -9,9 +9,9 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper, get_worker
-from optionality.service.models import Monitor, utcnow
-from optionality.service.monitor import WATCHLIST_ORDER, watchlist_quotes
+from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
+from optionality.service.models import Monitor
+from optionality.service.monitor import WATCHLIST_ORDER
 from optionality.service.routes.health import _opend_reachable
 from optionality.service.routes.monitors import (
     ComboMonitorIn,
@@ -23,7 +23,6 @@ from optionality.service.routes.monitors import (
     patch_monitor,
 )
 from optionality.service.settings import Settings
-from optionality.service.timefmt import display_time
 
 router = APIRouter(prefix="/ui", tags=["ui"], include_in_schema=False)
 static_router = APIRouter(include_in_schema=False)
@@ -118,12 +117,23 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
     return rows
 
 
+_REFRESH_PRESETS = (5, 10, 15, 30, 60, 120)
+
+
+def _refresh_options(settings: Settings) -> list[int]:
+    # the page renders the last sweep, so polling faster than MONITOR_INTERVAL_SECONDS
+    # would redraw identical data while implying it were fresh
+    floor = settings.monitor_interval_seconds
+    return sorted({floor} | {opt for opt in _REFRESH_PRESETS if opt >= floor})
+
+
 def _refresh_seconds(request: Request, settings: Settings) -> int:
-    # viewer preference (cookie) beats the .env default; clamped to sane bounds
+    # viewer preference (cookie) beats the .env default; never faster than the sweep behind it
+    floor = settings.monitor_interval_seconds
     try:
-        return max(5, min(3600, int(request.cookies.get("ui_refresh"))))
+        return max(floor, min(3600, int(request.cookies.get("ui_refresh"))))
     except (TypeError, ValueError):
-        return settings.ui_refresh_seconds
+        return max(floor, settings.ui_refresh_seconds)
 
 
 def _redirect(request: Request, error: str | None = None) -> RedirectResponse:
@@ -143,16 +153,14 @@ def _error_text(err: Exception) -> str:
     return str(err)
 
 
-def _live_context(request: Request, session, settings, session_factory, sweeper, worker) -> dict:
-    quotes, quotes_error = [], None
+def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
+    quotes, fetched, quotes_error = [], None, None
     try:
-        quotes = watchlist_quotes(session_factory, settings, sweeper.fetcher, include_combos=True)
-    except Exception as err:  # noqa: BLE001 - dashboard must render even with OpenD down
+        # the sweep's records, not a fetch of our own: the value and the 🔔 beside it
+        # must come from the same instant. fetched is None until the first sweep lands.
+        quotes, fetched = sweeper.cached_quotes(include_combos=True)
+    except Exception as err:  # noqa: BLE001 - dashboard must render even when the sweep is broken
         quotes_error = str(err)
-    fetched = next(
-        (q["snapshot"]["fetched_at"] for q in quotes if q.get("snapshot")),
-        display_time(utcnow(), settings.display_tz),
-    )
     muted = session.scalars(select(Monitor).where(~Monitor.enabled).order_by(*WATCHLIST_ORDER)).all()
     alarms_label, alarms_bad = sweeper.alarm_state()
     health = {
@@ -176,13 +184,19 @@ def ui_dashboard(
     request: Request,
     session: SessionDep,
     settings: SettingsDep,
-    session_factory: Annotated[object, Depends(get_session_factory)],
     sweeper: Annotated[object, Depends(get_sweeper)],
     worker: Annotated[object, Depends(get_worker)],
     error: str | None = None,
 ):
-    context = _live_context(request, session, settings, session_factory, sweeper, worker)
-    context.update({"fields": UI_FIELDS, "error": error, "refresh_seconds": _refresh_seconds(request, settings)})
+    context = _live_context(request, session, settings, sweeper, worker)
+    context.update(
+        {
+            "fields": UI_FIELDS,
+            "error": error,
+            "refresh_seconds": _refresh_seconds(request, settings),
+            "refresh_options": _refresh_options(settings),
+        }
+    )
     response = templates.TemplateResponse(request, "ui.html", context)
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -193,20 +207,20 @@ def ui_table_fragment(
     request: Request,
     session: SessionDep,
     settings: SettingsDep,
-    session_factory: Annotated[object, Depends(get_session_factory)],
     sweeper: Annotated[object, Depends(get_sweeper)],
     worker: Annotated[object, Depends(get_worker)],
 ):
-    context = _live_context(request, session, settings, session_factory, sweeper, worker)
+    context = _live_context(request, session, settings, sweeper, worker)
     response = templates.TemplateResponse(request, "ui_table.html", context)
     response.headers["Cache-Control"] = "no-store"
     return response
 
 
 @router.post("/refresh")
-def ui_set_refresh(request: Request, refresh: Annotated[int, Form()]):
+def ui_set_refresh(request: Request, settings: SettingsDep, refresh: Annotated[int, Form()]):
     response = _redirect(request)
-    response.set_cookie("ui_refresh", str(max(5, min(3600, refresh))), max_age=31536000, samesite="lax")
+    clamped = max(settings.monitor_interval_seconds, min(3600, refresh))
+    response.set_cookie("ui_refresh", str(clamped), max_age=31536000, samesite="lax")
     return response
 
 

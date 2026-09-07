@@ -59,7 +59,7 @@ button { cursor: pointer; }
 <form method="post" action="{{ root_path }}/ui/refresh" class="health">
   refresh every
   <select name="refresh">
-    {% for opt in [5, 10, 15, 30, 60, 120] %}
+    {% for opt in refresh_options %}
     <option value="{{ opt }}"{% if opt == refresh_seconds %} selected{% endif %}>{{ opt }}s</option>
     {% endfor %}
   </select>
