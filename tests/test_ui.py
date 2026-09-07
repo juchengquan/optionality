@@ -394,15 +394,30 @@ def test_dashboard_before_the_first_sweep_says_so(client_factory):
     assert "C8100000" in page  # rows still render, so mute/delete/threshold stay usable
 
 
-def test_refresh_options_never_promise_more_than_the_sweep(client_factory):
+def test_poll_may_run_faster_than_the_sweep(client_factory):
+    """The two intervals answer different questions and must not be coupled.
+
+    The sweep sets how fresh the data is; the poll sets how soon the page shows the
+    latest sweep. A 15s poll against a 15s sweep can leave a just-missed sweep on screen
+    for nearly 30s, so polling faster genuinely cuts display latency — and costs nothing,
+    because the page reads the sweep's cache rather than calling OpenD.
+    """
     client = client_factory(snapshot_fetcher=_greeks_fetcher, monitor_interval_seconds=30, ui_refresh_seconds=30)
     page = client.get("/ui", headers=AUTH).text
-    for too_fast in (5, 10, 15):
-        assert f'value="{too_fast}"' not in page  # a 30s sweep cannot feed a 5s refresh
-    assert 'value="30"' in page and 'value="60"' in page
+    for fast in (5, 10, 15):
+        assert f'value="{fast}"' in page  # offered even though the sweep is slower
 
     client.post("/ui/refresh", data={"refresh": "5"}, headers=AUTH)
-    assert 'hx-trigger="every 30s' in client.get("/ui", headers=AUTH).text  # floor is the sweep interval
+    assert 'hx-trigger="every 5s' in client.get("/ui", headers=AUTH).text
+
+
+def test_page_states_the_sweep_interval_so_a_static_timestamp_reads_as_normal(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher, monitor_interval_seconds=30)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    # polling at 5s against a 30s sweep means "fetched at" holds still for six polls;
+    # naming the sweep cadence is what stops that looking like a stuck dashboard
+    assert "sweep every 30s" in page
 
 
 def test_row_action_swaps_the_table_instead_of_reloading(client_factory):

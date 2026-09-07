@@ -31,7 +31,8 @@ Deployed as a macOS launchd agent on the owner's always-on machine, behind `tail
   bounded OpenD calls outside that queue — documented exceptions, not violations.
 - The whole watchlist is ONE `get_market_snapshot` call per sweep (combo legs join the batch, deduped).
   The dashboard makes NO call of its own: it renders the sweep's cached records, so a row's value and its
-  🔔 always come from the same instant. `MONITOR_INTERVAL_SECONDS` is therefore the refresh floor for `/ui`.
+  🔔 always come from the same instant. The dashboard poll is INDEPENDENT of the sweep: the sweep sets how
+  fresh the data is, the poll sets how soon the newest sweep reaches the screen. Polling faster is free.
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
 - Alarms: the 🔔 flips truthfully at the EXACT threshold — no value hysteresis. `ALARM_COOLDOWN_SECONDS`
   throttles state-change messages; `ALARM_REPEAT_SECONDS` re-reminds persisting breaches. `compare: abs|signed`

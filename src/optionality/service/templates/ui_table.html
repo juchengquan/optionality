@@ -1,4 +1,4 @@
-<p class="meta">{% if fetched %}fetched at {{ fetched }}{% else %}waiting for first sweep{% endif %}</p>
+<p class="meta">{% if fetched %}fetched at {{ fetched }}{% else %}waiting for first sweep{% endif %} · sweep every {{ sweep_seconds }}s</p>
 {% if quotes_error %}<div class="banner">Live quotes unavailable: {{ quotes_error }}</div>{% endif %}
 
 <div class="health">
