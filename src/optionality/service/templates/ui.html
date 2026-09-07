@@ -49,12 +49,19 @@ label { display: block; margin: 0.3rem 0; }
 button { cursor: pointer; }
 .health { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.2rem; }
 .health .bad { color: var(--bad); font-weight: 700; }
+/* only occupies space when it has something to say */
+#ui-error:empty { display: none; }
+#ui-error { position: fixed; top: 0; left: 0; right: 0; z-index: 10; }
+#ui-error .banner { margin: 0; }
 </style>
 <script src="{{ root_path }}/static/htmx.min.js"></script>
 </head>
 <body>
 <h2>optionality watchlist</h2>
-{% if error %}<div class="banner">{{ error }}</div>{% endif %}
+
+{#- fixed, and OUTSIDE #live: an add-combo failure happens at the very bottom of a long
+    page, and a banner rendered up here would never be seen. Empty until something fails. -#}
+<div id="ui-error"></div>
 
 <form method="post" action="{{ root_path }}/ui/refresh" class="health">
   refresh every
@@ -68,61 +75,20 @@ button { cursor: pointer; }
 </form>
 
 {# the live region re-fetches itself; the poll skips a beat while focus is inside it,
-   so mid-typing in a row's threshold box is never wiped either #}
+   so mid-typing in a row's threshold box is never wiped either.
+   hx-target/hx-swap here are inherited by every row-action form below, so the four
+   forms per row don't each repeat them. #}
 <div id="live"
      hx-get="{{ root_path }}/ui/table"
      hx-trigger="every {{ refresh_seconds }}s [!document.activeElement.closest('#live')]"
+     hx-target="#live"
      hx-swap="innerHTML">
 {% include "ui_table.html" %}
 </div>
 
-<fieldset>
-<legend>Add monitor</legend>
-<form method="post" action="{{ root_path }}/ui/monitors">
-  <label>expiry <input type="date" name="strike_date" required></label>
-  <label>type
-    <select name="option_type"><option>CALL</option><option>PUT</option></select>
-  </label>
-  <label>strike <input type="number" name="strike" step="any" required></label>
-  <label>field
-    <select name="field">{% for f in fields %}<option value="{{ f }}">{{ f }}</option>{% endfor %}</select>
-  </label>
-  <label>threshold <input type="number" name="threshold" step="any" required></label>
-  <label>direction
-    <select name="direction"><option>above</option><option>below</option></select>
-  </label>
-  <label>compare
-    <select name="compare"><option value="abs">abs</option><option value="signed">signed</option></select>
-  </label>
-  <button>watch</button>
-</form>
-</fieldset>
+{% include "_add_monitor.html" %}
 
-<fieldset>
-<legend>Add combo</legend>
-<form method="post" action="{{ root_path }}/ui/combos">
-  <label>name <input type="text" name="name" required></label>
-  <label>expiry <input type="date" name="strike_date" required></label>
-  {% for i in range(1, 7) %}
-  <label>leg {{ i }}
-    <select name="sign_{{ i }}"><option>+</option><option>-</option></select>
-    <select name="option_type_{{ i }}"><option>CALL</option><option>PUT</option></select>
-    <input type="number" name="strike_{{ i }}" step="any" placeholder="strike (blank = skip)">
-  </label>
-  {% endfor %}
-  <label>field
-    <select name="field"><option value="mid_price">mid_price</option>{% for f in fields %}{% if f != "mid_price" %}<option value="{{ f }}">{{ f }}</option>{% endif %}{% endfor %}</select>
-  </label>
-  <label>threshold <input type="number" name="threshold" step="any" required></label>
-  <label>direction
-    <select name="direction"><option>above</option><option>below</option></select>
-  </label>
-  <label>compare
-    <select name="compare"><option value="abs">abs</option><option value="signed">signed</option></select>
-  </label>
-  <button>watch combo</button>
-</form>
-</fieldset>
+{% include "_add_combo.html" %}
 
 </body>
 </html>

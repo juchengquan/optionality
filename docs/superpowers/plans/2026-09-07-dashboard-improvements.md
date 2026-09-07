@@ -88,11 +88,11 @@ Consequence accepted: the dashboard shows data up to one sweep interval old, and
 
 ## PR 3 — htmx mutations
 
-- [ ] 3.1 The six mutation endpoints return the `ui_table.html` fragment instead of 303. `_redirect` and the
+- [x] 3.1 The six mutation endpoints return the `ui_table.html` fragment instead of 303. `_redirect` and the
       `?error=` query param retire.
-- [ ] 3.2 A `position: sticky` error region, swapped out-of-band. The add-combo form sits at the bottom of the
+- [x] 3.2 A `position: sticky` error region, swapped out-of-band. The add-combo form sits at the bottom of the
       page; a banner rendered at the top is a banner you never see.
-- [ ] 3.3 Forms get `hx-post`; add-forms reset on success only. Scroll position survives, so muting a row at
+- [x] 3.3 Forms get `hx-post`; add-forms reset on success only. Scroll position survives, so muting a row at
       the bottom of a long watchlist no longer flings you to the top.
 
 ## PR 4 — `disabled_reason`
