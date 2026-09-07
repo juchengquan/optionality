@@ -76,13 +76,13 @@ No schema, no invariant change. Everything here is visible immediately.
 **Edits a ratified invariant.** CLAUDE.md currently reads "The whole watchlist is ONE `get_market_snapshot`
 call per sweep/page"; the `/page` half goes away. The CLAUDE.md edit ships in this PR.
 
-- [ ] 2.1 `MonitorSweeper` caches its last records plus `fetched_at`. The sweep already fetches every enabled
+- [x] 2.1 `MonitorSweeper` caches its last records plus `fetched_at`. The sweep already fetches every enabled
       monitor's codes with combo legs joined and deduped — precisely the set the dashboard needs.
-- [ ] 2.2 `_live_context` renders from that cache instead of issuing its own call. The bell and the number
+- [x] 2.2 `_live_context` renders from that cache instead of issuing its own call. The bell and the number
       beside it then come from one instant, and "fetched at" becomes literally true.
-- [ ] 2.3 Clamp the refresh selector to `monitor_interval_seconds`. With a 15s sweep the 5s and 10s options
+- [x] 2.3 Clamp the refresh selector to `monitor_interval_seconds`. With a 15s sweep the 5s and 10s options
       cannot deliver what they promise, and silently lying about freshness is the fault this PR exists to fix.
-- [ ] 2.4 Update the invariant in CLAUDE.md.
+- [x] 2.4 Update the invariant in CLAUDE.md.
 
 Consequence accepted: the dashboard shows data up to one sweep interval old, and stops calling OpenD at all.
 

@@ -60,6 +60,7 @@ def test_table_fragment_is_forms_free(client_factory):
     client = client_factory(snapshot_fetcher=_fetcher)
     payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
     client.post("/monitors", json=payload, headers=AUTH)
+    client.app.state.sweeper.sweep()
     resp = client.get("/ui/table", headers=AUTH)
     assert resp.status_code == 200
     assert "8100.00C" in resp.text or "C8100000" in resp.text
@@ -302,18 +303,20 @@ def test_highlight_marks_the_monitored_field(client_factory):
         "compare": "signed",
     }
     client.post("/monitors", json=payload, headers=AUTH)
+    client.app.state.sweeper.sweep()
     row = client.get("/ui/table", headers=AUTH).text
     assert '<td class="hl">-0.44</td>' in row  # theta drives the alarm, so theta is highlighted
     assert '<td class="hl">0.33</td>' not in row  # delta no longer highlighted unconditionally
     assert '<td class="hl">26.4</td>' not in row  # nor mid
 
 
-def test_unknown_contract_is_visible_on_the_row(client_factory):
+def test_unmuted_dead_contract_is_flagged_on_the_row(client_factory):
     client = client_factory(snapshot_fetcher=_poison_fetcher)
     sf = client.app.state.session_factory
     with sf() as s:  # inserted directly: creation probes reject non-existent contracts
         s.add(
             Monitor(
+                id="deadbeef" * 4,
                 code=POISON,
                 strike_date=_future(),
                 option_type="CALL",
@@ -323,8 +326,15 @@ def test_unknown_contract_is_visible_on_the_row(client_factory):
             )
         )
         s.commit()
+
+    client.app.state.sweeper.sweep()  # quarantines it: disabled, never deleted
+    with sf() as s:
+        assert s.get(Monitor, "deadbeef" * 4).enabled is False
+
+    client.post("/ui/monitors/%s/toggle" % ("deadbeef" * 4), data={}, headers=AUTH)  # user unmutes it
     row = client.get("/ui/table", headers=AUTH).text
-    # a vanished contract must not read as "OpenD is briefly slow"
+    # back on the watchlist, but the contract still does not exist — say so rather than
+    # rendering a row of em-dashes that reads as "OpenD is briefly slow"
     assert "unknown contract" in row
 
 
@@ -333,3 +343,63 @@ def test_dashboard_supports_dark_mode_and_aligned_numerals(client_factory):
     page = client.get("/ui", headers=AUTH).text
     assert "prefers-color-scheme: dark" in page  # the US session is overnight in DISPLAY_TZ
     assert "tabular-nums" in page  # %.4g gives ragged decimals; columns must still scan
+
+
+def test_dashboard_makes_no_opend_call_of_its_own(client_factory):
+    calls = []
+
+    def counting(codes, opend_host=None, opend_port=None):
+        calls.append(tuple(codes))
+        return [{"code": c, "option_delta": 0.42, "mid_price": 12.0} for c in codes]
+
+    client = client_factory(snapshot_fetcher=counting)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    client.post("/monitors", json=payload, headers=AUTH)
+    client.app.state.sweeper.sweep()
+    before = len(calls)
+
+    page = client.get("/ui", headers=AUTH).text
+    client.get("/ui/table", headers=AUTH)
+
+    assert len(calls) == before  # the page renders from the sweep's records, not its own fetch
+    assert "0.42" in page  # and still shows real values
+
+
+def test_row_value_and_bell_come_from_the_same_instant(client_factory):
+    live = {"delta": 0.61}
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_delta": live["delta"], "mid_price": 12.0} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    client.post("/monitors", json=payload, headers=AUTH)
+    client.app.state.sweeper.sweep()  # 0.61 breaches 0.6 -> triggered
+
+    live["delta"] = 0.59  # the market moves, but no sweep has run since
+    page = client.get("/ui", headers=AUTH).text
+
+    assert ">0.61<" in page  # the value the alarm engine actually used
+    assert ">0.59<" not in page  # not a fresher number the bell never saw
+    assert "🔔" in page
+
+
+def test_dashboard_before_the_first_sweep_says_so(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    client.post("/monitors", json=payload, headers=AUTH)
+
+    page = client.get("/ui", headers=AUTH).text
+    assert "waiting for first sweep" in page  # honest: no data yet rather than a fake timestamp
+    assert "C8100000" in page  # rows still render, so mute/delete/threshold stay usable
+
+
+def test_refresh_options_never_promise_more_than_the_sweep(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher, monitor_interval_seconds=30, ui_refresh_seconds=30)
+    page = client.get("/ui", headers=AUTH).text
+    for too_fast in (5, 10, 15):
+        assert f'value="{too_fast}"' not in page  # a 30s sweep cannot feed a 5s refresh
+    assert 'value="30"' in page and 'value="60"' in page
+
+    client.post("/ui/refresh", data={"refresh": "5"}, headers=AUTH)
+    assert 'hx-trigger="every 30s' in client.get("/ui", headers=AUTH).text  # floor is the sweep interval

@@ -87,7 +87,13 @@ def client_factory(tmp_path):
     clients = []
 
     def make(
-        token="tok", runner=_stub_runner, opend_port=1, root_path="", snapshot_fetcher=None, ui_refresh_seconds=30
+        token="tok",
+        runner=_stub_runner,
+        opend_port=1,
+        root_path="",
+        snapshot_fetcher=None,
+        ui_refresh_seconds=30,
+        monitor_interval_seconds=5,  # the dashboard refresh floor; low so tests can pick any interval
     ):
         snapshot_fetcher = snapshot_fetcher or _echo_fetcher  # never let tests touch the real moomoo SDK
         settings = Settings(
@@ -97,6 +103,7 @@ def client_factory(tmp_path):
             root_path=root_path,
             display_tz="Asia/Singapore",
             ui_refresh_seconds=ui_refresh_seconds,
+            monitor_interval_seconds=monitor_interval_seconds,
         )
         client = TestClient(create_app(settings=settings, runner=runner, snapshot_fetcher=snapshot_fetcher))
         client.__enter__()  # run lifespan (starts worker + scheduler)
