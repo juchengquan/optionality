@@ -112,9 +112,9 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
             for greek_field, greek_value in q["combo_greeks"].items():
                 if greek_value is not None:
                     row[_FIELD_COLUMN[greek_field]] = _fmt(greek_value)
-            column = _FIELD_COLUMN.get(q["field"])
-            if column and q["combo_value"] is not None:
-                row[column] = _fmt(q["combo_value"])
+            # one column for the monitored field, whatever it is: bid/ask/last-trade never
+            # apply to a combo, and the alarm column already names the field
+            row["value"] = _fmt(q["combo_value"])
         rows.append(row)
     return rows
 
@@ -208,8 +208,10 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
         "alarms_bad": alarms_bad,
         "queue": worker.queue_depth(),
     }
+    rows = _quote_rows(quotes)
     return {
-        "rows": _quote_rows(quotes),
+        "single_rows": [r for r in rows if not r["is_combo"]],
+        "combo_rows": [r for r in rows if r["is_combo"]],
         "muted_groups": _muted_groups(muted, settings),
         "fetched": fetched,
         "sweep_seconds": settings.monitor_interval_seconds,
