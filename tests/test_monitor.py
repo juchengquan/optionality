@@ -607,3 +607,28 @@ def test_alarm_state_labels(session_factory):
     assert sweeper.alarm_state() == ("STALLED (1 failed sweep)", True)
     sweeper.consecutive_failures = 3
     assert sweeper.alarm_state() == ("STALLED (3 failed sweeps)", True)
+
+
+def test_quarantine_records_why_it_disabled_the_monitor(session_factory):
+    poison_id = _mk_monitor(session_factory, code=POISON, strike=99999.0)
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=_poisonable_fetcher(), sender=Recorder())
+
+    sweeper.sweep()
+
+    with session_factory() as s:
+        row = s.get(Monitor, poison_id)
+        assert row.enabled is False
+        # a vanished contract and a monitor you muted on purpose are otherwise identical rows
+        assert row.disabled_reason == "unknown-contract"
+
+
+def test_expiry_mute_records_why_it_disabled_the_monitor(session_factory):
+    expired_id = _mk_monitor(session_factory, strike_date=_past())
+    sweeper = MonitorSweeper(session_factory, SETTINGS, fetcher=_poisonable_fetcher(), sender=Recorder())
+
+    sweeper.sweep()
+
+    with session_factory() as s:
+        row = s.get(Monitor, expired_id)
+        assert row.enabled is False
+        assert row.disabled_reason == "expired"  # counts down to the one auto-delete in the system
