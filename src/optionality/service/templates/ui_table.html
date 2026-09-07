@@ -7,19 +7,17 @@
   · queue: {{ health.queue }}
 </div>
 
-{% if rows %}
+{% if single_rows %}
+<h3>Single-leg</h3>
 <table>
   <thead><tr>
     <th>contract</th><th>alarm</th><th>mode</th><th>delta</th><th>gamma</th><th>theta</th><th>vega</th>
     <th>IV</th><th>mid</th><th>bid</th><th>ask</th><th>actions</th><th>last trade</th>
   </tr></thead>
   <tbody>
-  {% for row in rows %}
+  {% for row in single_rows %}
     <tr{% if row.triggered %} class="triggered"{% endif %}>
-      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}
-        {#- a combo's legs ARE its identity: the name alone says nothing about expiry or signs -#}
-        {% if row.legs %}<div class="legs">{{ row.strike_date }} · {{ row.legs }}</div>{% endif -%}
-      </td>
+      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}</td>
       <td>{{ row.alarm }}</td>
       <td>{{ row.compare }}</td>
       {#- hl marks the column the alarm actually watches, not a hardcoded delta/mid pair -#}
@@ -33,12 +31,6 @@
           <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required>
           <button>set</button>
         </form>
-        {% if row.is_combo %}
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/rename">
-          <input type="text" name="name" value="{{ row.name }}" size="14" required>
-          <button>rename</button>
-        </form>
-        {% endif %}
         <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
         <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
       </td>
@@ -47,9 +39,49 @@
   {% endfor %}
   </tbody>
 </table>
-{% else %}
-<p>Watchlist is empty.</p>
 {% endif %}
+
+{#- combos get their own table: bid, ask, IV and last trade are structurally empty for them
+    (no per-contract snapshot), and a single "value" column carries whatever field they watch -#}
+{% if combo_rows %}
+<h3>Combos</h3>
+<table>
+  <thead><tr>
+    <th>combo</th><th>alarm</th><th>mode</th><th>value</th>
+    <th>delta</th><th>gamma</th><th>theta</th><th>vega</th><th>actions</th>
+  </tr></thead>
+  <tbody>
+  {% for row in combo_rows %}
+    <tr{% if row.triggered %} class="triggered"{% endif %}>
+      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}
+        <div class="legs">{{ row.strike_date }} · {{ row.legs }}</div>
+      </td>
+      <td>{{ row.alarm }}</td>
+      <td>{{ row.compare }}</td>
+      <td class="hl">{{ row.value }}</td>
+      <td>{{ row.delta }}</td>
+      <td>{{ row.gamma }}</td>
+      <td>{{ row.theta }}</td>
+      <td>{{ row.vega }}</td>
+      <td class="actions">
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
+          <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required>
+          <button>set</button>
+        </form>
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/rename">
+          <input type="text" name="name" value="{{ row.name }}" size="14" required>
+          <button>rename</button>
+        </form>
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if not single_rows and not combo_rows %}<p>Watchlist is empty.</p>{% endif %}
 
 {% for group in muted_groups %}
 <h3>{{ group.label }}</h3>

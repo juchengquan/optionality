@@ -534,3 +534,54 @@ def test_muted_table_groups_by_reason_and_counts_down_to_deletion(client_factory
     assert "Muted" not in page.replace("Muted by you", "")  # the old catch-all heading is gone
     # EXPIRED_RETENTION_DAYS is 7 and it expired 2 days ago: deleted once 8 days have passed
     assert "auto-deletes in 6 days" in page
+
+
+def test_singles_and_combos_render_as_separate_tables(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    expiry = _future()
+    client.post(
+        "/monitors",
+        json={"strike_date": expiry, "option_type": "CALL", "strike": 8100, "threshold": 0.6},
+        headers=AUTH,
+    )
+    client.post(
+        "/monitors",
+        json={
+            "name": "condor-a",
+            "strike_date": expiry,
+            "threshold": 10,
+            "legs": [
+                {"sign": 1, "option_type": "CALL", "strike": 8100},
+                {"sign": -1, "option_type": "CALL", "strike": 8150},
+            ],
+        },
+        headers=AUTH,
+    )
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+
+    assert "Single-leg" in page and "Combos" in page
+    singles, combos = page.index("Single-leg"), page.index("Combos")
+    assert singles < combos  # singles first
+
+    # bid/ask/last-trade are structurally empty for a combo (no per-contract snapshot),
+    # so they belong to the singles table only
+    combo_section = page[combos:]
+    assert "<th>bid</th>" not in combo_section
+    assert "<th>ask</th>" not in combo_section
+    assert "<th>last trade</th>" not in combo_section
+    assert "<th>value</th>" in combo_section  # one column for whatever field the combo watches
+    assert "+C8100 -C8150" in combo_section  # legs stay with the combo row
+
+
+def test_each_table_is_omitted_when_it_has_no_rows(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    client.post(
+        "/monitors",
+        json={"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6},
+        headers=AUTH,
+    )
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    assert "Single-leg" in page
+    assert "Combos" not in page  # no empty heading over an empty table
