@@ -11,7 +11,7 @@
   </label>
   {% endfor %}
   <label>field
-    <select name="field"><option value="mid_price">mid_price</option>{% for f in fields %}{% if f != "mid_price" %}<option value="{{ f }}">{{ f }}</option>{% endif %}{% endfor %}</select>
+    <select name="field"><option value="mid_price">mid_price</option>{% for f in combo_fields %}{% if f != "mid_price" %}<option value="{{ f }}">{{ f }}</option>{% endif %}{% endfor %}</select>
   </label>
   <label>threshold <input type="number" name="threshold" step="any" required></label>
   <label>direction

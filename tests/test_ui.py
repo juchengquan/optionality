@@ -585,3 +585,14 @@ def test_each_table_is_omitted_when_it_has_no_rows(client_factory):
     page = client.get("/ui/table", headers=AUTH).text
     assert "Single-leg" in page
     assert "Combos" not in page  # no empty heading over an empty table
+
+
+def test_combo_form_does_not_offer_non_additive_fields(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    page = client.get("/ui", headers=AUTH).text
+    combo_form = page[page.index('id="add-combo"') :]
+    single_form = page[page.index('id="add-monitor"') : page.index('id="add-combo"')]
+    # a single-leg monitor on IV is perfectly valid; a combo on IV is not, so don't
+    # offer a choice the gate will only reject after the form is filled in
+    assert "option_implied_volatility" in single_form
+    assert "option_implied_volatility" not in combo_form

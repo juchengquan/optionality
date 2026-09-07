@@ -434,3 +434,11 @@ def test_rename_command(session_factory):
 
     bot.handle_update(_update("/rename new-name"))
     assert "usage" in api.sent[-1].lower()
+
+
+def test_bot_rejects_iv_combo(session_factory):
+    bot, api = _make_bot(session_factory)
+    bot.handle_update(_update(f"/watchcombo iv-x {_future()} +C8100 +C8150 10 option_implied_volatility"))
+    assert "option_implied_volatility" in api.sent[-1]
+    with session_factory() as s:
+        assert s.scalar(select(Monitor)) is None  # never created

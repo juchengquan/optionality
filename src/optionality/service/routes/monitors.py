@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
 from optionality.service.models import Monitor
-from optionality.service.monitor import WATCHLIST_ORDER, verify_contracts, watchlist_quotes
+from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error, verify_contracts, watchlist_quotes
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
@@ -207,6 +207,10 @@ def create_monitor(
 
 
 def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings, sweeper):
+    # checked here rather than on the model: inside the MonitorIn|ComboMonitorIn union a
+    # validator's message is buried under the other branch's "field required" errors
+    if error := combo_field_error(payload.field):
+        raise HTTPException(status_code=422, detail=error)
     if session.scalar(select(Monitor).where(Monitor.code == payload.name, Monitor.field == payload.field)):
         raise HTTPException(status_code=409, detail=f"monitor for ({payload.name}, {payload.field}) already exists")
     leg_codes = [build_spx_code(payload.strike_date, leg.option_type, leg.strike) for leg in payload.legs]

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
 from optionality.service.models import Monitor
-from optionality.service.monitor import WATCHLIST_ORDER
+from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error
 from optionality.service.routes.health import _opend_reachable
 from optionality.service.routes.monitors import (
     ComboMonitorIn,
@@ -55,6 +55,10 @@ UI_FIELDS = [
     "option_vega",
     "option_gamma",
 ]
+
+# a single-leg monitor on IV is fine; a combo on IV is refused, so the combo form
+# must not offer it — see combo_field_error
+COMBO_FIELDS = [f for f in UI_FIELDS if not combo_field_error(f)]
 
 _FIELD_COLUMN = {
     "option_delta": "delta",
@@ -233,6 +237,7 @@ def _mutation_response(
     context.update(
         {
             "fields": UI_FIELDS,
+            "combo_fields": COMBO_FIELDS,
             "error": error,
             "oob": True,
             "reset_form": None if error else reset_form,
@@ -255,6 +260,7 @@ def ui_dashboard(
     context.update(
         {
             "fields": UI_FIELDS,
+            "combo_fields": COMBO_FIELDS,
             "refresh_seconds": _refresh_seconds(request, settings),
             "refresh_options": _refresh_options(settings),
         }

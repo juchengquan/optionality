@@ -632,3 +632,28 @@ def test_expiry_mute_records_why_it_disabled_the_monitor(session_factory):
         row = s.get(Monitor, expired_id)
         assert row.enabled is False
         assert row.disabled_reason == "expired"  # counts down to the one auto-delete in the system
+
+
+def test_legacy_iv_combo_is_never_summed(session_factory):
+    """A combo predating the validation must not produce a summed IV either."""
+    from optionality.service.monitor import monitor_leg_codes, monitor_value
+
+    with session_factory() as s:
+        combo = Monitor(
+            code="legacy-iv",
+            strike_date=_future(),
+            option_type="CMB",
+            strike=0.0,
+            field="option_implied_volatility",
+            threshold=10.0,
+            legs=[
+                {"sign": 1, "option_type": "CALL", "strike": 8100},
+                {"sign": 1, "option_type": "CALL", "strike": 8150},
+            ],
+        )
+        s.add(combo)
+        s.commit()
+        s.refresh(combo)
+        by_code = {c: {"code": c, "option_implied_volatility": 20.0} for c in monitor_leg_codes(combo)}
+        # both legs report 20.0; the old behaviour returned 40.0
+        assert monitor_value(combo, by_code) is None

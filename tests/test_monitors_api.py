@@ -326,3 +326,22 @@ def test_list_groups_by_expiry_with_combos_first(client_factory):
     assert [m["strike_date"] for m in listed] == [near, near, near, far]  # expiry groups
     assert listed[0]["code"] == "near-condor"  # the combo leads its own expiry, not the CALL/PUT gap
     assert [m["option_type"] for m in listed[1:3]] == ["CALL", "PUT"]
+
+
+def test_combo_cannot_watch_implied_volatility(client_factory):
+    client = client_factory()
+    combo = {
+        "name": "iv-combo",
+        "strike_date": _future(),
+        "threshold": 10,
+        "field": "option_implied_volatility",
+        "legs": [
+            {"sign": 1, "option_type": "CALL", "strike": 8100},
+            {"sign": 1, "option_type": "CALL", "strike": 8150},
+        ],
+    }
+    resp = client.post("/monitors", json=combo, headers=AUTH)
+    # IV is intensive: two 20% legs are not a 40% combo. Summing it is meaningless,
+    # so the field is refused at the gate rather than producing a nonsense alarm.
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "combos cannot watch option_implied_volatility: it is not additive across legs"

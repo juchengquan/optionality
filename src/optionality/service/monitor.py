@@ -25,8 +25,23 @@ def monitor_leg_codes(monitor: Monitor) -> list[str]:
     return [build_spx_code(monitor.strike_date, leg["option_type"], leg["strike"]) for leg in monitor.legs]
 
 
+# IV is intensive, not extensive: two legs at 20% are not a 40% combo, so a signed sum of
+# them is a number with no meaning. Combos may not watch these fields, and a row predating
+# that rule must still never produce a sum.
+NON_ADDITIVE_FIELDS = frozenset({"option_implied_volatility"})
+
+
+def combo_field_error(field: str) -> str | None:
+    """Reason this field cannot be a combo's monitored field, or None if it can."""
+    if field in NON_ADDITIVE_FIELDS:
+        return f"combos cannot watch {field}: it is not additive across legs"
+    return None
+
+
 def combo_field_sum(monitor: Monitor, by_code: dict, field: str) -> float | None:
     """Signed sum of one field over a combo's legs; None if ANY leg is missing — no partial sums, ever."""
+    if combo_field_error(field):
+        return None  # guard for legacy rows: never fabricate a summed IV
     total = 0.0
     for leg, code in zip(monitor.legs, monitor_leg_codes(monitor), strict=True):
         record = by_code.get(code)
