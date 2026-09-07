@@ -114,8 +114,8 @@ def test_create_monitor_via_form(client_factory):
         "direction": "above",
     }
     resp = client.post("/ui/monitors", data=form, headers=AUTH, follow_redirects=False)
-    assert resp.status_code == 303
-    assert resp.headers["location"].endswith("/ui")
+    assert resp.status_code == 200  # fragment swap, not a page reload
+    assert "location" not in resp.headers
     sf = client.app.state.session_factory
     with sf() as s:
         monitor = s.scalar(select(Monitor))
@@ -172,7 +172,7 @@ def test_create_combo_via_form_with_blank_rows(client_factory):
         "strike_6": "",
     }
     resp = client.post("/ui/combos", data=form, headers=AUTH, follow_redirects=False)
-    assert resp.status_code == 303
+    assert resp.status_code == 200
     sf = client.app.state.session_factory
     with sf() as s:
         combo = s.scalar(select(Monitor))
@@ -403,3 +403,62 @@ def test_refresh_options_never_promise_more_than_the_sweep(client_factory):
 
     client.post("/ui/refresh", data={"refresh": "5"}, headers=AUTH)
     assert 'hx-trigger="every 30s' in client.get("/ui", headers=AUTH).text  # floor is the sweep interval
+
+
+def test_row_action_swaps_the_table_instead_of_reloading(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    mid = client.post("/monitors", json=payload, headers=AUTH).json()["id"]
+    client.app.state.sweeper.sweep()
+
+    resp = client.post(f"/ui/monitors/{mid}/toggle", data={}, headers=AUTH, follow_redirects=False)
+    assert resp.status_code == 200
+    assert "location" not in resp.headers  # no 303: scroll position survives a mute
+    assert "<!DOCTYPE" not in resp.text  # a fragment, not a whole document
+    assert "<table" in resp.text
+
+
+def test_add_forms_drive_htmx_and_target_the_live_region(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    page = client.get("/ui", headers=AUTH).text
+    assert 'hx-post="/ui/monitors"' in page
+    assert 'hx-post="/ui/combos"' in page
+    # the error region sits OUTSIDE the swapped region, above it, so a failure from the
+    # add-combo form at the bottom of the page is visible without scrolling back up
+    assert page.index('id="ui-error"') < page.index('id="live"')
+
+
+def test_mutation_error_rides_an_out_of_band_swap(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    form = {
+        "strike_date": "not-a-date",
+        "option_type": "CALL",
+        "strike": "8100",
+        "field": "option_delta",
+        "threshold": "0.6",
+        "direction": "above",
+    }
+    resp = client.post("/ui/monitors", data=form, headers=AUTH, follow_redirects=False)
+    assert resp.status_code == 200
+    assert 'id="ui-error"' in resp.text and "hx-swap-oob" in resp.text
+    assert "strike_date" in resp.text
+    assert "?error=" not in resp.text  # the query-param error path is gone
+
+
+def test_add_form_resets_on_success_but_keeps_input_on_error(client_factory):
+    client = client_factory(snapshot_fetcher=_greeks_fetcher)
+    good = {
+        "strike_date": _future(),
+        "option_type": "CALL",
+        "strike": "8100",
+        "field": "option_delta",
+        "threshold": "0.6",
+        "direction": "above",
+    }
+    ok = client.post("/ui/monitors", data=good, headers=AUTH, follow_redirects=False)
+    # a fresh, empty form is swapped back out-of-band — server-rendered, so no reset script
+    assert 'id="add-monitor"' in ok.text and "hx-swap-oob" in ok.text
+
+    bad = dict(good, strike_date="not-a-date")
+    err = client.post("/ui/monitors", data=bad, headers=AUTH, follow_redirects=False)
+    assert 'id="add-monitor"' not in err.text  # input left alone so it can be corrected

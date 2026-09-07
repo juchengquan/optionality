@@ -1,0 +1,25 @@
+<fieldset id="add-combo"{% if oob %} hx-swap-oob="true"{% endif %}>
+<legend>Add combo</legend>
+<form hx-post="{{ root_path }}/ui/combos" hx-target="#live" hx-swap="innerHTML">
+  <label>name <input type="text" name="name" required></label>
+  <label>expiry <input type="date" name="strike_date" required></label>
+  {% for i in range(1, 7) %}
+  <label>leg {{ i }}
+    <select name="sign_{{ i }}"><option>+</option><option>-</option></select>
+    <select name="option_type_{{ i }}"><option>CALL</option><option>PUT</option></select>
+    <input type="number" name="strike_{{ i }}" step="any" placeholder="strike (blank = skip)">
+  </label>
+  {% endfor %}
+  <label>field
+    <select name="field"><option value="mid_price">mid_price</option>{% for f in fields %}{% if f != "mid_price" %}<option value="{{ f }}">{{ f }}</option>{% endif %}{% endfor %}</select>
+  </label>
+  <label>threshold <input type="number" name="threshold" step="any" required></label>
+  <label>direction
+    <select name="direction"><option>above</option><option>below</option></select>
+  </label>
+  <label>compare
+    <select name="compare"><option value="abs">abs</option><option value="signed">signed</option></select>
+  </label>
+  <button>watch combo</button>
+</form>
+</fieldset>

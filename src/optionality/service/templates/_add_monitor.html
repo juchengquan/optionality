@@ -1,0 +1,21 @@
+<fieldset id="add-monitor"{% if oob %} hx-swap-oob="true"{% endif %}>
+<legend>Add monitor</legend>
+<form hx-post="{{ root_path }}/ui/monitors" hx-target="#live" hx-swap="innerHTML">
+  <label>expiry <input type="date" name="strike_date" required></label>
+  <label>type
+    <select name="option_type"><option>CALL</option><option>PUT</option></select>
+  </label>
+  <label>strike <input type="number" name="strike" step="any" required></label>
+  <label>field
+    <select name="field">{% for f in fields %}<option value="{{ f }}">{{ f }}</option>{% endfor %}</select>
+  </label>
+  <label>threshold <input type="number" name="threshold" step="any" required></label>
+  <label>direction
+    <select name="direction"><option>above</option><option>below</option></select>
+  </label>
+  <label>compare
+    <select name="compare"><option value="abs">abs</option><option value="signed">signed</option></select>
+  </label>
+  <button>watch</button>
+</form>
+</fieldset>

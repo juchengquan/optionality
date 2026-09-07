@@ -1,0 +1,7 @@
+{#- response to a mutation: the table swaps into #live, and everything below rides
+    out-of-band so one request can update regions the swap does not cover -#}
+{% include "ui_table.html" %}
+<div id="ui-error" hx-swap-oob="true">{% if error %}<div class="banner">{{ error }}</div>{% endif %}</div>
+{#- a fresh form only on success; on error the user's input must survive so it can be fixed -#}
+{% if reset_form == "monitor" %}{% include "_add_monitor.html" %}{% endif %}
+{% if reset_form == "combo" %}{% include "_add_combo.html" %}{% endif %}

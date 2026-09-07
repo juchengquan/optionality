@@ -29,18 +29,18 @@
       <td>{{ row.bid }}</td>
       <td>{{ row.ask }}</td>
       <td class="actions">
-        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
           <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required>
           <button>set</button>
         </form>
         {% if row.is_combo %}
-        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/rename">
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/rename">
           <input type="text" name="name" value="{{ row.name }}" size="14" required>
           <button>rename</button>
         </form>
         {% endif %}
-        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
-        <form method="post" action="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
+        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
       </td>
       <td>{{ row.last_trade }}</td>
     </tr>
@@ -62,8 +62,8 @@
       <td>{{ m.field }}</td>
       <td>{{ m.threshold }}</td>
       <td class="actions">
-        <form method="post" action="{{ root_path }}/ui/monitors/{{ m.id }}/toggle"><button>unmute</button></form>
-        <form method="post" action="{{ root_path }}/ui/monitors/{{ m.id }}/delete"><button>delete</button></form>
+        <form hx-post="{{ root_path }}/ui/monitors/{{ m.id }}/toggle"><button>unmute</button></form>
+        <form hx-post="{{ root_path }}/ui/monitors/{{ m.id }}/delete"><button>delete</button></form>
       </td>
     </tr>
   {% endfor %}

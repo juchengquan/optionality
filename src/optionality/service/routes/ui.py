@@ -1,4 +1,3 @@
-import urllib.parse
 from pathlib import Path
 from typing import Annotated
 
@@ -44,6 +43,8 @@ def htmx_asset():
 
 SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+SweeperDep = Annotated[object, Depends(get_sweeper)]
+WorkerDep = Annotated[object, Depends(get_worker)]
 
 UI_FIELDS = [
     "option_delta",
@@ -136,11 +137,10 @@ def _refresh_seconds(request: Request, settings: Settings) -> int:
         return max(floor, settings.ui_refresh_seconds)
 
 
-def _redirect(request: Request, error: str | None = None) -> RedirectResponse:
-    url = f"{request.scope.get('root_path', '')}/ui"
-    if error:
-        url += "?error=" + urllib.parse.quote(error)
-    return RedirectResponse(url, status_code=303)
+def _redirect(request: Request) -> RedirectResponse:
+    """Only the refresh selector still reloads: the poll interval lives in #live's
+    hx-trigger attribute, which an innerHTML swap of #live cannot rewrite."""
+    return RedirectResponse(f"{request.scope.get('root_path', '')}/ui", status_code=303)
 
 
 def _error_text(err: Exception) -> str:
@@ -179,20 +179,40 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
     }
 
 
-@router.get("")
-def ui_dashboard(
-    request: Request,
-    session: SessionDep,
-    settings: SettingsDep,
-    sweeper: Annotated[object, Depends(get_sweeper)],
-    worker: Annotated[object, Depends(get_worker)],
-    error: str | None = None,
+def _mutation_response(
+    request: Request, session, settings, sweeper, worker, error: str | None = None, reset_form: str | None = None
 ):
+    """The table fragment for #live, plus out-of-band updates for the regions it misses.
+
+    A failed mutation reports the error and leaves the add-form's values alone; only a
+    successful one swaps a fresh, empty form back.
+    """
     context = _live_context(request, session, settings, sweeper, worker)
     context.update(
         {
             "fields": UI_FIELDS,
             "error": error,
+            "oob": True,
+            "reset_form": None if error else reset_form,
+        }
+    )
+    response = templates.TemplateResponse(request, "ui_mutation.html", context)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@router.get("")
+def ui_dashboard(
+    request: Request,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
+):
+    context = _live_context(request, session, settings, sweeper, worker)
+    context.update(
+        {
+            "fields": UI_FIELDS,
             "refresh_seconds": _refresh_seconds(request, settings),
             "refresh_options": _refresh_options(settings),
         }
@@ -207,8 +227,8 @@ def ui_table_fragment(
     request: Request,
     session: SessionDep,
     settings: SettingsDep,
-    sweeper: Annotated[object, Depends(get_sweeper)],
-    worker: Annotated[object, Depends(get_worker)],
+    sweeper: SweeperDep,
+    worker: WorkerDep,
 ):
     context = _live_context(request, session, settings, sweeper, worker)
     response = templates.TemplateResponse(request, "ui_table.html", context)
@@ -229,6 +249,8 @@ def ui_create_monitor(
     request: Request,
     session: SessionDep,
     settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
     strike_date: Annotated[str, Form()],
     option_type: Annotated[str, Form()],
     strike: Annotated[float, Form()],
@@ -236,7 +258,6 @@ def ui_create_monitor(
     field: Annotated[str, Form()] = "option_delta",
     direction: Annotated[str, Form()] = "above",
     compare: Annotated[str, Form()] = "abs",
-    sweeper: Annotated[object, Depends(get_sweeper)] = None,
 ):
     try:
         payload = MonitorIn(
@@ -250,8 +271,8 @@ def ui_create_monitor(
         )
         create_monitor(payload, session, settings, sweeper)
     except (ValidationError, HTTPException) as err:
-        return _redirect(request, error=_error_text(err))
-    return _redirect(request)
+        return _mutation_response(request, session, settings, sweeper, worker, error=_error_text(err))
+    return _mutation_response(request, session, settings, sweeper, worker, reset_form="monitor")
 
 
 @router.post("/combos")
@@ -259,7 +280,8 @@ async def ui_create_combo(
     request: Request,
     session: SessionDep,
     settings: SettingsDep,
-    sweeper: Annotated[object, Depends(get_sweeper)] = None,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
 ):
     form = await request.form()
     try:
@@ -286,8 +308,8 @@ async def ui_create_combo(
         )
         _create_combo(payload, session, settings, sweeper)
     except (ValidationError, HTTPException, ValueError) as err:
-        return _redirect(request, error=_error_text(err))
-    return _redirect(request)
+        return _mutation_response(request, session, settings, sweeper, worker, error=_error_text(err))
+    return _mutation_response(request, session, settings, sweeper, worker, reset_form="combo")
 
 
 @router.post("/monitors/{monitor_id}/threshold")
@@ -296,13 +318,15 @@ def ui_set_threshold(
     monitor_id: str,
     session: SessionDep,
     settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
     threshold: Annotated[float, Form()],
 ):
     try:
         patch_monitor(monitor_id, MonitorPatch(threshold=threshold), session, settings)
     except (ValidationError, HTTPException) as err:
-        return _redirect(request, error=_error_text(err))
-    return _redirect(request)
+        return _mutation_response(request, session, settings, sweeper, worker, error=_error_text(err))
+    return _mutation_response(request, session, settings, sweeper, worker)
 
 
 @router.post("/monitors/{monitor_id}/rename")
@@ -311,29 +335,45 @@ def ui_rename_monitor(
     monitor_id: str,
     session: SessionDep,
     settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
     name: Annotated[str, Form()],
 ):
     try:
         patch_monitor(monitor_id, MonitorPatch(name=name.strip()), session, settings)
     except (ValidationError, HTTPException) as err:
-        return _redirect(request, error=_error_text(err))
-    return _redirect(request)
+        return _mutation_response(request, session, settings, sweeper, worker, error=_error_text(err))
+    return _mutation_response(request, session, settings, sweeper, worker)
 
 
 @router.post("/monitors/{monitor_id}/toggle")
-def ui_toggle_monitor(request: Request, monitor_id: str, session: SessionDep):
+def ui_toggle_monitor(
+    request: Request,
+    monitor_id: str,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
+):
     row = session.get(Monitor, monitor_id)
     if row is None:
-        return _redirect(request, error="monitor not found")
+        return _mutation_response(request, session, settings, sweeper, worker, error="monitor not found")
     row.enabled = not row.enabled
     session.commit()
-    return _redirect(request)
+    return _mutation_response(request, session, settings, sweeper, worker)
 
 
 @router.post("/monitors/{monitor_id}/delete")
-def ui_delete_monitor(request: Request, monitor_id: str, session: SessionDep):
+def ui_delete_monitor(
+    request: Request,
+    monitor_id: str,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
+):
     try:
         delete_monitor(monitor_id, session)
     except HTTPException as err:
-        return _redirect(request, error=_error_text(err))
-    return _redirect(request)
+        return _mutation_response(request, session, settings, sweeper, worker, error=_error_text(err))
+    return _mutation_response(request, session, settings, sweeper, worker)
