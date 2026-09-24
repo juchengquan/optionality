@@ -18,7 +18,7 @@ Deployed as a macOS launchd agent on the owner's always-on machine, behind `tail
 
 ## Layout (`src/optionality/`)
 
-- `core.py` — run pipeline + `fetch_snapshot` (CLI `main.py` and the service share it)
+- `core.py` — run pipeline + `fetch_snapshot` (the worker and routes share it)
 - `apis/` moomoo + yfinance + `build_spx_code`/`normalize_strike_date`; `notification/` gmail, file, telegram
 - `service/`: `app.py` (factory, auth middleware, lifespan), `worker.py` (THE single job thread),
   `scheduler.py` (APScheduler; `refresh_jobs` must only touch `schedule-*` job ids),

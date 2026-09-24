@@ -22,16 +22,8 @@ Optionality is a small, simple yet effective tool aimed at providing a report to
    uv sync
    ```
 
-3. **Configure Settings**:
-   Edit a YAML config (see `examples/strategy.yaml`) to set your instruments, holdings, and alert thresholds.
-   Gmail credentials come from the `GMAIL_USER` / `GMAIL_APP_PASSWORD` environment variables, never from YAML.
-
-4. **Run the CLI** (no service needed — same core pipeline):
-   ```bash
-   uv run python main.py -t holdings -f examples/holdings.yaml   # report on current holdings
-   uv run python main.py -t strategy -f examples/strategy.yaml   # scan for new strategy candidates
-   ```
-   The results are saved locally or emailed, per the config's notification block.
+3. **Run the service** — see [Hosted service](#hosted-service). Reports come from configs stored over the
+   API, run on a schedule or ad hoc.
 
 
 ## Hosted service
@@ -70,9 +62,13 @@ unattended reboot.
 
 ```bash
 AUTH="Authorization: Bearer $API_TOKEN"
-# store a config (body = the YAML document as JSON)
+# store a config (body shape: OptionHoldingsConfig / OptionStrategiesConfig in src/optionality/datatype/base.py;
+# gmail credentials come from GMAIL_USER / GMAIL_APP_PASSWORD, never from the body)
 curl -X POST localhost:31415/configs -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"name": "spx-holdings", "task_type": "holdings", "body": {...}}'
+# edit or remove it (removal is refused while a schedule references it)
+curl -X PUT localhost:31415/configs/spx-holdings -H "$AUTH" -H 'Content-Type: application/json' -d '{...}'
+curl -X DELETE localhost:31415/configs/spx-holdings -H "$AUTH"
 # schedule it for 09:35 ET every weekday
 curl -X POST localhost:31415/schedules -H "$AUTH" -H 'Content-Type: application/json' \
   -d '{"cron_expr": "35 9 * * mon-fri", "task_type": "holdings", "config_name": "spx-holdings"}'
@@ -148,7 +144,6 @@ run the local server and the Docker deployment simultaneously with the same bot.
 
 - **Scheduled reports stopped and healthchecks.io alerted:** check `docker compose ps`, then `curl :31415/health`. If `"opend": false`, OpenD is down or logged out — restart/re-login it (this is the most common failure).
 - **Failure email arrived:** the run failed twice (one automatic retry). The email includes the error; `GET /runs?status=failed` has details.
-- **Debugging the pipeline without the service:** `uv run python main.py -t holdings -f examples/strategy.yaml` uses the same core code against a local OpenD.
 - **Schema changes:** `uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head` (fresh databases are created automatically at startup).
 
 ## License
