@@ -296,9 +296,11 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
             r["value"] = _fmt_at(closing, "mid")
             r["fill"] = _fill_pct(closing, r["threshold"], "above", "abs")
         whole = positions if scope == "all" else []
-        # a summed credit is not something you can type, so entry is editable only where
-        # the rule watches exactly one holding
+        # entry is typed straight onto a rule that watches exactly one holding. Where it
+        # spans several, you type the TOTAL and the unrecorded wing is derived from it, so
+        # the per-wing credits stay the single source of truth.
         r["position_id"] = whole[0].id if len(whole) == 1 else ""
+        r["combined_id"] = r["id"] if len(whole) > 1 and any(p.entry is None for p in whole) else ""
         r["entry"] = _fmt_at(combined_entry(whole), "mid") if whole else ""
         r["pnl"] = _fmt_at(combined_pnl(whole, by_code), "mid") if whole else ""
     return {
@@ -495,6 +497,39 @@ def ui_set_entry(
     if row is None:
         return _mutation_response(request, session, settings, sweeper, worker, error="position not found")
     row.entry = entry
+    session.commit()
+    return _mutation_response(request, session, settings, sweeper, worker)
+
+
+@router.post("/monitors/{monitor_id}/entry")
+def ui_set_combined_entry(
+    request: Request,
+    monitor_id: str,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
+    entry: Annotated[float, Form()],
+):
+    """Record a total credit across the Positions a rule spans, by deriving the one wing
+    whose credit is not yet known. Two unknowns and one equation cannot be solved, so that
+    case is refused rather than split arbitrarily."""
+    positions = (
+        session.query(Position)
+        .join(monitor_positions, monitor_positions.c.position_id == Position.id)
+        .filter(monitor_positions.c.monitor_id == monitor_id)
+        .all()
+    )
+    missing = [p for p in positions if p.entry is None]
+    if len(missing) != 1:
+        detail = (
+            "no wing left to derive — set each one directly"
+            if not missing
+            else f"cannot split a total across {len(missing)} wings with no credit recorded; set one wing first"
+        )
+        return _mutation_response(request, session, settings, sweeper, worker, error=detail)
+    known = sum(p.entry for p in positions if p.entry is not None)
+    missing[0].entry = round(entry - known, 4)
     session.commit()
     return _mutation_response(request, session, settings, sweeper, worker)
 

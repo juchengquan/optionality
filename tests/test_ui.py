@@ -1,6 +1,7 @@
 import re
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import select
 
 from optionality.service.models import Monitor, monitor_positions
@@ -848,3 +849,79 @@ def test_a_spanning_rule_sums_both_holdings_and_cannot_be_typed_into(client_fact
     assert "3.00" in entry_cell
     assert "<input" not in entry_cell
     assert f"/ui/positions/{calls['id']}/entry" not in page
+
+
+def _condor_pair(client, call_entry=2.87, put_entry=None):
+    """The legged-in shape: a call spread, a put spread, and a stop spanning both."""
+    made = {}
+    for name, legs, entry in (
+        ("calls_side", [("sold", "CALL", 8050), ("bought", "CALL", 8075)], call_entry),
+        ("puts_side", [("sold", "PUT", 7100), ("bought", "PUT", 7075)], put_entry),
+    ):
+        made[name] = client.post(
+            "/positions",
+            json={
+                "name": name,
+                "strike_date": _future(),
+                "entry": entry,
+                "contracts": 1,
+                "legs": [{"side": s, "option_type": t, "strike": k} for s, t, k in legs],
+            },
+            headers=AUTH,
+        ).json()
+    sf = client.app.state.session_factory
+    with sf() as s:
+        s.add(
+            Monitor(
+                code="the_condor",
+                strike_date=_future(),
+                option_type="CMB",
+                strike=0.0,
+                field="mid_price",
+                threshold=9.0,
+                scope="all",
+                legs=[{"sign": -1, "option_type": "CALL", "strike": 8050.0}],
+            )
+        )
+        s.flush()
+        mid = s.scalar(select(Monitor.id).where(Monitor.code == "the_condor"))
+        for p in made.values():
+            s.execute(monitor_positions.insert().values(monitor_id=mid, position_id=p["id"]))
+        s.commit()
+    return made, mid
+
+
+def test_typing_the_total_derives_the_unrecorded_wing(client_factory):
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _made, mid = _condor_pair(client, call_entry=2.87, put_entry=None)
+    client.app.state.sweeper.sweep()
+
+    page = client.get("/ui/table", headers=AUTH).text
+    assert f"/ui/monitors/{mid}/entry" in page  # a box, because one wing is still unknown
+
+    resp = client.post(f"/ui/monitors/{mid}/entry", data={"entry": "3.21"}, headers=AUTH)
+    assert resp.status_code == 200
+    puts = client.get("/positions", headers=AUTH).json()
+    by_name = {p["name"]: p for p in puts}
+    # 3.21 total less the 2.87 already on the call spread
+    assert by_name["puts_side"]["entry"] == pytest.approx(0.34)
+    assert by_name["calls_side"]["entry"] == 2.87  # untouched
+
+
+def test_the_total_is_read_only_once_every_wing_is_known(client_factory):
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _made, mid = _condor_pair(client, call_entry=2.87, put_entry=0.34)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    assert f"/ui/monitors/{mid}/entry" not in page  # nothing left to derive
+    assert ">3.21<" in page  # the sum is shown instead
+
+
+def test_a_total_cannot_be_split_across_two_unknown_wings(client_factory):
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _made, mid = _condor_pair(client, call_entry=None, put_entry=None)
+    client.app.state.sweeper.sweep()
+    resp = client.post(f"/ui/monitors/{mid}/entry", data={"entry": "3.21"}, headers=AUTH)
+    # two unknowns and one equation: say so rather than splitting it arbitrarily
+    assert "one wing" in resp.text or "wings" in resp.text
+    assert all(p["entry"] is None for p in client.get("/positions", headers=AUTH).json())
