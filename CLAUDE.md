@@ -23,9 +23,10 @@ Deployed as a macOS launchd agent on the owner's always-on machine, behind `tail
 - `service/`: `app.py` (factory, auth middleware, lifespan), `worker.py` (THE single job thread),
   `scheduler.py` (APScheduler; `refresh_jobs` must only touch `schedule-*` job ids),
   `monitor.py` (sweep, watchlist, `fetch_resilient`, `verify_contracts`), `telegram_bot.py` (long-poll bot),
-  `routes/` + `templates/` (Jinja2 + vendored htmx — the only JavaScript on `/ui`),
-  `frontend/` (Vite + React + TS for `/app`; built assets are COMMITTED under `static/app/`,
-  so node is never needed to run the service — `make build-ui`, `make check-ui`. See ADR 0005)
+  `routes/` (`ui.py` is now only the React shell and its asset route),
+  `frontend/` (Vite + React + TS — the dashboard at `/ui`; built assets are COMMITTED under
+  `static/app/`, so node is never needed to run the service — `make build-ui`, `make check-ui`,
+  `make test-ui`. See ADR 0005. The htmx dashboard was retired once React reached parity.)
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
@@ -52,7 +53,8 @@ Deployed as a macOS launchd agent on the owner's always-on machine, behind `tail
   commented lines show defaults); viewer preferences (dashboard refresh) live in browser cookies. No DB config
   layer.
 - Behind the path-stripping proxy, Starlette `Mount`s don't resolve — serve static assets via routes, not
-  `StaticFiles` (see `htmx_asset`).
+  `StaticFiles` (see `app_asset`). The React shell injects `root_path` for the same reason: the browser
+  sees `/opt/...` while the app sees `/...`.
 
 ## Testing conventions
 

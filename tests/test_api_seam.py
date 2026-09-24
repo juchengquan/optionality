@@ -111,14 +111,16 @@ def test_monitors_says_which_position_it_watches(client_factory):
     assert [p["name"] for p in listed["condor_rule"]["positions"]] == ["calls_side", "puts_side"]
 
 
-def test_the_dashboard_adds_no_arithmetic_of_its_own(client_factory):
-    """Acceptance for phase 0: _quote_rows formats, it does not compute."""
+def test_the_route_layer_holds_no_domain_logic(client_factory):
+    """Successor to the _quote_rows acceptance test: that function retired with htmx, but
+    the rule it enforced did not. Serving the dashboard must stay a matter of handing over
+    a bundle — every figure belongs to the domain, reachable over HTTP."""
     import inspect
 
     from optionality.service.routes import ui
 
-    source = inspect.getsource(ui._quote_rows)
-    for computation in ("_fill_pct", "days_to_expiry", "combined_cost_to_close", "/ 100", "* 100"):
+    source = inspect.getsource(ui)
+    for computation in ("threshold_fill", "days_to_expiry", "combined_cost_to_close", "cost_to_close"):
         assert computation not in source, f"{computation} belongs in the domain layer, not a route"
 
 

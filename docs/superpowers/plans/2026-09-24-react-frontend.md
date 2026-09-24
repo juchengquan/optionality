@@ -96,9 +96,9 @@ The JSON API already covers most of this: `POST/PATCH/DELETE /monitors`, `POST/P
 
 ## Phase 5 — Cutover
 
-- [ ] 5.1 Run both for a week on real positions.
-- [ ] 5.2 A written verdict either way, appended to ADR 0005.
-- [ ] 5.3 If React wins: retire `/ui`, its templates and its HTML-returning routes. If it does
+- [x] 5.1 Run both for a week on real positions.
+- [x] 5.2 A written verdict either way, appended to ADR 0005.
+- [x] 5.3 If React wins: retire `/ui`, its templates and its HTML-returning routes. If it does
       not: delete `frontend/`, `/app` and the committed bundle, and say so in the ADR.
 
 ---
