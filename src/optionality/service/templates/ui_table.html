@@ -64,7 +64,8 @@
           <input type="number" name="entry" step="any" value="{{ row.entry if row.entry != "—" else "" }}"
                  placeholder="entry" required><button>set</button>
         </form>{% elif row.combined_id %}<form hx-post="{{ root_path }}/ui/monitors/{{ row.combined_id }}/entry">
-          <input type="number" name="entry" step="any" placeholder="total" required><button>set</button>
+          <input type="number" name="entry" step="any" placeholder="total"
+                 value="{{ row.entry if row.entry != "—" else "" }}" required><button>set</button>
         </form>{% else %}{{ row.entry }}{% endif %}</td>
       <td class="hl"{% if row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}>{{ row.value }}</td>
       <td>{{ row.pnl }}</td>

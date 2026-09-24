@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
@@ -285,6 +285,13 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
     ):
         owned.setdefault(m.id, []).append(p)
         scopes[m.id] = m.scope
+    # a Position is directly editable when some rule watches it alone — that rule's row
+    # carries its entry box. Anything else can only be reached through a total.
+    # only a whole-position rule carries an entry box; a leg rule links to one Position too
+    # but shows no box, so counting it would wrongly mark that Position reachable
+    directly_editable = {
+        ps[0].id for mid, ps in owned.items() if len(ps) == 1 and scopes.get(mid) == "all"
+    }
     for r in rows:
         positions = owned.get(r["id"], [])
         scope = scopes.get(r["id"])
@@ -300,7 +307,10 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
         # spans several, you type the TOTAL and the unrecorded wing is derived from it, so
         # the per-wing credits stay the single source of truth.
         r["position_id"] = whole[0].id if len(whole) == 1 else ""
-        r["combined_id"] = r["id"] if len(whole) > 1 and any(p.entry is None for p in whole) else ""
+        # the total stays editable for as long as there is a wing it can adjust — otherwise
+        # typing it once would be a one-way door, with no way to correct a slip
+        unreachable = [p for p in whole if p.id not in directly_editable]
+        r["combined_id"] = r["id"] if len(whole) > 1 and len(unreachable) == 1 else ""
         r["entry"] = _fmt_at(combined_entry(whole), "mid") if whole else ""
         r["pnl"] = _fmt_at(combined_pnl(whole, by_code), "mid") if whole else ""
     return {
@@ -520,16 +530,35 @@ def ui_set_combined_entry(
         .filter(monitor_positions.c.monitor_id == monitor_id)
         .all()
     )
-    missing = [p for p in positions if p.entry is None]
-    if len(missing) != 1:
+    # the total adjusts the wing that has no rule of its own, since that is the one you
+    # cannot edit directly. A wing with its own row is never silently rewritten.
+    sole = (
+        session.query(monitor_positions.c.monitor_id)
+        .group_by(monitor_positions.c.monitor_id)
+        .having(func.count(monitor_positions.c.position_id) == 1)
+        .subquery()
+    )
+    directly_editable = {
+        pid
+        for (pid,) in session.query(monitor_positions.c.position_id)
+        .join(Monitor, Monitor.id == monitor_positions.c.monitor_id)
+        .filter(Monitor.scope == "all", monitor_positions.c.monitor_id.in_(session.query(sole.c.monitor_id)))
+        .all()
+    }
+    targets = [p for p in positions if p.id not in directly_editable]
+    if len(targets) != 1:
         detail = (
-            "no wing left to derive — set each one directly"
-            if not missing
-            else f"cannot split a total across {len(missing)} wings with no credit recorded; set one wing first"
+            "every wing here has a rule of its own — set them individually"
+            if not targets
+            else f"cannot split a total across {len(targets)} wings that have no rule of their own"
         )
         return _mutation_response(request, session, settings, sweeper, worker, error=detail)
-    known = sum(p.entry for p in positions if p.entry is not None)
-    missing[0].entry = round(entry - known, 4)
+    others = [p.entry for p in positions if p.id != targets[0].id]
+    if any(e is None for e in others):
+        return _mutation_response(
+            request, session, settings, sweeper, worker, error="set the other wings' credits first"
+        )
+    targets[0].entry = round(entry - sum(others), 4)
     session.commit()
     return _mutation_response(request, session, settings, sweeper, worker)
 
