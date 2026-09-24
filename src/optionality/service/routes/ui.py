@@ -10,9 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
-from optionality.service.models import Monitor, Position
+from optionality.service.models import Monitor, Position, monitor_positions
 from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error
-from optionality.service.position import cost_to_close, position_pnl
+from optionality.service.position import (
+    combined_cost_to_close,
+    combined_entry,
+    combined_pnl,
+)
 from optionality.service.routes.health import _opend_reachable
 from optionality.service.routes.monitors import (
     ComboMonitorIn,
@@ -269,23 +273,34 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
     # Entry belongs to the whole holding, so it is offered only against the rule that
     # watches the whole holding. Showing it beside a wing would invite reading that wing's
     # cost against the entire position's credit.
-    owned = {
-        m.id: (p, m.scope) for m, p in session.query(Monitor, Position).filter(Monitor.position_id == Position.id).all()
-    }
+    # a rule may span several Positions — a combined stop over two credit spreads belongs
+    # to neither alone
+    owned: dict[str, list[Position]] = {}
+    scopes: dict[str, str | None] = {}
+    for m, p in (
+        session.query(Monitor, Position)
+        .join(monitor_positions, monitor_positions.c.monitor_id == Monitor.id)
+        .filter(Position.id == monitor_positions.c.position_id)
+        .all()
+    ):
+        owned.setdefault(m.id, []).append(p)
+        scopes[m.id] = m.scope
     for r in rows:
-        owner = owned.get(r["id"])
-        position, scope = owner if owner else (None, None)
+        positions = owned.get(r["id"], [])
+        scope = scopes.get(r["id"])
         # with entry beside it, the value column has to BE the cost to close: reading
         # "entry 3.21, value -1.50, P&L 171" is arithmetic that does not work. The alarm
         # engine still evaluates its own signed sum; only the display is reconciled.
-        if position and r["is_combo"]:
-            closing = cost_to_close(position, by_code, scope)
+        if positions and r["is_combo"]:
+            closing = combined_cost_to_close(positions, by_code, scope)
             r["value"] = _fmt_at(closing, "mid")
             r["fill"] = _fill_pct(closing, r["threshold"], "above", "abs")
-        whole = position if scope == "all" else None
-        r["position_id"] = whole.id if whole else ""
-        r["entry"] = _fmt_at(whole.entry, "mid") if whole else ""
-        r["pnl"] = _fmt_at(position_pnl(whole, by_code), "mid") if whole else ""
+        whole = positions if scope == "all" else []
+        # a summed credit is not something you can type, so entry is editable only where
+        # the rule watches exactly one holding
+        r["position_id"] = whole[0].id if len(whole) == 1 else ""
+        r["entry"] = _fmt_at(combined_entry(whole), "mid") if whole else ""
+        r["pnl"] = _fmt_at(combined_pnl(whole, by_code), "mid") if whole else ""
     return {
         "single_rows": [r for r in rows if not r["is_combo"]],
         "combo_rows": [r for r in rows if r["is_combo"]],
