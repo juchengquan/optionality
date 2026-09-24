@@ -26,7 +26,7 @@ export function RowActions({
   return (
     <>
       <form
-        className="inline"
+        className="flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (threshold !== null) onPatch(entry.id, { threshold });
@@ -37,7 +37,7 @@ export function RowActions({
       </form>
       {isCombo && onRename ? (
         <form
-          className="inline"
+          className="flex items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             onRename(entry.id, name);
@@ -75,7 +75,7 @@ export function EntryCell({
   if (!single && !spanning) return null;
   return (
     <form
-      className="inline"
+      className="flex items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         if (value === null) return;

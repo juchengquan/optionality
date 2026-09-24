@@ -99,3 +99,23 @@ which does not shrink when you go back and reports 1 in jsdom regardless. It wat
 
 The width estimates written in phase 3 survive only as the default argument to `columnsFor`,
 used before the first measurement lands. Nothing on screen depends on them.
+
+## A browser suite that was not testing the browser
+
+The layout suite shipped in phase 4 with two harness faults, both of which made it pass
+against something that was not the application.
+
+Its Vite config had no Tailwind plugin, so none of the utility classes existed. Every
+measurement was of unstyled markup. And it narrowed `document.body` rather than the viewport
+— which fixed-position elements ignore entirely, and which no media query ever answers to,
+so the phone margin and the muted tables' narrow rule appeared covered while never having
+been evaluated once.
+
+Both were found by a misalignment the owner could see on screen and the suite could not.
+That is the failure mode a browser suite exists to prevent, so it is recorded: a test
+environment that differs from the application is worse than no test, because it reports
+confidence it has not earned.
+
+With both fixed, the suite immediately failed on a real overflow it had been hiding, and the
+`.table-scroll` valve turned out not to be load-bearing at all until a test was written with
+a name longer than the screen.
