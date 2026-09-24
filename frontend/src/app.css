@@ -1,29 +1,54 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+
+/* ── TEMPORARY, phase 0 of the shadcn rebuild (ADR 0007) ─────────────────────
+   Tailwind's preflight resets form controls to nothing and flattens headings to
+   body text. shadcn's components need that reset; the controls still on screen
+   were written against the browser's defaults and have not been rebuilt yet.
+
+   This block hands those elements back their native appearance so the dashboard
+   looks today exactly as it did yesterday. DELETE IT IN PIECES: the button and
+   input rules go when phases 2-4 replace those controls, the heading rule when
+   phase 5 reconciles the palette. If this block is still whole at the end, a
+   phase was skipped. */
+h2, h3 { font-size: revert; font-weight: revert; }
+button, input, select {
+  font: revert; color: revert; background-color: revert;
+  border: revert; padding: revert; appearance: revert;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 /* Mirrors /ui's palette so the two dashboards are visually identical and the comparison
    is about React rather than about a restyle. Duplicated deliberately: phase 5 retires
    one of the two frontends, and until then neither should drift to match the other. */
 :root {
   color-scheme: light dark;
-  --bg: #fff; --fg: #222; --muted: #666; --line: #aaa;
+  --bg: #fff; --fg: #222; --dim: #666; --line: #aaa;
   --hl: #fff3cd; --trig: #f8d7da; --trig-hl: #f5c2c7;
   --fill-bar: #ffd84d; --trig-fill: #e88b93;
   --banner-bg: #f8d7da; --banner-line: #d9534f; --bad: #c00;
-  --badge-bg: #d9534f; --badge-fg: #fff;
+  --badge-bg: #d9534f; --badge-fg: #fff; --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.97 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent: oklch(0.97 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
 }
 /* the US session runs 21:30-04:00 in DISPLAY_TZ=Asia/Singapore — read at night */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161a; --fg: #d7dae0; --muted: #8b929c; --line: #383d46;
+    --bg: #14161a; --fg: #d7dae0; --dim: #8b929c; --line: #383d46;
     --hl: #4a3f18; --trig: #4a2126; --trig-hl: #63272e;
     --fill-bar: #8a6d1f; --trig-fill: #93383f;
     --banner-bg: #4a2126; --banner-line: #b4515a; --bad: #ff8080;
     --badge-bg: #b4515a; --badge-fg: #fff;
+    /* shadcn's dark palette, kept in the media query rather than a .dark class:
+       no toggle, no provider, follows the system as this dashboard always has */
+    --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0); --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0); --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0); --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0); --accent-foreground: oklch(0.985 0 0); --destructive: oklch(0.704 0.191 22.216); --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%); --ring: oklch(0.556 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --sidebar: oklch(0.205 0 0); --sidebar-foreground: oklch(0.985 0 0); --sidebar-primary: oklch(0.488 0.243 264.376); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.269 0 0); --sidebar-accent-foreground: oklch(0.985 0 0); --sidebar-border: oklch(1 0 0 / 10%); --sidebar-ring: oklch(0.556 0 0);
   }
 }
 body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem;
        color: var(--fg); background: var(--bg); }
 h2 { margin-bottom: 0.2rem; }
 h3 { margin-bottom: 0.3rem; }
-.meta { color: var(--muted); margin: 0 0 1rem; }
+.meta { color: var(--dim); margin: 0 0 1rem; }
 .banner { background: var(--banner-bg); border: 1px solid var(--banner-line);
           padding: 0.5rem 1rem; margin-bottom: 1rem; }
 table { border-collapse: collapse; margin-bottom: 1.5rem; }
@@ -36,12 +61,12 @@ td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), v
 tr.triggered td { background: var(--trig); }
 tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(--fill, 0%),
                                                  var(--trig-hl) var(--fill, 0%)); }
-.legs { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
+.legs { font-size: 0.78rem; color: var(--dim); font-weight: 400; }
 .badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.7rem;
          padding: 1px 5px; border-radius: 3px; white-space: nowrap; margin-left: 0.3rem; }
-.health { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.2rem; }
+.health { color: var(--dim); font-size: 0.9rem; margin-bottom: 1.2rem; }
 .health .bad { color: var(--bad); font-weight: 700; }
-.pending { color: var(--muted); }
+.pending { color: var(--dim); }
 #column-pickers details { display: inline-block; vertical-align: top; margin-right: 1.5rem; }
 #column-pickers summary { cursor: pointer; display: inline-block; padding: 2px 8px;
   border: 1px solid var(--line); border-radius: 3px; user-select: none; }
@@ -55,3 +80,14 @@ fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0;
 legend { font-weight: 600; }
 fieldset label { display: block; margin: 0.3rem 0; }
 button { cursor: pointer; }
+
+@theme inline { --font-heading: var(--font-sans); --font-sans: -apple-system, "Helvetica Neue", sans-serif; --color-sidebar-ring: var(--sidebar-ring); --color-sidebar-border: var(--sidebar-border); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground); --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground); --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-foreground: var(--sidebar-foreground); --color-sidebar: var(--sidebar); --color-chart-5: var(--chart-5); --color-chart-4: var(--chart-4); --color-chart-3: var(--chart-3); --color-chart-2: var(--chart-2); --color-chart-1: var(--chart-1); --color-ring: var(--ring); --color-input: var(--input); --color-border: var(--border); --color-destructive: var(--destructive); --color-accent-foreground: var(--accent-foreground); --color-accent: var(--accent); --color-muted-foreground: var(--muted-foreground); --color-muted: var(--muted); --color-secondary-foreground: var(--secondary-foreground); --color-secondary: var(--secondary); --color-primary-foreground: var(--primary-foreground); --color-primary: var(--primary); --color-popover-foreground: var(--popover-foreground); --color-popover: var(--popover); --color-card-foreground: var(--card-foreground); --color-card: var(--card); --color-foreground: var(--foreground); --color-background: var(--background); --radius-sm: calc(var(--radius) * 0.6); --radius-md: calc(var(--radius) * 0.8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --radius-2xl: calc(var(--radius) * 1.8); --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6); }
+
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50; }
+  body {
+    @apply bg-background text-foreground; }
+  html {
+    @apply font-sans; } }

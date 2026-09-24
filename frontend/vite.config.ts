@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -15,7 +17,10 @@ const contractVersion: number = JSON.parse(
 // "./assets/main.js" against the tailnet root. UI_BASE in the Makefile is the one knob;
 // api.ts locates the API from this same value.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  // "@/..." is how shadcn's components import each other; __dirname does not exist
+  // in an ESM config, so the URL form is the one that works here
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   base: process.env.VITE_BASE || "/",
   define: { __CONTRACT_VERSION__: JSON.stringify(contractVersion) },
   // Built assets are still COMMITTED, now to frontend/dist and served by Caddy. Keeping node
