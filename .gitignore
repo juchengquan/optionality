@@ -17,6 +17,11 @@ downloads/
 eggs/
 .eggs/
 lib/
+# ...but this is Python's rule, and the frontend has a src/lib of its own that is
+# hand-written source. Without this a fresh clone cannot resolve "@/lib/utils" and the
+# build fails. Third time this template has swallowed frontend source; see also
+# frontend/dist and the service templates below.
+!frontend/src/lib/
 lib64/
 parts/
 sdist/
