@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from optionality.service.contract import CONTRACT_VERSION
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
 from optionality.service.models import Run
 from optionality.service.monitor import MonitorSweeper
@@ -48,6 +49,9 @@ def health(
 
     return {
         "db": db_ok,
+        # the dashboard is a separate deployment now (ADR 0006); this is how it tells
+        # whether it was built against the API it is currently talking to
+        "contract_version": CONTRACT_VERSION,
         "opend": _opend_reachable(settings.opend_host, settings.opend_port),
         "queue_depth": worker.queue_depth(),
         "last_run": last_run,

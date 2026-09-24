@@ -7,6 +7,7 @@ import {
   type Entry, type Health, type Monitor,
 } from "./api";
 import { AddCombo, AddMonitor } from "./AddForms";
+import { CONTRACT_VERSION } from "./contract";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, visible, writeHidden } from "./columns";
 import { ColumnPickers } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
@@ -23,7 +24,7 @@ function readRefresh(fallback: number): number {
   return Number.isFinite(n) && n > 0 ? Math.max(5, Math.min(3600, n)) : fallback;
 }
 
-export function App({ rootPath }: { rootPath: string }) {
+export function App() {
   const [quotes, setQuotes] = useState<Entry[]>([]);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
@@ -35,9 +36,9 @@ export function App({ rootPath }: { rootPath: string }) {
   const load = useCallback(async () => {
     try {
       const [q, m, h] = await Promise.all([
-        fetchQuotes(rootPath),
-        fetchMonitors(rootPath),
-        fetchHealth(rootPath),
+        fetchQuotes(),
+        fetchMonitors(),
+        fetchHealth(),
       ]);
       setQuotes(q);
       setMonitors(m);
@@ -47,7 +48,7 @@ export function App({ rootPath }: { rootPath: string }) {
       // the dashboard must still render when the service is unhappy, as /ui does
       setError(String(e));
     }
-  }, [rootPath]);
+  }, []);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -83,13 +84,13 @@ export function App({ rootPath }: { rootPath: string }) {
 
   const handlers: RowHandlers = useMemo(
     () => ({
-      onPatch: (id, body) => void act(() => patchMonitor(rootPath, id, body)),
-      onDelete: (id) => void act(() => deleteMonitor(rootPath, id)),
-      onRename: (id, name) => void act(() => patchMonitor(rootPath, id, { name })),
-      onEntry: (positionId, value) => void act(() => patchPosition(rootPath, positionId, { entry: value })),
-      onTotal: (monitorId, value) => void act(() => setTotalEntry(rootPath, monitorId, value)),
+      onPatch: (id, body) => void act(() => patchMonitor(id, body)),
+      onDelete: (id) => void act(() => deleteMonitor(id)),
+      onRename: (id, name) => void act(() => patchMonitor(id, { name })),
+      onEntry: (positionId, value) => void act(() => patchPosition(positionId, { entry: value })),
+      onTotal: (monitorId, value) => void act(() => setTotalEntry(monitorId, value)),
     }),
-    [act, rootPath],
+    [act],
   );
 
   const onToggle = useCallback((table: "single" | "combo", key: string, shown: boolean) => {
@@ -114,10 +115,21 @@ export function App({ rootPath }: { rootPath: string }) {
 
   const fetchedAt = health?.monitor.fetched_at;
 
+  // The dashboard and the API deploy separately now (ADR 0006), so this bundle can be older
+  // than the service it is talking to. Say so rather than let it surface as a blank column.
+  const skewed = health !== null && health.contract_version !== CONTRACT_VERSION;
+
   return (
     <main>
       <h2>optionality watchlist</h2>
       {error ? <div className="banner">{error}</div> : null}
+      {skewed ? (
+        <div className="banner">
+          This dashboard is out of date — it was built for API v{CONTRACT_VERSION}, the service
+          is running v{health.contract_version}. The figures below may be wrong. Run{" "}
+          <code>make deploy</code>, then reload.
+        </div>
+      ) : null}
 
       <form className="health" onSubmit={(e) => e.preventDefault()}>
         refresh every{" "}
@@ -162,12 +174,12 @@ export function App({ rootPath }: { rootPath: string }) {
       <MutedTables
         monitors={monitors}
         retentionDays={health?.settings.expired_retention_days ?? 7}
-        onUnmute={(id) => void act(() => patchMonitor(rootPath, id, { enabled: true }))}
-        onDelete={(id) => void act(() => deleteMonitor(rootPath, id))}
+        onUnmute={(id) => void act(() => patchMonitor(id, { enabled: true }))}
+        onDelete={(id) => void act(() => deleteMonitor(id))}
       />
 
-      <AddMonitor onCreate={(body) => void act(() => createMonitor(rootPath, body))} />
-      <AddCombo onCreate={(body) => void act(() => createMonitor(rootPath, body))} />
+      <AddMonitor onCreate={(body) => void act(() => createMonitor(body))} />
+      <AddCombo onCreate={(body) => void act(() => createMonitor(body))} />
     </main>
   );
 }

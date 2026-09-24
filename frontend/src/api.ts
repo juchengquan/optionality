@@ -71,20 +71,31 @@ export interface Health {
     fetched_at: string | null;
   };
   settings: { sweep_seconds: number; expired_retention_days: number };
+  /** what the API believes the contract is; the bundle carries its own to compare */
+  contract_version: number;
 }
 
-async function getJSON<T>(rootPath: string, path: string): Promise<T> {
-  const res = await fetch(`${rootPath}${path}`);
+/** Where the API lives, relative to wherever this bundle was deployed.
+ *
+ * The page cannot work its own prefix out at runtime: `tailscale serve` strips it before
+ * proxying, so the app only ever sees the stripped spelling. BASE_URL is baked at build
+ * time from UI_BASE (see the Makefile) and locates both the assets and the API, so the two
+ * cannot end up pointing at different deployments. ADR 0006 has the reasoning.
+ */
+const API_BASE = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+
+async function getJSON<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
   return (await res.json()) as T;
 }
 
-export const fetchQuotes = (root: string) => getJSON<Entry[]>(root, "/quotes");
-export const fetchMonitors = (root: string) => getJSON<Monitor[]>(root, "/monitors");
-export const fetchHealth = (root: string) => getJSON<Health>(root, "/health");
+export const fetchQuotes = () => getJSON<Entry[]>("/quotes");
+export const fetchMonitors = () => getJSON<Monitor[]>("/monitors");
+export const fetchHealth = () => getJSON<Health>("/health");
 
-async function send(rootPath: string, path: string, method: string, body?: unknown): Promise<void> {
-  const res = await fetch(`${rootPath}${path}`, {
+async function send(path: string, method: string, body?: unknown): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -97,18 +108,18 @@ async function send(rootPath: string, path: string, method: string, body?: unkno
   }
 }
 
-export const patchMonitor = (root: string, id: string, body: Record<string, unknown>) =>
-  send(root, `/monitors/${id}`, "PATCH", body);
+export const patchMonitor = (id: string, body: Record<string, unknown>) =>
+  send(`/monitors/${id}`, "PATCH", body);
 
-export const deleteMonitor = (root: string, id: string) => send(root, `/monitors/${id}`, "DELETE");
+export const deleteMonitor = (id: string) => send(`/monitors/${id}`, "DELETE");
 
-export const patchPosition = (root: string, id: string, body: Record<string, unknown>) =>
-  send(root, `/positions/${id}`, "PATCH", body);
+export const patchPosition = (id: string, body: Record<string, unknown>) =>
+  send(`/positions/${id}`, "PATCH", body);
 
 /** Record a credit taken in across everything a rule spans; the server derives the one wing
  *  that has no rule of its own, so the per-wing credits stay the single source of truth. */
-export const setTotalEntry = (root: string, monitorId: string, entry: number) =>
-  send(root, `/monitors/${monitorId}/total-entry`, "POST", { entry });
+export const setTotalEntry = (monitorId: string, entry: number) =>
+  send(`/monitors/${monitorId}/total-entry`, "POST", { entry });
 
-export const createMonitor = (root: string, body: Record<string, unknown>) =>
-  send(root, "/monitors", "POST", body);
+export const createMonitor = (body: Record<string, unknown>) =>
+  send("/monitors", "POST", body);

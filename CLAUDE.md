@@ -1,15 +1,20 @@
 # CLAUDE.md
 
-SPX options monitoring service: FastAPI + APScheduler + SQLite, Telegram bot, server-rendered dashboard.
-Deployed as a macOS launchd agent on the owner's always-on machine, behind `tailscale serve --set-path /api`.
+SPX options monitoring service: FastAPI + APScheduler + SQLite, Telegram bot, React dashboard.
+**Two launchd agents** on the owner's always-on machine, behind one tailnet hostname (ADR 0006):
+`com.optionality.service` (uvicorn, the JSON API, `/opt/api`) and `com.optionality.ui` (Caddy serving
+`frontend/dist`, `/opt`). Same origin, so no CORS.
 
 ## Commands
 
 - `make test` / `make lint` / `make format` — run all three before every commit. Lint is ruff with a broad
   external ruleset (expect rules far beyond the defaults; per-file `BLE001` ignores exist for the
   worker/sweeper/bot, whose job is to survive any failure).
-- `make serve` — run locally (loads `.env`). Production runs via launchd: **`make launchd-restart` after every
-  merge or pull** — launchd does not watch the repo, and the agent runs this working tree.
+- `make deploy` — **the only correct way to land a merge**: pull, sync, back up the DB, migrate, restart BOTH
+  agents. launchd does not watch the repo and the agents run this working tree, so a merge that skips this
+  leaves stale code running. Doing the steps by hand is how the dashboard and the API drift apart.
+- `make serve` — run the API locally (loads `.env`). `make build-ui` / `check-ui` / `test-ui` for the frontend;
+  the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path.
 - Schema change: edit `service/models.py`, then
   `OPTIONALITY_DB_PATH=data/optionality.db uv run alembic revision --autogenerate -m "..."` and
   `... alembic upgrade head`. Alembic runs in batch mode (SQLite table rebuilds). **Squash a branch's

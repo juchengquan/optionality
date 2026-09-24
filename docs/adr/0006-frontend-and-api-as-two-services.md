@@ -43,3 +43,14 @@ the most an arrangement like this can honestly offer.
   possible only because there is no client-side router — the same reason given in ADR 0005.
 - The API loses its `/ui`, `/app` and asset routes, and the shell template with them.
 - Two launchd agents, two restarts, two ways to be stale.
+
+## Outcome
+
+Verified end to end on a throwaway `/probe` path before `/opt` was touched: Caddy served the
+shell at both `/probe` and `/probe/`, its hashed assets resolved, and `/probe/api/health`
+reached uvicorn — two processes, one hostname, nesting intact. The tailscale config was
+snapshotted first and confirmed byte-identical after the probe was removed.
+
+The absolute base path proved itself in the same test, in the negative: the page served at
+`/probe` still asked for `/opt/assets/...`, because the bundle knows where it was built to
+live. That is the coupling this ADR accepts, and it is visible rather than subtle.
