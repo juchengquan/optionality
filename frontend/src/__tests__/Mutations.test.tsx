@@ -8,6 +8,7 @@ function submitFormOf(control: HTMLElement) {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { CONTRACT_VERSION } from "../contract";
 
 const wing = {
   id: "m1", code: "1016_bs_8050", field: "mid_price", threshold: 2.76,
@@ -26,6 +27,9 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
+  // without this every test here renders the version-skew banner, which would
+  // camouflage a real one
+  contract_version: CONTRACT_VERSION,
 };
 
 let calls: { url: string; method: string; body: unknown }[] = [];
