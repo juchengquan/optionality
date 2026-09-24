@@ -1149,4 +1149,4 @@ def test_a_tick_applies_without_a_confirm_step(client_factory):
     assert 'hx-trigger="change"' in picker
     assert "from:find" not in picker
     # and a form may not sit inside a label: label takes phrasing content only
-    assert "<label" in picker and "<label class=\"colpick\">" not in picker
+    assert "<label" in picker and '<label class="colpick">' not in picker

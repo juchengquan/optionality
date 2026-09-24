@@ -7,10 +7,15 @@ from sqlalchemy import select
 from optionality.apis.aux import build_spx_code
 from optionality.core import fetch_snapshot
 from optionality.notification.telegram import send_telegram_message
-from optionality.service.models import Monitor, Position, utcnow
-from optionality.service.position import position_leg_codes
+from optionality.service.models import Monitor, Position, monitor_positions, utcnow
+from optionality.service.position import (
+    combined_cost_to_close,
+    combined_entry,
+    combined_pnl,
+    position_leg_codes,
+)
 from optionality.service.settings import Settings
-from optionality.service.timefmt import display_time, market_time_to_display
+from optionality.service.timefmt import days_to_expiry, display_time, market_time_to_display
 
 logger = logging.getLogger("optionality.monitor")
 
@@ -135,7 +140,51 @@ def _display_records(records: list[dict], settings: Settings, fetched_at: dateti
     return by_code
 
 
-def build_entries(monitors: list[Monitor], by_code: dict, bad_set: set[str]) -> list[dict]:
+def threshold_fill(value, threshold, direction: str, compare: str) -> int | None:
+    """How far a value has travelled toward its threshold, 0-100.
+
+    None where the journey has no honest baseline to fill from — a signed negative threshold
+    the value must cross from the other side. A figure that sometimes lies is worse than none,
+    the same reasoning that makes a partly priced combo report nothing rather than a part sum.
+    """
+    if value is None or not threshold:
+        return None
+    metric = abs(value) if compare == "abs" else value
+    if metric < 0 or threshold < 0:
+        return None
+    if direction == "above":
+        ratio = metric / threshold
+    elif metric > 0:
+        ratio = threshold / metric
+    else:
+        return None
+    return max(0, min(100, round(ratio * 100)))
+
+
+def positions_for_monitors(session, monitor_ids: list[str]) -> dict[str, list]:
+    """Which Positions each Monitor watches. A rule may span several — a combined stop over
+    two credit spreads belongs to neither alone."""
+    if not monitor_ids:
+        return {}
+    rows = (
+        session.query(monitor_positions.c.monitor_id, Position)
+        .filter(
+            Position.id == monitor_positions.c.position_id,
+            monitor_positions.c.monitor_id.in_(monitor_ids),
+        )
+        .all()
+    )
+    owned: dict[str, list] = {}
+    for monitor_id, position in rows:
+        owned.setdefault(monitor_id, []).append(position)
+    for positions in owned.values():
+        positions.sort(key=lambda p: p.name)
+    return owned
+
+
+def build_entries(
+    monitors: list[Monitor], by_code: dict, bad_set: set[str], owned: dict[str, list] | None = None
+) -> list[dict]:
     """Watchlist entries for a set of monitors against an already-fetched batch of records.
 
     Combo entries carry their signed-sum under "combo_value" and no per-contract snapshot;
@@ -161,6 +210,27 @@ def build_entries(monitors: list[Monitor], by_code: dict, bad_set: set[str]) -> 
             entry["combo_greeks"] = {f: combo_field_sum(m, by_code, f) for f in COMBO_GREEK_FIELDS}
         if bad_set.intersection(monitor_leg_codes(m)):
             entry["error"] = "unknown contract"
+
+        # everything a client needs without re-deriving it: how long the contract has left,
+        # which holdings the rule watches, what they cost to close, and how close it is to
+        # firing. These used to be computed in routes/ui.py and reachable over no endpoint.
+        entry["dte"] = days_to_expiry(m.strike_date)
+        positions = (owned or {}).get(m.id, [])
+        entry["scope"] = m.scope
+        entry["positions"] = [{"id": p.id, "name": p.name} for p in positions]
+        entry["cost_to_close"] = combined_cost_to_close(positions, by_code, m.scope) if positions else None
+        whole = positions if m.scope == "all" else []
+        entry["entry"] = combined_entry(whole) if whole else None
+        entry["pnl"] = combined_pnl(whole, by_code) if whole else None
+
+        # a rule backed by a Position is measured on its cost to close, which cannot be
+        # negative — so the comparison is always "above"/"abs" regardless of the rule's own
+        # mode, matching what the dashboard has shown since the sign reconciliation.
+        if positions and m.legs:
+            entry["fill"] = threshold_fill(entry["cost_to_close"], m.threshold, "above", "abs")
+        else:
+            watched = entry.get("combo_value") if m.legs else (entry["snapshot"] or {}).get(m.field)
+            entry["fill"] = threshold_fill(watched, m.threshold, m.direction, m.compare)
         entries.append(entry)
     return entries
 
@@ -174,9 +244,16 @@ def watchlist_quotes(session_factory, settings: Settings, fetcher=fetch_snapshot
     monitors = enabled_monitors(session_factory, include_combos)
     if not monitors:
         return []
-    codes = sorted({code for m in monitors for code in monitor_leg_codes(m)})
+    with session_factory() as session:
+        owned = positions_for_monitors(session, [m.id for m in monitors])
+    # a Position can hold legs no Monitor names — a rule watching one wing of a condor, say.
+    # Without them the cost to close would be a partial sum, so it joins the batch instead.
+    codes = sorted(
+        {code for m in monitors for code in monitor_leg_codes(m)}
+        | {code for ps in owned.values() for p in ps for code in position_leg_codes(p)}
+    )
     records, bad_codes = fetch_resilient(codes, settings, fetcher)
-    return build_entries(monitors, _display_records(records, settings, utcnow()), set(bad_codes))
+    return build_entries(monitors, _display_records(records, settings, utcnow()), set(bad_codes), owned)
 
 
 class MonitorSweeper:
@@ -228,7 +305,9 @@ class MonitorSweeper:
         """
         monitors = enabled_monitors(self.session_factory, include_combos)
         by_code, fetched = self.cached_records()
-        return build_entries(monitors, by_code, set(self.last_bad_codes)), fetched
+        with self.session_factory() as session:
+            owned = positions_for_monitors(session, [m.id for m in monitors])
+        return build_entries(monitors, by_code, set(self.last_bad_codes), owned), fetched
 
     def _notify(self, text: str) -> None:
         if not (self.settings.telegram_bot_token and self.settings.telegram_chat_id):
