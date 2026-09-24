@@ -1,0 +1,121 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "../App";
+
+/** A delta-watched leg rule: its fill lives on the delta column, which is hideable. */
+const leg = {
+  id: "m1", code: "US.SPXW261120C8100000", field: "option_delta", threshold: 0.2,
+  direction: "above", compare: "abs", triggered: true, strike_date: "2026-11-20",
+  dte: 57, fill: 84, scope: "leg", positions: [{ id: "p1", name: "1120_b_8100" }],
+  cost_to_close: 3.75, entry: null, pnl: null,
+  snapshot: { name: "SPXW 261120 8100.00C", option_delta: 0.1685, option_gamma: 0.0007,
+              option_theta: -0.9, option_vega: 7.8, option_implied_volatility: 11.3,
+              mid_price: 31.5, bid_price: 31.3, ask_price: 31.7 },
+};
+
+const health = {
+  db: true, opend: true, queue_depth: 0,
+  monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
+  settings: { sweep_seconds: 15, expired_retention_days: 7 },
+};
+
+function mockApi() {
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    const body = url.endsWith("/quotes") ? [leg] : url.endsWith("/monitors") ? [] : health;
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+  }));
+}
+
+function clearCookies() {
+  for (const name of ["ui_cols_single", "ui_cols_combo", "ui_refresh"]) {
+    document.cookie = `${name}=;path=/;max-age=0`;
+  }
+}
+
+/** The whole cell, since --fill and the hl class live in attributes rather than text. */
+function filledCell(container: HTMLElement): HTMLElement {
+  const cell = container.querySelector("td.hl");
+  if (!cell) throw new Error("no filled cell");
+  return cell as HTMLElement;
+}
+
+async function untick(label: string) {
+  const picker = screen.getByText("Single-leg columns").closest("details")!;
+  fireEvent.click(within(picker).getByLabelText(label));
+}
+
+describe("the fill and bell fallback chain", () => {
+  beforeEach(() => { clearCookies(); mockApi(); });
+
+  it("normally sits on the column the alarm watches", async () => {
+    const { container } = render(<App rootPath="" />);
+    await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
+    const cell = filledCell(container);
+    expect(cell.textContent).toBe("0.1685"); // delta
+    expect(cell.style.getPropertyValue("--fill")).toBe("84%");
+  });
+
+  it("moves to the alarm cell when that column is hidden", async () => {
+    const { container } = render(<App rootPath="" />);
+    await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
+    await untick("delta");
+    await waitFor(() => expect(filledCell(container).textContent).toContain("delta ≥ 0.2"));
+    // urgency must survive the column that carried it being hidden
+    expect(filledCell(container).style.getPropertyValue("--fill")).toBe("84%");
+  });
+
+  it("ends on the contract when the alarm is hidden too, taking the bell with it", async () => {
+    const { container } = render(<App rootPath="" />);
+    await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
+    await untick("delta");
+    await untick("alarm");
+    await waitFor(() => expect(filledCell(container).textContent).toContain("SPXW 261120"));
+    // contract is protected, so the chain always terminates somewhere visible
+    const cell = filledCell(container);
+    expect(cell.style.getPropertyValue("--fill")).toBe("84%");
+    expect(cell.textContent).toContain("🔔");
+  });
+
+  it("never offers to hide the columns that identify or operate a row", async () => {
+    render(<App rootPath="" />);
+    await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
+    const picker = screen.getByText("Single-leg columns").closest("details")!;
+    expect(within(picker).queryByLabelText("contract")).toBeNull();
+    expect(within(picker).queryByLabelText("actions")).toBeNull();
+  });
+});
+
+describe("column preferences", () => {
+  beforeEach(() => { clearCookies(); mockApi(); });
+
+  it("stores what is HIDDEN, so a column added later is not invisible", async () => {
+    render(<App rootPath="" />);
+    await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
+    await untick("gamma");
+    // "." separates: a comma makes the cookie value quote-escaped and it stops round-tripping
+    await waitFor(() => expect(document.cookie).toContain("ui_cols_single=gamma"));
+    expect(document.cookie).not.toContain("ui_cols_single=contract");
+  });
+
+  it("reads the cookie /ui writes, so both dashboards agree", async () => {
+    document.cookie = "ui_cols_single=gamma.vega;path=/";
+    const { container } = render(<App rootPath="" />);
+    await waitFor(() => expect(container.querySelector("table")).toBeTruthy());
+    const headers = [...container.querySelectorAll("th")].map((h) => h.textContent);
+    expect(headers).not.toContain("gamma");
+    expect(headers).not.toContain("vega");
+    expect(headers).toContain("delta");
+  });
+
+  it("show all puts every column back in one action", async () => {
+    document.cookie = "ui_cols_single=gamma.vega.bid.ask;path=/";
+    const { container } = render(<App rootPath="" />);
+    await waitFor(() => expect(container.querySelector("table")).toBeTruthy());
+    const picker = screen.getByText("Single-leg columns").closest("details")!;
+    fireEvent.click(within(picker).getByText("show all"));
+    await waitFor(() =>
+      expect([...container.querySelectorAll("th")].map((h) => h.textContent)).toContain("gamma"),
+    );
+  });
+});
