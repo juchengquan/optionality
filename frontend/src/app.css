@@ -55,3 +55,11 @@ fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0;
 legend { font-weight: 600; }
 fieldset label { display: block; margin: 0.3rem 0; }
 button { cursor: pointer; }
+
+/* urgency is MARKED, never re-ordered: a row that moves between reading and clicking is
+   how you mute the wrong position */
+tr.near td:first-child { box-shadow: inset 3px 0 0 var(--fill-bar); }
+tr.close td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+.moved { font-size: 0.78rem; font-weight: 400; }
+.moved.up { color: var(--bad); }
+.moved.down { color: var(--muted); }

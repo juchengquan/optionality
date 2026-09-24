@@ -2,6 +2,7 @@ import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary } from "./format";
 import { EntryCell, RowActions } from "./RowActions";
+import { movedSince, urgencyBand, type Baseline } from "./signals";
 
 function cellValue(entry: Entry, key: string, isCombo: boolean): string {
   const snap = entry.snapshot ?? {};
@@ -37,13 +38,14 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, handlers,
+  title, entries, columns, isCombo, handlers, baseline,
 }: {
   title: string;
   entries: Entry[];
   columns: Column[];
   isCombo: boolean;
   handlers: RowHandlers;
+  baseline: Baseline | null;
 }) {
   if (entries.length === 0) return null;
   const shown = new Set(columns.map((c) => c.key));
@@ -62,8 +64,14 @@ export function WatchlistTable({
         <tbody>
           {entries.map((entry) => {
             const signal = signalColumns(entry, isCombo, shown);
+            const moved = movedSince(entry, baseline);
+            // urgency is marked, never re-ordered: a row that moves between reading it and
+            // clicking is how you mute the wrong position
+            const rowClass = [entry.triggered ? "triggered" : "", urgencyBand(entry.fill)]
+              .filter(Boolean)
+              .join(" ");
             return (
-              <tr key={entry.id} className={entry.triggered ? "triggered" : undefined}>
+              <tr key={entry.id} className={rowClass || undefined}>
                 {columns.map((c) => {
                   const hl = c.key === signal.fill;
                   const classes = [hl ? "hl" : "", LEFT.has(c.key) ? "left" : ""].filter(Boolean);
@@ -82,6 +90,11 @@ export function WatchlistTable({
                           {entry.triggered && signal.bell === identity ? " 🔔" : null}
                           {isCombo && entry.legs ? (
                             <div className="legs">{entry.strike_date} · {legSummary(entry.legs)}</div>
+                          ) : null}
+                          {moved !== null ? (
+                            <div className={`moved ${moved > 0 ? "up" : "down"}`}>
+                              {moved > 0 ? "▲" : "▼"} {Math.abs(moved).toFixed(2)} since you last looked
+                            </div>
                           ) : null}
                         </>
                       ) : c.key === "alarm" ? (

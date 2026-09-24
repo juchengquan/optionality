@@ -61,6 +61,17 @@ export interface Monitor {
   positions: PositionRef[];
 }
 
+/** Per-holding figures. The book total must sum THESE, not the rules: a rule spanning two
+ *  credit spreads already contains a wing that another rule reports on its own, so summing
+ *  rules double-counts it. */
+export interface PositionValue {
+  id: string;
+  name: string;
+  entry: number | null;
+  cost_to_close: number | null;
+  pnl: number | null;
+}
+
 export interface Health {
   db: boolean;
   opend: boolean;
@@ -82,6 +93,7 @@ async function getJSON<T>(rootPath: string, path: string): Promise<T> {
 export const fetchQuotes = (root: string) => getJSON<Entry[]>(root, "/quotes");
 export const fetchMonitors = (root: string) => getJSON<Monitor[]>(root, "/monitors");
 export const fetchHealth = (root: string) => getJSON<Health>(root, "/health");
+export const fetchPositionValues = (root: string) => getJSON<PositionValue[]>(root, "/positions/values");
 
 async function send(rootPath: string, path: string, method: string, body?: unknown): Promise<void> {
   const res = await fetch(`${rootPath}${path}`, {

@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import "./app.css";
 import {
-  createMonitor, deleteMonitor, fetchHealth, fetchMonitors, fetchQuotes,
+  createMonitor, deleteMonitor, fetchHealth, fetchMonitors, fetchPositionValues, fetchQuotes,
   patchMonitor, patchPosition, setTotalEntry,
-  type Entry, type Health, type Monitor,
+  type Entry, type Health, type Monitor, type PositionValue,
 } from "./api";
+import { StatusStrip } from "./StatusStrip";
+import {
+  bookPnl, closestToFiring, loadBaseline, saveBaseline, type Baseline,
+} from "./signals";
 import { AddCombo, AddMonitor } from "./AddForms";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, visible, writeHidden } from "./columns";
 import { ColumnPickers } from "./ColumnPickers";
@@ -27,21 +31,30 @@ export function App({ rootPath }: { rootPath: string }) {
   const [quotes, setQuotes] = useState<Entry[]>([]);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  const [positions, setPositions] = useState<PositionValue[]>([]);
+  const [baseline, setBaseline] = useState<Baseline | null>(() => loadBaseline());
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
   const [hiddenSingle, setHiddenSingle] = useState(() => readHidden("single"));
   const [hiddenCombo, setHiddenCombo] = useState(() => readHidden("combo"));
 
+  const quotesRef = useRef<Entry[]>([]);
+  useEffect(() => { quotesRef.current = quotes; }, [quotes]);
+
   const load = useCallback(async () => {
     try {
-      const [q, m, h] = await Promise.all([
+      const [q, m, h, p] = await Promise.all([
         fetchQuotes(rootPath),
         fetchMonitors(rootPath),
         fetchHealth(rootPath),
+        fetchPositionValues(rootPath),
       ]);
       setQuotes(q);
       setMonitors(m);
       setHealth(h);
+      setPositions(p);
+      // first visit of all: record where things stand, so "since you last looked" has a start
+      setBaseline((prev) => prev ?? saveBaseline(q));
       setError(null);
     } catch (e: unknown) {
       // the dashboard must still render when the service is unhappy, as /ui does
@@ -92,6 +105,16 @@ export function App({ rootPath }: { rootPath: string }) {
     [act, rootPath],
   );
 
+  // the baseline resets when you come BACK to the tab, which is what "since you last
+  // looked" means. A plain reload keeps it, because reloading is not looking away.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setBaseline(saveBaseline(quotesRef.current));
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const onToggle = useCallback((table: "single" | "combo", key: string, shown: boolean) => {
     const setter = table === "single" ? setHiddenSingle : setHiddenCombo;
     setter((prev) => {
@@ -107,6 +130,8 @@ export function App({ rootPath }: { rootPath: string }) {
     setter(() => { writeHidden(table, new Set()); return new Set(); });
   }, []);
 
+  const book = useMemo(() => bookPnl(positions), [positions]);
+  const closest = useMemo(() => closestToFiring(quotes), [quotes]);
   const singles = useMemo(() => quotes.filter((q) => !q.legs), [quotes]);
   const combos = useMemo(() => quotes.filter((q) => q.legs), [quotes]);
   const singleCols = useMemo(() => visible(SINGLE_COLUMNS, hiddenSingle), [hiddenSingle]);
@@ -146,17 +171,16 @@ export function App({ rootPath }: { rootPath: string }) {
         {health ? ` · sweep every ${health.settings.sweep_seconds}s` : ""}
       </p>
 
-      {health ? (
-        <div className="health">
-          OpenD: <span className={health.opend ? undefined : "bad"}>{health.opend ? "up" : "DOWN"}</span>
-          {" · alarms: "}
-          <span className={health.monitor.alarms.bad ? "bad" : undefined}>{health.monitor.alarms.label}</span>
-          {` · queue: ${health.queue_depth}`}
-        </div>
-      ) : null}
+      <StatusStrip
+        health={health}
+        book={book}
+        closest={closest}
+        baselineAt={baseline?.at ?? null}
+        onResetBaseline={() => setBaseline(saveBaseline(quotes))}
+      />
 
-      <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false} handlers={handlers} />
-      <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true} handlers={handlers} />
+      <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false} handlers={handlers} baseline={baseline} />
+      <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true} handlers={handlers} baseline={baseline} />
       {quotes.length === 0 && !error ? <p>Watchlist is empty.</p> : null}
 
       <MutedTables
