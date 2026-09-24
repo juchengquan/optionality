@@ -6,8 +6,10 @@ export interface Column {
   label: string;
 }
 
-// contract/combo identifies the row and actions operates it, so neither may be hidden.
-export const PROTECTED = new Set(["contract", "combo", "actions"]);
+/** Identity only. "actions" was here until the detail sheet took the controls (ADR
+ *  0008) — a number box and three buttons per row could not survive a narrow screen,
+ *  and full parity meant the operations could not go with it. */
+export const PROTECTED = new Set(["contract", "combo"]);
 
 export const SINGLE_COLUMNS: Column[] = [
   { key: "contract", label: "contract" }, { key: "alarm", label: "alarm" },
@@ -15,8 +17,7 @@ export const SINGLE_COLUMNS: Column[] = [
   { key: "gamma", label: "gamma" }, { key: "theta", label: "theta" },
   { key: "vega", label: "vega" }, { key: "iv", label: "IV" },
   { key: "mid", label: "mid" }, { key: "bid", label: "bid" },
-  { key: "ask", label: "ask" }, { key: "actions", label: "actions" },
-  { key: "last_trade", label: "last trade" },
+  { key: "ask", label: "ask" }, { key: "last_trade", label: "last trade" },
 ];
 
 export const COMBO_COLUMNS: Column[] = [
@@ -25,10 +26,9 @@ export const COMBO_COLUMNS: Column[] = [
   { key: "value", label: "value" }, { key: "pnl", label: "P&L" },
   { key: "delta", label: "delta" }, { key: "gamma", label: "gamma" },
   { key: "theta", label: "theta" }, { key: "vega", label: "vega" },
-  { key: "actions", label: "actions" },
 ];
 
-export const LEFT = new Set(["contract", "combo", "alarm", "actions", "entry"]);
+export const LEFT = new Set(["contract", "combo", "alarm", "entry"]);
 
 /** The cookie stores what is HIDDEN, not what is kept, so a column added later shows up by
  *  default instead of staying invisible. "." separates because a comma makes the value

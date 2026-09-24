@@ -195,9 +195,9 @@ export function App() {
       ) : null}
 
       <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false}
-                      handlers={handlers} onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
+                      onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
       <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true}
-                      handlers={handlers} onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
+                      onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
 
       <RowDetail
         entry={detailEntry}

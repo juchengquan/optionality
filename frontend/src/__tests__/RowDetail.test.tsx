@@ -85,16 +85,6 @@ describe("the row detail sheet", () => {
       expect(calls.some((c) => c.body && "enabled" in (c.body as object))).toBe(true));
   });
 
-  it("does not open when the click was meant for a control in the row", async () => {
-    mockApi();
-    render(<App />);
-    await waitFor(() => expect(screen.getByText("mute")).toBeTruthy());
-
-    // the inline actions still exist in phase 1; clicking one must not also open a sheet
-    await userEvent.click(screen.getAllByText("mute")[0]!);
-    expect(screen.queryByRole("dialog")).toBeNull();
-  });
-
   it("follows the live data rather than freezing what it opened with", async () => {
     mockApi();
     const sheet = await openDetail();

@@ -28,6 +28,15 @@ function numberBoxPlaceholdered(text: string): HTMLInputElement {
   return box;
 }
 
+/** Every control lives in the detail sheet since phase 2 (ADR 0008), so operating a row
+ *  means opening it first. One helper, so the tests below still read as "set this, expect
+ *  that" rather than as a click script. */
+async function openRow(name: string) {
+  await waitFor(() => expect(screen.getByText(name)).toBeTruthy());
+  await userEvent.click(screen.getByText(name));
+  return await screen.findByRole("dialog");
+}
+
 async function typeNumber(box: HTMLInputElement, value: string) {
   await userEvent.clear(box);
   await userEvent.type(box, value);
@@ -84,6 +93,7 @@ describe("mutations", () => {
   it("sets a threshold through the JSON API", async () => {
     mockApi([wing]);
     render(<App />);
+    await openRow("1016_bs_8050");
     await waitFor(() => expect(numberBoxShowing("2.76")).toBeTruthy());
     const threshold = numberBoxShowing("2.76");
     await typeNumber(threshold, "3.00");
@@ -97,6 +107,7 @@ describe("mutations", () => {
   it("types an entry onto the one holding a rule watches", async () => {
     mockApi([wing]);
     render(<App />);
+    await openRow("1016_bs_8050");
     await waitFor(() => expect(numberBoxShowing("2.87")).toBeTruthy());
     const entry = numberBoxShowing("2.87");
     await typeNumber(entry, "3.00");
@@ -108,6 +119,7 @@ describe("mutations", () => {
   it("sends a TOTAL for a rule spanning two holdings, never a per-wing entry", async () => {
     mockApi([spanning]);
     render(<App />);
+    await openRow("1016_IC");
     await waitFor(() => expect(screen.getByPlaceholderText("total")).toBeTruthy());
     const total = screen.getByPlaceholderText("total");
     fireEvent.change(total, { target: { value: "3.21" } });
@@ -123,6 +135,7 @@ describe("mutations", () => {
   it("shows the service's own words when it refuses", async () => {
     mockApi([spanning], "cannot split a total across 2 wings that have no rule of their own");
     render(<App />);
+    await openRow("1016_IC");
     await waitFor(() => expect(screen.getByPlaceholderText("total")).toBeTruthy());
     const totalBox = screen.getByPlaceholderText("total");
     fireEvent.change(totalBox, { target: { value: "3.21" } });
@@ -133,14 +146,15 @@ describe("mutations", () => {
   it("mutes without asking — it is reversible", async () => {
     mockApi([wing]);
     render(<App />);
-    await waitFor(() => expect(screen.getByText("mute")).toBeTruthy());
-    fireEvent.click(screen.getByText("mute"));
+    const sheet = await openRow("1016_bs_8050");
+    fireEvent.click(within(sheet).getByText("mute"));
     await waitFor(() => expect(calls.some((c) => c.body && "enabled" in (c.body as object))).toBe(true));
   });
 
   it("says a refusal once, in a toast, not in the standing banner", async () => {
     mockApi([spanning], "cannot split a total across two unpriced wings");
     render(<App />);
+    await openRow("1016_IC");
     await waitFor(() => expect(numberBoxPlaceholdered("total")).toBeTruthy());
     const box = numberBoxPlaceholdered("total");
     await typeNumber(box, "3.21");
@@ -168,9 +182,8 @@ describe("mutations", () => {
   it("asks before deleting, and does nothing if you decline", async () => {
     mockApi([wing]);
     render(<App />);
-    await waitFor(() => expect(screen.getByText("delete")).toBeTruthy());
-
-    await userEvent.click(screen.getByText("delete"));
+    const opened = await openRow("1016_bs_8050");
+    await userEvent.click(within(opened).getByText("delete"));
     const dialog = await screen.findByRole("alertdialog");
     // it names what is about to go, so the question can be answered without guessing
     expect(within(dialog).getByText(/1016_bs_8050/)).toBeTruthy();
@@ -185,9 +198,8 @@ describe("mutations", () => {
   it("deletes once confirmed", async () => {
     mockApi([wing]);
     render(<App />);
-    await waitFor(() => expect(screen.getByText("delete")).toBeTruthy());
-
-    await userEvent.click(screen.getByText("delete"));
+    const opened = await openRow("1016_bs_8050");
+    await userEvent.click(within(opened).getByText("delete"));
     // scoped to the dialog on purpose: finding "delete" anywhere on the page would match
     // the row's own button and pass without a confirmation existing at all
     const dialog = await screen.findByRole("alertdialog");

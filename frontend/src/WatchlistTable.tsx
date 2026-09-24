@@ -1,7 +1,6 @@
 import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary } from "./format";
-import { EntryCell, RowActions } from "./RowActions";
 
 /** Row plus column key to displayed text. Exported because the detail sheet shows every
  *  column whether or not the table is drawing it, and two of these would drift. */
@@ -39,13 +38,12 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, handlers, onOpen,
+  title, entries, columns, isCombo, onOpen,
 }: {
   title: string;
   entries: Entry[];
   columns: Column[];
   isCombo: boolean;
-  handlers: RowHandlers;
   onOpen: (entry: Entry, isCombo: boolean) => void;
 }) {
   if (entries.length === 0) return null;
@@ -69,13 +67,8 @@ export function WatchlistTable({
               <tr
                 key={entry.id}
                 className={entry.triggered ? "triggered" : undefined}
-                // the row opens its detail, but a click that landed on a control inside the
-                // row was meant for that control — setting a threshold must not also open a
-                // sheet over the box you just typed in
-                onClick={(e) => {
-                  if ((e.target as HTMLElement).closest("button, input, select, form, a")) return;
-                  onOpen(entry, isCombo);
-                }}
+                // the whole row opens its detail now: there is nothing else in it to click
+                onClick={() => onOpen(entry, isCombo)}
               >
                 {columns.map((c) => {
                   const hl = c.key === signal.fill;
@@ -102,15 +95,6 @@ export function WatchlistTable({
                           {cellValue(entry, c.key, isCombo)}
                           {entry.triggered && signal.bell === "alarm" ? " 🔔" : null}
                         </>
-                      ) : c.key === "actions" ? (
-                        <RowActions
-                          entry={entry}
-                          onPatch={handlers.onPatch}
-                          onDelete={handlers.onDelete}
-                          onRename={handlers.onRename}
-                        />
-                      ) : c.key === "entry" ? (
-                        <EntryCell entry={entry} onEntry={handlers.onEntry} onTotal={handlers.onTotal} />
                       ) : (
                         cellValue(entry, c.key, isCombo)
                       )}
