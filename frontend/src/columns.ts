@@ -99,17 +99,18 @@ export function columnsFor(
   table: "single" | "combo",
   available: number,
   hidden: Set<string>,
+  widthOf: (key: string) => number = (k) => WIDTH[k] ?? DEFAULT_WIDTH,
 ): Column[] {
   const all = table === "single" ? SINGLE_COLUMNS : COMBO_COLUMNS;
   const byKey = new Map(all.map((c) => [c.key, c]));
   const identity = table === "single" ? "contract" : "combo";
 
   const kept: string[] = [identity];
-  let used = WIDTH[identity] ?? DEFAULT_WIDTH;
+  let used = widthOf(identity);
 
   for (const key of PRIORITY[table]) {
     if (key === identity || hidden.has(key) || !byKey.has(key)) continue;
-    const w = WIDTH[key] ?? DEFAULT_WIDTH;
+    const w = widthOf(key);
     // STOP rather than skip. Skipping to a narrower column further down the order means a
     // window widened by twenty pixels can swap one column for another instead of simply
     // gaining one, and columns that appear and vanish as you drag are worse than columns
@@ -126,12 +127,43 @@ export function columnsFor(
 
 /** What the picker should offer at this width. A column that cannot appear however it is
  *  ticked is not offered, so ticking is never silently ignored. */
-export function offerable(table: "single" | "combo", available: number): Set<string> {
+export function offerable(
+  table: "single" | "combo",
+  available: number,
+  widthOf: (key: string) => number = (k) => WIDTH[k] ?? DEFAULT_WIDTH,
+): Set<string> {
   const identity = table === "single" ? "contract" : "combo";
-  const base = WIDTH[identity] ?? DEFAULT_WIDTH;
+  const base = widthOf(identity);
   return new Set(
-    PRIORITY[table].filter(
-      (k) => k !== identity && base + (WIDTH[k] ?? DEFAULT_WIDTH) <= available,
-    ),
+    PRIORITY[table].filter((k) => k !== identity && base + widthOf(k) <= available),
   );
+}
+
+/** Column widths derived from what is actually in the table, not guessed.
+ *
+ *  A pixel estimate cannot survive the reader changing their text size: the viewport is
+ *  unchanged while the amount that fits is not. So widths are counted in CHARACTERS —
+ *  the longest thing this column will actually draw, header included — and multiplied by
+ *  the width of one character in the font the table is really using. That makes the result
+ *  respond to both the data and the text size, with no probe table to render.
+ *
+ *  Figures are tabular-nums, so every digit is the same width and counting characters is
+ *  exact for them. It is an approximation only for the identity column's proportional
+ *  text, which is why CELL_PADDING carries a little slack.
+ */
+export function widthsFromContent(
+  columns: Column[],
+  rows: readonly Entry[],
+  isCombo: boolean,
+  charWidth: number,
+  cellText: (row: Entry, key: string, isCombo: boolean) => string,
+): Record<string, number> {
+  const CELL_PADDING = 22; // 10px each side plus the border, per app.css
+  const out: Record<string, number> = {};
+  for (const c of columns) {
+    let longest = c.label.length;
+    for (const r of rows) longest = Math.max(longest, cellText(r, c.key, isCombo).length);
+    out[c.key] = Math.ceil(longest * charWidth) + CELL_PADDING;
+  }
+  return out;
 }

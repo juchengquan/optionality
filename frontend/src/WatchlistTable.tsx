@@ -11,6 +11,11 @@ export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
     isCombo ? fmt(greeks[name] ?? null, col) : fmt(snap[name as keyof typeof snap] as number | null, col);
 
   switch (key) {
+    // the identity columns are DRAWN by the JSX below, badge and bell and all — but they
+    // still have to answer here, because the fitting measurement asks this function how
+    // wide every column needs to be and these are the widest on the page
+    case "contract": return entry.snapshot?.name ?? entry.code;
+    case "combo": return entry.code;
     case "dte": return String(entry.dte);
     case "alarm": return alarmText(entry.field, entry.direction, entry.threshold, entry.compare);
     case "value": return fmt(entry.cost_to_close ?? entry.combo_value ?? null, "mid");
@@ -38,20 +43,22 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, onOpen,
+  title, entries, columns, isCombo, onOpen, containerRef,
 }: {
   title: string;
   entries: Entry[];
   columns: Column[];
   isCombo: boolean;
   onOpen: (entry: Entry, isCombo: boolean) => void;
+  containerRef?: React.Ref<HTMLDivElement>;
 }) {
   if (entries.length === 0) return null;
   const shown = new Set(columns.map((c) => c.key));
 
   return (
-    <>
+    <div ref={containerRef}>
       <h3>{title}</h3>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -106,6 +113,7 @@ export function WatchlistTable({
           })}
         </tbody>
       </table>
-    </>
+      </div>
+    </div>
   );
 }

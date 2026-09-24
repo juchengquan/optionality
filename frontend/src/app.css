@@ -51,6 +51,11 @@ body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem;
           border: 1px solid var(--destructive); border-radius: var(--radius-md);
           padding: 0.5rem 1rem; margin-bottom: 1rem; }
 table { border-collapse: collapse; margin-bottom: 1.5rem; }
+/* The safety valve, not the mechanism. Columns drop by priority so this should never be
+   reached — but the identity column is never dropped, and a long enough contract name can
+   exceed the screen on its own. Scrolling INSIDE the table beats what this all started as:
+   the whole page, heading and status strip included, sliding sideways. */
+.table-scroll { overflow-x: auto; }
 /* tabular-nums: ragged decimals defeat scanning a column */
 th, td { border: 1px solid var(--grid); padding: 4px 10px; text-align: right;
          white-space: nowrap; font-variant-numeric: tabular-nums; }

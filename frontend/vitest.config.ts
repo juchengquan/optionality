@@ -15,5 +15,6 @@ export default defineConfig({
   // to resolve rather than fails an assertion
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   define: { __CONTRACT_VERSION__: JSON.stringify(contractVersion) },
-  test: { environment: "jsdom", globals: true },
+  // __browser__ is the other suite: it needs a real layout engine (ADR 0008)
+  test: { environment: "jsdom", globals: true, exclude: ["**/node_modules/**", "src/__browser__/**"] },
 });

@@ -10,10 +10,11 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddCombo, AddMonitor } from "./AddForms";
 import { CONTRACT_VERSION } from "./contract";
-import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, visible, writeHidden } from "./columns";
+import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, writeHidden } from "./columns";
 import { ColumnPickers } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { RowDetail, type DetailTarget } from "./RowDetail";
+import { useTableFit } from "./useTableFit";
 import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
 
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
@@ -128,8 +129,9 @@ export function App() {
 
   const singles = useMemo(() => quotes.filter((q) => !q.legs), [quotes]);
   const combos = useMemo(() => quotes.filter((q) => q.legs), [quotes]);
-  const singleCols = useMemo(() => visible(SINGLE_COLUMNS, hiddenSingle), [hiddenSingle]);
-  const comboCols = useMemo(() => visible(COMBO_COLUMNS, hiddenCombo), [hiddenCombo]);
+  // what the viewer ticked is now a wish; the width decides how much of it is granted
+  const singleFit = useTableFit("single", singles, hiddenSingle);
+  const comboFit = useTableFit("combo", combos, hiddenCombo);
 
   // the sheet holds a snapshot of the row it was opened with; the poll replaces every row
   // object, so re-read it from the live list or the figures behind the sheet freeze
@@ -175,8 +177,10 @@ export function App() {
 
       <ColumnPickers
         pickers={[
-          { table: "single", label: "Single-leg", all: SINGLE_COLUMNS, hidden: hiddenSingle, onToggle, onReset },
-          { table: "combo", label: "Combos", all: COMBO_COLUMNS, hidden: hiddenCombo, onToggle, onReset },
+          // only columns that could actually appear at this width are offered, so ticking
+          // one is never silently ignored
+          { table: "single", label: "Single-leg", all: SINGLE_COLUMNS.filter((c) => singleFit.offered.has(c.key)), hidden: hiddenSingle, onToggle, onReset },
+          { table: "combo", label: "Combos", all: COMBO_COLUMNS.filter((c) => comboFit.offered.has(c.key)), hidden: hiddenCombo, onToggle, onReset },
         ]}
       />
 
@@ -194,9 +198,9 @@ export function App() {
         </div>
       ) : null}
 
-      <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false}
+      <WatchlistTable title="Single-leg" entries={singles} columns={singleFit.columns} containerRef={singleFit.ref} isCombo={false}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
-      <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true}
+      <WatchlistTable title="Combos" entries={combos} columns={comboFit.columns} containerRef={comboFit.ref} isCombo={true}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
 
       <RowDetail

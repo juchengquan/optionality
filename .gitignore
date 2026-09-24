@@ -192,3 +192,6 @@ data/
 opend/
 # frontend: dependencies are not committed, the BUILT bundle is (see ADR 0005)
 frontend/node_modules/
+# playwright writes test traces and screenshots beside the tests it runs
+frontend/src/__browser__/__screenshots__/
+frontend/test-results/
