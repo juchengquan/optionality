@@ -48,7 +48,7 @@
 <h3>Combos</h3>
 <table>
   <thead><tr>
-    <th>combo</th><th>alarm</th><th>dte</th><th>value</th>
+    <th>combo</th><th>alarm</th><th>dte</th><th>entry</th><th>value</th><th>P&amp;L</th>
     <th>delta</th><th>gamma</th><th>theta</th><th>vega</th><th>actions</th>
   </tr></thead>
   <tbody>
@@ -59,7 +59,13 @@
       </td>
       <td>{{ row.alarm }}</td>
       <td>{{ row.dte }}</td>
+      {#- entry is the Position's, so it is editable only on the whole-position rule -#}
+      <td class="actions">{% if row.position_id %}<form hx-post="{{ root_path }}/ui/positions/{{ row.position_id }}/entry">
+          <input type="number" name="entry" step="any" value="{{ row.entry if row.entry != "—" else "" }}"
+                 placeholder="entry" required><button>set</button>
+        </form>{% endif %}</td>
       <td class="hl"{% if row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}>{{ row.value }}</td>
+      <td>{{ row.pnl }}</td>
       <td>{{ row.delta }}</td>
       <td>{{ row.gamma }}</td>
       <td>{{ row.theta }}</td>

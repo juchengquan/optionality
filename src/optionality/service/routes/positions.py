@@ -121,6 +121,28 @@ def create_position(payload: PositionIn, session: SessionDep, settings: Settings
     return _to_dict(row, settings.display_tz)
 
 
+class PositionPatch(BaseModel):
+    entry: float | None = None
+    contracts: int | None = Field(default=None, ge=1)
+    strategy: str | None = None
+
+
+@router.patch("/{position_id}")
+def patch_position(position_id: str, payload: PositionPatch, session: SessionDep, settings: SettingsDep):
+    """Record what was taken in, after the fact. Legs are never edited here — a different
+    structure is a different holding."""
+    changes = payload.model_dump(exclude_none=True)
+    if not changes:
+        raise HTTPException(status_code=422, detail="nothing to update")
+    row = session.get(Position, position_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="position not found")
+    for key, value in changes.items():
+        setattr(row, key, value)
+    session.commit()
+    return _to_dict(row, settings.display_tz)
+
+
 @router.delete("/{position_id}", status_code=204)
 def delete_position(position_id: str, session: SessionDep):
     row = session.get(Position, position_id)

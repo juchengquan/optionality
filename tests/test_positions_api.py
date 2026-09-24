@@ -112,3 +112,22 @@ def test_values_are_none_rather_than_wrong_when_a_leg_is_unpriced(client_factory
     v = client.get("/positions/values", headers=AUTH).json()[0]
     assert v["cost_to_close"] is None
     assert v["pnl"] is None
+
+
+def test_entry_can_be_recorded_after_the_fact(client_factory):
+    client = client_factory(snapshot_fetcher=_priced_fetcher)
+    pid = client.post("/positions", json=_condor_payload(entry=None), headers=AUTH).json()["id"]
+    assert client.get("/positions/values", headers=AUTH).json()[0]["pnl"] is None
+
+    patched = client.patch(f"/positions/{pid}", json={"entry": 3.0}, headers=AUTH)
+    assert patched.status_code == 200
+    assert patched.json()["entry"] == 3.0
+    # cost to close is 4.5, so sold at 3.00 is down 1.50 a contract
+    assert client.get("/positions/values", headers=AUTH).json()[0]["pnl"] == -150.0
+
+
+def test_patch_rejects_an_empty_body_and_unknown_position(client_factory):
+    client = client_factory(snapshot_fetcher=_priced_fetcher)
+    pid = client.post("/positions", json=_condor_payload(), headers=AUTH).json()["id"]
+    assert client.patch(f"/positions/{pid}", json={}, headers=AUTH).status_code == 422
+    assert client.patch("/positions/nope", json={"entry": 1.0}, headers=AUTH).status_code == 404
