@@ -1,4 +1,4 @@
-.PHONY: lint format test serve build-ui check-ui launchd-install launchd-restart launchd-uninstall logs
+.PHONY: lint format test test-ui serve build-ui check-ui launchd-install launchd-restart launchd-uninstall logs
 
 LAUNCHD_LABEL = com.optionality.service
 LAUNCHD_PLIST = $(HOME)/Library/LaunchAgents/$(LAUNCHD_LABEL).plist
@@ -16,6 +16,9 @@ test:
 # 127.0.0.1: reachable only via the tailscale serve proxy (and localhost); never the LAN
 serve:
 	uv run --env-file .env uvicorn --factory optionality.service.app:create_app --host 127.0.0.1 --port 31415
+
+test-ui:
+	cd frontend && npm install --silent && npm test
 
 # the bundle is COMMITTED, so node is needed only to change the frontend, never to run
 # the service — a failed build must not become a failed deploy

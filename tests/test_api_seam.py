@@ -120,3 +120,22 @@ def test_the_dashboard_adds_no_arithmetic_of_its_own(client_factory):
     source = inspect.getsource(ui._quote_rows)
     for computation in ("_fill_pct", "days_to_expiry", "combined_cost_to_close", "/ 100", "* 100"):
         assert computation not in source, f"{computation} belongs in the domain layer, not a route"
+
+
+def test_health_carries_what_the_status_strip_shows(client_factory):
+    """The alarm label and the two settings a client needs were computed in routes/ui.py."""
+    client = client_factory(snapshot_fetcher=_fetcher, monitor_interval_seconds=15)
+    h = client.get("/health", headers=AUTH).json()
+
+    assert h["monitor"]["alarms"] == {"label": "starting", "bad": False}
+    # the muted table counts down to the one auto-delete in the system, and the meta line
+    # names the sweep cadence; neither figure was reachable over HTTP
+    assert h["settings"]["sweep_seconds"] == 15
+    assert h["settings"]["expired_retention_days"] == 7
+
+    client.app.state.sweeper.last_sweep_ok = False
+    client.app.state.sweeper.consecutive_failures = 3
+    assert client.get("/health", headers=AUTH).json()["monitor"]["alarms"] == {
+        "label": "STALLED (3 failed sweeps)",
+        "bad": True,
+    }
