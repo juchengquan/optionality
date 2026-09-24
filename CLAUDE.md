@@ -3,7 +3,8 @@
 SPX options monitoring service: FastAPI + APScheduler + SQLite, Telegram bot, React dashboard.
 **Two launchd agents** on the owner's always-on machine, behind one tailnet hostname (ADR 0006):
 `com.optionality.service` (uvicorn, the JSON API, `/opt/api`) and `com.optionality.ui` (Caddy serving
-`frontend/dist`, `/opt`). Same origin, so no CORS.
+`frontend/dist`, `/opt`). Same origin, so no CORS. `ROOT_PATH` must be the API's path (`/opt/api`), not
+the dashboard's. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
 
 ## Commands
 
