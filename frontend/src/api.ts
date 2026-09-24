@@ -82,3 +82,33 @@ async function getJSON<T>(rootPath: string, path: string): Promise<T> {
 export const fetchQuotes = (root: string) => getJSON<Entry[]>(root, "/quotes");
 export const fetchMonitors = (root: string) => getJSON<Monitor[]>(root, "/monitors");
 export const fetchHealth = (root: string) => getJSON<Health>(root, "/health");
+
+async function send(rootPath: string, path: string, method: string, body?: unknown): Promise<void> {
+  const res = await fetch(`${rootPath}${path}`, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    // the service explains itself properly — a duplicate, a dead contract, an unsplittable
+    // total — so surface its words rather than a status code
+    const detail = await res.json().catch(() => null);
+    throw new Error(typeof detail?.detail === "string" ? detail.detail : `${path} → ${res.status}`);
+  }
+}
+
+export const patchMonitor = (root: string, id: string, body: Record<string, unknown>) =>
+  send(root, `/monitors/${id}`, "PATCH", body);
+
+export const deleteMonitor = (root: string, id: string) => send(root, `/monitors/${id}`, "DELETE");
+
+export const patchPosition = (root: string, id: string, body: Record<string, unknown>) =>
+  send(root, `/positions/${id}`, "PATCH", body);
+
+/** Record a credit taken in across everything a rule spans; the server derives the one wing
+ *  that has no rule of its own, so the per-wing credits stay the single source of truth. */
+export const setTotalEntry = (root: string, monitorId: string, entry: number) =>
+  send(root, `/monitors/${monitorId}/total-entry`, "POST", { entry });
+
+export const createMonitor = (root: string, body: Record<string, unknown>) =>
+  send(root, "/monitors", "POST", body);

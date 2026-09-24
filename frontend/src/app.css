@@ -47,3 +47,11 @@ tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(
   border: 1px solid var(--line); border-radius: 3px; user-select: none; }
 #column-pickers details[open] summary { margin-bottom: 0.4rem; }
 label.colpick { display: inline-block; margin: 0 0.6rem 0 0; cursor: pointer; }
+form.inline { display: inline; }
+form.inline input[type=number] { width: 5.5rem; }
+td.actions { text-align: left; }
+fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0;
+           padding: 0.8rem 1rem; border: 1px solid var(--line); }
+legend { font-weight: 600; }
+fieldset label { display: block; margin: 0.3rem 0; }
+button { cursor: pointer; }

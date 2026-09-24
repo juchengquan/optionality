@@ -1,6 +1,7 @@
 import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary } from "./format";
+import { EntryCell, RowActions } from "./RowActions";
 
 function cellValue(entry: Entry, key: string, isCombo: boolean): string {
   const snap = entry.snapshot ?? {};
@@ -27,13 +28,22 @@ function cellValue(entry: Entry, key: string, isCombo: boolean): string {
   }
 }
 
+export interface RowHandlers {
+  onPatch: (id: string, body: Record<string, unknown>) => void;
+  onDelete: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onEntry: (positionId: string, value: number) => void;
+  onTotal: (monitorId: string, value: number) => void;
+}
+
 export function WatchlistTable({
-  title, entries, columns, isCombo,
+  title, entries, columns, isCombo, handlers,
 }: {
   title: string;
   entries: Entry[];
   columns: Column[];
   isCombo: boolean;
+  handlers: RowHandlers;
 }) {
   if (entries.length === 0) return null;
   const shown = new Set(columns.map((c) => c.key));
@@ -80,7 +90,14 @@ export function WatchlistTable({
                           {entry.triggered && signal.bell === "alarm" ? " 🔔" : null}
                         </>
                       ) : c.key === "actions" ? (
-                        <span className="pending">—</span>
+                        <RowActions
+                          entry={entry}
+                          onPatch={handlers.onPatch}
+                          onDelete={handlers.onDelete}
+                          onRename={handlers.onRename}
+                        />
+                      ) : c.key === "entry" ? (
+                        <EntryCell entry={entry} onEntry={handlers.onEntry} onTotal={handlers.onTotal} />
                       ) : (
                         cellValue(entry, c.key, isCombo)
                       )}

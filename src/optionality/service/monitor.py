@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from optionality.apis.aux import build_spx_code
 from optionality.core import fetch_snapshot
@@ -159,6 +159,59 @@ def threshold_fill(value, threshold, direction: str, compare: str) -> int | None
     else:
         return None
     return max(0, min(100, round(ratio * 100)))
+
+
+def solely_watched_positions(session) -> set[str]:
+    """Positions that some whole-position rule watches alone, and which therefore have an
+    entry field of their own. A leg rule links to one Position too but offers no field, so
+    counting it would wrongly mark that Position reachable."""
+    sole = (
+        session.query(monitor_positions.c.monitor_id)
+        .group_by(monitor_positions.c.monitor_id)
+        .having(func.count(monitor_positions.c.position_id) == 1)
+        .subquery()
+    )
+    return {
+        pid
+        for (pid,) in session.query(monitor_positions.c.position_id)
+        .join(Monitor, Monitor.id == monitor_positions.c.monitor_id)
+        .filter(
+            Monitor.scope == "all",
+            monitor_positions.c.monitor_id.in_(session.query(sole.c.monitor_id)),
+        )
+        .all()
+    }
+
+
+def apply_total_entry(session, monitor_id: str, total: float) -> str | None:
+    """Record a credit taken in across everything a rule spans, by deriving the one wing
+    that has no rule of its own — the one that cannot be edited directly.
+
+    Returns an error message, or None on success. Shared by the HTML and JSON routes so the
+    two cannot drift, which is how the API rotted away from the dashboard once already.
+    """
+    positions = (
+        session.query(Position)
+        .join(monitor_positions, monitor_positions.c.position_id == Position.id)
+        .filter(monitor_positions.c.monitor_id == monitor_id)
+        .all()
+    )
+    if not positions:
+        return "no holdings attached to this rule"
+    editable = solely_watched_positions(session)
+    targets = [p for p in positions if p.id not in editable]
+    if len(targets) != 1:
+        return (
+            "every wing here has a rule of its own — set them individually"
+            if not targets
+            else f"cannot split a total across {len(targets)} wings that have no rule of their own"
+        )
+    others = [p.entry for p in positions if p.id != targets[0].id]
+    if any(e is None for e in others):
+        return "set the other wings' credits first"
+    targets[0].entry = round(total - sum(others), 4)
+    session.commit()
+    return None
 
 
 def positions_for_monitors(session, monitor_ids: list[str]) -> dict[str, list]:
