@@ -3,7 +3,9 @@ import { LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary } from "./format";
 import { EntryCell, RowActions } from "./RowActions";
 
-function cellValue(entry: Entry, key: string, isCombo: boolean): string {
+/** Row plus column key to displayed text. Exported because the detail sheet shows every
+ *  column whether or not the table is drawing it, and two of these would drift. */
+export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
   const snap = entry.snapshot ?? {};
   const greeks = entry.combo_greeks ?? {};
   const greek = (name: string, col: string) =>
@@ -37,13 +39,14 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, handlers,
+  title, entries, columns, isCombo, handlers, onOpen,
 }: {
   title: string;
   entries: Entry[];
   columns: Column[];
   isCombo: boolean;
   handlers: RowHandlers;
+  onOpen: (entry: Entry, isCombo: boolean) => void;
 }) {
   if (entries.length === 0) return null;
   const shown = new Set(columns.map((c) => c.key));
@@ -63,7 +66,17 @@ export function WatchlistTable({
           {entries.map((entry) => {
             const signal = signalColumns(entry, isCombo, shown);
             return (
-              <tr key={entry.id} className={entry.triggered ? "triggered" : undefined}>
+              <tr
+                key={entry.id}
+                className={entry.triggered ? "triggered" : undefined}
+                // the row opens its detail, but a click that landed on a control inside the
+                // row was meant for that control — setting a threshold must not also open a
+                // sheet over the box you just typed in
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest("button, input, select, form, a")) return;
+                  onOpen(entry, isCombo);
+                }}
+              >
                 {columns.map((c) => {
                   const hl = c.key === signal.fill;
                   const classes = [hl ? "hl" : "", LEFT.has(c.key) ? "left" : ""].filter(Boolean);

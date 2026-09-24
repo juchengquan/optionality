@@ -13,6 +13,7 @@ import { CONTRACT_VERSION } from "./contract";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, visible, writeHidden } from "./columns";
 import { ColumnPickers } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
+import { RowDetail, type DetailTarget } from "./RowDetail";
 import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
 
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
@@ -47,6 +48,7 @@ export function App() {
   const [refresh, setRefresh] = useState(15);
   const [hiddenSingle, setHiddenSingle] = useState(() => readHidden("single"));
   const [hiddenCombo, setHiddenCombo] = useState(() => readHidden("combo"));
+  const [detail, setDetail] = useState<DetailTarget | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -129,6 +131,13 @@ export function App() {
   const singleCols = useMemo(() => visible(SINGLE_COLUMNS, hiddenSingle), [hiddenSingle]);
   const comboCols = useMemo(() => visible(COMBO_COLUMNS, hiddenCombo), [hiddenCombo]);
 
+  // the sheet holds a snapshot of the row it was opened with; the poll replaces every row
+  // object, so re-read it from the live list or the figures behind the sheet freeze
+  const detailEntry = useMemo(
+    () => (detail ? (quotes.find((q) => q.id === detail.entry.id) ?? detail.entry) : null),
+    [detail, quotes],
+  );
+
   const fetchedAt = health?.monitor.fetched_at;
 
   // The dashboard and the API deploy separately now (ADR 0006), so this bundle can be older
@@ -185,8 +194,18 @@ export function App() {
         </div>
       ) : null}
 
-      <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false} handlers={handlers} />
-      <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true} handlers={handlers} />
+      <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false}
+                      handlers={handlers} onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
+      <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true}
+                      handlers={handlers} onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
+
+      <RowDetail
+        entry={detailEntry}
+        isCombo={detail?.isCombo ?? false}
+        handlers={handlers}
+        open={detail !== null}
+        onOpenChange={(o) => { if (!o) setDetail(null); }}
+      />
       {quotes.length === 0 && !error ? <p>Watchlist is empty.</p> : null}
 
       <MutedTables
