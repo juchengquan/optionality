@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
 from optionality.service.models import Monitor
-from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error, verify_contracts, watchlist_quotes
+from optionality.service.monitor import (
+    WATCHLIST_ORDER,
+    combo_field_error,
+    positions_for_monitors,
+    verify_contracts,
+    watchlist_quotes,
+)
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
@@ -103,7 +109,7 @@ def _build_code(payload: MonitorIn) -> str:
         raise HTTPException(status_code=422, detail=f"invalid strike_date: {err}") from err
 
 
-def _to_dict(row: Monitor, tz: str) -> dict:
+def _to_dict(row: Monitor, tz: str, owned: dict | None = None) -> dict:
     return {
         "id": row.id,
         "code": row.code,
@@ -116,6 +122,8 @@ def _to_dict(row: Monitor, tz: str) -> dict:
         "compare": row.compare,
         "legs": row.legs,
         "enabled": row.enabled,
+        "scope": row.scope,
+        "positions": [{"id": p.id, "name": p.name} for p in (owned or {}).get(row.id, [])],
         "disabled_reason": row.disabled_reason,
         "triggered": row.triggered,
         "last_value": row.last_value,
@@ -127,7 +135,8 @@ def _to_dict(row: Monitor, tz: str) -> dict:
 @router.get("")
 def list_monitors(session: SessionDep, settings: SettingsDep):
     rows = session.scalars(select(Monitor).order_by(*WATCHLIST_ORDER)).all()
-    return [_to_dict(r, settings.display_tz) for r in rows]
+    owned = positions_for_monitors(session, [r.id for r in rows])
+    return [_to_dict(r, settings.display_tz, owned) for r in rows]
 
 
 @quotes_router.get("/quotes")

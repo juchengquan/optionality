@@ -12,11 +12,6 @@ from sqlalchemy.orm import Session
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
 from optionality.service.models import Monitor, Position, monitor_positions
 from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error
-from optionality.service.position import (
-    combined_cost_to_close,
-    combined_entry,
-    combined_pnl,
-)
 from optionality.service.routes.health import _opend_reachable
 from optionality.service.routes.monitors import (
     ComboMonitorIn,
@@ -28,7 +23,6 @@ from optionality.service.routes.monitors import (
     patch_monitor,
 )
 from optionality.service.settings import Settings
-from optionality.service.timefmt import days_to_expiry
 
 router = APIRouter(prefix="/ui", tags=["ui"], include_in_schema=False)
 static_router = APIRouter(include_in_schema=False)
@@ -160,28 +154,6 @@ def _fmt_at(value, column: str) -> str:
     return f"{float(value):.{_PLACES.get(column, 4)}f}"
 
 
-def _fill_pct(value, threshold, direction: str, compare: str) -> int | None:
-    """How far a value has travelled toward its threshold, 0-100.
-
-    None where the journey has no honest baseline to fill from — a signed negative
-    threshold the value must cross from the other side, for instance. A bar that
-    sometimes lies is worse than no bar, the same reasoning that makes a partly
-    priced combo report nothing rather than a partial sum.
-    """
-    if value is None or not threshold:
-        return None
-    metric = abs(value) if compare == "abs" else value
-    if metric < 0 or threshold < 0:
-        return None
-    if direction == "above":
-        ratio = metric / threshold
-    elif metric > 0:
-        ratio = threshold / metric
-    else:
-        return None
-    return max(0, min(100, round(ratio * 100)))
-
-
 def _quote_rows(quotes: list[dict]) -> list[dict]:
     rows = []
     for q in quotes:
@@ -190,7 +162,6 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
         label = _FIELD_LABEL.get(q["field"], q["field"])
         # the mode column read "abs" on every row; name the mode only where it is not the default
         mode = " signed" if q["compare"] == "signed" else ""
-        watched = q["combo_value"] if "legs" in q else snap.get(q["field"])
         row = {
             "id": q["id"],
             "contract": snap.get("name") or q["code"],
@@ -201,10 +172,10 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
             "is_combo": "legs" in q,
             "name": q["code"],
             "strike_date": q["strike_date"],
-            "dte": days_to_expiry(q["strike_date"]),
+            "dte": q["dte"],
             "error": q.get("error"),
             "field_column": _FIELD_COLUMN.get(q["field"]),  # the column the alarm actually watches
-            "fill": _fill_pct(watched, q["threshold"], q["direction"], q["compare"]),
+            "fill": q["fill"],
             "legs": _leg_summary(q["legs"]) if "legs" in q else "",
             "delta": _fmt_at(snap.get("option_delta"), "delta"),
             "gamma": _fmt_at(snap.get("option_gamma"), "gamma"),
@@ -334,48 +305,27 @@ def _live_context(request: Request, session, settings, sweeper, worker, columns:
         "queue": worker.queue_depth(),
     }
     rows = _quote_rows(quotes)
-    by_code, _stamp = sweeper.cached_records()
+    # no records needed here any more: every figure arrives on the entries themselves
     # Entry belongs to the whole holding, so it is offered only against the rule that
     # watches the whole holding. Showing it beside a wing would invite reading that wing's
     # cost against the entire position's credit.
-    # a rule may span several Positions — a combined stop over two credit spreads belongs
-    # to neither alone
-    owned: dict[str, list[Position]] = {}
-    scopes: dict[str, str | None] = {}
-    for m, p in (
-        session.query(Monitor, Position)
-        .join(monitor_positions, monitor_positions.c.monitor_id == Monitor.id)
-        .filter(Position.id == monitor_positions.c.position_id)
-        .all()
-    ):
-        owned.setdefault(m.id, []).append(p)
-        scopes[m.id] = m.scope
-    # a Position is directly editable when some rule watches it alone — that rule's row
-    # carries its entry box. Anything else can only be reached through a total.
-    # only a whole-position rule carries an entry box; a leg rule links to one Position too
-    # but shows no box, so counting it would wrongly mark that Position reachable
-    directly_editable = {ps[0].id for mid, ps in owned.items() if len(ps) == 1 and scopes.get(mid) == "all"}
-    for r in rows:
-        positions = owned.get(r["id"], [])
-        scope = scopes.get(r["id"])
-        # with entry beside it, the value column has to BE the cost to close: reading
-        # "entry 3.21, value -1.50, P&L 171" is arithmetic that does not work. The alarm
-        # engine still evaluates its own signed sum; only the display is reconciled.
+    # the entries already carry cost_to_close, entry and pnl — see build_entries. The route
+    # decides only where a figure may be TYPED: a summed credit is not something you can type,
+    # so an entry box appears on a rule watching exactly one holding, and a total box on one
+    # spanning several while a wing of it is still unrecorded.
+    directly_editable = {
+        e["positions"][0]["id"] for e in quotes if len(e.get("positions") or []) == 1 and e.get("scope") == "all"
+    }
+    for r, q in zip(rows, quotes, strict=True):
+        positions = q.get("positions") or []
+        whole = positions if q.get("scope") == "all" else []
         if positions and r["is_combo"]:
-            closing = combined_cost_to_close(positions, by_code, scope)
-            r["value"] = _fmt_at(closing, "mid")
-            r["fill"] = _fill_pct(closing, r["threshold"], "above", "abs")
-        whole = positions if scope == "all" else []
-        # entry is typed straight onto a rule that watches exactly one holding. Where it
-        # spans several, you type the TOTAL and the unrecorded wing is derived from it, so
-        # the per-wing credits stay the single source of truth.
-        r["position_id"] = whole[0].id if len(whole) == 1 else ""
-        # the total stays editable for as long as there is a wing it can adjust — otherwise
-        # typing it once would be a one-way door, with no way to correct a slip
-        unreachable = [p for p in whole if p.id not in directly_editable]
+            r["value"] = _fmt_at(q["cost_to_close"], "mid")
+        r["position_id"] = whole[0]["id"] if len(whole) == 1 else ""
+        unreachable = [p for p in whole if p["id"] not in directly_editable]
         r["combined_id"] = r["id"] if len(whole) > 1 and len(unreachable) == 1 else ""
-        r["entry"] = _fmt_at(combined_entry(whole), "mid") if whole else ""
-        r["pnl"] = _fmt_at(combined_pnl(whole, by_code), "mid") if whole else ""
+        r["entry"] = _fmt_at(q["entry"], "mid") if whole else ""
+        r["pnl"] = _fmt_at(q["pnl"], "mid") if whole else ""
     single_cols = _visible_columns(request, "single", columns)
     combo_cols = _visible_columns(request, "combo", columns)
     for r in rows:
