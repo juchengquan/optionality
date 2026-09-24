@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from optionality.service.models import Position
 from optionality.service.position import (
     contract_size,
@@ -152,3 +154,60 @@ def test_pnl_is_unknown_until_an_entry_is_recorded():
     by_code = _quotes(p, [5.0, 2.0, 3.0, 1.5])
     assert cost_to_close(p, by_code) == 4.5  # still knows what it costs to close
     assert position_pnl(p, by_code) is None  # but not how that compares to entry
+
+
+def _call_spread(entry=1.8):
+    return Position(
+        name="1016_bs_8050",
+        strike_date=_future(),
+        contracts=1,
+        entry=entry,
+        legs=[
+            {"side": "sold", "option_type": "CALL", "strike": 8050.0},
+            {"side": "bought", "option_type": "CALL", "strike": 8075.0},
+        ],
+    )
+
+
+def _put_spread(entry=1.4):
+    return Position(
+        name="1016_bps_7100",
+        strike_date=_future(),
+        contracts=1,
+        entry=entry,
+        legs=[
+            {"side": "sold", "option_type": "PUT", "strike": 7100.0},
+            {"side": "bought", "option_type": "PUT", "strike": 7075.0},
+        ],
+    )
+
+
+def _both_quotes(positions, mids):
+    codes = [c for p in positions for c in position_leg_codes(p)]
+    return {
+        code: {"code": code, "mid_price": mid, "option_contract_size": 100.0}
+        for code, mid in zip(codes, mids, strict=True)
+    }
+
+
+def test_a_combined_stop_sums_across_positions():
+    from optionality.service.position import combined_cost_to_close, combined_entry, combined_pnl
+
+    call, put = _call_spread(entry=1.8), _put_spread(entry=1.4)
+    # calls: sold 5.00 bought 2.00 -> 3.00. puts: sold 3.00 bought 1.50 -> 1.50
+    by_code = _both_quotes([call, put], [5.0, 2.0, 3.0, 1.5])
+
+    assert combined_cost_to_close([call, put], by_code) == 4.5
+    assert combined_entry([call, put]) == pytest.approx(3.2)
+    # each wing is down: 1.8-3.0 = -120, 1.4-1.5 = -10
+    assert combined_pnl([call, put], by_code) == -130.0
+
+
+def test_a_combined_figure_is_unknown_if_any_part_is():
+    from optionality.service.position import combined_entry, combined_pnl
+
+    call, put = _call_spread(entry=1.8), _put_spread(entry=None)
+    by_code = _both_quotes([call, put], [5.0, 2.0, 3.0, 1.5])
+    # one wing's credit unrecorded means the total credit is not known, so neither is P&L
+    assert combined_entry([call, put]) is None
+    assert combined_pnl([call, put], by_code) is None

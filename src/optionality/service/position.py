@@ -74,3 +74,25 @@ def position_pnl(position: Position, by_code: dict) -> float | None:
     # money, so 2dp is its own precision: float noise here reads as 160.99999999999986.
     # points and greeks stay exact and are rounded at display instead.
     return round((position.entry - closing) * position.contracts * size, 2)
+
+
+def combined_cost_to_close(positions: list[Position], by_code: dict, scope: str | None = None) -> float | None:
+    """What it costs to close several Positions at once — a stop over two credit spreads."""
+    parts = [cost_to_close(p, by_code, scope) for p in positions]
+    return None if not parts or any(x is None for x in parts) else sum(parts)
+
+
+def combined_entry(positions: list[Position]) -> float | None:
+    """Total taken in across Positions. Unknown if any one of them is."""
+    entries = [p.entry for p in positions]
+    return None if not entries or any(e is None for e in entries) else sum(entries)
+
+
+def combined_pnl(positions: list[Position], by_code: dict) -> float | None:
+    parts = [position_pnl(p, by_code) for p in positions]
+    return None if not parts or any(x is None for x in parts) else round(sum(parts), 2)
+
+
+def combined_greek(positions: list[Position], by_code: dict, field: str, scope: str | None = None) -> float | None:
+    parts = [position_greek(p, by_code, field, scope) for p in positions]
+    return None if not parts or any(x is None for x in parts) else sum(parts)

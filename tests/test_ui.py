@@ -1,8 +1,9 @@
+import re
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from optionality.service.models import Monitor
+from optionality.service.models import Monitor, monitor_positions
 from tests.conftest import AUTH
 
 
@@ -714,7 +715,6 @@ def _pos_with_monitor(client, entry=None, scope="all"):
                 strike=0.0,
                 field="mid_price",
                 threshold=9.0,
-                position_id=pos["id"],
                 scope=scope,
                 legs=[
                     {"sign": -1, "option_type": "CALL", "strike": 8050.0},
@@ -722,6 +722,9 @@ def _pos_with_monitor(client, entry=None, scope="all"):
                 ],
             )
         )
+        s.flush()
+        monitor_id = s.scalar(select(Monitor.id).where(Monitor.code == "1016_IC"))
+        s.execute(monitor_positions.insert().values(monitor_id=monitor_id, position_id=pos["id"]))
         s.commit()
     return pos
 
@@ -783,3 +786,65 @@ def test_value_reads_as_cost_to_close_so_entry_minus_value_is_the_pnl(client_fac
     assert ">3.00<" in page
     assert ">-3.00<" not in page  # the old signed sum would have shown this
     assert ">100.00<" in page  # and 4.00 - 3.00 must visibly produce it
+
+
+def test_a_spanning_rule_sums_both_holdings_and_cannot_be_typed_into(client_factory):
+    """The combined stop over two credit spreads belongs to neither alone."""
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    calls = client.post(
+        "/positions",
+        json={
+            "name": "calls_side",
+            "strike_date": _future(),
+            "entry": 1.8,
+            "contracts": 1,
+            "legs": [
+                {"side": "sold", "option_type": "CALL", "strike": 8050},
+                {"side": "bought", "option_type": "CALL", "strike": 8075},
+            ],
+        },
+        headers=AUTH,
+    ).json()
+    puts = client.post(
+        "/positions",
+        json={
+            "name": "puts_side",
+            "strike_date": _future(),
+            "entry": 1.2,
+            "contracts": 1,
+            "legs": [
+                {"side": "sold", "option_type": "PUT", "strike": 7100},
+                {"side": "bought", "option_type": "PUT", "strike": 7075},
+            ],
+        },
+        headers=AUTH,
+    ).json()
+    sf = client.app.state.session_factory
+    with sf() as s:
+        s.add(
+            Monitor(
+                code="the_condor",
+                strike_date=_future(),
+                option_type="CMB",
+                strike=0.0,
+                field="mid_price",
+                threshold=9.0,
+                scope="all",
+                legs=[{"sign": -1, "option_type": "CALL", "strike": 8050.0}],
+            )
+        )
+        s.flush()
+        mid = s.scalar(select(Monitor.id).where(Monitor.code == "the_condor"))
+        for pid in (calls["id"], puts["id"]):
+            s.execute(monitor_positions.insert().values(monitor_id=mid, position_id=pid))
+        s.commit()
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    # entry 1.8 + 1.2 = 3.00, summed and shown in the entry CELL, with no box to type into.
+    # asserting on ">3.00<" alone would also match the value column, so pin the cell.
+    combos = page[page.index("<h3>Combos</h3>") :]
+    row = next(r for r in combos.split("<tr") if "the_condor" in r)
+    entry_cell = re.findall(r"<td[^>]*>(.*?)</td>", row, re.DOTALL)[3]
+    assert "3.00" in entry_cell
+    assert "<input" not in entry_cell
+    assert f"/ui/positions/{calls['id']}/entry" not in page

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Column, ForeignKey, String, Table, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -70,9 +70,9 @@ class Monitor(Base):
     compare: Mapped[str] = mapped_column(String(6), default="abs", server_default="abs")  # "abs" | "signed"
     # combo monitors: [{"sign": 1|-1, "option_type": "CALL"|"PUT", "strike": float}, ...]; None = single-leg
     legs: Mapped[list | None] = mapped_column(JSON, default=None)
-    # which Position this warns about, and how much of it: "all" | "calls" | "puts" | "leg".
-    # A wing of a condor is neither one leg nor all of them — see ADR 0003.
-    position_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("positions.id"), default=None)
+    # how much of each linked Position this warns about: "all" | "calls" | "puts" | "leg".
+    # Which Positions is the monitor_positions association — a combined stop over two credit
+    # spreads belongs to neither alone. See ADR 0004.
     scope: Mapped[str | None] = mapped_column(String(10), default=None)
     enabled: Mapped[bool] = mapped_column(default=True)
     # why enabled is False: "manual" | "expired" | "unknown-contract". NULL on rows that
@@ -83,6 +83,16 @@ class Monitor(Base):
     last_checked_at: Mapped[datetime | None] = mapped_column(default=None)
     last_alarm_at: Mapped[datetime | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+# a Monitor links to one or more Positions; plain table rather than a relationship, to match
+# the query style used everywhere else in this service
+monitor_positions = Table(
+    "monitor_positions",
+    Base.metadata,
+    Column("monitor_id", String(32), ForeignKey("monitors.id"), primary_key=True),
+    Column("position_id", String(32), ForeignKey("positions.id"), primary_key=True),
+)
 
 
 class Position(Base):
