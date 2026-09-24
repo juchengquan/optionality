@@ -97,10 +97,15 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
   const [threshold, setThreshold] = useState<number | null>(null);
   const [direction, setDirection] = useState("above");
   const [compare, setCompare] = useState("abs");
-  const [legs, setLegs] = useState<LegInput[]>(Array.from({ length: 6 }, () => ({ ...BLANK })));
+  // two to start, up to six. The fixed six were an htmx artefact -- rendering a variable
+  // number of rows server-side was awkward -- and that constraint left with htmx. A
+  // vertical spread is two legs and an iron condor is four, so the old form drew two to
+  // four permanently empty rows, which is most of a phone screen.
+  const [legs, setLegs] = useState<LegInput[]>([{ ...BLANK }, { ...BLANK }]);
 
   const setLeg = (i: number, patch: Partial<LegInput>) =>
     setLegs((prev) => prev.map((l, j) => (i === j ? { ...l, ...patch } : l)));
+  const MAX_LEGS = 6;
 
   return (
     <FieldSet>
@@ -143,6 +148,12 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
                            value={leg.strike} onValueChange={(v) => setLeg(i, { strike: v })} />
             </Field>
           ))}
+          {legs.length < MAX_LEGS ? (
+            <Button type="button" variant="outline" size="sm"
+                    onClick={() => setLegs((prev) => [...prev, { ...BLANK }])}>
+              add leg
+            </Button>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="c-field">field</FieldLabel>
             <NativeSelect id="c-field" value={field} onChange={(e) => setField(e.target.value)}>

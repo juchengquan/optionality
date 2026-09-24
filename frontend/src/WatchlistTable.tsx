@@ -1,15 +1,21 @@
 import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary } from "./format";
-import { EntryCell, RowActions } from "./RowActions";
 
-function cellValue(entry: Entry, key: string, isCombo: boolean): string {
+/** Row plus column key to displayed text. Exported because the detail sheet shows every
+ *  column whether or not the table is drawing it, and two of these would drift. */
+export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
   const snap = entry.snapshot ?? {};
   const greeks = entry.combo_greeks ?? {};
   const greek = (name: string, col: string) =>
     isCombo ? fmt(greeks[name] ?? null, col) : fmt(snap[name as keyof typeof snap] as number | null, col);
 
   switch (key) {
+    // the identity columns are DRAWN by the JSX below, badge and bell and all — but they
+    // still have to answer here, because the fitting measurement asks this function how
+    // wide every column needs to be and these are the widest on the page
+    case "contract": return entry.snapshot?.name ?? entry.code;
+    case "combo": return entry.code;
     case "dte": return String(entry.dte);
     case "alarm": return alarmText(entry.field, entry.direction, entry.threshold, entry.compare);
     case "value": return fmt(entry.cost_to_close ?? entry.combo_value ?? null, "mid");
@@ -37,20 +43,22 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, handlers,
+  title, entries, columns, isCombo, onOpen, containerRef,
 }: {
   title: string;
   entries: Entry[];
   columns: Column[];
   isCombo: boolean;
-  handlers: RowHandlers;
+  onOpen: (entry: Entry, isCombo: boolean) => void;
+  containerRef?: React.Ref<HTMLDivElement>;
 }) {
   if (entries.length === 0) return null;
   const shown = new Set(columns.map((c) => c.key));
 
   return (
-    <>
+    <div ref={containerRef}>
       <h3>{title}</h3>
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -63,7 +71,12 @@ export function WatchlistTable({
           {entries.map((entry) => {
             const signal = signalColumns(entry, isCombo, shown);
             return (
-              <tr key={entry.id} className={entry.triggered ? "triggered" : undefined}>
+              <tr
+                key={entry.id}
+                className={entry.triggered ? "triggered" : undefined}
+                // the whole row opens its detail now: there is nothing else in it to click
+                onClick={() => onOpen(entry, isCombo)}
+              >
                 {columns.map((c) => {
                   const hl = c.key === signal.fill;
                   const classes = [hl ? "hl" : "", LEFT.has(c.key) ? "left" : ""].filter(Boolean);
@@ -89,15 +102,6 @@ export function WatchlistTable({
                           {cellValue(entry, c.key, isCombo)}
                           {entry.triggered && signal.bell === "alarm" ? " 🔔" : null}
                         </>
-                      ) : c.key === "actions" ? (
-                        <RowActions
-                          entry={entry}
-                          onPatch={handlers.onPatch}
-                          onDelete={handlers.onDelete}
-                          onRename={handlers.onRename}
-                        />
-                      ) : c.key === "entry" ? (
-                        <EntryCell entry={entry} onEntry={handlers.onEntry} onTotal={handlers.onTotal} />
                       ) : (
                         cellValue(entry, c.key, isCombo)
                       )}
@@ -109,6 +113,7 @@ export function WatchlistTable({
           })}
         </tbody>
       </table>
-    </>
+      </div>
+    </div>
   );
 }

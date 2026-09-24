@@ -1,4 +1,4 @@
-.PHONY: lint format test test-ui serve build-ui check-ui deploy \
+.PHONY: lint format test test-ui test-ui-fast test-ui-layout serve build-ui check-ui deploy \
 	launchd-install launchd-restart launchd-uninstall \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
 
@@ -26,8 +26,20 @@ test:
 serve:
 	uv run --env-file .env uvicorn --factory optionality.service.app:create_app --host 127.0.0.1 --port 31415
 
-test-ui:
+# two suites, split by what they can prove. jsdom has no layout engine at all, so the
+# fitting mechanism is invisible to it — see ADR 0008. Both run here: the reason for
+# measuring rather than guessing was to catch what nobody thinks to check by hand, and a
+# check you have to remember to run does not do that.
+test-ui: test-ui-fast test-ui-layout
+
+test-ui-fast:
 	cd frontend && npm install --silent && npm test
+
+# NOTE: the first run downloads a headless Chromium (~95MB) into ~/Library/Caches.
+# Nothing here touches the deploy path — ADR 0006 keeps node off that entirely.
+test-ui-layout:
+	cd frontend && npm install --silent && npx playwright install --with-deps chromium >/dev/null 2>&1 || true
+	cd frontend && npm run test:browser
 
 # the bundle is COMMITTED, so node is needed only to change the frontend, never to run
 # the service — a failed build must not become a failed deploy, and now that Caddy serves

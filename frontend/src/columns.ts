@@ -6,8 +6,10 @@ export interface Column {
   label: string;
 }
 
-// contract/combo identifies the row and actions operates it, so neither may be hidden.
-export const PROTECTED = new Set(["contract", "combo", "actions"]);
+/** Identity only. "actions" was here until the detail sheet took the controls (ADR
+ *  0008) — a number box and three buttons per row could not survive a narrow screen,
+ *  and full parity meant the operations could not go with it. */
+export const PROTECTED = new Set(["contract", "combo"]);
 
 export const SINGLE_COLUMNS: Column[] = [
   { key: "contract", label: "contract" }, { key: "alarm", label: "alarm" },
@@ -15,20 +17,20 @@ export const SINGLE_COLUMNS: Column[] = [
   { key: "gamma", label: "gamma" }, { key: "theta", label: "theta" },
   { key: "vega", label: "vega" }, { key: "iv", label: "IV" },
   { key: "mid", label: "mid" }, { key: "bid", label: "bid" },
-  { key: "ask", label: "ask" }, { key: "actions", label: "actions" },
-  { key: "last_trade", label: "last trade" },
+  { key: "ask", label: "ask" }, { key: "last_trade", label: "last trade" },
 ];
 
 export const COMBO_COLUMNS: Column[] = [
   { key: "combo", label: "combo" }, { key: "alarm", label: "alarm" },
-  { key: "dte", label: "dte" }, { key: "entry", label: "entry" },
-  { key: "value", label: "value" }, { key: "pnl", label: "P&L" },
+  { key: "dte", label: "dte" }, { key: "value", label: "value" },
+  // entry sits between value and P&L: what it is worth now, what it cost, the difference.
+  // Entry used to precede value, which left it two columns from the figure it explains.
+  { key: "entry", label: "entry" }, { key: "pnl", label: "P&L" },
   { key: "delta", label: "delta" }, { key: "gamma", label: "gamma" },
   { key: "theta", label: "theta" }, { key: "vega", label: "vega" },
-  { key: "actions", label: "actions" },
 ];
 
-export const LEFT = new Set(["contract", "combo", "alarm", "actions", "entry"]);
+export const LEFT = new Set(["contract", "combo", "alarm", "entry"]);
 
 /** The cookie stores what is HIDDEN, not what is kept, so a column added later shows up by
  *  default instead of staying invisible. "." separates because a comma makes the value
@@ -62,4 +64,106 @@ export function signalColumns(entry: Entry, isCombo: boolean, shown: Set<string>
   const watched = isCombo ? "value" : FIELD_COLUMN[entry.field];
   const fill = [watched, "alarm", identity].find((c) => c && shown.has(c)) ?? identity;
   return { fill, bell: shown.has("alarm") ? "alarm" : identity };
+}
+
+/** Roughly how wide each column needs to be, in CSS pixels at the default text size.
+ *
+ *  These are a starting estimate only. Phase 4 replaces them with real measurement (ADR
+ *  0008), because a pixel guess cannot survive the reader changing their text size — the
+ *  viewport stays the same while what fits does not. Until then they let the rule be
+ *  written and tested without a browser.
+ */
+const WIDTH: Record<string, number> = {
+  contract: 170, combo: 140, alarm: 110, dte: 46, entry: 66, value: 66, pnl: 70,
+  delta: 62, gamma: 74, theta: 62, vega: 58, iv: 58, mid: 62, bid: 62, ask: 62,
+  last_trade: 140,
+};
+const DEFAULT_WIDTH = 64;
+
+export const PRIORITY: Record<"single" | "combo", string[]> = {
+  // delta and mid first because every rule in this watchlist is built on one of them;
+  // the greeks nothing watches go last, together, because that is what the sheet is for
+  single: ["contract", "alarm", "delta", "mid", "dte", "bid", "ask", "iv", "theta", "vega", "gamma", "last_trade"],
+  // entry sits against P&L: it is the number the P&L is computed from, so distrusting one
+  // means wanting the other beside it
+  combo: ["combo", "alarm", "value", "pnl", "entry", "dte", "delta", "theta", "vega", "gamma"],
+};
+
+/** Which columns to draw, given the room available and what the viewer asked for.
+ *
+ *  Width wins and the picker is a wish list: ticking a column means "show this when there
+ *  is room", unticking still hides it absolutely. The identity column is never dropped —
+ *  a row you cannot identify is not a row — so it is kept even when nothing fits.
+ */
+export function columnsFor(
+  table: "single" | "combo",
+  available: number,
+  hidden: Set<string>,
+  widthOf: (key: string) => number = (k) => WIDTH[k] ?? DEFAULT_WIDTH,
+): Column[] {
+  const all = table === "single" ? SINGLE_COLUMNS : COMBO_COLUMNS;
+  const byKey = new Map(all.map((c) => [c.key, c]));
+  const identity = table === "single" ? "contract" : "combo";
+
+  const kept: string[] = [identity];
+  let used = widthOf(identity);
+
+  for (const key of PRIORITY[table]) {
+    if (key === identity || hidden.has(key) || !byKey.has(key)) continue;
+    const w = widthOf(key);
+    // STOP rather than skip. Skipping to a narrower column further down the order means a
+    // window widened by twenty pixels can swap one column for another instead of simply
+    // gaining one, and columns that appear and vanish as you drag are worse than columns
+    // that are merely absent.
+    if (used + w > available) break;
+    kept.push(key);
+    used += w;
+  }
+
+  // drawn in the table's own order, not the priority order: priority decides WHICH
+  // columns survive, never where they sit, or the layout would rearrange as you resize
+  return all.filter((c) => kept.includes(c.key));
+}
+
+/** What the picker should offer at this width. A column that cannot appear however it is
+ *  ticked is not offered, so ticking is never silently ignored. */
+export function offerable(
+  table: "single" | "combo",
+  available: number,
+  widthOf: (key: string) => number = (k) => WIDTH[k] ?? DEFAULT_WIDTH,
+): Set<string> {
+  const identity = table === "single" ? "contract" : "combo";
+  const base = widthOf(identity);
+  return new Set(
+    PRIORITY[table].filter((k) => k !== identity && base + widthOf(k) <= available),
+  );
+}
+
+/** Column widths derived from what is actually in the table, not guessed.
+ *
+ *  A pixel estimate cannot survive the reader changing their text size: the viewport is
+ *  unchanged while the amount that fits is not. So widths are counted in CHARACTERS —
+ *  the longest thing this column will actually draw, header included — and multiplied by
+ *  the width of one character in the font the table is really using. That makes the result
+ *  respond to both the data and the text size, with no probe table to render.
+ *
+ *  Figures are tabular-nums, so every digit is the same width and counting characters is
+ *  exact for them. It is an approximation only for the identity column's proportional
+ *  text, which is why CELL_PADDING carries a little slack.
+ */
+export function widthsFromContent(
+  columns: Column[],
+  rows: readonly Entry[],
+  isCombo: boolean,
+  charWidth: number,
+  cellText: (row: Entry, key: string, isCombo: boolean) => string,
+): Record<string, number> {
+  const CELL_PADDING = 22; // 10px each side plus the border, per app.css
+  const out: Record<string, number> = {};
+  for (const c of columns) {
+    let longest = c.label.length;
+    for (const r of rows) longest = Math.max(longest, cellText(r, c.key, isCombo).length);
+    out[c.key] = Math.ceil(longest * charWidth) + CELL_PADDING;
+  }
+  return out;
 }

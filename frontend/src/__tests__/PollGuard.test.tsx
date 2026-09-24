@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -50,8 +50,10 @@ describe("the poll guard", () => {
   it("holds it while a threshold box has focus", async () => {
     mockApi();
     render(<App />);
-    const box = await waitFor(() =>
-      document.querySelector<HTMLInputElement>('[data-slot="number-field"]')!);
+    await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
+    await userEvent.click(screen.getByText("1016_bs_8050"));
+    const sheet = await screen.findByRole("dialog");
+    const box = within(sheet).getAllByRole("textbox")[0] as HTMLInputElement;
 
     box.focus();
     expect(beingOperated(document.activeElement)).toBe(true);
@@ -72,9 +74,10 @@ describe("the poll guard", () => {
   it("holds it while the delete confirmation is up", async () => {
     mockApi();
     render(<App />);
-    await waitFor(() => expect(screen.getByText("delete")).toBeTruthy());
-
-    await userEvent.click(screen.getByText("delete"));
+    await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
+    await userEvent.click(screen.getByText("1016_bs_8050"));
+    const sheet = await screen.findByRole("dialog");
+    await userEvent.click(within(sheet).getByText("delete"));
     await screen.findByRole("alertdialog");
 
     // focus lands a tick after the dialog mounts, so this waits rather than races
