@@ -66,6 +66,54 @@ UI_FIELDS = [
 # must not offer it — see combo_field_error
 COMBO_FIELDS = [f for f in UI_FIELDS if not combo_field_error(f)]
 
+# (key, label) in render order. "contract"/"combo" identify the row and "actions" operates
+# it, so neither may be hidden — see the grilling session of 2026-09-24.
+SINGLE_COLUMNS = [
+    ("contract", "contract"),
+    ("alarm", "alarm"),
+    ("dte", "dte"),
+    ("delta", "delta"),
+    ("gamma", "gamma"),
+    ("theta", "theta"),
+    ("vega", "vega"),
+    ("iv", "IV"),
+    ("mid", "mid"),
+    ("bid", "bid"),
+    ("ask", "ask"),
+    ("actions", "actions"),
+    ("last_trade", "last trade"),
+]
+COMBO_COLUMNS = [
+    ("combo", "combo"),
+    ("alarm", "alarm"),
+    ("dte", "dte"),
+    ("entry", "entry"),
+    ("value", "value"),
+    ("pnl", "P&L"),
+    ("delta", "delta"),
+    ("gamma", "gamma"),
+    ("theta", "theta"),
+    ("vega", "vega"),
+    ("actions", "actions"),
+]
+PROTECTED_COLUMNS = frozenset({"contract", "combo", "actions"})
+COLUMN_TABLES = {"single": SINGLE_COLUMNS, "combo": COMBO_COLUMNS}
+
+
+def _hidden_columns(request: Request, table: str) -> set[str]:
+    """Which columns the viewer has hidden. The cookie stores what is HIDDEN, not what is
+    kept, so a column added later shows up by default instead of staying invisible."""
+    raw = request.cookies.get(f"ui_cols_{table}", "")
+    # "." separates rather than ",": a comma makes the cookie value quote-escaped
+    # ("a\054b") and it stops round-tripping
+    return {c for c in raw.split(".") if c and c not in PROTECTED_COLUMNS}
+
+
+def _visible_columns(request: Request, table: str, override: dict | None = None) -> list[tuple[str, str]]:
+    hidden = override[table] if override and table in override else _hidden_columns(request, table)
+    return [(k, label) for k, label in COLUMN_TABLES[table] if k not in hidden]
+
+
 _FIELD_COLUMN = {
     "option_delta": "delta",
     "option_gamma": "gamma",
@@ -146,7 +194,7 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
         row = {
             "id": q["id"],
             "contract": snap.get("name") or q["code"],
-            "alarm": f"{label} {sign} {q['threshold']}{mode}" + (" 🔔" if q["triggered"] else ""),
+            "alarm": f"{label} {sign} {q['threshold']}{mode}",
             "triggered": q["triggered"],
             "threshold": q["threshold"],
             "compare": q["compare"],
@@ -252,7 +300,24 @@ def _error_text(err: Exception) -> str:
     return str(err)
 
 
-def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
+def _signal_columns(row: dict, visible: set[str]) -> tuple[str, str]:
+    """Where a row's fill bar and 🔔 must be drawn, given what is visible.
+
+    Both normally live in hideable cells, so each falls back along a chain ending at the
+    protected identity column — a breach or an urgency reading can never be hidden by
+    unticking a box.
+    """
+    identity = "combo" if row["is_combo"] else "contract"
+    watched = "value" if row["is_combo"] else row["field_column"]
+    for candidate in (watched, "alarm", identity):
+        if candidate and candidate in visible:
+            fill_col = candidate
+            break
+    bell_col = "alarm" if "alarm" in visible else identity
+    return fill_col, bell_col
+
+
+def _live_context(request: Request, session, settings, sweeper, worker, columns: dict | None = None) -> dict:
     quotes, fetched, quotes_error = [], None, None
     try:
         # the sweep's records, not a fetch of our own: the value and the 🔔 beside it
@@ -289,9 +354,7 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
     # carries its entry box. Anything else can only be reached through a total.
     # only a whole-position rule carries an entry box; a leg rule links to one Position too
     # but shows no box, so counting it would wrongly mark that Position reachable
-    directly_editable = {
-        ps[0].id for mid, ps in owned.items() if len(ps) == 1 and scopes.get(mid) == "all"
-    }
+    directly_editable = {ps[0].id for mid, ps in owned.items() if len(ps) == 1 and scopes.get(mid) == "all"}
     for r in rows:
         positions = owned.get(r["id"], [])
         scope = scopes.get(r["id"])
@@ -313,7 +376,21 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
         r["combined_id"] = r["id"] if len(whole) > 1 and len(unreachable) == 1 else ""
         r["entry"] = _fmt_at(combined_entry(whole), "mid") if whole else ""
         r["pnl"] = _fmt_at(combined_pnl(whole, by_code), "mid") if whole else ""
+    single_cols = _visible_columns(request, "single", columns)
+    combo_cols = _visible_columns(request, "combo", columns)
+    for r in rows:
+        visible = {k for k, _ in (combo_cols if r["is_combo"] else single_cols)}
+        r["fill_col"], r["bell_col"] = _signal_columns(r, visible)
     return {
+        "single_cols": single_cols,
+        "combo_cols": combo_cols,
+        "single_keys": [k for k, _ in single_cols],
+        "combo_keys": [k for k, _ in combo_cols],
+        "column_tables": [
+            ("single", "Single-leg", SINGLE_COLUMNS, {k for k, _ in single_cols}),
+            ("combo", "Combos", COMBO_COLUMNS, {k for k, _ in combo_cols}),
+        ],
+        "protected_columns": PROTECTED_COLUMNS,
         "single_rows": [r for r in rows if not r["is_combo"]],
         "combo_rows": [r for r in rows if r["is_combo"]],
         "muted_groups": _muted_groups(muted, settings),
@@ -326,14 +403,21 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
 
 
 def _mutation_response(
-    request: Request, session, settings, sweeper, worker, error: str | None = None, reset_form: str | None = None
+    request: Request,
+    session,
+    settings,
+    sweeper,
+    worker,
+    error: str | None = None,
+    reset_form: str | None = None,
+    columns: dict | None = None,
 ):
     """The table fragment for #live, plus out-of-band updates for the regions it misses.
 
     A failed mutation reports the error and leaves the add-form's values alone; only a
     successful one swaps a fresh, empty form back.
     """
-    context = _live_context(request, session, settings, sweeper, worker)
+    context = _live_context(request, session, settings, sweeper, worker, columns)
     context.update(
         {
             "fields": UI_FIELDS,
@@ -561,6 +645,59 @@ def ui_set_combined_entry(
     targets[0].entry = round(entry - sum(others), 4)
     session.commit()
     return _mutation_response(request, session, settings, sweeper, worker)
+
+
+def _column_response(request, session, settings, sweeper, worker, table: str, hidden: set[str], *, repaint=False):
+    """repaint sends the pickers back out-of-band. Only "show all" needs it: a single
+    click already left its own box in the right state."""
+    response = _mutation_response(
+        request,
+        session,
+        settings,
+        sweeper,
+        worker,
+        columns={table: hidden},
+        reset_form="columns" if repaint else None,
+    )
+    response.set_cookie(f"ui_cols_{table}", ".".join(sorted(hidden)), max_age=31536000, samesite="lax")
+    return response
+
+
+@router.post("/columns/{table}")
+def ui_set_column(
+    request: Request,
+    table: str,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
+    column: Annotated[str, Form()],
+    shown: Annotated[str | None, Form()] = None,
+):
+    """An unchecked box posts no value, so the absence of `shown` IS the hide."""
+    if table not in COLUMN_TABLES:
+        return _mutation_response(request, session, settings, sweeper, worker, error="unknown table")
+    hidden = _hidden_columns(request, table)
+    if shown is None:
+        hidden.add(column)
+    else:
+        hidden.discard(column)
+    hidden -= PROTECTED_COLUMNS  # identity and actions are never hideable
+    return _column_response(request, session, settings, sweeper, worker, table, hidden)
+
+
+@router.post("/columns/{table}/reset")
+def ui_reset_columns(
+    request: Request,
+    table: str,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
+):
+    if table not in COLUMN_TABLES:
+        return _mutation_response(request, session, settings, sweeper, worker, error="unknown table")
+    return _column_response(request, session, settings, sweeper, worker, table, set(), repaint=True)
 
 
 @router.post("/monitors/{monitor_id}/toggle")

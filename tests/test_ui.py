@@ -69,7 +69,7 @@ def test_table_fragment_is_forms_free(client_factory):
     assert "fetched at" in resp.text
     assert "Add monitor" not in resp.text  # creation forms live outside the refreshing fragment
     assert "htmx.min.js" not in resp.text  # fragment, not a full document
-    assert "<th>actions</th><th>last trade</th>" in resp.text  # last trade sits at the far edge
+    assert re.search(r"<th[^>]*>actions</th><th[^>]*>last trade</th>", resp.text)  # last trade at the far edge
 
 
 def test_htmx_asset_served(client_factory):
@@ -749,7 +749,7 @@ def test_entry_is_editable_on_the_row_and_drives_pnl(client_factory):
     client.app.state.sweeper.sweep()
 
     page = client.get("/ui/table", headers=AUTH).text
-    assert "<th>entry</th>" in page
+    assert re.search(r"<th[^>]*>entry</th>", page)
     assert f"/ui/positions/{pos['id']}/entry" in page  # settable inline, like a threshold
 
     resp = client.post(f"/ui/positions/{pos['id']}/entry", data={"entry": "4.00"}, headers=AUTH)
@@ -993,3 +993,160 @@ def test_the_total_adjusts_the_wing_you_cannot_otherwise_reach(client_factory):
     by_name = {p["name"]: p for p in client.get("/positions", headers=AUTH).json()}
     assert by_name["calls_side"]["entry"] == 1.00
     assert by_name["puts_side"]["entry"] == pytest.approx(4.00)
+
+
+def _rows_fetcher(codes, opend_host=None, opend_port=None):
+    return [
+        {
+            "code": c,
+            "mid_price": 5.0,
+            "bid_price": 4.9,
+            "ask_price": 5.1,
+            "option_delta": 0.12,
+            "option_gamma": 0.0005,
+            "option_theta": -0.5,
+            "option_vega": 2.0,
+            "option_implied_volatility": 10.5,
+            "option_contract_size": 100.0,
+        }
+        for c in codes
+    ]
+
+
+def _headers(page, table):
+    seg = page[page.index(f"<h3>{table}</h3>") :]
+    seg = seg[: seg.index("</table>")]
+    return [re.sub(r"<[^>]+>", "", h) for h in re.findall(r"<th[^>]*>(.*?)</th>", seg)]
+
+
+def test_every_column_shows_until_something_is_ticked(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui", headers=AUTH).text
+    assert "gamma" in _headers(page, "Single-leg")  # absent cookie means nothing is hidden
+    assert 'name="ui_cols_single"' not in page  # no cookie was invented
+
+
+def test_unticking_a_column_hides_it_in_that_table_only(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.post(
+        "/monitors",
+        json={
+            "name": "a_combo",
+            "strike_date": _future(),
+            "threshold": 9.0,
+            "legs": [
+                {"sign": -1, "option_type": "CALL", "strike": 8050},
+                {"sign": 1, "option_type": "CALL", "strike": 8075},
+            ],
+        },
+        headers=AUTH,
+    )
+    client.app.state.sweeper.sweep()
+
+    resp = client.post("/ui/columns/single", data={"column": "gamma"}, headers=AUTH)
+    assert resp.status_code == 200
+    assert client.cookies.get("ui_cols_single") == "gamma"
+
+    page = client.get("/ui", headers=AUTH).text
+    assert "gamma" not in _headers(page, "Single-leg")
+    assert "gamma" in _headers(page, "Combos")  # the tables are independent
+
+
+def test_the_swap_reflects_the_change_immediately(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    # the response IS the new table, so it must not render from the pre-change cookie
+    resp = client.post("/ui/columns/single", data={"column": "gamma"}, headers=AUTH)
+    assert "<th>gamma</th>" not in resp.text
+
+
+def test_protected_columns_cannot_be_hidden(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    for column in ("contract", "actions"):
+        client.post("/ui/columns/single", data={"column": column}, headers=AUTH)
+    page = client.get("/ui", headers=AUTH).text
+    assert "contract" in _headers(page, "Single-leg")
+    assert "actions" in _headers(page, "Single-leg")
+
+
+def test_show_all_clears_the_table_in_one_action(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    for column in ("gamma", "vega", "bid", "ask"):
+        client.post("/ui/columns/single", data={"column": column}, headers=AUTH)
+    assert client.cookies.get("ui_cols_single") == "ask.bid.gamma.vega"
+
+    client.post("/ui/columns/single/reset", data={}, headers=AUTH)
+    assert not (client.cookies.get("ui_cols_single") or "").strip('"')
+    assert "gamma" in _headers(client.get("/ui", headers=AUTH).text, "Single-leg")
+
+
+def test_hiding_the_watched_column_moves_the_fill_to_the_alarm(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)  # 0.12 of 0.6 is 20%
+    client.app.state.sweeper.sweep()
+    assert "--fill:20%" in client.get("/ui/table", headers=AUTH).text
+
+    client.post("/ui/columns/single", data={"column": "delta"}, headers=AUTH)
+    page = client.get("/ui/table", headers=AUTH).text
+    assert "--fill:20%" in page  # urgency must never vanish with a column
+    row = next(r for r in page.split("<tr") if "C8100" in r)
+    # capture the whole cell: --fill lives in the tag's attributes, not its text
+    cells = re.findall(r"(<td[^>]*>.*?</td>)", row, re.DOTALL)
+    assert "--fill" in cells[1]  # it landed on the alarm cell
+
+
+def test_hiding_alarm_too_moves_fill_and_bell_onto_the_contract(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.1)  # 0.12 breaches 0.1
+    client.app.state.sweeper.sweep()
+    for column in ("delta", "alarm"):
+        client.post("/ui/columns/single", data={"column": column}, headers=AUTH)
+
+    page = client.get("/ui/table", headers=AUTH).text
+    row = next(r for r in page.split("<tr") if "C8100" in r)
+    cells = re.findall(r"(<td[^>]*>.*?</td>)", row, re.DOTALL)
+    # contract is protected, so the chain always terminates somewhere visible
+    assert "--fill" in cells[0]
+    assert "🔔" in cells[0]
+
+
+def test_show_all_reticks_the_boxes_not_just_the_table(client_factory):
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    client.post("/ui/columns/single", data={"column": "gamma"}, headers=AUTH)
+
+    resp = client.post("/ui/columns/single/reset", data={}, headers=AUTH)
+    # the browser cannot know its own checkboxes changed, so they ride back out-of-band
+    assert 'id="column-pickers"' in resp.text
+    assert "hx-swap-oob" in resp.text
+
+    # a single toggle does not need the repaint — its own box is already correct
+    single = client.post("/ui/columns/single", data={"column": "vega"}, headers=AUTH)
+    assert 'id="column-pickers"' not in single.text
+
+
+def test_a_tick_applies_without_a_confirm_step(client_factory):
+    """The trigger must bind to the form, not to a descendant input.
+
+    "change from:find input" resolves to the FIRST descendant input — the hidden one
+    carrying the column key, which never fires a change event — so ticking a box did
+    nothing at all and there was no confirm button either.
+    """
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui", headers=AUTH).text
+    picker = page[page.index('id="column-pickers"') :]
+    assert 'hx-trigger="change"' in picker
+    assert "from:find" not in picker
+    # and a form may not sit inside a label: label takes phrasing content only
+    assert "<label" in picker and "<label class=\"colpick\">" not in picker
