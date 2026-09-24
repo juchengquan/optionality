@@ -6,6 +6,33 @@ import userEvent from "@testing-library/user-event";
 function submitFormOf(control: HTMLElement) {
   fireEvent.submit(control.closest("form")!);
 }
+
+// ── numeric inputs, fenced off (phase 3 of ADR 0007) ───────────────────────────
+// NumberField renders TWO inputs: a visible text one you type into, and a hidden
+// number one carrying the form value. Both hold the same string, so getByDisplayValue
+// matches twice and getAllByPlaceholderText hands back the wrong one. Always the visible.
+
+function numberBoxes(): HTMLInputElement[] {
+  return [...document.querySelectorAll<HTMLInputElement>('[data-slot="number-field"]')];
+}
+
+function numberBoxShowing(value: string): HTMLInputElement {
+  const box = numberBoxes().find((i) => i.value === value);
+  if (!box) throw new Error(`no number field showing "${value}"`);
+  return box;
+}
+
+function numberBoxPlaceholdered(text: string): HTMLInputElement {
+  const box = numberBoxes().find((i) => i.placeholder === text);
+  if (!box) throw new Error(`no number field placeholdered "${text}"`);
+  return box;
+}
+
+async function typeNumber(box: HTMLInputElement, value: string) {
+  await userEvent.clear(box);
+  await userEvent.type(box, value);
+}
+// ───────────────────────────────────────────────────────────────────────────────
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
@@ -57,9 +84,9 @@ describe("mutations", () => {
   it("sets a threshold through the JSON API", async () => {
     mockApi([wing]);
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("2.76")).toBeTruthy());
-    const threshold = screen.getByDisplayValue("2.76");
-    fireEvent.change(threshold, { target: { value: "3.00" } });
+    await waitFor(() => expect(numberBoxShowing("2.76")).toBeTruthy());
+    const threshold = numberBoxShowing("2.76");
+    await typeNumber(threshold, "3.00");
     submitFormOf(threshold);
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
     const patch = calls.find((c) => c.method === "PATCH")!;
@@ -70,9 +97,9 @@ describe("mutations", () => {
   it("types an entry onto the one holding a rule watches", async () => {
     mockApi([wing]);
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("2.87")).toBeTruthy());
-    const entry = screen.getByDisplayValue("2.87");
-    fireEvent.change(entry, { target: { value: "3.00" } });
+    await waitFor(() => expect(numberBoxShowing("2.87")).toBeTruthy());
+    const entry = numberBoxShowing("2.87");
+    await typeNumber(entry, "3.00");
     submitFormOf(entry);
     await waitFor(() => expect(calls.some((c) => c.url.includes("/positions/p1"))).toBe(true));
     expect(calls.find((c) => c.url.includes("/positions/p1"))!.body).toEqual({ entry: 3 });
@@ -114,9 +141,9 @@ describe("mutations", () => {
   it("says a refusal once, in a toast, not in the standing banner", async () => {
     mockApi([spanning], "cannot split a total across two unpriced wings");
     render(<App />);
-    await waitFor(() => expect(screen.getAllByPlaceholderText("total")[0]).toBeTruthy());
-    const box = screen.getAllByPlaceholderText("total")[0]!;
-    fireEvent.change(box, { target: { value: "3.21" } });
+    await waitFor(() => expect(numberBoxPlaceholdered("total")).toBeTruthy());
+    const box = numberBoxPlaceholdered("total");
+    await typeNumber(box, "3.21");
     submitFormOf(box);
 
     // the service's own words, because it explains itself better than a status code

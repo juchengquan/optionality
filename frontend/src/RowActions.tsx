@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { NumberField } from "@/components/ui/number-field";
+
 import type { Entry } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
 
@@ -13,7 +15,9 @@ export function RowActions({
   onDelete: (id: string) => void;
   onRename?: (id: string, name: string) => void;
 }) {
-  const [threshold, setThreshold] = useState(String(entry.threshold));
+  // a number, not a string: NumberField parses and formats, so the component never
+  // holds a half-typed value that Number() would silently turn into NaN
+  const [threshold, setThreshold] = useState<number | null>(entry.threshold);
   const [name, setName] = useState(entry.code);
   const isCombo = Boolean(entry.legs);
 
@@ -23,10 +27,10 @@ export function RowActions({
         className="inline"
         onSubmit={(e) => {
           e.preventDefault();
-          onPatch(entry.id, { threshold: Number(threshold) });
+          if (threshold !== null) onPatch(entry.id, { threshold });
         }}
       >
-        <input type="number" step="any" value={threshold} onChange={(e) => setThreshold(e.target.value)} required />
+        <NumberField value={threshold} onValueChange={setThreshold} required />
         <button>set</button>
       </form>
       {isCombo && onRename ? (
@@ -64,7 +68,7 @@ export function EntryCell({
   const whole = entry.scope === "all" ? entry.positions : [];
   const single = whole.length === 1 ? whole[0] : undefined;
   const spanning = whole.length > 1;
-  const [value, setValue] = useState(entry.entry === null ? "" : String(entry.entry));
+  const [value, setValue] = useState<number | null>(entry.entry);
 
   if (!single && !spanning) return null;
   return (
@@ -72,17 +76,15 @@ export function EntryCell({
       className="inline"
       onSubmit={(e) => {
         e.preventDefault();
-        const n = Number(value);
-        if (single) onEntry(single.id, n);
-        else onTotal(entry.id, n);
+        if (value === null) return;
+        if (single) onEntry(single.id, value);
+        else onTotal(entry.id, value);
       }}
     >
-      <input
-        type="number"
-        step="any"
+      <NumberField
         value={value}
+        onValueChange={setValue}
         placeholder={single ? "entry" : "total"}
-        onChange={(e) => setValue(e.target.value)}
         required
       />
       <button>set</button>
