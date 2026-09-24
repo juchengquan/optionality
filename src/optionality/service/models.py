@@ -81,6 +81,26 @@ class Monitor(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+class Position(Base):
+    """An options structure actually held: its legs, how many, and what was taken in.
+
+    Distinct from Monitor, which only warns. Deleting an alarm must never delete the
+    record of what you own, so legs live here.
+    """
+
+    __tablename__ = "positions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=random_id)
+    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    strategy: Mapped[str | None] = mapped_column(String(50), default=None)
+    strike_date: Mapped[str] = mapped_column(String(10))  # one expiry per position, as combos were
+    contracts: Mapped[int] = mapped_column(default=1)
+    entry: Mapped[float]  # points per contract, taken in on open
+    # [{"side": "sold"|"bought", "option_type": "CALL"|"PUT", "strike": float}]
+    legs: Mapped[list] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class Report(Base):
     __tablename__ = "reports"
 
