@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 /** Submit the form the given control belongs to. Indexing getAllByText("set") is
  *  fragile: entry sits BEFORE actions in the combo column order. */
@@ -102,13 +103,70 @@ describe("mutations", () => {
     await waitFor(() => expect(screen.getByText(/cannot split a total/)).toBeTruthy());
   });
 
-  it("mutes and deletes", async () => {
+  it("mutes without asking — it is reversible", async () => {
     mockApi([wing]);
     render(<App />);
     await waitFor(() => expect(screen.getByText("mute")).toBeTruthy());
     fireEvent.click(screen.getByText("mute"));
     await waitFor(() => expect(calls.some((c) => c.body && "enabled" in (c.body as object))).toBe(true));
-    fireEvent.click(screen.getByText("delete"));
+  });
+
+  it("says a refusal once, in a toast, not in the standing banner", async () => {
+    mockApi([spanning], "cannot split a total across two unpriced wings");
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByPlaceholderText("total")[0]).toBeTruthy());
+    const box = screen.getAllByPlaceholderText("total")[0]!;
+    fireEvent.change(box, { target: { value: "3.21" } });
+    submitFormOf(box);
+
+    // the service's own words, because it explains itself better than a status code
+    await waitFor(() => expect(screen.getByText(/cannot split a total/)).toBeTruthy());
+    // but NOT in the banner: a refusal is an event, and the banner is for conditions.
+    // Left there it outlives its moment and is still on screen a minute later.
+    expect(document.querySelector(".banner")).toBeNull();
+  });
+
+  it("keeps an unreachable service in the banner, because that one is a condition", async () => {
+    // the poll failing is not an event you caused — it means every figure on screen is
+    // stale, which stays true until it stops being true. That belongs in the banner.
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("service unreachable"))));
+    render(<App />);
+
+    await waitFor(() => expect(document.querySelector(".banner")?.textContent)
+      .toMatch(/unreachable/));
+    // and the dashboard still renders around it rather than showing nothing
+    expect(screen.getByText("optionality watchlist")).toBeTruthy();
+  });
+
+  it("asks before deleting, and does nothing if you decline", async () => {
+    mockApi([wing]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("delete")).toBeTruthy());
+
+    await userEvent.click(screen.getByText("delete"));
+    const dialog = await screen.findByRole("alertdialog");
+    // it names what is about to go, so the question can be answered without guessing
+    expect(within(dialog).getByText(/1016_bs_8050/)).toBeTruthy();
+    // and nothing has reached the server — the click opened a question, not a deletion
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+
+  it("deletes once confirmed", async () => {
+    mockApi([wing]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("delete")).toBeTruthy());
+
+    await userEvent.click(screen.getByText("delete"));
+    // scoped to the dialog on purpose: finding "delete" anywhere on the page would match
+    // the row's own button and pass without a confirmation existing at all
+    const dialog = await screen.findByRole("alertdialog");
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: /delete/i }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
   });
 });

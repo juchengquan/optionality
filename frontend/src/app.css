@@ -14,7 +14,11 @@
    phase 5 reconciles the palette. If this block is still whole at the end, a
    phase was skipped. */
 h2, h3 { font-size: revert; font-weight: revert; }
-button, input, select {
+/* :not([class]) is the fence between old and new. Every control still written by hand is
+   bare; every shadcn component carries Tailwind classes. So this reaches exactly the
+   controls awaiting rebuild and cannot touch the ones already done — which matters, since
+   handing a shadcn button back its native appearance would undo the point of it. */
+button:not([class]), input:not([class]), select:not([class]) {
   font: revert; color: revert; background-color: revert;
   border: revert; padding: revert; appearance: revert;
 }

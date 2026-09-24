@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { Entry } from "./api";
+import { ConfirmDelete } from "./ConfirmDelete";
 
 /** Threshold, mute and delete. No optimistic update on any of them: these change what the
  *  alarm engine does, and the server's answer is the only truth about that. */
@@ -41,7 +42,11 @@ export function RowActions({
         </form>
       ) : null}
       <button onClick={() => onPatch(entry.id, { enabled: false })}>mute</button>
-      <button onClick={() => onDelete(entry.id)}>delete</button>
+      <ConfirmDelete
+        name={isCombo ? entry.code : (entry.snapshot?.name ?? entry.code)}
+        what={isCombo ? "combo and its alarm rule" : "alarm rule"}
+        onConfirm={() => onDelete(entry.id)}
+      />
     </>
   );
 }
