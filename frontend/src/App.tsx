@@ -6,6 +6,7 @@ import {
   patchMonitor, patchPosition, setTotalEntry,
   type Entry, type Health, type Monitor,
 } from "./api";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddCombo, AddMonitor } from "./AddForms";
 import { CONTRACT_VERSION } from "./contract";
@@ -137,7 +138,9 @@ export function App() {
 
       <form className="health" onSubmit={(e) => e.preventDefault()}>
         refresh every{" "}
-        <select
+        <NativeSelect
+          size="sm"
+          aria-label="refresh every"
           value={refresh}
           onChange={(e) => {
             const n = Number(e.target.value);
@@ -146,7 +149,7 @@ export function App() {
           }}
         >
           {REFRESH_PRESETS.map((n) => <option key={n} value={n}>{n}s</option>)}
-        </select>{" "}
+        </NativeSelect>{" "}
         (this browser only)
       </form>
 

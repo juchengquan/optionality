@@ -43,16 +43,16 @@ function choose(scope: HTMLElement, label: string, value: string) {
   fireEvent.change(within(scope).getByLabelText(label, { exact: false }), { target: { value } });
 }
 
-/** A leg row is one <label> wrapping three controls, so it has no usable accessible name
- *  of its own — find it by its leading text and reach inside. */
+/** Rewritten in phase 4, which is the whole point of fencing these off. The row used to be
+ *  one <label> wrapping three controls, found by walking the DOM; the two selects now carry
+ *  their own names, so this asks for them rather than groping for them. */
 function setLeg(scope: HTMLElement, n: number, sign: string, type_: string, strike: string) {
-  const row = [...scope.querySelectorAll("label")].find(
-    (l) => l.textContent?.startsWith(`leg ${n}`),
-  )!;
-  const selects = row.querySelectorAll("select");
-  fireEvent.change(selects[0]!, { target: { value: sign } });
-  fireEvent.change(selects[1]!, { target: { value: type_ } });
-  fireEvent.change(row.querySelector("input")!, { target: { value: strike } });
+  fireEvent.change(within(scope).getByLabelText(`leg ${n} sign`), { target: { value: sign } });
+  fireEvent.change(within(scope).getByLabelText(`leg ${n} type`), { target: { value: type_ } });
+  fireEvent.change(
+    within(scope).getByLabelText(`leg ${n}`, { exact: true }),
+    { target: { value: strike } },
+  );
 }
 // ────────────────────────────────────────────────────────────────────────────────
 

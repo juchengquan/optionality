@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -20,7 +21,9 @@ export function ConfirmDelete({
 }) {
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<button type="button">{children ?? "delete"}</button>} />
+      <AlertDialogTrigger
+        render={<Button type="button" variant="ghost" size="sm">{children ?? "delete"}</Button>}
+      />
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {name}?</AlertDialogTitle>

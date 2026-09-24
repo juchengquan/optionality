@@ -1,5 +1,9 @@
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { NumberField } from "@/components/ui/number-field";
 
 const FIELDS = [
@@ -8,6 +12,11 @@ const FIELDS = [
 ];
 // a combo's value is a signed sum, and IV is intensive — two 20% legs are not a 40% combo
 const COMBO_FIELDS = FIELDS.filter((f) => f !== "option_implied_volatility");
+
+/** These stayed NATIVE selects, styled to match the rest, rather than becoming custom
+ *  listboxes. On a phone a native select opens the OS picker; a custom one cannot. The
+ *  only thing given up is styling the open list, and the longest list here is six field
+ *  names in plain text — there is nothing to style. See ADR 0007. */
 
 export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unknown>) => void }) {
   const [form, setForm] = useState({
@@ -21,8 +30,8 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
-    <fieldset>
-      <legend>Add monitor</legend>
+    <FieldSet>
+      <FieldLegend>Add monitor</FieldLegend>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -30,32 +39,51 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
           onCreate({ ...form, strike, threshold });
         }}
       >
-        <label>expiry <input type="date" value={form.strike_date} onChange={(e) => set("strike_date", e.target.value)} required /></label>
-        <label>type
-          <select value={form.option_type} onChange={(e) => set("option_type", e.target.value)}>
-            <option>CALL</option><option>PUT</option>
-          </select>
-        </label>
-        <label>strike <NumberField value={strike} onValueChange={setStrike} required /></label>
-        <label>field
-          <select value={form.field} onChange={(e) => set("field", e.target.value)}>
-            {FIELDS.map((f) => <option key={f}>{f}</option>)}
-          </select>
-        </label>
-        <label>threshold <NumberField value={threshold} onValueChange={setThreshold} required /></label>
-        <label>direction
-          <select value={form.direction} onChange={(e) => set("direction", e.target.value)}>
-            <option>above</option><option>below</option>
-          </select>
-        </label>
-        <label>compare
-          <select value={form.compare} onChange={(e) => set("compare", e.target.value)}>
-            <option value="abs">abs</option><option value="signed">signed</option>
-          </select>
-        </label>
-        <button>watch</button>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="m-expiry">expiry</FieldLabel>
+            <Input id="m-expiry" type="date" value={form.strike_date}
+                   onChange={(e) => set("strike_date", e.target.value)} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="m-type">type</FieldLabel>
+            <NativeSelect id="m-type" value={form.option_type}
+                          onChange={(e) => set("option_type", e.target.value)}>
+              <option>CALL</option><option>PUT</option>
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="m-strike">strike</FieldLabel>
+            <NumberField id="m-strike" value={strike} onValueChange={setStrike} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="m-field">field</FieldLabel>
+            <NativeSelect id="m-field" value={form.field} onChange={(e) => set("field", e.target.value)}>
+              {FIELDS.map((f) => <option key={f}>{f}</option>)}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="m-threshold">threshold</FieldLabel>
+            <NumberField id="m-threshold" value={threshold} onValueChange={setThreshold} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="m-direction">direction</FieldLabel>
+            <NativeSelect id="m-direction" value={form.direction}
+                          onChange={(e) => set("direction", e.target.value)}>
+              <option>above</option><option>below</option>
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="m-compare">compare</FieldLabel>
+            <NativeSelect id="m-compare" value={form.compare}
+                          onChange={(e) => set("compare", e.target.value)}>
+              <option value="abs">abs</option><option value="signed">signed</option>
+            </NativeSelect>
+          </Field>
+          <Button type="submit">watch</Button>
+        </FieldGroup>
       </form>
-    </fieldset>
+    </FieldSet>
   );
 }
 
@@ -75,15 +103,14 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
     setLegs((prev) => prev.map((l, j) => (i === j ? { ...l, ...patch } : l)));
 
   return (
-    <fieldset>
-      <legend>Add combo</legend>
+    <FieldSet>
+      <FieldLegend>Add combo</FieldLegend>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           if (threshold === null) return;
           onCreate({
-            name, strike_date: strikeDate, field, direction, compare,
-            threshold,
+            name, strike_date: strikeDate, field, direction, compare, threshold,
             // blank rows are skipped, as on /ui
             legs: legs
               .filter((l) => l.strike !== null)
@@ -91,38 +118,57 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
           });
         }}
       >
-        <label>name <input value={name} onChange={(e) => setName(e.target.value)} required /></label>
-        <label>expiry <input type="date" value={strikeDate} onChange={(e) => setStrikeDate(e.target.value)} required /></label>
-        {legs.map((leg, i) => (
-          <label key={i}>leg {i + 1}
-            <select value={leg.sign} onChange={(e) => setLeg(i, { sign: e.target.value })}>
-              <option>+</option><option>-</option>
-            </select>
-            <select value={leg.option_type} onChange={(e) => setLeg(i, { option_type: e.target.value })}>
-              <option>CALL</option><option>PUT</option>
-            </select>
-            <NumberField placeholder="strike (blank = skip)" value={leg.strike}
-                         onValueChange={(v) => setLeg(i, { strike: v })} />
-          </label>
-        ))}
-        <label>field
-          <select value={field} onChange={(e) => setField(e.target.value)}>
-            {COMBO_FIELDS.map((f) => <option key={f}>{f}</option>)}
-          </select>
-        </label>
-        <label>threshold <NumberField value={threshold} onValueChange={setThreshold} required /></label>
-        <label>direction
-          <select value={direction} onChange={(e) => setDirection(e.target.value)}>
-            <option>above</option><option>below</option>
-          </select>
-        </label>
-        <label>compare
-          <select value={compare} onChange={(e) => setCompare(e.target.value)}>
-            <option value="abs">abs</option><option value="signed">signed</option>
-          </select>
-        </label>
-        <button>watch combo</button>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="c-name">name</FieldLabel>
+            <Input id="c-name" value={name} onChange={(e) => setName(e.target.value)} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="c-expiry">expiry</FieldLabel>
+            <Input id="c-expiry" type="date" value={strikeDate}
+                   onChange={(e) => setStrikeDate(e.target.value)} required />
+          </Field>
+          {legs.map((leg, i) => (
+            <Field key={i} orientation="horizontal">
+              <FieldLabel htmlFor={`c-leg-${i}-strike`}>leg {i + 1}</FieldLabel>
+              <NativeSelect aria-label={`leg ${i + 1} sign`} value={leg.sign}
+                            onChange={(e) => setLeg(i, { sign: e.target.value })}>
+                <option>+</option><option>-</option>
+              </NativeSelect>
+              <NativeSelect aria-label={`leg ${i + 1} type`} value={leg.option_type}
+                            onChange={(e) => setLeg(i, { option_type: e.target.value })}>
+                <option>CALL</option><option>PUT</option>
+              </NativeSelect>
+              <NumberField id={`c-leg-${i}-strike`} placeholder="strike (blank = skip)"
+                           value={leg.strike} onValueChange={(v) => setLeg(i, { strike: v })} />
+            </Field>
+          ))}
+          <Field>
+            <FieldLabel htmlFor="c-field">field</FieldLabel>
+            <NativeSelect id="c-field" value={field} onChange={(e) => setField(e.target.value)}>
+              {COMBO_FIELDS.map((f) => <option key={f}>{f}</option>)}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="c-threshold">threshold</FieldLabel>
+            <NumberField id="c-threshold" value={threshold} onValueChange={setThreshold} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="c-direction">direction</FieldLabel>
+            <NativeSelect id="c-direction" value={direction}
+                          onChange={(e) => setDirection(e.target.value)}>
+              <option>above</option><option>below</option>
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="c-compare">compare</FieldLabel>
+            <NativeSelect id="c-compare" value={compare} onChange={(e) => setCompare(e.target.value)}>
+              <option value="abs">abs</option><option value="signed">signed</option>
+            </NativeSelect>
+          </Field>
+          <Button type="submit">watch combo</Button>
+        </FieldGroup>
       </form>
-    </fieldset>
+    </FieldSet>
   );
 }
