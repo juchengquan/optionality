@@ -287,9 +287,9 @@ def test_combo_row_shows_expiry_and_legs(client_factory):
     }
     client.post("/monitors", json=combo, headers=AUTH)
     page = client.get("/ui", headers=AUTH).text
-    # the legs ARE the combo's identity; a name alone is meaningless three weeks later
-    assert "+C8100 -C8150 -P7900 +P7850" in page
-    assert expiry in page  # and which expiry it belongs to — only the name showed before
+    # a combo monitor with no Position still identifies itself by name; its legs now live
+    # on the Position row rather than being repeated against every rule that watches it
+    assert "condor-a" in page
 
 
 def test_highlight_marks_the_monitored_field(client_factory):
@@ -561,18 +561,17 @@ def test_singles_and_combos_render_as_separate_tables(client_factory):
     client.app.state.sweeper.sweep()
     page = client.get("/ui/table", headers=AUTH).text
 
-    assert "Single-leg" in page and "Combos" in page
-    singles, combos = page.index("Single-leg"), page.index("Combos")
-    assert singles < combos  # singles first
+    assert "Per-leg" in page and "Whole-position and wing" in page
+    singles, combos = page.index("Per-leg"), page.index("Whole-position and wing")
+    assert singles < combos  # per-leg rules first
 
     # bid/ask/last-trade are structurally empty for a combo (no per-contract snapshot),
-    # so they belong to the singles table only
+    # and greeks/dte now live on the Position row, so the rule row carries none of them
     combo_section = page[combos:]
-    assert "<th>bid</th>" not in combo_section
-    assert "<th>ask</th>" not in combo_section
-    assert "<th>last trade</th>" not in combo_section
-    assert "<th>value</th>" in combo_section  # one column for whatever field the combo watches
-    assert "+C8100 -C8150" in combo_section  # legs stay with the combo row
+    for absent in ("<th>bid</th>", "<th>ask</th>", "<th>last trade</th>", "<th>delta</th>"):
+        assert absent not in combo_section
+    assert "<th>value</th>" in combo_section  # one column for whatever field the rule watches
+    assert "<th>watching</th>" in combo_section  # which position, and how much of it
 
 
 def test_each_table_is_omitted_when_it_has_no_rows(client_factory):
@@ -584,8 +583,8 @@ def test_each_table_is_omitted_when_it_has_no_rows(client_factory):
     )
     client.app.state.sweeper.sweep()
     page = client.get("/ui/table", headers=AUTH).text
-    assert "Single-leg" in page
-    assert "Combos" not in page  # no empty heading over an empty table
+    assert "Per-leg" in page
+    assert "Whole-position and wing" not in page  # no empty heading over an empty table
 
 
 def test_combo_form_does_not_offer_non_additive_fields(client_factory):
@@ -686,3 +685,114 @@ def test_field_names_lose_their_prefix(client_factory):
     row = client.get("/ui/table", headers=AUTH).text
     assert "theta ≥ -0.5" in row  # was "option_theta ≥ -0.5" in the widest column
     assert "option_theta" not in row
+
+
+def _position(client, name="1016_IC", entry=3.0, **kw):
+    payload = {
+        "name": name,
+        "strike_date": _future(),
+        "entry": entry,
+        "contracts": 1,
+        "legs": [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+            {"side": "sold", "option_type": "PUT", "strike": 7100},
+            {"side": "bought", "option_type": "PUT", "strike": 7075},
+        ],
+    }
+    payload.update(kw)
+    return client.post("/positions", json=payload, headers=AUTH).json()
+
+
+def _pos_fetcher(codes, opend_host=None, opend_port=None):
+    mids = {"C8050": 5.0, "C8075": 2.0, "P7100": 3.0, "P7075": 1.5}
+    return [
+        {
+            "code": c,
+            "mid_price": next((v for k, v in mids.items() if c.endswith(k + "000")), 1.0),
+            "option_delta": 0.1,
+            "option_contract_size": 100.0,
+        }
+        for c in codes
+    ]
+
+
+def test_dashboard_shows_positions_with_cost_to_close_and_pnl(client_factory):
+    client = client_factory(snapshot_fetcher=_pos_fetcher)
+    _position(client, entry=3.0)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+
+    assert "Positions" in page
+    assert "1016_IC" in page
+    assert ">4.50<" in page  # cost to close, POSITIVE — the combo read -4.50
+    assert ">-150.00<" in page  # sold for 3.00, costs 4.50 to close, 1 contract
+    assert "sC8050" in page  # sides, not signs
+
+
+def test_position_without_entry_shows_no_pnl_rather_than_zero(client_factory):
+    client = client_factory(snapshot_fetcher=_pos_fetcher)
+    _position(client, entry=None)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    assert ">4.50<" in page  # still knows the cost to close
+    assert ">-150.00<" not in page  # but never invents a P&L
+
+
+def test_alarms_table_names_the_position_and_scope(client_factory):
+    client = client_factory(snapshot_fetcher=_pos_fetcher)
+    pos = _position(client)
+    sf = client.app.state.session_factory
+    with sf() as s:
+        s.add(
+            Monitor(
+                code="wing-watch",
+                strike_date=_future(),
+                option_type="CMB",
+                strike=0.0,
+                field="mid_price",
+                threshold=2.0,
+                position_id=pos["id"],
+                scope="calls",
+                legs=[
+                    {"sign": -1, "option_type": "CALL", "strike": 8050.0},
+                    {"sign": 1, "option_type": "CALL", "strike": 8075.0},
+                ],
+            )
+        )
+        s.commit()
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    assert "Alarms" in page
+    assert "1016_IC · calls" in page  # which position, and how much of it
+
+
+def test_owned_rule_shows_cost_to_close_not_the_legacy_signed_sum(client_factory):
+    client = client_factory(snapshot_fetcher=_pos_fetcher)
+    pos = _position(client)
+    sf = client.app.state.session_factory
+    with sf() as s:
+        s.add(
+            Monitor(
+                code="1016_IC",
+                strike_date=_future(),
+                option_type="CMB",
+                strike=0.0,
+                field="mid_price",
+                threshold=9.0,
+                position_id=pos["id"],
+                scope="all",
+                legs=[  # the old representation, still driving the alarm engine
+                    {"sign": -1, "option_type": "CALL", "strike": 8050.0},
+                    {"sign": 1, "option_type": "CALL", "strike": 8075.0},
+                    {"sign": -1, "option_type": "PUT", "strike": 7100.0},
+                    {"sign": 1, "option_type": "PUT", "strike": 7075.0},
+                ],
+            )
+        )
+        s.commit()
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    # the same quantity must not read +4.50 as a Position and -4.50 as a rule
+    assert ">4.50<" in page
+    assert ">-4.50<" not in page

@@ -11,15 +11,31 @@ from optionality.service.models import Position
 SOLD = "sold"
 BOUGHT = "bought"
 
+# greeks are linear in the legs, so an exposure-signed sum is the greek OF the position.
+# IV is intensive and never summed — the same rule combos hold to.
+POSITION_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")
 
-def position_leg_codes(position: Position) -> list[str]:
-    return [build_spx_code(position.strike_date, leg["option_type"], leg["strike"]) for leg in position.legs]
+
+def scoped_legs(position: Position, scope: str | None = None) -> list[dict]:
+    """The legs a scope selects. For a condor, "calls" and "puts" are exactly the wings."""
+    if scope == "calls":
+        return [leg for leg in position.legs if leg["option_type"] == "CALL"]
+    if scope == "puts":
+        return [leg for leg in position.legs if leg["option_type"] == "PUT"]
+    return list(position.legs)
 
 
-def _signed_sum(position: Position, by_code: dict, field: str, sold_sign: int) -> float | None:
-    """Sum `field` over the legs; None if ANY leg is missing — never a partial position."""
+def position_leg_codes(position: Position, scope: str | None = None) -> list[str]:
+    return [
+        build_spx_code(position.strike_date, leg["option_type"], leg["strike"]) for leg in scoped_legs(position, scope)
+    ]
+
+
+def _signed_sum(position: Position, by_code: dict, field: str, sold_sign: int, scope: str | None) -> float | None:
+    """Sum `field` over the scoped legs; None if ANY is missing — never a partial position."""
+    legs = scoped_legs(position, scope)
     total = 0.0
-    for leg, code in zip(position.legs, position_leg_codes(position), strict=True):
+    for leg, code in zip(legs, position_leg_codes(position, scope), strict=True):
         record = by_code.get(code)
         value = record.get(field) if record else None
         if value is None:
@@ -28,14 +44,14 @@ def _signed_sum(position: Position, by_code: dict, field: str, sold_sign: int) -
     return total
 
 
-def cost_to_close(position: Position, by_code: dict) -> float | None:
+def cost_to_close(position: Position, by_code: dict, scope: str | None = None) -> float | None:
     """Points needed to buy the position back: sold legs cost, bought legs return."""
-    return _signed_sum(position, by_code, "mid_price", sold_sign=1)
+    return _signed_sum(position, by_code, "mid_price", sold_sign=1, scope=scope)
 
 
-def position_greek(position: Position, by_code: dict, field: str) -> float | None:
+def position_greek(position: Position, by_code: dict, field: str, scope: str | None = None) -> float | None:
     """Exposure-signed sum: a sold leg's greek counts against you, hence sold_sign=-1."""
-    return _signed_sum(position, by_code, field, sold_sign=-1)
+    return _signed_sum(position, by_code, field, sold_sign=-1, scope=scope)
 
 
 def contract_size(by_code: dict) -> float | None:
@@ -51,7 +67,9 @@ def position_pnl(position: Position, by_code: dict) -> float | None:
     """Entry less cost to close, in money. None unless every leg priced and a size is known."""
     closing = cost_to_close(position, by_code)
     size = contract_size(by_code)
-    if closing is None or size is None:
+    # entry is for the whole holding, so P&L is too; unknown entry means unknown P&L,
+    # never a fabricated one
+    if closing is None or size is None or position.entry is None:
         return None
     # money, so 2dp is its own precision: float noise here reads as 160.99999999999986.
     # points and greeks stay exact and are rounded at display instead.

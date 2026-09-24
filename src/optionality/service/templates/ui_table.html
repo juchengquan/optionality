@@ -7,8 +7,38 @@
   · queue: {{ health.queue }}
 </div>
 
+{#- what you HOLD. the alarms below say what is being watched about it. -#}
+{% if position_rows %}
+<h3>Positions</h3>
+<table>
+  <thead><tr>
+    <th>position</th><th>dte</th><th>qty</th><th>entry</th><th>cost to close</th><th>P&amp;L</th>
+    <th>delta</th><th>gamma</th><th>theta</th><th>vega</th>
+  </tr></thead>
+  <tbody>
+  {% for p in position_rows %}
+    <tr>
+      <td>{{ p.name }}{% if p.strategy %} <span class="legs">{{ p.strategy }}</span>{% endif %}
+        <div class="legs">{{ p.strike_date }} · {{ p.legs }}</div>
+      </td>
+      <td>{{ p.dte }}</td>
+      <td>{{ p.contracts }}</td>
+      <td>{{ p.entry }}</td>
+      <td class="hl">{{ p.cost }}</td>
+      <td>{{ p.pnl }}</td>
+      <td>{{ p.delta }}</td>
+      <td>{{ p.gamma }}</td>
+      <td>{{ p.theta }}</td>
+      <td>{{ p.vega }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h3>Alarms</h3>
 {% if single_rows %}
-<h3>Single-leg</h3>
+<h4>Per-leg</h4>
 <table>
   <thead><tr>
     <th>contract</th><th>alarm</th><th>dte</th><th>delta</th><th>gamma</th><th>theta</th><th>vega</th>
@@ -17,7 +47,9 @@
   <tbody>
   {% for row in single_rows %}
     <tr{% if row.triggered %} class="triggered"{% endif %}>
-      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}</td>
+      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}
+        {%- if row.owner %}<div class="legs">{{ row.owner }}</div>{% endif %}
+      </td>
       <td>{{ row.alarm }}</td>
       <td>{{ row.dte }}</td>
       {#- hl marks the column the alarm actually watches; --fill carries how far that value
@@ -44,26 +76,20 @@
 
 {#- combos get their own table: bid, ask, IV and last trade are structurally empty for them
     (no per-contract snapshot), and a single "value" column carries whatever field they watch -#}
+{#- a combo monitor now belongs to a Position, so its row is about the RULE only:
+    legs, greeks and dte all live on the Position row above and are not repeated -#}
 {% if combo_rows %}
-<h3>Combos</h3>
+<h4>Whole-position and wing</h4>
 <table>
   <thead><tr>
-    <th>combo</th><th>alarm</th><th>dte</th><th>value</th>
-    <th>delta</th><th>gamma</th><th>theta</th><th>vega</th><th>actions</th>
+    <th>watching</th><th>alarm</th><th>value</th><th>actions</th>
   </tr></thead>
   <tbody>
   {% for row in combo_rows %}
     <tr{% if row.triggered %} class="triggered"{% endif %}>
-      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}
-        <div class="legs">{{ row.strike_date }} · {{ row.legs }}</div>
-      </td>
+      <td>{{ row.owner or row.name }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}</td>
       <td>{{ row.alarm }}</td>
-      <td>{{ row.dte }}</td>
       <td class="hl"{% if row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}>{{ row.value }}</td>
-      <td>{{ row.delta }}</td>
-      <td>{{ row.gamma }}</td>
-      <td>{{ row.theta }}</td>
-      <td>{{ row.vega }}</td>
       <td class="actions">
         <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
           <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required>

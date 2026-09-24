@@ -10,8 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
-from optionality.service.models import Monitor
+from optionality.service.models import Monitor, Position
 from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error
+from optionality.service.position import (
+    POSITION_GREEK_FIELDS,
+    cost_to_close,
+    position_greek,
+    position_pnl,
+)
 from optionality.service.routes.health import _opend_reachable
 from optionality.service.routes.monitors import (
     ComboMonitorIn,
@@ -177,6 +183,31 @@ def _quote_rows(quotes: list[dict]) -> list[dict]:
 _REFRESH_PRESETS = (5, 10, 15, 30, 60, 120)
 
 
+def _position_rows(session, by_code: dict) -> list[dict]:
+    """What you hold, valued from the same sweep the alarms were evaluated against."""
+    rows = []
+    for p in session.scalars(select(Position).order_by(Position.strike_date, Position.name)).all():
+        rows.append(
+            {
+                "id": p.id,
+                "name": p.name,
+                "strategy": p.strategy or "",
+                "legs": " ".join(f"{leg['side'][0]}{leg['option_type'][0]}{leg['strike']:g}" for leg in p.legs),
+                "strike_date": p.strike_date,
+                "dte": days_to_expiry(p.strike_date),
+                "contracts": p.contracts,
+                "entry": _fmt_at(p.entry, "mid"),
+                "cost": _fmt_at(cost_to_close(p, by_code), "mid"),
+                "pnl": _fmt_at(position_pnl(p, by_code), "mid"),
+                **{
+                    _FIELD_COLUMN[f]: _fmt_at(position_greek(p, by_code, f), _FIELD_COLUMN[f])
+                    for f in POSITION_GREEK_FIELDS
+                },
+            }
+        )
+    return rows
+
+
 def _refresh_options(settings: Settings) -> list[int]:
     # deliberately NOT clamped to MONITOR_INTERVAL_SECONDS: the sweep decides how fresh the
     # data is, the poll decides how soon the page shows the newest sweep. A poll that just
@@ -264,7 +295,23 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
         "queue": worker.queue_depth(),
     }
     rows = _quote_rows(quotes)
+    by_code, _stamp = sweeper.cached_records()
+    owned = {
+        m.id: (p, m.scope) for m, p in session.query(Monitor, Position).filter(Monitor.position_id == Position.id).all()
+    }
+    for r in rows:
+        owner = owned.get(r["id"])
+        r["owner"] = f"{owner[0].name} · {owner[1]}" if owner else ""
+        # a rule that belongs to a Position shows the Position's cost to close, so the same
+        # quantity cannot appear as +1.60 above and -1.60 below. The alarm engine still
+        # evaluates its own signed sum; only the display is reconciled.
+        if owner and r["is_combo"]:
+            position, scope = owner
+            closing = cost_to_close(position, by_code, scope)
+            r["value"] = _fmt_at(closing, "mid")
+            r["fill"] = _fill_pct(closing, r["threshold"], "above", "abs")
     return {
+        "position_rows": _position_rows(session, by_code),
         "single_rows": [r for r in rows if not r["is_combo"]],
         "combo_rows": [r for r in rows if r["is_combo"]],
         "muted_groups": _muted_groups(muted, settings),

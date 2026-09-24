@@ -115,3 +115,40 @@ def test_pnl_is_rounded_to_money_precision():
     # 3.21 - 1.60 in binary floating point is 1.6100000000000003
     by_code = _quotes(p, [5.0, 2.0, 3.0, 4.4])
     assert position_pnl(p, by_code) == 161.0  # not 160.99999999999986
+
+
+def test_scope_selects_a_wing_of_the_condor():
+    p = _condor()
+    by_code = _quotes(p, [5.0, 2.0, 3.0, 1.5])
+    # calls: sold 5.00, bought 2.00 -> 3.00 to close that wing
+    assert cost_to_close(p, by_code, scope="calls") == 3.0
+    # puts: sold 3.00, bought 1.50 -> 1.50
+    assert cost_to_close(p, by_code, scope="puts") == 1.5
+    # the wings add up to the whole
+    assert cost_to_close(p, by_code) == 4.5
+
+
+def test_scope_narrows_exposure_too():
+    p = _condor()
+    by_code = _quotes(p, [1.0, 1.0, 1.0, 1.0])
+    for code, leg in zip(position_leg_codes(p), p.legs, strict=True):
+        by_code[code]["option_delta"] = 0.4 if leg["option_type"] == "CALL" else -0.3
+    # calls wing: bought 0.4 - sold 0.4 = 0.0; make the short call dominate
+    by_code[position_leg_codes(p)[0]]["option_delta"] = 0.9
+    assert position_greek(p, by_code, "option_delta", scope="calls") == -0.5
+    assert position_greek(p, by_code, "option_delta", scope="puts") == 0.0
+
+
+def test_unknown_scope_is_the_whole_position():
+    p = _condor()
+    by_code = _quotes(p, [5.0, 2.0, 3.0, 1.5])
+    assert cost_to_close(p, by_code, scope=None) == 4.5
+    assert cost_to_close(p, by_code, scope="all") == 4.5
+
+
+def test_pnl_is_unknown_until_an_entry_is_recorded():
+    p = _condor()
+    p.entry = None  # migrated from a combo, which never recorded what was taken in
+    by_code = _quotes(p, [5.0, 2.0, 3.0, 1.5])
+    assert cost_to_close(p, by_code) == 4.5  # still knows what it costs to close
+    assert position_pnl(p, by_code) is None  # but not how that compares to entry
