@@ -6,6 +6,7 @@ import {
   patchMonitor, patchPosition, setTotalEntry,
   type Entry, type Health, type Monitor,
 } from "./api";
+import { Toaster, toast } from "@/components/ui/toast";
 import { AddCombo, AddMonitor } from "./AddForms";
 import { CONTRACT_VERSION } from "./contract";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, visible, writeHidden } from "./columns";
@@ -45,8 +46,10 @@ export function App() {
       setHealth(h);
       setError(null);
     } catch (e: unknown) {
-      // the dashboard must still render when the service is unhappy, as /ui does
-      setError(String(e));
+      // the dashboard must still render when the service is unhappy. This banner means one
+      // thing only — the poll is failing, so every figure below is stale — and it stays up
+      // until a poll succeeds. Refusals of things you just did go to a toast instead.
+      setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -73,10 +76,11 @@ export function App() {
     async (fn: () => Promise<void>) => {
       try {
         await fn();
-        setError(null);
         await load();
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : String(e));
+        // the service explains its refusals properly — a duplicate, a dead contract, an
+        // unsplittable total — so its words go straight to the toast
+        toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
       }
     },
     [load],
@@ -180,6 +184,8 @@ export function App() {
 
       <AddMonitor onCreate={(body) => void act(() => createMonitor(body))} />
       <AddCombo onCreate={(body) => void act(() => createMonitor(body))} />
+
+      <Toaster />
     </main>
   );
 }

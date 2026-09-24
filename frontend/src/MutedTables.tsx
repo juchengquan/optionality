@@ -1,4 +1,5 @@
 import type { Monitor } from "./api";
+import { ConfirmDelete } from "./ConfirmDelete";
 
 // most alarming first: a vanished contract needs attention, one you muted yourself does not
 const GROUPS: [string | null, string][] = [
@@ -56,7 +57,7 @@ export function MutedTables({
                     <td>{m.threshold}</td>
                     <td className="left">
                       <button onClick={() => onUnmute(m.id)}>unmute</button>
-                      <button onClick={() => onDelete(m.id)}>delete</button>
+                      <ConfirmDelete name={m.code} what="alarm rule" onConfirm={() => onDelete(m.id)} />
                     </td>
                   </tr>
                 ))}
