@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0005
+---
+
 # Server-rendered HTML over a SPA framework
 
 The dashboard renders Jinja templates with htmx and no JavaScript of our own. A rebuild in
