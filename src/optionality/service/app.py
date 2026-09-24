@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from optionality.core import fetch_snapshot, run_task
 from optionality.service.db import init_db, make_engine, make_session_factory
 from optionality.service.monitor import MonitorSweeper
-from optionality.service.routes import configs, health, monitors, positions, runs, schedules, spx, ui
+from optionality.service.routes import configs, health, monitors, positions, runs, schedules, spx
 from optionality.service.scheduler import build_scheduler, refresh_jobs
 from optionality.service.settings import Settings
 from optionality.service.telegram_bot import TelegramBot
@@ -78,5 +78,4 @@ def create_app(settings: Settings | None = None, runner=None, snapshot_fetcher=N
     app.include_router(monitors.router)
     app.include_router(monitors.quotes_router)
     app.include_router(positions.router)
-    app.include_router(ui.router)
     return app

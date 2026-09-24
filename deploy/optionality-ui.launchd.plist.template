@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.optionality.ui</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__CADDY__</string>
+        <string>run</string>
+        <string>--config</string>
+        <string>__REPO__/deploy/Caddyfile</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>OPTIONALITY_UI_ROOT</key>
+        <string>__REPO__/frontend/dist</string>
+        <key>XDG_DATA_HOME</key>
+        <string>__HOME__/Library/Application Support</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/optionality-ui.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/optionality-ui.log</string>
+</dict>
+</plist>

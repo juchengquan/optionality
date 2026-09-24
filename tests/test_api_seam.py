@@ -7,9 +7,12 @@ These tests exist so that cannot happen silently again.
 """
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import select
 
+from optionality.service import routes
+from optionality.service.contract import CONTRACT_VERSION
 from optionality.service.models import Monitor, monitor_positions
 from tests.conftest import AUTH
 
@@ -111,17 +114,19 @@ def test_monitors_says_which_position_it_watches(client_factory):
     assert [p["name"] for p in listed["condor_rule"]["positions"]] == ["calls_side", "puts_side"]
 
 
-def test_the_route_layer_holds_no_domain_logic(client_factory):
-    """Successor to the _quote_rows acceptance test: that function retired with htmx, but
-    the rule it enforced did not. Serving the dashboard must stay a matter of handing over
-    a bundle — every figure belongs to the domain, reachable over HTTP."""
-    import inspect
+def test_the_api_serves_no_frontend(client_factory):
+    """Successor to the _quote_rows acceptance test, which guarded the rule that every
+    figure must be reachable over HTTP rather than computed while rendering. Caddy serves
+    the dashboard now (ADR 0006), so the rule has a blunter form: there is no rendering
+    here to hide arithmetic in, and nothing that would quietly grow one back."""
+    client = client_factory(snapshot_fetcher=_fetcher)
 
-    from optionality.service.routes import ui
+    for path in ("/ui", "/app", "/static/app/index.html"):
+        assert client.get(path, headers=AUTH).status_code == 404, f"{path} belongs to Caddy"
 
-    source = inspect.getsource(ui)
-    for computation in ("threshold_fill", "days_to_expiry", "combined_cost_to_close", "cost_to_close"):
-        assert computation not in source, f"{computation} belongs in the domain layer, not a route"
+    package = Path(routes.__file__).resolve().parent.parent
+    assert not (package / "templates").exists()
+    assert not (package / "static").exists()
 
 
 def test_health_carries_what_the_status_strip_shows(client_factory):
@@ -142,3 +147,11 @@ def test_health_carries_what_the_status_strip_shows(client_factory):
         "label": "STALLED (3 failed sweeps)",
         "bad": True,
     }
+
+
+def test_health_reports_the_contract_version(client_factory):
+    """The dashboard ships separately now (ADR 0006), so it needs a way to notice it is
+    older than the API it is talking to. This number is that way."""
+    client = client_factory(snapshot_fetcher=_fetcher)
+
+    assert client.get("/health", headers=AUTH).json()["contract_version"] == CONTRACT_VERSION

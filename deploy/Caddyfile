@@ -1,0 +1,37 @@
+# The dashboard's web server. Only this: static files, no proxying, no TLS.
+#
+# Tailscale terminates TLS at the tailnet edge and proxies plain HTTP to 127.0.0.1, exactly
+# as it does for uvicorn — so auto_https must be off or Caddy would try to get certificates
+# for a name it does not own and cannot reach.
+{
+	auto_https off
+	admin off
+}
+
+:31416 {
+	bind 127.0.0.1
+
+	# the repo path arrives from the launchd plist, so this file stays committed and
+	# machine-independent, the way __REPO__ reaches the uvicorn one
+	root * {$OPTIONALITY_UI_ROOT}
+
+	# `tailscale serve --set-path /opt` strips the prefix, so everything below is seen at
+	# the root here. Unknown paths fall through to the app rather than 404ing: /opt/app was
+	# a real URL once, and a redirect could not fix it — tailscale does not rewrite Location
+	# headers, so any redirect we issue would land the browser on the tailnet root.
+	try_files {path} /index.html
+	file_server
+
+	# filenames carry a content hash, so they can never go stale...
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+	# ...but the file that names them must be re-read on every load, or a deploy would wait
+	# on a cache expiry to be noticed
+	header /index.html Cache-Control "no-store"
+
+	encode gzip
+
+	log {
+		output stderr
+		format console
+	}
+}

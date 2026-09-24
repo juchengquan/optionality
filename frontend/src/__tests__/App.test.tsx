@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { CONTRACT_VERSION } from "../contract";
 
 /** Fixtures mirror the REAL watchlist: a wing rule, a rule spanning two holdings, and a
  *  leg rule. Every frontend bug shipped on 2026-09-24 passed against a simpler fixture and
@@ -38,11 +39,12 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "2026-09-24 15:00:00+08:00", alarms: { label: "active", bad: false }, fetched_at: "2026-09-24 15:00:00+08:00" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
+  contract_version: CONTRACT_VERSION,
 };
 
-function mockApi(quotes: unknown[], monitors: unknown[] = []) {
+function mockApi(quotes: unknown[], monitors: unknown[] = [], healthBody: unknown = health) {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
-    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/monitors") ? monitors : health;
+    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/monitors") ? monitors : healthBody;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }
@@ -52,7 +54,7 @@ describe("the watchlist", () => {
 
   it("renders both tables from the API", async () => {
     mockApi([wing, spanning, leg]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByText("Single-leg")).toBeTruthy());
     expect(screen.getByText("Combos")).toBeTruthy();
     expect(screen.getByText("SPXW 261120 8100.00C")).toBeTruthy();
@@ -60,7 +62,7 @@ describe("the watchlist", () => {
 
   it("shows cost to close positive, and the P&L it implies", async () => {
     mockApi([spanning]);
-    render(<App rootPath="" />);
+    render(<App />);
     // the combo's own signed sum is -0.80; what a trader reads is what it costs to close
     await waitFor(() => expect(screen.getByText("1.55")).toBeTruthy());
     expect(screen.getByText("166.00")).toBeTruthy();
@@ -69,13 +71,13 @@ describe("the watchlist", () => {
 
   it("carries the legs, so a leg entered backwards is visible", async () => {
     mockApi([wing]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByText(/-C8050 \+C8075/)).toBeTruthy());
   });
 
   it("puts the fill bar on the column the alarm watches", async () => {
     mockApi([leg]);
-    const { container } = render(<App rootPath="" />);
+    const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
     const filled = container.querySelector("td.hl") as HTMLElement;
     expect(filled.style.getPropertyValue("--fill")).toBe("84%");
@@ -84,14 +86,14 @@ describe("the watchlist", () => {
 
   it("rings the bell on a triggered row", async () => {
     mockApi([spanning]);
-    const { container } = render(<App rootPath="" />);
+    const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("tr.triggered")).toBeTruthy());
     expect(container.textContent).toContain("🔔");
   });
 
   it("names the sweep cadence, so a still timestamp reads as normal", async () => {
     mockApi([leg]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByText(/sweep every 15s/)).toBeTruthy());
   });
 
@@ -100,8 +102,27 @@ describe("the watchlist", () => {
       { id: "x", code: "old", field: "option_delta", threshold: 0.2, strike_date: "2026-09-22",
         enabled: false, disabled_reason: "expired", scope: null, positions: [] },
     ]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByText("Expired")).toBeTruthy());
     expect(screen.getByText(/auto-deletes in \d+ days?/)).toBeTruthy();
+  });
+});
+
+describe("version skew", () => {
+  it("says so when the service has moved on without the dashboard", async () => {
+    mockApi([wing], [], { ...health, contract_version: CONTRACT_VERSION + 1 });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText(/out of date/i)).toBeTruthy());
+    // the figures are still drawn: a skewed dashboard is suspect, not useless
+    expect(screen.getByText("1016_bs_8050")).toBeTruthy();
+  });
+
+  it("stays quiet when they agree", async () => {
+    mockApi([wing]);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
+    expect(screen.queryByText(/out of date/i)).toBeNull();
   });
 });

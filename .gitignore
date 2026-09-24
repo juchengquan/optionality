@@ -11,6 +11,8 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+# the frontend bundle is committed on purpose: node must never sit on the deploy path
+!frontend/dist/
 downloads/
 eggs/
 .eggs/
@@ -176,6 +178,9 @@ _examples/
 *.html
 # ...but the dashboard templates are source, not generated output
 !src/optionality/service/templates/*.html
+# ...nor the frontend's shell, nor the built copy of it Caddy actually serves
+!frontend/index.html
+!frontend/dist/index.html
 
 # optionality service
 data/

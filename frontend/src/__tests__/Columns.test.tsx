@@ -49,7 +49,7 @@ describe("the fill and bell fallback chain", () => {
   beforeEach(() => { clearCookies(); mockApi(); });
 
   it("normally sits on the column the alarm watches", async () => {
-    const { container } = render(<App rootPath="" />);
+    const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
     const cell = filledCell(container);
     expect(cell.textContent).toBe("0.1685"); // delta
@@ -57,7 +57,7 @@ describe("the fill and bell fallback chain", () => {
   });
 
   it("moves to the alarm cell when that column is hidden", async () => {
-    const { container } = render(<App rootPath="" />);
+    const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
     await untick("delta");
     await waitFor(() => expect(filledCell(container).textContent).toContain("delta ≥ 0.2"));
@@ -66,7 +66,7 @@ describe("the fill and bell fallback chain", () => {
   });
 
   it("ends on the contract when the alarm is hidden too, taking the bell with it", async () => {
-    const { container } = render(<App rootPath="" />);
+    const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
     await untick("delta");
     await untick("alarm");
@@ -78,7 +78,7 @@ describe("the fill and bell fallback chain", () => {
   });
 
   it("never offers to hide the columns that identify or operate a row", async () => {
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
     const picker = screen.getByText("Single-leg columns").closest("details")!;
     expect(within(picker).queryByLabelText("contract")).toBeNull();
@@ -90,7 +90,7 @@ describe("column preferences", () => {
   beforeEach(() => { clearCookies(); mockApi(); });
 
   it("stores what is HIDDEN, so a column added later is not invisible", async () => {
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
     await untick("gamma");
     // "." separates: a comma makes the cookie value quote-escaped and it stops round-tripping
@@ -100,7 +100,7 @@ describe("column preferences", () => {
 
   it("reads the cookie /ui writes, so both dashboards agree", async () => {
     document.cookie = "ui_cols_single=gamma.vega;path=/";
-    const { container } = render(<App rootPath="" />);
+    const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("table")).toBeTruthy());
     const headers = [...container.querySelectorAll("th")].map((h) => h.textContent);
     expect(headers).not.toContain("gamma");
@@ -110,7 +110,7 @@ describe("column preferences", () => {
 
   it("show all puts every column back in one action", async () => {
     document.cookie = "ui_cols_single=gamma.vega.bid.ask;path=/";
-    const { container } = render(<App rootPath="" />);
+    const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("table")).toBeTruthy());
     const picker = screen.getByText("Single-leg columns").closest("details")!;
     fireEvent.click(within(picker).getByText("show all"));

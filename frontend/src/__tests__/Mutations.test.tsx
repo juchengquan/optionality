@@ -51,7 +51,7 @@ describe("mutations", () => {
 
   it("sets a threshold through the JSON API", async () => {
     mockApi([wing]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByDisplayValue("2.76")).toBeTruthy());
     const threshold = screen.getByDisplayValue("2.76");
     fireEvent.change(threshold, { target: { value: "3.00" } });
@@ -64,7 +64,7 @@ describe("mutations", () => {
 
   it("types an entry onto the one holding a rule watches", async () => {
     mockApi([wing]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByDisplayValue("2.87")).toBeTruthy());
     const entry = screen.getByDisplayValue("2.87");
     fireEvent.change(entry, { target: { value: "3.00" } });
@@ -75,7 +75,7 @@ describe("mutations", () => {
 
   it("sends a TOTAL for a rule spanning two holdings, never a per-wing entry", async () => {
     mockApi([spanning]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByPlaceholderText("total")).toBeTruthy());
     const total = screen.getByPlaceholderText("total");
     fireEvent.change(total, { target: { value: "3.21" } });
@@ -90,7 +90,7 @@ describe("mutations", () => {
 
   it("shows the service's own words when it refuses", async () => {
     mockApi([spanning], "cannot split a total across 2 wings that have no rule of their own");
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByPlaceholderText("total")).toBeTruthy());
     const totalBox = screen.getByPlaceholderText("total");
     fireEvent.change(totalBox, { target: { value: "3.21" } });
@@ -100,7 +100,7 @@ describe("mutations", () => {
 
   it("mutes and deletes", async () => {
     mockApi([wing]);
-    render(<App rootPath="" />);
+    render(<App />);
     await waitFor(() => expect(screen.getByText("mute")).toBeTruthy());
     fireEvent.click(screen.getByText("mute"));
     await waitFor(() => expect(calls.some((c) => c.body && "enabled" in (c.body as object))).toBe(true));
