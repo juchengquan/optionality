@@ -1,4 +1,6 @@
 import type { Monitor } from "./api";
+import { Button } from "@/components/ui/button";
+
 import { ConfirmDelete } from "./ConfirmDelete";
 
 // most alarming first: a vanished contract needs attention, one you muted yourself does not
@@ -56,7 +58,7 @@ export function MutedTables({
                     <td>{m.field}</td>
                     <td>{m.threshold}</td>
                     <td className="left">
-                      <button onClick={() => onUnmute(m.id)}>unmute</button>
+                      <Button variant="ghost" size="sm" onClick={() => onUnmute(m.id)}>unmute</Button>
                       <ConfirmDelete name={m.code} what="alarm rule" onConfirm={() => onDelete(m.id)} />
                     </td>
                   </tr>

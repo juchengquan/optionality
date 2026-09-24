@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 
 import type { Entry } from "./api";
@@ -30,8 +32,8 @@ export function RowActions({
           if (threshold !== null) onPatch(entry.id, { threshold });
         }}
       >
-        <NumberField value={threshold} onValueChange={setThreshold} required />
-        <button>set</button>
+        <NumberField className="w-22" value={threshold} onValueChange={setThreshold} required />
+        <Button type="submit" variant="outline" size="sm">set</Button>
       </form>
       {isCombo && onRename ? (
         <form
@@ -41,11 +43,11 @@ export function RowActions({
             onRename(entry.id, name);
           }}
         >
-          <input type="text" size={14} value={name} onChange={(e) => setName(e.target.value)} required />
-          <button>rename</button>
+          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+          <Button type="submit" variant="outline" size="sm">rename</Button>
         </form>
       ) : null}
-      <button onClick={() => onPatch(entry.id, { enabled: false })}>mute</button>
+      <Button variant="ghost" size="sm" onClick={() => onPatch(entry.id, { enabled: false })}>mute</Button>
       <ConfirmDelete
         name={isCombo ? entry.code : (entry.snapshot?.name ?? entry.code)}
         what={isCombo ? "combo and its alarm rule" : "alarm rule"}
@@ -82,12 +84,13 @@ export function EntryCell({
       }}
     >
       <NumberField
+        className="w-22"
         value={value}
         onValueChange={setValue}
         placeholder={single ? "entry" : "total"}
         required
       />
-      <button>set</button>
+      <Button type="submit" variant="outline" size="sm">set</Button>
     </form>
   );
 }

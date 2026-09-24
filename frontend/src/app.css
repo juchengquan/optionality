@@ -14,14 +14,10 @@
    phase 5 reconciles the palette. If this block is still whole at the end, a
    phase was skipped. */
 h2, h3 { font-size: revert; font-weight: revert; }
-/* :not([class]) is the fence between old and new. Every control still written by hand is
-   bare; every shadcn component carries Tailwind classes. So this reaches exactly the
-   controls awaiting rebuild and cannot touch the ones already done — which matters, since
-   handing a shadcn button back its native appearance would undo the point of it. */
-button:not([class]), input:not([class]), select:not([class]) {
-  font: revert; color: revert; background-color: revert;
-  border: revert; padding: revert; appearance: revert;
-}
+/* The control rules that lived here are GONE as of phase 4: every button, input and select
+   on the page is a shadcn component now, so there was nothing left for them to reach. Only
+   the headings still need the browser's own sizing back, and they go in phase 5 when the
+   palette is reconciled. */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /* Mirrors /ui's palette so the two dashboards are visually identical and the comparison
@@ -75,14 +71,12 @@ tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(
 #column-pickers summary { cursor: pointer; display: inline-block; padding: 2px 8px;
   border: 1px solid var(--line); border-radius: 3px; user-select: none; }
 #column-pickers details[open] summary { margin-bottom: 0.4rem; }
-label.colpick { display: inline-block; margin: 0 0.6rem 0 0; cursor: pointer; }
 form.inline { display: inline; }
-form.inline input[type=number] { width: 5.5rem; }
 td.actions { text-align: left; }
-fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0;
-           padding: 0.8rem 1rem; border: 1px solid var(--line); }
-legend { font-weight: 600; }
-fieldset label { display: block; margin: 0.3rem 0; }
+/* the add-forms are shadcn FieldSets now and bring their own spacing; these element
+   selectors matched them too and fought it. Kept only the side-by-side placement, which
+   is this dashboard's layout choice rather than the component's. */
+fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0; }
 button { cursor: pointer; }
 
 @theme inline { --font-heading: var(--font-sans); --font-sans: -apple-system, "Helvetica Neue", sans-serif; --color-sidebar-ring: var(--sidebar-ring); --color-sidebar-border: var(--sidebar-border); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground); --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground); --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-foreground: var(--sidebar-foreground); --color-sidebar: var(--sidebar); --color-chart-5: var(--chart-5); --color-chart-4: var(--chart-4); --color-chart-3: var(--chart-3); --color-chart-2: var(--chart-2); --color-chart-1: var(--chart-1); --color-ring: var(--ring); --color-input: var(--input); --color-border: var(--border); --color-destructive: var(--destructive); --color-accent-foreground: var(--accent-foreground); --color-accent: var(--accent); --color-muted-foreground: var(--muted-foreground); --color-muted: var(--muted); --color-secondary-foreground: var(--secondary-foreground); --color-secondary: var(--secondary); --color-primary-foreground: var(--primary-foreground); --color-primary: var(--primary); --color-popover-foreground: var(--popover-foreground); --color-popover: var(--popover); --color-card-foreground: var(--card-foreground); --color-card: var(--card); --color-foreground: var(--foreground); --color-background: var(--background); --radius-sm: calc(var(--radius) * 0.6); --radius-md: calc(var(--radius) * 0.8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --radius-2xl: calc(var(--radius) * 1.8); --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6); }
