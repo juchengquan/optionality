@@ -4,6 +4,7 @@ import {
 } from "@/components/ui/sheet";
 
 import type { Entry } from "./api";
+import { useDismissOnBack } from "./useDismissOnBack";
 import { COMBO_COLUMNS, PROTECTED, SINGLE_COLUMNS } from "./columns";
 import { alarmText, legSummary } from "./format";
 import { EntryCell, RowActions } from "./RowActions";
@@ -27,6 +28,7 @@ export function RowDetail({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  useDismissOnBack(open, () => onOpenChange(false));
   if (!entry) return null;
   const columns = (isCombo ? COMBO_COLUMNS : SINGLE_COLUMNS).filter(
     (c) => !PROTECTED.has(c.key) && c.key !== "alarm" && c.key !== "entry",

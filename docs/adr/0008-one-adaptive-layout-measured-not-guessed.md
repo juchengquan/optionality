@@ -67,3 +67,35 @@ nobody thinks to check by hand, and a check you have to remember to run does not
   the sheet closes by any other route, or back silently does nothing once.
 - The sheet is modal to begin with. Non-modal would be nicer for comparing rows against each
   other and is a later improvement, not a starting point.
+
+## Outcome
+
+All six phases landed together. The measuring works as argued, and five bugs turned up that
+the planning did not foresee — four of them found by tests rather than by reading.
+
+**The fitting loop was not monotonic.** It skipped a column that did not fit and took a
+narrower one further down the order, so widening a window by twenty pixels could swap one
+column for another instead of gaining one — at 260px the name and delta, at 280px the name
+and the alarm, delta gone. It stops at the first miss now, which is what "priority order"
+should have meant. Found by a property test asserting that every column set is a subset of
+every wider one.
+
+**`cellValue` had no case for the identity columns**, because the JSX draws them specially
+with their badge and bell. So the measurement asked how wide the widest column on the page
+needed to be and was told `—`. One character.
+
+**The hook used a plain ref**, and the table renders nothing until the first quotes arrive —
+so the ref was null when the effect ran and the effect never re-ran once the table appeared.
+Nothing was ever measured, and jsdom could not tell, because jsdom reports every element as
+zero wide either way.
+
+**The identity column is never dropped**, so a long enough contract name overflows alone
+however well the rest fits. The table scrolls inside its own box as a last resort. That is a
+safety valve, not the mechanism, and it is still better than the page scrolling.
+
+**One test passed with its bug present.** The history-entry test asserted `history.length`,
+which does not shrink when you go back and reports 1 in jsdom regardless. It watches for the
+`history.back()` call now, which is the actual contract.
+
+The width estimates written in phase 3 survive only as the default argument to `columnsFor`,
+used before the first measurement lands. Nothing on screen depends on them.

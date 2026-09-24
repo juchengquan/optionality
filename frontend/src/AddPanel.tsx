@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/sheet";
 
 import { AddCombo, AddMonitor } from "./AddForms";
+import { useDismissOnBack } from "./useDismissOnBack";
 
 /** The add-forms, in the same surface the row detail uses (ADR 0008).
  *
@@ -16,6 +17,7 @@ import { AddCombo, AddMonitor } from "./AddForms";
  */
 export function AddPanel({ onCreate }: { onCreate: (body: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState<"monitor" | "combo" | null>(null);
+  useDismissOnBack(open !== null, () => setOpen(null));
 
   return (
     <>

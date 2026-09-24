@@ -45,7 +45,10 @@ h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
 }
 /* colour and background come from shadcn's base layer now; this sets only what the
    dashboard has an opinion about */
+/* margin shrinks on a phone: 1.5rem each side is 48px of a 390px screen, which is an
+   eighth of the width given to nothing */
 body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem; }
+@media (max-width: 40rem) { body { margin: 0.75rem; } }
 .meta { color: var(--muted-foreground); margin: 0 0 1rem; }
 .banner { background: color-mix(in oklch, var(--destructive) 12%, var(--background));
           border: 1px solid var(--destructive); border-radius: var(--radius-md);
@@ -56,6 +59,10 @@ table { border-collapse: collapse; margin-bottom: 1.5rem; }
    exceed the screen on its own. Scrolling INSIDE the table beats what this all started as:
    the whole page, heading and status strip included, sliding sideways. */
 .table-scroll { overflow-x: auto; }
+/* The muted tables are four columns and rarely populated, so they get a plain rule rather
+   than the watchlist's measuring: which rule is muted and why is the whole content, and
+   the field and threshold behind it live in the detail the row opens. */
+@media (max-width: 40rem) { .hide-narrow { display: none; } }
 /* tabular-nums: ragged decimals defeat scanning a column */
 th, td { border: 1px solid var(--grid); padding: 4px 10px; text-align: right;
          white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -69,9 +76,12 @@ tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(
 .badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.7rem;
          padding: 1px 5px; border-radius: 3px; white-space: nowrap; margin-left: 0.3rem; }
 .health { color: var(--muted-foreground); font-size: 0.9rem; margin-bottom: 1.2rem; }
+/* the status strip and the refresh selector sit on one line at a desk and wrap on a
+   phone, rather than deciding the page is wider than the screen */
+form.health { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .health .bad { color: var(--destructive); font-weight: 700; }
 .pending { color: var(--muted-foreground); }
-#column-pickers { display: flex; gap: 0.75rem; align-items: center; }
+#column-pickers { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
 form.inline { display: inline; }
 td.actions { text-align: left; }
 /* the add-forms are shadcn FieldSets now and bring their own spacing; these element

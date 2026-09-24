@@ -39,10 +39,14 @@ export function MutedTables({
         return (
           <div key={label}>
             <h3>{label}</h3>
+            <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th className="left">contract</th><th>field</th><th>thr</th>
+                  <th className="left">contract</th>
+                  {/* field and threshold are the first to go on a narrow screen: what
+                      matters here is which rule is muted and why, not its number */}
+                  <th className="hide-narrow">field</th><th className="hide-narrow">thr</th>
                   <th className="left">actions</th>
                 </tr>
               </thead>
@@ -55,8 +59,8 @@ export function MutedTables({
                         <div className="legs">{retentionNote(m.strike_date, retentionDays)}</div>
                       ) : null}
                     </td>
-                    <td>{m.field}</td>
-                    <td>{m.threshold}</td>
+                    <td className="hide-narrow">{m.field}</td>
+                    <td className="hide-narrow">{m.threshold}</td>
                     <td className="left">
                       <Button variant="ghost" size="sm" onClick={() => onUnmute(m.id)}>unmute</Button>
                       <ConfirmDelete name={m.code} what="alarm rule" onConfirm={() => onDelete(m.id)} />
@@ -65,6 +69,7 @@ export function MutedTables({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         );
       })}

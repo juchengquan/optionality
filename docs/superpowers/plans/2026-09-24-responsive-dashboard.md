@@ -117,9 +117,9 @@ at 390px.
 
 ## Checklist
 
-- [ ] Phase 1 — detail sheet, additive
-- [ ] Phase 2 — retire the actions column
-- [ ] Phase 3 — `columnsFor`, tested in jsdom, nothing visible yet
-- [ ] Phase 4 — ResizeObserver + browser-mode suite
-- [ ] Phase 5 — add-forms into the sheet, legs grow from two
-- [ ] Phase 6 — back-to-close, muted tables, page chrome
+- [x] Phase 1 — detail sheet, additive
+- [x] Phase 2 — retire the actions column
+- [x] Phase 3 — `columnsFor`, tested in jsdom, nothing visible yet
+- [x] Phase 4 — ResizeObserver + browser-mode suite
+- [x] Phase 5 — add-forms into the sheet, legs grow from two
+- [x] Phase 6 — back-to-close, muted tables, page chrome
