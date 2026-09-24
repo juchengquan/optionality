@@ -18,7 +18,9 @@ stands on its own, so the run can stop early without leaving the dashboard half-
   `.pending`; shadcn's is a background, with `--muted-foreground` for text. Unhandled, those
   four rules paint near-white text on white.
 - **jsdom is missing** `ResizeObserver`, `IntersectionObserver`, `matchMedia`,
-  `element.animate` and `scrollIntoView` — all used by Base UI popups.
+  `element.animate` and `scrollIntoView`. Phase 0 established this does **not** matter — Base
+  UI 1.8.0 handles their absence. The planned setup file was written, proven to guard nothing,
+  and deleted.
 - **The add-forms have no tests.** 21 tests cover the table, mutations and column pickers;
   `AddMonitor` and `AddCombo` — which hold nine of the selects being replaced — have none.
 - **Bundle:** 210 KB today, 417 KB with React plus the seven components in scope.
@@ -29,22 +31,34 @@ stands on its own, so the run can stop early without leaving the dashboard half-
 
 Nothing user-visible. The phase exists so that every later phase starts from a working build.
 
-- `@tailwindcss/vite` (v4 — a Vite plugin, not PostCSS), `clsx`, `tailwind-merge`,
-  `lucide-react`, `@base-ui-components/react` pinned to `1.0.0-rc.0` exactly.
+- `@tailwindcss/vite` (v4 — a Vite plugin, not PostCSS) plus what `shadcn init -b base -p nova`
+  installs: `@base-ui/react` at **1.8.0 stable** (`@base-ui-components/react` is deprecated and
+  renamed — the plan named the dead package), `cn`, `class-variance-authority`, `lucide-react`,
+  `tw-animate-css`, and `shadcn` itself, which is **not** only a CLI: `app.css` imports
+  `shadcn/tailwind.css` from it, so removing it breaks the build.
 - `shadcn init`, which writes `components.json` and wants `@/*` path aliases in
   `tsconfig.json` and `vite.config.ts`. Components land in `src/components/ui/` and are
   **committed** — they are source, not vendored dependency.
 - `@testing-library/user-event` as a dev dependency. Clicking through a custom dropdown with
   raw `fireEvent` is possible and miserable.
-- `src/__tests__/setup.ts`, registered as `setupFiles` in `vitest.config.ts`, stubbing the
-  five missing jsdom APIs. **Without this, popup tests crash rather than fail** — a crash is
-  much harder to read than an assertion.
+- ~~A setup file stubbing the five missing jsdom APIs.~~ Written, found to guard nothing,
+  deleted. `Setup.test.tsx` stays as a smoke test that user-event can drive a portalled popup —
+  the toolchain every later phase rests on.
 - Dark mode: shadcn's dark tokens go inside the existing `@media (prefers-color-scheme: dark)`
   rule. Do **not** add the `@custom-variant dark (&:is(.dark *))` line and do not add a
   ThemeProvider — Tailwind's `dark:` variant follows the system by default, which is the
   behaviour to keep.
-- Rename `--muted` at its four use sites before shadcn's tokens land, or those rules break
-  silently in light mode.
+- Rename `--muted` at its four use sites. **Not theoretical**: `shadcn init` appends its tokens
+  into the existing `:root` and overwrote `--muted: #666` with `oklch(0.97 0 0)` on the way,
+  turning the status strip, the meta line and every leg summary into near-white text on white.
+  Ours became `--dim`; `--muted` went back to shadcn.
+- Handle **preflight**. Tailwind's reset strips form controls and flattens headings; shadcn
+  needs it, the current controls do not survive it. A marked temporary block in `app.css`
+  `revert`s those elements, to be deleted in pieces by phases 2-4.
+- Decline the `nova` preset's **Geist webfont**. It would change every figure in the table.
+  Point `--font-sans` at the existing system stack and uninstall it.
+- `.gitignore`'s Python `lib/` rule swallows `frontend/src/lib/`, which shadcn creates and its
+  components import. Needs a negation or a fresh clone cannot build.
 
 **Done when:** `make build-ui`, `make check-ui` and `make test-ui` all pass with the bundle
 committed, and the dashboard looks exactly as it does today.

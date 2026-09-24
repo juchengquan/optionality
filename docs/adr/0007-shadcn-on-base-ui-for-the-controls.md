@@ -42,7 +42,10 @@ sound, and the decision was revisited once that was checked.
   immutable asset caching; the real effect is that each frontend commit carries a larger file.
 - **Native selects are lost.** Nine of them. On a phone a native `<select>` opens the OS picker
   and a custom listbox does not. This is a real regression for mobile use, accepted knowingly.
-- **Base UI is at `1.0.0-rc.0`.** A release candidate, pinned exactly, upgraded deliberately.
+- **Base UI is at `1.8.0`, stable.** Corrected during phase 0: the package researched while
+  planning, `@base-ui-components/react`, is deprecated and renamed to `@base-ui/react`. The
+  plan named the dead package and called it a release candidate. It is neither, and the risk
+  recorded here was imaginary.
 
 ## Two decisions inside it that will look arbitrary later
 
@@ -67,6 +70,12 @@ made. No toggle, because there is no one to disagree with the system setting.
   and it keeps its structure — only its colours move.
 - Every interaction test that drives a `<select>` or clicks `delete` has to be rewritten: a
   custom dropdown is not a control you set a value on, and `delete` now opens a dialog first.
-- The test environment needs stubs it has never needed: jsdom has no `ResizeObserver`,
-  `IntersectionObserver`, `matchMedia`, `element.animate` or `scrollIntoView`, and Base UI
-  popups use all of them. Without stubs those tests crash rather than fail.
+- The test environment needs **no** stubs, contrary to what was planned here. jsdom does lack
+  `ResizeObserver`, `IntersectionObserver`, `matchMedia`, `element.animate` and
+  `scrollIntoView`, and inferring that Base UI would therefore crash was reasonable and wrong:
+  1.8.0 guards their absence itself. Verified in phase 0 by running Select, Popover and
+  AlertDialog with the stubs removed. They were deleted rather than shipped dead.
+- Tailwind's **preflight** is not optional and is not invisible. It strips form controls back
+  to nothing and flattens headings to body text. shadcn's components require it; the controls
+  still on screen do not survive it. `app.css` carries a temporary `revert` block to be
+  removed in pieces as phases 2-4 replace those elements.
