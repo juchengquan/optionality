@@ -51,3 +51,21 @@ export const FIELD_COLUMN: Record<string, string> = {
   option_implied_volatility: "iv",
   mid_price: "mid",
 };
+
+/** "SPXW 261016 8050.00C" → "261016 8050C".
+ *
+ *  Every contract this service can create goes through build_spx_code, which hardcodes the
+ *  SPXW symbol and builds the strike with int() — so the prefix and the decimals are
+ *  identical on every row and carry no information at all. Eight of twenty characters, in
+ *  the widest column on the page.
+ *
+ *  It matches strictly and returns anything else untouched: a name from a symbol this does
+ *  not know about must not be quietly shortened into a different-looking contract. If SPX
+ *  monthlies or fractional strikes ever appear, this stops applying rather than lying.
+ */
+const SPXW_NAME = /^SPXW (\d{6}) (\d+)\.00([CP])$/;
+
+export function shortContract(name: string): string {
+  const m = SPXW_NAME.exec(name);
+  return m ? `${m[1]} ${m[2]}${m[3]}` : name;
+}

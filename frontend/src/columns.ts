@@ -6,10 +6,21 @@ export interface Column {
   label: string;
 }
 
-/** Identity only. "actions" was here until the detail sheet took the controls (ADR
- *  0008) — a number box and three buttons per row could not survive a narrow screen,
- *  and full parity meant the operations could not go with it. */
-export const PROTECTED = new Set(["contract", "combo"]);
+/** Columns that are always drawn: never dropped for width, never offered in the picker.
+ *
+ *  Identity, because a row you cannot name is not a row. And delta on the single-leg table,
+ *  because every single-leg rule in this watchlist watches option_delta — a single-leg row
+ *  without it does not say what its alarm is about. Combos are left alone: their rules watch
+ *  the combo's value, which is pinned in their own order instead.
+ *
+ *  "actions" was here until the detail sheet took the controls (ADR 0008).
+ */
+export const ALWAYS: Record<"single" | "combo", readonly string[]> = {
+  single: ["contract", "delta"],
+  combo: ["combo"],
+};
+
+export const PROTECTED = new Set([...ALWAYS.single, ...ALWAYS.combo]);
 
 export const SINGLE_COLUMNS: Column[] = [
   { key: "contract", label: "contract" }, { key: "alarm", label: "alarm" },
@@ -74,7 +85,8 @@ export function signalColumns(entry: Entry, isCombo: boolean, shown: Set<string>
  *  written and tested without a browser.
  */
 const WIDTH: Record<string, number> = {
-  contract: 170, combo: 140, alarm: 110, dte: 46, entry: 66, value: 66, pnl: 70,
+  // "261016 8050C" now, not "SPXW 261016 8050.00C" — see shortContract
+  contract: 120, combo: 140, alarm: 110, dte: 46, entry: 66, value: 66, pnl: 70,
   delta: 62, gamma: 74, theta: 62, vega: 58, iv: 58, mid: 62, bid: 62, ask: 62,
   last_trade: 140,
 };
@@ -103,13 +115,15 @@ export function columnsFor(
 ): Column[] {
   const all = table === "single" ? SINGLE_COLUMNS : COMBO_COLUMNS;
   const byKey = new Map(all.map((c) => [c.key, c]));
-  const identity = table === "single" ? "contract" : "combo";
 
-  const kept: string[] = [identity];
-  let used = widthOf(identity);
+  const always = ALWAYS[table];
+  const kept: string[] = [...always];
+  // the pinned columns are spent first and never checked against the room available: they
+  // are the reason the table is worth looking at, and .table-scroll catches the rest
+  let used = always.reduce((n, k) => n + widthOf(k), 0);
 
   for (const key of PRIORITY[table]) {
-    if (key === identity || hidden.has(key) || !byKey.has(key)) continue;
+    if (always.includes(key) || hidden.has(key) || !byKey.has(key)) continue;
     const w = widthOf(key);
     // STOP rather than skip. Skipping to a narrower column further down the order means a
     // window widened by twenty pixels can swap one column for another instead of simply
@@ -132,10 +146,10 @@ export function offerable(
   available: number,
   widthOf: (key: string) => number = (k) => WIDTH[k] ?? DEFAULT_WIDTH,
 ): Set<string> {
-  const identity = table === "single" ? "contract" : "combo";
-  const base = widthOf(identity);
+  const always = ALWAYS[table];
+  const base = always.reduce((n, k) => n + widthOf(k), 0);
   return new Set(
-    PRIORITY[table].filter((k) => k !== identity && base + widthOf(k) <= available),
+    PRIORITY[table].filter((k) => !always.includes(k) && base + widthOf(k) <= available),
   );
 }
 

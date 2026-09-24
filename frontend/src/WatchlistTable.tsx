@@ -1,6 +1,6 @@
 import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
-import { alarmText, DASH, fmt, fmtText, legSummary } from "./format";
+import { alarmText, DASH, fmt, fmtText, legSummary, shortContract } from "./format";
 
 /** Row plus column key to displayed text. Exported because the detail sheet shows every
  *  column whether or not the table is drawing it, and two of these would drift. */
@@ -14,7 +14,7 @@ export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
     // the identity columns are DRAWN by the JSX below, badge and bell and all — but they
     // still have to answer here, because the fitting measurement asks this function how
     // wide every column needs to be and these are the widest on the page
-    case "contract": return entry.snapshot?.name ?? entry.code;
+    case "contract": return shortContract(entry.snapshot?.name ?? entry.code);
     case "combo": return entry.code;
     case "dte": return String(entry.dte);
     case "alarm": return alarmText(entry.field, entry.direction, entry.threshold, entry.compare);
@@ -90,7 +90,7 @@ export function WatchlistTable({
                     <td key={c.key} className={classes.join(" ") || undefined} style={style}>
                       {c.key === identity ? (
                         <>
-                          {isCombo ? entry.code : (entry.snapshot?.name ?? entry.code)}
+                          {isCombo ? entry.code : shortContract(entry.snapshot?.name ?? entry.code)}
                           {entry.error ? <span className="badge">{entry.error}</span> : null}
                           {entry.triggered && signal.bell === identity ? " 🔔" : null}
                           {isCombo && entry.legs ? (

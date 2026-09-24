@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { columnsFor, offerable, PRIORITY, SINGLE_COLUMNS, COMBO_COLUMNS } from "../columns";
+import { ALWAYS, columnsFor, offerable, PRIORITY, SINGLE_COLUMNS, COMBO_COLUMNS } from "../columns";
 
 /** The fitting rule, exhaustively, with no browser involved (ADR 0008).
  *
@@ -13,8 +13,10 @@ const keys = (cs: { key: string }[]) => cs.map((c) => c.key);
 const NONE = new Set<string>();
 
 describe("what fits", () => {
-  it("keeps the identity column even when nothing fits at all", () => {
-    expect(keys(columnsFor("single", 0, NONE))).toEqual(["contract"]);
+  it("keeps the pinned columns even when nothing fits at all", () => {
+    // a row you cannot name is not a row, and a single-leg row without delta does not say
+    // what its alarm is about — so both survive a zero-width table
+    expect(keys(columnsFor("single", 0, NONE))).toEqual(["contract", "delta"]);
     expect(keys(columnsFor("combo", 10, NONE))).toEqual(["combo"]);
   });
 
@@ -76,20 +78,57 @@ describe("what the picker offers", () => {
     expect(offerable("single", 100).size).toBe(0);
   });
 
-  it("offers only what could actually appear", () => {
-    const at = offerable("single", 300);
-    // 170 for the contract leaves 130: alarm fits, last_trade does not
-    expect(at.has("alarm")).toBe(true);
-    expect(at.has("last_trade")).toBe(false);
+  it("offers strictly more as the screen grows, and never less", () => {
+    // asserted as a property rather than "column X at width Y". The widths are provisional
+    // estimates that real measurement replaces, and pinning one column already invalidated
+    // this test twice when it named a number.
+    let previous = new Set<string>();
+    let grew = false;
+    for (let w = 0; w <= 1600; w += 10) {
+      const at = offerable("single", w);
+      for (const k of previous) expect(at.has(k), `${k} stopped being offered at ${w}px`).toBe(true);
+      if (at.size > previous.size) grew = true;
+      previous = at;
+    }
+    // and it is not simply always-everything or always-nothing
+    expect(grew).toBe(true);
+    expect(offerable("single", 0).size).toBe(0);
+    expect(offerable("single", 1600).size).toBeGreaterThan(5);
   });
 
-  it("offers everything at a desk", () => {
+  it("offers everything at a desk, except what cannot be turned off", () => {
     const at = offerable("single", 2000);
-    for (const k of PRIORITY.single) if (k !== "contract") expect(at.has(k)).toBe(true);
+    for (const k of PRIORITY.single) {
+      if (ALWAYS.single.includes(k)) expect(at.has(k), `${k} is pinned`).toBe(false);
+      else expect(at.has(k), `${k} should be offered`).toBe(true);
+    }
   });
 
-  it("never offers the identity column, which cannot be hidden", () => {
+  it("never offers a pinned column, which cannot be hidden", () => {
     expect(offerable("single", 4000).has("contract")).toBe(false);
     expect(offerable("combo", 4000).has("combo")).toBe(false);
+  });
+});
+
+describe("columns that are always there", () => {
+  it("keeps delta on a single-leg table however narrow it gets", () => {
+    // every single-leg rule in this watchlist watches option_delta, so a row without it
+    // is a row that does not say what the alarm is about
+    for (const w of [0, 120, 200, 342, 390, 1600]) {
+      expect(keys(columnsFor("single", w, NONE)), `at ${w}px`).toContain("delta");
+    }
+  });
+
+  it("keeps delta even when it has been unticked", () => {
+    expect(keys(columnsFor("single", 1600, new Set(["delta"])))).toContain("delta");
+  });
+
+  it("does not offer delta in the picker, because it cannot be turned off", () => {
+    expect(offerable("single", 4000).has("delta")).toBe(false);
+  });
+
+  it("leaves the combo table alone — its rules watch value, not delta", () => {
+    expect(keys(columnsFor("combo", 200, NONE))).not.toContain("delta");
+    expect(offerable("combo", 4000).has("delta")).toBe(true);
   });
 });

@@ -57,7 +57,7 @@ describe("the watchlist", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("Single-leg")).toBeTruthy());
     expect(screen.getByText("Combos")).toBeTruthy();
-    expect(screen.getByText("SPXW 261120 8100.00C")).toBeTruthy();
+    expect(screen.getByText("261120 8100C")).toBeTruthy();
   });
 
   it("shows cost to close positive, and the P&L it implies", async () => {
