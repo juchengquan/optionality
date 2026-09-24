@@ -137,11 +137,12 @@ assertions.
 
 ---
 
-## Checklist
+## Checklist — all six landed as PRs #49-#54
 
-- [ ] Phase 0 — deps, aliases, jsdom stubs, dark-mode wiring, `--muted` rename
-- [ ] Phase 1 — tests covering both add-forms as they are
-- [ ] Phase 2 — AlertDialog before delete, Toast for errors
-- [ ] Phase 3 — Popover pickers, NumberField inputs
-- [ ] Phase 4 — Select and Field across both forms
-- [ ] Phase 5 — palette reconciled, gridlines judged at night
+
+- [x] Phase 0 — deps, aliases, jsdom stubs, dark-mode wiring, `--muted` rename
+- [x] Phase 1 — tests covering both add-forms as they are
+- [x] Phase 2 — AlertDialog before delete, Toast for errors
+- [x] Phase 3 — Popover pickers, NumberField inputs
+- [x] Phase 4 — Select and Field across both forms
+- [x] Phase 5 — palette reconciled, gridlines judged at night
