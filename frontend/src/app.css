@@ -82,7 +82,9 @@ form.health { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; 
 .health .bad { color: var(--destructive); font-weight: 700; }
 .pending { color: var(--muted-foreground); }
 #column-pickers { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-form.inline { display: inline; }
+/* form.inline is gone: it was written when these forms sat in a table cell holding only
+   inline elements. NumberField renders a block wrapper, so an inline form dropped its
+   button onto the next line. They are flex rows now, stated where they are used. */
 td.actions { text-align: left; }
 /* the add-forms are shadcn FieldSets now and bring their own spacing; these element
    selectors matched them too and fought it. Kept only the side-by-side placement, which

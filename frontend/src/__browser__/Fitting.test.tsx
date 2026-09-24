@@ -1,4 +1,5 @@
 import { render } from "@testing-library/react";
+import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../App";
@@ -38,21 +39,24 @@ function mockApi(rows: unknown[] = [row]) {
     })) as unknown as typeof fetch;
 }
 
-/** Constrain the page the way a narrow device would, and let the observer react. */
+/** Resize the REAL viewport, not the body.
+ *
+ *  Narrowing document.body looks equivalent and is not. Fixed-position elements — the toast
+ *  viewport, any sheet — are laid out against the viewport and ignore it entirely, and media
+ *  queries never fire at all, so the phone margin and the muted tables' narrow rule went
+ *  untested while appearing covered. */
 async function atWidth(px: number) {
-  document.body.style.width = `${px}px`;
-  document.body.style.margin = "0";
-  await new Promise((r) => setTimeout(r, 120));
+  await page.viewport(px, 900);
+  await new Promise((r) => setTimeout(r, 160));
 }
 
 function headers(): string[] {
   return [...document.querySelectorAll("table th")].map((h) => h.textContent ?? "");
 }
 
-afterEach(() => {
-  document.body.style.width = "";
-  document.body.style.margin = "";
+afterEach(async () => {
   document.body.innerHTML = "";
+  await page.viewport(1280, 900);
 });
 
 describe("fitting, measured for real", () => {
@@ -121,5 +125,31 @@ describe("fitting, measured for real", () => {
     await atWidth(700);
 
     expect(headers().length).toBeGreaterThan(wide);
+  });
+
+  it("contains a name too long for the screen instead of moving the page", async () => {
+    // the identity column is never dropped, so a name wider than the phone overflows
+    // whatever the rest does. It has to be contained by the table, not by the document.
+    mockApi([{ ...row, snapshot: { ...row.snapshot, name: "SPXW 261120 8100.00C QUARANTINED LONG NAME" } }]);
+    render(<App />);
+    await atWidth(320);
+
+    const table = document.querySelector("table")!;
+    expect(table.getBoundingClientRect().width).toBeGreaterThan(320);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(321);
+  });
+
+  it("gives a phone back the margin a desk can afford", async () => {
+    // a media query, which the old harness could never fire: it narrowed document.body,
+    // and media queries answer to the viewport
+    mockApi();
+    render(<App />);
+
+    await atWidth(1280);
+    const wide = parseFloat(getComputedStyle(document.body).marginLeft);
+    await atWidth(390);
+    const narrow = parseFloat(getComputedStyle(document.body).marginLeft);
+
+    expect(narrow).toBeLessThan(wide);
   });
 });

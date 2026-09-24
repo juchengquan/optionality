@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -15,7 +16,9 @@ const contractVersion: number = JSON.parse(
  *  does not need a browser. See ADR 0008.
  */
 export default defineConfig({
-  plugins: [react()],
+  // WITHOUT this the utilities do not exist and every measurement is of unstyled
+  // markup — which looks like passing tests and is worth nothing
+  plugins: [react(), tailwindcss()],
   define: { __CONTRACT_VERSION__: JSON.stringify(contractVersion) },
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
