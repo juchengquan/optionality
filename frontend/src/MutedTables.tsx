@@ -17,7 +17,14 @@ function retentionNote(strikeDate: string, retentionDays: number): string {
   return `auto-deletes in ${left} day${left === 1 ? "" : "s"}`;
 }
 
-export function MutedTables({ monitors, retentionDays }: { monitors: Monitor[]; retentionDays: number }) {
+export function MutedTables({
+  monitors, retentionDays, onUnmute, onDelete,
+}: {
+  monitors: Monitor[];
+  retentionDays: number;
+  onUnmute: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
   const muted = monitors.filter((m) => !m.enabled);
   if (muted.length === 0) return null;
 
@@ -47,7 +54,10 @@ export function MutedTables({ monitors, retentionDays }: { monitors: Monitor[]; 
                     </td>
                     <td>{m.field}</td>
                     <td>{m.threshold}</td>
-                    <td className="left"><span className="pending">—</span></td>
+                    <td className="left">
+                      <button onClick={() => onUnmute(m.id)}>unmute</button>
+                      <button onClick={() => onDelete(m.id)}>delete</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

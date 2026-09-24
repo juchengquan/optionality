@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from tests.conftest import AUTH
 
 
@@ -131,3 +133,94 @@ def test_patch_rejects_an_empty_body_and_unknown_position(client_factory):
     pid = client.post("/positions", json=_condor_payload(), headers=AUTH).json()["id"]
     assert client.patch(f"/positions/{pid}", json={}, headers=AUTH).status_code == 422
     assert client.patch("/positions/nope", json={"entry": 1.0}, headers=AUTH).status_code == 404
+
+
+def _spanning_setup(client):
+    """A call spread with a rule of its own, a put spread with none, and a stop over both."""
+    from sqlalchemy import select
+
+    from optionality.service.models import Monitor, monitor_positions
+
+    made = {}
+    for name, legs, entry in (
+        ("calls", [("sold", "CALL", 8050), ("bought", "CALL", 8075)], 2.87),
+        ("puts", [("sold", "PUT", 7100), ("bought", "PUT", 7075)], None),
+    ):
+        made[name] = client.post(
+            "/positions",
+            json={
+                "name": name,
+                "strike_date": _future(),
+                "entry": entry,
+                "contracts": 1,
+                "legs": [{"side": s, "option_type": t, "strike": k} for s, t, k in legs],
+            },
+            headers=AUTH,
+        ).json()
+    sf = client.app.state.session_factory
+    with sf() as s:
+        for code in ("calls_rule", "span_rule"):
+            s.add(
+                Monitor(
+                    code=code,
+                    strike_date=_future(),
+                    option_type="CMB",
+                    strike=0.0,
+                    field="mid_price",
+                    threshold=9.0,
+                    scope="all",
+                    legs=[{"sign": -1, "option_type": "CALL", "strike": 8050.0}],
+                )
+            )
+        s.flush()
+        wing = s.scalar(select(Monitor.id).where(Monitor.code == "calls_rule"))
+        span = s.scalar(select(Monitor.id).where(Monitor.code == "span_rule"))
+        s.execute(monitor_positions.insert().values(monitor_id=wing, position_id=made["calls"]["id"]))
+        for p in made.values():
+            s.execute(monitor_positions.insert().values(monitor_id=span, position_id=p["id"]))
+        s.commit()
+    return made, span
+
+
+def test_a_total_credit_derives_the_unreachable_wing_over_json(client_factory):
+    client = client_factory(snapshot_fetcher=_priced_fetcher)
+    _made, span = _spanning_setup(client)
+
+    resp = client.post(f"/monitors/{span}/total-entry", json={"entry": 3.21}, headers=AUTH)
+    assert resp.status_code == 200
+
+    by_name = {p["name"]: p for p in client.get("/positions", headers=AUTH).json()}
+    assert by_name["puts"]["entry"] == pytest.approx(0.34)  # 3.21 less the 2.87 already recorded
+    assert by_name["calls"]["entry"] == 2.87  # the wing you can edit directly is untouched
+
+
+def test_a_total_cannot_be_split_where_every_wing_has_its_own_rule(client_factory):
+    client = client_factory(snapshot_fetcher=_priced_fetcher)
+    made, span = _spanning_setup(client)
+    # give the put side its own rule too, so nothing is left to derive
+    from sqlalchemy import select
+
+    from optionality.service.models import Monitor, monitor_positions
+
+    sf = client.app.state.session_factory
+    with sf() as s:
+        s.add(
+            Monitor(
+                code="puts_rule",
+                strike_date=_future(),
+                option_type="CMB",
+                strike=0.0,
+                field="mid_price",
+                threshold=9.0,
+                scope="all",
+                legs=[{"sign": -1, "option_type": "PUT", "strike": 7100.0}],
+            )
+        )
+        s.flush()
+        mid = s.scalar(select(Monitor.id).where(Monitor.code == "puts_rule"))
+        s.execute(monitor_positions.insert().values(monitor_id=mid, position_id=made["puts"]["id"]))
+        s.commit()
+
+    resp = client.post(f"/monitors/{span}/total-entry", json={"entry": 3.21}, headers=AUTH)
+    assert resp.status_code == 422
+    assert "own" in resp.json()["detail"]

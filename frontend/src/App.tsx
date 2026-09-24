@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import "./app.css";
-import { fetchHealth, fetchMonitors, fetchQuotes, type Entry, type Health, type Monitor } from "./api";
+import {
+  createMonitor, deleteMonitor, fetchHealth, fetchMonitors, fetchQuotes,
+  patchMonitor, patchPosition, setTotalEntry,
+  type Entry, type Health, type Monitor,
+} from "./api";
+import { AddCombo, AddMonitor } from "./AddForms";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, visible, writeHidden } from "./columns";
 import { ColumnPickers } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
-import { WatchlistTable } from "./WatchlistTable";
+import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
 
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 
@@ -60,6 +65,32 @@ export function App({ rootPath }: { rootPath: string }) {
     }, refresh * 1000);
     return () => clearInterval(id);
   }, [refresh, load]);
+
+  // every mutation reloads rather than patching local state: these change what the alarm
+  // engine does, and the server's account of that is the only one that counts
+  const act = useCallback(
+    async (fn: () => Promise<void>) => {
+      try {
+        await fn();
+        setError(null);
+        await load();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [load],
+  );
+
+  const handlers: RowHandlers = useMemo(
+    () => ({
+      onPatch: (id, body) => void act(() => patchMonitor(rootPath, id, body)),
+      onDelete: (id) => void act(() => deleteMonitor(rootPath, id)),
+      onRename: (id, name) => void act(() => patchMonitor(rootPath, id, { name })),
+      onEntry: (positionId, value) => void act(() => patchPosition(rootPath, positionId, { entry: value })),
+      onTotal: (monitorId, value) => void act(() => setTotalEntry(rootPath, monitorId, value)),
+    }),
+    [act, rootPath],
+  );
 
   const onToggle = useCallback((table: "single" | "combo", key: string, shown: boolean) => {
     const setter = table === "single" ? setHiddenSingle : setHiddenCombo;
@@ -124,11 +155,19 @@ export function App({ rootPath }: { rootPath: string }) {
         </div>
       ) : null}
 
-      <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false} />
-      <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true} />
+      <WatchlistTable title="Single-leg" entries={singles} columns={singleCols} isCombo={false} handlers={handlers} />
+      <WatchlistTable title="Combos" entries={combos} columns={comboCols} isCombo={true} handlers={handlers} />
       {quotes.length === 0 && !error ? <p>Watchlist is empty.</p> : null}
 
-      <MutedTables monitors={monitors} retentionDays={health?.settings.expired_retention_days ?? 7} />
+      <MutedTables
+        monitors={monitors}
+        retentionDays={health?.settings.expired_retention_days ?? 7}
+        onUnmute={(id) => void act(() => patchMonitor(rootPath, id, { enabled: true }))}
+        onDelete={(id) => void act(() => deleteMonitor(rootPath, id))}
+      />
+
+      <AddMonitor onCreate={(body) => void act(() => createMonitor(rootPath, body))} />
+      <AddCombo onCreate={(body) => void act(() => createMonitor(rootPath, body))} />
     </main>
   );
 }

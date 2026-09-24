@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
-from optionality.service.models import Monitor, Position, monitor_positions
-from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error
+from optionality.service.models import Monitor, Position
+from optionality.service.monitor import WATCHLIST_ORDER, apply_total_entry, combo_field_error
 from optionality.service.routes.health import _opend_reachable
 from optionality.service.routes.monitors import (
     ComboMonitorIn,
@@ -601,44 +601,10 @@ def ui_set_combined_entry(
     entry: Annotated[float, Form()],
 ):
     """Record a total credit across the Positions a rule spans, by deriving the one wing
-    whose credit is not yet known. Two unknowns and one equation cannot be solved, so that
-    case is refused rather than split arbitrarily."""
-    positions = (
-        session.query(Position)
-        .join(monitor_positions, monitor_positions.c.position_id == Position.id)
-        .filter(monitor_positions.c.monitor_id == monitor_id)
-        .all()
-    )
-    # the total adjusts the wing that has no rule of its own, since that is the one you
-    # cannot edit directly. A wing with its own row is never silently rewritten.
-    sole = (
-        session.query(monitor_positions.c.monitor_id)
-        .group_by(monitor_positions.c.monitor_id)
-        .having(func.count(monitor_positions.c.position_id) == 1)
-        .subquery()
-    )
-    directly_editable = {
-        pid
-        for (pid,) in session.query(monitor_positions.c.position_id)
-        .join(Monitor, Monitor.id == monitor_positions.c.monitor_id)
-        .filter(Monitor.scope == "all", monitor_positions.c.monitor_id.in_(session.query(sole.c.monitor_id)))
-        .all()
-    }
-    targets = [p for p in positions if p.id not in directly_editable]
-    if len(targets) != 1:
-        detail = (
-            "every wing here has a rule of its own — set them individually"
-            if not targets
-            else f"cannot split a total across {len(targets)} wings that have no rule of their own"
-        )
-        return _mutation_response(request, session, settings, sweeper, worker, error=detail)
-    others = [p.entry for p in positions if p.id != targets[0].id]
-    if any(e is None for e in others):
-        return _mutation_response(
-            request, session, settings, sweeper, worker, error="set the other wings' credits first"
-        )
-    targets[0].entry = round(entry - sum(others), 4)
-    session.commit()
+    whose credit is not yet known. The arithmetic lives in monitor.apply_total_entry, shared
+    with the JSON route so the two cannot drift."""
+    if error := apply_total_entry(session, monitor_id, entry):
+        return _mutation_response(request, session, settings, sweeper, worker, error=error)
     return _mutation_response(request, session, settings, sweeper, worker)
 
 

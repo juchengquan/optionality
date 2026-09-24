@@ -10,6 +10,7 @@ from optionality.service.deps import get_session, get_session_factory, get_setti
 from optionality.service.models import Monitor
 from optionality.service.monitor import (
     WATCHLIST_ORDER,
+    apply_total_entry,
     combo_field_error,
     positions_for_monitors,
     verify_contracts,
@@ -312,6 +313,22 @@ def patch_monitor(monitor_id: str, payload: MonitorPatch, session: SessionDep, s
         row.disabled_reason = None if row.enabled else "manual"
     session.commit()
     return _to_dict(row, settings.display_tz)
+
+
+class TotalEntryIn(BaseModel):
+    entry: float
+
+
+@router.post("/{monitor_id}/total-entry")
+def set_total_entry(monitor_id: str, payload: TotalEntryIn, session: SessionDep, settings: SettingsDep):
+    """Record what was taken in across everything a rule spans. The per-wing credits stay the
+    single source of truth — the total is a way of REACHING them, not a second place to keep
+    them, so the two can never disagree."""
+    if session.get(Monitor, monitor_id) is None:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    if error := apply_total_entry(session, monitor_id, payload.entry):
+        raise HTTPException(status_code=422, detail=error)
+    return {"ok": True}
 
 
 @router.delete("/{monitor_id}", status_code=204)
