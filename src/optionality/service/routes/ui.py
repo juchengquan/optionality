@@ -10,8 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from optionality.service.deps import get_session, get_settings, get_sweeper, get_worker
-from optionality.service.models import Monitor
+from optionality.service.models import Monitor, Position
 from optionality.service.monitor import WATCHLIST_ORDER, combo_field_error
+from optionality.service.position import cost_to_close, position_pnl
 from optionality.service.routes.health import _opend_reachable
 from optionality.service.routes.monitors import (
     ComboMonitorIn,
@@ -264,6 +265,27 @@ def _live_context(request: Request, session, settings, sweeper, worker) -> dict:
         "queue": worker.queue_depth(),
     }
     rows = _quote_rows(quotes)
+    by_code, _stamp = sweeper.cached_records()
+    # Entry belongs to the whole holding, so it is offered only against the rule that
+    # watches the whole holding. Showing it beside a wing would invite reading that wing's
+    # cost against the entire position's credit.
+    owned = {
+        m.id: (p, m.scope) for m, p in session.query(Monitor, Position).filter(Monitor.position_id == Position.id).all()
+    }
+    for r in rows:
+        owner = owned.get(r["id"])
+        position, scope = owner if owner else (None, None)
+        # with entry beside it, the value column has to BE the cost to close: reading
+        # "entry 3.21, value -1.50, P&L 171" is arithmetic that does not work. The alarm
+        # engine still evaluates its own signed sum; only the display is reconciled.
+        if position and r["is_combo"]:
+            closing = cost_to_close(position, by_code, scope)
+            r["value"] = _fmt_at(closing, "mid")
+            r["fill"] = _fill_pct(closing, r["threshold"], "above", "abs")
+        whole = position if scope == "all" else None
+        r["position_id"] = whole.id if whole else ""
+        r["entry"] = _fmt_at(whole.entry, "mid") if whole else ""
+        r["pnl"] = _fmt_at(position_pnl(whole, by_code), "mid") if whole else ""
     return {
         "single_rows": [r for r in rows if not r["is_combo"]],
         "combo_rows": [r for r in rows if r["is_combo"]],
@@ -441,6 +463,24 @@ def ui_rename_monitor(
         patch_monitor(monitor_id, MonitorPatch(name=name.strip()), session, settings)
     except (ValidationError, HTTPException) as err:
         return _mutation_response(request, session, settings, sweeper, worker, error=_error_text(err))
+    return _mutation_response(request, session, settings, sweeper, worker)
+
+
+@router.post("/positions/{position_id}/entry")
+def ui_set_entry(
+    request: Request,
+    position_id: str,
+    session: SessionDep,
+    settings: SettingsDep,
+    sweeper: SweeperDep,
+    worker: WorkerDep,
+    entry: Annotated[float, Form()],
+):
+    row = session.get(Position, position_id)
+    if row is None:
+        return _mutation_response(request, session, settings, sweeper, worker, error="position not found")
+    row.entry = entry
+    session.commit()
     return _mutation_response(request, session, settings, sweeper, worker)
 
 

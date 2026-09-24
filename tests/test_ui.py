@@ -686,3 +686,100 @@ def test_field_names_lose_their_prefix(client_factory):
     row = client.get("/ui/table", headers=AUTH).text
     assert "theta ≥ -0.5" in row  # was "option_theta ≥ -0.5" in the widest column
     assert "option_theta" not in row
+
+
+def _pos_with_monitor(client, entry=None, scope="all"):
+    """A Position plus the whole-position monitor that watches it."""
+    pos = client.post(
+        "/positions",
+        json={
+            "name": "1016_IC",
+            "strike_date": _future(),
+            "entry": entry,
+            "contracts": 1,
+            "legs": [
+                {"side": "sold", "option_type": "CALL", "strike": 8050},
+                {"side": "bought", "option_type": "CALL", "strike": 8075},
+            ],
+        },
+        headers=AUTH,
+    ).json()
+    sf = client.app.state.session_factory
+    with sf() as s:
+        s.add(
+            Monitor(
+                code="1016_IC",
+                strike_date=_future(),
+                option_type="CMB",
+                strike=0.0,
+                field="mid_price",
+                threshold=9.0,
+                position_id=pos["id"],
+                scope=scope,
+                legs=[
+                    {"sign": -1, "option_type": "CALL", "strike": 8050.0},
+                    {"sign": 1, "option_type": "CALL", "strike": 8075.0},
+                ],
+            )
+        )
+        s.commit()
+    return pos
+
+
+def _entry_fetcher(codes, opend_host=None, opend_port=None):
+    mids = {"C8050": 5.0, "C8075": 2.0}
+    return [
+        {
+            "code": c,
+            "mid_price": next((v for k, v in mids.items() if c.endswith(k + "000")), 1.0),
+            "option_delta": 0.1,
+            "option_contract_size": 100.0,
+        }
+        for c in codes
+    ]
+
+
+def test_entry_is_editable_on_the_row_and_drives_pnl(client_factory):
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    pos = _pos_with_monitor(client, entry=None)
+    client.app.state.sweeper.sweep()
+
+    page = client.get("/ui/table", headers=AUTH).text
+    assert "<th>entry</th>" in page
+    assert f"/ui/positions/{pos['id']}/entry" in page  # settable inline, like a threshold
+
+    resp = client.post(f"/ui/positions/{pos['id']}/entry", data={"entry": "4.00"}, headers=AUTH)
+    assert resp.status_code == 200
+    # sold for 4.00, costs 3.00 to close (5.00 - 2.00), 1 contract at 100
+    assert ">100.00<" in resp.text
+
+
+def test_pnl_is_blank_until_an_entry_is_given(client_factory):
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _pos_with_monitor(client, entry=None)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    assert "<th>P&amp;L</th>" in page
+    assert ">100.00<" not in page  # no entry, so no invented profit
+
+
+def test_a_wing_rule_shows_no_entry_of_its_own(client_factory):
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _pos_with_monitor(client, entry=4.0, scope="calls")
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    # entry belongs to the whole holding; showing it against a wing would invite
+    # reading a wing's cost against the entire position's credit
+    assert "/ui/positions/" not in page
+    assert ">100.00<" not in page
+
+
+def test_value_reads_as_cost_to_close_so_entry_minus_value_is_the_pnl(client_factory):
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _pos_with_monitor(client, entry=4.0)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    # 5.00 sold less 2.00 bought = 3.00 to close; entry 4.00 leaves 1.00 a contract
+    assert ">3.00<" in page
+    assert ">-3.00<" not in page  # the old signed sum would have shown this
+    assert ">100.00<" in page  # and 4.00 - 3.00 must visibly produce it
