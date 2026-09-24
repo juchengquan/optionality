@@ -79,3 +79,39 @@ made. No toggle, because there is no one to disagree with the system setting.
   to nothing and flattens headings to body text. shadcn's components require it; the controls
   still on screen do not survive it. `app.css` carries a temporary `revert` block to be
   removed in pieces as phases 2-4 replace those elements.
+
+## Outcome
+
+All six phases landed. Every control on the dashboard is a shadcn component; the watchlist
+table kept its structure and changed only its colours, as intended.
+
+**The selects stayed native.** This ADR recorded losing the phone's OS picker as a knowing
+cost, on the author's account that it was unavoidable. It was not: shadcn ships
+`native-select`, a real `<select>` wearing the same styling. The regression was designed out
+in phase 4 rather than accepted. What a headless listbox would have bought — styling the open
+list — is worth nothing here, where the longest list is six field names in plain text.
+
+**Two of this ADR's stated risks were imaginary**, both from research rather than from doing.
+The package named while planning is deprecated and renamed, and is stable rather than a
+release candidate. The jsdom stubs called essential guard nothing, verified by running the
+components without them.
+
+**The real costs were the ones nobody wrote down.** Tailwind's preflight is neither optional
+nor invisible and needed a temporary compatibility layer for four phases. `shadcn init`
+overwrote `--muted` on its way past, silently turning four rules near-white on white.
+`.gitignore`'s Python `lib/` rule swallowed the directory shadcn creates. None of those
+appear in the plan; all three would have broken something.
+
+**A regression was introduced and found by audit, not by tests.** The poll's guard against
+reloading mid-edit named `details`, and phase 4 retired that element — so the column pickers
+silently stopped being protected. It is a tested function now. The lesson generalises: a
+list of selectors describing "the controls" rots the moment a control is replaced, and
+nothing about replacing it makes a test fail.
+
+**Bundle:** 210 KB to 417 KB of JavaScript, 2.4 KB to 54.5 KB of CSS. Predicted at roughly
+double; came in slightly over that.
+
+**Still open:** the table's gridlines went from `#aaaaaa` to `#e5e5e5` in light and from
+`#383d46` to a translucent white near `#232323` in dark. Taken deliberately, on the
+understanding that it is one variable per block to put back. It wants judging against live
+data at night before it counts as settled.
