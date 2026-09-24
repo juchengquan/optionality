@@ -99,8 +99,8 @@ def test_mode_column_shows_compare(client_factory):
     }
     client.post("/monitors", json=signed, headers=AUTH)
     page = client.get("/ui", headers=AUTH)
-    assert "<th>mode</th>" in page.text
-    assert "<td>signed</td>" in page.text
+    assert "<th>mode</th>" not in page.text  # a column reading "abs" on every row buys nothing
+    assert "signed" in page.text  # the non-default mode still has to be visible, inline
 
 
 def test_create_monitor_via_form(client_factory):
@@ -305,9 +305,10 @@ def test_highlight_marks_the_monitored_field(client_factory):
     client.post("/monitors", json=payload, headers=AUTH)
     client.app.state.sweeper.sweep()
     row = client.get("/ui/table", headers=AUTH).text
-    assert '<td class="hl">-0.44</td>' in row  # theta drives the alarm, so theta is highlighted
-    assert '<td class="hl">0.33</td>' not in row  # delta no longer highlighted unconditionally
-    assert '<td class="hl">26.4</td>' not in row  # nor mid
+    # 4dp for greeks now; a signed negative threshold gets no fill, so no style attribute
+    assert '<td class="hl">-0.4400</td>' in row  # theta drives the alarm, so theta is highlighted
+    assert '<td class="hl">0.3300</td>' not in row  # delta no longer highlighted unconditionally
+    assert '<td class="hl">26.40</td>' not in row  # nor mid
 
 
 def test_unmuted_dead_contract_is_flagged_on_the_row(client_factory):
@@ -379,8 +380,8 @@ def test_row_value_and_bell_come_from_the_same_instant(client_factory):
     live["delta"] = 0.59  # the market moves, but no sweep has run since
     page = client.get("/ui", headers=AUTH).text
 
-    assert ">0.61<" in page  # the value the alarm engine actually used
-    assert ">0.59<" not in page  # not a fresher number the bell never saw
+    assert ">0.6100<" in page  # the value the alarm engine actually used, at 4dp
+    assert ">0.5900<" not in page  # not a fresher number the bell never saw
     assert "🔔" in page
 
 
@@ -596,3 +597,92 @@ def test_combo_form_does_not_offer_non_additive_fields(client_factory):
     # offer a choice the gate will only reject after the form is filled in
     assert "option_implied_volatility" in single_form
     assert "option_implied_volatility" not in combo_form
+
+
+def _mk(client, **kw):
+    payload = {"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6}
+    payload.update(kw)
+    return client.post("/monitors", json=payload, headers=AUTH).json()["id"]
+
+
+def test_value_cell_shows_how_close_it_is_to_firing(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_delta": 0.1723, "mid_price": 1.0} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    _mk(client, field="option_delta", threshold=0.2)
+    client.app.state.sweeper.sweep()
+    row = client.get("/ui/table", headers=AUTH).text
+    # 0.1723 of 0.2 is 86% of the way there — carried as a fill on the watched cell,
+    # so urgency is seen rather than computed, without spending a column on it
+    assert "--fill:86%" in row
+
+
+def test_fill_is_absent_rather_than_misleading(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "mid_price": -1.0, "option_delta": 0.1} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    # a signed negative threshold the value must cross from the other side has no
+    # honest baseline to fill from
+    _mk(client, field="mid_price", threshold=-4.05, direction="below", compare="signed")
+    client.app.state.sweeper.sweep()
+    row = client.get("/ui/table", headers=AUTH).text
+    assert "--fill" not in row
+
+
+def test_prices_keep_both_decimals_and_greeks_avoid_exponents(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [
+            {
+                "code": c,
+                "mid_price": 1.0,
+                "bid_price": 26.1,
+                "ask_price": 26.7,
+                "option_delta": 0.05654,
+                "option_gamma": -9.351e-05,
+                "option_theta": -0.5429,
+                "option_vega": 2.188,
+                "option_implied_volatility": 10.34,
+            }
+            for c in codes
+        ]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    row = client.get("/ui/table", headers=AUTH).text
+    assert ">1.00<" in row  # money keeps 2dp; %.4g rendered this as bare "1"
+    assert "e-05" not in row and "e-0" not in row  # no scientific notation in a scanned table
+    assert ">-0.000094<" in row  # gamma readable at fixed precision
+
+
+def test_days_to_expiry_is_shown(client_factory):
+    from optionality.service.timefmt import days_to_expiry
+
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_delta": 0.1, "mid_price": 1.0} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    expiry = _future()
+    _mk(client, strike_date=expiry)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui/table", headers=AUTH).text
+    assert "<th>dte</th>" in page
+    assert f">{days_to_expiry(expiry)}<" in page
+    # counted from the MARKET date, so it may sit one day above the UTC calendar figure:
+    # when it is morning in Asia, New York is still on the previous afternoon
+    utc_days = (datetime.fromisoformat(expiry).date() - datetime.now(UTC).date()).days
+    assert days_to_expiry(expiry) in (utc_days, utc_days + 1)
+
+
+def test_field_names_lose_their_prefix(client_factory):
+    def fetcher(codes, opend_host=None, opend_port=None):
+        return [{"code": c, "option_theta": -0.44, "mid_price": 1.0} for c in codes]
+
+    client = client_factory(snapshot_fetcher=fetcher)
+    _mk(client, field="option_theta", threshold=-0.5, compare="signed")
+    client.app.state.sweeper.sweep()
+    row = client.get("/ui/table", headers=AUTH).text
+    assert "theta ≥ -0.5" in row  # was "option_theta ≥ -0.5" in the widest column
+    assert "option_theta" not in row

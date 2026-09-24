@@ -23,6 +23,7 @@ from optionality.service.routes.monitors import (
     patch_monitor,
 )
 from optionality.service.settings import Settings
+from optionality.service.timefmt import days_to_expiry
 
 router = APIRouter(prefix="/ui", tags=["ui"], include_in_schema=False)
 static_router = APIRouter(include_in_schema=False)
@@ -76,6 +77,21 @@ def _leg_summary(legs: list[dict]) -> str:
     return " ".join(f"{'+' if leg['sign'] > 0 else '-'}{leg['option_type'][0]}{leg['strike']:g}" for leg in legs)
 
 
+# %.4g was used for everything, which rendered money as a bare "1" and gamma as
+# "-9.351e-05". Prices want a fixed 2dp so decimal points line up under tabular-nums;
+# greeks want enough places to never reach scientific notation.
+_PLACES = {"delta": 4, "gamma": 6, "theta": 4, "vega": 4, "iv": 2, "mid": 2, "bid": 2, "ask": 2}
+
+_FIELD_LABEL = {
+    "option_delta": "delta",
+    "option_gamma": "gamma",
+    "option_theta": "theta",
+    "option_vega": "vega",
+    "option_implied_volatility": "IV",
+    "mid_price": "mid",
+}
+
+
 def _fmt(value) -> str:
     if value is None:
         return "—"
@@ -84,41 +100,76 @@ def _fmt(value) -> str:
     return str(value)
 
 
+def _fmt_at(value, column: str) -> str:
+    """Format a numeric cell at the precision its column deserves."""
+    if value is None:
+        return "—"
+    return f"{float(value):.{_PLACES.get(column, 4)}f}"
+
+
+def _fill_pct(value, threshold, direction: str, compare: str) -> int | None:
+    """How far a value has travelled toward its threshold, 0-100.
+
+    None where the journey has no honest baseline to fill from — a signed negative
+    threshold the value must cross from the other side, for instance. A bar that
+    sometimes lies is worse than no bar, the same reasoning that makes a partly
+    priced combo report nothing rather than a partial sum.
+    """
+    if value is None or not threshold:
+        return None
+    metric = abs(value) if compare == "abs" else value
+    if metric < 0 or threshold < 0:
+        return None
+    if direction == "above":
+        ratio = metric / threshold
+    elif metric > 0:
+        ratio = threshold / metric
+    else:
+        return None
+    return max(0, min(100, round(ratio * 100)))
+
+
 def _quote_rows(quotes: list[dict]) -> list[dict]:
     rows = []
     for q in quotes:
         snap = q["snapshot"] or {}
         sign = "≤" if q["direction"] == "below" else "≥"
+        label = _FIELD_LABEL.get(q["field"], q["field"])
+        # the mode column read "abs" on every row; name the mode only where it is not the default
+        mode = " signed" if q["compare"] == "signed" else ""
+        watched = q["combo_value"] if "legs" in q else snap.get(q["field"])
         row = {
             "id": q["id"],
             "contract": snap.get("name") or q["code"],
-            "alarm": f"{q['field']} {sign} {q['threshold']}" + (" 🔔" if q["triggered"] else ""),
+            "alarm": f"{label} {sign} {q['threshold']}{mode}" + (" 🔔" if q["triggered"] else ""),
             "triggered": q["triggered"],
             "threshold": q["threshold"],
             "compare": q["compare"],
             "is_combo": "legs" in q,
             "name": q["code"],
             "strike_date": q["strike_date"],
+            "dte": days_to_expiry(q["strike_date"]),
             "error": q.get("error"),
             "field_column": _FIELD_COLUMN.get(q["field"]),  # the column the alarm actually watches
+            "fill": _fill_pct(watched, q["threshold"], q["direction"], q["compare"]),
             "legs": _leg_summary(q["legs"]) if "legs" in q else "",
-            "delta": _fmt(snap.get("option_delta")),
-            "gamma": _fmt(snap.get("option_gamma")),
-            "theta": _fmt(snap.get("option_theta")),
-            "vega": _fmt(snap.get("option_vega")),
-            "iv": _fmt(snap.get("option_implied_volatility")),
-            "mid": _fmt(snap.get("mid_price")),
-            "bid": _fmt(snap.get("bid_price")),
-            "ask": _fmt(snap.get("ask_price")),
+            "delta": _fmt_at(snap.get("option_delta"), "delta"),
+            "gamma": _fmt_at(snap.get("option_gamma"), "gamma"),
+            "theta": _fmt_at(snap.get("option_theta"), "theta"),
+            "vega": _fmt_at(snap.get("option_vega"), "vega"),
+            "iv": _fmt_at(snap.get("option_implied_volatility"), "iv"),
+            "mid": _fmt_at(snap.get("mid_price"), "mid"),
+            "bid": _fmt_at(snap.get("bid_price"), "bid"),
+            "ask": _fmt_at(snap.get("ask_price"), "ask"),
             "last_trade": _fmt(snap.get("update_time")),
         }
         if "legs" in q:
             for greek_field, greek_value in q["combo_greeks"].items():
                 if greek_value is not None:
-                    row[_FIELD_COLUMN[greek_field]] = _fmt(greek_value)
+                    row[_FIELD_COLUMN[greek_field]] = _fmt_at(greek_value, _FIELD_COLUMN[greek_field])
             # one column for the monitored field, whatever it is: bid/ask/last-trade never
             # apply to a combo, and the alarm column already names the field
-            row["value"] = _fmt(q["combo_value"])
+            row["value"] = _fmt_at(q["combo_value"], _FIELD_COLUMN.get(q["field"], "mid"))
         rows.append(row)
     return rows
 
