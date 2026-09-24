@@ -17,6 +17,19 @@ import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
 
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 
+/** Is the user in the middle of something the poll would wipe?
+ *
+ *  A reload replaces every row, so it must not land while a threshold is half-typed or a
+ *  picker is open under the pointer. This list HAS gone stale once already: it named
+ *  "details" until phase 4 retired that element, at which point the column pickers stopped
+ *  being protected and nothing said so. Hence a test.
+ */
+export function beingOperated(el: Element | null): boolean {
+  // portalled dialogs cover the column pickers and the delete confirmation: focus moves
+  // into them when they open, so their role is what marks them busy
+  return Boolean(el?.closest("input, select, textarea, [role=dialog], [role=alertdialog]"));
+}
+
 function readRefresh(fallback: number): number {
   const raw = document.cookie
     .split("; ")
@@ -64,9 +77,7 @@ export function App() {
 
   useEffect(() => {
     const id = setInterval(() => {
-      // skip a beat while focus is inside the page's controls, so a poll never wipes
-      // something being typed — the same guard /ui applies to its live region
-      if (!document.activeElement?.closest("input, select, details")) void load();
+      if (!beingOperated(document.activeElement)) void load();
     }, refresh * 1000);
     return () => clearInterval(id);
   }, [refresh, load]);

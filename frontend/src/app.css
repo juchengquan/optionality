@@ -3,57 +3,47 @@
 @import "shadcn/tailwind.css";
 
 
-/* ── TEMPORARY, phase 0 of the shadcn rebuild (ADR 0007) ─────────────────────
-   Tailwind's preflight resets form controls to nothing and flattens headings to
-   body text. shadcn's components need that reset; the controls still on screen
-   were written against the browser's defaults and have not been rebuilt yet.
+/* Tailwind's preflight flattens headings to body text, which suits a component library and
+   not a page with two table titles on it. Sized here rather than reverted to the browser's
+   defaults, so the sizes are a choice someone made. */
+h2 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.2rem; }
+h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
 
-   This block hands those elements back their native appearance so the dashboard
-   looks today exactly as it did yesterday. DELETE IT IN PIECES: the button and
-   input rules go when phases 2-4 replace those controls, the heading rule when
-   phase 5 reconciles the palette. If this block is still whole at the end, a
-   phase was skipped. */
-h2, h3 { font-size: revert; font-weight: revert; }
-/* The control rules that lived here are GONE as of phase 4: every button, input and select
-   on the page is a shadcn component now, so there was nothing left for them to reach. Only
-   the headings still need the browser's own sizing back, and they go in phase 5 when the
-   palette is reconciled. */
-/* ─────────────────────────────────────────────────────────────────────────── */
-
-/* Mirrors /ui's palette so the two dashboards are visually identical and the comparison
-   is about React rather than about a restyle. Duplicated deliberately: phase 5 retires
-   one of the two frontends, and until then neither should drift to match the other. */
+/* The dashboard's OWN colours, the ones shadcn has no opinion about because no design
+   system does: how a breached threshold looks, how far a value has travelled toward
+   firing, what a quarantined contract's badge says. Everything generic -- surfaces,
+   borders, focus rings -- comes from shadcn's tokens below. See ADR 0007. */
 :root {
   color-scheme: light dark;
-  --bg: #fff; --fg: #222; --dim: #666; --line: #aaa;
-  --hl: #fff3cd; --trig: #f8d7da; --trig-hl: #f5c2c7;
-  --fill-bar: #ffd84d; --trig-fill: #e88b93;
-  --banner-bg: #f8d7da; --banner-line: #d9534f; --bad: #c00;
+  /* a row at rest that the alarm is watching, and the bar showing how far its value
+     has travelled toward the threshold */
+  --hl: #fff3cd; --fill-bar: #ffd84d;
+  /* a row whose threshold has been breached, and the same bar inside it */
+  --trig: #f8d7da; --trig-hl: #f5c2c7; --trig-fill: #e88b93;
+  /* a quarantined contract's badge */
   --badge-bg: #d9534f; --badge-fg: #fff; --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.97 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent: oklch(0.97 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
 }
 /* the US session runs 21:30-04:00 in DISPLAY_TZ=Asia/Singapore — read at night */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161a; --fg: #d7dae0; --dim: #8b929c; --line: #383d46;
-    --hl: #4a3f18; --trig: #4a2126; --trig-hl: #63272e;
-    --fill-bar: #8a6d1f; --trig-fill: #93383f;
-    --banner-bg: #4a2126; --banner-line: #b4515a; --bad: #ff8080;
+    --hl: #4a3f18; --fill-bar: #8a6d1f;
+    --trig: #4a2126; --trig-hl: #63272e; --trig-fill: #93383f;
     --badge-bg: #b4515a; --badge-fg: #fff;
     /* shadcn's dark palette, kept in the media query rather than a .dark class:
        no toggle, no provider, follows the system as this dashboard always has */
     --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0); --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0); --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0); --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0); --accent-foreground: oklch(0.985 0 0); --destructive: oklch(0.704 0.191 22.216); --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%); --ring: oklch(0.556 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --sidebar: oklch(0.205 0 0); --sidebar-foreground: oklch(0.985 0 0); --sidebar-primary: oklch(0.488 0.243 264.376); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.269 0 0); --sidebar-accent-foreground: oklch(0.985 0 0); --sidebar-border: oklch(1 0 0 / 10%); --sidebar-ring: oklch(0.556 0 0);
   }
 }
-body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem;
-       color: var(--fg); background: var(--bg); }
-h2 { margin-bottom: 0.2rem; }
-h3 { margin-bottom: 0.3rem; }
-.meta { color: var(--dim); margin: 0 0 1rem; }
-.banner { background: var(--banner-bg); border: 1px solid var(--banner-line);
+/* colour and background come from shadcn's base layer now; this sets only what the
+   dashboard has an opinion about */
+body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem; }
+.meta { color: var(--muted-foreground); margin: 0 0 1rem; }
+.banner { background: color-mix(in oklch, var(--destructive) 12%, var(--background));
+          border: 1px solid var(--destructive); border-radius: var(--radius-md);
           padding: 0.5rem 1rem; margin-bottom: 1rem; }
 table { border-collapse: collapse; margin-bottom: 1.5rem; }
 /* tabular-nums: ragged decimals defeat scanning a column */
-th, td { border: 1px solid var(--line); padding: 4px 10px; text-align: right;
+th, td { border: 1px solid var(--border); padding: 4px 10px; text-align: right;
          white-space: nowrap; font-variant-numeric: tabular-nums; }
 th.left, td.left { text-align: left; }
 td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
@@ -61,16 +51,13 @@ td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), v
 tr.triggered td { background: var(--trig); }
 tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(--fill, 0%),
                                                  var(--trig-hl) var(--fill, 0%)); }
-.legs { font-size: 0.78rem; color: var(--dim); font-weight: 400; }
+.legs { font-size: 0.78rem; color: var(--muted-foreground); font-weight: 400; }
 .badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.7rem;
          padding: 1px 5px; border-radius: 3px; white-space: nowrap; margin-left: 0.3rem; }
-.health { color: var(--dim); font-size: 0.9rem; margin-bottom: 1.2rem; }
-.health .bad { color: var(--bad); font-weight: 700; }
-.pending { color: var(--dim); }
-#column-pickers details { display: inline-block; vertical-align: top; margin-right: 1.5rem; }
-#column-pickers summary { cursor: pointer; display: inline-block; padding: 2px 8px;
-  border: 1px solid var(--line); border-radius: 3px; user-select: none; }
-#column-pickers details[open] summary { margin-bottom: 0.4rem; }
+.health { color: var(--muted-foreground); font-size: 0.9rem; margin-bottom: 1.2rem; }
+.health .bad { color: var(--destructive); font-weight: 700; }
+.pending { color: var(--muted-foreground); }
+#column-pickers { display: flex; gap: 0.75rem; align-items: center; }
 form.inline { display: inline; }
 td.actions { text-align: left; }
 /* the add-forms are shadcn FieldSets now and bring their own spacing; these element
