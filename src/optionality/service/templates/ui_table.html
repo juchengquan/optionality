@@ -11,7 +11,7 @@
 <h3>Single-leg</h3>
 <table>
   <thead><tr>
-    <th>contract</th><th>alarm</th><th>mode</th><th>delta</th><th>gamma</th><th>theta</th><th>vega</th>
+    <th>contract</th><th>alarm</th><th>dte</th><th>delta</th><th>gamma</th><th>theta</th><th>vega</th>
     <th>IV</th><th>mid</th><th>bid</th><th>ask</th><th>actions</th><th>last trade</th>
   </tr></thead>
   <tbody>
@@ -19,10 +19,11 @@
     <tr{% if row.triggered %} class="triggered"{% endif %}>
       <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}</td>
       <td>{{ row.alarm }}</td>
-      <td>{{ row.compare }}</td>
-      {#- hl marks the column the alarm actually watches, not a hardcoded delta/mid pair -#}
+      <td>{{ row.dte }}</td>
+      {#- hl marks the column the alarm actually watches; --fill carries how far that value
+          has travelled toward its threshold, so urgency is seen without spending a column -#}
       {% for col in ["delta", "gamma", "theta", "vega", "iv", "mid"] %}
-      <td{% if row.field_column == col %} class="hl"{% endif %}>{{ row[col] }}</td>
+      <td{% if row.field_column == col %} class="hl"{% if row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}{% endif %}>{{ row[col] }}</td>
       {%- endfor %}
       <td>{{ row.bid }}</td>
       <td>{{ row.ask }}</td>
@@ -47,7 +48,7 @@
 <h3>Combos</h3>
 <table>
   <thead><tr>
-    <th>combo</th><th>alarm</th><th>mode</th><th>value</th>
+    <th>combo</th><th>alarm</th><th>dte</th><th>value</th>
     <th>delta</th><th>gamma</th><th>theta</th><th>vega</th><th>actions</th>
   </tr></thead>
   <tbody>
@@ -57,8 +58,8 @@
         <div class="legs">{{ row.strike_date }} · {{ row.legs }}</div>
       </td>
       <td>{{ row.alarm }}</td>
-      <td>{{ row.compare }}</td>
-      <td class="hl">{{ row.value }}</td>
+      <td>{{ row.dte }}</td>
+      <td class="hl"{% if row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}>{{ row.value }}</td>
       <td>{{ row.delta }}</td>
       <td>{{ row.gamma }}</td>
       <td>{{ row.theta }}</td>

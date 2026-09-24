@@ -11,6 +11,7 @@
   color-scheme: light dark;
   --bg: #fff; --fg: #222; --muted: #666; --line: #aaa;
   --hl: #fff3cd; --trig: #f8d7da; --trig-hl: #f5c2c7;
+  --fill-bar: #ffd84d; --trig-fill: #e88b93;
   --banner-bg: #f8d7da; --banner-line: #d9534f; --bad: #c00;
   --badge-bg: #d9534f; --badge-fg: #fff;
 }
@@ -19,6 +20,7 @@
   :root {
     --bg: #14161a; --fg: #d7dae0; --muted: #8b929c; --line: #383d46;
     --hl: #4a3f18; --trig: #4a2126; --trig-hl: #63272e;
+    --fill-bar: #8a6d1f; --trig-fill: #93383f;
     --banner-bg: #4a2126; --banner-line: #b4515a; --bad: #ff8080;
     --badge-bg: #b4515a; --badge-fg: #fff;
   }
@@ -33,9 +35,13 @@ table { border-collapse: collapse; margin-bottom: 1.5rem; }
 th, td { border: 1px solid var(--line); padding: 4px 10px; text-align: right; white-space: nowrap;
          font-variant-numeric: tabular-nums; }
 th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
-td.hl { background: var(--hl); font-weight: 600; }
+/* the watched cell fills from the left in proportion to how close the value is to its
+   threshold: 86% full means 86% of the way there. --fill unset leaves it plain. */
+td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
+        font-weight: 600; }
 tr.triggered td { background: var(--trig); }
-tr.triggered td.hl { background: var(--trig-hl); }
+tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(--fill, 0%),
+                                                 var(--trig-hl) var(--fill, 0%)); }
 td.actions { text-align: left; }
 td.actions form { display: inline; }
 .legs { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
