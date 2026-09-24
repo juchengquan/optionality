@@ -10,6 +10,7 @@ from optionality.service.deps import get_session, get_settings, get_sweeper
 from optionality.service.models import Position, utcnow
 from optionality.service.monitor import fetch_resilient, verify_contracts
 from optionality.service.position import (
+    POSITION_GREEK_FIELDS,
     contract_size,
     cost_to_close,
     position_greek,
@@ -25,10 +26,6 @@ SessionDep = Annotated[Session, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SweeperDep = Annotated[object, Depends(get_sweeper)]
 
-# greeks are linear in the legs, so an exposure-signed sum is the greek OF the position.
-# IV is intensive and never summed — the same rule combos hold to.
-POSITION_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")
-
 POSITION_ORDER = (Position.strike_date, Position.name)
 
 
@@ -42,7 +39,7 @@ class PositionIn(BaseModel):
     name: str
     strike_date: str
     legs: list[LegIn] = Field(min_length=1)  # a single held option is a position too
-    entry: float
+    entry: float | None = None  # unknown for a Position migrated from a combo; P&L reads unknown too
     contracts: int = Field(default=1, ge=1)
     strategy: str | None = None
 
