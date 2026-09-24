@@ -7,84 +7,64 @@
   · queue: {{ health.queue }}
 </div>
 
+{%- set LEFT = ["contract", "combo", "alarm", "actions", "entry"] -%}
+
+{%- macro cell(row, key, root_path) -%}
+  {%- set hl = (key == row.fill_col) -%}
+  {%- set classes = (["hl"] if hl else []) + (["left"] if key in LEFT else []) -%}
+  <td{% if classes %} class="{{ classes|join(' ') }}"{% endif %}{% if hl and row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}>
+  {%- if key in ["contract", "combo"] -%}
+    {{ row.contract if key == "contract" else row.name }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}{% if row.triggered and row.bell_col == key %} 🔔{% endif %}
+    {%- if key == "combo" %}<div class="legs">{{ row.strike_date }} · {{ row.legs }}</div>{% endif -%}
+  {%- elif key == "alarm" -%}
+    {{ row.alarm }}{% if row.triggered and row.bell_col == "alarm" %} 🔔{% endif %}
+  {%- elif key == "entry" -%}
+    {%- if row.position_id %}<form hx-post="{{ root_path }}/ui/positions/{{ row.position_id }}/entry">
+      <input type="number" name="entry" step="any" value="{{ row.entry if row.entry != "—" else "" }}" placeholder="entry" required><button>set</button>
+    </form>{% elif row.combined_id %}<form hx-post="{{ root_path }}/ui/monitors/{{ row.combined_id }}/entry">
+      <input type="number" name="entry" step="any" placeholder="total" value="{{ row.entry if row.entry != "—" else "" }}" required><button>set</button>
+    </form>{% else %}{{ row.entry }}{% endif -%}
+  {%- elif key == "actions" -%}
+    <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
+      <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required><button>set</button>
+    </form>
+    {%- if row.is_combo %}<form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/rename">
+      <input type="text" name="name" value="{{ row.name }}" size="14" required><button>rename</button>
+    </form>{% endif %}
+    <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
+    <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
+  {%- else -%}
+    {{ row[key] }}
+  {%- endif -%}
+  </td>
+{%- endmacro -%}
+
 {% if single_rows %}
 <h3>Single-leg</h3>
 <table>
   <thead><tr>
-    <th>contract</th><th>alarm</th><th>dte</th><th>delta</th><th>gamma</th><th>theta</th><th>vega</th>
-    <th>IV</th><th>mid</th><th>bid</th><th>ask</th><th>actions</th><th>last trade</th>
+    {%- for key, label in single_cols %}<th{% if key in LEFT %} class="left"{% endif %}>{{ label }}</th>{% endfor %}
   </tr></thead>
   <tbody>
   {% for row in single_rows %}
     <tr{% if row.triggered %} class="triggered"{% endif %}>
-      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}</td>
-      <td>{{ row.alarm }}</td>
-      <td>{{ row.dte }}</td>
-      {#- hl marks the column the alarm actually watches; --fill carries how far that value
-          has travelled toward its threshold, so urgency is seen without spending a column -#}
-      {% for col in ["delta", "gamma", "theta", "vega", "iv", "mid"] %}
-      <td{% if row.field_column == col %} class="hl"{% if row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}{% endif %}>{{ row[col] }}</td>
-      {%- endfor %}
-      <td>{{ row.bid }}</td>
-      <td>{{ row.ask }}</td>
-      <td class="actions">
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
-          <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required>
-          <button>set</button>
-        </form>
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
-      </td>
-      <td>{{ row.last_trade }}</td>
+      {%- for key, label in single_cols %}{{ cell(row, key, root_path) }}{% endfor %}
     </tr>
   {% endfor %}
   </tbody>
 </table>
 {% endif %}
 
-{#- combos get their own table: bid, ask, IV and last trade are structurally empty for them
-    (no per-contract snapshot), and a single "value" column carries whatever field they watch -#}
 {% if combo_rows %}
 <h3>Combos</h3>
 <table>
   <thead><tr>
-    <th>combo</th><th>alarm</th><th>dte</th><th>entry</th><th>value</th><th>P&amp;L</th>
-    <th>delta</th><th>gamma</th><th>theta</th><th>vega</th><th>actions</th>
+    {%- for key, label in combo_cols %}<th{% if key in LEFT %} class="left"{% endif %}>{{ label }}</th>{% endfor %}
   </tr></thead>
   <tbody>
   {% for row in combo_rows %}
     <tr{% if row.triggered %} class="triggered"{% endif %}>
-      <td>{{ row.contract }}{% if row.error %} <span class="badge">{{ row.error }}</span>{% endif %}
-        <div class="legs">{{ row.strike_date }} · {{ row.legs }}</div>
-      </td>
-      <td>{{ row.alarm }}</td>
-      <td>{{ row.dte }}</td>
-      {#- entry is the Position's, so it is editable only on the whole-position rule -#}
-      <td class="actions">{% if row.position_id %}<form hx-post="{{ root_path }}/ui/positions/{{ row.position_id }}/entry">
-          <input type="number" name="entry" step="any" value="{{ row.entry if row.entry != "—" else "" }}"
-                 placeholder="entry" required><button>set</button>
-        </form>{% elif row.combined_id %}<form hx-post="{{ root_path }}/ui/monitors/{{ row.combined_id }}/entry">
-          <input type="number" name="entry" step="any" placeholder="total"
-                 value="{{ row.entry if row.entry != "—" else "" }}" required><button>set</button>
-        </form>{% else %}{{ row.entry }}{% endif %}</td>
-      <td class="hl"{% if row.fill is not none %} style="--fill:{{ row.fill }}%"{% endif %}>{{ row.value }}</td>
-      <td>{{ row.pnl }}</td>
-      <td>{{ row.delta }}</td>
-      <td>{{ row.gamma }}</td>
-      <td>{{ row.theta }}</td>
-      <td>{{ row.vega }}</td>
-      <td class="actions">
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/threshold">
-          <input type="number" name="threshold" step="any" value="{{ row.threshold }}" required>
-          <button>set</button>
-        </form>
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/rename">
-          <input type="text" name="name" value="{{ row.name }}" size="14" required>
-          <button>rename</button>
-        </form>
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/toggle"><button>mute</button></form>
-        <form hx-post="{{ root_path }}/ui/monitors/{{ row.id }}/delete"><button>delete</button></form>
-      </td>
+      {%- for key, label in combo_cols %}{{ cell(row, key, root_path) }}{% endfor %}
     </tr>
   {% endfor %}
   </tbody>

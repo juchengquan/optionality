@@ -34,7 +34,7 @@ table { border-collapse: collapse; margin-bottom: 1.5rem; }
 /* tabular-nums: %.4g yields 0.5981 beside 0.06 beside 1.234; ragged digits defeat scanning a column */
 th, td { border: 1px solid var(--line); padding: 4px 10px; text-align: right; white-space: nowrap;
          font-variant-numeric: tabular-nums; }
-th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+th.left, td.left { text-align: left; }
 /* the watched cell fills from the left in proportion to how close the value is to its
    threshold: 86% full means 86% of the way there. --fill unset leaves it plain. */
 td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
@@ -55,6 +55,9 @@ label { display: block; margin: 0.3rem 0; }
 button { cursor: pointer; }
 .health { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.2rem; }
 .health .bad { color: var(--bad); font-weight: 700; }
+#column-pickers details { display: inline-block; vertical-align: top; margin-right: 1.5rem; }
+#column-pickers summary { cursor: pointer; }
+label.colpick, label.colpick form { display: inline-block; margin: 0 0.6rem 0 0; }
 /* only occupies space when it has something to say */
 #ui-error:empty { display: none; }
 #ui-error { position: fixed; top: 0; left: 0; right: 0; z-index: 10; }
@@ -79,6 +82,8 @@ button { cursor: pointer; }
   <button>set</button>
   (this browser only)
 </form>
+
+{% include "_columns.html" %}
 
 {# the live region re-fetches itself; the poll skips a beat while focus is inside it,
    so mid-typing in a row's threshold box is never wiped either.

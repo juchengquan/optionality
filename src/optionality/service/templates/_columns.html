@@ -1,0 +1,22 @@
+{#- column pickers live OUTSIDE #live, so the poll cannot snap them shut mid-use -#}
+<div id="column-pickers"{% if oob %} hx-swap-oob="true"{% endif %} class="health">
+{% for table, label, all_cols, shown in column_tables %}
+  <details>
+    <summary>{{ label }} columns</summary>
+    {% for key, name in all_cols %}
+      {% if key not in protected_columns %}
+      <label class="colpick">
+        <form hx-post="{{ root_path }}/ui/columns/{{ table }}" hx-target="#live" hx-swap="innerHTML"
+              hx-trigger="change from:find input">
+          <input type="hidden" name="column" value="{{ key }}">
+          <input type="checkbox" name="shown"{% if key in shown %} checked{% endif %}>{{ name }}
+        </form>
+      </label>
+      {% endif %}
+    {% endfor %}
+    <form hx-post="{{ root_path }}/ui/columns/{{ table }}/reset" hx-target="#live" hx-swap="innerHTML">
+      <button>show all</button>
+    </form>
+  </details>
+{% endfor %}
+</div>

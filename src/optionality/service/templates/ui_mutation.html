@@ -5,3 +5,5 @@
 {#- a fresh form only on success; on error the user's input must survive so it can be fixed -#}
 {% if reset_form == "monitor" %}{% include "_add_monitor.html" %}{% endif %}
 {% if reset_form == "combo" %}{% include "_add_combo.html" %}{% endif %}
+{#- "show all" re-ticks every box, which the browser cannot know about on its own -#}
+{% if reset_form == "columns" %}{% include "_columns.html" %}{% endif %}
