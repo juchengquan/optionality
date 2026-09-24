@@ -23,7 +23,9 @@ Deployed as a macOS launchd agent on the owner's always-on machine, behind `tail
 - `service/`: `app.py` (factory, auth middleware, lifespan), `worker.py` (THE single job thread),
   `scheduler.py` (APScheduler; `refresh_jobs` must only touch `schedule-*` job ids),
   `monitor.py` (sweep, watchlist, `fetch_resilient`, `verify_contracts`), `telegram_bot.py` (long-poll bot),
-  `routes/` + `templates/` (Jinja2 + vendored htmx; the only JavaScript in the project)
+  `routes/` + `templates/` (Jinja2 + vendored htmx — the only JavaScript on `/ui`),
+  `frontend/` (Vite + React + TS for `/app`; built assets are COMMITTED under `static/app/`,
+  so node is never needed to run the service — `make build-ui`, `make check-ui`. See ADR 0005)
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 

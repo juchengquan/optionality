@@ -1,4 +1,4 @@
-.PHONY: lint format test serve launchd-install launchd-restart launchd-uninstall logs
+.PHONY: lint format test serve build-ui check-ui launchd-install launchd-restart launchd-uninstall logs
 
 LAUNCHD_LABEL = com.optionality.service
 LAUNCHD_PLIST = $(HOME)/Library/LaunchAgents/$(LAUNCHD_LABEL).plist
@@ -16,6 +16,18 @@ test:
 # 127.0.0.1: reachable only via the tailscale serve proxy (and localhost); never the LAN
 serve:
 	uv run --env-file .env uvicorn --factory optionality.service.app:create_app --host 127.0.0.1 --port 31415
+
+# the bundle is COMMITTED, so node is needed only to change the frontend, never to run
+# the service — a failed build must not become a failed deploy
+build-ui:
+	cd frontend && npm install --silent && npm run build
+
+# a committed bundle can drift from its source; this is what catches it
+check-ui:
+	cd frontend && npm install --silent && npm run build >/dev/null
+	@git diff --quiet -- src/optionality/service/static/app \
+		|| { echo "frontend bundle is stale — run 'make build-ui' and commit the result"; exit 1; }
+	@echo "frontend bundle matches its source"
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:
