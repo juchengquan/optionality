@@ -129,7 +129,8 @@ def test_health_carries_what_the_status_strip_shows(client_factory):
     client = client_factory(snapshot_fetcher=_fetcher, monitor_interval_seconds=15)
     h = client.get("/health", headers=AUTH).json()
 
-    assert h["monitor"]["alarms"] == {"label": "starting", "bad": False}
+    # "starting" is only honest before the first sweep, and one now runs at startup
+    assert h["monitor"]["alarms"] == {"label": "active", "bad": False}
     # the muted table counts down to the one auto-delete in the system, and the meta line
     # names the sweep cadence; neither figure was reachable over HTTP
     assert h["settings"]["sweep_seconds"] == 15
