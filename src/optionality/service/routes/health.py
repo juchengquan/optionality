@@ -55,5 +55,16 @@ def health(
             "last_sweep_at": display_time(sweeper.last_sweep_at, settings.display_tz),
             "last_sweep_ok": sweeper.last_sweep_ok,
             "consecutive_failures": sweeper.consecutive_failures,
+            # the human label the status strip shows; deriving it client-side would
+            # duplicate the alarm engine's own account of its health
+            "alarms": dict(zip(("label", "bad"), sweeper.alarm_state(), strict=True)),
+            "fetched_at": display_time(sweeper.last_fetch_at, settings.display_tz),
+        },
+        # knobs a client cannot guess: the sweep cadence the meta line names, and the
+        # retention window the muted table counts down to
+        "settings": {
+            "sweep_seconds": settings.monitor_interval_seconds,
+            "expired_retention_days": settings.expired_retention_days,
+            "display_tz": settings.display_tz,
         },
     }
