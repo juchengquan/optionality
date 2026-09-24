@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
@@ -43,10 +44,26 @@ function filledCell(container: HTMLElement): HTMLElement {
   return cell as HTMLElement;
 }
 
-async function untick(label: string) {
-  const picker = screen.getByText("Single-leg columns").closest("details")!;
-  fireEvent.click(within(picker).getByLabelText(label));
+// ── the picker interaction, fenced off (phase 3 of ADR 0007) ───────────────────
+// <details> keeps its children in the DOM while shut; a popover does not. Every test
+// below therefore opens the picker before reaching into it, which is true of both.
+
+async function openPicker(table = "Single-leg"): Promise<HTMLElement> {
+  // idempotent on purpose: the trigger TOGGLES, so a test that unticks twice would
+  // otherwise shut the picker on its second call and fail looking for a missing list
+  const already = screen.queryByRole("group", { name: `${table} columns` });
+  if (already) return already;
+  await userEvent.click(screen.getByText(`${table} columns`));
+  return await screen.findByRole("group", { name: `${table} columns` });
 }
+
+async function untick(label: string) {
+  const picker = await openPicker();
+  // by ROLE, not by label text: the box is a button with role=checkbox now, and the column
+  // name it carries is also a table header, so text alone matches more than one thing
+  await userEvent.click(within(picker).getByRole("checkbox", { name: label }));
+}
+// ───────────────────────────────────────────────────────────────────────────────
 
 describe("the fill and bell fallback chain", () => {
   beforeEach(() => { clearCookies(); mockApi(); });
@@ -83,9 +100,9 @@ describe("the fill and bell fallback chain", () => {
   it("never offers to hide the columns that identify or operate a row", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
-    const picker = screen.getByText("Single-leg columns").closest("details")!;
-    expect(within(picker).queryByLabelText("contract")).toBeNull();
-    expect(within(picker).queryByLabelText("actions")).toBeNull();
+    const picker = await openPicker();
+    expect(within(picker).queryByRole("checkbox", { name: "contract" })).toBeNull();
+    expect(within(picker).queryByRole("checkbox", { name: "actions" })).toBeNull();
   });
 });
 
@@ -115,10 +132,35 @@ describe("column preferences", () => {
     document.cookie = "ui_cols_single=gamma.vega.bid.ask;path=/";
     const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("table")).toBeTruthy());
-    const picker = screen.getByText("Single-leg columns").closest("details")!;
-    fireEvent.click(within(picker).getByText("show all"));
+    const picker = await openPicker();
+    await userEvent.click(within(picker).getByText("show all"));
     await waitFor(() =>
       expect([...container.querySelectorAll("th")].map((h) => h.textContent)).toContain("gamma"),
     );
+  });
+});
+
+describe("the picker as a control", () => {
+  beforeEach(() => { clearCookies(); mockApi(); });
+
+  it("closes on Escape, which the <details> it replaced could not do", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
+
+    const picker = await openPicker();
+    expect(picker).toBeTruthy();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByRole("group", { name: "Single-leg columns" })).toBeNull());
+  });
+
+  it("keeps the two tables' pickers independent", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Combos columns")).toBeTruthy());
+
+    await openPicker("Combos");
+    // opening one must not open or disturb the other; they store separate cookies
+    expect(screen.queryByRole("group", { name: "Single-leg columns" })).toBeNull();
   });
 });
