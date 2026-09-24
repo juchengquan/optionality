@@ -20,6 +20,12 @@ h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
   --hl: #fff3cd; --fill-bar: #ffd84d;
   /* a row whose threshold has been breached, and the same bar inside it */
   --trig: #f8d7da; --trig-hl: #f5c2c7; --trig-fill: #e88b93;
+  /* The table's own gridlines, deliberately heavier than shadcn's --border.
+     That token is built for a card sitting on open space; this is a dense grid of
+     numbers where the lines are what let the eye track along a row without sliding
+     into the one below. Tried shadcn's value, judged too faint, put back. Everything
+     that is not the table still uses --border. */
+  --grid: #aaa;
   /* a quarantined contract's badge */
   --badge-bg: #d9534f; --badge-fg: #fff; --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.97 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent: oklch(0.97 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
 }
@@ -28,6 +34,9 @@ h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
   :root {
     --hl: #4a3f18; --fill-bar: #8a6d1f;
     --trig: #4a2126; --trig-hl: #63272e; --trig-fill: #93383f;
+    /* shadcn's dark border is a translucent white that sits closer to the ground
+       than this does; at night the grid mattered more than the consistency */
+    --grid: #383d46;
     --badge-bg: #b4515a; --badge-fg: #fff;
     /* shadcn's dark palette, kept in the media query rather than a .dark class:
        no toggle, no provider, follows the system as this dashboard always has */
@@ -43,7 +52,7 @@ body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem;
           padding: 0.5rem 1rem; margin-bottom: 1rem; }
 table { border-collapse: collapse; margin-bottom: 1.5rem; }
 /* tabular-nums: ragged decimals defeat scanning a column */
-th, td { border: 1px solid var(--border); padding: 4px 10px; text-align: right;
+th, td { border: 1px solid var(--grid); padding: 4px 10px; text-align: right;
          white-space: nowrap; font-variant-numeric: tabular-nums; }
 th.left, td.left { text-align: left; }
 td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
