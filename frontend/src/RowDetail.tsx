@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -57,17 +56,19 @@ export function RowDetail({
           ))}
         </dl>
 
-        <div className="flex flex-col gap-3 px-4 pb-4">
-          <EntryCell entry={entry} onEntry={handlers.onEntry} onTotal={handlers.onTotal} />
-          <div className="flex flex-wrap items-center gap-2">
-            <RowActions
-              entry={entry}
-              onPatch={handlers.onPatch}
-              onDelete={(id) => { onOpenChange(false); handlers.onDelete(id); }}
-              onRename={handlers.onRename}
-            />
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>close</Button>
+        {/* The boxes sat under column headers in the table and have none here, so each
+            says what it is. No close button: SheetContent draws its own, and a second one
+            stretches edge to edge as a column-flex child. */}
+        <div className="flex flex-col gap-4 px-4 pb-6 pt-2">
+          <RowActions
+            entry={entry}
+            onPatch={handlers.onPatch}
+            onDelete={(id) => { onOpenChange(false); handlers.onDelete(id); }}
+            onRename={handlers.onRename}
+            entryCell={
+              <EntryCell entry={entry} onEntry={handlers.onEntry} onTotal={handlers.onTotal} />
+            }
+          />
         </div>
       </SheetContent>
     </Sheet>

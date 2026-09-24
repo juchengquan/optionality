@@ -90,4 +90,54 @@ describe("the detail sheet's controls", () => {
     const rights = values.map((v) => Math.round(v.getBoundingClientRect().right));
     expect(new Set(rights).size, `value column is ragged: ${[...new Set(rights)]}`).toBe(1);
   });
+
+  it("has one close control, not two", async () => {
+    const sheet = await openSheet();
+    // SheetContent renders its own X; a second "close" button is both redundant and,
+    // as a column-flex child, stretched edge to edge
+    const closers = [...sheet.querySelectorAll("button")]
+      .filter((b) => /close/i.test(b.textContent ?? "") || /close/i.test(b.getAttribute("aria-label") ?? ""));
+    expect(closers.length).toBe(1);
+  });
+
+  it("does not stretch small buttons across the whole panel", async () => {
+    const sheet = await openSheet();
+    const panel = sheet.getBoundingClientRect().width;
+
+    for (const b of sheet.querySelectorAll("button")) {
+      const label = (b.textContent ?? "").trim();
+      if (!label) continue; // the icon-only close
+      expect(b.getBoundingClientRect().width, `"${label}" spans the panel`)
+        .toBeLessThan(panel * 0.7);
+    }
+  });
+
+  it("keeps mute and delete together on one line", async () => {
+    const sheet = await openSheet();
+    const find = (t: string) =>
+      [...sheet.querySelectorAll("button")].find((b) => b.textContent?.trim() === t)!;
+    expect(sameLine(find("mute"), find("delete"))).toBe(true);
+  });
+
+  it("says what each editable box is for", async () => {
+    const sheet = await openSheet();
+
+    // in the table these boxes sat under column headers. In a panel they have none, and an
+    // unlabelled number box beside a "set" button does not tell you what it sets.
+    for (const form of sheet.querySelectorAll("form")) {
+      const row = form.parentElement!;
+      const label = (row.textContent ?? "").replace(form.textContent ?? "", "").trim();
+      expect(label.length, `a form in the sheet has no label beside it`).toBeGreaterThan(0);
+    }
+  });
+
+  it("aligns every label to the same column", async () => {
+    const sheet = await openSheet();
+    const controls = [...sheet.querySelectorAll("form")]
+      .map((f) => f.getBoundingClientRect().left);
+    expect(controls.length).toBeGreaterThan(1);
+    // the boxes start where the labels end; ragged labels make a ragged panel
+    expect(new Set(controls.map(Math.round)).size,
+      `controls start at ${[...new Set(controls.map(Math.round))]}`).toBe(1);
+  });
 });
