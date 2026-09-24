@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { ALWAYS, columnsFor, offerable, PRIORITY, SINGLE_COLUMNS, COMBO_COLUMNS } from "../columns";
+import {
+  ALWAYS, columnsFor, COMBO_COLUMNS, offerable, PRIORITY, SINGLE_COLUMNS, widthsFromContent,
+} from "../columns";
+import { comboSubLine } from "../format";
+import { cellValue } from "../WatchlistTable";
 
 /** The fitting rule, exhaustively, with no browser involved (ADR 0008).
  *
@@ -130,5 +134,43 @@ describe("columns that are always there", () => {
   it("leaves the combo table alone — its rules watch value, not delta", () => {
     expect(keys(columnsFor("combo", 200, NONE))).not.toContain("delta");
     expect(offerable("combo", 4000).has("delta")).toBe(true);
+  });
+});
+
+describe("the combo column's real width", () => {
+  const condor = {
+    id: "m1", code: "1016_IC", field: "mid_price", threshold: 3.21,
+    direction: "above" as const, compare: "abs" as const, triggered: false,
+    strike_date: "2026-10-16",
+    dte: 22, fill: 48, scope: "all", positions: [], cost_to_close: 1.55, entry: 3.21, pnl: 166,
+    snapshot: null, combo_value: -1.55, combo_greeks: {},
+    legs: [
+      { sign: -1, option_type: "CALL" as const, strike: 8050 },
+      { sign: 1, option_type: "CALL" as const, strike: 8075 },
+      { sign: -1, option_type: "PUT" as const, strike: 7100 },
+      { sign: 1, option_type: "PUT" as const, strike: 7075 },
+    ],
+  };
+
+  it("counts the leg summary, not just the name", () => {
+    // "1016_IC" is 7 characters; the cell renders that plus "261016 · -C8050 +C8075
+    // -P7100 +P7075" underneath. Measuring the name alone told the fitting rule the
+    // column needed a fifth of the room it actually takes.
+    const w = widthsFromContent(COMBO_COLUMNS, [condor], true, 8, cellValue, comboSubLine);
+    const nameOnly = widthsFromContent(COMBO_COLUMNS, [condor], true, 8, cellValue);
+
+    expect(w.combo!).toBeGreaterThan(nameOnly.combo! * 2);
+  });
+
+  it("discounts the sub-line for being set smaller", () => {
+    // it renders at 0.78rem, so counting its characters at full width would overshoot
+    const w = widthsFromContent(COMBO_COLUMNS, [condor], true, 10, cellValue, comboSubLine);
+    const sub = comboSubLine(condor, "combo");
+    expect(w.combo!).toBeLessThan(sub.length * 10 + 30);
+  });
+
+  it("ignores the sub-line for columns that do not have one", () => {
+    const w = widthsFromContent(COMBO_COLUMNS, [condor], true, 8, cellValue, comboSubLine);
+    expect(w.dte!).toBeLessThan(w.combo!);
   });
 });

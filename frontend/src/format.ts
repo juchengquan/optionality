@@ -69,3 +69,26 @@ export function shortContract(name: string): string {
   const m = SPXW_NAME.exec(name);
   return m ? `${m[1]} ${m[2]}${m[3]}` : name;
 }
+
+/** "2026-10-16" → "261016", the form contract names now use. */
+export function shortDate(iso: string): string {
+  const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[2]}${m[3]}${m[4]}` : iso;
+}
+
+/** The second line of a combo's cell: when it expires and what it is made of.
+ *
+ *  This is what actually sizes the combo column — "1016_IC" is seven characters and this
+ *  is thirty-six — so the fitting measurement has to be given it explicitly. Grouping the
+ *  legs by type was tried and measured WORSE: the separator costs more than the repeated
+ *  C and P save.
+ */
+export function comboSubLine(
+  entry: { strike_date: string; legs?: readonly Leg[] | null },
+  key?: string,
+): string {
+  // key-aware on purpose: the measurement asks this of EVERY column, and a version that
+  // answered for all of them would size dte and delta as though they carried a leg summary
+  if (key !== undefined && key !== "combo") return "";
+  return entry.legs ? `${shortDate(entry.strike_date)} · ${legSummary(entry.legs)}` : "";
+}

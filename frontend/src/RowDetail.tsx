@@ -5,7 +5,7 @@ import {
 import type { Entry } from "./api";
 import { useDismissOnBack } from "./useDismissOnBack";
 import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
-import { alarmText, legSummary, shortContract } from "./format";
+import { alarmText, comboSubLine, shortContract } from "./format";
 import { EntryCell, RowActions } from "./RowActions";
 import { cellValue } from "./WatchlistTable";
 import type { RowHandlers } from "./WatchlistTable";
@@ -45,7 +45,7 @@ export function RowDetail({
           <SheetDescription>
             {alarmText(entry.field, entry.direction, entry.threshold, entry.compare)}
             {entry.triggered ? " 🔔" : null}
-            {isCombo && entry.legs ? ` · ${entry.strike_date} · ${legSummary(entry.legs)}` : null}
+            {isCombo && entry.legs ? ` · ${comboSubLine(entry)}` : null}
           </SheetDescription>
         </SheetHeader>
 

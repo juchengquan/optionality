@@ -1,6 +1,6 @@
 import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
-import { alarmText, DASH, fmt, fmtText, legSummary, shortContract } from "./format";
+import { alarmText, comboSubLine, DASH, fmt, fmtText, shortContract } from "./format";
 
 /** Row plus column key to displayed text. Exported because the detail sheet shows every
  *  column whether or not the table is drawing it, and two of these would drift. */
@@ -94,7 +94,7 @@ export function WatchlistTable({
                           {entry.error ? <span className="badge">{entry.error}</span> : null}
                           {entry.triggered && signal.bell === identity ? " 🔔" : null}
                           {isCombo && entry.legs ? (
-                            <div className="legs">{entry.strike_date} · {legSummary(entry.legs)}</div>
+                            <div className="legs">{comboSubLine(entry)}</div>
                           ) : null}
                         </>
                       ) : c.key === "alarm" ? (

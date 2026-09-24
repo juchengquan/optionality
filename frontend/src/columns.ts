@@ -171,12 +171,21 @@ export function widthsFromContent(
   isCombo: boolean,
   charWidth: number,
   cellText: (row: Entry, key: string, isCombo: boolean) => string,
+  subText?: (row: Entry, key: string, isCombo: boolean) => string,
 ): Record<string, number> {
   const CELL_PADDING = 22; // 10px each side plus the border, per app.css
+  // the combo cell's second line renders at 0.78rem (.legs in app.css), so counting its
+  // characters at full width would demand a column half again as wide as it needs
+  const SUB_SCALE = 0.78;
   const out: Record<string, number> = {};
   for (const c of columns) {
     let longest = c.label.length;
-    for (const r of rows) longest = Math.max(longest, cellText(r, c.key, isCombo).length);
+    for (const r of rows) {
+      longest = Math.max(longest, cellText(r, c.key, isCombo).length);
+      // a cell can render MORE than cellText returns — the combo identity draws a leg
+      // summary underneath, and measuring the name alone asked for a fifth of the room
+      if (subText) longest = Math.max(longest, subText(r, c.key, isCombo).length * SUB_SCALE);
+    }
     out[c.key] = Math.ceil(longest * charWidth) + CELL_PADDING;
   }
   return out;
