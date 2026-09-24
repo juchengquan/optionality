@@ -224,3 +224,39 @@ def test_a_total_cannot_be_split_where_every_wing_has_its_own_rule(client_factor
     resp = client.post(f"/monitors/{span}/total-entry", json={"entry": 3.21}, headers=AUTH)
     assert resp.status_code == 422
     assert "own" in resp.json()["detail"]
+
+
+def test_a_total_needs_the_other_wings_recorded_first(client_factory):
+    """Two unknowns and one equation cannot be solved, so it refuses rather than guessing."""
+    client = client_factory(snapshot_fetcher=_priced_fetcher)
+    made, span = _spanning_setup(client)
+    client.patch(f"/positions/{made['calls']['id']}", json={"entry": None}, headers=AUTH)
+    # entry is optional, so clearing it needs a direct write
+    sf = client.app.state.session_factory
+    from optionality.service.models import Position
+
+    with sf() as s:
+        s.get(Position, made["calls"]["id"]).entry = None
+        s.commit()
+
+    resp = client.post(f"/monitors/{span}/total-entry", json={"entry": 3.21}, headers=AUTH)
+    assert resp.status_code == 422
+    assert "first" in resp.json()["detail"]
+
+
+def test_a_total_on_a_rule_watching_nothing_is_refused(client_factory):
+    """A rule with no holdings attached has no wing to adjust."""
+    client = client_factory(snapshot_fetcher=_priced_fetcher)
+    mid = client.post(
+        "/monitors",
+        json={"strike_date": _future(), "option_type": "CALL", "strike": 8100, "threshold": 0.6},
+        headers=AUTH,
+    ).json()["id"]
+    resp = client.post(f"/monitors/{mid}/total-entry", json={"entry": 3.21}, headers=AUTH)
+    assert resp.status_code == 422
+    assert "no holdings" in resp.json()["detail"]
+
+
+def test_a_total_on_an_unknown_rule_is_a_404(client_factory):
+    client = client_factory(snapshot_fetcher=_priced_fetcher)
+    assert client.post("/monitors/nope/total-entry", json={"entry": 1.0}, headers=AUTH).status_code == 404

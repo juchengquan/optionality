@@ -2,7 +2,7 @@
 status: supersedes ADR-0002
 ---
 
-# A React frontend, built alongside at /app
+# A React frontend, now the dashboard at /ui
 
 ADR 0002 deferred a JS/TS rebuild and named what would justify revisiting it: charts, or more
 than one viewer. Neither has arrived. The decision is taken anyway, on the owner's call, after
@@ -37,3 +37,21 @@ rather than a second implementation of the domain.
   from Vite's manifest — mounts do not resolve behind the path-stripping proxy, and a built
   `index.html` would be swallowed by `.gitignore`'s blanket `*.html`.
 - No new auth. `API_TOKEN` is empty and tailscale remains the only gate, exactly as for `/ui`.
+
+## Outcome
+
+React reached parity across display, mutations and tests, and was preferred on use. It now
+serves `/ui` — the URL the dashboard has always had, since bookmarks, the tailscale path and
+muscle memory all point there. `/app`, where it grew up alongside htmx, redirects there so a
+bookmark from that period still lands, leaving one canonical URL.
+
+The htmx implementation is deleted: six templates, the vendored htmx, sixteen HTML-returning
+routes and 1152 lines of tests. `routes/ui.py` went from 697 lines to 70, and now does nothing
+but hand over a bundle. It is all in the history if the reasoning ever needs revisiting.
+
+Three refusal branches of `apply_total_entry` had been covered only through the HTML routes,
+and were re-covered against the JSON API rather than allowed to lapse — deleting a frontend
+should not quietly delete tests of the domain beneath it.
+
+The cost this decision accepted is now real and permanent: the deployment has a build step,
+and `make check-ui` is what stands between a committed bundle and its source drifting apart.
