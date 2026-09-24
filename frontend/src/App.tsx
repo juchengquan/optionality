@@ -8,7 +8,7 @@ import {
 } from "./api";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Toaster, toast } from "@/components/ui/toast";
-import { AddCombo, AddMonitor } from "./AddForms";
+import { AddPanel } from "./AddPanel";
 import { CONTRACT_VERSION } from "./contract";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, writeHidden } from "./columns";
 import { ColumnPickers } from "./ColumnPickers";
@@ -219,8 +219,7 @@ export function App() {
         onDelete={(id) => void act(() => deleteMonitor(id))}
       />
 
-      <AddMonitor onCreate={(body) => void act(() => createMonitor(body))} />
-      <AddCombo onCreate={(body) => void act(() => createMonitor(body))} />
+      <AddPanel onCreate={(body) => void act(() => createMonitor(body))} />
 
       <Toaster />
     </main>

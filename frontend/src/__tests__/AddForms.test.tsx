@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
@@ -56,21 +57,26 @@ function setLeg(scope: HTMLElement, n: number, sign: string, type_: string, stri
 }
 // ────────────────────────────────────────────────────────────────────────────────
 
-async function forms() {
+/** The forms live in a sheet since phase 5 of the responsive work (ADR 0008), so getting
+ *  at one means opening it. Still an interaction helper; still no assertion moved. */
+async function openForm(which: "monitor" | "combo") {
   mockApi();
   render(<App />);
-  await waitFor(() => expect(screen.getByText("Add monitor")).toBeTruthy());
-  return {
-    monitor: screen.getByRole("group", { name: "Add monitor" }),
-    combo: screen.getByRole("group", { name: "Add combo" }),
-  };
+  await waitFor(() => expect(screen.getByText(`add ${which}`)).toBeTruthy());
+  await userEvent.click(screen.getByText(`add ${which}`));
+  return await screen.findByRole("dialog");
+}
+
+/** The combo form starts at two legs and grows; ask for the rows before filling them. */
+async function needLegs(scope: HTMLElement, n: number) {
+  for (let i = 2; i < n; i++) await userEvent.click(within(scope).getByText("add leg"));
 }
 
 describe("adding a single-leg monitor", () => {
   beforeEach(() => { document.cookie = "ui_cols_single=;path=/"; });
 
   it("posts the contract, the rule, and numbers as numbers", async () => {
-    const { monitor } = await forms();
+    const monitor = await openForm("monitor");
 
     type(monitor, "expiry", "2026-10-16");
     choose(monitor, "type", "PUT");
@@ -98,7 +104,7 @@ describe("adding a single-leg monitor", () => {
   });
 
   it("offers implied volatility, which a single contract does have", async () => {
-    const { monitor } = await forms();
+    const monitor = await openForm("monitor");
     const field = within(monitor).getByLabelText("field", { exact: false });
     expect([...field.querySelectorAll("option")].map((o) => o.textContent))
       .toContain("option_implied_volatility");
@@ -109,10 +115,11 @@ describe("adding a combo", () => {
   beforeEach(() => { document.cookie = "ui_cols_combo=;path=/"; });
 
   it("posts legs with the signs the user chose", async () => {
-    const { combo } = await forms();
+    const combo = await openForm("combo");
 
     type(combo, "name", "1016_IC");
     type(combo, "expiry", "2026-10-16");
+    await needLegs(combo, 4);
     setLeg(combo, 1, "-", "CALL", "8050");
     setLeg(combo, 2, "+", "CALL", "8075");
     setLeg(combo, 3, "-", "PUT", "7100");
@@ -141,13 +148,15 @@ describe("adding a combo", () => {
   });
 
   it("drops the leg rows left blank", async () => {
-    const { combo } = await forms();
+    const combo = await openForm("combo");
 
     type(combo, "name", "1016_bs_8050");
     type(combo, "expiry", "2026-10-16");
+    // ask for a third row and leave it empty: the form no longer draws rows you did not
+    // want, so proving blanks are dropped means creating one on purpose
+    await needLegs(combo, 3);
     setLeg(combo, 1, "-", "CALL", "8050");
     setLeg(combo, 2, "+", "CALL", "8075");
-    // rows 3-6 stay empty; the form always draws six
     type(combo, "threshold", "2.76");
     fireEvent.submit(within(combo).getByRole("button", { name: "watch combo" }).closest("form")!);
 
@@ -156,7 +165,7 @@ describe("adding a combo", () => {
   });
 
   it("never offers implied volatility, which cannot be summed", async () => {
-    const { combo } = await forms();
+    const combo = await openForm("combo");
     const field = within(combo).getByLabelText("field", { exact: false });
     const offered = [...field.querySelectorAll("option")].map((o) => o.textContent);
     // CLAUDE.md, combos: "IV is never summed" — two 20% legs are not a 40% combo

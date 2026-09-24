@@ -50,8 +50,10 @@ describe("the poll guard", () => {
   it("holds it while a threshold box has focus", async () => {
     mockApi();
     render(<App />);
-    const box = await waitFor(() =>
-      document.querySelector<HTMLInputElement>('[data-slot="number-field"]')!);
+    await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
+    await userEvent.click(screen.getByText("1016_bs_8050"));
+    const sheet = await screen.findByRole("dialog");
+    const box = within(sheet).getAllByRole("textbox")[0] as HTMLInputElement;
 
     box.focus();
     expect(beingOperated(document.activeElement)).toBe(true);
