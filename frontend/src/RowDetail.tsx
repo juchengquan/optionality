@@ -4,8 +4,8 @@ import {
 
 import type { Entry } from "./api";
 import { useDismissOnBack } from "./useDismissOnBack";
-import { COMBO_COLUMNS, PROTECTED, SINGLE_COLUMNS } from "./columns";
-import { alarmText, legSummary } from "./format";
+import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
+import { alarmText, legSummary, shortContract } from "./format";
 import { EntryCell, RowActions } from "./RowActions";
 import { cellValue } from "./WatchlistTable";
 import type { RowHandlers } from "./WatchlistTable";
@@ -29,15 +29,19 @@ export function RowDetail({
 }) {
   useDismissOnBack(open, () => onOpenChange(false));
   if (!entry) return null;
+  // the identity is the title, the alarm is the subtitle, and entry has its own editable
+  // row below — everything else is a figure. NOT filtered by PROTECTED: that set grew to
+  // mean "never dropped from the table", which is the opposite of what belongs here.
+  const shownElsewhere = new Set([isCombo ? "combo" : "contract", "alarm", "entry"]);
   const columns = (isCombo ? COMBO_COLUMNS : SINGLE_COLUMNS).filter(
-    (c) => !PROTECTED.has(c.key) && c.key !== "alarm" && c.key !== "entry",
+    (c) => !shownElsewhere.has(c.key),
   );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isCombo ? entry.code : (entry.snapshot?.name ?? entry.code)}</SheetTitle>
+          <SheetTitle>{isCombo ? entry.code : shortContract(entry.snapshot?.name ?? entry.code)}</SheetTitle>
           <SheetDescription>
             {alarmText(entry.field, entry.direction, entry.threshold, entry.compare)}
             {entry.triggered ? " 🔔" : null}

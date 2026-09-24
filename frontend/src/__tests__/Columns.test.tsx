@@ -3,11 +3,15 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { shortContract } from "../format";
 import { CONTRACT_VERSION } from "../contract";
 
-/** A delta-watched leg rule: its fill lives on the delta column, which is hideable. */
+/** A MID-watched leg rule. It used to watch delta, but delta is pinned now (every
+ *  single-leg rule in the real watchlist watches it) and a pinned column cannot be hidden
+ *  — which is exactly what these tests need to do to exercise the fallback chain. The
+ *  chain itself is unchanged and still matters for any rule watched on something else. */
 const leg = {
-  id: "m1", code: "US.SPXW261120C8100000", field: "option_delta", threshold: 0.2,
+  id: "m1", code: "US.SPXW261120C8100000", field: "mid_price", threshold: 35,
   direction: "above", compare: "abs", triggered: true, strike_date: "2026-11-20",
   dte: 57, fill: 84, scope: "leg", positions: [{ id: "p1", name: "1120_b_8100" }],
   cost_to_close: 3.75, entry: null, pnl: null,
@@ -72,15 +76,15 @@ describe("the fill and bell fallback chain", () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
     const cell = filledCell(container);
-    expect(cell.textContent).toBe("0.1685"); // delta
+    expect(cell.textContent).toBe("31.50"); // mid
     expect(cell.style.getPropertyValue("--fill")).toBe("84%");
   });
 
   it("moves to the alarm cell when that column is hidden", async () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
-    await untick("delta");
-    await waitFor(() => expect(filledCell(container).textContent).toContain("delta ≥ 0.2"));
+    await untick("mid");
+    await waitFor(() => expect(filledCell(container).textContent).toContain("mid ≥ 35"));
     // urgency must survive the column that carried it being hidden
     expect(filledCell(container).style.getPropertyValue("--fill")).toBe("84%");
   });
@@ -88,10 +92,11 @@ describe("the fill and bell fallback chain", () => {
   it("ends on the contract when the alarm is hidden too, taking the bell with it", async () => {
     const { container } = render(<App />);
     await waitFor(() => expect(container.querySelector("td.hl")).toBeTruthy());
-    await untick("delta");
+    await untick("mid");
     await untick("alarm");
-    await waitFor(() => expect(filledCell(container).textContent).toContain("SPXW 261120"));
-    // contract is protected, so the chain always terminates somewhere visible
+    // the shortened form: SPXW and the .00 are identical on every row and say nothing
+    await waitFor(() => expect(filledCell(container).textContent).toContain("261120 8100C"));
+    // contract is pinned, so the chain always terminates somewhere visible
     const cell = filledCell(container);
     expect(cell.style.getPropertyValue("--fill")).toBe("84%");
     expect(cell.textContent).toContain("🔔");
@@ -162,5 +167,22 @@ describe("the picker as a control", () => {
     await openPicker("Combos");
     // opening one must not open or disturb the other; they store separate cookies
     expect(screen.queryByRole("group", { name: "Single-leg columns" })).toBeNull();
+  });
+});
+
+describe("contract names", () => {
+  it("drops the noise that every contract carries", () => {
+    // build_spx_code hardcodes SPXW and builds strikes with int(), so the symbol and the
+    // decimals are identical on every row this service can create — twenty characters of
+    // which eight say nothing
+    expect(shortContract("SPXW 261016 8050.00C")).toBe("261016 8050C");
+    expect(shortContract("SPXW 261120 7100.00P")).toBe("261120 7100P");
+  });
+
+  it("leaves anything it does not recognise exactly as it found it", () => {
+    // a name from somewhere else must not be quietly mangled into a different contract
+    expect(shortContract("SPX 261016 8050.00C")).toBe("SPX 261016 8050.00C");
+    expect(shortContract("SPXW 261016 8050.50C")).toBe("SPXW 261016 8050.50C");
+    expect(shortContract("1016_bs_8050")).toBe("1016_bs_8050");
   });
 });

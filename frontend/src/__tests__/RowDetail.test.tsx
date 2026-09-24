@@ -42,8 +42,8 @@ function mockApi(quotes: unknown[] = [leg]) {
 
 async function openDetail() {
   render(<App />);
-  await waitFor(() => expect(screen.getByText("SPXW 261120 8100.00C")).toBeTruthy());
-  await userEvent.click(screen.getByText("SPXW 261120 8100.00C"));
+  await waitFor(() => expect(screen.getByText("261120 8100C")).toBeTruthy());
+  await userEvent.click(screen.getByText("261120 8100C"));
   return await screen.findByRole("dialog");
 }
 
@@ -70,7 +70,7 @@ describe("the row detail sheet", () => {
     mockApi();
     const sheet = await openDetail();
 
-    expect(within(sheet).getByText(/SPXW 261120 8100.00C/)).toBeTruthy();
+    expect(within(sheet).getByText(/261120 8100C/)).toBeTruthy();
     // the rule as the alarm column states it. "delta" alone also matches the figure label
     // below it, so this asserts the whole phrase, comparator and all
     expect(within(sheet).getByText(/delta ≥ 0\.2/)).toBeTruthy();
