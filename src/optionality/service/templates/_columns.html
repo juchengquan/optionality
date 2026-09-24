@@ -5,13 +5,13 @@
     <summary>{{ label }} columns</summary>
     {% for key, name in all_cols %}
       {% if key not in protected_columns %}
-      <label class="colpick">
-        <form hx-post="{{ root_path }}/ui/columns/{{ table }}" hx-target="#live" hx-swap="innerHTML"
-              hx-trigger="change from:find input">
-          <input type="hidden" name="column" value="{{ key }}">
-          <input type="checkbox" name="shown"{% if key in shown %} checked{% endif %}>{{ name }}
-        </form>
-      </label>
+      {#- hx-trigger="change" on the FORM: a change event bubbles up from whichever control
+          fired it. "from:find input" would bind to the hidden input, which never changes. -#}
+      <form class="colpick" hx-post="{{ root_path }}/ui/columns/{{ table }}"
+            hx-target="#live" hx-swap="innerHTML" hx-trigger="change">
+        <input type="hidden" name="column" value="{{ key }}">
+        <label><input type="checkbox" name="shown"{% if key in shown %} checked{% endif %}> {{ name }}</label>
+      </form>
       {% endif %}
     {% endfor %}
     <form hx-post="{{ root_path }}/ui/columns/{{ table }}/reset" hx-target="#live" hx-swap="innerHTML">

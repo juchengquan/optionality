@@ -56,8 +56,13 @@ button { cursor: pointer; }
 .health { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.2rem; }
 .health .bad { color: var(--bad); font-weight: 700; }
 #column-pickers details { display: inline-block; vertical-align: top; margin-right: 1.5rem; }
-#column-pickers summary { cursor: pointer; }
-label.colpick, label.colpick form { display: inline-block; margin: 0 0.6rem 0 0; }
+/* it has to READ as a control: two muted words next to the refresh selector look
+   like caption text, which is exactly why it went unnoticed */
+#column-pickers summary { cursor: pointer; display: inline-block; padding: 2px 8px;
+  border: 1px solid var(--line); border-radius: 3px; user-select: none; }
+#column-pickers details[open] summary { margin-bottom: 0.4rem; }
+form.colpick { display: inline-block; margin: 0 0.6rem 0 0; }
+form.colpick label { display: inline; cursor: pointer; }
 /* only occupies space when it has something to say */
 #ui-error:empty { display: none; }
 #ui-error { position: fixed; top: 0; left: 0; right: 0; z-index: 10; }

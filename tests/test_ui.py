@@ -1132,3 +1132,21 @@ def test_show_all_reticks_the_boxes_not_just_the_table(client_factory):
     # a single toggle does not need the repaint — its own box is already correct
     single = client.post("/ui/columns/single", data={"column": "vega"}, headers=AUTH)
     assert 'id="column-pickers"' not in single.text
+
+
+def test_a_tick_applies_without_a_confirm_step(client_factory):
+    """The trigger must bind to the form, not to a descendant input.
+
+    "change from:find input" resolves to the FIRST descendant input — the hidden one
+    carrying the column key, which never fires a change event — so ticking a box did
+    nothing at all and there was no confirm button either.
+    """
+    client = client_factory(snapshot_fetcher=_rows_fetcher)
+    _mk(client, field="option_delta", threshold=0.6)
+    client.app.state.sweeper.sweep()
+    page = client.get("/ui", headers=AUTH).text
+    picker = page[page.index('id="column-pickers"') :]
+    assert 'hx-trigger="change"' in picker
+    assert "from:find" not in picker
+    # and a form may not sit inside a label: label takes phrasing content only
+    assert "<label" in picker and "<label class=\"colpick\">" not in picker
