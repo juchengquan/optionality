@@ -883,10 +883,41 @@ def _condor_pair(client, call_entry=2.87, put_entry=None):
                 legs=[{"sign": -1, "option_type": "CALL", "strike": 8050.0}],
             )
         )
+        # and a rule watching the call side alone, as the live watchlist has: that is what
+        # gives calls_side its own entry box, leaving puts_side reachable only via the total
+        s.add(
+            Monitor(
+                code="the_call_side",
+                strike_date=_future(),
+                option_type="CMB",
+                strike=0.0,
+                field="mid_price",
+                threshold=9.0,
+                scope="all",
+                legs=[{"sign": -1, "option_type": "CALL", "strike": 8050.0}],
+            )
+        )
+        # and a LEG rule on the put side, as the live watchlist has. It links to one
+        # Position but shows no entry box, so it must not make that Position look reachable.
+        s.add(
+            Monitor(
+                code="US.SPXW991231P7100000",
+                strike_date=_future(),
+                option_type="PUT",
+                strike=7100.0,
+                field="option_delta",
+                threshold=0.15,
+                scope="leg",
+            )
+        )
         s.flush()
         mid = s.scalar(select(Monitor.id).where(Monitor.code == "the_condor"))
+        wing = s.scalar(select(Monitor.id).where(Monitor.code == "the_call_side"))
+        leg = s.scalar(select(Monitor.id).where(Monitor.code == "US.SPXW991231P7100000"))
+        s.execute(monitor_positions.insert().values(monitor_id=leg, position_id=made["puts_side"]["id"]))
         for p in made.values():
             s.execute(monitor_positions.insert().values(monitor_id=mid, position_id=p["id"]))
+        s.execute(monitor_positions.insert().values(monitor_id=wing, position_id=made["calls_side"]["id"]))
         s.commit()
     return made, mid
 
@@ -908,13 +939,18 @@ def test_typing_the_total_derives_the_unrecorded_wing(client_factory):
     assert by_name["calls_side"]["entry"] == 2.87  # untouched
 
 
-def test_the_total_is_read_only_once_every_wing_is_known(client_factory):
+def test_the_total_keeps_its_box_once_every_wing_is_known(client_factory):
+    """Superseded the earlier behaviour of hiding the box: hiding it meant a mistyped
+    total could only be fixed by editing a wing that has no row to edit."""
     client = client_factory(snapshot_fetcher=_entry_fetcher)
     _made, mid = _condor_pair(client, call_entry=2.87, put_entry=0.34)
     client.app.state.sweeper.sweep()
     page = client.get("/ui/table", headers=AUTH).text
-    assert f"/ui/monitors/{mid}/entry" not in page  # nothing left to derive
-    assert ">3.21<" in page  # the sum is shown instead
+    assert f"/ui/monitors/{mid}/entry" in page  # still correctable
+    combos = page[page.index("<h3>Combos</h3>") :]
+    row = next(r for r in combos.split("<tr") if "the_condor" in r)
+    entry_cell = re.findall(r"<td[^>]*>(.*?)</td>", row, re.DOTALL)[3]
+    assert 'value="3.21"' in entry_cell  # and carries the current total
 
 
 def test_a_total_cannot_be_split_across_two_unknown_wings(client_factory):
@@ -925,3 +961,35 @@ def test_a_total_cannot_be_split_across_two_unknown_wings(client_factory):
     # two unknowns and one equation: say so rather than splitting it arbitrarily
     assert "one wing" in resp.text or "wings" in resp.text
     assert all(p["entry"] is None for p in client.get("/positions", headers=AUTH).json())
+
+
+def test_the_total_stays_editable_and_can_be_corrected(client_factory):
+    """Typing a total must not be a one-way door: a slip has to be fixable in place."""
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _made, mid = _condor_pair(client, call_entry=2.87, put_entry=None)
+    client.app.state.sweeper.sweep()
+
+    client.post(f"/ui/monitors/{mid}/entry", data={"entry": "3.00"}, headers=AUTH)
+    by_name = {p["name"]: p for p in client.get("/positions", headers=AUTH).json()}
+    assert by_name["puts_side"]["entry"] == pytest.approx(0.13)
+
+    # the box is still there, carrying the total, so it can be corrected
+    page = client.get("/ui/table", headers=AUTH).text
+    assert f"/ui/monitors/{mid}/entry" in page
+
+    client.post(f"/ui/monitors/{mid}/entry", data={"entry": "3.21"}, headers=AUTH)
+    by_name = {p["name"]: p for p in client.get("/positions", headers=AUTH).json()}
+    assert by_name["puts_side"]["entry"] == pytest.approx(0.34)  # re-derived
+    assert by_name["calls_side"]["entry"] == 2.87  # the wing you can edit directly is never touched
+
+
+def test_the_total_adjusts_the_wing_you_cannot_otherwise_reach(client_factory):
+    """calls_side has a rule of its own, so it has a box; puts_side does not. The total
+    therefore belongs to puts_side, and never silently rewrites the one you can edit."""
+    client = client_factory(snapshot_fetcher=_entry_fetcher)
+    _made, mid = _condor_pair(client, call_entry=1.00, put_entry=2.00)
+    client.app.state.sweeper.sweep()
+    client.post(f"/ui/monitors/{mid}/entry", data={"entry": "5.00"}, headers=AUTH)
+    by_name = {p["name"]: p for p in client.get("/positions", headers=AUTH).json()}
+    assert by_name["calls_side"]["entry"] == 1.00
+    assert by_name["puts_side"]["entry"] == pytest.approx(4.00)
