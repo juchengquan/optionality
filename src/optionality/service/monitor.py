@@ -7,7 +7,8 @@ from sqlalchemy import select
 from optionality.apis.aux import build_spx_code
 from optionality.core import fetch_snapshot
 from optionality.notification.telegram import send_telegram_message
-from optionality.service.models import Monitor, utcnow
+from optionality.service.models import Monitor, Position, utcnow
+from optionality.service.position import position_leg_codes
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time, market_time_to_display
 
@@ -202,6 +203,19 @@ class MonitorSweeper:
         n = self.consecutive_failures
         return f"STALLED ({n} failed sweep{'s' if n != 1 else ''})", True
 
+    def cached_records(self) -> tuple[dict, str | None]:
+        """The last sweep's quotes indexed by code, display-stamped.
+
+        Positions read from here too, so everything on the dashboard — a monitor's value,
+        a position's cost to close — comes from one instant.
+        """
+        if self.last_fetch_at is None:
+            return {}, None
+        return (
+            _display_records(self.last_records, self.settings, self.last_fetch_at),
+            display_time(self.last_fetch_at, self.settings.display_tz),
+        )
+
     def cached_quotes(self, include_combos: bool = True) -> tuple[list[dict], str | None]:
         """Watchlist entries built from the LAST SWEEP's records — no OpenD call.
 
@@ -213,10 +227,7 @@ class MonitorSweeper:
         Returns (entries, fetched_display); fetched_display is None before the first sweep.
         """
         monitors = enabled_monitors(self.session_factory, include_combos)
-        if self.last_fetch_at is None:
-            return build_entries(monitors, {}, set()), None
-        by_code = _display_records(self.last_records, self.settings, self.last_fetch_at)
-        fetched = display_time(self.last_fetch_at, self.settings.display_tz)
+        by_code, fetched = self.cached_records()
         return build_entries(monitors, by_code, set(self.last_bad_codes)), fetched
 
     def _notify(self, text: str) -> None:
@@ -259,11 +270,18 @@ class MonitorSweeper:
                     active.append(monitor)
             session.commit()
 
-        if not active:
+        # positions join the batch even when nothing alarms on them: the dashboard values
+        # them from this same fetch, and a held position must not read as "—" merely
+        # because you happen not to be watching it. Widens the batch only — the alarm
+        # loop below still runs over `active` and nothing else.
+        with self.session_factory() as session:
+            position_codes = {code for p in session.scalars(select(Position)).all() for code in position_leg_codes(p)}
+
+        codes = sorted({code for m in active for code in monitor_leg_codes(m)} | position_codes)
+        if not codes:
             self._record_success()
             return
 
-        codes = sorted({code for m in active for code in monitor_leg_codes(m)})
         try:
             records, bad_codes = fetch_resilient(codes, self.settings, self.fetcher)
         except Exception:

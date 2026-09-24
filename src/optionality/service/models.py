@@ -70,6 +70,10 @@ class Monitor(Base):
     compare: Mapped[str] = mapped_column(String(6), default="abs", server_default="abs")  # "abs" | "signed"
     # combo monitors: [{"sign": 1|-1, "option_type": "CALL"|"PUT", "strike": float}, ...]; None = single-leg
     legs: Mapped[list | None] = mapped_column(JSON, default=None)
+    # which Position this warns about, and how much of it: "all" | "calls" | "puts" | "leg".
+    # A wing of a condor is neither one leg nor all of them — see ADR 0003.
+    position_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("positions.id"), default=None)
+    scope: Mapped[str | None] = mapped_column(String(10), default=None)
     enabled: Mapped[bool] = mapped_column(default=True)
     # why enabled is False: "manual" | "expired" | "unknown-contract". NULL on rows that
     # predate the column, and cleared whenever a monitor is re-enabled.
@@ -95,7 +99,9 @@ class Position(Base):
     strategy: Mapped[str | None] = mapped_column(String(50), default=None)
     strike_date: Mapped[str] = mapped_column(String(10))  # one expiry per position, as combos were
     contracts: Mapped[int] = mapped_column(default=1)
-    entry: Mapped[float]  # points per contract, taken in on open
+    # points per contract taken in on open. Nullable: a Position migrated from a combo
+    # has no recorded entry, and P&L reads unknown rather than inventing one.
+    entry: Mapped[float | None] = mapped_column(default=None)
     # [{"side": "sold"|"bought", "option_type": "CALL"|"PUT", "strike": float}]
     legs: Mapped[list] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
