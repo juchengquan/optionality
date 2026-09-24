@@ -225,7 +225,9 @@ def test_health_exposes_monitor_sweep_state(client_factory):
     client = client_factory()
     data = client.get("/health").json()
     assert data["monitor"]["consecutive_failures"] == 0
-    assert data["monitor"]["last_sweep_at"] is None
+    # a sweep now runs at startup, so this is stamped rather than None — before that fix the
+    # alarm engine was quiet for a whole interval after every restart
+    assert data["monitor"]["last_sweep_at"] is not None
 
 
 def test_creation_rejects_unknown_contract(client_factory):

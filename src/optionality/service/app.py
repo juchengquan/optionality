@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -26,6 +27,10 @@ def create_app(settings: Settings | None = None, runner=None, snapshot_fetcher=N
             "interval",
             seconds=settings.monitor_interval_seconds,
             id="monitor-sweep",
+            # sweep at once rather than an interval from now. Without this every restart left
+            # the alarm engine quiet and the dashboard's cache empty for MONITOR_INTERVAL_SECONDS,
+            # and restarts happen after every merge.
+            next_run_time=datetime.now(UTC),
         )
         if app.state.telegram_bot is not None:
             app.state.telegram_bot.start()
