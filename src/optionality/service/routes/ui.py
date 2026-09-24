@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
@@ -40,6 +41,50 @@ def htmx_asset():
         media_type="text/javascript",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+_APP_DIR = _STATIC_DIR / "app"
+
+
+def _app_assets() -> tuple[str, list[str]]:
+    """Vite's manifest names the hashed entry file. Read at request time so a rebuild needs
+    no restart, and so a missing bundle fails loudly instead of serving a blank page."""
+    manifest = json.loads((_APP_DIR / ".vite" / "manifest.json").read_text())
+    entry = next(v for v in manifest.values() if v.get("isEntry"))
+    return entry["file"], list(entry.get("css", []))
+
+
+@static_router.get("/static/app/{path:path}")
+def app_asset(path: str):
+    """Hashed assets, served by a route for the same reason htmx.min.js is: a StaticFiles
+    mount only matches the root_path-prefixed spelling the proxy never sends."""
+    root = _APP_DIR.resolve()
+    target = (root / path).resolve()
+    if root not in target.parents or not target.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    # the filename carries a content hash, so this can never go stale
+    return FileResponse(target, headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@static_router.get("/app")
+def react_app(request: Request):
+    """The React shell. /ui keeps working; both run until the comparison is settled."""
+    root_path = request.scope.get("root_path", "")
+    try:
+        entry, css = _app_assets()
+    except (OSError, StopIteration, ValueError) as err:
+        raise HTTPException(status_code=503, detail=f"frontend bundle missing: run make build-ui ({err})") from err
+    response = templates.TemplateResponse(
+        request,
+        "app.html",
+        {
+            "root_path": root_path,
+            "entry": f"{root_path}/static/app/{entry}",
+            "css": [f"{root_path}/static/app/{href}" for href in css],
+        },
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 SessionDep = Annotated[Session, Depends(get_session)]

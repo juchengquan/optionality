@@ -180,3 +180,5 @@ _examples/
 # optionality service
 data/
 opend/
+# frontend: dependencies are not committed, the BUILT bundle is (see ADR 0005)
+frontend/node_modules/
