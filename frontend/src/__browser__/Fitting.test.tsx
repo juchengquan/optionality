@@ -139,16 +139,19 @@ describe("fitting, measured for real", () => {
     expect(headers().length).toBeGreaterThan(wide);
   });
 
-  it("contains a name too long for the screen instead of moving the page", async () => {
-    // the identity column is never dropped, so a name wider than the phone overflows
-    // whatever the rest does. It has to be contained by the table, not by the document.
-    mockApi([{ ...row, snapshot: { ...row.snapshot, name: "SPXW 261120 8100.00C QUARANTINED LONG NAME" } }]);
+  it("contains a name too long for the screen without moving the page or losing it", async () => {
+    // the identity column is never dropped, so a very long name has to go somewhere. It is
+    // capped and wrapped rather than allowed to push anything: the assertion that matters
+    // is that the page stays still AND the whole name survives. This used to assert the
+    // table overflowed, which was testing the mechanism rather than the outcome.
+    const long = "SPXW 261120 8100.00C QUARANTINED LONG NAME";
+    mockApi([{ ...row, snapshot: { ...row.snapshot, name: long } }]);
     render(<App />);
     await atWidth(320);
 
-    const table = document.querySelector("table")!;
-    expect(table.getBoundingClientRect().width).toBeGreaterThan(320);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(321);
+    const cell = document.querySelector("tbody td")!;
+    expect(cell.textContent).toContain("QUARANTINED LONG NAME");
   });
 
   it("gives a phone back the margin a desk can afford", async () => {

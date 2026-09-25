@@ -1,6 +1,25 @@
+import { Fragment } from "react";
+
 import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
+
+/** Somewhere the name may fold when the column is capped on a narrow screen.
+ *
+ *  <wbr> is a break OPPORTUNITY, not a break: it costs nothing when there is room and folds
+ *  at "1016_ bs_ 8050" when there is not. Without it the browser either overflows the cap or
+ *  breaks mid-token, and "1016_bs_80" followed by "50" is not a name anyone recognises. */
+function breakable(name: string): React.ReactNode {
+  const parts = name.split(/(?<=[_ ])/);
+  // Fragments, NOT spans. A span around each part means no single element holds the whole
+  // name, and every test that looks for it by text stops finding it — thirteen of them did.
+  return parts.map((part, i) => (
+    <Fragment key={i}>
+      {part}
+      {i < parts.length - 1 ? <wbr /> : null}
+    </Fragment>
+  ));
+}
 
 /** Row plus column key to displayed text. Exported because the detail sheet shows every
  *  column whether or not the table is drawing it, and two of these would drift. */
@@ -92,12 +111,9 @@ export function WatchlistTable({
                     <td key={c.key} className={classes.join(" ") || undefined} style={style}>
                       {c.key === identity ? (
                         <>
-                          {isCombo ? entry.code : shortContract(entry.snapshot?.name ?? entry.code)}
+                          {breakable(isCombo ? entry.code : shortContract(entry.snapshot?.name ?? entry.code))}
                           {entry.error ? <span className="badge">{entry.error}</span> : null}
                           {entry.triggered && signal.bell === identity ? " 🔔" : null}
-                          {isCombo && entry.legs ? (
-                            <div className="legs">{entry.strike_date} · {legSummary(entry.legs)}</div>
-                          ) : null}
                         </>
                       ) : c.key === "alarm" ? (
                         <>
