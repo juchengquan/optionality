@@ -1,4 +1,12 @@
-@import "tailwindcss";
+/* source(".") restricts automatic class detection to this directory — src — instead of the
+   whole project.
+   Tailwind skips .gitignore'd paths by default, but frontend/dist is deliberately NOT
+   ignored (the bundle is committed), so it was scanning its own previous output and
+   generating utilities for class strings found there. The CSS came out 3KB larger WITH a
+   dist present than without, which made the build unreproducible from a clean checkout and
+   was invisible to `make check-ui` — that always builds with a dist in place, so it was
+   comparing a self-consistent result against itself. */
+@import "tailwindcss" source(".");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -75,10 +83,20 @@ th.left, td.left { text-align: left; }
 /* The name stays put while the rest of the row is swiped: the table is allowed to be wider
    than the screen now (SCROLL_BUDGET), and a swipe that carries the name away costs you the
    one thing that says which row you are reading.
-   Declared BEFORE the triggered and fill rules deliberately — they share this specificity,
-   so source order is what lets a breached row keep its own colour under the frozen cell. */
+   The cell needs a background or the row would show through it while scrolling, and a
+   breached row's colour must still win. It does, by SPECIFICITY rather than source order:
+   "tr.triggered td" is (0,1,2) against this rule's (0,1,1). An earlier comment here claimed
+   order was what settled it, which was wrong — moving this block to the end of the file
+   changes nothing. Raising its specificity would. */
 th:first-child, td:first-child {
   position: sticky; left: 0; z-index: 1; background: var(--background);
+  /* The right edge is drawn with a SHADOW, not a border.
+     With border-collapse the edge between two cells is painted once, by agreement between
+     them — and the cell that ends up painting this one scrolls away underneath the sticky
+     column, taking the line with it. The frozen column then floats with no edge at all,
+     which is exactly what a swipe revealed.
+     box-shadow is not part of border collapsing, so it survives. */
+  box-shadow: 1px 0 0 0 var(--grid);
 }
 /* A frozen column occupies its width at EVERY scroll position, so a wide one does not just
    take space once — it permanently narrows the window you swipe the figures through. An
