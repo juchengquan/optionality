@@ -119,3 +119,27 @@ confidence it has not earned.
 With both fixed, the suite immediately failed on a real overflow it had been hiding, and the
 `.table-scroll` valve turned out not to be load-bearing at all until a test was written with
 a name longer than the screen.
+
+## Reversed after use: swiping is a mechanism, not a last resort
+
+Q3 of the design session rejected "the table scrolls inside its own box" on the grounds that
+it "isn't a design, it's a scrollbar", and chose priority columns instead. The owner then used
+the shipped result, found the sideways swipe perfectly usable, and asked for more figures on
+the page rather than fewer.
+
+So the container's overflow is promoted from safety valve to mechanism. `SCROLL_BUDGET` lets
+the table be about two screens wide before columns start dropping, and the identity column is
+`position: sticky` so a swipe never costs you the row you are reading. Sticky and
+`border-collapse` are famously uneasy together; both the freezing and the surviving gridline
+are measured in the browser suite rather than assumed.
+
+What makes the reversal worth recording is *why* the owner noticed. The swipe they liked was
+on the combo table, and it existed only because the combo column was being measured at a
+third of its width — 71px against a real 219px, because the measurement never saw the leg
+summary rendered underneath the name. The behaviour they wanted was a side effect of a bug,
+and fixing the bug would have removed it. It is now deliberate.
+
+The same finding retired the sub-line entirely. A second line inside a cell was drawn
+unconditionally while every other figure had to earn its place, and it defeated the
+measurement by being invisible to it. `legs` and `expiry` are ordinary columns now: they drop
+by priority, the picker can turn them off, and nothing renders more than `cellValue` returns.

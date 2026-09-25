@@ -69,3 +69,9 @@ export function shortContract(name: string): string {
   const m = SPXW_NAME.exec(name);
   return m ? `${m[1]} ${m[2]}${m[3]}` : name;
 }
+
+/** "2026-10-16" → "261016", the form contract names use since they lost their SPXW. */
+export function shortDate(iso: string): string {
+  const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[2]}${m[3]}${m[4]}` : iso;
+}

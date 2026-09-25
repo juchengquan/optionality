@@ -1,6 +1,6 @@
 import type { Entry } from "./api";
 import { LEFT, signalColumns, type Column } from "./columns";
-import { alarmText, DASH, fmt, fmtText, legSummary, shortContract } from "./format";
+import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
 
 /** Row plus column key to displayed text. Exported because the detail sheet shows every
  *  column whether or not the table is drawing it, and two of these would drift. */
@@ -17,6 +17,8 @@ export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
     case "contract": return shortContract(entry.snapshot?.name ?? entry.code);
     case "combo": return entry.code;
     case "dte": return String(entry.dte);
+    case "legs": return entry.legs ? legSummary(entry.legs) : DASH;
+    case "expiry": return shortDate(entry.strike_date);
     case "alarm": return alarmText(entry.field, entry.direction, entry.threshold, entry.compare);
     case "value": return fmt(entry.cost_to_close ?? entry.combo_value ?? null, "mid");
     case "entry": return entry.scope === "all" ? fmt(entry.entry, "mid") : "";
