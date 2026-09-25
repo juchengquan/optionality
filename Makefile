@@ -47,8 +47,16 @@ test-ui-layout:
 build-ui:
 	cd frontend && npm install --silent && VITE_BASE=$(UI_BASE) npm run build
 
-# a committed bundle can drift from its source; this is what catches it
+# A committed bundle can drift from its source; this is what catches it.
+#
+# The rm is not tidiness. Building over an existing dist hid a real bug for weeks: Tailwind
+# skips .gitignore'd paths, frontend/dist is deliberately not ignored, so it was scanning its
+# own previous output and emitting 3KB of utilities that existed only because a former build
+# mentioned them. This check never saw it, because it too built with a dist in place and so
+# compared a self-consistent result against itself. Building from nothing is what makes this
+# a reproducibility check rather than a self-agreement check.
 check-ui:
+	rm -rf frontend/dist
 	cd frontend && npm install --silent && VITE_BASE=$(UI_BASE) npm run build >/dev/null
 	@git diff --quiet -- frontend/dist \
 		|| { echo "frontend bundle is stale — run 'make build-ui' and commit the result"; exit 1; }

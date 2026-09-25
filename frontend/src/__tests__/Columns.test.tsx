@@ -186,3 +186,51 @@ describe("contract names", () => {
     expect(shortContract("1016_bs_8050")).toBe("1016_bs_8050");
   });
 });
+
+describe("the imminent band", () => {
+  /** A third state between watching and fired, for rows about to cross their threshold.
+   *  Deliberately NOT a spectrum: fill measures distance to a line the owner chose, and in
+   *  their book the highest fill has the MOST time left — so colouring by fill would shout
+   *  loudest at the calmest row. "About to fire" is different: it is a fact about the alarm,
+   *  not a judgement about the trade. */
+
+  async function fillCell(fill: number | null, triggered = false) {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      const body = url.endsWith("/quotes")
+        ? [{ ...leg, fill, triggered }]
+        : url.endsWith("/monitors") ? [] : health;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+    }));
+    const { container } = render(<App />);
+    await waitFor(() => expect(container.querySelector("tbody tr")).toBeTruthy());
+    return container.querySelector("td.hl");
+  }
+
+  it("marks a row that is nearly at its threshold", async () => {
+    expect((await fillCell(95))?.className).toContain("imminent");
+  });
+
+  it("leaves a row with room to spare alone", async () => {
+    // the whole book sits between 36% and 85% on an ordinary day; if that were all
+    // "imminent" the colour would mean nothing
+    expect((await fillCell(85))?.className).not.toContain("imminent");
+  });
+
+  it("marks a row at 100 that has not actually fired", async () => {
+    // threshold_fill rounds, so 99.6% of the way reads as 100 without the alarm firing.
+    // That is the clearest case there is for this band.
+    expect((await fillCell(100, false))?.className).toContain("imminent");
+  });
+
+  it("does not mark a row that has already fired", async () => {
+    // fired has its own colour and outranks this; two markings on one row says nothing
+    expect((await fillCell(100, true))?.className).not.toContain("imminent");
+  });
+
+  it("marks nothing when there is no honest fill to read", async () => {
+    // threshold_fill returns null where the journey has no baseline — a signed negative
+    // threshold crossed from the other side
+    const cell = await fillCell(null);
+    expect(cell?.className ?? "").not.toContain("imminent");
+  });
+});

@@ -1,4 +1,12 @@
-@import "tailwindcss";
+/* source(".") restricts automatic class detection to this directory — src — instead of the
+   whole project.
+   Tailwind skips .gitignore'd paths by default, but frontend/dist is deliberately NOT
+   ignored (the bundle is committed), so it was scanning its own previous output and
+   generating utilities for class strings found there. The CSS came out 3KB larger WITH a
+   dist present than without, which made the build unreproducible from a clean checkout and
+   was invisible to `make check-ui` — that always builds with a dist in place, so it was
+   comparing a self-consistent result against itself. */
+@import "tailwindcss" source(".");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -18,6 +26,10 @@ h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
   /* a row at rest that the alarm is watching, and the bar showing how far its value
      has travelled toward the threshold */
   --hl: #fff3cd; --fill-bar: #ffd84d;
+  /* the same row within IMMINENT_FILL of its threshold — one small move from firing.
+     Orange sits between the watching yellow and the fired pink on purpose, so the three
+     states read as a progression rather than three unrelated colours. */
+  --imm-hl: #ffe8cc; --imm-fill: #ff9f43;
   /* a row whose threshold has been breached, and the same bar inside it */
   --trig: #f8d7da; --trig-hl: #f5c2c7; --trig-fill: #e88b93;
   /* The table's own gridlines, deliberately heavier than shadcn's --border.
@@ -33,6 +45,7 @@ h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
 @media (prefers-color-scheme: dark) {
   :root {
     --hl: #4a3f18; --fill-bar: #8a6d1f;
+    --imm-hl: #4a3520; --imm-fill: #9c6224;
     --trig: #4a2126; --trig-hl: #63272e; --trig-fill: #93383f;
     /* shadcn's dark border is a translucent white that sits closer to the ground
        than this does; at night the grid mattered more than the consistency */
@@ -105,6 +118,10 @@ th:first-child, td:first-child {
 }
 td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
         font-weight: 600; }
+/* (0,2,1), so it beats td.hl and loses to tr.triggered td.hl at (0,2,2) — a fired row keeps
+   its own colour without needing this to be guarded in CSS as well as in the markup */
+td.hl.imminent { background: linear-gradient(to right, var(--imm-fill) var(--fill, 0%),
+                                             var(--imm-hl) var(--fill, 0%)); }
 tr.triggered td { background: var(--trig); }
 tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(--fill, 0%),
                                                  var(--trig-hl) var(--fill, 0%)); }
