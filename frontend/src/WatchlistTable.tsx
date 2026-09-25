@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 
 import type { Entry } from "./api";
-import { LEFT, signalColumns, type Column } from "./columns";
+import { IMMINENT_FILL, LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
 
 /** Somewhere the name may fold when the column is capped on a narrow screen.
@@ -105,7 +105,15 @@ export function WatchlistTable({
               >
                 {columns.map((c) => {
                   const hl = c.key === signal.fill;
-                  const classes = [hl ? "hl" : "", LEFT.has(c.key) ? "left" : ""].filter(Boolean);
+                  // a fired row has its own colour and outranks this: two markings on one
+                  // row would say nothing about which state it is in
+                  const imminent =
+                    hl && !entry.triggered && entry.fill !== null && entry.fill >= IMMINENT_FILL;
+                  const classes = [
+                    hl ? "hl" : "",
+                    imminent ? "imminent" : "",
+                    LEFT.has(c.key) ? "left" : "",
+                  ].filter(Boolean);
                   // --fill carries how far the value has travelled toward its threshold,
                   // so urgency is seen rather than computed, without spending a column
                   const style = hl && entry.fill !== null

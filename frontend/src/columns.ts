@@ -45,6 +45,20 @@ export const COMBO_COLUMNS: Column[] = [
   { key: "theta", label: "theta" }, { key: "vega", label: "vega" },
 ];
 
+/** Where "about to fire" begins.
+ *
+ *  A third colour between watching and fired, and deliberately NOT a gradient. Fill measures
+ *  distance to a threshold the owner chose, and across their book the highest fill has the
+ *  MOST time left — so colouring by fill would shout loudest at the calmest row. This band is
+ *  defensible only because "about to fire" is a fact about the ALARM rather than a judgement
+ *  about the trade: one small move and a Telegram message goes out.
+ *
+ *  90 was a suggestion, not a finding. Move it. The band is worth having only while it stays
+ *  rare — the book sits between 36% and 85% on an ordinary day, and a colour half the rows
+ *  wear says nothing.
+ */
+export const IMMINENT_FILL = 90;
+
 export const LEFT = new Set(["contract", "combo", "alarm", "entry"]);
 
 /** The cookie stores what is HIDDEN, not what is kept, so a column added later shows up by
