@@ -71,8 +71,13 @@ describe("the watchlist", () => {
 
   it("carries the legs, so a leg entered backwards is visible", async () => {
     mockApi([wing]);
-    render(<App />);
-    await waitFor(() => expect(screen.getByText(/-C8050 \+C8075/)).toBeTruthy());
+    const { container } = render(<App />);
+    // its own column since the sub-line was promoted, so this asserts the CELL rather than
+    // any text on the page — the detail sheet carries the same string
+    await waitFor(() => {
+      const cells = [...container.querySelectorAll("td")].map((t) => t.textContent);
+      expect(cells).toContain("-C8050 +C8075");
+    });
   });
 
   it("puts the fill bar on the column the alarm watches", async () => {

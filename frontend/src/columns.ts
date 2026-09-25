@@ -37,6 +37,10 @@ export const COMBO_COLUMNS: Column[] = [
   // entry sits between value and P&L: what it is worth now, what it cost, the difference.
   // Entry used to precede value, which left it two columns from the figure it explains.
   { key: "entry", label: "entry" }, { key: "pnl", label: "P&L" },
+  // the leg summary and the expiry used to be a second line inside the name cell, which
+  // meant they were drawn unconditionally while every other figure had to earn its place.
+  // As columns they drop like anything else and the picker can turn them off.
+  { key: "legs", label: "legs" }, { key: "expiry", label: "expiry" },
   { key: "delta", label: "delta" }, { key: "gamma", label: "gamma" },
   { key: "theta", label: "theta" }, { key: "vega", label: "vega" },
 ];
@@ -86,7 +90,7 @@ export function signalColumns(entry: Entry, isCombo: boolean, shown: Set<string>
  */
 const WIDTH: Record<string, number> = {
   // "261016 8050C" now, not "SPXW 261016 8050.00C" — see shortContract
-  contract: 120, combo: 140, alarm: 110, dte: 46, entry: 66, value: 66, pnl: 70,
+  contract: 120, combo: 110, legs: 210, expiry: 70, alarm: 110, dte: 46, entry: 66, value: 66, pnl: 70,
   delta: 62, gamma: 74, theta: 62, vega: 58, iv: 58, mid: 62, bid: 62, ask: 62,
   last_trade: 140,
 };
@@ -98,8 +102,19 @@ export const PRIORITY: Record<"single" | "combo", string[]> = {
   single: ["contract", "alarm", "delta", "mid", "dte", "bid", "ask", "iv", "theta", "vega", "gamma", "last_trade"],
   // entry sits against P&L: it is the number the P&L is computed from, so distrusting one
   // means wanting the other beside it
-  combo: ["combo", "alarm", "value", "pnl", "entry", "dte", "delta", "theta", "vega", "gamma"],
+  // legs before the reference greeks: an unfamiliar combo is identified by its legs,
+  // and none of these rules watch delta anyway
+  combo: ["combo", "alarm", "value", "pnl", "entry", "dte", "legs", "expiry", "delta", "theta", "vega", "gamma"],
 };
+
+/** How much wider than its container the table may be.
+ *
+ *  The container scrolls sideways, and the owner would rather swipe than lose figures — so
+ *  fitting exactly inside the screen was too strict. This is what stops it becoming an
+ *  endless sideways scroll instead: roughly two screens, and the name column stays frozen
+ *  so swiping never costs you the row you are reading. ADR 0008 records why this reversed.
+ */
+export const SCROLL_BUDGET = 2.2;
 
 /** Which columns to draw, given the room available and what the viewer asked for.
  *
@@ -116,6 +131,7 @@ export function columnsFor(
   const all = table === "single" ? SINGLE_COLUMNS : COMBO_COLUMNS;
   const byKey = new Map(all.map((c) => [c.key, c]));
 
+  const budget = Number.isFinite(available) ? available * SCROLL_BUDGET : available;
   const always = ALWAYS[table];
   const kept: string[] = [...always];
   // the pinned columns are spent first and never checked against the room available: they
@@ -129,7 +145,7 @@ export function columnsFor(
     // window widened by twenty pixels can swap one column for another instead of simply
     // gaining one, and columns that appear and vanish as you drag are worse than columns
     // that are merely absent.
-    if (used + w > available) break;
+    if (used + w > budget) break;
     kept.push(key);
     used += w;
   }

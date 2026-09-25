@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { ALWAYS, columnsFor, offerable, PRIORITY, SINGLE_COLUMNS, COMBO_COLUMNS } from "../columns";
+import {
+  ALWAYS, columnsFor, COMBO_COLUMNS, offerable, PRIORITY, SCROLL_BUDGET, SINGLE_COLUMNS,
+} from "../columns";
 
 /** The fitting rule, exhaustively, with no browser involved (ADR 0008).
  *
@@ -20,14 +22,22 @@ describe("what fits", () => {
     expect(keys(columnsFor("combo", 10, NONE))).toEqual(["combo"]);
   });
 
-  it("gives a phone the name and the alarm, and not much else", () => {
-    // an iPhone in portrait is 390 CSS px of VIEWPORT; the table gets less, after the
-    // body's margins. Asserted as a property rather than an exact list, because phase 4
-    // replaces the width estimates and an exact list would then be wrong for no reason.
+  it("gives a phone more than fits, because the table swipes", () => {
+    // this used to assert "four columns at most". The owner uses the sideways swipe and
+    // would rather have the figures than a table that fits exactly — so the rule now
+    // spends up to SCROLL_BUDGET screens and the name column stays frozen.
     const phone = keys(columnsFor("single", 342, NONE));
     expect(phone[0]).toBe("contract");
     expect(phone).toContain("alarm");
-    expect(phone.length).toBeLessThanOrEqual(4);
+    expect(phone.length).toBeGreaterThan(4);
+  });
+
+  it("stops well short of an endless sideways scroll", () => {
+    // the budget is the point: swiping two screens is useful, swiping six is a maze
+    const phone = columnsFor("single", 342, NONE);
+    const widest = phone.length * 210; // no column is anywhere near this wide
+    expect(widest).toBeLessThan(342 * SCROLL_BUDGET * 4);
+    expect(phone.length).toBeLessThan(SINGLE_COLUMNS.length + 1);
   });
 
   it("gives a desk everything not unticked", () => {
@@ -61,8 +71,10 @@ describe("what fits", () => {
   });
 
   it("spends the room freed by unticking on the next column down", () => {
-    const narrow = keys(columnsFor("single", 560, NONE));
-    const freed = keys(columnsFor("single", 560, new Set(["alarm"])));
+    // a width where room is genuinely scarce even with the budget, or there is nothing to
+    // spend and the test proves nothing
+    const narrow = keys(columnsFor("single", 200, NONE));
+    const freed = keys(columnsFor("single", 200, new Set(["alarm"])));
     expect(freed.length).toBeGreaterThanOrEqual(narrow.length);
     expect(freed).not.toContain("alarm");
   });

@@ -60,7 +60,7 @@ afterEach(async () => {
 });
 
 describe("fitting, measured for real", () => {
-  it("drops to the name and the alarm on a phone", async () => {
+  it("gives a phone more columns than fit, and lets it swipe", async () => {
     mockApi();
     render(<App />);
     await atWidth(390);
@@ -68,8 +68,12 @@ describe("fitting, measured for real", () => {
     const h = headers();
     expect(h[0]).toBe("contract");
     expect(h).toContain("alarm");
-    // the whole point: thirteen columns do not survive 390 CSS pixels
-    expect(h.length).toBeLessThanOrEqual(4);
+    // this asserted "at most four" until the owner pointed out the table swipes and they
+    // would rather have the figures. It now spends up to SCROLL_BUDGET screens.
+    expect(h.length).toBeGreaterThan(4);
+
+    const box = document.querySelector<HTMLElement>(".table-scroll")!;
+    expect(box.scrollWidth, "there is nothing to swipe").toBeGreaterThan(box.clientWidth);
   });
 
   it("shows far more at a desk width", async () => {
@@ -85,20 +89,28 @@ describe("fitting, measured for real", () => {
     render(<App />);
     for (const w of [320, 390, 768, 1024, 1600]) {
       await atWidth(w);
-      // naming the offender matters: "414 > 321" sends you hunting, and the thing that
-      // overflows at 320px is rarely the thing you were working on
-      const guilty = [...document.querySelectorAll<HTMLElement>("body *")]
-        .filter((el) => el.getBoundingClientRect().right > w + 1)
-        .map((el) => `${el.tagName.toLowerCase()}.${el.className || "-"}`.slice(0, 60))
-        .slice(0, 4);
-      expect(guilty, `at ${w}px these spill past the edge`).toEqual([]);
+      // the DOCUMENT must not scroll. Individual cells legitimately extend past the edge
+      // now — that is what .table-scroll is for — so checking element rects would flag the
+      // very behaviour the owner asked for.
+      expect(document.documentElement.scrollWidth,
+        `at ${w}px the page itself scrolls sideways`).toBeLessThanOrEqual(w + 1);
+
+      // and if it does, say what caused it, excluding anything properly contained
+      if (document.documentElement.scrollWidth > w + 1) {
+        const guilty = [...document.querySelectorAll<HTMLElement>("body *")]
+          .filter((el) => !el.closest(".table-scroll"))
+          .filter((el) => el.getBoundingClientRect().right > w + 1)
+          .map((el) => `${el.tagName.toLowerCase()}.${el.className || "-"}`.slice(0, 60));
+        expect(guilty, `at ${w}px these spill past the edge`).toEqual([]);
+      }
     }
   });
 
   it("fits fewer columns when the text is bigger, at the same width", async () => {
     mockApi();
     render(<App />);
-    await atWidth(900);
+    // narrow enough that room is scarce even with the budget, or both sides saturate
+    await atWidth(360);
     const normal = headers().length;
 
     // the case no pixel breakpoint can ever handle: the viewport is unchanged and the
@@ -116,13 +128,13 @@ describe("fitting, measured for real", () => {
     const longName = { ...row, snapshot: { ...row.snapshot, name: "SPXW 261120 8100.00C EXTRA LONG" } };
     mockApi([longName]);
     render(<App />);
-    await atWidth(700);
+    await atWidth(360);
     const wide = headers().length;
 
     document.body.innerHTML = "";
     mockApi([{ ...row, snapshot: { ...row.snapshot, name: "SPX C1" } }]);
     render(<App />);
-    await atWidth(700);
+    await atWidth(360);
 
     expect(headers().length).toBeGreaterThan(wide);
   });

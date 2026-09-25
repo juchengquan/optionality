@@ -67,6 +67,14 @@ table { border-collapse: collapse; margin-bottom: 1.5rem; }
 th, td { border: 1px solid var(--grid); padding: 4px 10px; text-align: right;
          white-space: nowrap; font-variant-numeric: tabular-nums; }
 th.left, td.left { text-align: left; }
+/* The name stays put while the rest of the row is swiped: the table is allowed to be wider
+   than the screen now (SCROLL_BUDGET), and a swipe that carries the name away costs you the
+   one thing that says which row you are reading.
+   Declared BEFORE the triggered and fill rules deliberately — they share this specificity,
+   so source order is what lets a breached row keep its own colour under the frozen cell. */
+th:first-child, td:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--background);
+}
 td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
         font-weight: 600; }
 tr.triggered td { background: var(--trig); }
