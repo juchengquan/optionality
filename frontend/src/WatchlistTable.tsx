@@ -64,7 +64,7 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, onOpen, containerRef,
+  title, entries, columns, isCombo, onOpen, containerRef, picker,
 }: {
   title: string;
   entries: Entry[];
@@ -72,13 +72,18 @@ export function WatchlistTable({
   isCombo: boolean;
   onOpen: (entry: Entry, isCombo: boolean) => void;
   containerRef?: React.Ref<HTMLDivElement>;
+  /** this table's column choices, sat beside its name rather than in the page's chrome */
+  picker?: React.ReactNode;
 }) {
   if (entries.length === 0) return null;
   const shown = new Set(columns.map((c) => c.key));
 
   return (
     <div ref={containerRef}>
-      <h3>{title}</h3>
+      <div className="table-head">
+        <h3>{title}</h3>
+        {picker}
+      </div>
       <div className="table-scroll">
       <table>
         <thead>

@@ -11,7 +11,7 @@ import { Toaster, toast } from "@/components/ui/toast";
 import { AddPanel } from "./AddPanel";
 import { CONTRACT_VERSION } from "./contract";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, writeHidden } from "./columns";
-import { ColumnPickers } from "./ColumnPickers";
+import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { RowDetail, type DetailTarget } from "./RowDetail";
 import { useTableFit } from "./useTableFit";
@@ -158,8 +158,15 @@ export function App() {
         </div>
       ) : null}
 
-      <form className="health" onSubmit={(e) => e.preventDefault()}>
-        refresh every{" "}
+      {/* Freshness in one sentence. The refresh selector used to be a row of its own above
+          the tables; it belongs here, because how current the figures are and how often they
+          update are the same subject. The two cadences are worded to stay distinct: the
+          SERVICE decides how fresh the data is, this screen only decides how soon the newest
+          sweep reaches it. */}
+      <p className="meta">
+        {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
+        {health ? ` · service sweeps every ${health.settings.sweep_seconds}s` : ""}
+        {" · this screen every "}
         <NativeSelect
           size="sm"
           aria-label="refresh every"
@@ -171,22 +178,7 @@ export function App() {
           }}
         >
           {REFRESH_PRESETS.map((n) => <option key={n} value={n}>{n}s</option>)}
-        </NativeSelect>{" "}
-        (this browser only)
-      </form>
-
-      <ColumnPickers
-        pickers={[
-          // only columns that could actually appear at this width are offered, so ticking
-          // one is never silently ignored
-          { table: "single", label: "Single-leg", all: SINGLE_COLUMNS.filter((c) => singleFit.offered.has(c.key)), hidden: hiddenSingle, onToggle, onReset },
-          { table: "combo", label: "Combos", all: COMBO_COLUMNS.filter((c) => comboFit.offered.has(c.key)), hidden: hiddenCombo, onToggle, onReset },
-        ]}
-      />
-
-      <p className="meta">
-        {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
-        {health ? ` · sweep every ${health.settings.sweep_seconds}s` : ""}
+        </NativeSelect>
       </p>
 
       {health ? (
@@ -199,9 +191,15 @@ export function App() {
       ) : null}
 
       <WatchlistTable title="Single-leg" entries={singles} columns={singleFit.columns} containerRef={singleFit.ref} isCombo={false}
-                      onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
+                      onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
+                      picker={<ColumnPicker table="single" label="Single-leg"
+                        all={SINGLE_COLUMNS.filter((c) => singleFit.offered.has(c.key))}
+                        hidden={hiddenSingle} onToggle={onToggle} onReset={onReset} />} />
       <WatchlistTable title="Combos" entries={combos} columns={comboFit.columns} containerRef={comboFit.ref} isCombo={true}
-                      onOpen={(entry, isCombo) => setDetail({ entry, isCombo })} />
+                      onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
+                      picker={<ColumnPicker table="combo" label="Combos"
+                        all={COMBO_COLUMNS.filter((c) => comboFit.offered.has(c.key))}
+                        hidden={hiddenCombo} onToggle={onToggle} onReset={onReset} />} />
 
       <RowDetail
         entry={detailEntry}

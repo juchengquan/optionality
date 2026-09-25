@@ -28,9 +28,9 @@ const health = {
   contract_version: CONTRACT_VERSION,
 };
 
-function mockApi() {
+function mockApi(quotes: unknown[] = [leg]) {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
-    const body = url.endsWith("/quotes") ? [leg] : url.endsWith("/monitors") ? [] : health;
+    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/monitors") ? [] : health;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }
@@ -57,7 +57,9 @@ async function openPicker(table = "Single-leg"): Promise<HTMLElement> {
   // otherwise shut the picker on its second call and fail looking for a missing list
   const already = screen.queryByRole("group", { name: `${table} columns` });
   if (already) return already;
-  await userEvent.click(screen.getByText(`${table} columns`));
+  // by ROLE and accessible name: the trigger sits on the table's heading now and draws an
+  // icon rather than words, so there is no visible text to find it by
+  await userEvent.click(screen.getByRole("button", { name: `${table} columns` }));
   return await screen.findByRole("group", { name: `${table} columns` });
 }
 
@@ -104,7 +106,7 @@ describe("the fill and bell fallback chain", () => {
 
   it("never offers to hide the columns that identify or operate a row", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Single-leg columns" })).toBeTruthy());
     const picker = await openPicker();
     expect(within(picker).queryByRole("checkbox", { name: "contract" })).toBeNull();
     expect(within(picker).queryByRole("checkbox", { name: "actions" })).toBeNull();
@@ -116,7 +118,7 @@ describe("column preferences", () => {
 
   it("stores what is HIDDEN, so a column added later is not invisible", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Single-leg columns" })).toBeTruthy());
     await untick("gamma");
     // "." separates: a comma makes the cookie value quote-escaped and it stops round-tripping
     await waitFor(() => expect(document.cookie).toContain("ui_cols_single=gamma"));
@@ -150,7 +152,7 @@ describe("the picker as a control", () => {
 
   it("closes on Escape, which the <details> it replaced could not do", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Single-leg columns" })).toBeTruthy());
 
     const picker = await openPicker();
     expect(picker).toBeTruthy();
@@ -161,12 +163,24 @@ describe("the picker as a control", () => {
   });
 
   it("keeps the two tables' pickers independent", async () => {
+    // both tables must exist for there to be two pickers — see the test below
+    mockApi([leg, { ...leg, id: "m9", code: "1016_IC",
+      legs: [{ sign: -1, option_type: "CALL", strike: 8050 }] }]);
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Combos columns")).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Combos columns" })).toBeTruthy());
 
     await openPicker("Combos");
     // opening one must not open or disturb the other; they store separate cookies
     expect(screen.queryByRole("group", { name: "Single-leg columns" })).toBeNull();
+  });
+
+  it("offers no picker for a table that is not there", async () => {
+    // the picker lives INSIDE its table now, so an empty watchlist has no stray control for
+    // columns nobody can see. Both used to sit in the page chrome regardless.
+    mockApi([leg]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Single-leg columns" })).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "Combos columns" })).toBeNull();
   });
 });
 
