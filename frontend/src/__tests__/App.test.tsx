@@ -131,3 +131,19 @@ describe("version skew", () => {
     expect(screen.queryByText(/out of date/i)).toBeNull();
   });
 });
+
+describe("the legs, exactly once", () => {
+  it("draws the leg summary in its own column and nowhere else", async () => {
+    // it was BOTH a sub-line inside the name cell and a column for one release: the
+    // replacement that should have removed the sub-line targeted a helper that only
+    // existed on another branch, so it silently did not match. Nothing asserted its
+    // absence, so nothing failed — the name cell just quietly became 51% of a phone.
+    mockApi([wing]);
+    const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByText("Combos")).toBeTruthy());
+
+    const cells = [...container.querySelectorAll("td")]
+      .filter((t) => t.textContent?.includes("-C8050 +C8075"));
+    expect(cells.length, "the leg summary is rendered in more than one place").toBe(1);
+  });
+});

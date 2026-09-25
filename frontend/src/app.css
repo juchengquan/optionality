@@ -75,6 +75,24 @@ th.left, td.left { text-align: left; }
 th:first-child, td:first-child {
   position: sticky; left: 0; z-index: 1; background: var(--background);
 }
+/* A frozen column occupies its width at EVERY scroll position, so a wide one does not just
+   take space once — it permanently narrows the window you swipe the figures through. An
+   uncapped "1016_bs_8050" took 51% of a 390px screen and left room for two columns at a
+   time, which is the opposite of the point.
+
+   Capped and allowed to WRAP rather than truncated: the name is the identity column and
+   half an identity is worse than a tall row. WatchlistTable inserts break opportunities at
+   the separators so it folds at "1016_ bs_ 8050" rather than mid-token. */
+@media (max-width: 60rem) {
+  /* min-width, NOT max-width. Allowing the cell to wrap lets the table's auto layout shrink
+     it to its narrowest unbreakable token — so a cap never binds, and the column collapses
+     to 20% of the screen at the cost of a third line. Measured against the alternatives:
+       4.5rem → 20% wide, three lines
+       5.5rem → 24% wide, two lines   ← this
+       7.5rem → 33% wide, two lines
+     Wider buys no height back, narrower buys 4% at the cost of a line. */
+  th:first-child, td:first-child { min-width: 5.5rem; white-space: normal; }
+}
 td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
         font-weight: 600; }
 tr.triggered td { background: var(--trig); }
