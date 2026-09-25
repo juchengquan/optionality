@@ -66,17 +66,31 @@ describe("the name column while swiping", () => {
     expect(Math.abs(name.getBoundingClientRect().left - before)).toBeLessThan(2);
   });
 
-  it("still draws the gridline on the sticky cell", async () => {
-    // border-collapse drops borders on sticky cells in some browsers, which would leave the
-    // frozen column visually detached from the row it belongs to
+  it("keeps a visible edge after the row has been swiped under it", async () => {
+    /* This test previously asserted getComputedStyle(cell).borderRightWidth > 0 and passed
+       while the edge was visibly MISSING on a swipe. Computed style reports what was
+       DECLARED; with border-collapse the edge between two cells is painted once by
+       agreement between them, and the cell that paints this one scrolls away underneath the
+       sticky column. A declaration was never evidence of a painted line.
+       No assertion available here can see paint. So this asserts the technique that makes
+       paint correct — a box-shadow, which border collapsing does not touch — and says so
+       rather than implying more than it checks. */
     mockApi();
     render(<App />);
     await page.viewport(390, 800);
     await new Promise((r) => setTimeout(r, 160));
 
+    const box = document.querySelector<HTMLElement>(".table-scroll")!;
     const name = screen.getByText("261120 8100C").closest("td")!;
-    const style = getComputedStyle(name);
-    expect(parseFloat(style.borderRightWidth)).toBeGreaterThan(0);
+
+    box.scrollLeft = 200;
+    await new Promise((r) => setTimeout(r, 80));
+
+    const shadow = getComputedStyle(name).boxShadow;
+    expect(shadow, "the frozen column has no shadow to stand in for its border")
+      .not.toBe("none");
+    // and it must be an opaque line, not a soft glow that reads as nothing
+    expect(shadow).toMatch(/0px 0px 0px|1px 0px 0px/);
   });
 
   it("does not let the frozen name eat the screen", async () => {
@@ -113,5 +127,31 @@ describe("the name column while swiping", () => {
     expect(cell.textContent).toContain("1016_bs_8050");
     // and not clipped away to nothing
     expect(cell.scrollWidth).toBeLessThanOrEqual(cell.clientWidth + 1);
+  });
+});
+
+describe("the frozen cell's background", () => {
+  it("takes the breached row's colour, not the page's", async () => {
+    /* The sticky cell must be opaque or the row would show through it while scrolling — so
+       it sets a background. That background must LOSE to a breached row's, or a firing row
+       would show a plain white name cell against its own alarm colour. The rules share
+       specificity, so only source order decides it, which is an easy thing to break by
+       tidying a stylesheet. */
+    mockApi([{ ...row, triggered: true }]);
+    render(<App />);
+    await page.viewport(390, 800);
+    await new Promise((r) => setTimeout(r, 160));
+
+    const name = screen.getByText("261120 8100C").closest("td")!;
+    const neighbour = name.parentElement!.querySelectorAll("td")[2]!;
+
+    /* Compared against its OWN ROW, not against the body. The first version of this test
+       compared the cell to document.body and passed regardless, because the body reports
+       "oklch(1 0 0)" and cells report "rgb(...)" — two notations that are never equal as
+       strings, so the assertion could not fail. Comparing like with like is the whole
+       point: the frozen cell must look like the row it belongs to. */
+    expect(getComputedStyle(name).backgroundColor,
+      "the frozen cell does not match the row it belongs to")
+      .toBe(getComputedStyle(neighbour).backgroundColor);
   });
 });
