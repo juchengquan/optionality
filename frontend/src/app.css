@@ -117,7 +117,12 @@ tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(
 form.health { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .health .bad { color: var(--destructive); font-weight: 700; }
 .pending { color: var(--muted-foreground); }
-#column-pickers { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+/* a table's name and its column control on one line, the control sitting on the
+   heading's baseline rather than floating above the table */
+.table-head { display: flex; align-items: center; gap: 0.25rem; }
+.table-head h3 { margin-bottom: 0; }
+/* the meta line now holds a control, so it needs to align its contents */
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 /* form.inline is gone: it was written when these forms sat in a table cell holding only
    inline elements. NumberField renders a block wrapper, so an inline form dropped its
    button onto the next line. They are flex rows now, stated where they are used. */

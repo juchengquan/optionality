@@ -62,10 +62,12 @@ describe("the poll guard", () => {
   it("holds it while a column picker is open", async () => {
     mockApi();
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Single-leg columns")).toBeTruthy());
+    // the fixture is a combo, so the Combos table is the one that exists — and since
+    // the picker moved INTO the table, its picker is the only one rendered
+    const trigger = await screen.findByRole("button", { name: "Combos columns" });
 
-    await userEvent.click(screen.getByText("Single-leg columns"));
-    await screen.findByRole("group", { name: "Single-leg columns" });
+    await userEvent.click(trigger);
+    await screen.findByRole("group", { name: "Combos columns" });
 
     // this is the case that went quiet in phase 4: the picker stopped being a <details>
     await waitFor(() => expect(beingOperated(document.activeElement)).toBe(true));

@@ -99,7 +99,7 @@ describe("the watchlist", () => {
   it("names the sweep cadence, so a still timestamp reads as normal", async () => {
     mockApi([leg]);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/sweep every 15s/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/service sweeps every 15s/)).toBeTruthy());
   });
 
   it("groups muted monitors by reason and counts down to the delete", async () => {
