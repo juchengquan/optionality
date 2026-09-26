@@ -14,8 +14,11 @@
 /* Tailwind's preflight flattens headings to body text, which suits a component library and
    not a page with two table titles on it. Sized here rather than reverted to the browser's
    defaults, so the sizes are a choice someone made. */
-h2 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.2rem; }
-h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
+/* One scale. There were five sizes before this — 1.4, 1.05, 0.9, 0.78, 0.7rem — each picked
+   by eye at a different time, none of them related to any of the others. These are steps
+   from the same ramp the components already use. */
+h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.2rem; }
+h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.3rem; }
 
 /* The dashboard's OWN colours, the ones shadcn has no opinion about because no design
    system does: how a breached threshold looks, how far a value has travelled toward
@@ -23,34 +26,44 @@ h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
    borders, focus rings -- comes from shadcn's tokens below. See ADR 0007. */
 :root {
   color-scheme: light dark;
-  /* a row at rest that the alarm is watching, and the bar showing how far its value
-     has travelled toward the threshold */
-  --hl: #fff3cd; --fill-bar: #ffd84d;
-  /* the same row within IMMINENT_FILL of its threshold — one small move from firing.
-     Orange sits between the watching yellow and the fired pink on purpose, so the three
-     states read as a progression rather than three unrelated colours. */
-  --imm-hl: #ffe8cc; --imm-fill: #ff9f43;
-  /* a row whose threshold has been breached, and the same bar inside it */
-  --trig: #f8d7da; --trig-hl: #f5c2c7; --trig-fill: #e88b93;
-  /* The table's own gridlines, deliberately heavier than shadcn's --border.
-     That token is built for a card sitting on open space; this is a dense grid of
-     numbers where the lines are what let the eye track along a row without sliding
-     into the one below. Tried shadcn's value, judged too faint, put back. Everything
-     that is not the table still uses --border. */
+  /* The table's own gridlines, deliberately heavier than shadcn's --border. That token is
+     built for a card on open space; this is a dense grid of numbers where the lines are what
+     let the eye track along a row. */
   --grid: #aaa;
-  /* a quarantined contract's badge */
-  --badge-bg: #d9534f; --badge-fg: #fff; --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.97 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent: oklch(0.97 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
+
+  /* The alarm colours: one hue ramp, in the same colour space as every other token here.
+     They were Bootstrap's alert backgrounds (#fff3cd, #f8d7da) — carried in by the first
+     htmx version and never revisited, so the most loaded thing on the screen was the only
+     part still dressed by a framework this project does not use.
+     Each state is a pale TRACK and a saturated BAR of the same hue, and the hues step
+     yellow -> orange -> red so the three read as a progression. The fired hue is exactly
+     --destructive's, so a firing row and an error message are the same red. */
+
+  /* watching: the alarm is live and the value is travelling */
+  --hl: oklch(0.96 0.04 90); --fill-bar: oklch(0.87 0.13 90);
+  /* imminent: within IMMINENT_FILL of the threshold */
+  --imm-hl: oklch(0.95 0.05 55); --imm-fill: oklch(0.82 0.15 55);
+  /* fired: the row's own tint, the track inside its fill cell, and the bar */
+  --trig: oklch(0.95 0.04 27.325);
+  --trig-hl: oklch(0.92 0.06 27.325);
+  --trig-fill: oklch(0.78 0.15 27.325);
+  /* a quarantined contract's badge — the same red as everything else that has gone wrong */
+  --badge-bg: var(--destructive); --badge-fg: oklch(1 0 0); --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.97 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent: oklch(0.97 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
 }
 /* the US session runs 21:30-04:00 in DISPLAY_TZ=Asia/Singapore — read at night */
 @media (prefers-color-scheme: dark) {
   :root {
-    --hl: #4a3f18; --fill-bar: #8a6d1f;
-    --imm-hl: #4a3520; --imm-fill: #9c6224;
-    --trig: #4a2126; --trig-hl: #63272e; --trig-fill: #93383f;
+    /* the same ramp on the dark ground: tracks barely lit, bars readable but not
+       glaring — this is read at night, the US session runs 21:30-04:00 here */
+    --hl: oklch(0.29 0.04 90); --fill-bar: oklch(0.52 0.10 90);
+    --imm-hl: oklch(0.29 0.05 55); --imm-fill: oklch(0.52 0.12 55);
+    --trig: oklch(0.28 0.04 22.216);
+    --trig-hl: oklch(0.32 0.05 22.216);
+    --trig-fill: oklch(0.50 0.13 22.216);
     /* shadcn's dark border is a translucent white that sits closer to the ground
        than this does; at night the grid mattered more than the consistency */
     --grid: #383d46;
-    --badge-bg: #b4515a; --badge-fg: #fff;
+    --badge-bg: var(--destructive); --badge-fg: oklch(1 0 0);
     /* shadcn's dark palette, kept in the media query rather than a .dark class:
        no toggle, no provider, follows the system as this dashboard always has */
     --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0); --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0); --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0); --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0); --accent-foreground: oklch(0.985 0 0); --destructive: oklch(0.704 0.191 22.216); --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%); --ring: oklch(0.556 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --sidebar: oklch(0.205 0 0); --sidebar-foreground: oklch(0.985 0 0); --sidebar-primary: oklch(0.488 0.243 264.376); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.269 0 0); --sidebar-accent-foreground: oklch(0.985 0 0); --sidebar-border: oklch(1 0 0 / 10%); --sidebar-ring: oklch(0.556 0 0);
@@ -62,7 +75,7 @@ h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; }
    eighth of the width given to nothing */
 body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem; }
 @media (max-width: 40rem) { body { margin: 0.75rem; } }
-.meta { color: var(--muted-foreground); margin: 0 0 1rem; }
+.meta { color: var(--muted-foreground); font-size: 0.875rem; margin: 0 0 1rem; }
 .banner { background: color-mix(in oklch, var(--destructive) 12%, var(--background));
           border: 1px solid var(--destructive); border-radius: var(--radius-md);
           padding: 0.5rem 1rem; margin-bottom: 1rem; }
@@ -125,10 +138,11 @@ td.hl.imminent { background: linear-gradient(to right, var(--imm-fill) var(--fil
 tr.triggered td { background: var(--trig); }
 tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(--fill, 0%),
                                                  var(--trig-hl) var(--fill, 0%)); }
-.legs { font-size: 0.78rem; color: var(--muted-foreground); font-weight: 400; }
-.badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.7rem;
-         padding: 1px 5px; border-radius: 3px; white-space: nowrap; margin-left: 0.3rem; }
-.health { color: var(--muted-foreground); font-size: 0.9rem; margin-bottom: 1.2rem; }
+.legs { font-size: 0.75rem; color: var(--muted-foreground); font-weight: 400; }
+.badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.75rem;
+         padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
+         margin-left: 0.3rem; }
+.health { color: var(--muted-foreground); font-size: 0.875rem; margin-bottom: 1.2rem; }
 /* the status strip and the refresh selector sit on one line at a desk and wrap on a
    phone, rather than deciding the page is wider than the screen */
 form.health { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }

@@ -42,7 +42,9 @@ async function bandColour(fill: number, triggered: boolean): Promise<string> {
   // identical their colours — so the test could not fail, and it duly passed with the
   // imminent palette set to the watching palette and again with the class never applied.
   const image = getComputedStyle(cell).backgroundImage;
-  return (image.match(/rgba?\([^)]*\)/g) ?? []).join(" ");
+  // oklch OR rgb: the palette moved to oklch and browsers serialise it as itself, so a
+  // regex that only knew rgb() reported no colours at all and the test stopped working
+  return (image.match(/(?:oklch|rgba?)\([^)]*\)/g) ?? []).join(" ");
 }
 
 afterEach(async () => { document.body.innerHTML = ""; await page.viewport(1280, 900); });
