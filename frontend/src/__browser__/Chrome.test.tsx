@@ -77,4 +77,33 @@ describe("where the controls sit", () => {
     expect(between.length, `chrome rows: ${between.map((e) => e.className || e.tagName).join(", ")}`)
       .toBeLessThanOrEqual(2);
   });
+
+  it("puts the add triggers above the tables, on the heading's own line", async () => {
+    await show();
+    const h2 = screen.getByText("optionality watchlist");
+    const table = document.querySelector("table")!;
+
+    for (const label of ["add monitor", "add combo"]) {
+      const button = screen.getByRole("button", { name: label });
+      expect(sameLine(h2, button), `"${label}" is not on the heading's line`).toBe(true);
+      expect(button.getBoundingClientRect().top, `"${label}" is below the table`)
+        .toBeLessThan(table.getBoundingClientRect().top);
+    }
+  });
+
+  it("costs no extra row to do it", async () => {
+    await show();
+    const h2 = screen.getByText("optionality watchlist");
+    const table = document.querySelector("table")!;
+
+    // they used to sit below the muted tables; moving them up must not push the data down,
+    // which is the whole reason they share the heading's line
+    const between = [...document.querySelectorAll<HTMLElement>("main > *")].filter((el) => {
+      if (el.contains(table) || el.contains(h2)) return false;
+      const t = el.getBoundingClientRect().top;
+      return t > h2.getBoundingClientRect().bottom && t < table.getBoundingClientRect().top;
+    });
+    expect(between.length, `chrome rows: ${between.map((e) => e.className || e.tagName).join(", ")}`)
+      .toBeLessThanOrEqual(2);
+  });
 });

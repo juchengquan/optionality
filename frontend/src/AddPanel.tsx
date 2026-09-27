@@ -14,6 +14,9 @@ import { useDismissOnBack } from "./useDismissOnBack";
  *  between them, on a page whose reason for existing is the watchlist above. On a phone
  *  that is most of the scroll. The page is the watchlist now; creating something is
  *  somewhere you go.
+ *
+ *  The triggers sit on the page heading's own line, so moving them above the tables costs
+ *  no vertical space at all — the chrome above the data is one line and stays one line.
  */
 export function AddPanel({ onCreate }: { onCreate: (body: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState<"monitor" | "combo" | null>(null);
@@ -21,7 +24,7 @@ export function AddPanel({ onCreate }: { onCreate: (body: Record<string, unknown
 
   return (
     <>
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => setOpen("monitor")}>
           add monitor
         </Button>

@@ -148,7 +148,12 @@ export function App() {
 
   return (
     <main>
-      <h2>optionality watchlist</h2>
+      {/* the add triggers share the heading's line rather than taking a row of their own:
+          everything above the tables was reduced to one line and this keeps it that way */}
+      <div className="page-head">
+        <h2>optionality watchlist</h2>
+        <AddPanel onCreate={(body) => void act(() => createMonitor(body))} />
+      </div>
       {error ? <div className="banner">{error}</div> : null}
       {skewed ? (
         <div className="banner">
@@ -217,7 +222,6 @@ export function App() {
         onDelete={(id) => void act(() => deleteMonitor(id))}
       />
 
-      <AddPanel onCreate={(body) => void act(() => createMonitor(body))} />
 
       <Toaster />
     </main>
