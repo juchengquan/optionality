@@ -24,9 +24,19 @@
 
 	# filenames carry a content hash, so they can never go stale...
 	header /assets/* Cache-Control "public, max-age=31536000, immutable"
-	# ...but the file that names them must be re-read on every load, or a deploy would wait
-	# on a cache expiry to be noticed
-	header /index.html Cache-Control "no-store"
+
+	# ...but the file that NAMES them must be re-read on every load, or a deploy waits on a
+	# cache expiry to be noticed.
+	#
+	# Matched as "anything that is not an asset", NOT as /index.html. A header matcher tests
+	# the REQUEST path, and the request for this page is "/" — try_files rewrites to
+	# /index.html afterwards, too late to be matched. So the page everyone actually loads was
+	# served with no Cache-Control at all and browsers cached it on their own judgement,
+	# holding a stale HTML that named last week's bundle. The assets it named were immutable,
+	# so the old app kept loading until the browser felt like revalidating.
+	# This also covers the try_files fallback paths, which are HTML too.
+	@html not path /assets/*
+	header @html Cache-Control "no-store"
 
 	encode gzip
 
