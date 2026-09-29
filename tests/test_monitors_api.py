@@ -353,10 +353,11 @@ def test_delete_removes_the_position_links_first(client_factory):
     """Every monitor in the live database is linked to a Position, and deleting one raised
     `FOREIGN KEY constraint failed` — so delete was broken for every row that mattered.
 
-    The two existing delete tests passed because a monitor created through the API is linked
-    to nothing at all (see test_link_probe findings): the links in production were written by
-    the migration that moved monitors.position_id into the association table, and the write
-    path was never ported. So the tests exercised the only monitors that could be deleted.
+    The two existing delete tests passed because a monitor created through the API used to be
+    linked to nothing at all: the links in production were written by the migration that moved
+    monitors.position_id into the association table, and the write path was never ported. So
+    those tests exercised the only monitors that could be deleted. Creation links properly now,
+    which is why this one no longer has to forge a link by hand.
     """
     from sqlalchemy import func, select
 
@@ -366,29 +367,41 @@ def test_delete_removes_the_position_links_first(client_factory):
     made = client.post(
         "/positions",
         headers=AUTH,
-        json={"name": "del-target", "strike_date": "2026-12-18",
-              "legs": [{"side": "sold", "option_type": "CALL", "strike": 6500}]},
+        json={
+            "name": "del-target",
+            "strike_date": "2026-12-18",
+            "legs": [{"side": "sold", "option_type": "CALL", "strike": 6500}],
+        },
     )
     assert made.status_code == 201, made.text
-    pid = made.json()["id"]
 
     mid = client.post(
         "/monitors",
         headers=AUTH,
-        json={"strike_date": "2026-12-18", "option_type": "CALL", "strike": 6500,
-              "field": "option_delta", "threshold": 0.2, "direction": "above"},
+        json={
+            "strike_date": "2026-12-18",
+            "option_type": "CALL",
+            "strike": 6500,
+            "field": "option_delta",
+            "threshold": 0.2,
+            "direction": "above",
+        },
     ).json()["id"]
 
-    # link them the way the migration did, since nothing else does
+    # creation links it to the Position holding the contract; assert that rather than assume
     with client.app.state.session_factory() as s:
-        s.execute(monitor_positions.insert().values(monitor_id=mid, position_id=pid))
-        s.commit()
+        assert (
+            s.scalar(select(func.count()).select_from(monitor_positions).where(monitor_positions.c.monitor_id == mid))
+            == 1
+        )
 
     assert client.delete(f"/monitors/{mid}", headers=AUTH).status_code == 204
 
     with client.app.state.session_factory() as s:
         # the link goes with the monitor; the Position does NOT — it is a holding that exists
         # whether or not anything watches it
-        assert s.scalar(select(func.count()).select_from(monitor_positions)
-                        .where(monitor_positions.c.monitor_id == mid)) == 0
+        assert (
+            s.scalar(select(func.count()).select_from(monitor_positions).where(monitor_positions.c.monitor_id == mid))
+            == 0
+        )
         assert client.get("/positions", headers=AUTH).json()[0]["name"] == "del-target"

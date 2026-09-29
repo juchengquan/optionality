@@ -96,3 +96,38 @@ def combined_pnl(positions: list[Position], by_code: dict) -> float | None:
 def combined_greek(positions: list[Position], by_code: dict, field: str, scope: str | None = None) -> float | None:
     parts = [position_greek(p, by_code, field, scope) for p in positions]
     return None if not parts or any(x is None for x in parts) else sum(parts)
+
+
+def positions_holding(positions: list[Position], contracts: list[str]) -> tuple[set[str], str | None]:
+    """Which Positions a Monitor's contracts belong to, and whether it watches legs or wholes.
+
+    A Monitor exists to warn, never to record what you own (CONTEXT.md), so it does not bring
+    a Position into being — it finds the one it is watching. That is a lookup rather than a
+    guess: a contract appears in exactly one Position's legs, or in none.
+
+    Returns no link at all in the two honest cases:
+
+    - Nothing holds the contract. Watching a strike you have no position in is legitimate;
+      it simply has no entry and no P&L, which is why those fields read empty rather than zero.
+    - Something holds it TWICE. Rolling a spread can leave the old and the new sharing a
+      strike for a day, and the entry is then genuinely ambiguous. A wrong P&L is worse than
+      an absent one — a missing figure makes you look, a wrong one does not.
+
+    Scope is "all" when the Positions found are covered exactly by the Monitor's contracts,
+    and "leg" when it watches part of a larger structure. Several Positions at once is normal
+    and not ambiguity: a condor's stop spans both its spreads (ADR 0004).
+    """
+    owners: dict[str, list[str]] = {}
+    for position in positions:
+        for code in position_leg_codes(position):
+            owners.setdefault(code, []).append(position.id)
+
+    if any(len(owners.get(code, [])) > 1 for code in contracts):
+        return set(), None
+
+    found = {pid for code in contracts for pid in owners.get(code, [])}
+    if not found:
+        return set(), None
+
+    covered = sum(len(p.legs or []) for p in positions if p.id in found)
+    return found, "all" if covered == len(contracts) else "leg"
