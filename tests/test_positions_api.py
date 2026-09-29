@@ -404,3 +404,95 @@ def test_a_contract_in_two_positions_links_to_neither(client_factory):
     mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
 
     assert _links(client, mid) == (set(), None)
+
+
+def test_a_new_position_adopts_the_monitors_already_watching_it(client_factory):
+    """The link is worked out when something is created, so it only ever handled one order:
+    position first, then monitor. Set the alarm before recording the holding and the monitor
+    stayed orphaned for ever, with no entry and no P&L.
+
+    A Position now looks for orphans the same way a Monitor looks for Positions. Symmetry,
+    rather than a job that recomputes links on a schedule — see the test below for why that
+    would be worse.
+    """
+    client = client_factory()
+    mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
+    assert _links(client, mid) == (set(), None)
+
+    pid = _position(client, "1016_bs_8050", "2026-10-16",
+                    [{"side": "sold", "option_type": "CALL", "strike": 8050},
+                     {"side": "bought", "option_type": "CALL", "strike": 8075}])
+
+    assert _links(client, mid) == ({pid}, "leg")
+
+
+def test_adopting_never_takes_a_link_away(client_factory):
+    """Why this is not "recompute the links every sweep". Rolling a spread leaves the old and
+    the new sharing a strike for a day; a recomputing job would find that contract in two
+    Positions, call it ambiguous, and silently unlink a monitor that had worked for weeks --
+    the entry and P&L vanishing mid-session with nothing to explain it.
+
+    Only a monitor with NO link is ever looked at again, so what you already have cannot be
+    taken from you by something you subsequently hold.
+    """
+    client = client_factory()
+    first = _position(client, "old_roll", "2026-10-16",
+                      [{"side": "sold", "option_type": "CALL", "strike": 8050},
+                       {"side": "bought", "option_type": "CALL", "strike": 8075}])
+    mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
+    assert _links(client, mid) == ({first}, "leg")
+
+    # the roll: now two Positions hold strike 8050
+    _position(client, "new_roll", "2026-10-16",
+              [{"side": "sold", "option_type": "CALL", "strike": 8050},
+               {"side": "bought", "option_type": "CALL", "strike": 8100}])
+
+    assert _links(client, mid) == ({first}, "leg")
+
+
+def test_adoption_does_not_resolve_an_ambiguity_it_cannot_resolve(client_factory):
+    """An orphan created while two Positions already share its strike stays an orphan, and a
+    later Position does not talk adoption into guessing. The entry is ambiguous however many
+    times you ask."""
+    client = client_factory()
+    _position(client, "old_roll", "2026-10-16",
+              [{"side": "sold", "option_type": "CALL", "strike": 8050},
+               {"side": "bought", "option_type": "CALL", "strike": 8075}])
+    _position(client, "new_roll", "2026-10-16",
+              [{"side": "sold", "option_type": "CALL", "strike": 8050},
+               {"side": "bought", "option_type": "CALL", "strike": 8100}])
+    mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
+    assert _links(client, mid) == (set(), None)
+
+    # a third holding, unrelated to the ambiguous strike, runs adoption again
+    _position(client, "elsewhere", "2026-11-20",
+              [{"side": "sold", "option_type": "CALL", "strike": 9000}])
+
+    assert _links(client, mid) == (set(), None)
+
+
+def test_deleting_a_position_takes_its_links_with_it(client_factory):
+    """The same foreign-key fault #70 fixed on the monitor side. Every Position in the live
+    database is linked, so deleting one raised the same IntegrityError.
+
+    The Monitors survive. Nothing in this service deletes a rule as a side effect -- they
+    simply stop knowing what they were watching, and would be adopted again if the holding
+    came back.
+    """
+    from sqlalchemy import func, select
+
+    from optionality.service.models import Monitor, monitor_positions
+
+    client = client_factory()
+    pid = _position(client, "1016_bs_8050", "2026-10-16",
+                    [{"side": "sold", "option_type": "CALL", "strike": 8050},
+                     {"side": "bought", "option_type": "CALL", "strike": 8075}])
+    mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
+    assert _links(client, mid) == ({pid}, "leg")
+
+    assert client.delete(f"/positions/{pid}", headers=AUTH).status_code == 204
+
+    with client.app.state.session_factory() as s:
+        assert s.get(Monitor, mid) is not None, "the rule was deleted as a side effect"
+        assert s.scalar(select(func.count()).select_from(monitor_positions)
+                        .where(monitor_positions.c.position_id == pid)) == 0
