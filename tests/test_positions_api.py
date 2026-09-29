@@ -260,3 +260,147 @@ def test_a_total_on_a_rule_watching_nothing_is_refused(client_factory):
 def test_a_total_on_an_unknown_rule_is_a_404(client_factory):
     client = client_factory(snapshot_fetcher=_priced_fetcher)
     assert client.post("/monitors/nope/total-entry", json={"entry": 1.0}, headers=AUTH).status_code == 404
+
+
+def _position(client, name, date, legs):
+    r = client.post("/positions", headers=AUTH, json={"name": name, "strike_date": date, "legs": legs})
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def _monitor(client, **kw):
+    r = client.post(
+        "/monitors", headers=AUTH, json={"field": "option_delta", "threshold": 0.2, "direction": "above", **kw}
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def _links(client, mid):
+    from sqlalchemy import select
+
+    from optionality.service.models import Monitor, monitor_positions
+
+    with client.app.state.session_factory() as s:
+        ids = {
+            p
+            for (p,) in s.execute(select(monitor_positions.c.position_id).where(monitor_positions.c.monitor_id == mid))
+        }
+        return ids, s.get(Monitor, mid).scope
+
+
+def test_a_new_leg_monitor_finds_the_position_holding_it(client_factory):
+    """Creating a monitor linked it to nothing, so everything the Position work built --
+    entry, P&L, the derived total -- silently applied only to monitors that predate the
+    migration which backfilled the links. The link is a lookup, not a guess: the contract
+    appears in exactly one Position's legs or in none."""
+    client = client_factory()
+    pid = _position(
+        client,
+        "1016_bs_8050",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+        ],
+    )
+    mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
+
+    # one leg of a two-leg structure, so it watches the LEG
+    assert _links(client, mid) == ({pid}, "leg")
+
+
+def test_a_combo_covering_a_whole_position_watches_all_of_it(client_factory):
+    client = client_factory()
+    pid = _position(
+        client,
+        "1030_bs_8100",
+        "2026-10-30",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8100},
+            {"side": "bought", "option_type": "CALL", "strike": 8125},
+        ],
+    )
+    mid = _monitor(
+        client,
+        name="1030_bs_8100",
+        field="mid_price",
+        strike_date="2026-10-30",
+        legs=[{"sign": -1, "option_type": "CALL", "strike": 8100}, {"sign": 1, "option_type": "CALL", "strike": 8125}],
+    )
+
+    assert _links(client, mid) == ({pid}, "all")
+
+
+def test_a_condor_spans_both_its_spreads(client_factory):
+    """ADR 0004: a monitor may span positions. The live 1016_IC does exactly this."""
+    client = client_factory()
+    calls = _position(
+        client,
+        "1016_bs_8050",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+        ],
+    )
+    puts = _position(
+        client,
+        "1016_IC_puts",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "PUT", "strike": 7100},
+            {"side": "bought", "option_type": "PUT", "strike": 7075},
+        ],
+    )
+    mid = _monitor(
+        client,
+        name="1016_IC",
+        field="mid_price",
+        strike_date="2026-10-16",
+        legs=[
+            {"sign": -1, "option_type": "CALL", "strike": 8050},
+            {"sign": 1, "option_type": "CALL", "strike": 8075},
+            {"sign": -1, "option_type": "PUT", "strike": 7100},
+            {"sign": 1, "option_type": "PUT", "strike": 7075},
+        ],
+    )
+
+    assert _links(client, mid) == ({calls, puts}, "all")
+
+
+def test_watching_something_you_do_not_hold_links_nothing(client_factory):
+    """A Monitor exists to warn, never to record what you own (CONTEXT.md). Watching a strike
+    you have no position in is legitimate — it simply has no entry and no P&L."""
+    client = client_factory()
+    mid = _monitor(client, strike_date="2026-12-18", option_type="CALL", strike=6500)
+
+    assert _links(client, mid) == (set(), None)
+
+
+def test_a_contract_in_two_positions_links_to_neither(client_factory):
+    """Rolling a spread can leave the old and the new holding the same strike for a day. The
+    entry is then genuinely ambiguous, and a wrong P&L is worse than an absent one: a missing
+    figure makes you look, a wrong one does not."""
+    client = client_factory()
+    _position(
+        client,
+        "old_roll",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+        ],
+    )
+    _position(
+        client,
+        "new_roll",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8100},
+        ],
+    )
+    mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
+
+    assert _links(client, mid) == (set(), None)

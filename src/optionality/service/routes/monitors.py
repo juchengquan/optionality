@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
-from optionality.service.models import Monitor, monitor_positions
+from optionality.service.models import Monitor, Position, monitor_positions
 from optionality.service.monitor import (
     WATCHLIST_ORDER,
     apply_total_entry,
@@ -16,6 +16,7 @@ from optionality.service.monitor import (
     verify_contracts,
     watchlist_quotes,
 )
+from optionality.service.position import positions_holding
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
 
@@ -212,8 +213,28 @@ def create_monitor(
         disabled_reason=None if payload.enabled else "manual",
     )
     session.add(row)
+    session.flush()  # the id the link rows need
+    _link_to_positions(session, row, [code])
     session.commit()
     return _to_dict(row, settings.display_tz)
+
+
+def _link_to_positions(session: Session, row: Monitor, contracts: list[str]) -> None:
+    """Attach a new Monitor to whatever Position already holds its contracts.
+
+    Without this a monitor created through the API is linked to nothing, and everything the
+    Position work built -- entry, P&L, the derived total -- applies only to monitors that
+    predate the migration which backfilled these rows. See positions_holding for the two
+    cases that deliberately link nothing.
+    """
+    found, scope = positions_holding(list(session.scalars(select(Position))), contracts)
+    if not found:
+        return
+    row.scope = scope
+    session.execute(
+        monitor_positions.insert(),
+        [{"monitor_id": row.id, "position_id": pid} for pid in sorted(found)],
+    )
 
 
 def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings, sweeper):
@@ -239,6 +260,9 @@ def _create_combo(payload: ComboMonitorIn, session: Session, settings: Settings,
         disabled_reason=None if payload.enabled else "manual",
     )
     session.add(row)
+    session.flush()  # the id the link rows need
+    # a combo's contracts are its LEGS; its own code is a name the trader chose
+    _link_to_positions(session, row, leg_codes)
     session.commit()
     return _to_dict(row, settings.display_tz)
 
