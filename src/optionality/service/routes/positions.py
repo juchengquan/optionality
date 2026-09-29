@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from optionality.apis.aux import normalize_strike_date
+from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_settings, get_sweeper
-from optionality.service.models import Position, utcnow
+from optionality.service.models import Monitor, Position, monitor_positions, utcnow
 from optionality.service.monitor import fetch_resilient, verify_contracts
 from optionality.service.position import (
     POSITION_GREEK_FIELDS,
@@ -16,6 +16,7 @@ from optionality.service.position import (
     position_greek,
     position_leg_codes,
     position_pnl,
+    positions_holding,
 )
 from optionality.service.settings import Settings
 from optionality.service.timefmt import display_time
@@ -101,6 +102,40 @@ def position_values(session: SessionDep, settings: SettingsDep, sweeper: Sweeper
     ]
 
 
+def _adopt_orphan_monitors(session: Session) -> None:
+    """Link monitors that watch something now held, and never unlink anything.
+
+    The link is worked out when a thing is created, which handled only one order: position
+    first, then monitor. Set the alarm before recording the holding and the monitor stayed
+    orphaned for ever. This is the mirror image, so either order works.
+
+    It looks ONLY at monitors that have no link. The tempting alternative -- recompute every
+    link on a schedule -- is worse than the bug: rolling a spread leaves the old and the new
+    sharing a strike for a day, a recomputing job would call that contract ambiguous, and a
+    monitor that had worked for weeks would silently lose its entry and P&L mid-session. What
+    you already have cannot be taken away by something you subsequently hold.
+    """
+    linked = select(monitor_positions.c.monitor_id)
+    orphans = list(session.scalars(select(Monitor).where(Monitor.id.not_in(linked))))
+    if not orphans:
+        return
+    positions = list(session.scalars(select(Position)))
+    for monitor in orphans:
+        codes = (
+            [build_spx_code(monitor.strike_date, leg["option_type"], leg["strike"]) for leg in monitor.legs]
+            if monitor.legs
+            else [monitor.code]
+        )
+        found, scope = positions_holding(positions, codes)
+        if not found:
+            continue
+        monitor.scope = scope
+        session.execute(
+            monitor_positions.insert(),
+            [{"monitor_id": monitor.id, "position_id": pid} for pid in sorted(found)],
+        )
+
+
 @router.post("", status_code=201)
 def create_position(payload: PositionIn, session: SessionDep, settings: SettingsDep, sweeper: SweeperDep):
     if session.scalar(select(Position).where(Position.name == payload.name)):
@@ -117,6 +152,9 @@ def create_position(payload: PositionIn, session: SessionDep, settings: Settings
     if error := verify_contracts(sorted(set(position_leg_codes(row))), settings, sweeper.fetcher):
         raise HTTPException(status_code=422, detail=error)
     session.add(row)
+    session.flush()  # the id the link rows need
+    # a holding you have just recorded may be the one an existing rule was already watching
+    _adopt_orphan_monitors(session)
     session.commit()
     return _to_dict(row, settings.display_tz)
 
@@ -145,8 +183,18 @@ def patch_position(position_id: str, payload: PositionPatch, session: SessionDep
 
 @router.delete("/{position_id}", status_code=204)
 def delete_position(position_id: str, session: SessionDep):
+    """No longer holding it takes the links with it, and leaves the rules alone.
+
+    The same foreign-key fault the monitor side had: monitor_positions is a plain Table, so
+    SQLAlchemy does not know those rows exist and the DELETE was refused. Every Position in
+    the live database is linked, so this was broken for all of them.
+
+    The Monitors survive — nothing here deletes a rule as a side effect. They simply stop
+    knowing what they were watching, and would be adopted again if the holding came back.
+    """
     row = session.get(Position, position_id)
     if row is None:
         raise HTTPException(status_code=404, detail="position not found")
+    session.execute(monitor_positions.delete().where(monitor_positions.c.position_id == position_id))
     session.delete(row)
     session.commit()
