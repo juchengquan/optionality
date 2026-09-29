@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from optionality.apis.aux import build_spx_code, normalize_strike_date
 from optionality.service.deps import get_session, get_session_factory, get_settings, get_sweeper
-from optionality.service.models import Monitor
+from optionality.service.models import Monitor, monitor_positions
 from optionality.service.monitor import (
     WATCHLIST_ORDER,
     apply_total_entry,
@@ -333,8 +333,19 @@ def set_total_entry(monitor_id: str, payload: TotalEntryIn, session: SessionDep,
 
 @router.delete("/{monitor_id}", status_code=204)
 def delete_monitor(monitor_id: str, session: SessionDep):
+    """Removing a rule takes its links to Positions with it, and leaves the Positions alone.
+
+    monitor_positions is a plain Table rather than a relationship, to match the query style
+    used everywhere else here — which means SQLAlchemy does not know those rows exist and
+    will not clear them. Deleting the monitor first raised `FOREIGN KEY constraint failed`
+    for every row in the live database, because every one of them is linked.
+
+    The Position itself stays. It is a holding: it exists whether or not anything is
+    watching it, and nothing in this service deletes one as a side effect (see ADR 0001).
+    """
     row = session.get(Monitor, monitor_id)
     if row is None:
         raise HTTPException(status_code=404, detail="monitor not found")
+    session.execute(monitor_positions.delete().where(monitor_positions.c.monitor_id == monitor_id))
     session.delete(row)
     session.commit()
