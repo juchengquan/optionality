@@ -132,6 +132,27 @@ promise, different mechanism, and the comment should say so.
 **Done when** the sweep's ported tests pass and a manual sweep against live OpenD produces the
 same figures the Python service shows at the same moment.
 
+**In three PRs.** Nothing from phase 0 was committed — it was a feasibility spike — so the OpenD
+client does not exist yet, and the live comparison cannot happen without it.
+
+1. the sweeper and the schedule, against fakes
+2. the moomoo WebSocket client, and the live comparison this phase is done when
+3. the worker, the Python bridge, and the lifespan that starts all of it
+
+**`run_task` stays in Python, invoked as a subprocess.** It is the strategy/holdings scan that
+produces the HTML report, and porting it means replacing pandas, the option-chain scan and yfinance:
+~614 lines across four pandas modules. It has run twice, both on 2026-08-10, with no schedule
+configured — while the sweep runs every sixty seconds. So the worker spawns it and stores what comes
+back: no divergence risk in the one output the owner reads as money, and everything used daily
+becomes TypeScript as intended. The owner's decision, knowingly taken; phase 10 narrows from "delete
+Python" to "delete the Python that was ported", and it can be ported later if it starts being used.
+
+**One thing found rather than ported.** The expiry path deletes a monitor without clearing its
+`monitor_positions` links, which raises `FOREIGN KEY constraint failed` inside the sweep — every
+minute, so the alarm engine stops altogether. Every monitor in the live database is linked; it would
+have stalled on 2026-11-07. Fixed in the Python separately (#81) rather than carried across, because
+a port cannot reproduce a crash and the live service should not be left waiting for the cutover.
+
 ## Phase 7 — The Telegram bot
 
 Long-poll, the command set, the table formatting rules — ~40 monospace characters, four columns
