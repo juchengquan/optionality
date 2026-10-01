@@ -80,6 +80,12 @@ not exist again.
 **Done when** the new database holds the same data, verified field by field, and the Python
 database has not been written to.
 
+**Done, and Drizzle is not in it.** Stable Drizzle cannot drive `node:sqlite`, and the release
+candidate that can has a transaction method that commits before the callback runs. `node:sqlite`
+directly, no ORM — so the backend has no runtime dependencies at all. The stored formats stay
+SQLAlchemy's, which keeps the Python usable as a rollback; that is verified, not assumed. See
+ADR 0009's two corrections.
+
 ## Phase 5 — The HTTP layer
 
 The 18 routes in Hono with Zod schemas, including response schemas — which the Python service
@@ -147,7 +153,7 @@ case: a Friday expiry, a quarantined contract, a gap open.
 - [ ] Phase 1 — workspaces, shared tsconfig, one test command
 - [ ] Phase 2 — 3,278 lines of tests ported and failing
 - [x] Phase 3 — the pure domain, all its tests green, and verified against the Python
-- [ ] Phase 4 — Drizzle schema and the 24 rows, verified completely
+- [x] Phase 4 — the schema and the 24 rows, verified completely (no Drizzle — see the phase)
 - [ ] Phase 5 — 18 routes in Hono with response schemas
 - [ ] Phase 6 — sweeper, promise-queue worker, timezone-correct schedule
 - [ ] Phase 7 — Telegram bot, tested against a fake
