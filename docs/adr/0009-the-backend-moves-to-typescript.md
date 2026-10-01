@@ -98,6 +98,59 @@ could never fail (ADR 0008).
   the current schema; matching it exactly from TypeScript is a silent risk, and 24 rows is small
   enough to verify completely — every row, every field.
 
+## Correction: Drizzle was chosen on a premise that does not hold
+
+This ADR chose Drizzle alongside Node 25's built-in `node:sqlite`. **Those two do not go
+together.** Stable Drizzle (0.45.3) ships no `node:sqlite` driver at all — only `better-sqlite3`,
+`bun-sqlite`, `libsql` and a generic proxy. The pairing exists in `1.0.0-rc.5`, and in that release
+candidate the driver's `transaction()` is written synchronously around async query builders:
+
+```js
+const result = transaction(tx);   // the callback is async; this is a promise
+this.run(sql`commit`);            // committed before the body has done anything
+return result;                    // the rejection is never seen, so nothing rolls back
+```
+
+Verified directly: a throwing transaction leaves its row behind, and so does an explicit
+`tx.rollback()`. `node:sqlite`'s own `begin`/`rollback` is correct, so this is Drizzle's.
+
+`better-sqlite3` was the remaining stable route and has its own cost: no prebuilt binary for Node
+25 (ABI 141 is a 404), so it compiles from source on install and must be rebuilt after every Node
+upgrade. That puts a build step on the deploy path, which is the thing committing the frontend
+bundle was meant to avoid (ADR 0005, ADR 0006).
+
+**So: `node:sqlite` directly, no ORM.** Hono has no dependencies and neither does this, which
+leaves the backend with nothing to recompile when Node moves. The cost is real — hand-written SQL,
+no generated migrations, and no schema declared once that both the database and the types derive
+from. The last of those is the only one worth mitigating, and `db/rows.ts` does it: `schema.sql` is
+the database's truth, `COLUMNS`/`NULLABLE` the runtime's, and the row interfaces the compiler's,
+with the compiler tying the second to the third and `rows.test.ts` tying the first to the second.
+Nine kinds of drift between them were introduced on purpose; eight failed a test and one failed
+the typecheck.
+
+It also removes the argument for the ORM that was never strong here: the Python uses SQLAlchemy as
+a query builder (`session.scalars(select(...))`), not as an object graph, and `monitor_positions`
+is deliberately a plain table.
+
+## Correction: the stored formats stay SQLAlchemy's
+
+Datetimes stay as naive-UTC text with six fractional digits (`2026-09-01 15:39:11.940183`),
+booleans stay as 0 and 1, and the copy carries JSON across byte for byte including Python's
+spacing. Epoch-millisecond integers and native booleans would be pleasanter to work with.
+
+The reason not to is the cutover. There is no side-by-side run and no recording week, so if the
+TypeScript service misbehaves the only rollback is to point the Python at the new file and start
+it. That only works if the formats match, and it is verified rather than asserted:
+`python_can_read.py` opens the copy with SQLAlchemy, compares all 194 mapped field values
+including their Python types, and checks `alembic current` reports the head rather than an empty
+table. The schema therefore also carries `alembic_version`, stamped from the source.
+
+New rows written by TypeScript will differ from copied ones in one visible way: `JSON.stringify`
+writes `[{"sign":-1,...,"strike":8050}]` where Python writes `[{"sign": -1, ..., "strike": 8050.0}]`.
+The values are identical and both sides parse the other's text. Matching Python's formatting would
+mean writing a JSON serialiser to imitate another language's repr, and nothing reads those bytes
+except a JSON parser.
+
 ## Consequences
 
 - The Python database is never written to, which makes the first week genuinely reversible:

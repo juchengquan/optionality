@@ -1,4 +1,4 @@
-.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck diff-api diff-api-live \
+.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck diff-api diff-api-live copy-db \
 	serve build-ui check-ui deploy \
 	launchd-install launchd-restart launchd-uninstall \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
@@ -101,6 +101,14 @@ diff-api-live:
 		$(DIFF_OUT)/live_in.json $(DIFF_OUT)/live_py.json
 	node backend/tools/differential/live_ts.mjs $(DIFF_OUT)/live_in.json $(DIFF_OUT)/live_ts.json
 	python3 backend/tools/differential/compare.py $(DIFF_OUT)/live_py.json $(DIFF_OUT)/live_ts.json 40
+
+# the fresh TypeScript database, copied from the Python's and verified field by field (ADR 0009
+# phase 4). Snapshots the live file first, so a sweep landing mid-copy cannot read as corruption.
+# Never writes to data/optionality.db. Refuses to overwrite an existing target.
+NEXT_DB ?= data/optionality-next.db
+copy-db:
+	node backend/tools/copy-db/copy.ts data/optionality.db $(NEXT_DB)
+	uv run python backend/tools/copy-db/python_can_read.py $(NEXT_DB).snapshot $(NEXT_DB)
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:
