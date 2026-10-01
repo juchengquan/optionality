@@ -103,8 +103,13 @@ describe("the watchlist", () => {
   });
 
   it("groups muted monitors by reason and counts down to the delete", async () => {
+    // expired three days ago, computed rather than written down: a fixed date is a time bomb,
+    // and this one went off — it was inside the seven-day retention when written and outside
+    // it by the time anyone looked. CLAUDE.md asks for dates relative to today for this reason.
+    const expiredDaysAgo = (n: number) =>
+      new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
     mockApi([], [
-      { id: "x", code: "old", field: "option_delta", threshold: 0.2, strike_date: "2026-09-22",
+      { id: "x", code: "old", field: "option_delta", threshold: 0.2, strike_date: expiredDaysAgo(3),
         enabled: false, disabled_reason: "expired", scope: null, positions: [] },
     ]);
     render(<App />);
