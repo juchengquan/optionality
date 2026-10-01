@@ -78,6 +78,7 @@ export function healthRoutes(deps: Deps) {
           display_tz: settings.displayTz,
         },
       }),
+      200,
     );
   });
 }

@@ -64,7 +64,7 @@ export function scheduleRoutes(deps: Deps) {
   });
 
   return new Hono()
-    .get("/", (c) => c.json(z.array(ScheduleOut).parse(listSchedules(db).map(out))))
+    .get("/", (c) => c.json(z.array(ScheduleOut).parse(listSchedules(db).map(out)), 200))
 
     .post("/", valid("json", ScheduleIn), (c) => {
       const payload = c.req.valid("json");
@@ -81,7 +81,7 @@ export function scheduleRoutes(deps: Deps) {
       check(payload);
       const row = updateSchedule(db, id, stored(payload));
       scheduler.refreshJobs();
-      return c.json(ScheduleOut.parse(out(row)));
+      return c.json(ScheduleOut.parse(out(row)), 200);
     })
 
     .delete("/:id", (c) => {

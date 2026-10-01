@@ -39,6 +39,10 @@ async function endpoints() {
   const runs = "detail" in runsOrError ? [] : runsOrError;
   const run = await (await client.runs[":id"].$get({ param: { id: "x" } })).json();
 
+  const monitors = await (await client.monitors.$get()).json();
+  const quotesOrError = await (await client.quotes.$get()).json();
+  const quotes = "detail" in quotesOrError ? [] : quotesOrError;
+
   const triggered = await client.runs.$post({
     json: { task: "holdings", config: "spx", notify: false },
   });
@@ -49,7 +53,29 @@ async function endpoints() {
     json: { cron_expr: "35 9 * * mon-fri", task_type: "holdings", config_name: "spx" },
   });
 
-  return { health, configs, config, schedules, runs, runsOrError, run, triggered, created, schedule };
+  const monitorCreated = await client.monitors.$post({
+    json: { strike_date: "2026-12-18", option_type: "CALL", strike: 6500, threshold: 0.6 },
+  });
+  const comboCreated = await client.monitors.$post({
+    json: {
+      name: "sep-condor", strike_date: "2026-12-18", threshold: 10,
+      legs: [
+        { sign: 1, option_type: "CALL", strike: 8100 },
+        { sign: -1, option_type: "CALL", strike: 8150 },
+      ],
+    },
+  });
+  const patched = await client.monitors[":id"].$patch({
+    param: { id: "x" }, json: { threshold: 0.5 },
+  });
+  const totalEntry = await client.monitors[":id"]["total-entry"].$post({
+    param: { id: "x" }, json: { entry: 3.21 },
+  });
+
+  return {
+    health, configs, config, schedules, runs, runsOrError, runsResp, run, triggered, created,
+    schedule, monitors, quotes, monitorCreated, comboCreated, patched, totalEntry,
+  };
 }
 
 type Endpoints = Awaited<ReturnType<typeof endpoints>>;
@@ -83,6 +109,25 @@ export type HcChecks = [
   Checked<Exactly<Endpoints["runs"][number]["attempt"], number>>,
   Checked<Exactly<Endpoints["run"]["finished_at"], string | null>>,
   Checked<Exactly<Endpoints["run"]["error"], string | null>>,
+
+  // a monitor's legs are null for a single leg and an array for a combo, which is how the dashboard
+  // decides which row shape to render
+  Checked<Known<Endpoints["monitors"]>>,
+  Checked<Exactly<Endpoints["monitors"][number]["legs"],
+    { sign: number; option_type: string; strike: number }[] | null>>,
+  Checked<Exactly<Endpoints["monitors"][number]["triggered"], boolean>>,
+  Checked<Exactly<Endpoints["monitors"][number]["enabled"], boolean>>,
+  Checked<Exactly<Endpoints["monitors"][number]["last_value"], number | null>>,
+  Checked<Exactly<Endpoints["monitors"][number]["scope"], string | null>>,
+  Checked<Exactly<Endpoints["monitors"][number]["positions"], { id: string; name: string }[]>>,
+
+  // the watchlist entry the dashboard's table is built from
+  Checked<Known<Endpoints["quotes"]>>,
+  Checked<Exactly<Endpoints["quotes"][number]["dte"], number>>,
+  Checked<Exactly<Endpoints["quotes"][number]["fill"], number | null>>,
+  Checked<Exactly<Endpoints["quotes"][number]["cost_to_close"], number | null>>,
+  Checked<Exactly<Endpoints["quotes"][number]["pnl"], number | null>>,
+  Checked<Known<Endpoints["quotes"][number]["snapshot"]>>,
 ];
 
 /** The status codes are typed too, so a client can narrow on them. */
@@ -90,4 +135,12 @@ export type StatusChecks = [
   Checked<Exactly<Endpoints["triggered"]["status"], 202 | 422>>,
   Checked<Exactly<Endpoints["created"]["status"], 201 | 422>>,
   Checked<Exactly<Endpoints["schedule"]["status"], 201 | 422>>,
+  Checked<Exactly<Endpoints["monitorCreated"]["status"], 201 | 422>>,
+  Checked<Exactly<Endpoints["comboCreated"]["status"], 201 | 422>>,
+  Checked<Exactly<Endpoints["patched"]["status"], 200 | 422>>,
+  Checked<Exactly<Endpoints["totalEntry"]["status"], 200 | 422>>,
+  // success statuses are stated explicitly in the handlers rather than left to default. Without
+  // that, `hc` hands the caller the whole ContentfulStatusCode union and `res.status === 422`
+  // narrows nothing — which is the only thing the dashboard wants to ask.
+  Checked<Exactly<Endpoints["runsResp"]["status"], 200 | 422>>,
 ];

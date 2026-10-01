@@ -10,6 +10,7 @@ import { Hono } from "hono";
 import type { Deps } from "./deps.ts";
 import { configRoutes } from "./routes/configs.ts";
 import { healthRoutes } from "./routes/health.ts";
+import { monitorRoutes, quoteRoutes } from "./routes/monitors.ts";
 import { runRoutes } from "./routes/runs.ts";
 import { scheduleRoutes } from "./routes/schedules.ts";
 
@@ -36,9 +37,11 @@ export function createApp(deps: Deps) {
       return next();
     })
     .route("/", healthRoutes(deps))
+    .route("/", quoteRoutes(deps))
     .route("/configs", configRoutes(deps))
     .route("/schedules", scheduleRoutes(deps))
-    .route("/runs", runRoutes(deps));
+    .route("/runs", runRoutes(deps))
+    .route("/monitors", monitorRoutes(deps));
 }
 
 /** What `hc` on the frontend is parameterised by. */

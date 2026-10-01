@@ -18,6 +18,7 @@ import { createDatabase } from "./db/open.ts";
 import { type Settings, settingsFor } from "./env.ts";
 import type { Deps } from "./deps.ts";
 import type { CreateRunArgs } from "./ports.ts";
+import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
 
 export const TOKEN = "tok";
 export const AUTH = { Authorization: `Bearer ${TOKEN}` };
@@ -81,10 +82,36 @@ export interface Harness {
   call(path: string, init?: RequestInit & { anonymous?: boolean }): Promise<Response>;
 }
 
+/** The permissive default: every requested contract "exists". The same fixture the Python uses, and
+ *  for the same reason — a test must never reach the real moomoo SDK, which blocks indefinitely on a
+ *  dead port, so a missing fake looks like a hung suite rather than a failure (CLAUDE.md). */
+export const echoFetcher: QuoteFetcher = (codes) =>
+  Promise.resolve(codes.map((code) => ({ code })));
+
+/** A fetcher that returns the given figures per code, and nothing for a code it does not know. */
+export function quoting(byCode: Record<string, QuoteRecord>): QuoteFetcher {
+  return (codes) => Promise.resolve(codes.filter((c) => c in byCode).map((c) => ({ code: c, ...byCode[c] })));
+}
+
+/** A fetcher that rejects the whole batch while a code containing `fragment` is in it, as moomoo
+ *  does — and names the culprit WITHOUT its market prefix, which is why fetchResilient matches the
+ *  name as a suffix rather than for equality. */
+export function poisonable(fragment: string): QuoteFetcher {
+  return (codes) => {
+    const bad = codes.filter((c) => c.includes(fragment));
+    if (bad.length > 0) {
+      return Promise.reject(new Error(`snapshot API failed: Unknown stock. ${bad[0]!.replace(/^US\./, "")}`));
+    }
+    return Promise.resolve(codes.map((code) => ({ code })));
+  };
+}
+
 export interface HarnessOptions {
   settings?: Partial<Settings>;
   /** whether OpenD answers; false matches the Python's test port, where nothing listens */
   opend?: boolean;
+  /** the bounded OpenD call. Defaults to the permissive echo. */
+  fetchQuotes?: QuoteFetcher;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -113,6 +140,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     scheduler,
     sweeper,
     opendReachable: () => Promise.resolve(options.opend ?? false),
+    fetchQuotes: options.fetchQuotes ?? echoFetcher,
     htmlDocument: (body) => `<html><body>${body}</body></html>`,
   };
 

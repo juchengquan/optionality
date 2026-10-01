@@ -35,6 +35,7 @@ const deps: Deps = {
   },
   opendReachable: probeOpend,
   htmlDocument: (body) => body,
+  fetchQuotes: notYet("the OpenD client"),
 };
 
 const port = Number(process.env.PORT ?? 31417);
