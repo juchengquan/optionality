@@ -169,6 +169,18 @@ export function harness(options: HarnessOptions = {}): Harness {
   return h;
 }
 
+/** The fetcher the position tests want: every leg priced, so cost to close and P&L are real. */
+export const pricedFetcher: QuoteFetcher = (codes) => Promise.resolve(codes.map((code) => {
+  const mids: Record<string, number> = { C8050: 5.0, C8075: 2.0, P7100: 3.0, P7075: 1.5 };
+  const hit = Object.entries(mids).find(([suffix]) => code.endsWith(`${suffix}000`));
+  return {
+    code,
+    mid_price: hit ? hit[1] : 1.0,
+    option_delta: 0.2,
+    option_contract_size: 100.0,
+  };
+}));
+
 /** POST JSON, the shape nearly every write test needs. */
 export function json(body: unknown): RequestInit {
   return {

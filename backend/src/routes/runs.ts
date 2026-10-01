@@ -125,6 +125,11 @@ export function runRoutes(deps: Deps) {
     .get("/:id/report.html", (c) => {
       const report = findReport(db, c.req.param("id"));
       if (!report) throw notFound("report");
-      return c.html(deps.htmlDocument(report.html));
+      // c.body rather than c.html, with the same content type. `hc` types every helper's status
+      // and body except c.html, which it reports as ClientResponse<{}, StatusCode, string> — so a
+      // caller could not narrow on the status at all. Same bytes, same header, a typed contract.
+      return c.body(deps.htmlDocument(report.html), 200, {
+        "Content-Type": "text/html; charset=UTF-8",
+      });
     });
 }

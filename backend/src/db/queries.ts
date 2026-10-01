@@ -182,6 +182,11 @@ export function linkMonitorToPositions(
   for (const pid of [...positionIds].sort()) insert.run(monitorId, pid);
 }
 
+/** Every position, in the order the dashboard lists them: expiry groups, then name.
+ *
+ *  One function, not two. There were briefly two with identical SQL — one for the listing route and
+ *  one for the linkage code that does not care about order — and the duplicate hid a mutation:
+ *  breaking the order in one left the other intact, so no test noticed. */
 export function listPositions(db: DatabaseSync): PositionRow[] {
   return db.prepare("select * from positions order by strike_date, name")
     .all() as unknown as PositionRow[];
@@ -232,4 +237,51 @@ export function solelyWatchedPositions(db: DatabaseSync): Set<string> {
 
 export function setPositionEntry(db: DatabaseSync, id: string, entry: number): void {
   db.prepare("update positions set entry = ? where id = ?").run(entry, id);
+}
+
+export function findPosition(db: DatabaseSync, id: string): PositionRow | undefined {
+  return db.prepare("select * from positions where id = ?").get(id) as unknown as PositionRow | undefined;
+}
+
+export function findPositionByName(db: DatabaseSync, name: string): PositionRow | undefined {
+  return db.prepare("select * from positions where name = ?").get(name) as unknown as PositionRow | undefined;
+}
+
+export function insertPosition(db: DatabaseSync, row: PositionRow): PositionRow {
+  const columns = COLUMNS.positions;
+  db.prepare(
+    `insert into positions (${columns.map((c) => `"${c}"`).join(", ")})
+     values (${columns.map(() => "?").join(", ")})`,
+  ).run(...columns.map((c) => row[c] as never));
+  return findPosition(db, row.id)!;
+}
+
+export function updatePositionFields(
+  db: DatabaseSync, id: string, changes: Partial<PositionRow>,
+): PositionRow {
+  const keys = Object.keys(changes) as (keyof PositionRow)[];
+  if (keys.length === 0) return findPosition(db, id)!;
+  db.prepare(`update positions set ${keys.map((k) => `"${k}" = ?`).join(", ")} where id = ?`)
+    .run(...keys.map((k) => changes[k] as never), id);
+  return findPosition(db, id)!;
+}
+
+export function deletePositionRow(db: DatabaseSync, id: string): void {
+  db.prepare("delete from positions where id = ?").run(id);
+}
+
+export function clearPositionLinks(db: DatabaseSync, positionId: string): void {
+  db.prepare("delete from monitor_positions where position_id = ?").run(positionId);
+}
+
+/** Monitors with NO link at all. Deliberately not "monitors whose links look wrong": see
+ *  adoptOrphanMonitors for why recomputing every link would be worse than the bug it fixed. */
+export function orphanMonitors(db: DatabaseSync): MonitorRow[] {
+  return db.prepare(
+    "select * from monitors where id not in (select monitor_id from monitor_positions)",
+  ).all() as unknown as MonitorRow[];
+}
+
+export function setMonitorScope(db: DatabaseSync, id: string, scope: string | null): void {
+  db.prepare("update monitors set scope = ? where id = ?").run(scope, id);
 }
