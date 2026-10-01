@@ -99,8 +99,12 @@ hand-written call for each endpoint.
 not reviewable.
 
 1. the app, the token, the error shape, `/health`, `/configs`, `/schedules`, `/runs` — done (#78)
-2. `/monitors` and `/quotes`, with the quote-fetching layer and the watchlist builder they need
-3. `/positions`, `/spx`, and the `hc` proof completed over every endpoint
+2. `/monitors` and `/quotes`, with the quote-fetching layer and the watchlist builder — done (#79)
+3. `/positions`, `/spx`, and the `hc` proof completed over every endpoint — done
+
+**Done. 29 routes against the Python's 29**, and `hc<AppType>` type-checked against a hand-written
+call for every one of them. A route added without a line in `hc.types.ts` is a route nothing has
+type-checked, which is the only way the guarantee quietly stops being true.
 
 **Carried deliberately, not forgotten:**
 
@@ -175,7 +179,7 @@ case: a Friday expiry, a quarantined contract, a gap open.
 - [ ] Phase 2 — 3,278 lines of tests ported and failing
 - [x] Phase 3 — the pure domain, all its tests green, and verified against the Python
 - [x] Phase 4 — the schema and the 24 rows, verified completely (no Drizzle — see the phase)
-- [ ] Phase 5 — 18 routes in Hono with response schemas
+- [x] Phase 5 — 29 routes in Hono with response schemas, hc proved over every one
 - [ ] Phase 6 — sweeper, promise-queue worker, timezone-correct schedule
 - [ ] Phase 7 — Telegram bot, tested against a fake
 - [ ] Phase 8 — frontend on `hc`; contract version retired

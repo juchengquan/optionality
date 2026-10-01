@@ -11,6 +11,8 @@ import type { Deps } from "./deps.ts";
 import { configRoutes } from "./routes/configs.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { monitorRoutes, quoteRoutes } from "./routes/monitors.ts";
+import { positionRoutes } from "./routes/positions.ts";
+import { spxRoutes } from "./routes/spx.ts";
 import { runRoutes } from "./routes/runs.ts";
 import { scheduleRoutes } from "./routes/schedules.ts";
 
@@ -41,7 +43,9 @@ export function createApp(deps: Deps) {
     .route("/configs", configRoutes(deps))
     .route("/schedules", scheduleRoutes(deps))
     .route("/runs", runRoutes(deps))
-    .route("/monitors", monitorRoutes(deps));
+    .route("/monitors", monitorRoutes(deps))
+    .route("/positions", positionRoutes(deps))
+    .route("/spx", spxRoutes(deps));
 }
 
 /** What `hc` on the frontend is parameterised by. */
