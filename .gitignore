@@ -198,3 +198,4 @@ backend/node_modules/
 frontend/src/__browser__/__screenshots__/
 frontend/test-results/
 backend/tools/differential/.out/
+backend/tools/opend/.out/

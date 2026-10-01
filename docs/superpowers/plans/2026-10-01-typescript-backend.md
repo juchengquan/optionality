@@ -135,8 +135,8 @@ same figures the Python service shows at the same moment.
 **In three PRs.** Nothing from phase 0 was committed — it was a feasibility spike — so the OpenD
 client does not exist yet, and the live comparison cannot happen without it.
 
-1. the sweeper and the schedule, against fakes
-2. the moomoo WebSocket client, and the live comparison this phase is done when
+1. the sweeper and the schedule, against fakes — done (#82)
+2. the moomoo WebSocket client, and the live comparison this phase is done when — done
 3. the worker, the Python bridge, and the lifespan that starts all of it
 
 **`run_task` stays in Python, invoked as a subprocess.** It is the strategy/holdings scan that

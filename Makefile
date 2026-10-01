@@ -1,4 +1,4 @@
-.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck diff-api diff-api-live copy-db \
+.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api diff-api diff-api-live diff-opend copy-db \
 	serve build-ui check-ui deploy \
 	launchd-install launchd-restart launchd-uninstall \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
@@ -82,6 +82,12 @@ test-api:
 typecheck:
 	npm install --silent && npm run typecheck
 
+# tsc is not enough. Node runs the backend by ERASING types, so syntax that would have to EMIT code
+# is rejected at load time — and tsc accepts it while vitest transforms it, so neither notices. Two
+# classes reached main unable to load at all. See backend/tools/check-loads.mjs.
+check-api:
+	node backend/tools/check-loads.mjs
+
 # the port is faithful or it is nothing (ADR 0009), and there is no recorded history to replay —
 # so these put the same inputs through both implementations and compare exactly. A porting tool,
 # not a suite: what it finds belongs in backend/src/**/*.test.ts. See backend/tools/differential.
@@ -109,6 +115,18 @@ NEXT_DB ?= data/optionality-next.db
 copy-db:
 	node backend/tools/copy-db/copy.ts data/optionality.db $(NEXT_DB)
 	uv run python backend/tools/copy-db/python_can_read.py $(NEXT_DB).snapshot $(NEXT_DB)
+
+# the TypeScript OpenD client against the Python SDK, field by field (ADR 0009 phase 6). Reads the
+# live watchlist's own contracts and brackets the TypeScript read between two Python reads, because
+# the market moves while we look at it. Needs OpenD up and its websocket enabled.
+OPEND_OUT = $(CURDIR)/backend/tools/opend/.out
+diff-opend:
+	mkdir -p $(OPEND_OUT)
+	uv run --env-file .env python backend/tools/opend/codes.py $(OPEND_OUT)/codes.json
+	uv run --env-file .env python backend/tools/opend/read_py.py $(OPEND_OUT)/codes.json $(OPEND_OUT)/before.json
+	node --env-file=.env backend/tools/opend/read_ts.mjs $(OPEND_OUT)/codes.json $(OPEND_OUT)/ts.json
+	uv run --env-file .env python backend/tools/opend/read_py.py $(OPEND_OUT)/codes.json $(OPEND_OUT)/after.json
+	python3 backend/tools/opend/compare.py $(OPEND_OUT)/before.json $(OPEND_OUT)/ts.json $(OPEND_OUT)/after.json
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:
