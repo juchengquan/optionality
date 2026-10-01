@@ -657,3 +657,52 @@ def test_legacy_iv_combo_is_never_summed(session_factory):
         by_code = {c: {"code": c, "option_implied_volatility": 20.0} for c in monitor_leg_codes(combo)}
         # both legs report 20.0; the old behaviour returned 40.0
         assert monitor_value(combo, by_code) is None
+
+
+def test_expiry_deletion_takes_the_position_links_with_it(session_factory):
+    """A linked monitor passing the retention window raised FOREIGN KEY constraint failed, inside
+    the sweep -- and the sweep runs every minute, so the alarm engine stopped altogether.
+
+    The same fault #70 fixed on the delete route, reached by a path no test covered: retention only
+    deletes a monitor a week after expiry, and every monitor in the live database is linked. The two
+    existing expiry tests passed because their monitors were linked to nothing.
+
+    The Position stays. It is a holding: it exists whether or not anything is watching it.
+    """
+    from sqlalchemy import func
+
+    from optionality.service.models import Position, monitor_positions
+
+    long_ago = (datetime.now(UTC).date() - timedelta(days=30)).isoformat()
+    with session_factory() as s:
+        position = Position(
+            name="held",
+            strike_date=long_ago,
+            contracts=1,
+            entry=2.0,
+            legs=[{"side": "sold", "option_type": "CALL", "strike": 8050}],
+        )
+        s.add(position)
+        s.flush()
+        pid = position.id
+        s.commit()
+    mid = _mk_monitor(
+        session_factory,
+        code="US.SPXW260101C8050000",
+        strike_date=long_ago,
+        strike=8050.0,
+        enabled=False,
+        disabled_reason="expired",
+        scope="all",
+    )
+    with session_factory() as s:
+        s.execute(monitor_positions.insert().values(monitor_id=mid, position_id=pid))
+        s.commit()
+
+    sweeper, _recorder = _make_sweeper(session_factory, {})
+    sweeper.sweep()  # raised IntegrityError before the links were cleared first
+
+    with session_factory() as s:
+        assert s.get(Monitor, mid) is None
+        assert s.scalar(select(func.count()).select_from(monitor_positions)) == 0
+        assert s.get(Position, pid) is not None, "the holding was deleted as a side effect"
