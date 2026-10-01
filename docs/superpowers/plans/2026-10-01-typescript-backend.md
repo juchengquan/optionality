@@ -61,6 +61,13 @@ combined figures, `threshold_fill`, the alarm decision. No I/O, no database, no 
 This is where the money bugs live, and it is the part the tests cover best. **Done when** every
 ported test of the domain passes and none of the implementation has touched a database.
 
+**Done, with a correction to the premise.** "The part the tests cover best" was true of
+`position.py` and wrong about `monitor.py`: `threshold_fill` has one assertion in the whole Python
+suite and `positions_holding` has none, so porting test-by-test skipped a function entirely and
+left the alarm maths unguarded. Passing tests turned out not to be evidence of a faithful port —
+four real divergences survived a green suite. `backend/tools/differential` is what caught them and
+is now part of the method for the phases that follow. See ADR 0009.
+
 ## Phase 4 — The database
 
 Drizzle schema declared in TypeScript, then a throwaway script that reads the 24 rows out of
@@ -139,7 +146,7 @@ case: a Friday expiry, a quarantined contract, a gap open.
 - [ ] Phase 0 — OpenD WebSocket proven against TCP, field by field
 - [ ] Phase 1 — workspaces, shared tsconfig, one test command
 - [ ] Phase 2 — 3,278 lines of tests ported and failing
-- [ ] Phase 3 — the pure domain, all its tests green
+- [x] Phase 3 — the pure domain, all its tests green, and verified against the Python
 - [ ] Phase 4 — Drizzle schema and the 24 rows, verified completely
 - [ ] Phase 5 — 18 routes in Hono with response schemas
 - [ ] Phase 6 — sweeper, promise-queue worker, timezone-correct schedule

@@ -197,3 +197,4 @@ backend/node_modules/
 # playwright writes test traces and screenshots beside the tests it runs
 frontend/src/__browser__/__screenshots__/
 frontend/test-results/
+backend/tools/differential/.out/

@@ -57,6 +57,30 @@ flipped, `signed` compared as `abs`. It is recorded here as the owner's decision
 taken. The mitigation instead is to port the 3,278 lines of tests FIRST and let them be the
 contract; many encode the stated invariants directly rather than the implementation.
 
+### Ported tests turned out not to be enough on their own
+
+Phase 3 showed the limit of that mitigation. Every ported test passed, and the port was still
+wrong in four ways — because **a ported test can only check what the Python thought to check.**
+`positions_holding` has no Python test, so porting test-by-test skipped the function entirely and
+the suite stayed green. The faithfulness bugs were worse than that: CPython's `sum()` has carried
+a compensation term since 3.12, so a plain `reduce` gives a different combined delta; `round()`
+rounds the stored double rather than the decimal, so `Math.round(v * 100) / 100` disagrees on
+twelve values in four hundred; and `build_spx_code` accepted one date spelling where Python takes
+two and would have built a code for the 30th of February.
+
+None of those are the kind of mistake a test written from the invariants would catch, because none
+of them is about the invariants. They are about one language's arithmetic quietly differing from
+another's. So the mitigation gained a second half: `backend/tools/differential` puts the same
+inputs through both implementations and compares them **exactly** — bit-for-bit, because both
+sides do the same arithmetic in the same order on the same doubles. It runs over generated inputs
+and over the owner's real positions against one live quote set.
+
+It is a porting tool, not a suite: the Python goes away in phase 10, so whatever it finds has to be
+written into a committed TypeScript test before the branch merges. And it is itself verified by
+breaking what it guards — ten mutations, ten caught, on the harness and on the committed tests
+alike. That discipline is here because this project has already shipped three assertions that
+could never fail (ADR 0008).
+
 ## What was chosen
 
 - **Faithful port, not a redesign.** Every ratified invariant stays. Two hard changes at once
