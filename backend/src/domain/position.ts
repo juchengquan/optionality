@@ -7,6 +7,7 @@
  *
  */
 import { buildSpxCode } from "./contract.ts";
+import type { ByCode } from "./quote.ts";
 
 export type Side = "sold" | "bought";
 export type OptionType = "CALL" | "PUT";
@@ -27,9 +28,8 @@ export interface Position {
   id?: string;
 }
 
-/** One contract's live figures, as the sweep caches them, indexed by code. */
-export type Quote = Record<string, number | string | null | undefined>;
-export type ByCode = Record<string, Quote>;
+export type { ByCode, Quote } from "./quote.ts";
+
 
 /** greeks are linear in the legs, so an exposure-signed sum is the greek OF the position.
  *  IV is intensive and never summed — the same rule combos hold to. */

@@ -6,6 +6,7 @@
  *  own — in the Python it is four lines inside sweep(), reachable only through a session.
  */
 import { buildSpxCode } from "./contract.ts";
+import type { ByCode } from "./quote.ts";
 
 export interface MonitorLeg {
   sign: 1 | -1;
@@ -27,8 +28,8 @@ export interface Monitor {
   legs?: MonitorLeg[] | null;
 }
 
-export type Quote = Record<string, number | string | null | undefined>;
-export type ByCode = Record<string, Quote>;
+export type { ByCode, Quote } from "./quote.ts";
+
 
 /** greeks are linear, so signed sums are the greeks OF the combo's value; IV is not additive */
 export const COMBO_GREEK_FIELDS = [

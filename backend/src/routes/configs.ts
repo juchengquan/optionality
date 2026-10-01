@@ -43,7 +43,7 @@ export function configRoutes(deps: Deps) {
   }) => ({ ...summary(row), body: JSON.parse(row.body) as unknown });
 
   return new Hono()
-    .get("/", (c) => c.json(z.array(ConfigSummary).parse(listConfigs(db).map(summary))))
+    .get("/", (c) => c.json(z.array(ConfigSummary).parse(listConfigs(db).map(summary)), 200))
 
     .post("/", valid("json", ConfigIn), (c) => {
       const payload = c.req.valid("json");
@@ -69,7 +69,7 @@ export function configRoutes(deps: Deps) {
     .get("/:name", (c) => {
       const row = findConfig(db, c.req.param("name"));
       if (!row) throw notFound("config");
-      return c.json(ConfigDetail.parse(detail(row)));
+      return c.json(ConfigDetail.parse(detail(row)), 200);
     })
 
     .put("/:name", valid("json", ConfigIn), (c) => {
@@ -81,7 +81,7 @@ export function configRoutes(deps: Deps) {
       const row = updateConfig(
         db, name, payload.task_type, JSON.stringify(payload.body), toSqlDatetime(deps.now()),
       );
-      return c.json(ConfigDetail.parse(detail(row)));
+      return c.json(ConfigDetail.parse(detail(row)), 200);
     })
 
     .delete("/:name", (c) => {

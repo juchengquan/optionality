@@ -105,21 +105,21 @@ export function runRoutes(deps: Deps) {
 
     .get("/", valid("query", RunQuery), (c) => {
       const { status, limit } = c.req.valid("query");
-      return c.json(z.array(RunOut).parse(listRuns(db, { status, limit: limitOf(limit) }).map(out)));
+      return c.json(z.array(RunOut).parse(listRuns(db, { status, limit: limitOf(limit) }).map(out)), 200);
     })
 
     .get("/:id", (c) => {
       const row = findRun(db, c.req.param("id"));
       if (!row) throw notFound("run");
-      return c.json(RunOut.parse(out(row)));
+      return c.json(RunOut.parse(out(row)), 200);
     })
 
-    .get("/:id/report", (c) => c.json(summaryOf(c.req.param("id"))))
+    .get("/:id/report", (c) => c.json(summaryOf(c.req.param("id")), 200))
 
     .get("/:id/details", (c) => {
       const details = (summaryOf(c.req.param("id")).details ?? []) as Record<string, unknown>[];
       const code = c.req.query("code");
-      return c.json(code ? details.filter((d) => d.code === code) : details);
+      return c.json(code ? details.filter((d) => d.code === code) : details, 200);
     })
 
     .get("/:id/report.html", (c) => {

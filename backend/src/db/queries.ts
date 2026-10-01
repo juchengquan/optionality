@@ -9,7 +9,10 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import type { ConfigRow, ReportRow, RunRow, ScheduleRow } from "./rows.ts";
+import { COLUMNS } from "./rows.ts";
+import type {
+  ConfigRow, MonitorRow, PositionRow, ReportRow, RunRow, ScheduleRow,
+} from "./rows.ts";
 
 export function listConfigs(db: DatabaseSync): ConfigRow[] {
   return db.prepare("select * from configs order by name").all() as unknown as ConfigRow[];
@@ -105,4 +108,128 @@ export function databaseResponds(db: DatabaseSync): boolean {
   } catch {
     return false;
   }
+}
+
+/** The watchlist's order: expiry groups, combos before single legs, then calls before puts, then
+ *  strike. `legs is null` is 0 for a combo and 1 for a single leg, so ascending puts the combos
+ *  first — which is what the dashboard shows and what the bot's tables print.
+ *
+ *  Two combos in the same expiry have no defined order between them, here or in the Python: both
+ *  carry option_type 'CMB' and strike 0. */
+const WATCHLIST_ORDER = "order by strike_date, legs is null, option_type, strike";
+
+export function listMonitors(db: DatabaseSync): MonitorRow[] {
+  return db.prepare(`select * from monitors ${WATCHLIST_ORDER}`).all() as unknown as MonitorRow[];
+}
+
+/** Enabled monitors only, for the live `/quotes` family. Combos are excluded unless asked for
+ *  because the bot's narrower tables cannot render a signed sum in four columns. */
+export function enabledMonitors(db: DatabaseSync, includeCombos: boolean): MonitorRow[] {
+  const combos = includeCombos ? "" : "and legs is null";
+  return db.prepare(`select * from monitors where enabled = 1 ${combos} ${WATCHLIST_ORDER}`)
+    .all() as unknown as MonitorRow[];
+}
+
+export function findMonitor(db: DatabaseSync, id: string): MonitorRow | undefined {
+  return db.prepare("select * from monitors where id = ?").get(id) as unknown as MonitorRow | undefined;
+}
+
+/** The (code, field) pair is unique. `exceptId` is for an update, which must not conflict with
+ *  itself. */
+export function findMonitorByCodeField(
+  db: DatabaseSync, code: string, field: string, exceptId?: string,
+): MonitorRow | undefined {
+  const sql = exceptId
+    ? "select * from monitors where code = ? and field = ? and id != ?"
+    : "select * from monitors where code = ? and field = ?";
+  const params = exceptId ? [code, field, exceptId] : [code, field];
+  return db.prepare(sql).get(...params) as unknown as MonitorRow | undefined;
+}
+
+export function insertMonitor(db: DatabaseSync, row: MonitorRow): MonitorRow {
+  const columns = COLUMNS.monitors;
+  db.prepare(
+    `insert into monitors (${columns.map((c) => `"${c}"`).join(", ")})
+     values (${columns.map(() => "?").join(", ")})`,
+  ).run(...columns.map((c) => row[c] as never));
+  return findMonitor(db, row.id)!;
+}
+
+/** Update named columns of a monitor. The caller decides which, because PATCH changes only what it
+ *  was given and PUT replaces a fixed set. */
+export function updateMonitorFields(
+  db: DatabaseSync, id: string, changes: Partial<MonitorRow>,
+): MonitorRow {
+  const keys = Object.keys(changes) as (keyof MonitorRow)[];
+  if (keys.length === 0) return findMonitor(db, id)!;
+  db.prepare(`update monitors set ${keys.map((k) => `"${k}" = ?`).join(", ")} where id = ?`)
+    .run(...keys.map((k) => changes[k] as never), id);
+  return findMonitor(db, id)!;
+}
+
+export function deleteMonitorRow(db: DatabaseSync, id: string): void {
+  db.prepare("delete from monitors where id = ?").run(id);
+}
+
+export function clearMonitorLinks(db: DatabaseSync, monitorId: string): void {
+  db.prepare("delete from monitor_positions where monitor_id = ?").run(monitorId);
+}
+
+export function linkMonitorToPositions(
+  db: DatabaseSync, monitorId: string, positionIds: string[],
+): void {
+  const insert = db.prepare("insert into monitor_positions (monitor_id, position_id) values (?, ?)");
+  for (const pid of [...positionIds].sort()) insert.run(monitorId, pid);
+}
+
+export function listPositions(db: DatabaseSync): PositionRow[] {
+  return db.prepare("select * from positions order by strike_date, name")
+    .all() as unknown as PositionRow[];
+}
+
+/** Which Positions each Monitor watches. A rule may span several — a combined stop over two credit
+ *  spreads belongs to neither alone (ADR 0004). */
+export function positionsForMonitors(
+  db: DatabaseSync, monitorIds: string[],
+): Record<string, PositionRow[]> {
+  if (monitorIds.length === 0) return {};
+  const holes = monitorIds.map(() => "?").join(", ");
+  const rows = db.prepare(
+    `select mp.monitor_id as monitor_id, p.* from monitor_positions mp
+     join positions p on p.id = mp.position_id
+     where mp.monitor_id in (${holes})
+     order by p.name`,
+  ).all(...monitorIds) as unknown as (PositionRow & { monitor_id: string })[];
+  const owned: Record<string, PositionRow[]> = {};
+  for (const { monitor_id, ...position } of rows) {
+    (owned[monitor_id] ??= []).push(position as PositionRow);
+  }
+  return owned;
+}
+
+export function positionsForMonitor(db: DatabaseSync, monitorId: string): PositionRow[] {
+  return positionsForMonitors(db, [monitorId])[monitorId] ?? [];
+}
+
+/** Positions that some whole-position rule watches ALONE, and which therefore have an entry field
+ *  of their own.
+ *
+ *  A leg rule links to one Position too but offers no field, so counting it would wrongly mark that
+ *  Position reachable — which is the difference between "set this wing's credit directly" and "it
+ *  can only be reached by splitting a total". */
+export function solelyWatchedPositions(db: DatabaseSync): Set<string> {
+  const rows = db.prepare(
+    `select mp.position_id as position_id
+     from monitor_positions mp
+     join monitors m on m.id = mp.monitor_id
+     where m.scope = 'all'
+       and mp.monitor_id in (
+         select monitor_id from monitor_positions group by monitor_id having count(position_id) = 1
+       )`,
+  ).all() as { position_id: string }[];
+  return new Set(rows.map((r) => r.position_id));
+}
+
+export function setPositionEntry(db: DatabaseSync, id: string, entry: number): void {
+  db.prepare("update positions set entry = ? where id = ?").run(entry, id);
 }

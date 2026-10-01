@@ -98,8 +98,8 @@ hand-written call for each endpoint.
 1,070 lines of routes and 65 Python tests. One PR would be ~2,500 lines of new TypeScript, which is
 not reviewable.
 
-1. the app, the token, the error shape, `/health`, `/configs`, `/schedules`, `/runs`
-2. `/monitors` and `/quotes`
+1. the app, the token, the error shape, `/health`, `/configs`, `/schedules`, `/runs` — done (#78)
+2. `/monitors` and `/quotes`, with the quote-fetching layer and the watchlist builder they need
 3. `/positions`, `/spx`, and the `hc` proof completed over every endpoint
 
 **Carried deliberately, not forgotten:**
