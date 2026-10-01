@@ -388,6 +388,12 @@ class MonitorSweeper:
                     if monitor.enabled:  # retention=0 path: never got the muted notice
                         self._notify(f"ℹ️ monitor {monitor.code} expired ({monitor.strike_date}) — removed")
                     logger.info("monitor %s (%s) expired %s; deleted", monitor.id, monitor.code, monitor.strike_date)
+                    # the links go first. monitor_positions is a plain Table SQLAlchemy does not
+                    # manage, so deleting the monitor while a link survives raises FOREIGN KEY
+                    # constraint failed -- here, inside the sweep, on every subsequent sweep. The
+                    # same fault #70 fixed on the delete route, reached by a path no test covered
+                    # because retention only expires a monitor a week after it stops being watched.
+                    session.execute(monitor_positions.delete().where(monitor_positions.c.monitor_id == monitor.id))
                     session.delete(monitor)
                 elif expiry < today:
                     if monitor.enabled:
