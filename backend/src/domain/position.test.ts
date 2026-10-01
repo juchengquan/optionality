@@ -7,9 +7,11 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { buildSpxCode } from "./contract.ts";
 import {
   combinedCostToClose, combinedEntry, combinedPnl, contractSize, costToClose,
-  positionGreek, positionLegCodes, positionPnl, type ByCode, type Position,
+  positionGreek, positionLegCodes, positionPnl, positionsHolding,
+  type ByCode, type Position,
 } from "./position.ts";
 
 const future = () =>
@@ -190,5 +192,102 @@ describe("a stop spanning several positions", () => {
     // one wing's credit unrecorded means the total credit is not known, so neither is P&L
     expect(combinedEntry([call, put])).toBeNull();
     expect(combinedPnl([call, put], byCode)).toBeNull();
+  });
+});
+
+/** These two groups are not ported. They pin facts the Python's own tests never stated, found by
+ *  running both implementations over ten thousand generated values and comparing (ADR 0009,
+ *  phase 3). The Python goes away in phase 10, so the only place those findings can survive is
+ *  here. */
+describe("arithmetic that has to match the Python exactly", () => {
+  const withEntry = (entry: number): Position => ({
+    name: "e", strike_date: future(), contracts: 1, entry,
+    legs: [{ side: "sold", option_type: "CALL", strike: 8050 }],
+  });
+
+  it("adds across positions the way CPython's sum() does, not left to right", () => {
+    // sum([0.1, 0.2, 0.3]) is 0.6 exactly; adding them in order gives 0.6000000000000001.
+    // CPython has carried a compensation term here since 3.12, so a plain reduce would show the
+    // owner a different total from the one the Python service showed.
+    expect(combinedEntry([0.1, 0.2, 0.3].map(withEntry))).toBe(0.6);
+  });
+
+  it("rounds money half to even, on the stored value rather than the decimal", () => {
+    // Python's round() rounds the actual double and only breaks a genuine tie toward the even
+    // digit. 0.005 is held a shade ABOVE a half so it goes up; 0.015 a shade below so it goes
+    // down; 0.125 is exact, so the even rule decides it. A contract size of 1 is what makes
+    // these reachable — the size comes from the quotes, never assumed to be 100.
+    const one = (p: Position): ByCode =>
+      Object.fromEntries(positionLegCodes(p).map((c) => [c, { mid_price: 0, option_contract_size: 1 }]));
+    const pnlOf = (entry: number) => { const p = withEntry(entry); return positionPnl(p, one(p)); };
+    expect(pnlOf(0.005)).toBe(0.01);
+    expect(pnlOf(0.015)).toBe(0.01);
+    expect(pnlOf(0.125)).toBe(0.12);
+    expect(pnlOf(-0.125)).toBe(-0.12);
+    expect(pnlOf(2.675)).toBe(2.67);
+  });
+});
+
+describe("which positions a monitor is watching", () => {
+  const spread = (id: string, strikes: [number, number], type: "CALL" | "PUT" = "CALL"): Position & { id: string } => ({
+    id, name: id, strike_date: future(), contracts: 1, entry: 1.0,
+    legs: [
+      { side: "sold", option_type: type, strike: strikes[0] },
+      { side: "bought", option_type: type, strike: strikes[1] },
+    ],
+  });
+
+  it("links a monitor that covers a position exactly, and calls the scope all", () => {
+    const p = spread("a", [8050, 8075]);
+    const { found, scope } = positionsHolding([p], positionLegCodes(p));
+    expect([...found]).toEqual(["a"]);
+    expect(scope).toBe("all");
+  });
+
+  it("calls it a leg when the monitor watches only part of the structure", () => {
+    const p = spread("a", [8050, 8075]);
+    const { found, scope } = positionsHolding([p], [positionLegCodes(p)[0]!]);
+    expect([...found]).toEqual(["a"]);
+    expect(scope).toBe("leg");
+  });
+
+  it("spans both spreads of a condor — several positions is not ambiguity", () => {
+    // a condor's stop watches all four legs across the two spreads it is made of (ADR 0004)
+    const calls = spread("c", [8050, 8075], "CALL");
+    const puts = spread("p", [7100, 7075], "PUT");
+    const { found, scope } = positionsHolding(
+      [calls, puts], [...positionLegCodes(calls), ...positionLegCodes(puts)],
+    );
+    expect([...found].sort()).toEqual(["c", "p"]);
+    expect(scope).toBe("all");
+  });
+
+  it("links nothing when no position holds the contract", () => {
+    // watching a strike you have no position in is legitimate: it has no entry and no P&L,
+    // which is why those read empty rather than zero
+    const p = spread("a", [8050, 8075]);
+    const { found, scope } = positionsHolding([p], [buildSpxCode(future(), "CALL", 1234)]);
+    expect([...found]).toEqual([]);
+    expect(scope).toBeNull();
+  });
+
+  it("links nothing when a contract is held twice", () => {
+    // rolling a spread can leave the old and the new sharing a strike for a day, and the entry
+    // is then genuinely ambiguous. A missing figure makes you look; a wrong one does not.
+    const a = spread("a", [8050, 8075]);
+    const b = spread("b", [8050, 8100]);
+    const shared = positionLegCodes(a)[0]!;
+    const { found, scope } = positionsHolding([a, b], [shared]);
+    expect([...found]).toEqual([]);
+    expect(scope).toBeNull();
+  });
+
+  it("still links the unambiguous part of a monitor that also names a shared strike", () => {
+    // the double-hold rule is about the ambiguous contract, so it refuses the whole link rather
+    // than guessing which position the monitor meant
+    const a = spread("a", [8050, 8075]);
+    const b = spread("b", [8050, 8100]);
+    const { found } = positionsHolding([a, b], [positionLegCodes(a)[0]!, positionLegCodes(b)[1]!]);
+    expect([...found]).toEqual([]);
   });
 });

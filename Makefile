@@ -1,4 +1,5 @@
-.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck serve build-ui check-ui deploy \
+.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck diff-api diff-api-live \
+	serve build-ui check-ui deploy \
 	launchd-install launchd-restart launchd-uninstall \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
 
@@ -80,6 +81,26 @@ test-api:
 
 typecheck:
 	npm install --silent && npm run typecheck
+
+# the port is faithful or it is nothing (ADR 0009), and there is no recorded history to replay —
+# so these put the same inputs through both implementations and compare exactly. A porting tool,
+# not a suite: what it finds belongs in backend/src/**/*.test.ts. See backend/tools/differential.
+DIFF_OUT = $(CURDIR)/backend/tools/differential/.out
+diff-api:
+	mkdir -p $(DIFF_OUT)
+	python3 backend/tools/differential/gen_cases.py $(DIFF_OUT)/cases.json
+	uv run python backend/tools/differential/run_py.py $(DIFF_OUT)/cases.json $(DIFF_OUT)/py.json
+	node backend/tools/differential/run_ts.mjs $(DIFF_OUT)/cases.json $(DIFF_OUT)/ts.json
+	python3 backend/tools/differential/compare.py $(DIFF_OUT)/py.json $(DIFF_OUT)/ts.json 18000
+
+# reads the live DB and makes ONE bounded OpenD call, in a single process so both sides see the
+# same instant. Read-only.
+diff-api-live:
+	mkdir -p $(DIFF_OUT)
+	uv run --env-file .env python backend/tools/differential/live_py.py \
+		$(DIFF_OUT)/live_in.json $(DIFF_OUT)/live_py.json
+	node backend/tools/differential/live_ts.mjs $(DIFF_OUT)/live_in.json $(DIFF_OUT)/live_ts.json
+	python3 backend/tools/differential/compare.py $(DIFF_OUT)/live_py.json $(DIFF_OUT)/live_ts.json 40
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:
