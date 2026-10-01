@@ -94,6 +94,27 @@ never had, and which is what makes `hc` work. Auth middleware, the same bearer t
 **Done when** every route's ported test passes, and `hc<AppType>` type-checks against a
 hand-written call for each endpoint.
 
+**In three PRs, not one.** There are 29 handlers rather than 18 — this plan undercounted — across
+1,070 lines of routes and 65 Python tests. One PR would be ~2,500 lines of new TypeScript, which is
+not reviewable.
+
+1. the app, the token, the error shape, `/health`, `/configs`, `/schedules`, `/runs`
+2. `/monitors` and `/quotes`
+3. `/positions`, `/spx`, and the `hc` proof completed over every endpoint
+
+**Carried deliberately, not forgotten:**
+
+- **`/docs` does not come across.** FastAPI generates it; Hono serves no such page, so
+  `test_root_path_prefixes_openapi_url_for_reverse_proxy` has nothing to assert and `ROOT_PATH`
+  now has no reader at all. `@hono/zod-openapi` could generate a spec from the schemas already
+  written here, but it changes how the app is constructed and therefore how `hc` is typed, so it is
+  a decision for phase 8 rather than a detail of this one.
+- **`display_time_short` waits for phase 7.** Only the Telegram bot uses it, and it formats a zone
+  with Python's `tzname()` — "+08" for Singapore where JavaScript gives "GMT+8". That needs
+  deciding, not guessing.
+- **The scheduler half of the schedules tests waits for phase 6.** The Python asserts against a
+  live APScheduler; what phase 5 can assert is that every write asks for a reload.
+
 ## Phase 6 — The sweeper, the worker, the schedule
 
 The sweep, `fetch_resilient`, `verify_contracts`, quarantine, the expiry lifecycle. croner for

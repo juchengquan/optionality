@@ -2,11 +2,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { buildSpxCode } from "../../src/domain/contract.ts";
 import { daysToExpiry } from "../../src/domain/expiry.ts";
+import { displayTime, marketTimeToDisplay } from "../../src/timefmt.ts";
 import * as M from "../../src/domain/monitor.ts";
 import * as P from "../../src/domain/position.ts";
 
 const [, , inPath, outPath] = process.argv;
-const { cases, clock } = JSON.parse(readFileSync(inPath, "utf8"));
+const { cases, clock, display } = JSON.parse(readFileSync(inPath, "utf8"));
 const out = cases.map((c) => {
   const ps = c.positions;
   const byCode = Object.fromEntries(
@@ -50,5 +51,10 @@ const out = cases.map((c) => {
 });
 const dte = clock.instants.map((i) => clock.dates.map((d) => daysToExpiry(d, new Date(i))));
 
-writeFileSync(outPath, JSON.stringify({ cases: out, dte }));
+const displayOut = {
+  display_time: display.zones.map((z) => display.instants.map((i) => displayTime(new Date(i), z))),
+  market_time: display.zones.map((z) => display.market_times.map((t) => marketTimeToDisplay(t, z))),
+};
+
+writeFileSync(outPath, JSON.stringify({ cases: out, dte, display: displayOut }));
 console.log(`typescript: ${out.length} rows`);

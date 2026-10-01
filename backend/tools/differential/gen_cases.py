@@ -142,6 +142,52 @@ CLOCK = {
     "dates": [*DATES, "2026-10-01", "2026-09-30", "2025-01-02", "2028-02-29"],
 }
 
+# Display formatting: storage is UTC and display converts via DISPLAY_TZ, so the instants that
+# matter are the ones where the two disagree and the ones that straddle a daylight-saving change
+# in either zone. Zones chosen for awkwardness: a half-hour offset, a 45-minute one, one whose
+# abbreviation is a bare offset, one that is UTC, and the host default (empty string).
+DISPLAY = {
+    "zones": [
+        "Asia/Singapore",
+        "America/New_York",
+        "Europe/London",
+        "UTC",
+        "Asia/Kolkata",
+        "Asia/Kathmandu",
+        "Australia/Lord_Howe",
+        "Pacific/Chatham",
+        "America/St_Johns",
+    ],
+    "instants": [
+        "2026-08-10T03:35:32+00:00",
+        "2026-01-15T23:59:59+00:00",
+        "2026-11-01T05:30:00+00:00",  # inside the hour the US repeats
+        "2026-03-08T07:00:00+00:00",  # the hour the US skips
+        "2026-03-29T01:00:00+00:00",  # Europe forward
+        "2026-10-25T01:00:00+00:00",  # Europe back
+        "2026-12-31T16:00:00+00:00",  # a new year in some zones and not others
+        "2026-06-30T23:59:59+00:00",
+    ],
+    # naive strings as moomoo sends them, meaning US Eastern exchange time
+    "market_times": [
+        "2026-08-09 20:15:00",
+        "2026-01-15 09:30:00",
+        "2026-11-01 01:30:00",  # ambiguous: happens twice
+        "2026-03-08 02:30:00",  # does not exist
+        "2026-12-31 23:59:59",
+        "2026-07-04 12:00:00",
+        "N/A",
+        "",
+        "not a time",
+        # fits the shape and is not a time: Date.UTC rolls this into February 2027 unless the
+        # components are checked, which is how the first port of this function was wrong
+        "2026-13-45 99:99:99",
+        "2026-02-30 12:00:00",
+        "2026-00-10 12:00:00",
+        "2026-06-30 24:00:00",
+    ],
+}
+
 with open(sys.argv[1], "w") as f:
-    json.dump({"cases": cases, "clock": CLOCK}, f)
+    json.dump({"cases": cases, "clock": CLOCK, "display": DISPLAY}, f)
 print(f"{len(cases)} cases")
