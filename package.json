@@ -1,0 +1,22 @@
+{
+  "name": "optionality",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "test:browser": "npm run test:browser --workspace frontend",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspace frontend"
+  },
+  "devDependencies": {
+    "@vitest/browser": "^3.2.7",
+    "jsdom": "^27.4.0",
+    "playwright": "^1.63.0",
+    "typescript": "5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,15 +1,9 @@
 {
-  "extends": "../tsconfig.base.json",
+  "_comment": "Shared by both workspaces. The frontend adds its DOM and JSX settings, the backend adds Node's; everything here is a rule neither should disagree about.",
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -18,15 +12,6 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ]
-    }
-  },
-  "include": [
-    "src"
-  ]
+    "noEmit": true
+  }
 }
