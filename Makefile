@@ -1,4 +1,4 @@
-.PHONY: lint format test test-ui test-ui-fast test-ui-layout serve build-ui check-ui deploy \
+.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck serve build-ui check-ui deploy \
 	launchd-install launchd-restart launchd-uninstall \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
 
@@ -33,19 +33,19 @@ serve:
 test-ui: test-ui-fast test-ui-layout
 
 test-ui-fast:
-	cd frontend && npm install --silent && npm test
+	npm install --silent && npm test --workspace frontend
 
 # NOTE: the first run downloads a headless Chromium (~95MB) into ~/Library/Caches.
 # Nothing here touches the deploy path — ADR 0006 keeps node off that entirely.
 test-ui-layout:
-	cd frontend && npm install --silent && npx playwright install --with-deps chromium >/dev/null 2>&1 || true
-	cd frontend && npm run test:browser
+	npm install --silent && npx playwright install --with-deps chromium >/dev/null 2>&1 || true
+	npm run test:browser --workspace frontend
 
 # the bundle is COMMITTED, so node is needed only to change the frontend, never to run
 # the service — a failed build must not become a failed deploy, and now that Caddy serves
 # the files directly it would leave nothing to serve at all
 build-ui:
-	cd frontend && npm install --silent && VITE_BASE=$(UI_BASE) npm run build
+	npm install --silent && cd frontend && VITE_BASE=$(UI_BASE) npm run build
 
 # A committed bundle can drift from its source; this is what catches it.
 #
@@ -57,7 +57,7 @@ build-ui:
 # a reproducibility check rather than a self-agreement check.
 check-ui:
 	rm -rf frontend/dist
-	cd frontend && npm install --silent && VITE_BASE=$(UI_BASE) npm run build >/dev/null
+	npm install --silent && cd frontend && VITE_BASE=$(UI_BASE) npm run build >/dev/null
 	@git diff --quiet -- frontend/dist \
 		|| { echo "frontend bundle is stale — run 'make build-ui' and commit the result"; exit 1; }
 	@echo "frontend bundle matches its source"
@@ -72,6 +72,14 @@ deploy:
 	$(MAKE) launchd-restart
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
+
+# the TypeScript backend (ADR 0009). No build target: Node runs the source directly, so there
+# is nothing to compile and nothing to commit — the frontend's dist has no backend equivalent.
+test-api:
+	npm install --silent && npm test --workspace backend
+
+typecheck:
+	npm install --silent && npm run typecheck
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:

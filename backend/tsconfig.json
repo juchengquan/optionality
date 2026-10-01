@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "_comment": "Node runs these files directly (ADR 0009), so allowImportingTsExtensions lets the source import './x.ts' the way Node requires, with nothing compiled.",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src"]
+}

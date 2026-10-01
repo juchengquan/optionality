@@ -1,0 +1,16 @@
+{
+  "name": "backend",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/app.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node src/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3"
+  }
+}
