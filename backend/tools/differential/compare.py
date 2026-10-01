@@ -12,6 +12,19 @@ import json
 import math
 import sys
 
+# Divergences that are deliberate, each pinned to its exact path AND both values. An entry stops
+# matching the moment either side changes, so this cannot quietly absorb a regression — it can only
+# excuse the one case it names.
+KNOWN = {
+    # A wall time the clock skips, displayed in the market's own zone. Python's astimezone() is a
+    # no-op when the target zone is the one already attached, so it prints the original 02:30 with
+    # the pre-transition offset — a reading that never occurs, and which denotes 07:30Z, the very
+    # instant New York displays as 03:30-04:00. Matching it would mean encoding the artefact.
+    # Unreachable in practice: the market is shut at 02:30, so moomoo never sends it, and
+    # DISPLAY_TZ is Asia/Singapore.
+    ".display.market_time[1][3]": ("2026-03-08 02:30:00-05:00", "2026-03-08 03:30:00-04:00"),
+}
+
 compared = 0
 
 
@@ -30,6 +43,8 @@ def differs(x, y, path: str) -> list[str]:
     compared += 1
     if x is None or y is None:
         return [] if x is y else [f"{path}: python={x!r} ts={y!r}"]
+    if KNOWN.get(path) == (x, y):
+        return []
     if isinstance(x, int | float) and not isinstance(x, bool):
         if x == y or (math.isnan(x) and math.isnan(y)):
             return []

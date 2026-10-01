@@ -9,11 +9,11 @@ from types import SimpleNamespace
 from optionality.apis.aux import build_spx_code
 from optionality.service import monitor as M
 from optionality.service import position as P
-from optionality.service.timefmt import MARKET_TZ
+from optionality.service.timefmt import MARKET_TZ, display_time, market_time_to_display
 
 with open(sys.argv[1]) as f:
     loaded = json.load(f)
-cases, clock = loaded["cases"], loaded["clock"]
+cases, clock, display = loaded["cases"], loaded["clock"], loaded["display"]
 out = []
 for case in cases:
     ps = [SimpleNamespace(**p) for p in case["positions"]]
@@ -72,6 +72,13 @@ dte = [
     for i in clock["instants"]
 ]
 
+display_out = {
+    "display_time": [
+        [display_time(datetime.fromisoformat(i), z) for i in display["instants"]] for z in display["zones"]
+    ],
+    "market_time": [[market_time_to_display(t, z) for t in display["market_times"]] for z in display["zones"]],
+}
+
 with open(sys.argv[2], "w") as f:
-    json.dump({"cases": out, "dte": dte}, f)
+    json.dump({"cases": out, "dte": dte, "display": display_out}, f)
 print(f"python: {len(out)} rows")

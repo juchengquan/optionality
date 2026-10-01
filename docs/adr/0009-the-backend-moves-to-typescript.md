@@ -151,6 +151,25 @@ The values are identical and both sides parse the other's text. Matching Python'
 mean writing a JSON serialiser to imitate another language's repr, and nothing reads those bytes
 except a JSON parser.
 
+## A note on the typed client, which is the whole point
+
+`hc` types a request from the schema's PARSED shape, not its input shape. A field written
+`z.string().default("x")` is optional at runtime and **required of a typed client** — so the
+dashboard would have to send `tz` and `enabled` on every schedule, and `notify` on every run.
+
+Hono's `validator` has an `InputType` parameter for exactly this, and it cannot be inferred: the
+place it would be inferred from is itself guarded by a conditional on `InputType`, which is
+circular, so it resolves to `unknown` and the parsed branch wins. Passing it explicitly means
+passing the route path too, and a `string` there loses the path the client is keyed by — `$post`
+simply disappears from the client.
+
+So optional fields are written `.optional()` and their defaults applied where the value is used,
+named once. The schema then states what the API actually accepts, which is what `hc` is for.
+`@hono/zod-validator` would have handled it, but npm hoists the shadcn CLI's zod 3 to the workspace
+root and that package's types bind to it rather than to the backend's zod 4 — it will not compile
+against a version it declares support for. Hono's own validator couples to nothing, so the backend
+keeps four runtime dependencies: hono, zod, croner, and the node server adapter.
+
 ## Consequences
 
 - The Python database is never written to, which makes the first week genuinely reversible:
