@@ -170,6 +170,20 @@ root and that package's types bind to it rather than to the backend's zod 4 — 
 against a version it declares support for. Hono's own validator couples to nothing, so the backend
 keeps four runtime dependencies: hono, zod, croner, and the node server adapter.
 
+## Correction: Node runs TypeScript by ERASING it, which is narrower than it sounds
+
+"Node 25 runs TypeScript directly with no build step" is true, and the mechanism matters: it **strips
+types**. Any syntax that would have to EMIT code is rejected outright at load time — parameter
+properties, enums, namespaces, decorators, `import =`.
+
+`tsc` accepts all of them, and vitest transforms them properly, so neither the typecheck nor the test
+suite notices. Two classes reached main with `constructor(private readonly deps: Deps) {}` and could
+not be loaded by Node at all: 329 tests passed and `tsc --noEmit` was clean. `node --check` does not
+help either — it parses the syntax happily.
+
+`make check-api` loads every module in a short-lived subprocess, which is the only honest check. It is
+part of the gates from now on.
+
 ## Consequences
 
 - The Python database is never written to, which makes the first week genuinely reversible:

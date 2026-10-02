@@ -29,7 +29,15 @@ export class Scheduler {
   private readonly scheduleJobs = new Map<number, Cron>();
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly deps: SchedulerDeps) {}
+  /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
+   *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
+   *  so it is rejected outright at load time (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX). tsc accepts it and
+   *  vitest transforms it, which is how two of these reached main unable to run (see check-api). */
+  private readonly deps: SchedulerDeps;
+
+  constructor(deps: SchedulerDeps) {
+    this.deps = deps;
+  }
 
   /** Rebuild the schedule jobs from the database. Returns how many are now armed. */
   refreshJobs(): number {

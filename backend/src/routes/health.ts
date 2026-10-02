@@ -53,7 +53,10 @@ export function healthRoutes(deps: Deps) {
       HealthResponse.parse({
         db: ok,
         contract_version: CONTRACT_VERSION,
-        opend: await deps.opendReachable(settings.opendHost, settings.opendPort),
+        // the WEBSOCKET port, not the TCP one the Python probes. The question /health answers is
+        // "can I reach OpenD the way I talk to it", and probing a port this service never uses
+        // would be a green light for a gateway it cannot speak to.
+        opend: await deps.opendReachable(settings.opendHost, settings.moomooWsPort),
         queue_depth: worker.queueDepth(),
         last_run: last
           ? {

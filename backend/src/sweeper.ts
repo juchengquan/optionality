@@ -63,7 +63,15 @@ export class MonitorSweeper {
   lastBadCodes: string[] = [];
   fetchAt: Date | null = null;
 
-  constructor(private readonly deps: SweeperDeps) {}
+  /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
+   *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
+   *  so it is rejected outright at load time (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX). tsc accepts it and
+   *  vitest transforms it, which is how two of these reached main unable to run (see check-api). */
+  private readonly deps: SweeperDeps;
+
+  constructor(deps: SweeperDeps) {
+    this.deps = deps;
+  }
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();
