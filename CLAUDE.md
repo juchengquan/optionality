@@ -1,19 +1,35 @@
 # CLAUDE.md
 
-SPX options monitoring service: FastAPI + APScheduler + SQLite, Telegram bot, React dashboard.
+SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot and a React dashboard.
 **Two launchd agents** on the owner's always-on machine, behind one tailnet hostname (ADR 0006):
-`com.optionality.service` (uvicorn, the JSON API, `/opt/api`) and `com.optionality.ui` (Caddy serving
-`frontend/dist`, `/opt`). Same origin, so no CORS. `ROOT_PATH` must be the API's path (`/opt/api`), not
-the dashboard's. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
+the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
+Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
+
+**The API is being rewritten in TypeScript (ADR 0009), and the cutover is a single command.**
+Two implementations exist, and exactly ONE launchd agent is loaded:
+
+- `com.optionality.api` — node, `backend/src/main.ts`, database `data/optionality-ts.db`. The one to
+  work on. Node runs the TypeScript directly, so what is in the working tree is what runs.
+- `com.optionality.service` — uvicorn, `src/optionality/`, database `data/optionality.db`. The rollback
+  until phase 10 deletes it. Its database is never opened by the new service.
+
+`launchctl print gui/$(id -u)/com.optionality.api` says which is live. `make deploy` restarts whichever
+it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. The run pipeline
+(`core.py`, `apis/`, `notification/`) stays in Python either way, called as a subprocess.
 
 ## Commands
 
 - `make test` / `make lint` / `make format` — run all three before every commit. Lint is ruff with a broad
   external ruleset (expect rules far beyond the defaults; per-file `BLE001` ignores exist for the
   worker/sweeper/bot, whose job is to survive any failure).
-- `make deploy` — **the only correct way to land a merge**: pull, sync, back up the DB, migrate, restart BOTH
-  agents. launchd does not watch the repo and the agents run this working tree, so a merge that skips this
-  leaves stale code running. Doing the steps by hand is how the dashboard and the API drift apart.
+- `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, migrate if the
+  Python is live, restart BOTH agents. launchd does not watch the repo and the agents run this working
+  tree, so a merge that skips this leaves stale code running. Doing the steps by hand is how the
+  dashboard and the API drift apart.
+- TypeScript side: `make test-api` (the suite), `make typecheck`, **`make check-api`** (every module
+  loads under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached
+  main unable to load at all), `make diff-api` / `make diff-opend` / `make diff-services` (the three
+  differentials against the Python; see `backend/tools/*/README.md`).
 - `make serve` — run the API locally (loads `.env`). `make build-ui` / `check-ui` / `test-ui` for the frontend;
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path.
 - Schema change: edit `service/models.py`, then
