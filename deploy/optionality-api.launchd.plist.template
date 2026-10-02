@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The TypeScript service (ADR 0009). A DIFFERENT label from com.optionality.service, so both
+         can be installed and exactly one loaded — which is what makes the rollback one step. -->
+    <key>Label</key>
+    <string>com.optionality.api</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE__</string>
+        <!-- Node runs the TypeScript source directly; there is nothing to build and nothing to
+             commit, so what is in the working tree is what runs. --env-file loads the same .env
+             the Python read. -->
+        <string>--env-file=.env</string>
+        <string>backend/src/main.ts</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- the port the Python had, so the tailscale serve table does not move -->
+        <key>PORT</key>
+        <string>31415</string>
+        <!-- its OWN database, a copy taken at cutover. The Python's file is never opened again, which
+             is what makes the rollback lossless for everything that existed before the window. -->
+        <key>OPTIONALITY_DB_PATH</key>
+        <string>data/optionality-ts.db</string>
+        <!-- the bot token allows ONE getUpdates consumer, so this is only ever set on the service
+             that is actually running (CLAUDE.md) -->
+        <key>OPTIONALITY_BOT</key>
+        <string>1</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/optionality-api.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/optionality-api.log</string>
+</dict>
+</plist>

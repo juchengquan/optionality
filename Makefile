@@ -1,14 +1,21 @@
-.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api diff-api diff-api-live diff-opend diff-services copy-db \
+.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
+	diff-api diff-api-live diff-opend diff-services copy-db cutover cutover-preflight rollback restore-python \
+	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui deploy \
 	launchd-install launchd-restart launchd-uninstall \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
 
 LAUNCHD_LABEL = com.optionality.service
 LAUNCHD_PLIST = $(HOME)/Library/LaunchAgents/$(LAUNCHD_LABEL).plist
+API_LABEL = com.optionality.api
+API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
 UI_LABEL = com.optionality.ui
 UI_PLIST = $(HOME)/Library/LaunchAgents/$(UI_LABEL).plist
 UV_BIN = $(shell command -v uv)
+NODE_BIN = $(shell command -v node)
 CADDY_BIN = $(shell command -v caddy)
+# the TypeScript service's own database, a copy taken at cutover. The Python's is never opened again.
+TS_DB = data/optionality-ts.db
 
 # where the dashboard is mounted on the tailnet. Baked into the bundle at build time,
 # because `tailscale serve` strips the prefix and the page cannot discover it (ADR 0006).
@@ -65,12 +72,24 @@ check-ui:
 
 # The one path that keeps both services in step. Skew is the price of running them
 # separately (ADR 0006); this is what stops it happening by simple forgetfulness.
+#
+# Which API it restarts depends on which one is loaded, so this one target is correct before the
+# cutover and after it, and after a rollback. There is no alembic step for the TypeScript service:
+# its schema is declared, not migrated (ADR 0009 phase 4).
 deploy:
 	git pull --ff-only
-	uv sync --quiet
-	cp data/optionality.db data/optionality.db.bak-$$(date +%Y%m%d-%H%M%S)
-	OPTIONALITY_DB_PATH=data/optionality.db uv run alembic upgrade head
-	$(MAKE) launchd-restart
+	@if launchctl print gui/$$(id -u)/$(API_LABEL) >/dev/null 2>&1; then \
+		echo "the TypeScript API is loaded"; \
+		npm install --silent; \
+		cp $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S); \
+		$(MAKE) launchd-api-restart; \
+	else \
+		echo "the Python service is loaded"; \
+		uv sync --quiet; \
+		cp data/optionality.db data/optionality.db.bak-$$(date +%Y%m%d-%H%M%S); \
+		OPTIONALITY_DB_PATH=data/optionality.db uv run alembic upgrade head; \
+		$(MAKE) launchd-restart; \
+	fi
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
 
@@ -133,6 +152,82 @@ diff-opend:
 # data/optionality.db. Needs the Python service running on 31415 and OpenD up.
 diff-services:
 	backend/tools/opend/both_services.sh
+
+# --- the cutover (ADR 0009 phase 9) --------------------------------------------------------------
+#
+# One agent at a time. The Python keeps its database and never opens the new one, so a rollback loses
+# nothing that existed before the window — only what was entered during it, which is retypable.
+#
+# Read docs/cutover.md first. The Telegram test at the end is the owner's, not the agent's.
+# Every step after the Python stops restores it on failure. The window where nothing is running should
+# be as short as possible, and it must not be left open by a step that did not work.
+cutover: cutover-preflight
+	@echo "--- stopping the Python service"
+	-launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL)
+	@echo "--- copying the database, verified field by field"
+	@node backend/tools/copy-db/copy.ts data/optionality.db $(TS_DB) \
+		|| { $(MAKE) --no-print-directory restore-python; echo "the copy failed; the Python service is back"; exit 1; }
+	@uv run --env-file .env python backend/tools/copy-db/python_can_read.py $(TS_DB).snapshot $(TS_DB) \
+		|| { rm -f $(TS_DB)*; $(MAKE) --no-print-directory restore-python; \
+			 echo "the Python could not read the copy; it is back, and the copy is removed"; exit 1; }
+	@echo "--- starting the TypeScript API on 31415"
+	@$(MAKE) --no-print-directory launchd-api-install \
+		|| { $(MAKE) --no-print-directory restore-python; echo "the API would not install; the Python service is back"; exit 1; }
+	@sleep 4
+	@curl -fsS http://127.0.0.1:31415/health > /tmp/optionality-cutover-health.json \
+		|| { $(MAKE) --no-print-directory rollback; echo "the new API did not answer; rolled back"; exit 1; }
+	@python3 -c "import json;h=json.load(open('/tmp/optionality-cutover-health.json'));\
+print('  db      ', h['db']);print('  opend   ', h['opend']);print('  alarms  ', h['monitor']['alarms']['label']);\
+print('  sweep at', h['monitor']['last_sweep_at'])"
+	@echo
+	@echo "cutover done. Now the one test that cannot be automated — see docs/cutover.md."
+
+# used by cutover's failure paths; not a step to run on its own
+restore-python:
+	-launchctl bootstrap gui/$$(id -u) $(LAUNCHD_PLIST)
+
+# Everything that has to be true before the switch, each checked rather than assumed. recovery.sh is
+# the one that bites silently: it lives outside the repo, rebuilds the whole tailscale table, and as
+# written would start the Python on a port Node holds.
+cutover-preflight:
+	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
+	@test ! -f $(TS_DB) || { echo "$(TS_DB) exists — move it aside deliberately"; exit 1; }
+	@grep -q 'com.optionality.api' $(HOME)/recovery.sh \
+		|| { echo "~/recovery.sh still boots only the Python agent — see docs/cutover.md"; exit 1; }
+	@node -e 'import("./backend/src/opend.ts").then(async m => { \
+		const port = Number(process.env.MOOMOO_WS_PORT || 33333); \
+		if (!await m.probeOpend("127.0.0.1", port)) { console.error("OpenD is not listening on " + port); process.exit(1); } \
+		console.log("OpenD answers on " + port); })' 
+	$(MAKE) check-api
+	npm test --workspace backend
+	@echo "preflight passed"
+
+# Stop Node, start Python. Its database was never opened by the new service.
+rollback:
+	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
+	rm -f $(API_PLIST)
+	launchctl bootstrap gui/$$(id -u) $(LAUNCHD_PLIST)
+	@sleep 3
+	@curl -fsS http://127.0.0.1:31415/health | head -c 200; echo
+	@echo "rolled back to the Python service"
+
+launchd-api-install:
+	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
+	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
+	sed -e 's|__NODE__|$(NODE_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
+		deploy/optionality-api.launchd.plist.template > $(API_PLIST)
+	plutil -lint $(API_PLIST)
+	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
+
+launchd-api-restart:
+	launchctl kickstart -k gui/$$(id -u)/$(API_LABEL)
+
+launchd-api-uninstall:
+	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
+	rm -f $(API_PLIST)
+
+api-logs:
+	tail -f $(HOME)/Library/Logs/optionality-api.log
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:
