@@ -269,5 +269,5 @@ case: a Friday expiry, a quarantined contract, a gap open.
 - [ ] Phase 6 — sweeper, promise-queue worker, timezone-correct schedule
 - [ ] Phase 7 — Telegram bot, tested against a fake
 - [ ] Phase 8 — frontend on `hc`; contract version retired
-- [ ] Phase 9 — cutover, and a real alarm to a real phone
+- [x] Phase 9 — cutover, and a real alarm to a real phone
 - [ ] Phase 10 — Python deleted
