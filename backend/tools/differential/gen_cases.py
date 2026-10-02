@@ -188,6 +188,46 @@ DISPLAY = {
     ],
 }
 
+# The bot's formatting is asserted character for character (ADR 0009 phase 7), and the two languages
+# format a float in two places that could differ: a fixed number of decimals, and str(). The first
+# agrees; the second does not for an integral value — Python writes 100.0 where JavaScript writes 100 —
+# and these cells carry prices straight from moomoo, so whole numbers happen.
+FORMATTING = {
+    "values": [
+        0.0,
+        1.0,
+        100.0,
+        -1.0,
+        0.5,
+        26.4,
+        19.25,
+        7.15,
+        0.045548793,
+        0.000385614,
+        -0.443466676,
+        2.068031737,
+        11.488,
+        26.41235,
+        0.5125,
+        2.675,
+        1.0005,
+        -1.117809,
+        0.166096,
+        0.000124194,
+        22.012345,
+        5.89497,
+        1e-4,
+        1.5e-5,
+        1e16,
+        123456789.0,
+        0.1,
+        0.2,
+        0.3,
+        1 / 3,
+    ],
+    "places": [2, 3, 4, 5],
+}
+
 with open(sys.argv[1], "w") as f:
-    json.dump({"cases": cases, "clock": CLOCK, "display": DISPLAY}, f)
+    json.dump({"cases": cases, "clock": CLOCK, "display": DISPLAY, "formatting": FORMATTING}, f)
 print(f"{len(cases)} cases")

@@ -2,12 +2,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { buildSpxCode } from "../../src/domain/contract.ts";
 import { daysToExpiry } from "../../src/domain/expiry.ts";
-import { displayTime, marketTimeToDisplay } from "../../src/timefmt.ts";
+import { displayTime, displayTimeShort, marketTimeToDisplay } from "../../src/timefmt.ts";
+import { pyNumber } from "../../src/bot/format.ts";
 import * as M from "../../src/domain/monitor.ts";
 import * as P from "../../src/domain/position.ts";
 
 const [, , inPath, outPath] = process.argv;
-const { cases, clock, display } = JSON.parse(readFileSync(inPath, "utf8"));
+const { cases, clock, display, formatting } = JSON.parse(readFileSync(inPath, "utf8"));
 const out = cases.map((c) => {
   const ps = c.positions;
   const byCode = Object.fromEntries(
@@ -54,7 +55,13 @@ const dte = clock.instants.map((i) => clock.dates.map((d) => daysToExpiry(d, new
 const displayOut = {
   display_time: display.zones.map((z) => display.instants.map((i) => displayTime(new Date(i), z))),
   market_time: display.zones.map((z) => display.market_times.map((t) => marketTimeToDisplay(t, z))),
+  display_time_short: display.zones.map((z) => display.instants.map((i) => displayTimeShort(new Date(i), z))),
 };
 
-writeFileSync(outPath, JSON.stringify({ cases: out, dte, display: displayOut }));
+const formattingOut = {
+  fixed: formatting.places.map((n) => formatting.values.map((v) => v.toFixed(n))),
+  str: formatting.values.map((v) => pyNumber(v)),
+};
+
+writeFileSync(outPath, JSON.stringify({ cases: out, dte, display: displayOut, formatting: formattingOut }));
 console.log(`typescript: ${out.length} rows`);

@@ -179,6 +179,28 @@ Python tests do. The real thing is first exercised at cutover.
 
 **Done when** every bot test passes and the formatting is asserted character-for-character.
 
+**Done.** All thirteen commands, and `format.test.ts` asserts whole strings rather than substrings —
+which was not optional. A mutation sweep against the bot's own tests passed with the column padding
+removed, with one space between columns instead of two, with the HTML escaping applied in the wrong
+order, and with a delta printed to four places. None of those changes whether a substring appears, and
+every one is a table that reads wrongly on a phone.
+
+**The bot does not start unless `OPTIONALITY_BOT=1`.** The token allows one getUpdates consumer and the
+Python service is holding it; two consumers means each sees a random half of the owner's commands. The
+flag is how phase 9 hands it over deliberately rather than by whichever process started first.
+
+**Two formatting facts had to be implemented rather than inherited.** Python's `str()` of a float keeps
+the point on an integral value — `100.0`, not `100` — and goes exponential below 1e-4 and at 1e16 where
+JavaScript waits until 1e21. Both reach the owner's screen: prices arrive from moomoo as whole numbers,
+and a gamma threshold is the sort of figure typed as 0.00001.
+
+**`display_time_short` cannot be made exact, and that is recorded.** Python names a zone with tzdata's
+abbreviation; JavaScript uses ICU's, and ICU has fewer. They agree on the owner's Asia/Singapore (+08),
+on America/New_York (EDT), on UTC, and on every zone whose abbreviation is itself an offset. They
+differ for Asia/Kolkata (IST), Asia/Shanghai, Europe/Paris, a British summer and Newfoundland.
+`compare.py` allows exactly that one claim — the date and time must match, Python's side must be
+alphabetic and ours an offset — so a wrong time, a wrong offset or a wrong name all still fail.
+
 ## Phase 8 — The frontend takes its types from the backend
 
 `frontend/src/api.ts` loses its six interfaces and imports `hc<AppType>`. `contract.json`, the

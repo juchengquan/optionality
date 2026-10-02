@@ -133,3 +133,36 @@ export function displayStored(stored: string | null | undefined, tzName = ""): s
   if (stored === null || stored === undefined) return null;
   return displayTime(fromSqlDatetime(stored), tzName);
 }
+
+/** The short form the bot prints: `2026-08-10 11:35 +08`.
+ *
+ *  Ported from display_time_short, and it is the one formatting in this rewrite that cannot be made
+ *  exact. Python names the zone with tzdata's own abbreviation; JavaScript names it with ICU's, and
+ *  ICU has fewer. They agree on America/New_York (EDT), on UTC, and — after converting JavaScript's
+ *  `GMT+8` to tzdata's `+08` spelling — on every zone whose abbreviation IS an offset, which includes
+ *  the owner's Asia/Singapore.
+ *
+ *  They disagree where only Python has a name: Asia/Kolkata (IST vs +05:30), Asia/Shanghai (CST),
+ *  Europe/Paris (CET/CEST), Europe/London in summer (BST), America/St_Johns (NST/NDT). Converting the
+ *  offset back into those names would mean carrying a table of abbreviations that tzdata already has
+ *  and ICU deliberately dropped. Recorded rather than faked; `make diff-api` names each one.
+ */
+export function displayTimeShort(when: Date | null | undefined, tzName = ""): string | null {
+  if (when === null || when === undefined) return null;
+  const p = parts(when, tzName);
+  const named = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone(tzName), timeZoneName: "short",
+  }).formatToParts(when).find((x) => x.type === "timeZoneName")?.value ?? "";
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} ${tzAbbreviation(named)}`;
+}
+
+/** ICU's `GMT+8` or `GMT-3:30` in tzdata's spelling: `+08`, `-0330`. An alphabetic name is already
+ *  what Python would print, so it passes through. */
+function tzAbbreviation(icu: string): string {
+  const m = /^(?:GMT|UTC)([+-])(\d{1,2})(?::(\d{2}))?$/.exec(icu);
+  if (!m) return icu;
+  const [, sign, hours, minutes] = m;
+  const hh = hours!.padStart(2, "0");
+  // tzdata writes +08 for a whole hour and +0545 for anything else
+  return minutes && minutes !== "00" ? `${sign}${hh}${minutes}` : `${sign}${hh}`;
+}

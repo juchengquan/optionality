@@ -10,6 +10,7 @@ compared values where thousands were expected is not passing, it is not looking.
 
 import json
 import math
+import re
 import sys
 
 # Divergences that are deliberate, each pinned to its exact path AND both values. An entry stops
@@ -24,6 +25,30 @@ KNOWN = {
     # DISPLAY_TZ is Asia/Singapore.
     ".display.market_time[1][3]": ("2026-03-08 02:30:00-05:00", "2026-03-08 03:30:00-04:00"),
 }
+
+
+def _abbreviation_only(path: str, x: object, y: object) -> bool:
+    """Allow a display_time_short divergence that is ONLY the zone's name.
+
+    tzdata carries abbreviations ICU dropped — IST for Asia/Kolkata, BST for a British summer, NST and
+    NDT for Newfoundland — so Python prints a name where JavaScript can only print the offset. That is
+    the one claim this allows, and it allows nothing else: the date and time must match exactly, the
+    Python side must be alphabetic (it had a name), and ours must be an offset (we fell back). A wrong
+    time, a wrong offset, or a wrong name all still fail.
+
+    The owner's own Asia/Singapore agrees outright, as do America/New_York, UTC and every zone whose
+    tzdata abbreviation is itself an offset.
+    """
+    if "display_time_short" not in path:
+        return False
+    if not isinstance(x, str) or not isinstance(y, str):
+        return False
+    px, ax = x.rsplit(" ", 1)
+    py_, ay = y.rsplit(" ", 1)
+    if px != py_:
+        return False
+    return bool(re.fullmatch(r"[A-Za-z]{2,5}", ax)) and bool(re.fullmatch(r"[+-]\d{2}(\d{2})?", ay))
+
 
 compared = 0
 
@@ -43,7 +68,7 @@ def differs(x, y, path: str) -> list[str]:
     compared += 1
     if x is None or y is None:
         return [] if x is y else [f"{path}: python={x!r} ts={y!r}"]
-    if KNOWN.get(path) == (x, y):
+    if KNOWN.get(path) == (x, y) or _abbreviation_only(path, x, y):
         return []
     if isinstance(x, int | float) and not isinstance(x, bool):
         if x == y or (math.isnan(x) and math.isnan(y)):

@@ -1,9 +1,14 @@
 /** The process. launchd runs this file directly — Node executes TypeScript with no build step, which
  *  keeps the property that what is in the working tree is what runs (ADR 0009).
  *
- *  This is the whole service as of phase 6c: the routes, the alarm engine, the schedule, and the queue
- *  that owns run execution. The Telegram bot is phase 7, and the cutover is phase 9 — until then this
- *  listens on a port of its own so it can run beside the Python without either moving.
+ *  The whole service as of phase 7: the routes, the alarm engine, the schedule, the queue that owns run
+ *  execution, and the bot. The cutover is phase 9 — until then this listens on a port of its own so it
+ *  can run beside the Python without either moving.
+ *
+ *  **The bot is NOT started unless OPTIONALITY_BOT=1.** The token allows one getUpdates consumer
+ *  (CLAUDE.md), and the Python service is holding it. Two consumers means each sees a random half of
+ *  the owner's commands. The flag is how the cutover hands it over deliberately rather than by
+ *  whichever process happened to start first.
  */
 import { serve } from "@hono/node-server";
 
@@ -16,7 +21,8 @@ import { probeOpend } from "./opend.ts";
 import { PythonRunner } from "./runner.ts";
 import { Scheduler } from "./scheduler.ts";
 import { MonitorSweeper } from "./sweeper.ts";
-import { telegramSender } from "./telegram.ts";
+import { telegramApi, telegramSender } from "./telegram.ts";
+import { TelegramBot } from "./bot/bot.ts";
 import { Worker } from "./worker.ts";
 
 const settings = settingsFromEnv();
@@ -62,15 +68,33 @@ const port = Number(process.env.PORT ?? 31417);
 // 127.0.0.1: reachable only via the tailscale serve proxy and localhost, never the LAN
 const server = serve({ fetch: createApp(deps).fetch, port, hostname: "127.0.0.1" });
 
+const bot = new TelegramBot({
+  db,
+  settings,
+  api: telegramApi(settings.telegramBotToken),
+  fetchQuotes: opend.asFetcher(),
+  sweeper,
+  worker,
+});
+
 const armed = scheduler.refreshJobs();
 // sweep at once as well as on the interval. Without that every restart left the alarm engine quiet
 // and the dashboard's cache empty for a whole MONITOR_INTERVAL_SECONDS — and restarts happen after
 // every merge.
 scheduler.startSweep(settings.monitorIntervalSeconds, () => sweeper.sweep());
 
+// one getUpdates consumer per token, and the Python is holding it until the cutover
+const botWanted = process.env.OPTIONALITY_BOT === "1"
+  && Boolean(settings.telegramBotToken && settings.telegramChatId);
+if (botWanted) {
+  await bot.start();
+  void bot.run();
+}
+
 console.log(
   `optionality backend on 127.0.0.1:${port} — ${armed} schedule(s) armed, `
-  + `sweeping every ${settings.monitorIntervalSeconds}s`,
+  + `sweeping every ${settings.monitorIntervalSeconds}s, `
+  + `bot ${botWanted ? "polling" : "not started (set OPTIONALITY_BOT=1)"}`,
 );
 
 /** launchd sends SIGTERM on `kickstart -k`, which is how every deploy restarts this. Stopping in order
@@ -81,6 +105,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`${signal}: stopping`);
+    bot.stop();
     scheduler.stop();
     worker.stop();
     server.close();
