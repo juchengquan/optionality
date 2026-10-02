@@ -419,9 +419,15 @@ def test_a_new_position_adopts_the_monitors_already_watching_it(client_factory):
     mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
     assert _links(client, mid) == (set(), None)
 
-    pid = _position(client, "1016_bs_8050", "2026-10-16",
-                    [{"side": "sold", "option_type": "CALL", "strike": 8050},
-                     {"side": "bought", "option_type": "CALL", "strike": 8075}])
+    pid = _position(
+        client,
+        "1016_bs_8050",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+        ],
+    )
 
     assert _links(client, mid) == ({pid}, "leg")
 
@@ -436,16 +442,28 @@ def test_adopting_never_takes_a_link_away(client_factory):
     taken from you by something you subsequently hold.
     """
     client = client_factory()
-    first = _position(client, "old_roll", "2026-10-16",
-                      [{"side": "sold", "option_type": "CALL", "strike": 8050},
-                       {"side": "bought", "option_type": "CALL", "strike": 8075}])
+    first = _position(
+        client,
+        "old_roll",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+        ],
+    )
     mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
     assert _links(client, mid) == ({first}, "leg")
 
     # the roll: now two Positions hold strike 8050
-    _position(client, "new_roll", "2026-10-16",
-              [{"side": "sold", "option_type": "CALL", "strike": 8050},
-               {"side": "bought", "option_type": "CALL", "strike": 8100}])
+    _position(
+        client,
+        "new_roll",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8100},
+        ],
+    )
 
     assert _links(client, mid) == ({first}, "leg")
 
@@ -455,18 +473,29 @@ def test_adoption_does_not_resolve_an_ambiguity_it_cannot_resolve(client_factory
     later Position does not talk adoption into guessing. The entry is ambiguous however many
     times you ask."""
     client = client_factory()
-    _position(client, "old_roll", "2026-10-16",
-              [{"side": "sold", "option_type": "CALL", "strike": 8050},
-               {"side": "bought", "option_type": "CALL", "strike": 8075}])
-    _position(client, "new_roll", "2026-10-16",
-              [{"side": "sold", "option_type": "CALL", "strike": 8050},
-               {"side": "bought", "option_type": "CALL", "strike": 8100}])
+    _position(
+        client,
+        "old_roll",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+        ],
+    )
+    _position(
+        client,
+        "new_roll",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8100},
+        ],
+    )
     mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
     assert _links(client, mid) == (set(), None)
 
     # a third holding, unrelated to the ambiguous strike, runs adoption again
-    _position(client, "elsewhere", "2026-11-20",
-              [{"side": "sold", "option_type": "CALL", "strike": 9000}])
+    _position(client, "elsewhere", "2026-11-20", [{"side": "sold", "option_type": "CALL", "strike": 9000}])
 
     assert _links(client, mid) == (set(), None)
 
@@ -484,9 +513,15 @@ def test_deleting_a_position_takes_its_links_with_it(client_factory):
     from optionality.service.models import Monitor, monitor_positions
 
     client = client_factory()
-    pid = _position(client, "1016_bs_8050", "2026-10-16",
-                    [{"side": "sold", "option_type": "CALL", "strike": 8050},
-                     {"side": "bought", "option_type": "CALL", "strike": 8075}])
+    pid = _position(
+        client,
+        "1016_bs_8050",
+        "2026-10-16",
+        [
+            {"side": "sold", "option_type": "CALL", "strike": 8050},
+            {"side": "bought", "option_type": "CALL", "strike": 8075},
+        ],
+    )
     mid = _monitor(client, strike_date="2026-10-16", option_type="CALL", strike=8050)
     assert _links(client, mid) == ({pid}, "leg")
 
@@ -494,5 +529,7 @@ def test_deleting_a_position_takes_its_links_with_it(client_factory):
 
     with client.app.state.session_factory() as s:
         assert s.get(Monitor, mid) is not None, "the rule was deleted as a side effect"
-        assert s.scalar(select(func.count()).select_from(monitor_positions)
-                        .where(monitor_positions.c.position_id == pid)) == 0
+        assert (
+            s.scalar(select(func.count()).select_from(monitor_positions).where(monitor_positions.c.position_id == pid))
+            == 0
+        )
