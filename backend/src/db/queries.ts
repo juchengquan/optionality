@@ -285,3 +285,24 @@ export function orphanMonitors(db: DatabaseSync): MonitorRow[] {
 export function setMonitorScope(db: DatabaseSync, id: string, scope: string | null): void {
   db.prepare("update monitors set scope = ? where id = ?").run(scope, id);
 }
+
+export function insertRun(db: DatabaseSync, row: RunRow): RunRow {
+  const columns = COLUMNS.runs;
+  db.prepare(
+    `insert into runs (${columns.map((c) => `"${c}"`).join(", ")})
+     values (${columns.map(() => "?").join(", ")})`,
+  ).run(...columns.map((c) => row[c] as never));
+  return findRun(db, row.id)!;
+}
+
+export function updateRunFields(db: DatabaseSync, id: string, changes: Partial<RunRow>): void {
+  const keys = Object.keys(changes) as (keyof RunRow)[];
+  if (keys.length === 0) return;
+  db.prepare(`update runs set ${keys.map((k) => `"${k}" = ?`).join(", ")} where id = ?`)
+    .run(...keys.map((k) => changes[k] as never), id);
+}
+
+export function insertReport(db: DatabaseSync, row: ReportRow): void {
+  db.prepare("insert into reports (run_id, summary, html, created_at) values (?, ?, ?, ?)")
+    .run(row.run_id, row.summary, row.html, row.created_at);
+}

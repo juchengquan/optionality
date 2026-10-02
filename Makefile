@@ -1,4 +1,4 @@
-.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api diff-api diff-api-live diff-opend copy-db \
+.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api diff-api diff-api-live diff-opend diff-services copy-db \
 	serve build-ui check-ui deploy \
 	launchd-install launchd-restart launchd-uninstall \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
@@ -127,6 +127,12 @@ diff-opend:
 	node --env-file=.env backend/tools/opend/read_ts.mjs $(OPEND_OUT)/codes.json $(OPEND_OUT)/ts.json
 	uv run --env-file .env python backend/tools/opend/read_py.py $(OPEND_OUT)/codes.json $(OPEND_OUT)/after.json
 	python3 backend/tools/opend/compare.py $(OPEND_OUT)/before.json $(OPEND_OUT)/ts.json $(OPEND_OUT)/after.json
+
+# both services asked the same question within the same second (ADR 0009 phase 6). Starts the
+# TypeScript service against a FRESH copy of the live database, on a port of its own; never writes to
+# data/optionality.db. Needs the Python service running on 31415 and OpenD up.
+diff-services:
+	backend/tools/opend/both_services.sh
 
 # install the service as a macOS launchd agent: starts at login, restarts on crash
 launchd-install:
