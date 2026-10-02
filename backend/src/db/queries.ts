@@ -306,3 +306,26 @@ export function insertReport(db: DatabaseSync, row: ReportRow): void {
   db.prepare("insert into reports (run_id, summary, html, created_at) values (?, ?, ?, ?)")
     .run(row.run_id, row.summary, row.html, row.created_at);
 }
+
+/** Monitors a bot identifier might mean: the exact code, the joined-and-upcased form, an id prefix, or
+ *  a short contract like `260918 C8100`.
+ *
+ *  Deliberately returns every match rather than the first. "Ambiguous" is an answer the owner can act
+ *  on; silently picking one is how the wrong alarm gets deleted. */
+export function findMonitorsByIdentifier(
+  db: DatabaseSync, token: string, joined: string, expandedCode: string | null,
+): MonitorRow[] {
+  const clauses = ["code = ?", "code = ?", "id like ?"];
+  const params: unknown[] = [joined, token, `${token}%`];
+  if (expandedCode) {
+    clauses.push("code = ?");
+    params.push(expandedCode);
+  }
+  return db.prepare(`select * from monitors where ${clauses.join(" or ")}`)
+    .all(...(params as never[])) as unknown as MonitorRow[];
+}
+
+export function findComboByName(db: DatabaseSync, name: string): MonitorRow | undefined {
+  return db.prepare("select * from monitors where code = ? and legs is not null").get(name) as
+    unknown as MonitorRow | undefined;
+}

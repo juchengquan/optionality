@@ -202,6 +202,17 @@ the routes, the sweeper, the scheduler, the worker and the bot all go.
 It is reversible. If the scans start being used, they can be ported then, against a service that is
 already TypeScript.
 
+## Correction: the bot links what it creates
+
+The Python's `/watch` writes a Monitor and nothing else, so a monitor created from the phone has no
+entry and no P&L while the same monitor created from the dashboard has both. The linkage is a lookup
+rather than a guess (`positions_holding` returns nothing for a contract nothing holds and nothing for
+one held twice), so there is no reason the two doors should behave differently.
+
+The TypeScript bot links. It is the same omission #71 and #72 fixed on the API side, never carried to
+the bot, and it closes at the cutover rather than needing a Python fix first — the pre-cutover window
+is the only time the two differ.
+
 ## Consequences
 
 - The Python database is never written to, which makes the first week genuinely reversible:

@@ -9,11 +9,17 @@ from types import SimpleNamespace
 from optionality.apis.aux import build_spx_code
 from optionality.service import monitor as M
 from optionality.service import position as P
-from optionality.service.timefmt import MARKET_TZ, display_time, market_time_to_display
+from optionality.service.timefmt import (
+    MARKET_TZ,
+    display_time,
+    display_time_short,
+    market_time_to_display,
+)
 
 with open(sys.argv[1]) as f:
     loaded = json.load(f)
 cases, clock, display = loaded["cases"], loaded["clock"], loaded["display"]
+formatting = loaded["formatting"]
 out = []
 for case in cases:
     ps = [SimpleNamespace(**p) for p in case["positions"]]
@@ -77,8 +83,18 @@ display_out = {
         [display_time(datetime.fromisoformat(i), z) for i in display["instants"]] for z in display["zones"]
     ],
     "market_time": [[market_time_to_display(t, z) for t in display["market_times"]] for z in display["zones"]],
+    # the bot's short form, which NAMES the zone. tzdata has abbreviations ICU does not, so some of
+    # these are expected to differ — compare.py names every one it allows.
+    "display_time_short": [
+        [display_time_short(datetime.fromisoformat(i), z) for i in display["instants"]] for z in display["zones"]
+    ],
+}
+
+formatting_out = {
+    "fixed": [[f"{v:.{n}f}" for v in formatting["values"]] for n in formatting["places"]],
+    "str": [str(v) for v in formatting["values"]],
 }
 
 with open(sys.argv[2], "w") as f:
-    json.dump({"cases": out, "dte": dte, "display": display_out}, f)
+    json.dump({"cases": out, "dte": dte, "display": display_out, "formatting": formatting_out}, f)
 print(f"python: {len(out)} rows")

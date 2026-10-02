@@ -38,3 +38,21 @@ export function telegramSender(token: string, chatId: string) {
     await sendMessage({ token, chatId }, text);
   };
 }
+
+/** One call to the Telegram HTTP API, for the bot.
+ *
+ *  The timeout is longer than the long-poll it carries: getUpdates is asked to wait 25 seconds, so a
+ *  30-second request timeout would abort a healthy poll. The Python uses 35 for the same reason.
+ */
+export function telegramApi(token: string) {
+  return async (method: string, params: Record<string, string>): Promise<unknown> => {
+    const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST",
+      body: new URLSearchParams(params),
+      signal: AbortSignal.timeout(35_000),
+    });
+    const payload = (await response.json()) as { ok?: boolean; result?: unknown };
+    if (!payload.ok) throw new Error(`telegram ${method} failed: ${JSON.stringify(payload)}`);
+    return payload.result;
+  };
+}
