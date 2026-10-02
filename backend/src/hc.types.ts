@@ -122,8 +122,6 @@ type E = Awaited<ReturnType<typeof endpoints>>;
  *  under another name or another type, this stops compiling — which is the point. */
 export type HcChecks = [
   // /health ---------------------------------------------------------------------------
-  Checked<Known<E["health"]["contract_version"]>>,
-  Checked<Exactly<E["health"]["contract_version"], number>>,
   Checked<Exactly<E["health"]["db"], boolean>>,
   Checked<Exactly<E["health"]["opend"], boolean>>,
   Checked<Exactly<E["health"]["queue_depth"], number>>,

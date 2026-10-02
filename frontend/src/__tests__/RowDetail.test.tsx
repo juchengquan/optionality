@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { CONTRACT_VERSION } from "../contract";
 
 /** The detail sheet (ADR 0008). Its whole point is showing what the table is not:
  *  columns the picker has hidden, and — once the actions column retires — every control. */
@@ -12,7 +11,6 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
-  contract_version: CONTRACT_VERSION,
 };
 const leg = {
   id: "m3", code: "US.SPXW261120C8100000", field: "option_delta", threshold: 0.2,

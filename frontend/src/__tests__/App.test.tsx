@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { CONTRACT_VERSION } from "../contract";
 
 /** Fixtures mirror the REAL watchlist: a wing rule, a rule spanning two holdings, and a
  *  leg rule. Every frontend bug shipped on 2026-09-24 passed against a simpler fixture and
@@ -39,7 +38,6 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "2026-09-24 15:00:00+08:00", alarms: { label: "active", bad: false }, fetched_at: "2026-09-24 15:00:00+08:00" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
-  contract_version: CONTRACT_VERSION,
 };
 
 function mockApi(quotes: unknown[], monitors: unknown[] = [], healthBody: unknown = health) {
@@ -118,20 +116,15 @@ describe("the watchlist", () => {
   });
 });
 
-describe("version skew", () => {
-  it("says so when the service has moved on without the dashboard", async () => {
-    mockApi([wing], [], { ...health, contract_version: CONTRACT_VERSION + 1 });
-    render(<App />);
-
-    await waitFor(() => expect(screen.getByText(/out of date/i)).toBeTruthy());
-    // the figures are still drawn: a skewed dashboard is suspect, not useless
-    expect(screen.getByText("1016_bs_8050")).toBeTruthy();
-  });
-
-  it("stays quiet when they agree", async () => {
+describe("the shapes the dashboard draws", () => {
+  it("no longer checks a contract version, because the compiler does", async () => {
+    // Two tests used to live here: one asserting a banner when the service reported a different
+    // contract version, one asserting silence when it agreed. Both are gone with the version itself
+    // (ADR 0009 phase 8) — the dashboard now takes its types FROM the API, so a response that has
+    // changed shape is a compile error in this workspace rather than a banner on a page nobody may be
+    // looking at. There is nothing left here to assert at runtime; `npm run typecheck` is the test.
     mockApi([wing]);
     render(<App />);
-
     await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
     expect(screen.queryByText(/out of date/i)).toBeNull();
   });

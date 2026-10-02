@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { CONTRACT_VERSION } from "../contract";
 
 /** Phase 1 of the shadcn rebuild (ADR 0007): the two add-forms had NO tests, and they hold
  *  nine of the native selects phase 4 replaces. These assert what reaches the server, never
@@ -16,7 +15,6 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
-  contract_version: CONTRACT_VERSION,
 };
 
 let posted: { url: string; body: Record<string, unknown> }[] = [];

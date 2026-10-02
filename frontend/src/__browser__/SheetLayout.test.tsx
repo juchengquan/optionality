@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../App";
-import { CONTRACT_VERSION } from "../contract";
 
 /** The detail sheet's layout, measured. jsdom cannot see any of this — every box it
  *  reports is zero wide and zero tall — so "the controls are misaligned" was invisible to
@@ -13,7 +12,6 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
-  contract_version: CONTRACT_VERSION,
 };
 const combo = {
   id: "m1", code: "1016_bs_8050", field: "mid_price", threshold: 2.76,
