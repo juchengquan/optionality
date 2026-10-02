@@ -5,13 +5,14 @@ SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot and 
 the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
 Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
 
-**The API is being rewritten in TypeScript (ADR 0009), and the cutover is a single command.**
-Two implementations exist, and exactly ONE launchd agent is loaded:
+**The API is TypeScript as of 2026-10-02 (ADR 0009 phase 9).** Two implementations exist, and exactly
+ONE launchd agent is loaded — currently `com.optionality.api`:
 
 - `com.optionality.api` — node, `backend/src/main.ts`, database `data/optionality-ts.db`. The one to
   work on. Node runs the TypeScript directly, so what is in the working tree is what runs.
-- `com.optionality.service` — uvicorn, `src/optionality/`, database `data/optionality.db`. The rollback
-  until phase 10 deletes it. Its database is never opened by the new service.
+- `com.optionality.service` — uvicorn, `src/optionality/`, database `data/optionality.db`. **Not
+  loaded.** The rollback until phase 10 deletes it (a month after the cutover); its database is frozen
+  at the cutover minute and is never opened by the new service.
 
 `launchctl print gui/$(id -u)/com.optionality.api` says which is live. `make deploy` restarts whichever
 it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. The run pipeline

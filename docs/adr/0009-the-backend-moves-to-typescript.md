@@ -213,6 +213,22 @@ The TypeScript bot links. It is the same omission #71 and #72 fixed on the API s
 the bot, and it closes at the cutover rather than needing a Python fix first — the pre-cutover window
 is the only time the two differ.
 
+## The cutover happened
+
+2026-10-02, 11:19 UTC. `com.optionality.api` (node) replaced `com.optionality.service` (uvicorn) on the
+same port, behind the same tailscale path, serving the same dashboard bundle. Nothing outside the
+machine moved.
+
+The decision this ADR was least sure of — "verification has to happen before the cutover rather than
+during it", with the recording week declined — held up. Four differentials carried it: the domain
+against the Python over 19,265 generated values, the OpenD client against the Python SDK over 288 live
+field values, both services' computed answers over 94 values and 172 required fields, and the database
+copy field by field. What they could not cover was one Telegram message to one phone, and that was
+done by hand.
+
+The window is open until phase 10. The Python's agent is still installed and its database frozen at the
+cutover minute, so the rollback is one command and loses only what is typed during the window.
+
 ## Consequences
 
 - The Python database is never written to, which makes the first week genuinely reversible:
