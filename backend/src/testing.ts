@@ -21,6 +21,17 @@ import type { CreateRunArgs } from "./ports.ts";
 import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
 
 export const TOKEN = "tok";
+
+/** The harness's clock, fixed. Exported because a test that invents a date from the REAL clock while
+ *  the app reads this one is a test that breaks at midnight: `dte` counts from New York's calendar
+ *  day, so a strike 30 days from the real date is 31 days from a frozen 2026-10-01 once the real date
+ *  rolls over. That is exactly how this suite broke a day after it was written. Derive dates from
+ *  here and the gap cannot open. */
+export const NOW = new Date("2026-10-02T05:26:06.299Z");
+
+/** A date `n` days from the harness's clock, as YYYY-MM-DD. */
+export const daysFromNow = (n: number) =>
+  new Date(NOW.getTime() + n * 86_400_000).toISOString().slice(0, 10);
 export const AUTH = { Authorization: `Bearer ${TOKEN}` };
 
 /** A worker that records instead of running. One worker owns run execution, and in a route test
@@ -130,7 +141,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   const scheduler = new FakeScheduler();
   const sweeper = new FakeSweeper();
 
-  const state = { now: new Date("2026-10-01T05:26:06.299Z") };
+  const state = { now: NOW };
   const deps: Deps = {
     settings,
     db,

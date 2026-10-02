@@ -184,6 +184,24 @@ help either — it parses the syntax happily.
 `make check-api` loads every module in a short-lived subprocess, which is the only honest check. It is
 part of the gates from now on.
 
+## Correction: the run pipeline stays in Python
+
+The worker executes a strategy or holdings scan that produces an HTML report. Porting it means
+replacing pandas (DataFrame→HTML tables), the moomoo option-chain scan and yfinance: about 614 lines
+across four pandas modules, and the part of the codebase with the least test coverage.
+
+It has run **twice**, both on 2026-08-10, with no schedule configured. The sweep runs every sixty
+seconds. So the worker spawns `python -m optionality.runner` and stores what comes back. No divergence
+risk in the one output the owner reads as money, and everything used daily becomes TypeScript as
+intended. The owner's decision, knowingly taken.
+
+Phase 10 therefore narrows from "delete `src/optionality/`" to "delete the Python that was ported":
+`core.py`, `apis/`, `notification/` and `datatype/` stay, along with the `uv` environment. The service,
+the routes, the sweeper, the scheduler, the worker and the bot all go.
+
+It is reversible. If the scans start being used, they can be ported then, against a service that is
+already TypeScript.
+
 ## Consequences
 
 - The Python database is never written to, which makes the first week genuinely reversible:

@@ -10,13 +10,13 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type Harness, body, harness, json, poisonable, quoting } from "../testing.ts";
+import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../testing.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
 
-const daysAhead = (n: number) =>
-  new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+// relative to the HARNESS's clock, not the real one — see NOW in testing.ts
+const daysAhead = daysFromNow;
 const future = () => daysAhead(30);
 
 const single = (over: Record<string, unknown> = {}) =>

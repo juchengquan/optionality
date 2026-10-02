@@ -137,7 +137,22 @@ client does not exist yet, and the live comparison cannot happen without it.
 
 1. the sweeper and the schedule, against fakes — done (#82)
 2. the moomoo WebSocket client, and the live comparison this phase is done when — done
-3. the worker, the Python bridge, and the lifespan that starts all of it
+3. the worker, the Python bridge, and the lifespan that starts all of it — done
+
+**Done.** The service starts, sweeps, serves, and stops on SIGTERM, and both endpoints agree with the
+Python service asked within the same second:
+
+```
+make diff-services
+  /quotes            0 divergences over 62 compared values across 4 rows
+  /positions/values  0 divergences over 40 compared values across 4 rows
+```
+
+The boundary with Python is `optionality/runner.py`, called as a subprocess with files rather than
+pipes — the moomoo SDK writes its own lines to stdout and a JSON document sharing a pipe with them is
+one that sometimes does not parse. Two modes: `run` (the scan, and the report notification, which
+needs the same config object and the same senders) and `alert` (the failure email, which is SMTP with
+an app password).
 
 **`run_task` stays in Python, invoked as a subprocess.** It is the strategy/holdings scan that
 produces the HTML report, and porting it means replacing pandas, the option-chain scan and yfinance:
