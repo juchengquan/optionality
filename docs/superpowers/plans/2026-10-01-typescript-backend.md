@@ -210,6 +210,34 @@ This is the phase that delivers the stated reason for the whole exercise. **Done
 interfaces are gone, the frontend's 70 tests pass against the typed client, and changing a
 response shape in the backend breaks the frontend's typecheck.
 
+**Done.** Five types replace the six — `PositionRef` had no readers at all, because the components
+take `entry.positions` whole and use `.id`; the hand-written interface declared a `name` nothing
+looked at. 69 tests pass (one skew test replaced the two that are gone with the version).
+
+**The typecheck linkage is proved, and its scope is exactly right.** Ten response-shape changes were
+introduced on purpose; seven broke the frontend's typecheck. The three that did not are correct:
+
+- `fill` narrowed from `number | null` to `number` — a service promising MORE is not a problem for a
+  client, and the frontend's call sites accept the narrower type.
+- `dte` changed from a number to a string — the only use is `String(entry.dte)`, so the frontend
+  genuinely does not care.
+- `positions[].name` removed — nothing reads it.
+
+So the guarantee is "every field the dashboard READS is pinned", which is the useful statement and a
+stronger one than "every field is pinned" would be.
+
+**The ordering risk had to be closed first.** This phase types the frontend against the TypeScript
+backend while the dashboard still TALKS to the Python one — the cutover is phase 9. So
+`make diff-services` grew a shape comparison over every endpoint the dashboard reads: 172 required
+fields, both services, no differences. `hc` with a relative base builds byte-identical URLs, the same
+methods, and `application/json` bodies, so the deployed page is unchanged in what it sends.
+
+**One thing the old interfaces were wrong about.** They declared `mid_price?: number | null` while the
+service promised nothing of the kind — `snapshot` was untyped JSON all the way through. `hc` surfaced
+that as six type errors on the first attempt. The fix was to make the API state its contract: `/quotes`
+now has a response schema whose snapshot names the fields the dashboard reads, typed, with the rest of
+moomoo's columns passing through. The hand-written interface had been a claim; now it is a fact.
+
 ## Phase 9 — Cutover
 
 Stop `com.optionality.service`, start the Node agent on the same port and the same tailscale

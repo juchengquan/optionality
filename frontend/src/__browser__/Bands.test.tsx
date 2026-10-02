@@ -3,7 +3,6 @@ import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../App";
-import { CONTRACT_VERSION } from "../contract";
 
 /** Three states, three colours — measured. A class name is not evidence of a visible
  *  difference, and this project has shipped three assertions that reported confidence they
@@ -13,7 +12,6 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
-  contract_version: CONTRACT_VERSION,
 };
 const base = {
   id: "m1", code: "US.SPXW261120C8100000", field: "option_delta", threshold: 0.2,

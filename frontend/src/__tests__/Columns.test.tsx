@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import { shortContract } from "../format";
-import { CONTRACT_VERSION } from "../contract";
 
 /** A MID-watched leg rule. It used to watch delta, but delta is pinned now (every
  *  single-leg rule in the real watchlist watches it) and a pinned column cannot be hidden
@@ -25,7 +24,6 @@ const health = {
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
   // else every test here renders the skew banner, camouflaging a real one
-  contract_version: CONTRACT_VERSION,
 };
 
 function mockApi(quotes: unknown[] = [leg]) {

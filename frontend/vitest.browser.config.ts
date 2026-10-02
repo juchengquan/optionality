@@ -1,12 +1,8 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-const contractVersion: number = JSON.parse(
-  readFileSync("../src/optionality/service/contract.json", "utf8"),
-).version;
 
 /** The small suite that needs a real layout engine.
  *
@@ -19,7 +15,6 @@ export default defineConfig({
   // WITHOUT this the utilities do not exist and every measurement is of unstyled
   // markup — which looks like passing tests and is worth nothing
   plugins: [react(), tailwindcss()],
-  define: { __CONTRACT_VERSION__: JSON.stringify(contractVersion) },
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   test: {
     include: ["src/__browser__/**/*.test.tsx"],

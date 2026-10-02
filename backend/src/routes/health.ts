@@ -9,7 +9,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { CONTRACT_VERSION } from "../contract.ts";
 import type { Deps } from "../deps.ts";
 import { databaseResponds, latestRun } from "../db/queries.ts";
 import { displayStored, displayTime } from "../timefmt.ts";
@@ -23,7 +22,6 @@ const LastRun = z.object({
 
 export const HealthResponse = z.object({
   db: z.boolean(),
-  contract_version: z.number(),
   opend: z.boolean(),
   queue_depth: z.number(),
   last_run: LastRun.nullable(),
@@ -52,7 +50,6 @@ export function healthRoutes(deps: Deps) {
     return c.json(
       HealthResponse.parse({
         db: ok,
-        contract_version: CONTRACT_VERSION,
         // the WEBSOCKET port, not the TCP one the Python probes. The question /health answers is
         // "can I reach OpenD the way I talk to it", and probing a port this service never uses
         // would be a green light for a gateway it cannot speak to.

@@ -292,15 +292,71 @@ export function monitorRoutes(deps: Deps) {
     });
 }
 
+/** The contract's live figures, as a watchlist row carries them.
+ *
+ *  A loose object: the fields named here are the ones the dashboard and the bot read, and they are
+ *  typed because the service KNOWS they are numbers — it maps them itself (opend/snapshot.ts). The rest
+ *  of what moomoo returns passes through untouched for `/spx/quote` and for a human reading JSON.
+ *
+ *  Declared at all because of what phase 8 found: the frontend used to declare `mid_price?: number`
+ *  while the service promised nothing of the kind, so the hand-written interface was a claim rather
+ *  than a fact. With `hc` reading this, it is a fact.
+ */
+const SnapshotOut = z.looseObject({
+  code: z.string().nullish(),
+  name: z.string().nullish(),
+  update_time: z.string().nullish(),
+  fetched_at: z.string().nullish(),
+  mid_price: z.number().nullish(),
+  bid_price: z.number().nullish(),
+  ask_price: z.number().nullish(),
+  last_price: z.number().nullish(),
+  option_delta: z.number().nullish(),
+  option_gamma: z.number().nullish(),
+  option_theta: z.number().nullish(),
+  option_vega: z.number().nullish(),
+  option_implied_volatility: z.number().nullish(),
+  option_contract_size: z.number().nullish(),
+});
+
+/** One watchlist row: everything needed to draw it, with no arithmetic left for the client. */
+const EntryOut = z.object({
+  id: z.string(),
+  code: z.string(),
+  strike_date: z.string(),
+  field: z.string(),
+  threshold: z.number(),
+  direction: z.string(),
+  compare: z.string(),
+  triggered: z.boolean(),
+  last_value: z.number().nullable(),
+  snapshot: SnapshotOut.nullable(),
+  legs: z.array(z.object({
+    sign: z.number(), option_type: z.string(), strike: z.number(),
+  })).optional(),
+  combo_value: z.number().nullable().optional(),
+  combo_greeks: z.record(z.string(), z.number().nullable()).optional(),
+  error: z.string().optional(),
+  dte: z.number(),
+  scope: z.string().nullable(),
+  positions: z.array(z.object({ id: z.string(), name: z.string() })),
+  cost_to_close: z.number().nullable(),
+  entry: z.number().nullable(),
+  pnl: z.number().nullable(),
+  fill: z.number().nullable(),
+});
+
 /** `/quotes` — a live call for the whole watchlist, which the bot uses and the dashboard does not. */
 export function quoteRoutes(deps: Deps) {
   return new Hono().get("/quotes", async (c) => {
     try {
       return c.json(
-        await watchlistQuotes(deps.db, deps.settings.displayTz, deps.fetchQuotes, {
-          includeCombos: true,
-          now: deps.now(),
-        }),
+        z.array(EntryOut).parse(
+          await watchlistQuotes(deps.db, deps.settings.displayTz, deps.fetchQuotes, {
+            includeCombos: true,
+            now: deps.now(),
+          }),
+        ),
         200,
       );
     } catch (err) {

@@ -9,7 +9,6 @@ import {
 import { NativeSelect } from "@/components/ui/native-select";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddPanel } from "./AddPanel";
-import { CONTRACT_VERSION } from "./contract";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, writeHidden } from "./columns";
 import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
@@ -142,10 +141,6 @@ export function App() {
 
   const fetchedAt = health?.monitor.fetched_at;
 
-  // The dashboard and the API deploy separately now (ADR 0006), so this bundle can be older
-  // than the service it is talking to. Say so rather than let it surface as a blank column.
-  const skewed = health !== null && health.contract_version !== CONTRACT_VERSION;
-
   return (
     <main>
       {/* the add triggers share the heading's line rather than taking a row of their own:
@@ -155,13 +150,6 @@ export function App() {
         <AddPanel onCreate={(body) => void act(() => createMonitor(body))} />
       </div>
       {error ? <div className="banner">{error}</div> : null}
-      {skewed ? (
-        <div className="banner">
-          This dashboard is out of date — it was built for API v{CONTRACT_VERSION}, the service
-          is running v{health.contract_version}. The figures below may be wrong. Run{" "}
-          <code>make deploy</code>, then reload.
-        </div>
-      ) : null}
 
       {/* Freshness in one sentence. The refresh selector used to be a row of its own above
           the tables; it belongs here, because how current the figures are and how often they

@@ -7,7 +7,6 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CONTRACT_VERSION } from "./contract.ts";
 import { type Harness, body, harness } from "./testing.ts";
 
 let h: Harness;
@@ -25,10 +24,12 @@ describe("/health", () => {
     expect(data.last_run).toBeNull();
   });
 
-  it("carries the contract version the dashboard checks itself against", async () => {
-    // the two deploy separately (ADR 0006); this integer is the only thing both sides read
+  it("no longer carries a contract version, because the compiler has replaced it", async () => {
+    // the dashboard used to compare one against its own to decide whether it had been built against
+    // the API it was talking to. Since phase 8 it takes its TYPES from the API, so a shape that has
+    // moved is a compile error rather than a banner nobody may be looking at.
     const data = await body(await start().call("/health", { anonymous: true }));
-    expect(data.contract_version).toBe(CONTRACT_VERSION);
+    expect("contract_version" in data).toBe(false);
   });
 
   it("reports the knobs a client cannot guess", async () => {

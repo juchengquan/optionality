@@ -54,3 +54,14 @@ snapshotted first and confirmed byte-identical after the probe was removed.
 The absolute base path proved itself in the same test, in the negative: the page served at
 `/probe` still asked for `/opt/assets/...`, because the bundle knows where it was built to
 live. That is the coupling this ADR accepts, and it is visible rather than subtle.
+
+## The skew banner retired in ADR 0009 phase 8
+
+The contract version and the banner it fed were the answer to "a bundle can outlive the API it was
+built against". Since the frontend takes its types FROM the backend (`hc<AppType>`), a response that
+has changed shape is a compile error in the frontend's workspace — before the bundle is built, let
+alone deployed. A banner asks the owner to notice; a typecheck does not.
+
+What remains of the problem is real but smaller: the two services still deploy separately, so a bundle
+built from one commit can be served beside an API from another. `make deploy` restarting both is what
+addresses that, and it always was.

@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { CONTRACT_VERSION } from "../contract";
 
 /** Back closes the panel (ADR 0008). The interesting case is not that it works — it is
  *  that closing a panel some OTHER way has to consume the history entry too, or the next
@@ -13,7 +12,6 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
-  contract_version: CONTRACT_VERSION,
 };
 const row = {
   id: "m1", code: "1016_bs_8050", field: "mid_price", threshold: 2.76,

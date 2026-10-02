@@ -3,7 +3,6 @@ import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../App";
-import { CONTRACT_VERSION } from "../contract";
 
 /** The name column must stay put while the rest of the row is swiped, or swiping loses the
  *  one thing that says which row you are reading. position:sticky and border-collapse are
@@ -13,7 +12,6 @@ const health = {
   db: true, opend: true, queue_depth: 0,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
-  contract_version: CONTRACT_VERSION,
 };
 const combo = {
   id: "m2", code: "1016_bs_8050", field: "mid_price", threshold: 2.76,
