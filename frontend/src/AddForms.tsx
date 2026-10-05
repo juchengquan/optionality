@@ -133,8 +133,17 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
             <Input id="c-expiry" type="date" value={strikeDate}
                    onChange={(e) => setStrikeDate(e.target.value)} required />
           </Field>
+          {/* A leg is four controls on one line, which the horizontal Field is not built for:
+              it assumes label + ONE control and gives the label `flex-auto` — grow AND
+              shrink — so the label is squeezed below the width of its own text. "leg 1"
+              needs 31px and was given 20 on a phone and 30 at a desk, wrapping to "leg"/"1"
+              and making every row 39px tall for a 32px control. flex-none is its text's
+              width; the strike box takes what is left, which is 114px at the narrowest.
+              Nothing is set on the NumberField: its class would land on the inner input,
+              while the flex item is Base UI's wrapper, so it would do nothing at all. */}
           {legs.map((leg, i) => (
-            <Field key={i} orientation="horizontal">
+            <Field key={i} orientation="horizontal"
+                   className="*:data-[slot=field-label]:flex-none">
               <FieldLabel htmlFor={`c-leg-${i}-strike`}>leg {i + 1}</FieldLabel>
               <NativeSelect aria-label={`leg ${i + 1} sign`} value={leg.sign}
                             onChange={(e) => setLeg(i, { sign: e.target.value })}>
@@ -144,7 +153,9 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
                             onChange={(e) => setLeg(i, { option_type: e.target.value })}>
                 <option>CALL</option><option>PUT</option>
               </NativeSelect>
-              <NumberField id={`c-leg-${i}-strike`} placeholder="strike (blank = skip)"
+              {/* "strike (blank = skip)" wants 138px and the box has 100px of text room on a
+                  phone, so the hint was never readable where it mattered; the sheet says it */}
+              <NumberField id={`c-leg-${i}-strike`} placeholder="strike"
                            value={leg.strike} onValueChange={(v) => setLeg(i, { strike: v })} />
             </Field>
           ))}

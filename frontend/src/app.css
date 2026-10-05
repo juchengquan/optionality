@@ -164,10 +164,15 @@ form.health { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; 
    inline elements. NumberField renders a block wrapper, so an inline form dropped its
    button onto the next line. They are flex rows now, stated where they are used. */
 td.actions { text-align: left; }
-/* the add-forms are shadcn FieldSets now and bring their own spacing; these element
-   selectors matched them too and fought it. Kept only the side-by-side placement, which
-   is this dashboard's layout choice rather than the component's. */
-fieldset { display: inline-block; vertical-align: top; margin: 0 1rem 1rem 0; }
+/* No `fieldset` rule here. There was one -- `display: inline-block` for side-by-side
+   placement, from when both add-forms sat permanently on the page. The forms live in a
+   Sheet now and only one is ever open, so the placement had nothing left to do, but the
+   display did: FieldSet asks for `flex`, and Tailwind v4 puts its utilities in a cascade
+   LAYER, which an unlayered rule like that one beats regardless of specificity. So the
+   fieldset shrink-wrapped, and every `w-full` beneath it -- FieldGroup's, Field's, the
+   inputs' -- resolved against 86px. The strike box came out 22px wide and a four-digit
+   strike could not be typed into it. Element selectors on components are a trap here;
+   state layout where the component is used. */
 button { cursor: pointer; }
 
 @theme inline { --font-heading: var(--font-sans); --font-sans: -apple-system, "Helvetica Neue", sans-serif; --color-sidebar-ring: var(--sidebar-ring); --color-sidebar-border: var(--sidebar-border); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground); --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground); --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-foreground: var(--sidebar-foreground); --color-sidebar: var(--sidebar); --color-chart-5: var(--chart-5); --color-chart-4: var(--chart-4); --color-chart-3: var(--chart-3); --color-chart-2: var(--chart-2); --color-chart-1: var(--chart-1); --color-ring: var(--ring); --color-input: var(--input); --color-border: var(--border); --color-destructive: var(--destructive); --color-accent-foreground: var(--accent-foreground); --color-accent: var(--accent); --color-muted-foreground: var(--muted-foreground); --color-muted: var(--muted); --color-secondary-foreground: var(--secondary-foreground); --color-secondary: var(--secondary); --color-primary-foreground: var(--primary-foreground); --color-primary: var(--primary); --color-popover-foreground: var(--popover-foreground); --color-popover: var(--popover); --color-card-foreground: var(--card-foreground); --color-card: var(--card); --color-foreground: var(--foreground); --color-background: var(--background); --radius-sm: calc(var(--radius) * 0.6); --radius-md: calc(var(--radius) * 0.8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --radius-2xl: calc(var(--radius) * 1.8); --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6); }
