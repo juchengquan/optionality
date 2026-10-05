@@ -1,7 +1,9 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import {
+  Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { NumberField } from "@/components/ui/number-field";
@@ -97,6 +99,9 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
   const [threshold, setThreshold] = useState<number | null>(null);
   const [direction, setDirection] = useState("above");
   const [compare, setCompare] = useState("abs");
+  // null means "not held" rather than zero: a combo you only watch has no entry, and an entry
+  // of 0 is a real credit of nothing. The service keeps the two apart, so the form must too.
+  const [entry, setEntry] = useState<number | null>(null);
   // two to start, up to six. The fixed six were an htmx artefact -- rendering a variable
   // number of rows server-side was awkward -- and that constraint left with htmx. A
   // vertical spread is two legs and an iron condor is four, so the old form drew two to
@@ -115,7 +120,7 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
           e.preventDefault();
           if (threshold === null) return;
           onCreate({
-            name, strike_date: strikeDate, field, direction, compare, threshold,
+            name, strike_date: strikeDate, field, direction, compare, threshold, entry,
             // blank rows are skipped, as on /ui
             legs: legs
               .filter((l) => l.strike !== null)
@@ -165,6 +170,18 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
               add leg
             </Button>
           ) : null}
+          {/* The one thing on this form that is not about the alarm: what you took in. The
+              service records it on a HOLDING and never on the rule — a monitor warns, it does
+              not record what you own — so filling this in creates both, and the row's entry and
+              P&L start reading. Blank watches a structure you do not hold, which is legitimate
+              and was all this form could do before. */}
+          <Field>
+            <FieldLabel htmlFor="c-entry">entry</FieldLabel>
+            <NumberField id="c-entry" value={entry} onValueChange={setEntry} />
+            <FieldDescription>
+              The credit taken in. Blank if you are only watching.
+            </FieldDescription>
+          </Field>
           <Field>
             <FieldLabel htmlFor="c-field">field</FieldLabel>
             <NativeSelect id="c-field" value={field} onChange={(e) => setField(e.target.value)}>

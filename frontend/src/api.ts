@@ -101,5 +101,45 @@ export const setTotalEntry = (monitorId: string, entry: number) =>
     `/monitors/${monitorId}/total-entry`,
   );
 
-export const createMonitor = (body: Record<string, unknown>) =>
-  sent(client.monitors.$post({ json: body as never }), "/monitors");
+/** `sign` is the combo's vocabulary and `side` the holding's: the minus the form offers means
+ *  short, and a short leg is one you sold. The two signings are inverses in the position maths
+ *  (domain/position.ts), so reversing this would invert every P&L rather than fail. */
+interface ComboLeg { sign: number; option_type: string; strike: number }
+const holdingLegs = (legs: ComboLeg[]) =>
+  legs.map((leg) => ({
+    side: leg.sign < 0 ? "sold" : "bought",
+    option_type: leg.option_type,
+    strike: leg.strike,
+  }));
+
+/** Create the rule, and — when the form said what was paid — the holding it warns about.
+ *
+ *  Two calls rather than one wider body. The service keeps the two apart deliberately: "a Monitor
+ *  exists to warn, never to record what you own", so it does not bring a Position into being, and
+ *  teaching POST /monitors to do it would break the invariant the entry linkage rests on. POST
+ *  /positions calls adoptOrphanMonitors itself, so the rule picks up its entry and its scope with
+ *  no third call — either order links, which is why only failure decides the order here.
+ *
+ *  The rule goes FIRST. Both routes probe the contracts strictly, so if the second call is refused
+ *  what matters is which record is left behind: a rule with no entry is exactly the state you were
+ *  in before, while a holding nothing watches has no screen on this dashboard that lists it.
+ *
+ *  `contracts` is not sent — the form does not ask and the service defaults it. An entry typed
+ *  wrongly is correctable from the row's own entry box; nothing here is a one-way door.
+ */
+export async function createWatch(body: Record<string, unknown>): Promise<void> {
+  const { entry, ...monitor } = body as { entry?: number | null } & Record<string, unknown>;
+  await sent(client.monitors.$post({ json: monitor as never }), "/monitors");
+  if (entry === null || entry === undefined) return;
+  await sent(
+    client.positions.$post({
+      json: {
+        name: monitor.name,
+        strike_date: monitor.strike_date,
+        entry,
+        legs: holdingLegs(monitor.legs as ComboLeg[]),
+      } as never,
+    }),
+    "/positions",
+  );
+}

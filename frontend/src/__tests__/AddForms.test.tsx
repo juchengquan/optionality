@@ -3,6 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+// the service's OWN schemas, not a copy of them — see the contract test at the end of this file
+import { MonitorCreateIn } from "../../../backend/src/schemas/monitor.ts";
+import { PositionIn } from "../../../backend/src/schemas/position.ts";
 
 /** Phase 1 of the shadcn rebuild (ADR 0007): the two add-forms had NO tests, and they hold
  *  nine of the native selects phase 4 replaces. These assert what reaches the server, never
@@ -19,11 +22,14 @@ const health = {
 
 let posted: { url: string; body: Record<string, unknown> }[] = [];
 
-function mockApi() {
+function mockApi(failWith?: string) {
   posted = [];
   vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
     if ((init?.method ?? "GET") !== "GET") {
       posted.push({ url, body: JSON.parse(init!.body as string) });
+      if (failWith) {
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: failWith }) } as Response);
+      }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
     }
     const body = url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
@@ -57,8 +63,8 @@ function setLeg(scope: HTMLElement, n: number, sign: string, type_: string, stri
 
 /** The forms live in a sheet since phase 5 of the responsive work (ADR 0008), so getting
  *  at one means opening it. Still an interaction helper; still no assertion moved. */
-async function openForm(which: "monitor" | "combo") {
-  mockApi();
+async function openForm(which: "monitor" | "combo", failWith?: string) {
+  mockApi(failWith);
   render(<App />);
   await waitFor(() => expect(screen.getByText(`add ${which}`)).toBeTruthy());
   await userEvent.click(screen.getByText(`add ${which}`));
@@ -160,6 +166,86 @@ describe("adding a combo", () => {
 
     await waitFor(() => expect(posted).toHaveLength(1));
     expect(posted[0]!.body.legs).toHaveLength(2);
+  });
+
+  /** The holding. `entry` is the one thing the form asks that is not about the alarm: it is what
+   *  you took in, and it is what makes P&L knowable. The service keeps it on a Position, never on
+   *  a Monitor — "a Monitor exists to warn, never to record what you own" — so a filled entry is
+   *  TWO records, and these tests are about that split rather than about one wider body. */
+  async function fillCondor(combo: HTMLElement, entry?: string) {
+    type(combo, "name", "1120_IC_7100_8200");
+    type(combo, "expiry", "2026-11-20");
+    await needLegs(combo, 4);
+    setLeg(combo, 1, "-", "CALL", "8200");
+    setLeg(combo, 2, "+", "CALL", "8250");
+    setLeg(combo, 3, "-", "PUT", "7100");
+    setLeg(combo, 4, "+", "PUT", "7050");
+    type(combo, "threshold", "8.01");
+    if (entry !== undefined) type(combo, "entry", entry);
+    fireEvent.submit(within(combo).getByRole("button", { name: "watch combo" }).closest("form")!);
+  }
+
+  it("records the holding as well, when an entry is given", async () => {
+    const combo = await openForm("combo");
+    await fillCondor(combo, "7.4");
+
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[0]!.url).toMatch(/\/monitors$/);
+    expect(posted[1]!.url).toMatch(/\/positions$/);
+    // the rule's body is untouched: entry is not a monitor field and must not be sent as one
+    expect(posted[0]!.body).not.toHaveProperty("entry");
+    expect(posted[1]!.body).toEqual({
+      name: "1120_IC_7100_8200",
+      strike_date: "2026-11-20",
+      entry: 7.4,
+      // `sign` is the combo's vocabulary and `side` the holding's: the minus the form offers
+      // means short, and a short leg is one you sold. Reverse this and the P&L inverts.
+      legs: [
+        { side: "sold", option_type: "CALL", strike: 8200 },
+        { side: "bought", option_type: "CALL", strike: 8250 },
+        { side: "sold", option_type: "PUT", strike: 7100 },
+        { side: "bought", option_type: "PUT", strike: 7050 },
+      ],
+    });
+    // contracts is deliberately not sent — the service defaults it, and the form does not ask
+    expect(posted[1]!.body).not.toHaveProperty("contracts");
+  });
+
+  it("posts only the rule when the entry is left blank", async () => {
+    // watching a structure you do not hold is legitimate, and is what this form did before
+    const combo = await openForm("combo");
+    await fillCondor(combo);
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.url).toMatch(/\/monitors$/);
+    expect(posted.some((p) => p.url.includes("/positions"))).toBe(false);
+  });
+
+  it("records no holding when the rule itself is refused", async () => {
+    // both routes probe the contracts, so the order decides only which record survives a
+    // half-failure. The rule goes first: a rule with no entry is the state you were already
+    // in, while a holding nothing watches has no screen on this dashboard that lists it.
+    const combo = await openForm("combo", "no contract US.SPXW261120C8200000");
+    await fillCondor(combo, "7.4");
+
+    await waitFor(() => expect(screen.getByText(/no contract US.SPXW261120C8200000/)).toBeTruthy());
+    expect(posted).toHaveLength(1);
+    expect(posted[0]!.url).toMatch(/\/monitors$/);
+  });
+
+  it("sends bodies the service's own schemas accept", async () => {
+    // Neither tsc nor the mock above can check this. `createWatch` casts with `as never` — Hono's
+    // validator InputType cannot be inferred, which is why that cast exists at all — and the
+    // mocked fetch accepts anything that is JSON. So the two bodies are run through the REAL
+    // schemas, the only thing that would catch `side` written as `sign`, or a renamed field.
+    const combo = await openForm("combo");
+    await fillCondor(combo, "7.4");
+    await waitFor(() => expect(posted).toHaveLength(2));
+
+    const rule = MonitorCreateIn.safeParse(posted[0]!.body);
+    expect(rule.success ? null : rule.error.issues).toBeNull();
+    const holding = PositionIn.safeParse(posted[1]!.body);
+    expect(holding.success ? null : holding.error.issues).toBeNull();
   });
 
   it("never offers implied volatility, which cannot be summed", async () => {

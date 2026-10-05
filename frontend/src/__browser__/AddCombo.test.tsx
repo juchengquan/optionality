@@ -151,6 +151,20 @@ describe("the form fills the sheet", () => {
       expect(available).toBeGreaterThan(200);
     });
 
+    it(`every box you type into spans it — ${name}`, async () => {
+      await page.viewport(w, h);
+      const form = await openCombo();
+      const fieldset = form.querySelector("fieldset")!;
+      const available = fieldset.getBoundingClientRect().width;
+
+      // the vertical Fields are `*:w-full`, so each of these should span the fieldset. `entry` is
+      // here because it is new and because it is the one number on this form that is money.
+      for (const label of ["name", "expiry", "entry", "threshold"]) {
+        const box = within(form).getByLabelText(label, { exact: true }) as HTMLInputElement;
+        expect(box.getBoundingClientRect().width, label).toBeCloseTo(available, 0);
+      }
+    });
+
     it(`does not push the page sideways — ${name}`, async () => {
       await page.viewport(w, h);
       await openCombo();
