@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ALWAYS, columnsFor, COMBO_COLUMNS, offerable, PRIORITY, SCROLL_BUDGET, SINGLE_COLUMNS,
+  ALWAYS, columnsFor, COMBO_COLUMNS, columnWidth, isPinned, offerable, PRIORITY, readHidden,
+  SCROLL_BUDGET, SINGLE_COLUMNS,
 } from "../columns";
 
 /** The fitting rule, exhaustively, with no browser involved (ADR 0008).
@@ -13,6 +14,9 @@ import {
 
 const keys = (cs: { key: string }[]) => cs.map((c) => c.key);
 const NONE = new Set<string>();
+/** the same estimator columnsFor falls back to, so the order invariant below is checked
+ *  against the widths the rule itself uses */
+const widthOf = (key: string) => columnWidth(key);
 
 describe("what fits", () => {
   it("keeps the pinned columns even when nothing fits at all", () => {
@@ -79,6 +83,29 @@ describe("what fits", () => {
     expect(freed).not.toContain("alarm");
   });
 
+  it("draws a combo's delta on a phone", () => {
+    // It did not, and that is what "the combo table behaves differently" was: `legs` is the
+    // widest combo column and sat in the MIDDLE of the priority order, so the loop stopped at
+    // it and everything after — expiry, delta, theta, vega, gamma — was unreachable however it
+    // was ticked. Measured in a browser at 390: six columns against the single table's nine.
+    const phone = keys(columnsFor("combo", 366, NONE));
+    expect(phone).toContain("delta");
+  });
+
+  it("puts each table's widest column LAST in its priority order", () => {
+    // The rule that makes the two tables behave alike, and the reason this bug existed. The
+    // loop STOPS at the first column that does not fit (ADR 0008: skipping made widening lose
+    // columns), so a wide column early in the order starves every column after it. The single
+    // table was fine only by luck — its widest, `last_trade`, happens to be last.
+    for (const table of ["single", "combo"] as const) {
+      const order = PRIORITY[table];
+      const widths = order.map((k) => widthOf(k));
+      const widest = Math.max(...widths);
+      expect(widthOf(order[order.length - 1]!), `${table}: ${order[order.length - 1]} is last`)
+        .toBe(widest);
+    }
+  });
+
   it("keeps entry beside P&L on a combo, as the order says", () => {
     const wide = keys(columnsFor("combo", 2000, NONE));
     expect(Math.abs(wide.indexOf("entry") - wide.indexOf("pnl"))).toBe(1);
@@ -116,6 +143,32 @@ describe("what the picker offers", () => {
     }
   });
 
+  it("never offers a column that ticking would not actually draw", () => {
+    // ADR 0008: "the picker only offers columns that could appear at the current width", so
+    // that ticking is never silently ignored. It was measured against each column ALONE, while
+    // the drawing loop spends the budget cumulatively — so the combo picker at 390 offered five
+    // columns that no amount of ticking would reveal, which is exactly what was reported.
+    let proved = 0;
+    for (const table of ["single", "combo"] as const) {
+      for (const hidden of [NONE, new Set(["alarm"]), new Set(["legs", "mid", "dte"])]) {
+        for (let w = 120; w <= 1400; w += 40) {
+          const offered = offerable(table, w, hidden);
+          for (const key of offered) {
+            const without = new Set(hidden);
+            without.delete(key);
+            const drawn = keys(columnsFor(table, w, without));
+            expect(drawn, `${table} @${w}px offered ${key} but ticking it draws nothing`)
+              .toContain(key);
+            proved++;
+          }
+        }
+      }
+    }
+    // a test that walked nothing would pass just as quietly
+    expect(proved).toBeGreaterThan(500);
+    expect(SINGLE_COLUMNS.length + COMBO_COLUMNS.length).toBeGreaterThan(20);
+  });
+
   it("never offers a pinned column, which cannot be hidden", () => {
     expect(offerable("single", 4000).has("contract")).toBe(false);
     expect(offerable("combo", 4000).has("combo")).toBe(false);
@@ -137,6 +190,27 @@ describe("columns that are always there", () => {
 
   it("does not offer delta in the picker, because it cannot be turned off", () => {
     expect(offerable("single", 4000).has("delta")).toBe(false);
+  });
+
+  it("pins a column only on the table that pins it", () => {
+    // one PROTECTED set unioned across both tables made `delta` untouchable on BOTH, though it
+    // is pinned only on the single-leg one — so the combo picker drew no delta checkbox
+    expect(isPinned("single", "delta")).toBe(true);
+    expect(isPinned("combo", "delta")).toBe(false);
+    expect(isPinned("single", "contract")).toBe(true);
+    expect(isPinned("combo", "combo")).toBe(true);
+  });
+
+  it("remembers a combo's delta as hidden, and honours it", () => {
+    // readHidden dropped it on the way back in, so unticking it could never have stuck either
+    document.cookie = "ui_cols_combo=delta;path=/";
+    expect([...readHidden("combo")]).toContain("delta");
+    expect(keys(columnsFor("combo", 2000, readHidden("combo")))).not.toContain("delta");
+    document.cookie = "ui_cols_combo=;path=/";
+    // and the single-leg table still refuses, because there it IS pinned
+    document.cookie = "ui_cols_single=delta;path=/";
+    expect([...readHidden("single")]).not.toContain("delta");
+    document.cookie = "ui_cols_single=;path=/";
   });
 
   it("leaves the combo table alone — its rules watch value, not delta", () => {
