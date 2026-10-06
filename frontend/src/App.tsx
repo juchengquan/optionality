@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 
 import "./app.css";
 import {
@@ -6,6 +7,7 @@ import {
   patchMonitor, patchPosition, setTotalEntry,
   type Entry, type Health, type Monitor,
 } from "./api";
+import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddPanel } from "./AddPanel";
@@ -48,6 +50,11 @@ export function App() {
   const [refresh, setRefresh] = useState(15);
   const [hiddenSingle, setHiddenSingle] = useState(() => readHidden("single"));
   const [hiddenCombo, setHiddenCombo] = useState(() => readHidden("combo"));
+  const [refreshing, setRefreshing] = useState(false);
+  // bumped by a manual refresh, which restarts the poll interval below. `/quotes` is a LIVE
+  // call, so a click one second before a tick would otherwise cost two full-watchlist
+  // snapshots a second apart — the button has to displace the next poll, not add to it.
+  const [pollFrom, setPollFrom] = useState(0);
   const [detail, setDetail] = useState<DetailTarget | null>(null);
 
   const load = useCallback(async () => {
@@ -82,7 +89,21 @@ export function App() {
       if (!beingOperated(document.activeElement)) void load();
     }, refresh * 1000);
     return () => clearInterval(id);
-  }, [refresh, load]);
+  }, [refresh, load, pollFrom]);
+
+  /** Fetch now. Not a repaint — the figures come from `/quotes`, which asks OpenD — so it
+   *  refuses to overlap itself and it resets the clock rather than queueing behind it. The
+   *  poll's beingOperated guard is deliberately NOT applied: that exists to stop an automatic
+   *  poll replacing rows under someone's hands, and a click is not something done to you. */
+  const refreshNow = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+      setPollFrom((n) => n + 1);
+    }
+  }, [load]);
 
   // every mutation reloads rather than patching local state: these change what the alarm
   // engine does, and the server's account of that is the only one that counts
@@ -172,6 +193,18 @@ export function App() {
         >
           {REFRESH_PRESETS.map((n) => <option key={n} value={n}>{n}s</option>)}
         </NativeSelect>
+        {/* and one now, for when the next tick is not soon enough. Icon-only with an
+            accessible name, like the column pickers: this line is small text and a worded
+            button would weigh more than the sentence it sits in. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="refresh now"
+          disabled={refreshing}
+          onClick={() => void refreshNow()}
+        >
+          <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+        </Button>
       </p>
 
       {health ? (
