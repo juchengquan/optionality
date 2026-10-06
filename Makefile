@@ -70,6 +70,25 @@ check-ui:
 		|| { echo "frontend bundle is stale — run 'make build-ui' and commit the result"; exit 1; }
 	@echo "frontend bundle matches its source"
 
+# Resolve a frontend/dist conflict, which is the only kind this repo produces regularly.
+#
+# Two branches that both touch the frontend commit different bundles, so dist collides as a
+# rename/rename on the hashed asset plus index.html. Neither side is right and no blend of them
+# is either: a build has exactly one correct answer for the merged source. So this throws both
+# away and rebuilds. Source conflicts must be settled first — the bundle is built FROM them —
+# and it refuses to run while any remain rather than baking a conflict marker into the output.
+resolve-ui:
+	@unresolved=$$(git diff --name-only --diff-filter=U | grep -v '^frontend/dist/' || true); \
+	if [ -n "$$unresolved" ]; then \
+		echo "source conflicts remain; the bundle is built from these, so settle them first:"; \
+		echo "$$unresolved" | sed 's/^/  /'; \
+		exit 1; \
+	fi
+	rm -rf frontend/dist
+	$(MAKE) build-ui
+	git add -A frontend/dist
+	@echo "frontend/dist rebuilt from the merged source and staged; continue the merge or rebase."
+
 # The one path that keeps both services in step. Skew is the price of running them
 # separately (ADR 0006); this is what stops it happening by simple forgetfulness.
 #
