@@ -29,6 +29,13 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
   // strike the service rejects, and the form had no way to notice
   const [strike, setStrike] = useState<number | null>(null);
   const [threshold, setThreshold] = useState<number | null>(null);
+  // The holding, if there is one. A combo derives each leg's side from the sign the user gave it;
+  // a lone option has no sign and can be either side, so this asks. It has to: entry is a net
+  // credit RECEIVED, so a long is stored negative, and a long recorded positive reports a P&L of
+  // +1300 where +300 is right. The form owns that signing so the number typed is always what
+  // moved — "paid 5.00" is 5.00 here and −5.00 in the service.
+  const [side, setSide] = useState("sold");
+  const [entry, setEntry] = useState<number | null>(null);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
@@ -38,7 +45,7 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
         onSubmit={(e) => {
           e.preventDefault();
           if (strike === null || threshold === null) return;
-          onCreate({ ...form, strike, threshold });
+          onCreate({ ...form, strike, threshold, side, entry });
         }}
       >
         <FieldGroup>
@@ -57,6 +64,18 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
           <Field>
             <FieldLabel htmlFor="m-strike">strike</FieldLabel>
             <NumberField id="m-strike" value={strike} onValueChange={setStrike} required />
+          </Field>
+          {/* The side and the amount are ONE fact — which way the money went — so they sit on one
+              row rather than becoming two independent controls that could contradict each other.
+              The label on the box follows the side, so the number typed is always just what
+              moved. Blank watches a strike you do not hold, which is the common case. */}
+          <Field orientation="horizontal" className="*:data-[slot=field-label]:flex-none">
+            <FieldLabel htmlFor="m-entry">entry</FieldLabel>
+            <NativeSelect aria-label="side" value={side} onChange={(e) => setSide(e.target.value)}>
+              <option value="sold">sold</option><option value="bought">bought</option>
+            </NativeSelect>
+            <NumberField id="m-entry" value={entry} onValueChange={setEntry}
+                         placeholder={side === "sold" ? "received" : "paid"} />
           </Field>
           <Field>
             <FieldLabel htmlFor="m-field">field</FieldLabel>
@@ -179,7 +198,8 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
             <FieldLabel htmlFor="c-entry">entry</FieldLabel>
             <NumberField id="c-entry" value={entry} onValueChange={setEntry} />
             <FieldDescription>
-              The credit taken in. Blank if you are only watching.
+              The credit taken in — negative if the structure cost you. Blank if you are only
+              watching.
             </FieldDescription>
           </Field>
           <Field>

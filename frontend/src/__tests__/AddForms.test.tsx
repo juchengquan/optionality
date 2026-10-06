@@ -107,6 +107,76 @@ describe("adding a single-leg monitor", () => {
     expect(typeof posted[0]!.body.threshold).toBe("number");
   });
 
+  /** The holding, for one contract. The combo form derives each leg's side from the sign the
+   *  user gave it; a lone option has no sign, and it can be either side, so the form asks. It
+   *  must: `entry` is a net credit RECEIVED, and recording a long call with a positive entry
+   *  reports a P&L of +1300 where +300 is right — measured, not assumed. */
+  async function fillCall(monitor: HTMLElement, side?: string, entry?: string) {
+    type(monitor, "expiry", "2026-11-20");
+    choose(monitor, "type", "CALL");
+    type(monitor, "strike", "8100");
+    type(monitor, "threshold", "0.2");
+    if (side !== undefined) choose(monitor, "side", side);
+    if (entry !== undefined) type(monitor, "entry", entry);
+    fireEvent.submit(within(monitor).getByRole("button", { name: "watch" }).closest("form")!);
+  }
+
+  it("records the holding too, when an entry is given", async () => {
+    const monitor = await openForm("monitor");
+    await fillCall(monitor, "sold", "5.00");
+
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[0]!.url).toMatch(/\/monitors$/);
+    expect(posted[1]!.url).toMatch(/\/positions$/);
+    // side is not a monitor field and must not reach the rule, any more than entry does
+    expect(posted[0]!.body).not.toHaveProperty("side");
+    expect(posted[0]!.body).not.toHaveProperty("entry");
+    expect(posted[1]!.body).toEqual({
+      // a single-leg monitor has no name of its own — its code is derived from the contract, and
+      // so is this, so the two records are visibly about the same option
+      name: "2026-11-20_C8100",
+      strike_date: "2026-11-20",
+      entry: 5,
+      legs: [{ side: "sold", option_type: "CALL", strike: 8100 }],
+    });
+  });
+
+  it("stores what you paid for a long as a NEGATIVE credit", async () => {
+    // the whole reason the form asks which side you are on. entry is a net credit received, and
+    // P&L is entry − costToClose, where costToClose is negative for a long. Bought a call for
+    // 5.00, now worth 8.00: entry −5 gives +300, entry +5 gives +1300. Verified against
+    // backend/src/domain/position.ts, not reasoned about.
+    const monitor = await openForm("monitor");
+    await fillCall(monitor, "bought", "5.00");
+
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1]!.body).toMatchObject({
+      entry: -5,
+      legs: [{ side: "bought", option_type: "CALL", strike: 8100 }],
+    });
+  });
+
+  it("posts only the rule when the entry is left blank", async () => {
+    // watching a strike you do not hold is the common case and must stay one request
+    const monitor = await openForm("monitor");
+    await fillCall(monitor);
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.url).toMatch(/\/monitors$/);
+    expect(posted.some((x) => x.url.includes("/positions"))).toBe(false);
+  });
+
+  it("sends bodies the service's own schemas accept", async () => {
+    const monitor = await openForm("monitor");
+    await fillCall(monitor, "bought", "5.00");
+    await waitFor(() => expect(posted).toHaveLength(2));
+
+    const rule = MonitorCreateIn.safeParse(posted[0]!.body);
+    expect(rule.success ? null : rule.error.issues).toBeNull();
+    const holding = PositionIn.safeParse(posted[1]!.body);
+    expect(holding.success ? null : holding.error.issues).toBeNull();
+  });
+
   it("offers implied volatility, which a single contract does have", async () => {
     const monitor = await openForm("monitor");
     const field = within(monitor).getByLabelText("field", { exact: false });

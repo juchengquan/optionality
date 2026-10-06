@@ -117,6 +117,31 @@ describe("P&L", () => {
     expect(positionPnl(p, quotes(p, [5.0, 2.0, 3.0, 4.4]))).toBe(161); // not 160.99999999999986
   });
 
+  it("reads a lone option's entry as a credit RECEIVED, so a long is negative", () => {
+    // Nothing tested this, and the dashboard's add-monitor form depends on it: a single contract
+    // can be either side, and the sign of `entry` is what says which. costToClose is NEGATIVE for
+    // a long — closing it pays you — so P&L is entry − (−mid) = entry + mid, and only a negative
+    // entry gives the right answer. A long call recorded with a positive entry reports double its
+    // debit as profit, silently.
+    const lone = (side: "sold" | "bought", entry: number): Position => ({
+      name: "lone", strike_date: future(), contracts: 1, entry,
+      legs: [{ side, option_type: "CALL", strike: 8100 }],
+    });
+
+    // sold for 5.00, now worth 3.00: up 2.00 a point, 100 a point
+    const sold = lone("sold", 5.0);
+    expect(costToClose(sold, quotes(sold, [3.0]))).toBe(3.0);
+    expect(positionPnl(sold, quotes(sold, [3.0]))).toBe(200);
+
+    // bought for 5.00, now worth 8.00: up 3.00. The debit is recorded as a NEGATIVE credit.
+    const long = lone("bought", -5.0);
+    expect(costToClose(long, quotes(long, [8.0]))).toBe(-8.0);
+    expect(positionPnl(long, quotes(long, [8.0]))).toBe(300);
+
+    // and the trap itself, stated so it cannot be reintroduced quietly
+    expect(positionPnl(lone("bought", 5.0), quotes(long, [8.0]))).toBe(1300);
+  });
+
   it("is unknown until an entry is recorded", () => {
     const p = condor();
     p.entry = null; // migrated from a combo, which never recorded what was taken in
