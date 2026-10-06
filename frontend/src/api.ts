@@ -105,10 +105,11 @@ export const setTotalEntry = (monitorId: string, entry: number) =>
  *  means short, and a short leg is one you sold. The two signings are inverses in the position
  *  maths (domain/position.ts), so reversing this would invert every P&L rather than fail.
  *
- *  This reads the FORM's convention, not the only one the API permits: ComboLegIn documents that
- *  + on sold legs makes the combo track its cost to close, which is the opposite choice. Both are
- *  legal and `compare: abs` cannot tell them apart. The dashboard states "minus is short, plus is
- *  long" where the legs are entered, and a holding is only ever derived from legs entered there.
+ *  One convention, stated the same way everywhere since 2026-10-06: the schema, the bot's help and
+ *  the sentence above the legs on this form all say minus is short. ComboLegIn said the opposite
+ *  until then — "+ on sold legs watches the cost to close" — and nothing failed, because the sign
+ *  is otherwise just a multiplier and `compare: abs` is indifferent to it. The relationship is
+ *  pinned in backend/src/domain/position.test.ts rather than left to these comments.
  */
 interface ComboLeg { sign: number; option_type: string; strike: number }
 const holdingLegs = (legs: ComboLeg[]) =>

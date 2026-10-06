@@ -254,7 +254,7 @@ export class TelegramBot {
   }
 
   private async watchCombo(args: string[]): Promise<string> {
-    const usage = "Usage: /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below]";
+    const usage = "Usage: /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below]  (−short +long)";
     if (args.length < 5) return usage;
     const name = args[0]!;
     let strikeDate: string;

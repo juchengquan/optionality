@@ -168,7 +168,7 @@ _MONITOR_EXAMPLES = {
     },
     "combo": {
         "summary": "Combo monitor (e.g. iron condor)",
-        "description": "Signed sum over legs; + on sold legs and - on bought legs watches the cost to close.",
+        "description": "Signed sum over legs; -1 is a leg you sold and +1 a leg you bought, so a credit structure's value is the negative of its cost to close.",
         "value": {
             "name": "sep-condor",
             "strike_date": "2026-09-18",

@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSpxCode } from "./contract.ts";
+import { comboFieldSum, type Monitor } from "./monitor.ts";
 import {
   combinedCostToClose, combinedEntry, combinedPnl, contractSize, costToClose,
   positionGreek, positionLegCodes, positionPnl, positionsHolding,
@@ -314,5 +315,60 @@ describe("which positions a monitor is watching", () => {
     const b = spread("b", [8050, 8100]);
     const { found } = positionsHolding([a, b], [positionLegCodes(a)[0]!, positionLegCodes(b)[1]!]);
     expect([...found]).toEqual([]);
+  });
+});
+
+describe("the sign convention, so neither vocabulary can drift from the other", () => {
+  /** A Position records a SIDE per leg. A combo Monitor records a SIGN. Two places in this repo
+   *  described that sign in opposite terms — the API schema said "+ on sold legs", the dashboard
+   *  says "minus is short" where the legs are actually typed — and nothing failed, because
+   *  `compare: abs` cannot tell the two apart and the sign is otherwise just a multiplier.
+   *
+   *  It is not harmless. The add-combo form derives a holding's SIDES from those signs, so the
+   *  wrong reading inverts every P&L rather than failing. Here is the relationship as an
+   *  executable statement instead of a sentence in a doc comment.
+   *
+   *  CANONICAL: minus is short, and a short leg is one you SOLD.
+   */
+  const SIGN_FOR_SIDE = { sold: -1, bought: 1 } as const;
+
+  const asCombo = (p: Position): Monitor => ({
+    code: p.name, strike_date: p.strike_date, option_type: "CMB", strike: 0,
+    field: "mid_price", threshold: 1, direction: "above", compare: "abs",
+    legs: p.legs.map((l) => ({
+      sign: SIGN_FOR_SIDE[l.side], option_type: l.option_type, strike: l.strike,
+    })),
+  });
+
+  it("makes a combo's value the NEGATIVE of the same holding's cost to close", () => {
+    const p = condor();
+    const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
+
+    expect(costToClose(p, byCode)).toBe(4.5);
+    expect(comboFieldSum(asCombo(p), byCode, "mid_price")).toBe(-4.5);
+  });
+
+  it("is the only reading under which closing a short condor costs money", () => {
+    // the check that settled which convention the owner's book uses: read the other way round,
+    // buying back a structure you sold for a credit would PAY you, which it cannot
+    const p = condor();
+    expect(costToClose(p, quotes(p, [5.0, 2.0, 3.0, 1.5]))).toBeGreaterThan(0);
+    expect(comboFieldSum(asCombo(p), quotes(p, [5.0, 2.0, 3.0, 1.5]), "mid_price")).toBeLessThan(0);
+  });
+
+  it("makes a combo's greek and the same holding's greek ONE number, not two", () => {
+    // positionGreek signs a sold leg NEGATIVE, because that is the exposure you carry; the
+    // canonical -1 on a sold leg does the same. So these agree — and under the other reading
+    // every combo greek on the dashboard would be the exact negative of the holding's.
+    const p = condor();
+    const legCodes = positionLegCodes(p);
+    const deltas = [0.4, 0.3, -0.2, -0.15];
+    const byCode: ByCode = Object.fromEntries(legCodes.map((code, i) => [
+      code, { code, mid_price: 1, option_delta: deltas[i]!, option_contract_size: 100 },
+    ]));
+
+    const held = positionGreek(p, byCode, "option_delta");
+    expect(held).toBeCloseTo(-0.05, 12);
+    expect(comboFieldSum(asCombo(p), byCode, "option_delta")).toBeCloseTo(held!, 12);
   });
 });
