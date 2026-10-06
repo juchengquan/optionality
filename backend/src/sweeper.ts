@@ -117,9 +117,14 @@ export class MonitorSweeper {
 
   /** Watchlist entries built from the LAST SWEEP's records — no OpenD call.
    *
-   *  `triggered` is written by the sweep, and showing a fresher quote beside it makes the alarm
-   *  engine look wrong when it is not. A monitor created since the last sweep has no record yet and
-   *  renders as "—" until the next one. */
+   *  NO ROUTE CALLS THIS. It was built as the dashboard's path and the dashboard was wired to the
+   *  live `/quotes` instead, which is the reading ADR 0010 ratified — so this is the sweep's own
+   *  view of its last batch, kept because the sweep's state is observable through nothing else and
+   *  because it is the alternative if that decision is ever revisited. Six tests exercised it
+   *  while asserting the invariant the shipped dashboard was breaking.
+   *
+   *  A monitor created since the last sweep has no record here and renders as "—" until the next
+   *  one. */
   cachedQuotes(includeCombos = true): { entries: WatchlistEntry[]; fetched: string | null } {
     const { db } = this.deps;
     const monitors = enabledMonitors(db, includeCombos).map(forEntry);

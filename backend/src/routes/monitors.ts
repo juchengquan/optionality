@@ -328,8 +328,9 @@ const EntryOut = z.object({
   threshold: z.number(),
   direction: z.string(),
   compare: z.string(),
+  /** breaching NOW, by the figures in this same row. The engine's own verdict and its last value
+   *  live on /monitors, which is what that endpoint is for (ADR 0010). */
   triggered: z.boolean(),
-  last_value: z.number().nullable(),
   snapshot: SnapshotOut.nullable(),
   legs: z.array(z.object({
     sign: z.number(), option_type: z.string(), strike: z.number(),

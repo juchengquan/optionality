@@ -444,14 +444,17 @@ describe("the watchdog", () => {
   });
 });
 
-describe("what the dashboard renders", () => {
+/** The sweep's own cached view. Named "what the dashboard renders" until ADR 0010, which is the
+ *  trouble: the dashboard polls the LIVE /quotes and never came through here, so these passed
+ *  while the shipped dashboard broke the very invariant two of them assert. */
+describe("the sweep's cached view", () => {
   it("has nothing cached before the first sweep", () => {
     const s = sweeper(() => Promise.resolve([]));
     expect(s.cachedRecords()).toEqual({ byCode: {}, fetched: null });
     expect(s.cachedQuotes().fetched).toBeNull();
   });
 
-  it("serves the sweep's own records, so the value and the bell share an instant", async () => {
+  it("serves the sweep's own records, bell and value from one instant", async () => {
     monitor();
     const s = sweeper(quoting("option_delta", { [CODE]: 0.7 }));
     await s.sweep();
@@ -467,7 +470,7 @@ describe("what the dashboard renders", () => {
     expect(entries[0]!.triggered).toBe(true);
   });
 
-  it("makes no OpenD call of its own", async () => {
+  it("costs no OpenD call of its own, unlike the live path the dashboard uses", async () => {
     monitor();
     let calls = 0;
     const s = sweeper((codes) => {

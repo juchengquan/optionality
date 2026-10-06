@@ -329,3 +329,92 @@ describe("guards that are easy to lose", () => {
     expect(quotes[0]!.fill).toBe(50);
   });
 });
+
+describe("the bell and the value share an instant", () => {
+  /** The dashboard's figures come from THIS call, so its bell has to come from it too.
+   *
+   *  It did not. The payload carried the sweeper's stored `triggered` column beside a value
+   *  fetched a moment ago, so a row could show a figure past its threshold with no bell, or a
+   *  bell beside a figure well inside it. The alarm ENGINE is untouched by this: what it has
+   *  decided, when it last messaged, and its cooldowns are all still the sweep's business. This
+   *  is only about the row agreeing with itself. See ADR 0010.
+   */
+  const setEngineState = (id: string, triggered: number, lastValue: number | null) =>
+    db.prepare("update monitors set triggered = ?, last_value = ? where id = ?")
+      .run(triggered, lastValue, id);
+
+  it("rings on a breach the last sweep has not seen", async () => {
+    const id = monitor({ threshold: 0.6 });
+    setEngineState(id, 0, 0.1); // the engine's record says calm; the market has moved since
+    const [entry] = await run(quoting({ [CODE]: { option_delta: 0.7 } }));
+
+    expect(entry!.snapshot!.option_delta).toBe(0.7);
+    expect(entry!.triggered, "the row shows 0.7 against a 0.6 threshold and no bell").toBe(true);
+  });
+
+  it("falls silent once the value is back inside, whatever the engine still holds", async () => {
+    const id = monitor({ threshold: 0.6 });
+    setEngineState(id, 1, 0.9);
+    const [entry] = await run(quoting({ [CODE]: { option_delta: 0.1 } }));
+
+    expect(entry!.triggered, "a bell beside a figure well inside the threshold").toBe(false);
+  });
+
+  it("rings AT the threshold exactly, with no band around it", async () => {
+    // CLAUDE.md: the bell flips truthfully at the EXACT threshold — no value hysteresis
+    monitor({ threshold: 0.6 });
+    const at = await run(quoting({ [CODE]: { option_delta: 0.6 } }));
+    expect(at[0]!.triggered).toBe(true);
+
+    const under = await run(quoting({ [CODE]: { option_delta: 0.5999999999 } }));
+    expect(under[0]!.triggered).toBe(false);
+  });
+
+  it("never rings on a row it could not price", async () => {
+    // an unreadable value is not a calm one and not a breaching one. The row draws "—", and a
+    // bell beside a dash would be the stored state leaking back in by another door.
+    const id = monitor({ threshold: 0.6 });
+    setEngineState(id, 1, 0.9);
+    const [entry] = await run(quoting({}));
+
+    expect(entry!.snapshot).toBeNull();
+    expect(entry!.triggered).toBe(false);
+    expect(entry!.fill).toBeNull();
+  });
+
+  it("measures a position-backed combo on the same cost to close its fill bar uses", async () => {
+    const mid = combo({ threshold: 3 });
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+       values (?, ?, null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000')`,
+    ).run("p1".padEnd(32, "0"), "spread", EXPIRY, toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "bought", option_type: "CALL", strike: 8150 },
+    ]));
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, "p1".padEnd(32, "0"));
+    db.prepare("update monitors set scope = 'all', triggered = 0 where id = ?").run(mid);
+
+    // sold at 5.00, bought at 1.00: 4.00 to close, past a 3.00 stop
+    const [entry] = await run(quoting({
+      [LEG_A]: { mid_price: 5.0 }, [LEG_B]: { mid_price: 1.0 },
+    }), true);
+    expect(entry!.cost_to_close).toBe(4);
+    expect(entry!.triggered).toBe(true);
+  });
+
+  it("rings only on rows whose fill bar is full, since both read one figure", async () => {
+    // the bar and the bell are the same claim drawn twice; they must not be able to disagree.
+    // Only this direction is asserted: fill rounds, so 0.599 draws a full-looking bar at 99.83%
+    // without breaching, and that is the bar being imprecise rather than the bell being wrong.
+    monitor({ threshold: 0.6 });
+    let checked = 0;
+    for (const delta of [0.1, 0.3, 0.5, 0.59, 0.6, 0.61, 0.9, 2]) {
+      const [entry] = await run(quoting({ [CODE]: { option_delta: delta } }));
+      if (entry!.triggered) {
+        expect(entry!.fill, `delta ${delta} rings with a fill of ${entry!.fill}`).toBe(100);
+      }
+      checked++;
+    }
+    expect(checked).toBe(8);
+  });
+});
