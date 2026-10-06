@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-import { PROTECTED, type Column } from "./columns";
+import { isPinned, type Column } from "./columns";
 
 /** One table's column choices, shown beside that table's heading.
  *
@@ -38,7 +38,7 @@ export function ColumnPicker({
       <PopoverContent>
         <div role="group" aria-label={`${label} columns`} className="flex flex-col gap-2">
           {all
-            .filter((c) => !PROTECTED.has(c.key))
+            .filter((c) => !isPinned(table, c.key))
             .map((c) => (
               <label className="flex items-center gap-2 cursor-pointer" key={c.key}>
                 <Checkbox

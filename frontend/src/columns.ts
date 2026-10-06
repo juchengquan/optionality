@@ -20,7 +20,16 @@ export const ALWAYS: Record<"single" | "combo", readonly string[]> = {
   combo: ["combo"],
 };
 
-export const PROTECTED = new Set([...ALWAYS.single, ...ALWAYS.combo]);
+/** Is this column pinned on THIS table?
+ *
+ *  It used to be one PROTECTED set unioned across both tables, and that is wrong in exactly one
+ *  place, which happens to be the place that matters: `delta` is pinned on the single-leg table
+ *  and an ORDINARY column on a combo. The union meant the combo picker drew no delta checkbox at
+ *  all and readHidden silently discarded `delta` from the combo cookie — so the one column the
+ *  owner asked to see on that table was the one column it could not control.
+ */
+export const isPinned = (table: "single" | "combo", key: string): boolean =>
+  ALWAYS[table].includes(key);
 
 export const SINGLE_COLUMNS: Column[] = [
   { key: "contract", label: "contract" }, { key: "alarm", label: "alarm" },
@@ -70,7 +79,7 @@ export function readHidden(table: "single" | "combo"): Set<string> {
     .find((c) => c.startsWith(`ui_cols_${table}=`))
     ?.split("=")[1];
   const value = raw ? decodeURIComponent(raw).replace(/^"|"$/g, "") : "";
-  return new Set(value.split(".").filter((k) => k && !PROTECTED.has(k)));
+  return new Set(value.split(".").filter((k) => k && !isPinned(table, k)));
 }
 
 export function writeHidden(table: "single" | "combo", hidden: Set<string>): void {
@@ -110,15 +119,35 @@ const WIDTH: Record<string, number> = {
 };
 const DEFAULT_WIDTH = 64;
 
+/** The fallback estimate for one column, exported so the priority order can be checked
+ *  against the same numbers the fitting rule uses. */
+export const columnWidth = (key: string): number => WIDTH[key] ?? DEFAULT_WIDTH;
+
+/** Which columns survive when there is not room for all of them.
+ *
+ *  THE WIDEST COLUMN GOES LAST. The loop below stops at the first column that does not fit
+ *  rather than skipping it, because skipping made widening a window LOSE columns (ADR 0008) —
+ *  and the price of stopping is that one wide column starves everything behind it. The single
+ *  table was only ever well behaved by luck: its widest, `last_trade`, happens to be last.
+ *  The combo table had `legs` — the widest column on either table — in the middle, so at 390px
+ *  it drew six columns against the single table's nine, and expiry, delta, theta, vega and
+ *  gamma could not be reached however they were ticked. That is the bug this ordering fixes;
+ *  `Fitting.test.ts` asserts the rule rather than this list.
+ */
 export const PRIORITY: Record<"single" | "combo", string[]> = {
   // delta and mid first because every rule in this watchlist is built on one of them;
   // the greeks nothing watches go last, together, because that is what the sheet is for
   single: ["contract", "alarm", "delta", "mid", "dte", "bid", "ask", "iv", "theta", "vega", "gamma", "last_trade"],
   // entry sits against P&L: it is the number the P&L is computed from, so distrusting one
-  // means wanting the other beside it
-  // legs before the reference greeks: an unfamiliar combo is identified by its legs,
-  // and none of these rules watch delta anyway
-  combo: ["combo", "alarm", "value", "pnl", "entry", "dte", "legs", "expiry", "delta", "theta", "vega", "gamma"],
+  // means wanting the other beside it.
+  //
+  // delta is now ahead of the other greeks and of `legs`, because the owner asked for it on
+  // this table: the combo's rules watch its value, but its delta is how far the position has
+  // drifted toward the strike it was sold against. `legs` last — an unfamiliar combo is
+  // identified by its legs, but these names already carry the strikes (1120_IC_7100_8200),
+  // the detail sheet shows the legs whatever the table does, and at 263px it is the one
+  // column wide enough to cost four others.
+  combo: ["combo", "alarm", "value", "pnl", "entry", "dte", "delta", "expiry", "theta", "vega", "gamma", "legs"],
 };
 
 /** How much wider than its container the table may be.
@@ -140,7 +169,7 @@ export function columnsFor(
   table: "single" | "combo",
   available: number,
   hidden: Set<string>,
-  widthOf: (key: string) => number = (k) => WIDTH[k] ?? DEFAULT_WIDTH,
+  widthOf: (key: string) => number = columnWidth,
 ): Column[] {
   const all = table === "single" ? SINGLE_COLUMNS : COMBO_COLUMNS;
   const byKey = new Map(all.map((c) => [c.key, c]));
@@ -169,18 +198,33 @@ export function columnsFor(
   return all.filter((c) => kept.includes(c.key));
 }
 
-/** What the picker should offer at this width. A column that cannot appear however it is
- *  ticked is not offered, so ticking is never silently ignored. */
+/** What the picker should offer at this width: exactly the columns that ticking would draw.
+ *
+ *  This used to measure each column ALONE against the width — `pinned + this column` — while
+ *  the drawing loop spends the budget cumulatively and stops at the first miss. The two
+ *  disagreed, so the combo picker at 390px offered five columns that no amount of ticking
+ *  could reveal: the box went on, nothing happened, and the table looked broken. The honest
+ *  question is not "is there room for this column in the abstract" but "if I turn this on, do
+ *  I see it", so that is what is asked — of the drawing rule itself, which cannot drift from it.
+ *
+ *  It depends on what else is hidden, and should: unticking a wide column is how you make room
+ *  for a narrow one, and the picker re-renders with the new answer.
+ */
 export function offerable(
   table: "single" | "combo",
   available: number,
-  widthOf: (key: string) => number = (k) => WIDTH[k] ?? DEFAULT_WIDTH,
+  hidden: Set<string> = new Set(),
+  widthOf: (key: string) => number = columnWidth,
 ): Set<string> {
   const always = ALWAYS[table];
-  const base = always.reduce((n, k) => n + widthOf(k), 0);
-  return new Set(
-    PRIORITY[table].filter((k) => !always.includes(k) && base + widthOf(k) <= available),
-  );
+  const out = new Set<string>();
+  for (const key of PRIORITY[table]) {
+    if (always.includes(key)) continue;
+    const without = new Set(hidden);
+    without.delete(key);
+    if (columnsFor(table, available, without, widthOf).some((c) => c.key === key)) out.add(key);
+  }
+  return out;
 }
 
 /** Column widths derived from what is actually in the table, not guessed.

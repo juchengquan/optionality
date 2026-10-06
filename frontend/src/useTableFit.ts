@@ -80,6 +80,6 @@ export function useTableFit(table: "single" | "combo", rows: readonly Entry[], h
   return {
     ref,
     columns: columnsFor(table, room, hidden, widthOf),
-    offered: offerable(table, room, widthOf),
+    offered: offerable(table, room, hidden, widthOf),
   };
 }
