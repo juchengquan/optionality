@@ -58,9 +58,14 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
 - One worker thread owns run execution. The sweep, `/spx/quote`, `/quotes`, and creation probes make single
   bounded OpenD calls outside that queue — documented exceptions, not violations.
 - The whole watchlist is ONE `get_market_snapshot` call per sweep (combo legs join the batch, deduped).
-  The dashboard makes NO call of its own: it renders the sweep's cached records, so a row's value and its
-  🔔 always come from the same instant. The dashboard poll is INDEPENDENT of the sweep: the sweep sets how
-  fresh the data is, the poll sets how soon the newest sweep reaches the screen. Polling faster is free.
+  **The dashboard's poll is a live call of its own** — `/quotes`, one batch per poll per open tab — so its
+  figures are current rather than up to one sweep old, and polling faster is NOT free (ADR 0010). What the
+  earlier wording promised still holds and is what matters: a row's value and its 🔔 come from the same
+  instant. That is now true by construction — `buildEntries` reads the watched figure once and derives both
+  the fill bar and the bell from it, with `isBreached`, the engine's own predicate. The engine is untouched:
+  the stored `triggered`, the cooldowns and the Telegram messages remain the sweep's business, and the
+  dashboard's bell may therefore lead or lag what has been sent. `MonitorSweeper.cachedQuotes` is the cached
+  alternative and no route calls it.
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
 - Alarms: the 🔔 flips truthfully at the EXACT threshold — no value hysteresis. `ALARM_COOLDOWN_SECONDS`
   throttles state-change messages; `ALARM_REPEAT_SECONDS` re-reminds persisting breaches. `compare: abs|signed`

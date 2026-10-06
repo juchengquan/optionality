@@ -11,7 +11,6 @@ import {
   positionsForMonitors, setPositionEntry, solelyWatchedPositions, updateMonitorFields,
 } from "./db/queries.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
-import { fromSqliteBool } from "./db/values.ts";
 import { displayRecords, fetchResilient, type QuoteFetcher } from "./quotes.ts";
 import { buildEntries, codesFor, type MonitorForEntry, type WatchlistEntry } from "./watchlist.ts";
 import type { Position } from "./domain/position.ts";
@@ -64,25 +63,23 @@ function round4(value: number): number {
   return Number(value.toFixed(4));
 }
 
-/** A monitor row in the shape buildEntries needs. */
+/** A monitor row in the shape buildEntries needs — which no longer includes the engine's
+ *  `triggered` or `last_value`. An entry describes the row as of the batch it is built from, and
+ *  those two describe the last sweep (ADR 0010). */
 export function forEntry(row: {
   id: string; code: string; strike_date: string; option_type: string; strike: number; field: string;
   threshold: number; direction: string; compare: string; legs: string | null; scope: string | null;
-  triggered: number; last_value: number | null;
 }): MonitorForEntry {
-  return {
-    ...toMonitor(row as never),
-    triggered: fromSqliteBool(row.triggered),
-    last_value: row.last_value,
-    scope: row.scope,
-  };
+  return { ...toMonitor(row as never), scope: row.scope };
 }
 
 /** Live quotes for every enabled monitor — one call for the whole watchlist.
  *
- *  Used by the bot's `/quotes` family, which is a documented live-call exception. The dashboard does
- *  NOT come through here: it renders the sweeper's cached records, so a row's value and its bell
- *  always come from the same instant (CLAUDE.md).
+ *  Used by the bot's `/quotes` family AND by the dashboard, which polls it. This comment said the
+ *  opposite for as long as the route existed: that the dashboard rendered the sweeper's cached
+ *  records instead. It never did — `MonitorSweeper.cachedQuotes` is that path and no route calls
+ *  it. The owner ratified the live reading in ADR 0010, so a row's figures come from THIS call and
+ *  its bell is derived from them rather than from the engine's stored verdict.
  */
 export async function watchlistQuotes(
   db: DatabaseSync, displayTz: string, fetch: QuoteFetcher,

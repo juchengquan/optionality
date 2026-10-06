@@ -24,8 +24,10 @@ export interface WatchlistEntry {
   threshold: number;
   direction: string;
   compare: string;
+  /** breaching NOW, by the figures in this same entry — not the alarm engine's stored verdict.
+   *  `last_value` used to sit here too, the sweep's figure beside this fetch's; no client read it
+   *  and `/monitors` is where the engine's own record belongs. See ADR 0010. */
   triggered: boolean;
-  last_value: number | null;
   /** the contract's own figures; null for a combo, which has no single contract */
   snapshot: QuoteRecord | null;
   legs?: MonitorLeg[];
@@ -41,10 +43,12 @@ export interface WatchlistEntry {
   fill: number | null;
 }
 
+/** What buildEntries needs, and deliberately no more: the engine's `triggered` and `last_value`
+ *  columns are NOT here, so the entry cannot be built from them. That is the fix made structural
+ *  rather than written down — it was a comment before, and the comment was accurate while the code
+ *  beside it was not. */
 export interface MonitorForEntry extends Monitor {
   id: string;
-  triggered: boolean;
-  last_value: number | null;
   scope: string | null;
 }
 
@@ -87,8 +91,8 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       threshold: m.threshold,
       direction: m.direction,
       compare: m.compare,
-      triggered: m.triggered,
-      last_value: m.last_value,
+      // derived below, from the figure this row actually shows
+      triggered: false,
       snapshot,
       dte: daysToExpiry(m.strike_date, now),
       scope: m.scope,
@@ -108,17 +112,27 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     }
     if (monitorLegCodes(m).some((c) => bad.has(c))) entry.error = "unknown contract";
 
-    // a rule backed by a Position is measured on its cost to close, which cannot be negative — so
+    // The figure this row is about, read ONCE and then used for both the fill bar and the bell.
+    // They are one claim drawn twice and must not be able to disagree: the bell came from the
+    // sweep's stored column while every figure beside it came from this fetch, so a row could show
+    // a value past its threshold with no bell, or a bell beside a value well inside it (ADR 0010).
+    //
+    // A rule backed by a Position is measured on its cost to close, which cannot be negative — so
     // the comparison is always above/abs regardless of the rule's own mode, matching what the
-    // dashboard has shown since the sign reconciliation
-    if (positions.length > 0 && isCombo) {
-      entry.fill = thresholdFill(entry.cost_to_close, m.threshold, "above", "abs");
-    } else {
-      const watched = isCombo
-        ? comboValue
-        : ((snapshot?.[m.field] ?? null) as number | null);
-      entry.fill = thresholdFill(watched ?? null, m.threshold, m.direction, m.compare);
-    }
+    // dashboard has shown since the sign reconciliation.
+    const measured = positions.length > 0 && isCombo
+      ? { value: entry.cost_to_close, direction: "above", compare: "abs" }
+      : {
+        value: isCombo ? (comboValue ?? null) : ((snapshot?.[m.field] ?? null) as number | null),
+        direction: m.direction,
+        compare: m.compare,
+      };
+    entry.fill = thresholdFill(measured.value, m.threshold, measured.direction, measured.compare);
+    // An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
+    // stored state would be back, by the other door. isBreached is the ENGINE's own predicate, so
+    // the bell flips at the exact threshold and cannot drift from how the alarm is decided.
+    entry.triggered = measured.value !== null
+      && isBreached(measured.value, m.threshold, measured.direction, measured.compare);
     return entry;
   });
 }
