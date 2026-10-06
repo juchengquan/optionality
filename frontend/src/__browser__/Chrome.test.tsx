@@ -58,6 +58,21 @@ describe("where the controls sit", () => {
     expect(meta.textContent).toMatch(/fetched at/);
   });
 
+  it("puts refresh-now in that same line, as something a finger can hit", async () => {
+    await show();
+    const meta = document.querySelector(".meta")!;
+    const now = screen.getByRole("button", { name: "refresh now" });
+
+    expect(meta.contains(now), "refresh-now is not in the freshness line").toBe(true);
+    // it is an icon in a line of small text, so its tap target is the thing to check rather
+    // than its presence. 24px is the floor a thumb can be expected to find.
+    const box = now.getBoundingClientRect();
+    expect(Math.min(box.width, box.height), `${Math.round(box.width)}×${Math.round(box.height)}`)
+      .toBeGreaterThanOrEqual(24);
+    // and it sits beside the interval it overrides, not somewhere else in the sentence
+    expect(sameLine(screen.getByLabelText("refresh every"), now)).toBe(true);
+  });
+
   it("leaves one row of chrome between the heading and the data, not three", async () => {
     await show();
     const h2 = screen.getByText("optionality watchlist");
