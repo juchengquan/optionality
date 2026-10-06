@@ -32,7 +32,9 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
   main unable to load at all), `make diff-api` / `make diff-opend` / `make diff-services` (the three
   differentials against the Python; see `backend/tools/*/README.md`).
 - `make serve` — run the API locally (loads `.env`). `make build-ui` / `check-ui` / `test-ui` for the frontend;
-  the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path.
+  the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
+  therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
+  source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
 - Schema change: edit `service/models.py`, then
   `OPTIONALITY_DB_PATH=data/optionality.db uv run alembic revision --autogenerate -m "..."` and
   `... alembic upgrade head`. Alembic runs in batch mode (SQLite table rebuilds). **Squash a branch's
