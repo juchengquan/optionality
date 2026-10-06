@@ -248,5 +248,24 @@ describe("the monitor form, which shared the bug", () => {
         expect(box.getBoundingClientRect().width, label).toBeCloseTo(available, 0);
       }
     });
+
+    it(`its entry row shares one line with the side, usably — ${name}`, async () => {
+      await page.viewport(w, h);
+      const form = await open("add monitor");
+      const box = within(form).getByLabelText("entry", { exact: true }) as HTMLInputElement;
+      const row = box.closest("[data-slot=field]")!;
+      const label = row.querySelector("[data-slot=field-label]")! as HTMLElement;
+
+      // horizontal, like a combo's leg, so it is subject to the same two faults: a label the
+      // variant squeezes below its own text, and a number box the rest of the row crowds out
+      const lines = label.getBoundingClientRect().height
+        / parseFloat(getComputedStyle(label).lineHeight);
+      expect(Math.round(lines), `"${label.textContent}" wrapped`).toBe(1);
+      expect(row.getBoundingClientRect().height).toBeLessThan(36);
+
+      await userEvent.fill(box, "5.00");
+      expect(box.getBoundingClientRect().width).toBeGreaterThanOrEqual(60);
+      expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
+    });
   }
 });
