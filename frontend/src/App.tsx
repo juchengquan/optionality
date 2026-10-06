@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import "./app.css";
 import {
-  createMonitor, deleteMonitor, fetchHealth, fetchMonitors, fetchQuotes,
+  createWatch, deleteMonitor, fetchHealth, fetchMonitors, fetchQuotes,
   patchMonitor, patchPosition, setTotalEntry,
   type Entry, type Health, type Monitor,
 } from "./api";
@@ -147,7 +147,7 @@ export function App() {
           everything above the tables was reduced to one line and this keeps it that way */}
       <div className="page-head">
         <h2>optionality watchlist</h2>
-        <AddPanel onCreate={(body) => void act(() => createMonitor(body))} />
+        <AddPanel onCreate={(body) => void act(() => createWatch(body))} />
       </div>
       {error ? <div className="banner">{error}</div> : null}
 
