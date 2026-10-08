@@ -65,13 +65,17 @@ export const MonitorIn = z.object({
 });
 
 export const ComboLegIn = z.object({
-  /** + on sold legs and − on bought legs watches the cost to close.
+  /** MINUS IS SHORT: −1 is a leg you sold, +1 a leg you bought. The combo's value is the signed
+   *  sum under those signs, so a credit structure's value is the NEGATIVE of its cost to close —
+   *  which `compare: abs` is indifferent to, and which is why a position-backed row switches to
+   *  `cost_to_close` on the dashboard.
    *
-   *  That is one legal convention, not the meaning of the sign. The dashboard's add-combo form
-   *  states the OPPOSITE where the legs are typed — "minus is short, plus is long" — so a combo
-   *  entered there tracks the negative of its cost to close, which `compare: abs` cannot tell
-   *  apart. Anything deriving a holding's sides from these signs must follow whichever convention
-   *  entered them, because getting it backwards inverts P&L silently rather than failing. */
+   *  This comment said the opposite until 2026-10-06 ("+ on sold legs watches the cost to close",
+   *  ported from the Python's OpenAPI example). Both readings are arithmetically legal and nothing
+   *  failed, because the sign is otherwise just a multiplier. It is not harmless: the add-combo
+   *  form derives a holding's SIDES from these signs, and the wrong reading inverts every P&L
+   *  rather than failing. The relationship is pinned in domain/position.test.ts — "the sign
+   *  convention, so neither vocabulary can drift from the other" — rather than left to prose. */
   sign: z.union([z.literal(1), z.literal(-1)]),
   option_type: z.enum(["CALL", "PUT"]),
   strike: z.number(),

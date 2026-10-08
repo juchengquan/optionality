@@ -35,6 +35,7 @@ HELP_TEXT = """Commands:
 /threshold <name or contract> <value> — change a monitor's threshold
 /rename <old> <new> — rename a combo (keeps its alarm state and history)
 /snapshot <date> <CALL|PUT> <strike> — live quote
+(leg signs: − short, the leg you sold; + long)
 (dates: YYYY-MM-DD or YYYYMMDD)
 /health — service status
 /help — this message"""
@@ -90,7 +91,7 @@ BOT_COMMANDS = [
     {"command": "greeks", "description": "Live delta/gamma/theta for every watched code"},
     {"command": "vol", "description": "Live IV/vega for every watched code"},
     {"command": "watch", "description": "Add a monitor: DATE CALL|PUT strike threshold"},
-    {"command": "watchcombo", "description": "Watch a combo: NAME DATE ±Cstrike ±Pstrike ... threshold"},
+    {"command": "watchcombo", "description": "Watch a combo: NAME DATE −short +long Cstrike Pstrike ... threshold"},
     {"command": "unwatch", "description": "Remove a monitor by name, code, or id prefix"},
     {"command": "combo", "description": "Per-leg breakdown of a combo"},
     {"command": "threshold", "description": "Change a monitor's threshold: NAME|contract value"},
@@ -335,7 +336,7 @@ class TelegramBot(threading.Thread):
     _LEG_TOKEN = re.compile(r"^([+-])([CP])(\d+(?:\.\d+)?)$")
 
     def _cmd_watchcombo(self, args: list[str]) -> str:
-        usage = "Usage: /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below]"
+        usage = "Usage: /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below]  (−short +long)"
         if len(args) < 5:
             return usage
         name = args[0]

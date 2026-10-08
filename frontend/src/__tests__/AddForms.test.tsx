@@ -257,8 +257,16 @@ describe("adding a combo", () => {
 
   it("records the holding as well, when an entry is given", async () => {
     const combo = await openForm("combo");
-    await fillCondor(combo, "7.4");
+    // Read BEFORE submitting: the sheet closes on submit and its title ternary falls back to the
+    // monitor copy, so this assertion passes or fails for the wrong reason afterwards.
+    //
+    // The copy and the mapping are asserted TOGETHER, on purpose. The sides below are derived from
+    // the signs, and the only thing telling the owner what a sign means is this sentence — so
+    // changing the sentence without changing the mapping, or the reverse, has to fail here. The
+    // repo stated both readings at once until 2026-10-06; see ComboLegIn.
+    expect(combo.textContent).toContain("minus is short, plus is long");
 
+    await fillCondor(combo, "7.4");
     await waitFor(() => expect(posted).toHaveLength(2));
     expect(posted[0]!.url).toMatch(/\/monitors$/);
     expect(posted[1]!.url).toMatch(/\/positions$/);
