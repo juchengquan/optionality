@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Settings2 } from "lucide-react";
 
 import "./app.css";
 import {
@@ -8,17 +8,16 @@ import {
   type Entry, type Health, type Monitor,
 } from "./api";
 import { Button } from "@/components/ui/button";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Toaster, toast } from "@/components/ui/toast";
-import { AddPanel } from "./AddPanel";
+import { AddPanel, AddTrigger, type Adding } from "./AddPanel";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, writeHidden } from "./columns";
 import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { RowDetail, type DetailTarget } from "./RowDetail";
+import { Settings } from "./Settings";
 import { useTableFit } from "./useTableFit";
 import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
 
-const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 
 /** Is the user in the middle of something the poll would wipe?
  *
@@ -55,6 +54,10 @@ export function App() {
   // call, so a click one second before a tick would otherwise cost two full-watchlist
   // snapshots a second apart — the button has to displace the next poll, not add to it.
   const [pollFrom, setPollFrom] = useState(0);
+  // the add sheet's subject lives here, not in AddPanel: the two triggers moved out to their
+  // tables and cannot share a piece of state neither of them can see
+  const [adding, setAdding] = useState<Adding>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [detail, setDetail] = useState<DetailTarget | null>(null);
 
   const load = useCallback(async () => {
@@ -161,41 +164,20 @@ export function App() {
   );
 
   const fetchedAt = health?.monitor.fetched_at;
+  // "something to say": a dead OpenD, an alarm engine that is not running, or work in the queue
+  const degraded = Boolean(health && (!health.opend || health.monitor.alarms.bad || health.queue_depth > 0));
 
   return (
     <main>
       {/* the add triggers share the heading's line rather than taking a row of their own:
           everything above the tables was reduced to one line and this keeps it that way */}
+      {/* the page's name and the two things you can do to the page itself. What you can CREATE
+          moved to the tables that will hold it; these two are about the screen, not the data. */}
       <div className="page-head">
         <h2>optionality watchlist</h2>
-        <AddPanel onCreate={(body) => void act(() => createWatch(body))} />
-      </div>
-      {error ? <div className="banner">{error}</div> : null}
-
-      {/* Freshness in one sentence. The refresh selector used to be a row of its own above
-          the tables; it belongs here, because how current the figures are and how often they
-          update are the same subject. The two cadences are worded to stay distinct: the
-          SERVICE decides how fresh the data is, this screen only decides how soon the newest
-          sweep reaches it. */}
-      <p className="meta">
-        {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
-        {health ? ` · service sweeps every ${health.settings.sweep_seconds}s` : ""}
-        {" · this screen every "}
-        <NativeSelect
-          size="sm"
-          aria-label="refresh every"
-          value={refresh}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            setRefresh(n);
-            document.cookie = `ui_refresh=${n};path=/;max-age=31536000;samesite=lax`;
-          }}
-        >
-          {REFRESH_PRESETS.map((n) => <option key={n} value={n}>{n}s</option>)}
-        </NativeSelect>
-        {/* and one now, for when the next tick is not soon enough. Icon-only with an
-            accessible name, like the column pickers: this line is small text and a worded
-            button would weigh more than the sentence it sits in. */}
+        <Button variant="ghost" size="sm" aria-label="settings" onClick={() => setSettingsOpen(true)}>
+          <Settings2 />
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -205,9 +187,26 @@ export function App() {
         >
           <RefreshCw className={refreshing ? "animate-spin" : undefined} />
         </Button>
+      </div>
+      {error ? <div className="banner">{error}</div> : null}
+
+      {/* Freshness, and nothing else. The interval that used to sit in this sentence is a
+          preference set once and moved into the settings sheet; what is left is the one thing
+          worth reading every time you look at the screen. The two cadences stay worded
+          distinctly: the SERVICE decides how fresh the figures are, the screen only decides how
+          soon a new one reaches it. */}
+      <p className="meta">
+        {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
+        {health ? ` · service sweeps every ${health.settings.sweep_seconds}s` : ""}
       </p>
 
-      {health ? (
+      {/* The service's own state, shown ONLY when it has something to say.
+          It did not move into settings and must not: if OpenD is down or the alarm engine has
+          stalled, every figure below is suspect and the bell may be silent, which is exactly
+          when it cannot be a click away. A healthy idle service says nothing and the page keeps
+          the row. A non-empty queue is not a fault — a run is executing — but it is worth
+          seeing, so it counts as something to say. */}
+      {degraded && health ? (
         <div className="health">
           OpenD: <span className={health.opend ? undefined : "bad"}>{health.opend ? "up" : "DOWN"}</span>
           {" · alarms: "}
@@ -218,14 +217,29 @@ export function App() {
 
       <WatchlistTable title="Single-leg" entries={singles} columns={singleFit.columns} containerRef={singleFit.ref} isCombo={false}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
+                      add={<AddTrigger which="monitor" onOpen={() => setAdding("monitor")} />}
                       picker={<ColumnPicker table="single" label="Single-leg"
                         all={SINGLE_COLUMNS.filter((c) => singleFit.offered.has(c.key))}
                         hidden={hiddenSingle} onToggle={onToggle} onReset={onReset} />} />
       <WatchlistTable title="Combos" entries={combos} columns={comboFit.columns} containerRef={comboFit.ref} isCombo={true}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
+                      add={<AddTrigger which="combo" onOpen={() => setAdding("combo")} />}
                       picker={<ColumnPicker table="combo" label="Combos"
                         all={COMBO_COLUMNS.filter((c) => comboFit.offered.has(c.key))}
                         hidden={hiddenCombo} onToggle={onToggle} onReset={onReset} />} />
+
+      <AddPanel which={adding} onClose={() => setAdding(null)}
+                onCreate={(body) => void act(() => createWatch(body))} />
+      <Settings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        refresh={refresh}
+        sweepSeconds={health?.settings.sweep_seconds}
+        onRefresh={(n) => {
+          setRefresh(n);
+          document.cookie = `ui_refresh=${n};path=/;max-age=31536000;samesite=lax`;
+        }}
+      />
 
       <RowDetail
         entry={detailEntry}

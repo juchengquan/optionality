@@ -49,28 +49,47 @@ describe("where the controls sit", () => {
     expect(picker.closest("div")!.contains(heading)).toBe(true);
   });
 
-  it("puts the refresh selector in the line that reports freshness", async () => {
+  it("leaves the freshness line reporting freshness and nothing else", async () => {
     await show();
     const meta = document.querySelector(".meta")!;
-    const refresh = screen.getByLabelText("refresh every");
 
-    expect(meta.contains(refresh), "the refresh control is not in the freshness line").toBe(true);
     expect(meta.textContent).toMatch(/fetched at/);
+    expect(meta.textContent).toMatch(/sweeps every/);
+    // the interval used to live in this sentence. It is a preference set once, not a thing to
+    // read, so it moved into the settings sheet — and must not have left a control behind.
+    expect(screen.queryByLabelText("refresh every"), "the interval is still on the page").toBeNull();
+    expect(meta.querySelector("select, button"), "a control is still in the freshness line").toBeNull();
   });
 
-  it("puts refresh-now in that same line, as something a finger can hit", async () => {
+  it("offers the interval in the settings sheet instead", async () => {
     await show();
-    const meta = document.querySelector(".meta")!;
-    const now = screen.getByRole("button", { name: "refresh now" });
+    screen.getByRole("button", { name: "settings" }).click();
+    await new Promise((r) => setTimeout(r, 220));
+    const sheet = document.querySelector("[role=dialog]")!;
+    expect(sheet.contains(screen.getByLabelText("refresh every"))).toBe(true);
+  });
 
-    expect(meta.contains(now), "refresh-now is not in the freshness line").toBe(true);
+  it("puts the page's own two actions on the heading's line, as things a finger can hit", async () => {
+    await show();
+    const h2 = screen.getByText("optionality watchlist");
+    const now = screen.getByRole("button", { name: "refresh now" });
+    const settings = screen.getByRole("button", { name: "settings" });
+
+    // what you can DO to the screen sits with the screen's name; what you can CREATE moved to
+    // the table that will hold it. Two different subjects, so two different lines.
+    expect(sameLine(h2, now), "refresh-now is not on the heading's line").toBe(true);
+    expect(sameLine(h2, settings), "settings is not on the heading's line").toBe(true);
     // it is an icon in a line of small text, so its tap target is the thing to check rather
     // than its presence. 24px is the floor a thumb can be expected to find.
     const box = now.getBoundingClientRect();
     expect(Math.min(box.width, box.height), `${Math.round(box.width)}×${Math.round(box.height)}`)
       .toBeGreaterThanOrEqual(24);
-    // and it sits beside the interval it overrides, not somewhere else in the sentence
-    expect(sameLine(screen.getByLabelText("refresh every"), now)).toBe(true);
+    for (const b of [now, settings]) {
+      const box = b.getBoundingClientRect();
+      expect(Math.min(box.width, box.height),
+        `${b.getAttribute("aria-label")} is ${Math.round(box.width)}×${Math.round(box.height)}`)
+        .toBeGreaterThanOrEqual(24);
+    }
   });
 
   it("leaves one row of chrome between the heading and the data, not three", async () => {
@@ -87,20 +106,22 @@ describe("where the controls sit", () => {
     });
     // the freshness line and the service-status line; the pickers and the refresh selector
     // used to add two more
+    // ONE row now, not two: the service-status line shows only when it has something to say, and
+    // this fixture is healthy. A degraded service legitimately adds it back.
     expect(between.length, `chrome rows: ${between.map((e) => e.className || e.tagName).join(", ")}`)
-      .toBeLessThanOrEqual(2);
+      .toBe(1);
   });
 
-  it("puts the add triggers above the tables, on the heading's own line", async () => {
+  it("puts each add trigger on the heading of the table it adds to", async () => {
     await show();
-    const h2 = screen.getByText("optionality watchlist");
-    const table = document.querySelector("table")!;
-
-    for (const label of ["add monitor", "add combo"]) {
+    // the same reasoning that moved the column pickers here: a control belongs next to the thing
+    // it changes, and each of these adds a row to exactly one of these tables
+    for (const [label, title] of [["add monitor", "Single-leg"], ["add combo", "Combos"]] as const) {
       const button = screen.getByRole("button", { name: label });
-      expect(sameLine(h2, button), `"${label}" is not on the heading's line`).toBe(true);
-      expect(button.getBoundingClientRect().top, `"${label}" is below the table`)
-        .toBeLessThan(table.getBoundingClientRect().top);
+      const heading = screen.getByText(title);
+      expect(sameLine(heading, button), `"${label}" is not on ${title}'s line`).toBe(true);
+      expect(heading.closest(".table-head")!.contains(button),
+        `"${label}" is beside ${title} by accident, not inside its heading`).toBe(true);
     }
   });
 
@@ -109,14 +130,15 @@ describe("where the controls sit", () => {
     const h2 = screen.getByText("optionality watchlist");
     const table = document.querySelector("table")!;
 
-    // they used to sit below the muted tables; moving them up must not push the data down,
-    // which is the whole reason they share the heading's line
+    // they used to sit below the muted tables, then on the page heading, and now on their own
+    // tables' headings — none of which may push the data down. One row of chrome, the freshness
+    // line; the service-status line joins it only when something is wrong.
     const between = [...document.querySelectorAll<HTMLElement>("main > *")].filter((el) => {
       if (el.contains(table) || el.contains(h2)) return false;
       const t = el.getBoundingClientRect().top;
       return t > h2.getBoundingClientRect().bottom && t < table.getBoundingClientRect().top;
     });
     expect(between.length, `chrome rows: ${between.map((e) => e.className || e.tagName).join(", ")}`)
-      .toBeLessThanOrEqual(2);
+      .toBe(1);
   });
 });
