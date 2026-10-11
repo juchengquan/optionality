@@ -64,7 +64,7 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, onOpen, containerRef, picker,
+  title, entries, columns, isCombo, onOpen, containerRef, picker, add,
 }: {
   title: string;
   entries: Entry[];
@@ -74,14 +74,33 @@ export function WatchlistTable({
   containerRef?: React.Ref<HTMLDivElement>;
   /** this table's column choices, sat beside its name rather than in the page's chrome */
   picker?: React.ReactNode;
+  /** the trigger that adds a row to THIS table, on its heading for the same reason */
+  add?: React.ReactNode;
 }) {
-  if (entries.length === 0) return null;
   const shown = new Set(columns.map((c) => c.key));
+
+  // An empty table used to render NOTHING — heading included. That was invisible while the add
+  // triggers lived in the page chrome, and became a trap the moment they moved onto these
+  // headings: with no rows of a kind there would be no way to create the first one, on a fresh
+  // install or the moment you deleted your last. So the heading always draws, and says so.
+  // The picker does not: there is nothing to choose between for a table with no rows.
+  if (entries.length === 0) {
+    return (
+      <div ref={containerRef}>
+        <div className="table-head">
+          <h3>{title}</h3>
+          {add}
+        </div>
+        <p className="pending">nothing watched yet</p>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef}>
       <div className="table-head">
         <h3>{title}</h3>
+        {add}
         {picker}
       </div>
       <div className="table-scroll">

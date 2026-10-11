@@ -43,7 +43,8 @@ async function open(which: "add combo" | "add monitor") {
   }) as unknown as typeof fetch;
   render(<App />);
   await new Promise((r) => setTimeout(r, 200));
-  await userEvent.click(screen.getByText(which));
+  // icons on their tables' headings now, so by accessible name rather than by text
+  await userEvent.click(screen.getByRole("button", { name: which }));
   const dialog = await screen.findByRole("dialog");
   // the sheet slides in over 200ms and is narrower than its final width until it lands
   await new Promise((r) => setTimeout(r, 500));

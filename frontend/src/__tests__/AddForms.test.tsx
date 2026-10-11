@@ -66,8 +66,11 @@ function setLeg(scope: HTMLElement, n: number, sign: string, type_: string, stri
 async function openForm(which: "monitor" | "combo", failWith?: string) {
   mockApi(failWith);
   render(<App />);
-  await waitFor(() => expect(screen.getByText(`add ${which}`)).toBeTruthy());
-  await userEvent.click(screen.getByText(`add ${which}`));
+  // by ROLE and accessible name: the triggers moved onto their tables' headings and became
+  // icons, so there is no text to find. One of the three fenced interaction helpers.
+  const trigger = `add ${which}` as const;
+  await waitFor(() => expect(screen.getByRole("button", { name: trigger })).toBeTruthy());
+  await userEvent.click(screen.getByRole("button", { name: trigger }));
   return await screen.findByRole("dialog");
 }
 
