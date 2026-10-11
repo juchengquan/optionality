@@ -39,7 +39,7 @@ export function AddPanel({ onCreate }: { onCreate: (body: Record<string, unknown
             <SheetTitle>{open === "combo" ? "Add combo" : "Add monitor"}</SheetTitle>
             <SheetDescription>
               {open === "combo"
-                ? "Legs are signed: minus is short, plus is long. The value is their signed sum. A leg left blank is skipped."
+                ? "Each leg is short or long; the value is their signed sum, short legs counting negative. An entry records the short legs as sold and the long as bought. A leg left blank is skipped."
                 : "One contract, one rule. The alarm fires at the threshold exactly."}
             </SheetDescription>
           </SheetHeader>

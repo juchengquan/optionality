@@ -167,20 +167,41 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
               while the flex item is Base UI's wrapper, so it would do nothing at all. */}
           {legs.map((leg, i) => (
             <Field key={i} orientation="horizontal"
-                   className="*:data-[slot=field-label]:flex-none">
+                   className="flex-wrap *:data-[slot=field-label]:flex-none">
               <FieldLabel htmlFor={`c-leg-${i}-strike`}>leg {i + 1}</FieldLabel>
+              {/* No `shrink-0` on these: it reads like the obvious guard against the words being
+                  squeezed behind the chevron, and it is inert. The wrap plus the strike's minimum
+                  below leaves this line no shrink pressure at any width from 330 to 1600 —
+                  measured, after a mutation sweep found the class changing nothing.
+
+                  The words, not the signs. A sign is a multiplier and says nothing about which
+                  way you are on the leg; "+ on sold legs" and "minus is short" both lived in this
+                  repo at once, and the add-combo form is where a holding's SIDES are derived from
+                  these, so the wrong reading inverts a P&L rather than failing. The stored value
+                  is still ±1 — only the label changed.
+                  short/long rather than sold/bought because a combo you merely WATCH has no
+                  sides: you have not sold anything. The entry field below is where it becomes a
+                  holding, and that translation is stated in the sheet's description. */}
               <NativeSelect aria-label={`leg ${i + 1} sign`} value={leg.sign}
                             onChange={(e) => setLeg(i, { sign: e.target.value })}>
-                <option>+</option><option>-</option>
+                <option value="+">long</option><option value="-">short</option>
               </NativeSelect>
               <NativeSelect aria-label={`leg ${i + 1} type`} value={leg.option_type}
                             onChange={(e) => setLeg(i, { option_type: e.target.value })}>
                 <option>CALL</option><option>PUT</option>
               </NativeSelect>
-              {/* "strike (blank = skip)" wants 138px and the box has 100px of text room on a
-                  phone, so the hint was never readable where it mattered; the sheet says it */}
-              <NumberField id={`c-leg-${i}-strike`} placeholder="strike"
-                           value={leg.strike} onValueChange={(v) => setLeg(i, { strike: v })} />
+              {/* A div of my own around the NumberField, because Base UI's wrapper is the flex
+                  item and its className goes to the inner input — so this is the only way to give
+                  the strike a minimum. Below that minimum the row wraps and the box takes the
+                  next line whole, which is what a phone does: "long"/"short" and CALL/PUT and
+                  four digits do not fit on 260px together, measured. A desk keeps one line.
+
+                  "strike (blank = skip)" wants 138px and the box has ~100px of text room on a
+                  phone, so the hint was never readable where it mattered; the sheet says it. */}
+              <div className="min-w-28 flex-1">
+                <NumberField id={`c-leg-${i}-strike`} placeholder="strike"
+                             value={leg.strike} onValueChange={(v) => setLeg(i, { strike: v })} />
+              </div>
             </Field>
           ))}
           {legs.length < MAX_LEGS ? (

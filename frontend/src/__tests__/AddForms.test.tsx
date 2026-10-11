@@ -257,14 +257,16 @@ describe("adding a combo", () => {
 
   it("records the holding as well, when an entry is given", async () => {
     const combo = await openForm("combo");
-    // Read BEFORE submitting: the sheet closes on submit and its title ternary falls back to the
-    // monitor copy, so this assertion passes or fails for the wrong reason afterwards.
+    // The WORDS and the mapping are asserted together, on purpose. The sides posted below are
+    // derived from these signs, and this control is the only thing telling the owner which way
+    // round they are — so relabelling it without changing the mapping, or the reverse, has to
+    // fail here. The repo stated both readings at once until 2026-10-06; see ComboLegIn.
     //
-    // The copy and the mapping are asserted TOGETHER, on purpose. The sides below are derived from
-    // the signs, and the only thing telling the owner what a sign means is this sentence — so
-    // changing the sentence without changing the mapping, or the reverse, has to fail here. The
-    // repo stated both readings at once until 2026-10-06; see ComboLegIn.
-    expect(combo.textContent).toContain("minus is short, plus is long");
+    // Read BEFORE submitting: the sheet closes on submit and its content falls back to the
+    // monitor form, so anything read from it afterwards is the wrong form's.
+    const sign = within(combo).getByLabelText("leg 1 sign") as HTMLSelectElement;
+    expect([...sign.options].map((o) => [o.value, o.textContent]))
+      .toEqual([["+", "long"], ["-", "short"]]);
 
     await fillCondor(combo, "7.4");
     await waitFor(() => expect(posted).toHaveLength(2));

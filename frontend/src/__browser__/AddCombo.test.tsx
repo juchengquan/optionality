@@ -205,7 +205,58 @@ describe("a four-digit strike fits in the box that takes it", () => {
       // strike box either way. The number of lines is the thing that changed.
       const lines = label.getBoundingClientRect().height / parseFloat(getComputedStyle(label).lineHeight);
       expect(Math.round(lines), `"${label.textContent}" wrapped`).toBe(1);
-      expect(row.getBoundingClientRect().height).toBeLessThan(36);
+      // the row's own height is no longer the test: it wraps on a phone, deliberately, and that
+      // is asserted below as a fact about the strike box rather than as a pixel ceiling here
+      expect(row.getBoundingClientRect().height).toBeLessThan(80);
+    });
+
+    it(`wraps the strike onto its own line only where it must — ${name}`, async () => {
+      await page.viewport(w, h);
+      const form = await openCombo();
+      const box = strikeBox(form, 1);
+      const row = box.closest("[data-slot=field]")!;
+      // measured against a SELECT, not the label: the row is items-center and the label is
+      // shorter, so its top sits 6px lower on the very same line. Comparing to it reported a
+      // wrap at a desk width that was not wrapping at all.
+      const select = row.querySelector("select")!;
+      const beside = Math.abs(box.getBoundingClientRect().top - select.getBoundingClientRect().top) < 4;
+
+      if (w < 500) {
+        // "long"/"short" plus CALL/PUT plus four digits do not fit in 260px — measured, which is
+        // how the words came to be hidden behind the chevron in the first place. So the box takes
+        // the next line, whole, rather than everything being squeezed past legibility.
+        expect(beside, "the strike is still crammed onto the selects' line").toBe(false);
+        expect(box.getBoundingClientRect().width).toBeGreaterThan(200);
+      } else {
+        expect(beside, "a desk has room for one line and should use it").toBe(true);
+      }
+    });
+  }
+});
+
+describe("a select you can read", () => {
+  for (const [name, w, h] of WIDTHS) {
+    it(`every option fits the select that offers it — ${name}`, async () => {
+      await page.viewport(w, h);
+      const form = await openCombo();
+      // The gap this suite had: it measured the strike box and the leg label and never the
+      // selects. A <select> does not scroll, so clipping is silent — and these carry 42px of
+      // padding before a glyph is drawn (pr-8 for the chevron, pl-2.5), which is most of a
+      // shrunk select. Words went into them when the signs stopped being ± and vanished.
+      const ctx = document.createElement("canvas").getContext("2d")!;
+      const selects = [...form.querySelectorAll("select")];
+      expect(selects.length).toBeGreaterThan(3);
+
+      for (const select of selects) {
+        const cs = getComputedStyle(select);
+        ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const room = select.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        const longest = [...select.options]
+          .reduce((a, o) => Math.max(a, ctx.measureText(o.textContent ?? "").width), 0);
+        const label = select.getAttribute("aria-label") ?? select.id;
+        expect(longest, `${label}: longest option needs ${Math.round(longest)}px of ${Math.round(room)}px`)
+          .toBeLessThanOrEqual(room);
+      }
     });
   }
 });
