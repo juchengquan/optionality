@@ -120,6 +120,67 @@ describe("the schedule in the row's sheet", () => {
   });
 });
 
+describe("how much of the gap vol could explain", () => {
+  /** The √T shape assumes IV has not moved — time value scales with σ√T and only √T is used. The
+   *  condor's net vega is about -1.3 points per vol point, so HALF a vol point covers a whole pace
+   *  gap: "behind by 0.54" is largely a vol reading rather than a verdict on the trade.
+   *
+   *  Adjusting the line needs a baseline IV that nothing has recorded yet, so until then the sheet
+   *  says what a vol move WOULD explain. Net vega is already computed and already on screen as the
+   *  vega column, so this is arithmetic on figures the row already carries. */
+  const vega = (v: number | null) => ({
+    ...scheduled,
+    combo_greeks: { option_delta: -0.012, option_vega: v, option_gamma: 0.00004, option_theta: 0.21 },
+  });
+
+  it("says how big an IV move would account for the whole gap", async () => {
+    // gap 0.06 against a net vega of -1.29: 0.05 vol points
+    mockApi([vega(-1.29)]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).toMatch(/0\.05 vol points would cover/i);
+    expect(sheet.textContent).toContain("-1.29");
+  });
+
+  it("scales with the gap, so a wide gap needs a big move", async () => {
+    mockApi([{ ...vega(-1.29), schedule: { ...scheduled.schedule, pace_gap: 1.29 } }]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).toMatch(/1\.00 vol points would cover/i);
+  });
+
+  it("says nothing where there is no vega to divide by", async () => {
+    // a structure with no net vol exposure cannot have its gap explained by vol, and dividing by
+    // zero would print Infinity next to a number you act on
+    mockApi([vega(0)]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).not.toMatch(/vol points would cover/i);
+    expect(sheet.textContent, "the rest of the schedule still shows").toMatch(/on pace/i);
+  });
+
+  it("says nothing when the vega is unknown", async () => {
+    mockApi([vega(null)]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).not.toMatch(/vol points would cover/i);
+  });
+
+  it("says nothing on a row with no gap to explain", async () => {
+    mockApi([{ ...vega(-1.29), schedule: { ...scheduled.schedule, on_pace: null, pace_gap: null } }]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).not.toMatch(/vol points would cover/i);
+  });
+
+  it("keeps it out of the table", async () => {
+    mockApi([vega(-1.29)]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1120_IC_7100_8200")).toBeTruthy());
+    expect(document.querySelector("table")!.textContent).not.toMatch(/vol points/i);
+  });
+});
+
 describe("where the on-pace figure comes from", () => {
   /** Everything else on the row is a measurement; this one is a MODEL output, chosen on a single
    *  confirming observation (ADR 0011). A number that looks like a price and is not should say so

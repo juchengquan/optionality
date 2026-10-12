@@ -669,6 +669,105 @@ describe("recording what a Position was worth", () => {
     expect(samples()).toEqual([]);
   });
 
+  it("records each leg's IV beside the cost, which is what a vol adjustment needs", async () => {
+    // The √T shape silently assumes IV has not moved: time value scales with σ√T and only √T is
+    // used. The condor's net vega is about -1.3 points per IV point, so half a vol point accounts
+    // for a whole pace gap — the reference is mostly a vol reading. Fixing that needs a baseline,
+    // and nothing recorded one, so this starts.
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c,
+      mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_implied_volatility: c === buildSpxCode(future(), "CALL", 8050) ? 10.5 : 22.1,
+    })))).sweep();
+
+    const row = db.prepare("select legs_iv from position_samples where position_id = ?").get(id) as
+      { legs_iv: string | null };
+    expect(JSON.parse(row.legs_iv!)).toEqual({
+      [buildSpxCode(future(), "CALL", 8050)]: 10.5,
+      [buildSpxCode(future(), "CALL", 8075)]: 22.1,
+    });
+  });
+
+  it("records no IV at all rather than some of it", async () => {
+    // a vol adjustment needs every leg: with one missing you cannot say what the structure's vol
+    // did, and a partial map would invite an answer computed from half a structure. The cost to
+    // close is still recorded — that is a different all-or-nothing, and it has all its mids.
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      ...(c === buildSpxCode(future(), "CALL", 8050) ? { option_implied_volatility: 10.5 } : {}),
+    })))).sweep();
+
+    const row = db.prepare("select legs_iv, cost_to_close from position_samples where position_id = ?")
+      .get(id) as { legs_iv: string | null; cost_to_close: number };
+    expect(row.legs_iv).toBeNull();
+    expect(row.cost_to_close).toBe(4);
+  });
+});
+
+describe("how often the sampler actually writes", () => {
+  /** It wrote on every sweep — 5,760 times a day at a 15-second interval, to persist ONE row, and
+   *  overnight almost every one of those stored a value identical to what was already there. The
+   *  live file carried a 3.1MB write-ahead log against a 110KB database because of it.
+   *
+   *  Bounded rather than broken: SQLite folds the log in at about 4MB. But the IV map triples the
+   *  payload of each of those writes, so it is worth fixing in the same change rather than after.
+   */
+  const held = (name: string) => {
+    const id = name.padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, ?, null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', null, null)`,
+    ).run(id, name, future(), toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8050 },
+      { side: "bought", option_type: "CALL", strike: 8075 },
+    ]));
+    return id;
+  };
+  const writes = () =>
+    (db.prepare("select total_changes() n").get() as { n: number }).n;
+  const quiet = (mid: number, iv: number): QuoteFetcher => (codes) =>
+    Promise.resolve(codes.map((c) => ({
+      code: c, name: c,
+      mid_price: c === buildSpxCode(future(), "CALL", 8050) ? mid : 1.0,
+      option_implied_volatility: iv,
+    })));
+
+  it("writes nothing on a sweep that would store the same row again", async () => {
+    held("held");
+    await sweeper(quiet(5.0, 10.5)).sweep();
+    const after = writes();
+
+    for (let i = 0; i < 20; i++) await sweeper(quiet(5.0, 10.5)).sweep();
+    expect(writes() - after, "twenty identical sweeps should cost no writes").toBe(0);
+  });
+
+  it("writes when the figure moves, so the day's row still settles on the close", async () => {
+    held("held");
+    await sweeper(quiet(5.0, 10.5)).sweep();
+    const after = writes();
+    await sweeper(quiet(4.0, 10.5)).sweep();
+    expect(writes()).toBeGreaterThan(after);
+
+    const row = db.prepare("select cost_to_close from position_samples").get() as
+      { cost_to_close: number };
+    expect(row.cost_to_close).toBe(3);
+  });
+
+  it("writes when only the IV moves, which the cost alone would hide", async () => {
+    // the mid can sit still while vol moves, and the vol is the half being recorded for later
+    held("held");
+    await sweeper(quiet(5.0, 10.5)).sweep();
+    const after = writes();
+    await sweeper(quiet(5.0, 12.0)).sweep();
+    expect(writes()).toBeGreaterThan(after);
+
+    const row = db.prepare("select legs_iv from position_samples").get() as { legs_iv: string };
+    expect(JSON.parse(row.legs_iv)[buildSpxCode(future(), "CALL", 8050)]).toBe(12.0);
+  });
+
   it("does not stop the sweep if recording fails", async () => {
     // the sweep's job is the alarm. A sample is a nice-to-have and must never be the reason a
     // breach goes unmessaged, so the write is guarded like the telegram send is.

@@ -49,6 +49,18 @@ export function RowDetail({
   const paceSum = schedule && schedule.on_pace !== null && entry.entry !== null
     ? `${fmt(entry.entry, "mid")} × √(${entry.dte} ÷ ${schedule.dte_at_open})`
     : null;
+  // How much of the gap a vol move would account for. The √T shape assumes IV has not moved —
+  // time value scales with σ√T and only the √T half is used — and this structure's net vega is
+  // about -1.3 points per vol point, so half a vol point covers a whole gap. Until an IV baseline
+  // has been recorded the line cannot be adjusted, so the sheet says what vol WOULD explain.
+  //
+  // Magnitude only. Which way is already on the line above, as ahead or behind, and a signed
+  // version of this needs the sign of the vega and the sign of the gap both right to be read
+  // safely. Guarded against a zero vega, which would print Infinity beside a figure you act on.
+  const netVega = entry.combo_greeks?.option_vega ?? null;
+  const volPoints = schedule && schedule.pace_gap !== null && netVega !== null && netVega !== 0
+    ? Math.abs(schedule.pace_gap / netVega)
+    : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -95,6 +107,12 @@ export function RowDetail({
                 </>
               )}
             </p>
+            {volPoints === null ? null : (
+              <p className="meta">
+                {`${volPoints.toFixed(2)} vol points would cover this gap · net vega `}
+                {fmt(netVega, "vega")}
+              </p>
+            )}
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums">
               {([
                 ["on pace", (

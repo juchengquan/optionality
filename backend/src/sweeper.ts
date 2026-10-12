@@ -17,11 +17,12 @@ import { costToClose, positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
-  positionsForMonitors, recordPositionSample, stampManageNotified, updateMonitorFields,
+  findPositionSample, positionsForMonitors, recordPositionSample, stampManageNotified,
+  updateMonitorFields,
 } from "./db/queries.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
-import { toSqliteBool } from "./db/values.ts";
+import { toSqliteBool, toSqliteJson } from "./db/values.ts";
 import type { Settings } from "./env.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
 import { displayRecords, fetchResilient, type QuoteFetcher, type QuoteRecord } from "./quotes.ts";
@@ -271,11 +272,35 @@ export class MonitorSweeper {
       try {
         const dte = daysToExpiry(row.strike_date, at);
         if (dte < 0) continue;
+        const position = toPosition(row);
         // unknown, not zero: one unpriced leg and there is no observation to make
-        const cost = costToClose(toPosition(row), byCode);
+        const cost = costToClose(position, byCode);
         if (cost === null) continue;
+
+        // Per LEG, because a structure has no IV — "IV is never summed" (CLAUDE.md), and these
+        // legs run 10.5% to 22.1%, so one number for them would be a fiction. Null rather than a
+        // partial map: a vol adjustment needs every leg, and half a structure's vol invites an
+        // answer computed from half a structure.
+        const ivs: Record<string, number> = {};
+        let everyLegPriced = true;
+        for (const code of positionLegCodes(position)) {
+          const iv = byCode[code]?.option_implied_volatility;
+          if (iv === null || iv === undefined) { everyLegPriced = false; break; }
+          ivs[code] = Number(iv);
+        }
+        const legsIv = everyLegPriced ? toSqliteJson(ivs) : null;
+
+        // Only when something actually differs. The sweep runs every 15 seconds and the day's row
+        // is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
+        // weekends nearly every one of those writes stored what was already there, and the IV map
+        // triples what each one carries.
+        const stored = findPositionSample(this.deps.db, row.id, observedOn);
+        if (stored && stored.dte === dte && stored.cost_to_close === cost
+          && stored.legs_iv === legsIv) continue;
+
         recordPositionSample(this.deps.db, {
           position_id: row.id, observed_on: observedOn, dte, cost_to_close: cost,
+          legs_iv: legsIv,
         });
       } catch (err) {
         console.error(`recording a sample for ${row.name} failed:`, err);

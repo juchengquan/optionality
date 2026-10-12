@@ -104,6 +104,7 @@ CREATE TABLE position_samples (
 	observed_on VARCHAR(10) NOT NULL,
 	dte INTEGER NOT NULL,
 	cost_to_close FLOAT NOT NULL,
+	legs_iv TEXT,
 	PRIMARY KEY (position_id, observed_on),
 	FOREIGN KEY(position_id) REFERENCES positions (id)
 );
