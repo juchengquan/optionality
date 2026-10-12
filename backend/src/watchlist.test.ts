@@ -505,3 +505,73 @@ describe("the exit schedule on a watchlist entry", () => {
     expect(e!.schedule).toBeNull();
   });
 });
+
+describe("a rule that watches only PART of a holding", () => {
+  /** It reports the WHOLE holding's Cost to close, and that is deliberate.
+   *
+   *  It reads oddly — a row about one leg of a condor showing 6.40, the condor's cost — and I set
+   *  out to "fix" it before finding the intent written down in two places: the watchlist fetches a
+   *  Position's other legs even when no Monitor names them, "without them the cost to close would
+   *  be a partial sum", and the sweep widens its batch for the same reason. The other legs are
+   *  fetched PRECISELY so this figure can be whole.
+   *
+   *  So the question a leg rule answers is "what would it cost to buy back the thing this leg
+   *  belongs to", which is the number you act on when a short strike starts moving. Entry and P&L
+   *  are still withheld, because those would be a fraction of someone else's credit — the asymmetry
+   *  is the point, and nothing said so until now.
+   */
+  const condorPosition = () => {
+    const pid = "p9".padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'condor', 'iron_condor', ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', null, null)`,
+    ).run(pid, EXPIRY, toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "bought", option_type: "CALL", strike: 8150 },
+    ]));
+    return pid;
+  };
+
+  it("answers with the whole holding's cost, not the leg's own", async () => {
+    const mid = monitor({ strike: 8100, code: LEG_A, field: "option_delta", threshold: 0.18 });
+    const pid = condorPosition();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [e] = await run(quoting({
+      [LEG_A]: { mid_price: 5.0, option_delta: 0.11, option_contract_size: 100 },
+      [LEG_B]: { mid_price: 1.0, option_delta: 0.05, option_contract_size: 100 },
+    }));
+    expect(e!.scope).toBe("leg");
+    // sold 5.00, bought 1.00 — the SPREAD costs 4.00 to buy back, and that is what a row about
+    // its 8100 leg reports. The leg's own mid is 5.00 and is deliberately not this figure.
+    expect(e!.cost_to_close).toBe(4);
+    expect(e!.snapshot!.mid_price).toBe(5);
+    // and the three figures do NOT travel together: these two would be a fraction of a credit
+    expect(e!.entry).toBeNull();
+    expect(e!.pnl).toBeNull();
+  });
+
+  it("alarms on its own field regardless, so the whole-holding cost cannot mislead it", async () => {
+    // the figure is informational on a single-leg row: the rule compares option_delta, so a
+    // 4.00 cost to close beside it can never move the bell
+    const mid = monitor({ strike: 8100, code: LEG_A, field: "option_delta", threshold: 0.18 });
+    const pid = condorPosition();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [calm] = await run(quoting({
+      [LEG_A]: { mid_price: 5.0, option_delta: 0.11 },
+      [LEG_B]: { mid_price: 1.0, option_delta: 0.05 },
+    }));
+    expect(calm!.cost_to_close).toBe(4);
+    expect(calm!.triggered, "4.00 is well past any delta threshold and must not ring").toBe(false);
+
+    const [ringing] = await run(quoting({
+      [LEG_A]: { mid_price: 5.0, option_delta: 0.19 },
+      [LEG_B]: { mid_price: 1.0, option_delta: 0.05 },
+    }));
+    expect(ringing!.triggered).toBe(true);
+  });
+});
