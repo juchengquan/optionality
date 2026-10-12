@@ -27,8 +27,9 @@ legs up — so it is never expressed as a +/- sign the trader picks.
 _Avoid_: direction (that word means above/below on a Monitor), sign, long/short
 
 **Cost to close**:
-What it would cost right now to buy the Position back. Always positive for a credit structure,
-and the single meaning of a Position's current value.
+What it would cost right now to buy back the options in question — a Position's Legs, or the
+Contracts a Monitor names, which are not always the same set. Always positive for a credit
+structure, and reported only where you hold those Contracts.
 _Avoid_: combo value, signed sum, mid
 
 **Entry**:
