@@ -10,10 +10,16 @@ An options structure you actually hold — its legs, how many contracts, and wha
 or paid to open it. The thing a trader thinks in.
 _Avoid_: holding, trade, structure
 
+**Contract**:
+One tradeable option: an expiry, a type and a strike. It exists whether or not you hold it — a
+Monitor can watch one you have never owned, and a Quote describes one.
+_Avoid_: instrument, option, leg (a Leg is a Contract you hold)
+
 **Leg**:
-One contract within a Position, together with the Side you are on. Legs belong to the Position,
-never to a Monitor.
-_Avoid_: option, contract (when you mean the leg rather than the instrument)
+A Contract you hold, inside a Position, together with the Side you are on. Legs belong to the
+Position, never to a Monitor — the same Contract can be a Leg of yours and the subject of someone
+else's Monitor, and those are different facts about it.
+_Avoid_: option, contract (when the thing you mean is held rather than merely tradeable)
 
 **Side**:
 Whether a Leg was sold or bought. A fact about the Position, not a choice about how to add its
@@ -66,10 +72,15 @@ being paid for. A deadline, not a level.
 _Avoid_: roll date, close date, expiry (that word means the contract's own date)
 
 **Monitor**:
-A rule that watches one value and raises an alarm when it crosses a threshold. It watches
-either a single Leg or the Position as a whole. A Monitor exists to warn, never to record what
-you own, so it holds no legs of its own.
-_Avoid_: watch, rule, alert, combo monitor
+A rule that watches one value and raises an alarm when it crosses a threshold. It watches a
+Contract, or a signed set of Contracts — never a Position. It is created from an expiry, a type
+and a strike, and holds no Legs of its own.
+
+Where its Contracts turn out to be ones you hold, the Position is found AFTERWARDS so the row can
+show what you took in. That link is discovered, not declared, and it does not make the Monitor a
+rule about your holding: a delta alarm on one Contract is about that option, and the condor it
+happens to sit inside is a separate fact.
+_Avoid_: watch, rule, alert, combo monitor, "a monitor on my condor" (say which Contracts)
 
 **Quote**:
 Live market data for a contract. Always this word — moomoo's "snapshot" jargon stays out of

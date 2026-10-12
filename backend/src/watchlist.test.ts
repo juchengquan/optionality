@@ -270,7 +270,12 @@ describe("the holdings a rule watches", () => {
     expect(quotes[0]!.scope).toBe("leg");
     expect(quotes[0]!.entry).toBeNull();
     expect(quotes[0]!.pnl).toBeNull();
-    expect(quotes[0]!.cost_to_close).toBeCloseTo(0.8, 10);
+    // and no cost to close either. A Monitor watches CONTRACTS, never a Position (CONTEXT.md):
+    // the holding is found afterwards so the row can show what you took in, which does not make
+    // a row about one option into a row about the condor it happens to sit inside. This used to
+    // report 0.8 — the whole spread's — which is the figure that made the model look muddled.
+    // Nothing is lost: it is still on the holding's own row, where it means something.
+    expect(quotes[0]!.cost_to_close).toBeNull();
   });
 
   it("fetches the position's other legs even when no monitor names them", async () => {
@@ -503,5 +508,96 @@ describe("the exit schedule on a watchlist entry", () => {
     const [e] = await run(spreadOf({ [LEG_A]: 5.0, [LEG_B]: 1.0 }), true);
     expect(e!.positions).toHaveLength(2);
     expect(e!.schedule).toBeNull();
+  });
+});
+
+describe("a rule that watches only PART of a holding", () => {
+  /** It reports the WHOLE holding's Cost to close, and that is deliberate.
+   *
+   *  It reads oddly — a row about one leg of a condor showing 6.40, the condor's cost — and I set
+   *  out to "fix" it before finding the intent written down in two places: the watchlist fetches a
+   *  Position's other legs even when no Monitor names them, "without them the cost to close would
+   *  be a partial sum", and the sweep widens its batch for the same reason. The other legs are
+   *  fetched PRECISELY so this figure can be whole.
+   *
+   *  So the question a leg rule answers is "what would it cost to buy back the thing this leg
+   *  belongs to", which is the number you act on when a short strike starts moving. Entry and P&L
+   *  are still withheld, because those would be a fraction of someone else's credit — the asymmetry
+   *  is the point, and nothing said so until now.
+   */
+  const condorPosition = () => {
+    const pid = "p9".padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'condor', 'iron_condor', ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', null, null)`,
+    ).run(pid, EXPIRY, toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "bought", option_type: "CALL", strike: 8150 },
+    ]));
+    return pid;
+  };
+
+  it("reports no holding cost on a row about ONE Contract", async () => {
+    const mid = monitor({ strike: 8100, code: LEG_A, field: "option_delta", threshold: 0.18 });
+    const pid = condorPosition();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [e] = await run(quoting({
+      [LEG_A]: { mid_price: 5.0, option_delta: 0.11, option_contract_size: 100 },
+      [LEG_B]: { mid_price: 1.0, option_delta: 0.05, option_contract_size: 100 },
+    }));
+    expect(e!.scope).toBe("leg");
+    // the row shows the CONTRACT's own figures — its mid is 5.00 — and nothing about the spread
+    // it sits inside. The spread's 4.00 belongs on the spread's row.
+    expect(e!.snapshot!.mid_price).toBe(5);
+    expect(e!.cost_to_close).toBeNull();
+    expect(e!.entry).toBeNull();
+    expect(e!.pnl).toBeNull();
+  });
+
+  it("DOES report it when that one Contract is the whole holding", async () => {
+    // a lone held option is a Position too, and then the Contract and the holding are the same
+    // thing — so all three figures appear. Found by a mutation sweep: nothing covered this case,
+    // so removing the scope check broke nothing.
+    const pid = "p8".padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'lone call', null, ?, 1, 5.0, ?, '2026-08-01 00:00:00.000000', null, null)`,
+    ).run(pid, EXPIRY, toSqliteJson([{ side: "sold", option_type: "CALL", strike: 8100 }]));
+    const mid = monitor({ strike: 8100, code: LEG_A, field: "option_delta", threshold: 0.18 });
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'all' where id = ?").run(mid);
+
+    const [e] = await run(quoting({
+      [LEG_A]: { mid_price: 3.0, option_delta: 0.11, option_contract_size: 100 },
+    }));
+    expect(e!.scope).toBe("all");
+    expect(e!.cost_to_close).toBe(3);
+    expect(e!.entry).toBe(5);
+    expect(e!.pnl).toBe(200);
+  });
+
+  it("alarms on its own field regardless, so the whole-holding cost cannot mislead it", async () => {
+    // the figure is informational on a single-leg row: the rule compares option_delta, so a
+    // 4.00 cost to close beside it can never move the bell
+    const mid = monitor({ strike: 8100, code: LEG_A, field: "option_delta", threshold: 0.18 });
+    const pid = condorPosition();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [calm] = await run(quoting({
+      [LEG_A]: { mid_price: 5.0, option_delta: 0.11 },
+      [LEG_B]: { mid_price: 1.0, option_delta: 0.05 },
+    }));
+    expect(calm!.triggered, "a delta of 0.11 against 0.18 must not ring").toBe(false);
+
+    const [ringing] = await run(quoting({
+      [LEG_A]: { mid_price: 5.0, option_delta: 0.19 },
+      [LEG_B]: { mid_price: 1.0, option_delta: 0.05 },
+    }));
+    expect(ringing!.triggered).toBe(true);
   });
 });
