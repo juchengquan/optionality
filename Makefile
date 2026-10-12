@@ -93,19 +93,27 @@ resolve-ui:
 # separately (ADR 0006); this is what stops it happening by simple forgetfulness.
 #
 # Which API it restarts depends on which one is loaded, so this one target is correct before the
-# cutover and after it, and after a rollback. There is no alembic step for the TypeScript service:
-# its schema is declared, not migrated (ADR 0009 phase 4).
+# cutover and after it, and after a rollback.
+#
+# The backup is taken with SQLite's online backup, NOT `cp`. In WAL mode `cp` copies the main file
+# and leaves the write-ahead log beside it, so the copy is current only as far as the last
+# checkpoint — measured at 1 row of 500 on a scratch database, and still valid SQLite, which is
+# what makes it dangerous. This backup is the one taken immediately before a migration runs.
+#
+# And there IS a schema step for the TypeScript service now: `main.ts` applies what is pending in
+# backend/src/db/migrations at boot and fails fatally if one does not (ADR 0011). This comment said
+# otherwise, from when the schema was declared and never altered (ADR 0009 phase 4).
 deploy:
 	git pull --ff-only
 	@if launchctl print gui/$$(id -u)/$(API_LABEL) >/dev/null 2>&1; then \
 		echo "the TypeScript API is loaded"; \
 		npm install --silent; \
-		cp $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S); \
+		node backend/tools/backup/backup.mjs $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S); \
 		$(MAKE) launchd-api-restart; \
 	else \
 		echo "the Python service is loaded"; \
 		uv sync --quiet; \
-		cp data/optionality.db data/optionality.db.bak-$$(date +%Y%m%d-%H%M%S); \
+		node backend/tools/backup/backup.mjs data/optionality.db data/optionality.db.bak-$$(date +%Y%m%d-%H%M%S); \
 		OPTIONALITY_DB_PATH=data/optionality.db uv run alembic upgrade head; \
 		$(MAKE) launchd-restart; \
 	fi
