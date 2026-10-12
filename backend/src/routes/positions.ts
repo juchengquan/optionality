@@ -19,6 +19,9 @@ import type { PositionRow } from "../db/rows.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
+import { dteAtOpen, exitLevels } from "../domain/exit.ts";
+import { daysToExpiry } from "../domain/expiry.ts";
+import type { Settings } from "../env.ts";
 import { toPosition } from "../hydrate.ts";
 import { adoptOrphanMonitors } from "../positions.ts";
 import { displayRecords, fetchResilient, verifyContracts } from "../quotes.ts";
@@ -39,7 +42,21 @@ const PositionOut = z.object({
   entry: z.number().nullable(),
   legs: z.array(LegOut),
   created_at: z.string().nullable(),
+  /** the day it was PUT ON, which created_at is not. Null until declared (ADR 0011). */
+  opened_at: z.string().nullable(),
 });
+
+/** The exit schedule, or null for a Position whose Opened nobody has declared — which is the
+ *  opt-in, because nothing is inferred from created_at (ADR 0011). */
+const ScheduleOut = z.object({
+  dte_at_open: z.number(),
+  on_pace: z.number().nullable(),
+  pace_gap: z.number().nullable(),
+  target: z.number().nullable(),
+  stop: z.number().nullable(),
+  target_dte: z.number().nullable(),
+  manage_by_dte: z.number(),
+}).nullable();
 
 const PositionValues = PositionOut.extend({
   cost_to_close: z.number().nullable(),
@@ -47,7 +64,33 @@ const PositionValues = PositionOut.extend({
   contract_size: z.number().nullable(),
   greeks: z.record(z.string(), z.number().nullable()),
   fetched_at: z.string().nullable(),
+  /** days left where the option trades, the same reckoning the dashboard's column uses */
+  dte: z.number(),
+  schedule: ScheduleOut,
 });
+
+/** The schedule for one stored Position, or null if its Opened was never declared.
+ *
+ *  Assembled here rather than in the domain because it is the one place that has the row, the
+ *  live Cost to close and the policy at once; `domain/exit.ts` holds the arithmetic and knows
+ *  nothing about either.
+ */
+function scheduleFor(
+  row: PositionRow, cost: number | null, now: Date, settings: Settings,
+): z.input<typeof ScheduleOut> {
+  if (row.opened_at === null) return null;
+  const openedDte = dteAtOpen(row.strike_date, row.opened_at);
+  const levels = exitLevels(
+    row.entry, openedDte, daysToExpiry(row.strike_date, now),
+    {
+      takeFraction: settings.exitTakeFraction,
+      stopMultiple: settings.exitStopMultiple,
+      manageByDte: settings.exitManageByDte,
+    },
+    cost,
+  );
+  return levels === null ? null : { dte_at_open: openedDte, ...levels };
+}
 
 /** uuid4().hex in the Python — 32 hex characters, which the column is sized for. */
 const newId = () => randomUUID().replaceAll("-", "");
@@ -65,6 +108,9 @@ export function positionRoutes(deps: Deps) {
     entry: row.entry,
     legs: JSON.parse(row.legs) as unknown,
     created_at: displayStored(row.created_at, tz),
+    // a plain date, NOT displayStored: created_at is an instant and converts to DISPLAY_TZ,
+    // while Opened is the calendar day a trade was put on and has no time to convert
+    opened_at: row.opened_at,
   });
 
   return new Hono()
@@ -100,6 +146,8 @@ export function positionRoutes(deps: Deps) {
               POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(p, byCode, f)]),
             ),
             fetched_at: fetched,
+            dte: daysToExpiry(row.strike_date, now),
+            schedule: scheduleFor(row, costToClose(p, byCode), now, deps.settings),
           };
         })),
         200,

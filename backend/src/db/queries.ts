@@ -286,6 +286,12 @@ export function setMonitorScope(db: DatabaseSync, id: string, scope: string | nu
   db.prepare("update monitors set scope = ? where id = ?").run(scope, id);
 }
 
+/** Stamp a Position as having had its manage-by notice, so it is said once and not once a
+ *  minute. The sweep runs every minute. */
+export function stampManageNotified(db: DatabaseSync, id: string, at: string): void {
+  db.prepare("update positions set manage_notified_at = ? where id = ?").run(at, id);
+}
+
 /** One observation of a Position's Cost to close, keyed on the market day (ADR 0011).
  *
  *  REPLACE, not IGNORE: the sweep runs every minute and the row should converge on the settled

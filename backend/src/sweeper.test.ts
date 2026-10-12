@@ -685,3 +685,102 @@ describe("recording what a Position was worth", () => {
     expect(id).toBeTruthy();
   });
 });
+
+describe("the manage-by notice", () => {
+  /** A deadline is a date, and a date is the one thing the service can act on while nobody is
+   *  looking (ADR 0011). Pace deliberately does NOT notify: being behind fires on every IV spike.
+   *  Monitor thresholds are untouched — this is a notice about a Position, not an Alarm. */
+  const held = (name: string, openedAt: string | null, dteLeft: number) => {
+    const id = name.padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, ?, null, ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', ?, null)`,
+    ).run(id, name, daysFromNow(dteLeft), toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8050 },
+    ]), openedAt);
+    return id;
+  };
+  const notices = () => sent.filter((t) => t.includes("manage"));
+  const notifiedAt = (id: string) =>
+    (db.prepare("select manage_notified_at from positions where id = ?").get(id) as
+      { manage_notified_at: string | null }).manage_notified_at;
+
+  it("speaks when a declared Position reaches the deadline", async () => {
+    const id = held("condor", daysFromNow(-24), 21); // opened at 45 DTE, now at 21
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 }))
+      .sweep();
+
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain("condor");
+    expect(notices()[0]).toContain("21 DTE");
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
+  it("says it once, not once a minute", async () => {
+    held("condor", daysFromNow(-24), 21);
+    const fetch = quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 });
+    await sweeper(fetch).sweep();
+    await sweeper(fetch).sweep();
+    await sweeper(fetch).sweep();
+    expect(notices()).toHaveLength(1);
+  });
+
+  it("stays quiet on a Position whose Opened nobody declared, and logs nothing", async () => {
+    // THE reason `opened_at` is the opt-in. Three of the five Positions in the live book were
+    // already inside 21 DTE when this shipped; without the gate the first sweep after deploy
+    // would have fired three retroactive notices at once and looked like a fault.
+    //
+    // The silence is asserted as well as the quiet. Removing the gate is caught by the COMPILER
+    // — opened_at is `string | null` and dteAtOpen takes a `string` — but a mutation sweep showed
+    // the test itself could not tell "skipped" from "threw and was swallowed", which would log a
+    // failure every minute for ever.
+    const errors: unknown[][] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => { errors.push(args); };
+    try {
+      held("undeclared", null, 4);
+      await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(4), "CALL", 8050)]: 0.1 }))
+        .sweep();
+    } finally {
+      console.error = realError;
+    }
+    expect(notices()).toEqual([]);
+    expect(errors, `an undeclared Position should be silent: ${JSON.stringify(errors)}`).toEqual([]);
+  });
+
+  it("stays quiet while the deadline is still ahead", async () => {
+    held("condor", daysFromNow(-6), 39); // opened at 45, now at 39: eighteen days to go
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(39), "CALL", 8050)]: 6.5 }))
+      .sweep();
+    expect(notices()).toEqual([]);
+  });
+
+  it("speaks for a Position already past the deadline when it is declared", async () => {
+    // declaring an Opened on something already inside 21 DTE is not a mistake — it is overdue,
+    // and overdue is exactly what the notice is for
+    held("late", daysFromNow(-41), 4);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(4), "CALL", 8050)]: 0.1 }))
+      .sweep();
+    expect(notices()).toHaveLength(1);
+  });
+
+  it("carries the pace, because that is what decides what to do about it", async () => {
+    held("condor", daysFromNow(-24), 21);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 }))
+      .sweep();
+    // Entry 6.86 opened at 45 DTE, now 21: on-pace 4.69, and 4.40 is ahead of it
+    expect(notices()[0]).toMatch(/4\.69/);
+    expect(notices()[0]).toMatch(/ahead/i);
+  });
+
+  it("does not stop the sweep, nor the alarms, if the notice fails", async () => {
+    held("condor", daysFromNow(-24), 21);
+    monitor({ threshold: 0.05, strike_date: daysFromNow(21) });
+    const s = sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, option_delta: 0.9, mid_price: 4.4,
+    }))), { telegramBotToken: "", telegramChatId: "" }); // unconfigured: the send is a no-op
+    await s.sweep();
+    expect(s.lastSweepOk()).toBe(true);
+  });
+});
