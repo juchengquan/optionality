@@ -8,6 +8,7 @@
 import {
   COMBO_GREEK_FIELDS, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdFill,
 } from "./domain/monitor.ts";
+import { dteAtOpen, exitLevels, type ExitLevels, type ExitPolicy } from "./domain/exit.ts";
 import { daysToExpiry } from "./domain/expiry.ts";
 import {
   combinedCostToClose, combinedEntry, combinedPnl, positionLegCodes,
@@ -41,6 +42,8 @@ export interface WatchlistEntry {
   entry: number | null;
   pnl: number | null;
   fill: number | null;
+  /** the exit schedule, or null where there is no single holding to schedule (ADR 0011) */
+  schedule: (ExitLevels & { dte_at_open: number }) | null;
 }
 
 /** What buildEntries needs, and deliberately no more: the engine's `triggered` and `last_value`
@@ -60,6 +63,10 @@ export interface EntryInputs {
   owned: Record<string, (Position & { id: string })[]>;
   /** injectable so a test can state the date rather than wait for it */
   now?: Date;
+  /** REQUIRED rather than optional: a schedule that silently does not appear because a caller
+   *  forgot to pass the policy is the shape of bug this project keeps finding. The compiler
+   *  names every call site instead. */
+  policy: ExitPolicy;
 }
 
 /** Watchlist entries for a set of monitors against an already-fetched batch of records.
@@ -69,7 +76,7 @@ export interface EntryInputs {
  *  never summed at all (CLAUDE.md).
  */
 export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
-  const { monitors, byCode, bad, owned, now } = inputs;
+  const { monitors, byCode, bad, owned, now, policy } = inputs;
   return monitors.map((m) => {
     const isCombo = Boolean(m.legs && m.legs.length > 0);
     const positions = owned[m.id] ?? [];
@@ -101,6 +108,10 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       entry: whole.length > 0 ? combinedEntry(whole) : null,
       pnl: whole.length > 0 ? combinedPnl(whole, byCode) : null,
       fill: null,
+      // ONE holding only. Two Positions put on different days have no single DTE at entry, and a
+      // blended pace line would hide that rather than say it — ADR 0004 allows a rule to span
+      // them, and this declines to guess rather than averaging two trades into one.
+      schedule: null,
     };
 
     if (isCombo) {
@@ -133,6 +144,16 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     // the bell flips at the exact threshold and cannot drift from how the alarm is decided.
     entry.triggered = measured.value !== null
       && isBreached(measured.value, m.threshold, measured.direction, measured.compare);
+
+    // Built from THIS entry's own cost to close, so the gap is the gap against the figure the row
+    // shows. Fetching /positions/values beside it on the dashboard would compute it against a
+    // different instant, which is the fault ADR 0010 settled.
+    const held = whole.length === 1 ? whole[0]! : undefined;
+    if (held?.opened_at) {
+      const openedDte = dteAtOpen(held.strike_date, held.opened_at);
+      const levels = exitLevels(held.entry, openedDte, entry.dte, policy, entry.cost_to_close);
+      if (levels !== null) entry.schedule = { dte_at_open: openedDte, ...levels };
+    }
     return entry;
   });
 }

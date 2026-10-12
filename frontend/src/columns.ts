@@ -43,6 +43,9 @@ export const SINGLE_COLUMNS: Column[] = [
 export const COMBO_COLUMNS: Column[] = [
   { key: "combo", label: "combo" }, { key: "alarm", label: "alarm" },
   { key: "dte", label: "dte" }, { key: "value", label: "value" },
+  // the on-pace LEVEL, next to the value it is read against. A level rather than the gap, so
+  // there is no convention about which way a signed number points (ADR 0011).
+  { key: "on_pace", label: "on pace" },
   // entry sits between value and P&L: what it is worth now, what it cost, the difference.
   // Entry used to precede value, which left it two columns from the figure it explains.
   { key: "entry", label: "entry" }, { key: "pnl", label: "P&L" },
@@ -114,6 +117,7 @@ export function signalColumns(entry: Entry, isCombo: boolean, shown: Set<string>
 const WIDTH: Record<string, number> = {
   // "261016 8050C" now, not "SPXW 261016 8050.00C" — see shortContract
   contract: 120, combo: 110, legs: 210, expiry: 70, alarm: 110, dte: 46, entry: 66, value: 66, pnl: 70,
+  on_pace: 72,
   delta: 62, gamma: 74, theta: 62, vega: 58, iv: 58, mid: 62, bid: 62, ask: 62,
   last_trade: 140,
 };
@@ -147,7 +151,7 @@ export const PRIORITY: Record<"single" | "combo", string[]> = {
   // identified by its legs, but these names already carry the strikes (1120_IC_7100_8200),
   // the detail sheet shows the legs whatever the table does, and at 263px it is the one
   // column wide enough to cost four others.
-  combo: ["combo", "alarm", "value", "pnl", "entry", "dte", "delta", "expiry", "theta", "vega", "gamma", "legs"],
+  combo: ["combo", "alarm", "value", "on_pace", "pnl", "entry", "dte", "delta", "expiry", "theta", "vega", "gamma", "legs"],
 };
 
 /** How much wider than its container the table may be.

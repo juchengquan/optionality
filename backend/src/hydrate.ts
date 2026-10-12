@@ -30,6 +30,7 @@ export function toPosition(row: PositionRow): Position & { id: string } {
     id: row.id,
     name: row.name,
     strategy: row.strategy,
+    opened_at: row.opened_at,
     strike_date: row.strike_date,
     contracts: row.contracts,
     entry: row.entry,

@@ -12,7 +12,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { daysToExpiry, marketDate } from "./domain/expiry.ts";
 import { isBreached, monitorLegCodes, monitorValue } from "./domain/monitor.ts";
-import { dteAtOpen, onPace } from "./domain/exit.ts";
+import { dteAtOpen, exitPolicy, onPace } from "./domain/exit.ts";
 import { costToClose, positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
 import {
@@ -138,6 +138,7 @@ export class MonitorSweeper {
     return {
       entries: buildEntries({
         monitors, byCode, bad: new Set(this.lastBadCodes), owned, now: this.now(),
+        policy: exitPolicy(this.deps.settings),
       }),
       fetched,
     };

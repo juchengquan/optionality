@@ -40,6 +40,9 @@ export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
     case "expiry": return shortDate(entry.strike_date);
     case "alarm": return alarmText(entry.field, entry.direction, entry.threshold, entry.compare);
     case "value": return fmt(entry.cost_to_close ?? entry.combo_value ?? null, "mid");
+    // blank rather than a dash-or-zero where there is no declared holding: a 0.00 here would
+    // read as "exactly on pace", which is the opposite of "no schedule"
+    case "on_pace": return entry.schedule?.on_pace == null ? "" : fmt(entry.schedule.on_pace, "mid");
     case "entry": return entry.scope === "all" ? fmt(entry.entry, "mid") : "";
     case "pnl": return entry.scope === "all" ? fmt(entry.pnl, "mid") : "";
     case "delta": return greek("option_delta", "delta");

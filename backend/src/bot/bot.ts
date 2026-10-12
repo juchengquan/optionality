@@ -21,6 +21,7 @@ import { toSqlDatetime } from "../db/time.ts";
 import { fromSqliteBool, toSqliteBool, toSqliteJson } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import { toMonitor } from "../hydrate.ts";
+import { exitPolicy } from "../domain/exit.ts";
 import { linkToPositions, watchlistQuotes } from "../monitors.ts";
 import { verifyContracts, type QuoteFetcher, type QuoteRecord } from "../quotes.ts";
 import { displayTimeShort } from "../timefmt.ts";
@@ -208,7 +209,7 @@ export class TelegramBot {
     let quotes;
     try {
       quotes = await watchlistQuotes(this.deps.db, this.deps.settings.displayTz, this.deps.fetchQuotes,
-        { now: this.now() });
+        { now: this.now(), policy: exitPolicy(this.deps.settings) });
     } catch (err) {
       return `${label} failed: ${err instanceof Error ? err.message : String(err)}`;
     }

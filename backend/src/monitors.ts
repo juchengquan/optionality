@@ -12,6 +12,7 @@ import {
 } from "./db/queries.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
 import { displayRecords, fetchResilient, type QuoteFetcher } from "./quotes.ts";
+import type { ExitPolicy } from "./domain/exit.ts";
 import { buildEntries, codesFor, type MonitorForEntry, type WatchlistEntry } from "./watchlist.ts";
 import type { Position } from "./domain/position.ts";
 
@@ -83,7 +84,9 @@ export function forEntry(row: {
  */
 export async function watchlistQuotes(
   db: DatabaseSync, displayTz: string, fetch: QuoteFetcher,
-  options: { includeCombos?: boolean; now?: Date } = {},
+  /** no default: `policy` is required, so the compiler names any caller that would silently
+   *  produce entries with no schedule (ADR 0011) */
+  options: { includeCombos?: boolean; now?: Date; policy: ExitPolicy },
 ): Promise<WatchlistEntry[]> {
   const rows = enabledMonitors(db, options.includeCombos ?? false);
   if (rows.length === 0) return [];
@@ -100,5 +103,6 @@ export async function watchlistQuotes(
     bad: new Set(bad),
     owned,
     now,
+    policy: options.policy,
   });
 }
