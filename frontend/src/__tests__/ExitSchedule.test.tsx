@@ -119,3 +119,88 @@ describe("the schedule in the row's sheet", () => {
     expect(sheet.textContent).not.toMatch(/behind|ahead|on pace/i);
   });
 });
+
+describe("where the on-pace figure comes from", () => {
+  /** Everything else on the row is a measurement; this one is a MODEL output, chosen on a single
+   *  confirming observation (ADR 0011). A number that looks like a price and is not should say so
+   *  on its face — and substituted with the row's own figures it can be checked by eye, which the
+   *  abstract form cannot. Sheet only: the table is a scanning surface (ADR 0008). */
+  it("shows the sum with this row's own numbers in it", async () => {
+    mockApi([scheduled]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    // entry 6.86, 39 DTE now, opened at 45
+    expect(sheet.textContent).toContain("6.86 × √(39 ÷ 45)");
+  });
+
+  it("takes them from the row, not from anywhere fixed", async () => {
+    mockApi([{
+      ...scheduled, entry: 3.91, dte: 30,
+      schedule: { ...scheduled.schedule, dte_at_open: 57, on_pace: 2.84, pace_gap: -0.2 },
+    }]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).toContain("3.91 × √(30 ÷ 57)");
+    // the other row's sum, specifically — "45" on its own also matches the 6.45 cost to close,
+    // which is how this assertion first failed while the formula was perfectly correct
+    expect(sheet.textContent).not.toContain("√(39");
+    expect(sheet.textContent).not.toContain("6.86 ×");
+  });
+
+  it("says what kind of number it is, which is the point", async () => {
+    mockApi([scheduled]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).toMatch(/shape, not a price/i);
+    // the two things it cannot see, named rather than implied
+    expect(sheet.textContent).toMatch(/IV/);
+    expect(sheet.textContent).toMatch(/where SPX is/i);
+  });
+
+  it("shows no sum when there is no figure to explain", async () => {
+    // an Opened in the future: the schedule exists, the pace does not
+    mockApi([{
+      ...scheduled,
+      schedule: { ...scheduled.schedule, on_pace: null, pace_gap: null, dte_at_open: 10 },
+    }]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).not.toContain("√");
+    // and still no stray caveat about a number that is not there
+    expect(sheet.textContent).not.toMatch(/shape, not a price/i);
+  });
+
+  it("survives a row with no schedule FIELD at all, not merely a null one", async () => {
+    // the case that broke everything: every fixture here carried the key, so `=== null` checks
+    // passed their own tests and threw on each older fixture in the suite, where the field does
+    // not exist. A row from the bot, or from a cached payload, looks like this.
+    const { schedule: _dropped, ...noField } = scheduled;
+    mockApi([noField]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).not.toContain("√");
+    expect(sheet.textContent).toMatch(/mid ≥ 7\.51/);
+  });
+
+  it("keeps the formula off the table, which is for scanning", async () => {
+    mockApi([scheduled]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1120_IC_7100_8200")).toBeTruthy());
+    const table = document.querySelector("table")!;
+    expect(table.textContent).not.toContain("√");
+    expect(table.textContent).toContain("6.39");
+  });
+
+  it("renders a debit structure's negative entry as it is", async () => {
+    mockApi([{
+      ...scheduled, entry: -5, cost_to_close: -3.4,
+      schedule: {
+        ...scheduled.schedule, on_pace: -3.42, pace_gap: 0.02,
+        target: null, stop: null, target_dte: null,
+      },
+    }]);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    expect(sheet.textContent).toContain("-5.00 × √(39 ÷ 45)");
+  });
+});

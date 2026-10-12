@@ -39,6 +39,16 @@ export function RowDetail({
   const columns = (isCombo ? COMBO_COLUMNS : SINGLE_COLUMNS).filter(
     (c) => !shownElsewhere.has(c.key),
   );
+  // null when there is no figure to explain — an Opened in the future leaves a schedule with no
+  // pace, and a sum under a dash would be explaining nothing.
+  //
+  // Truthiness, not `=== null`: a row from before this field existed has no `schedule` key at
+  // all, so the first spelling of this passed its own tests and threw on every older fixture
+  // that opens this sheet.
+  const schedule = entry.schedule;
+  const paceSum = schedule && schedule.on_pace !== null && entry.entry !== null
+    ? `${fmt(entry.entry, "mid")} × √(${entry.dte} ÷ ${schedule.dte_at_open})`
+    : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -86,20 +96,41 @@ export function RowDetail({
               )}
             </p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums">
-              {[
-                ["on pace", fmt(entry.schedule.on_pace, "mid")],
+              {([
+                ["on pace", (
+                  <>
+                    {fmt(entry.schedule.on_pace, "mid") || DASH}
+                    {/* Substituted with this row's own figures rather than written abstractly:
+                        `entry × √(dte ÷ D₀)` has to be decoded, while 6.86 × √(39 ÷ 45) can be
+                        read and checked by eye. Every other figure on this row is a measurement;
+                        this one is a model output, so it shows its working. */}
+                    {paceSum ? (
+                      <div className="text-xs font-normal text-muted-foreground">{paceSum}</div>
+                    ) : null}
+                  </>
+                )],
                 ["target", fmt(entry.schedule.target, "mid")],
                 ["stop", fmt(entry.schedule.stop, "mid")],
                 ["target on decay alone", entry.schedule.target_dte === null
                   ? DASH : `${entry.schedule.target_dte} DTE`],
                 ["manage by", `${entry.schedule.manage_by_dte} DTE`],
-              ].map(([label, value]) => (
+              ] as [string, React.ReactNode][]).map(([label, value]) => (
                 <div key={label} className="contents">
                   <dt className="text-muted-foreground">{label}</dt>
                   <dd className="text-right">{value || DASH}</dd>
                 </div>
               ))}
             </dl>
+            {/* Shown only where there IS a pace figure to qualify. The two things the shape cannot
+                see are named rather than implied: an IV crush hands you the profit early and a
+                spike puts you behind through no fault of the position, and spot is what actually
+                decides a condor. ADR 0011. */}
+            {paceSum ? (
+              <p className="meta mt-1">
+                A shape, not a price: time value decays as √time. Assumes IV holds, and says
+                nothing about where SPX is.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
