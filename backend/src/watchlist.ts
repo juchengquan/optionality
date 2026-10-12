@@ -83,7 +83,15 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     const snapshot = isCombo ? null : (byCode[m.code] ?? null);
 
     const comboValue = isCombo ? monitorValue(m, byCode) : undefined;
-    const costToClose = positions.length > 0
+    // A Monitor watches CONTRACTS, never a Position (CONTEXT.md). Where its Contracts turn out to
+    // be ones you hold, the Position is found afterwards so the row can show what you took in —
+    // but that does not make a row about one option into a row about the condor it sits inside.
+    // So a single-Contract Monitor reports the holding's cost only when it covers the holding
+    // whole; otherwise the figure belongs on the holding's own row, and is there.
+    //
+    // Combos still report it whatever their scope, because for a position-backed combo it is what
+    // the ALARM is measured on, and narrowing that is a separate decision.
+    const costToClose = positions.length > 0 && (isCombo || m.scope === "all")
       ? combinedCostToClose(positions, byCode, m.scope)
       : null;
     // only a rule that covers whole positions has an entry to speak of; a leg rule watches part of
