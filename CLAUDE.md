@@ -108,6 +108,10 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
 
 - Branch → PR → the owner merges (never merge or push to main directly). Restart the agent after landing.
 - `.env` is gitignored and holds live Telegram credentials — never commit it or echo its secrets into
-  committed files. `data/optionality.db` is live state (watchlist, run history) with no backup yet.
+  committed files. `data/optionality-ts.db` is live state (watchlist, holdings, run history). The only backups are
+  the ones `make deploy` takes, immediately before it restarts and before any migration runs. They
+  are taken with SQLite's online backup, NEVER `cp`: in WAL mode `cp` leaves the write-ahead log
+  behind, so the copy is current only to the last checkpoint — 1 row of 500 when measured — and is
+  still valid SQLite, which is what makes it dangerous. There is no backup off this machine.
 - The Telegram bot token allows ONE `getUpdates` consumer: never run two service instances against it, and
   avoid external `getUpdates` curls while the service runs.
