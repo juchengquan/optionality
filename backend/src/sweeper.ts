@@ -13,7 +13,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { daysToExpiry, marketDate } from "./domain/expiry.ts";
 import { isBreached, monitorLegCodes, monitorValue } from "./domain/monitor.ts";
 import { dteAtOpen, exitPolicy, onPace } from "./domain/exit.ts";
-import { costToClose, positionLegCodes } from "./domain/position.ts";
+import { costToClose, legReadings, positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
@@ -278,17 +278,18 @@ export class MonitorSweeper {
         if (cost === null) continue;
 
         // Per LEG, because a structure has no IV — "IV is never summed" (CLAUDE.md), and these
-        // legs run 10.5% to 22.1%, so one number for them would be a fiction. Null rather than a
-        // partial map: a vol adjustment needs every leg, and half a structure's vol invites an
-        // answer computed from half a structure.
-        const ivs: Record<string, number> = {};
-        let everyLegPriced = true;
-        for (const code of positionLegCodes(position)) {
-          const iv = byCode[code]?.option_implied_volatility;
-          if (iv === null || iv === undefined) { everyLegPriced = false; break; }
-          ivs[code] = Number(iv);
-        }
-        const legsIv = everyLegPriced ? toSqliteJson(ivs) : null;
+        // legs run 10.5% to 22.1%, so one number for them would be a fiction. The vegas go with
+        // them as the weight those IVs have to be combined with, and are recorded rather than
+        // derived later because a vega is only knowable when it was observed.
+        //
+        // Null rather than a partial map, per map: a vol adjustment needs every leg, and half a
+        // structure's vol invites an answer computed from half a structure. Gated SEPARATELY,
+        // though — a withheld vega does not make the IV reading untrue, and the IV is the half no
+        // later sweep can recover.
+        const ivs = legReadings(position, byCode, "option_implied_volatility");
+        const vegas = legReadings(position, byCode, "option_vega");
+        const legsIv = ivs === null ? null : toSqliteJson(ivs);
+        const legsVega = vegas === null ? null : toSqliteJson(vegas);
 
         // Only when something actually differs. The sweep runs every 15 seconds and the day's row
         // is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
@@ -296,11 +297,11 @@ export class MonitorSweeper {
         // triples what each one carries.
         const stored = findPositionSample(this.deps.db, row.id, observedOn);
         if (stored && stored.dte === dte && stored.cost_to_close === cost
-          && stored.legs_iv === legsIv) continue;
+          && stored.legs_iv === legsIv && stored.legs_vega === legsVega) continue;
 
         recordPositionSample(this.deps.db, {
           position_id: row.id, observed_on: observedOn, dte, cost_to_close: cost,
-          legs_iv: legsIv,
+          legs_iv: legsIv, legs_vega: legsVega,
         });
       } catch (err) {
         console.error(`recording a sample for ${row.name} failed:`, err);

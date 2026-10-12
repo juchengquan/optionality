@@ -689,6 +689,63 @@ describe("recording what a Position was worth", () => {
     });
   });
 
+  it("records each leg's vega beside its IV, because a weighted vol needs weights", async () => {
+    // The adjustment multiplies the pace reference by one vol ratio, and these legs do not share a
+    // vol — 10.5 against 22.1 here, and the same 2x skew on the owner's live condor. Collapsing
+    // them into one number needs a weight per leg, and the weight is vega: points of value per
+    // point of IV. Stored beside the IV rather than derived later, because a vega is only knowable
+    // at the moment it was observed — a row without it can never be weighted.
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c,
+      mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_implied_volatility: c === buildSpxCode(future(), "CALL", 8050) ? 10.5 : 22.1,
+      option_vega: c === buildSpxCode(future(), "CALL", 8050) ? 1.4 : 0.9,
+    })))).sweep();
+
+    const row = db.prepare("select legs_vega from position_samples where position_id = ?").get(id) as
+      { legs_vega: string | null };
+    expect(JSON.parse(row.legs_vega!)).toEqual({
+      [buildSpxCode(future(), "CALL", 8050)]: 1.4,
+      [buildSpxCode(future(), "CALL", 8075)]: 0.9,
+    });
+  });
+
+  it("records no vega at all rather than some of it", async () => {
+    // same all-or-nothing as the IV map, for the same reason: a weighted mean over half the legs
+    // is not a weighted mean of the structure.
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_implied_volatility: 10.5,
+      ...(c === buildSpxCode(future(), "CALL", 8050) ? { option_vega: 1.4 } : {}),
+    })))).sweep();
+
+    const row = db.prepare("select legs_vega from position_samples where position_id = ?").get(id) as
+      { legs_vega: string | null };
+    expect(row.legs_vega).toBeNull();
+  });
+
+  it("still records the IV map when only the vegas are missing", async () => {
+    // the two maps are gated independently. A vega the feed withheld does not make the IV reading
+    // untrue, and that reading is the one thing that cannot be reconstructed after the day passes
+    // — throwing it away because a weight was absent would lose the measurement to save the
+    // weighting of it.
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_implied_volatility: c === buildSpxCode(future(), "CALL", 8050) ? 10.5 : 22.1,
+    })))).sweep();
+
+    const row = db.prepare("select legs_iv, legs_vega from position_samples where position_id = ?")
+      .get(id) as { legs_iv: string | null; legs_vega: string | null };
+    expect(row.legs_vega).toBeNull();
+    expect(JSON.parse(row.legs_iv!)).toEqual({
+      [buildSpxCode(future(), "CALL", 8050)]: 10.5,
+      [buildSpxCode(future(), "CALL", 8075)]: 22.1,
+    });
+  });
+
   it("records no IV at all rather than some of it", async () => {
     // a vol adjustment needs every leg: with one missing you cannot say what the structure's vol
     // did, and a partial map would invite an answer computed from half a structure. The cost to
@@ -728,11 +785,12 @@ describe("how often the sampler actually writes", () => {
   };
   const writes = () =>
     (db.prepare("select total_changes() n").get() as { n: number }).n;
-  const quiet = (mid: number, iv: number): QuoteFetcher => (codes) =>
+  const quiet = (mid: number, iv: number, vega = 1.0): QuoteFetcher => (codes) =>
     Promise.resolve(codes.map((c) => ({
       code: c, name: c,
       mid_price: c === buildSpxCode(future(), "CALL", 8050) ? mid : 1.0,
       option_implied_volatility: iv,
+      option_vega: vega,
     })));
 
   it("writes nothing on a sweep that would store the same row again", async () => {
@@ -766,6 +824,20 @@ describe("how often the sampler actually writes", () => {
 
     const row = db.prepare("select legs_iv from position_samples").get() as { legs_iv: string };
     expect(JSON.parse(row.legs_iv)[buildSpxCode(future(), "CALL", 8050)]).toBe(12.0);
+  });
+
+  it("writes when only a vega moves, which neither the cost nor the IV would show", async () => {
+    // vega moves with spot and with time even at a fixed mid and a fixed IV, and it is the weight
+    // the stored IVs will be combined with — a row left behind with a stale weight would be
+    // weighted wrongly for ever.
+    held("held");
+    await sweeper(quiet(5.0, 10.5, 1.4)).sweep();
+    const after = writes();
+    await sweeper(quiet(5.0, 10.5, 1.1)).sweep();
+    expect(writes()).toBeGreaterThan(after);
+
+    const row = db.prepare("select legs_vega from position_samples").get() as { legs_vega: string };
+    expect(JSON.parse(row.legs_vega)[buildSpxCode(future(), "CALL", 8050)]).toBe(1.1);
   });
 
   it("does not stop the sweep if recording fails", async () => {

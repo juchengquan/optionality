@@ -1,0 +1,22 @@
+-- Per-leg vega on each sample, which is the weight the per-leg IVs need (ADR 0011).
+--
+-- 0002 started recording IV per leg, because a structure has no IV: "IV is never summed" is a
+-- ratified invariant and the owner's live condor runs 10.5% on its calls against 21-22% on its
+-- puts. That leaves four numbers where the pace adjustment wants one, and collapsing four into
+-- one is a weighted mean. The weight is vega — points of value per point of IV — so the calls'
+-- 10.5 and the puts' 22 contribute in proportion to how much each leg's price actually answers
+-- to its own vol.
+--
+-- Recorded rather than derived, because a vega is only knowable at the moment it was observed: it
+-- moves with spot and with time, and no later sweep can say what it was on a day that has passed.
+-- Every row written before this column exists is therefore permanently unweightable, which is why
+-- this lands before the adjustment rather than with it.
+--
+-- Gated independently of legs_iv, not with it. A vega the feed withheld does not make the IV
+-- reading untrue, and the IV reading is the irreplaceable half — discarding a measurement because
+-- its weight was missing would lose the thing to save the weighting of it.
+--
+-- Size: the same shape as legs_iv and so about the same cost, ~135 bytes a row on four legs,
+-- taking a row from ~200 to ~335 bytes. Three Positions over a year of market days is ~250KB, and
+-- ~2.5MB over ten years.
+ALTER TABLE position_samples ADD COLUMN legs_vega TEXT;

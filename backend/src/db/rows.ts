@@ -34,7 +34,7 @@ export const COLUMNS = {
   position_samples: [
     "position_id", "observed_on", "dte", "cost_to_close",
     // appended, because ALTER TABLE adds at the end
-    "legs_iv",
+    "legs_iv", "legs_vega",
   ],
   monitor_positions: ["monitor_id", "position_id"],
   reports: ["run_id", "summary", "html", "created_at"],
@@ -61,7 +61,7 @@ export const NULLABLE = {
     "legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at",
   ],
   positions: ["strategy", "entry", "opened_at", "manage_notified_at"],
-  position_samples: ["legs_iv"],
+  position_samples: ["legs_iv", "legs_vega"],
   monitor_positions: [],
   reports: [],
   alembic_version: [],
@@ -162,6 +162,11 @@ export interface PositionSampleRow {
   /** JSON text: contract code -> implied volatility. Null where not every leg was priced — a
    *  partial map would invite a vol figure computed from half a structure (ADR 0011). */
   legs_iv: string | null;
+  /** JSON text: contract code -> vega, the weight legs_iv has to be combined with, since the legs
+   *  of one structure do not share a vol. Null on the same all-or-nothing rule, and gated
+   *  separately from legs_iv: a withheld vega does not make the IV reading untrue, and the IV is
+   *  the half no later sweep can recover (ADR 0011). */
+  legs_vega: string | null;
 }
 
 export interface MonitorPositionRow {

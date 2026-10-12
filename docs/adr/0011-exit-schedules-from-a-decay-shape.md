@@ -75,6 +75,27 @@ if one does not. This outlives the feature: it is what phase 10 leaves behind wh
 null Opened and no schedule until it is filled in by hand, because guessing it would put a wrong
 number under every figure the feature displays.
 
+**The vol assumption is now recorded, not just admitted.** The paragraph above says the shape
+assumes IV holds still; `position_samples` therefore also carries `legs_iv` and `legs_vega`, a JSON
+map each, so the assumption can be measured before anything is built on top of it. Per LEG, not per
+structure: "IV is never summed" is ratified, and the live condor runs 10.5% on its calls against
+21-22% on its puts, so a single σ for it would be a fiction. The vegas are the weight those IVs
+have to be combined with — points of value per point of IV — which is the only principled way four
+numbers become the one an adjustment multiplies by.
+
+**A sample's vol can never be reconstructed after its day.** IV and vega are both only knowable at
+the instant they were observed, so a row written without them is permanently unweightable, and that
+is why both columns landed before the adjustment rather than with it. The cost is small (~135 bytes
+a map, taking a row from ~65 to ~335; ~250KB a year for three Positions) and the alternative is not
+cheaper later, it is impossible later.
+
+**The adjustment cannot be computed for the Position that motivated it.** It is a ratio — today's
+vol against the vol at Opened — and recording began 2026-10-12, six days after the 1120 condor was
+opened at 45 DTE. Its first sample is at 39 DTE. Treating that as the baseline would be six days
+and 6 DTE of drift hidden inside every figure derived from it, so the adjustment must be gated on
+having a sample at or near a Position's Opened, which means it appears on the next trade and not on
+this one. The same rule as Opened above: a missing fact shows as absent, never as a guess.
+
 ## Considered and rejected
 
 **Pace as the rule** — close whenever Cost to close sits above the On-pace line. One idea instead
