@@ -452,3 +452,99 @@ describe("gaps the single-position tests cannot show", () => {
     expect(links(mid)).toEqual([[], "leg"]);
   });
 });
+
+describe("the exit schedule", () => {
+  /** ADR 0011. The schedule is a REFERENCE: no alarm is raised from it, and `opened_at` is the
+   *  opt-in because nothing is inferred from `created_at`, which is the day a Position was
+   *  RECORDED rather than put on.
+   *
+   *  Its own expiry, not the suite's: the harness clock is 2026-10-02, and a 45-DTE-at-open
+   *  scenario against the suite's December expiry would put the Opened in the FUTURE — which the
+   *  guard correctly reports as unknown, and which is how the first version of these passed
+   *  every assertion except the one that looked at the pace.
+   */
+  const SCHED_EXPIRY = "2026-10-30";   // 28 DTE at the harness clock
+  const OPENED = "2026-09-15";         // 45 DTE at open
+  const spread = (over: Record<string, unknown> = {}) => ({
+    name: "1030_IC", strategy: "iron_condor", strike_date: SCHED_EXPIRY, contracts: 1,
+    entry: 6.86, legs: CONDOR_LEGS, ...over,
+  });
+  const values = async () => {
+    const data = await body(await h.call("/positions/values"));
+    return data as unknown as {
+      name: string; dte: number; opened_at: string | null; cost_to_close: number;
+      schedule: Record<string, number | null> | null;
+    }[];
+  };
+
+  it("is null for a Position whose Opened nobody declared", async () => {
+    start();
+    await created201(await post(spread()));
+    const [p] = await values();
+    expect(p!.opened_at).toBeNull();
+    expect(p!.schedule, "nothing is inferred from created_at").toBeNull();
+    expect(p!.dte, "the DTE is still reported, schedule or not").toBe(28);
+  });
+
+  it("is computed once an Opened is declared on creation", async () => {
+    start();
+    await created201(await post(spread({ opened_at: OPENED })));
+    const [p] = await values();
+    const s = p!.schedule!;
+
+    expect(p!.opened_at).toBe(OPENED);
+    expect(s.dte_at_open).toBe(45);
+    expect(s.target).toBeCloseTo(3.43, 2);
+    expect(s.stop).toBeCloseTo(13.72, 2);
+    // a 50% Target is not reached by decay ALONE until ~11 DTE, which is the headline finding:
+    // hitting it at 21 came from an IV drop or a move, not from waiting
+    expect(s.target_dte).toBe(11);
+    expect(s.manage_by_dte).toBe(21);
+    // 6.86 × √(28/45)
+    expect(s.on_pace).toBeCloseTo(6.86 * Math.sqrt(28 / 45), 6);
+  });
+
+  it("can be declared after the fact, which is the only way the existing five get one", async () => {
+    start();
+    const id = await created201(await post(spread()));
+    expect((await values())[0]!.schedule).toBeNull();
+
+    const resp = await patch(id, { opened_at: OPENED });
+    expect(resp.status).toBe(200);
+    expect((await values())[0]!.schedule!.dte_at_open).toBe(45);
+  });
+
+  it("accepts either spelling of the date, as every other date here does", async () => {
+    start();
+    await created201(await post(spread({ opened_at: "20260915" })));
+    expect((await values())[0]!.opened_at).toBe(OPENED);
+  });
+
+  it("reports the gap to pace against the live Cost to close", async () => {
+    start();
+    await created201(await post(spread({ opened_at: OPENED })));
+    const [p] = await values();
+    const s = p!.schedule!;
+    expect(s.on_pace).not.toBeNull();
+    // behind is positive: costing MORE than it should is the direction that hurts
+    expect(s.pace_gap!).toBeCloseTo(p!.cost_to_close - s.on_pace!, 6);
+  });
+
+  it("says unknown rather than a number when the Opened is in the future", async () => {
+    // a DTE further out than the Opened one means the Opened is wrong, and a wrong Opened must
+    // read as unknown rather than as a pace above Entry
+    start();
+    await created201(await post(spread({ opened_at: "2026-10-20" })));
+    const s = (await values())[0]!.schedule!;
+    expect(s.dte_at_open).toBe(10);
+    expect(s.on_pace, "28 DTE today against 10 at open is not arithmetic, it is bad data")
+      .toBeNull();
+    expect(s.pace_gap).toBeNull();
+  });
+
+  it("refuses an Opened that is not a date", async () => {
+    start();
+    const resp = await post(spread({ opened_at: "last tuesday" }));
+    expect(resp.status).toBe(422);
+  });
+});

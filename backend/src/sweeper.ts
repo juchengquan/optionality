@@ -12,11 +12,12 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { daysToExpiry, marketDate } from "./domain/expiry.ts";
 import { isBreached, monitorLegCodes, monitorValue } from "./domain/monitor.ts";
+import { dteAtOpen, onPace } from "./domain/exit.ts";
 import { costToClose, positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
-  positionsForMonitors, recordPositionSample, updateMonitorFields,
+  positionsForMonitors, recordPositionSample, stampManageNotified, updateMonitorFields,
 } from "./db/queries.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
@@ -205,6 +206,51 @@ export class MonitorSweeper {
     );
     await this.evaluate(surviving, byCode);
     this.recordSamples(positionRows, byCode, at);
+    await this.noticeManageBy(positionRows, byCode, at);
+  }
+
+  /** One notice per Position when it reaches the manage-by DTE (ADR 0011).
+   *
+   *  A notice about a POSITION, not an Alarm about a Monitor: no threshold is involved, the
+   *  cooldowns do not apply, and `manage_notified_at` is what makes it once rather than once a
+   *  minute. Pace deliberately does not notify — being behind fires on every IV spike.
+   *
+   *  `opened_at` is the gate, and that is the whole reason it is: three of the five Positions in
+   *  the live book were already inside 21 DTE when this shipped, so without it the first sweep
+   *  after the deploy would have fired three retroactive notices and looked like a fault.
+   */
+  private async noticeManageBy(
+    rows: PositionRow[], byCode: Record<string, QuoteRecord>, at: Date,
+  ): Promise<void> {
+    const { settings } = this.deps;
+    for (const row of rows) {
+      try {
+        if (row.opened_at === null || row.manage_notified_at !== null) continue;
+        const dte = daysToExpiry(row.strike_date, at);
+        if (dte < 0 || dte > settings.exitManageByDte) continue;
+
+        const cost = costToClose(toPosition(row), byCode);
+        const pace = onPace(row.entry, dteAtOpen(row.strike_date, row.opened_at), dte);
+
+        let line = `⏰ ${row.name} is at ${dte} DTE — manage by ${settings.exitManageByDte}`;
+        if (row.entry !== null) line += `\nentry ${row.entry}`;
+        if (cost !== null) line += ` · now ${cost.toFixed(2)}`;
+        if (pace !== null) {
+          const gap = cost === null ? null : cost - pace;
+          line += `\non-pace ${pace.toFixed(2)}`;
+          if (gap !== null) {
+            line += ` — ${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
+          }
+        }
+        // stamped BEFORE the send, and only when the send does not throw: the order below means
+        // a failed send is retried next sweep rather than swallowed, while a successful one is
+        // never repeated
+        await this.notify(line);
+        stampManageNotified(this.deps.db, row.id, toSqlDatetime(at));
+      } catch (err) {
+        console.error(`manage-by notice for ${row.name} failed:`, err);
+      }
+    }
   }
 
   /** One observation per Position per market day, so the decay shape can be checked against this

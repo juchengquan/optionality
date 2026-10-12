@@ -31,6 +31,12 @@ export interface Settings {
   degradedAfterFailures: number;
   /** muted-expired monitors are auto-deleted this many days after expiry */
   expiredRetentionDays: number;
+  /** exit schedule (ADR 0011): the fraction of Entry taken as profit */
+  exitTakeFraction: number;
+  /** exit schedule: the Cost to close, as a multiple of Entry, that ends the trade */
+  exitStopMultiple: number;
+  /** exit schedule: be out of a Position at or inside this DTE whatever the P&L */
+  exitManageByDte: number;
   telegramBotToken: string;
   telegramChatId: string;
   /** URL prefix when served behind a path-stripping reverse proxy, e.g. "/opt/api" */
@@ -54,6 +60,9 @@ export const DEFAULTS: Settings = {
   uiRefreshSeconds: 30,
   degradedAfterFailures: 5,
   expiredRetentionDays: 7,
+  exitTakeFraction: 0.5,
+  exitStopMultiple: 2,
+  exitManageByDte: 21,
   telegramBotToken: "",
   telegramChatId: "",
   rootPath: "",
@@ -77,11 +86,18 @@ const FROM_ENV = {
   uiRefreshSeconds: "UI_REFRESH_SECONDS",
   degradedAfterFailures: "DEGRADED_AFTER_FAILURES",
   expiredRetentionDays: "EXPIRED_RETENTION_DAYS",
+  exitTakeFraction: "EXIT_TAKE_FRACTION",
+  exitStopMultiple: "EXIT_STOP_MULTIPLE",
+  exitManageByDte: "EXIT_MANAGE_BY_DTE",
   telegramBotToken: "TELEGRAM_BOT_TOKEN",
   telegramChatId: "TELEGRAM_CHAT_ID",
   rootPath: "ROOT_PATH",
   displayTz: "DISPLAY_TZ",
 } as const satisfies Record<keyof Settings, string>;
+
+/** The knobs that are genuinely fractional. Everything else is a count, where a fraction is a
+ *  typo — `EXIT_MANAGE_BY_DTE` is deliberately not here, because a DTE is a whole day. */
+const FRACTIONAL: ReadonlySet<keyof Settings> = new Set(["exitTakeFraction", "exitStopMultiple"]);
 
 export function settingsFromEnv(env: Record<string, string | undefined> = process.env): Settings {
   const out = { ...DEFAULTS };
@@ -89,10 +105,18 @@ export function settingsFromEnv(env: Record<string, string | undefined> = proces
     const raw = env[variable];
     if (raw === undefined) continue;
     if (typeof DEFAULTS[key] === "number") {
+      // an EMPTY value is not zero. `Number("")` is 0 and `Number.isInteger(0)` is true, so
+      // `MONITOR_INTERVAL_SECONDS=` used to mean a zero interval rather than an error — every
+      // numeric knob had that hole, and a knob set to nothing is a mistake, never an intent.
+      if (raw.trim() === "") throw new Error(`${variable} is set to nothing`);
       const n = Number(raw);
+      if (!Number.isFinite(n)) throw new Error(`${variable} is not a number: ${raw}`);
       // int() in the Python, which raises rather than silently using the default — a mistyped
-      // MONITOR_INTERVAL_SECONDS should stop the service, not quietly sweep every 60 seconds
-      if (!Number.isInteger(n)) throw new Error(`${variable} is not an integer: ${raw}`);
+      // MONITOR_INTERVAL_SECONDS should stop the service, not quietly sweep every 60 seconds.
+      // The exit FRACTIONS are the exception and are genuinely fractional; a count is not.
+      if (!FRACTIONAL.has(key) && !Number.isInteger(n)) {
+        throw new Error(`${variable} is not an integer: ${raw}`);
+      }
       (out[key] as number) = n;
     } else {
       (out[key] as string) = raw;
