@@ -548,3 +548,51 @@ describe("the exit schedule", () => {
     expect(resp.status).toBe(422);
   });
 });
+
+describe("deleting a Position that has been sampled", () => {
+  /** The third time this foreign key has bitten. monitor_positions did it in #71, the sweep's
+   *  expiry path did it in #81, and `position_samples` did it the moment ADR 0011 added a child
+   *  table without touching the delete path — which made DELETE refuse for EVERY Position, since
+   *  the first sweep after that deploy gave all five a sample.
+   *
+   *  The samples go with the holding, unlike the Monitors: a Monitor survives and simply stops
+   *  knowing what it watched, while a series of what-this-was-worth means nothing without it.
+   */
+  const sample = (positionId: string, on: string) =>
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close)
+       values (?, ?, 30, 4.0)`,
+    ).run(positionId, on);
+
+  it("deletes it, and its samples with it", async () => {
+    start();
+    const id = await created201(await post(condor()));
+    sample(id, "2026-10-11");
+    sample(id, "2026-10-12");
+    expect(h.db.prepare("select count(*) n from position_samples").get()).toEqual({ n: 2 });
+
+    const resp = await h.call(`/positions/${id}`, { method: "DELETE" });
+    expect(resp.status, await resp.text()).toBe(204);
+    expect(h.db.prepare("select count(*) n from positions").get()).toEqual({ n: 0 });
+    expect(h.db.prepare("select count(*) n from position_samples").get()).toEqual({ n: 0 });
+  });
+
+  it("leaves another Position's samples alone", async () => {
+    start();
+    const keep = await created201(await post(condor({ name: "keep" })));
+    const drop = await created201(await post(condor({ name: "drop" })));
+    sample(keep, "2026-10-12");
+    sample(drop, "2026-10-12");
+
+    expect((await h.call(`/positions/${drop}`, { method: "DELETE" })).status).toBe(204);
+    const rows = h.db.prepare("select position_id from position_samples").all() as
+      { position_id: string }[];
+    expect(rows.map((r) => r.position_id)).toEqual([keep]);
+  });
+
+  it("still deletes one that has no samples at all", async () => {
+    start();
+    const id = await created201(await post(condor()));
+    expect((await h.call(`/positions/${id}`, { method: "DELETE" })).status).toBe(204);
+  });
+});

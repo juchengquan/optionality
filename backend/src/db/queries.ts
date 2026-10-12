@@ -286,6 +286,12 @@ export function setMonitorScope(db: DatabaseSync, id: string, scope: string | nu
   db.prepare("update monitors set scope = ? where id = ?").run(scope, id);
 }
 
+/** Every observation recorded for a Position. They belong to the holding — the foreign key says
+ *  so — and a series of what-this-was-worth means nothing once the holding is gone. */
+export function clearPositionSamples(db: DatabaseSync, id: string): void {
+  db.prepare("delete from position_samples where position_id = ?").run(id);
+}
+
 /** Stamp a Position as having had its manage-by notice, so it is said once and not once a
  *  minute. The sweep runs every minute. */
 export function stampManageNotified(db: DatabaseSync, id: string, at: string): void {
