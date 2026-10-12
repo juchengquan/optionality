@@ -601,3 +601,167 @@ describe("a rule that watches only PART of a holding", () => {
     expect(ringing!.triggered).toBe(true);
   });
 });
+
+describe("a combo that covers only part of a holding", () => {
+  /** It is measured on the cost of buying back the Contracts IT names, not the holding's.
+   *
+   *  An alarm written about the call side of a condor was compared against the whole condor's
+   *  cost: you named two options and it fired on four. The original choice is sound — a
+   *  position-backed combo is measured on a buy-back cost because that is positive, and a combo's
+   *  own signed sum is negative for a credit structure — it simply did not notice an alarm
+   *  covering part of a holding. So the figure narrows to the alarm's own Contracts, which for an
+   *  alarm covering the whole holding is the same number it always gave.
+   *
+   *  Cost to close is widened to match (CONTEXT.md): what it costs to buy back the options in
+   *  question, whether those are a Position's Legs or the Contracts a Monitor names.
+   */
+  const PUT_A = buildSpxCode(EXPIRY, "PUT", 7100);
+  const PUT_B = buildSpxCode(EXPIRY, "PUT", 7050);
+
+  /** the whole condor, as ONE holding */
+  const condorHeld = () => {
+    const pid = "pc".padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'condor', 'iron_condor', ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', null, null)`,
+    ).run(pid, EXPIRY, toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "sold", option_type: "PUT", strike: 7100 },
+      { side: "bought", option_type: "PUT", strike: 7050 },
+    ]));
+    return pid;
+  };
+
+  /** sold 8100 at 5.00 / bought 8150 at 1.00  -> the call side costs 4.00 to buy back
+   *  sold 7100 at 3.00 / bought 7050 at 1.00  -> the put side costs 2.00
+   *  so the whole condor costs 6.00 */
+  const priced = quoting({
+    [LEG_A]: { mid_price: 5.0, option_delta: 0.30, option_contract_size: 100 },
+    [LEG_B]: { mid_price: 1.0, option_delta: 0.20, option_contract_size: 100 },
+    [PUT_A]: { mid_price: 3.0, option_delta: -0.25, option_contract_size: 100 },
+    [PUT_B]: { mid_price: 1.0, option_delta: -0.15, option_contract_size: 100 },
+  });
+
+  /** an alarm naming only the two calls — minus is short, per the canonical convention */
+  const callSide = (over: Record<string, unknown> = {}) => combo({
+    code: "call-side", legs: [
+      { sign: -1, option_type: "CALL", strike: 8100 },
+      { sign: 1, option_type: "CALL", strike: 8150 },
+    ], ...over,
+  });
+
+  it("costs what ITS contracts cost, not what the holding costs", async () => {
+    const mid = callSide({ threshold: 3 });
+    const pid = condorHeld();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [e] = await run(priced, true);
+    expect(e!.scope).toBe("leg");
+    expect(e!.cost_to_close, "it was reporting 6.00, the whole condor's").toBe(4);
+  });
+
+  it("alarms on its own cost, so a threshold means what it says", async () => {
+    // 4.00 for the call side against a 5.00 threshold: calm. Measured on the condor's 6.00 it
+    // would have been breached, which is the fault in one assertion.
+    const mid = callSide({ threshold: 5 });
+    const pid = condorHeld();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [e] = await run(priced, true);
+    expect(e!.cost_to_close).toBe(4);
+    expect(e!.triggered, "the condor's 6.00 would have rung this").toBe(false);
+    expect(e!.fill).toBe(80);
+  });
+
+  it("uses the MID to cost it, whatever field the alarm watches", async () => {
+    // the subtle one: a combo's own figure is the signed sum of ITS field, so an alarm on delta
+    // has a delta sum, not a price. Negating that would have made the cost to close -(-0.10).
+    const mid = callSide({ field: "option_delta", threshold: 0.5 });
+    const pid = condorHeld();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [e] = await run(priced, true);
+    // -0.30 + 0.20 under its signs
+    expect(e!.combo_value).toBeCloseTo(-0.1, 10);
+    // and the cost to close is still priced from the mids: 5.00 - 1.00
+    expect(e!.cost_to_close).toBe(4);
+    void mid;
+  });
+
+  it("gives an alarm covering the WHOLE holding the same number as before", async () => {
+    const mid = combo({
+      code: "whole-condor", threshold: 7,
+      legs: [
+        { sign: -1, option_type: "CALL", strike: 8100 },
+        { sign: 1, option_type: "CALL", strike: 8150 },
+        { sign: -1, option_type: "PUT", strike: 7100 },
+        { sign: 1, option_type: "PUT", strike: 7050 },
+      ],
+    });
+    const pid = condorHeld();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'all' where id = ?").run(mid);
+
+    const [e] = await run(priced, true);
+    expect(e!.scope).toBe("all");
+    expect(e!.cost_to_close).toBe(6);
+    expect(e!.entry).toBe(6.86);
+    expect(e!.pnl).not.toBeNull();
+  });
+
+  it("costs the same whichever leg convention the alarm was written in", async () => {
+    // The point of costing from the holding's sides. Two alarms naming the SAME two contracts,
+    // one written "-1 on sold" (what the dashboard says) and one "+1 on sold" (what the schema
+    // said until #97). Their own signed sums are exact opposites; what it costs to buy those two
+    // options back is one number, because that is a fact about the holding and not about signs.
+    const pid = condorHeld();
+    const canonical = callSide({ code: "minus-short", threshold: 9 });
+    const inverted = combo({
+      code: "plus-short", threshold: 9, legs: [
+        { sign: 1, option_type: "CALL", strike: 8100 },
+        { sign: -1, option_type: "CALL", strike: 8150 },
+      ],
+    });
+    for (const mid of [canonical, inverted]) {
+      db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+      db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+    }
+
+    const entries = await run(priced, true);
+    const a = entries.find((e) => e.code === "minus-short")!;
+    const b = entries.find((e) => e.code === "plus-short")!;
+
+    expect(a.combo_value).toBe(-4);
+    expect(b.combo_value).toBe(4);
+    expect(a.cost_to_close, "one fact about the holding").toBe(4);
+    expect(b.cost_to_close, "and the same fact, written the other way round").toBe(4);
+  });
+
+  it("still offers no entry or P&L for the part, which would be a fraction of a credit", async () => {
+    const mid = callSide({ threshold: 3 });
+    const pid = condorHeld();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [e] = await run(priced, true);
+    expect(e!.entry).toBeNull();
+    expect(e!.pnl).toBeNull();
+    expect(e!.schedule).toBeNull();
+  });
+
+  it("leaves a combo you do not hold exactly as it was", async () => {
+    // no holding, so no buy-back cost: the row shows its own signed sum and is measured on it
+    // under its own direction and compare
+    callSide({ threshold: 3, direction: "below", compare: "signed" });
+    const [e] = await run(priced, true);
+    expect(e!.cost_to_close).toBeNull();
+    // -1 x 5.00 + 1 x 1.00 under the canonical signs: its own figure is NEGATIVE for a credit
+    // structure, which is exactly why a buy-back cost was introduced for the ones you hold
+    expect(e!.combo_value).toBe(-4);
+  });
+});

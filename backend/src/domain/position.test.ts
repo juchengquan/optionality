@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { buildSpxCode } from "./contract.ts";
 import { comboFieldSum, type Monitor } from "./monitor.ts";
 import {
-  combinedCostToClose, combinedEntry, combinedPnl, contractSize, costToClose,
+  combinedCostToClose, combinedEntry, combinedPnl, contractSize, costToClose, costToCloseOf,
   positionGreek, positionLegCodes, positionPnl, positionsHolding,
   type ByCode, type Position,
 } from "./position.ts";
@@ -370,5 +370,62 @@ describe("the sign convention, so neither vocabulary can drift from the other", 
     const held = positionGreek(p, byCode, "option_delta");
     expect(held).toBeCloseTo(-0.05, 12);
     expect(comboFieldSum(asCombo(p), byCode, "option_delta")).toBeCloseTo(held!, 12);
+  });
+});
+
+describe("costing a named subset of what you hold", () => {
+  /** `costToCloseOf` — what it would cost to buy back just these Contracts. Added for alarms that
+   *  cover part of a holding, and costed from the holding's SIDES rather than from a combo's signs,
+   *  because a sign is a multiplier the trader picked and both conventions for it have lived in
+   *  this repo (#97). A mutation sweep found these two guards untested: it was only exercised
+   *  through buildEntries, where no fixture reached either. */
+  const CALL_A = buildSpxCode(future(), "CALL", 8050);
+  const CALL_B = buildSpxCode(future(), "CALL", 8075);
+  const PUT_A = buildSpxCode(future(), "PUT", 7100);
+
+  it("sums only the Contracts it was asked about, by side", () => {
+    const p = condor();
+    const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
+    // the call wing: sold 8050 at 5.00, bought 8075 at 2.00
+    expect(costToCloseOf([p], byCode, [CALL_A, CALL_B])).toBe(3);
+    // one sold leg on its own costs its mid to buy back
+    expect(costToCloseOf([p], byCode, [CALL_A])).toBe(5);
+    // and the whole set is the whole cost
+    expect(costToCloseOf([p], byCode, positionLegCodes(p))).toBe(4.5);
+  });
+
+  it("is unknown, not partial, when a named Contract has no price", () => {
+    const p = condor();
+    const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
+    delete byCode[CALL_B];
+    // 5.00 on its own would be a plausible, wrong answer for the wing
+    expect(costToCloseOf([p], byCode, [CALL_A, CALL_B])).toBeNull();
+  });
+
+  it("is unknown when none of the named Contracts is held", () => {
+    // zero would read as "costs nothing to close", which is the opposite of "you do not hold it"
+    const p = condor();
+    const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
+    expect(costToCloseOf([p], byCode, [buildSpxCode(future(), "CALL", 9999)])).toBeNull();
+    expect(costToCloseOf([], byCode, [CALL_A])).toBeNull();
+  });
+
+  it("adds up across several holdings, as a rule spanning them would", () => {
+    // ADR 0004: a condor's stop may span both its spreads
+    const calls: Position = {
+      name: "calls", strike_date: future(), contracts: 1, entry: 3.0,
+      legs: [{ side: "sold", option_type: "CALL", strike: 8050 }],
+    };
+    const puts: Position = {
+      name: "puts", strike_date: future(), contracts: 1, entry: 1.5,
+      legs: [{ side: "sold", option_type: "PUT", strike: 7100 }],
+    };
+    const byCode: ByCode = {
+      [CALL_A]: { code: CALL_A, mid_price: 5.0 },
+      [PUT_A]: { code: PUT_A, mid_price: 3.0 },
+    };
+    expect(costToCloseOf([calls, puts], byCode, [CALL_A, PUT_A])).toBe(8);
+    // and naming only one of them costs only that one
+    expect(costToCloseOf([calls, puts], byCode, [PUT_A])).toBe(3);
   });
 });

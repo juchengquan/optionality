@@ -11,7 +11,7 @@ import {
 import { dteAtOpen, exitLevels, type ExitLevels, type ExitPolicy } from "./domain/exit.ts";
 import { daysToExpiry } from "./domain/expiry.ts";
 import {
-  combinedCostToClose, combinedEntry, combinedPnl, positionLegCodes,
+  combinedCostToClose, combinedEntry, combinedPnl, costToCloseOf, positionLegCodes,
 } from "./domain/position.ts";
 import type { Monitor, MonitorLeg } from "./domain/monitor.ts";
 import type { Position } from "./domain/position.ts";
@@ -83,17 +83,31 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     const snapshot = isCombo ? null : (byCode[m.code] ?? null);
 
     const comboValue = isCombo ? monitorValue(m, byCode) : undefined;
-    // A Monitor watches CONTRACTS, never a Position (CONTEXT.md). Where its Contracts turn out to
-    // be ones you hold, the Position is found afterwards so the row can show what you took in —
-    // but that does not make a row about one option into a row about the condor it sits inside.
-    // So a single-Contract Monitor reports the holding's cost only when it covers the holding
-    // whole; otherwise the figure belongs on the holding's own row, and is there.
+    // What it would cost to buy back the options in question (CONTEXT.md) — and "in question"
+    // means the Contracts this Monitor NAMES, not the holding's Legs. A Monitor watches Contracts,
+    // never a Position; the holding is found afterwards.
     //
-    // Combos still report it whatever their scope, because for a position-backed combo it is what
-    // the ALARM is measured on, and narrowing that is a separate decision.
-    const costToClose = positions.length > 0 && (isCombo || m.scope === "all")
-      ? combinedCostToClose(positions, byCode, m.scope)
-      : null;
+    // So an alarm on the call side of a condor costs the call side. It used to be compared against
+    // the whole condor's cost: you named two options and it fired on four. For an alarm covering
+    // the holding whole this is the same number it always gave.
+    //
+    // A single Contract reports the figure only when it IS the whole holding — otherwise the row
+    // is about one option and the holding's cost belongs on the holding's own row.
+    //
+    // Only where you hold the Contracts: buying back something you do not have is not a cost, and
+    // an unheld combo is still shown and measured on its own signed sum.
+    let costToClose: number | null = null;
+    if (positions.length > 0) {
+      if (isCombo) {
+        // costed from the holding's SIDES, restricted to the Contracts this Monitor names — not
+        // from the combo's own signed sum. That sum is in the Monitor's own field, which may be
+        // delta, and its sign depends on which of the two leg conventions the legs were entered
+        // under (#97): derived from signs this figure is inverted under one of them.
+        costToClose = costToCloseOf(positions, byCode, monitorLegCodes(m));
+      } else if (m.scope === "all") {
+        costToClose = combinedCostToClose(positions, byCode, m.scope);
+      }
+    }
     // only a rule that covers whole positions has an entry to speak of; a leg rule watches part of
     // a structure and its P&L would be a fraction of someone else's credit
     const whole = m.scope === "all" ? positions : [];

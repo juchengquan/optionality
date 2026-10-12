@@ -107,6 +107,38 @@ export function positionGreek(
   return signedSum(p, byCode, field, -1, scope);
 }
 
+/** What it would cost to buy back just these Contracts, out of what you hold.
+ *
+ *  By SIDE, never from a combo's signs. A sign is a multiplier the trader picked, and both
+ *  conventions for it exist in this repo's own history — "+ on sold legs" was documented in the
+ *  schema until #97 while the dashboard said the opposite — so a cost derived from signs is right
+ *  under one of them and inverted under the other. Which way you are on a Leg is recorded on the
+ *  holding and is not a matter of convention.
+ *
+ *  Null if any named Contract is unpriced, and null if none of them is held: a partial answer to
+ *  "what would this cost" is worse than no answer.
+ */
+export function costToCloseOf(
+  positions: Position[], byCode: ByCode, codes: Iterable<string>,
+): number | null {
+  const named = new Set(codes);
+  let total = 0;
+  let found = 0;
+  for (const position of positions) {
+    for (const leg of position.legs) {
+      const code = buildSpxCode(position.strike_date, leg.option_type, leg.strike);
+      if (!named.has(code)) continue;
+      const mid = byCode[code]?.mid_price;
+      if (mid === null || mid === undefined) return null;
+      // buying back a leg you sold COSTS; closing one you bought returns. The inverse of the
+      // exposure signing above, which is why both live in this file.
+      total += (leg.side === "sold" ? 1 : -1) * Number(mid);
+      found += 1;
+    }
+  }
+  return found === 0 ? null : total;
+}
+
 /** Points-to-money multiplier, taken from the quotes rather than assumed to be 100. */
 export function contractSize(byCode: ByCode): number | null {
   for (const record of Object.values(byCode)) {
