@@ -304,9 +304,23 @@ export function stampManageNotified(db: DatabaseSync, id: string, at: string): v
  *  mark, so the last write of a market day is the one that stays. */
 export function recordPositionSample(db: DatabaseSync, row: PositionSampleRow): void {
   db.prepare(
-    `insert or replace into position_samples (position_id, observed_on, dte, cost_to_close)
-     values (?, ?, ?, ?)`,
-  ).run(row.position_id, row.observed_on, row.dte, row.cost_to_close);
+    `insert or replace into position_samples
+       (position_id, observed_on, dte, cost_to_close, legs_iv)
+     values (?, ?, ?, ?, ?)`,
+  ).run(row.position_id, row.observed_on, row.dte, row.cost_to_close, row.legs_iv);
+}
+
+/** The sample already stored for this Position on this market day, if any.
+ *
+ *  Read so the sampler can decline to write the same row again. It wrote on every sweep — 5,760
+ *  times a day at a 15-second interval, to persist one row — and overnight almost all of those
+ *  stored a value identical to the one already there. */
+export function findPositionSample(
+  db: DatabaseSync, positionId: string, observedOn: string,
+): PositionSampleRow | undefined {
+  return db.prepare(
+    "select * from position_samples where position_id = ? and observed_on = ?",
+  ).get(positionId, observedOn) as unknown as PositionSampleRow | undefined;
 }
 
 export function insertRun(db: DatabaseSync, row: RunRow): RunRow {

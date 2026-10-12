@@ -1,0 +1,18 @@
+-- Per-leg implied volatility on each sample (ADR 0011).
+--
+-- The √T decay shape silently assumes IV has not moved: time value scales with σ√T and only the
+-- √T half is used. Measured on the owner's condor, net vega is about -1.3 points per IV point, so
+-- an IV move of 0.42 points accounts for an entire pace gap of 0.54 — the reference is largely a
+-- vol reading rather than a verdict on the trade.
+--
+-- Adjusting for it needs a baseline, and nothing recorded one. This starts recording. Per LEG and
+-- not per structure, because a condor has no IV: "IV is never summed" is a ratified invariant, and
+-- these legs run 10.5% to 22.1% — a single number for them would be a fiction.
+--
+-- A JSON map of code -> IV rather than a second table: it keeps one row per Position per market
+-- day, it is smaller (measured: 65 -> 200 bytes a row, so 148KB a year for three Positions and
+-- 1.4MB over ten), and nothing needs to query one leg's IV on its own yet.
+--
+-- Nullable, and null means "not all of them were priced" rather than zero. Every row written
+-- before this column existed is null too, which is the same statement.
+ALTER TABLE position_samples ADD COLUMN legs_iv TEXT;
