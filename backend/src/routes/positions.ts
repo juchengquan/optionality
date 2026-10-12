@@ -11,7 +11,7 @@ import { z } from "zod";
 import { POSITION_GREEK_FIELDS, contractSize, costToClose, positionGreek, positionLegCodes, positionPnl } from "../domain/position.ts";
 import type { Deps } from "../deps.ts";
 import {
-  clearPositionLinks, deletePositionRow, findPosition, findPositionByName, insertPosition,
+  clearPositionLinks, clearPositionSamples, deletePositionRow, findPosition, findPositionByName, insertPosition,
   listPositions, updatePositionFields,
 } from "../db/queries.ts";
 import { atomic } from "../db/open.ts";
@@ -206,10 +206,17 @@ export function positionRoutes(deps: Deps) {
       // links must go first or the DELETE is refused. Every Position in the live database is linked,
       // so this was broken for all of them (#71).
       //
+      // `position_samples` is the THIRD time this key has bitten — #71 here, #81 in the sweep's
+      // expiry path, and then ADR 0011 added a child table without touching this line, which made
+      // DELETE refuse for every Position the moment the first sweep gave each of them a sample.
+      // Adding a table that references this one means coming back here.
+      //
       // The Monitors survive — nothing here deletes a rule as a side effect. They simply stop knowing
-      // what they were watching, and would be adopted again if the holding came back.
+      // what they were watching, and would be adopted again if the holding came back. The samples do
+      // NOT: they describe this holding and mean nothing without it.
       await atomic(db, () => {
         clearPositionLinks(db, id);
+        clearPositionSamples(db, id);
         deletePositionRow(db, id);
       });
       return c.body(null, 204);
