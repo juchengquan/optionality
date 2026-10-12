@@ -26,6 +26,9 @@ export interface Position {
   legs: Leg[];
   strategy?: string | null;
   id?: string;
+  /** the day it was PUT ON — a fact about the holding, like Entry, and not the day it was
+   *  recorded. Absent until declared, and nothing infers it (ADR 0011). */
+  opened_at?: string | null;
 }
 
 export type { ByCode, Quote } from "./quote.ts";

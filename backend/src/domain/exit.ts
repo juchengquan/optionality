@@ -13,6 +13,17 @@
  */
 import { normalizeStrikeDate } from "./contract.ts";
 
+/** The policy as the settings hold it. One place reads the three knobs, so a route and the sweep
+ *  cannot disagree about what the Target is. Settings is structurally typed here rather than
+ *  imported, because the domain does not depend on the environment. */
+export const exitPolicy = (
+  s: { exitTakeFraction: number; exitStopMultiple: number; exitManageByDte: number },
+): ExitPolicy => ({
+  takeFraction: s.exitTakeFraction,
+  stopMultiple: s.exitStopMultiple,
+  manageByDte: s.exitManageByDte,
+});
+
 /** DTE on the day the Position was opened: `strike_date` less `opened_at`.
  *
  *  Two calendar dates subtracted, with no timezone anywhere — NOT `daysToExpiry` with the opened

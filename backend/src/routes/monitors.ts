@@ -19,6 +19,7 @@ import { atomic } from "../db/open.ts";
 import type { MonitorRow } from "../db/rows.ts";
 import { fromSqliteBool, toSqliteBool, toSqliteJson } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
+import { exitPolicy } from "../domain/exit.ts";
 import { httpError, notFound } from "../errors.ts";
 import { applyTotalEntry, linkToPositions, watchlistQuotes } from "../monitors.ts";
 import {
@@ -342,6 +343,16 @@ const EntryOut = z.object({
   scope: z.string().nullable(),
   positions: z.array(z.object({ id: z.string(), name: z.string() })),
   cost_to_close: z.number().nullable(),
+  /** the exit schedule, null where there is no single declared holding to schedule (ADR 0011) */
+  schedule: z.object({
+    dte_at_open: z.number(),
+    on_pace: z.number().nullable(),
+    pace_gap: z.number().nullable(),
+    target: z.number().nullable(),
+    stop: z.number().nullable(),
+    target_dte: z.number().nullable(),
+    manage_by_dte: z.number(),
+  }).nullable(),
   entry: z.number().nullable(),
   pnl: z.number().nullable(),
   fill: z.number().nullable(),
@@ -356,6 +367,7 @@ export function quoteRoutes(deps: Deps) {
           await watchlistQuotes(deps.db, deps.settings.displayTz, deps.fetchQuotes, {
             includeCombos: true,
             now: deps.now(),
+            policy: exitPolicy(deps.settings),
           }),
         ),
         200,

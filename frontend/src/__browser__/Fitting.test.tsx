@@ -45,6 +45,12 @@ const combo = {
   combo_greeks: {
     option_delta: -0.0123, option_gamma: 0.00004, option_theta: 0.21, option_vega: -0.18,
   },
+  // a declared holding, so the on-pace column actually DRAWS a figure and is measured. Without
+  // it the column renders blank and the width assertions below pass without ever seeing it.
+  schedule: {
+    dte_at_open: 45, on_pace: 6.39, pace_gap: 0.06,
+    target: 3.43, stop: 13.72, target_dte: 11, manage_by_dte: 21,
+  },
   snapshot: null,
 };
 

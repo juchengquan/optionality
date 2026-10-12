@@ -5,7 +5,7 @@ import {
 import type { Entry } from "./api";
 import { useDismissOnBack } from "./useDismissOnBack";
 import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
-import { alarmText, legSummary, shortContract } from "./format";
+import { alarmText, DASH, fmt, legSummary, shortContract } from "./format";
 import { EntryCell, RowActions } from "./RowActions";
 import { cellValue } from "./WatchlistTable";
 import type { RowHandlers } from "./WatchlistTable";
@@ -32,7 +32,10 @@ export function RowDetail({
   // the identity is the title, the alarm is the subtitle, and entry has its own editable
   // row below — everything else is a figure. NOT filtered by PROTECTED: that set grew to
   // mean "never dropped from the table", which is the opposite of what belongs here.
-  const shownElsewhere = new Set([isCombo ? "combo" : "contract", "alarm", "entry"]);
+  // on_pace is in the schedule block below, with the words that make it mean something — listing
+  // it in the figures grid as well showed the same number twice, and showed it to rows that have
+  // no schedule at all
+  const shownElsewhere = new Set([isCombo ? "combo" : "contract", "alarm", "entry", "on_pace"]);
   const columns = (isCombo ? COMBO_COLUMNS : SINGLE_COLUMNS).filter(
     (c) => !shownElsewhere.has(c.key),
   );
@@ -59,6 +62,46 @@ export function RowDetail({
             </div>
           ))}
         </dl>
+
+        {/* The exit schedule, where there is room for words (ADR 0011).
+            The column shows the on-pace LEVEL, because a bare signed gap next to a P&L — where
+            positive means good — invites being read the wrong way round. Here it is spelled out:
+            behind means costing MORE than it should.
+
+            A REFERENCE and not a rule. No alarm is raised from it: being behind fires on every
+            IV spike and says nothing about risk, and the shape knows nothing about spot, which is
+            what actually kills a condor. The Monitors watch that. */}
+        {entry.schedule ? (
+          <div className="px-4 pt-3 text-sm">
+            <p className="meta">
+              {`opened at ${entry.schedule.dte_at_open} DTE`}
+              {entry.schedule.pace_gap === null ? null : (
+                <>
+                  {" · "}
+                  <strong>
+                    {entry.schedule.pace_gap > 0 ? "behind" : "ahead"}
+                    {` by ${Math.abs(entry.schedule.pace_gap).toFixed(2)}`}
+                  </strong>
+                </>
+              )}
+            </p>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums">
+              {[
+                ["on pace", fmt(entry.schedule.on_pace, "mid")],
+                ["target", fmt(entry.schedule.target, "mid")],
+                ["stop", fmt(entry.schedule.stop, "mid")],
+                ["target on decay alone", entry.schedule.target_dte === null
+                  ? DASH : `${entry.schedule.target_dte} DTE`],
+                ["manage by", `${entry.schedule.manage_by_dte} DTE`],
+              ].map(([label, value]) => (
+                <div key={label} className="contents">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="text-right">{value || DASH}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : null}
 
         {/* The boxes sat under column headers in the table and have none here, so each
             says what it is. No close button: SheetContent draws its own, and a second one

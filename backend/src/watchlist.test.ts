@@ -63,8 +63,11 @@ const combo = (over: Record<string, unknown> = {}) => monitor({
 const quoting = (byCode: Record<string, QuoteRecord>): QuoteFetcher =>
   (codes) => Promise.resolve(codes.filter((c) => c in byCode).map((c) => ({ code: c, ...byCode[c] })));
 
+/** the shipped defaults, so these tests and `.env.example` cannot drift apart */
+const POLICY = { takeFraction: 0.5, stopMultiple: 2, manageByDte: 21 };
+
 const run = (fetch: QuoteFetcher, includeCombos = false) =>
-  watchlistQuotes(db, TZ, fetch, { includeCombos, now: NOW });
+  watchlistQuotes(db, TZ, fetch, { includeCombos, now: NOW, policy: POLICY });
 
 describe("which monitors appear", () => {
   it("leaves combos out of the single-leg tables", async () => {
@@ -283,7 +286,7 @@ describe("the holdings a rule watches", () => {
     await watchlistQuotes(db, TZ, (codes) => {
       asked.push(codes);
       return Promise.resolve(codes.map((code) => ({ code })));
-    }, { now: NOW });
+    }, { now: NOW, policy: POLICY });
     expect(asked[0]).toEqual([LEG_A, LEG_B].sort());
   });
 });
@@ -416,5 +419,89 @@ describe("the bell and the value share an instant", () => {
       checked++;
     }
     expect(checked).toBe(8);
+  });
+});
+
+describe("the exit schedule on a watchlist entry", () => {
+  /** It rides on THIS payload rather than being fetched beside it, so `pace_gap` is the gap
+   *  against the very Cost to close the row shows. Joining /positions/values on the dashboard
+   *  would compute it against a different fetch's figure and put the row back to describing two
+   *  instants, which is the thing ADR 0010 settled. */
+  const declare = (positionId: string, openedAt: string) =>
+    db.prepare("update positions set opened_at = ? where id = ?").run(openedAt, positionId);
+
+  const spreadOf = (mid: Record<string, number>) => quoting(
+    Object.fromEntries(Object.entries(mid).map(([k, v]) => [k, { mid_price: v }])),
+  );
+
+  const heldCombo = (entry: number) => {
+    const mid = combo({ threshold: 3 });
+    const pid = "p1".padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'spread', null, ?, 1, ?, ?, '2026-08-01 00:00:00.000000', null, null)`,
+    ).run(pid, EXPIRY, entry, toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "bought", option_type: "CALL", strike: 8150 },
+    ]));
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'all' where id = ?").run(mid);
+    return { mid, pid };
+  };
+
+  it("is null until the Position's Opened is declared", async () => {
+    heldCombo(2.0);
+    const [e] = await run(spreadOf({ [LEG_A]: 5.0, [LEG_B]: 1.0 }), true);
+    expect(e!.schedule).toBeNull();
+  });
+
+  it("rides on the same payload as the value, so the gap is against THAT cost", async () => {
+    const { pid } = heldCombo(2.0);
+    // Opened long before NOW, because an Opened in the future reads as unknown by design.
+    declare(pid, "2026-07-11");
+    const [e] = await run(spreadOf({ [LEG_A]: 5.0, [LEG_B]: 1.0 }), true);
+    const s = e!.schedule!;
+
+    expect(e!.cost_to_close).toBe(4);
+    expect(s.dte_at_open).toBe(160);
+    // taken from the entry rather than written out: NOW is 03:35 UTC, which is still the previous
+    // evening in New York, so `dte` is 131 and not the 132 the calendar date suggests. Hardcoding
+    // it is how this test first failed, and `dte` being market-reckoned is the whole point of it.
+    expect(e!.dte).toBe(131);
+    expect(s.on_pace).toBeCloseTo(2.0 * Math.sqrt(e!.dte / 160), 6);
+    // the gap is computed from the cost in THIS entry, not from another fetch
+    expect(s.pace_gap).toBeCloseTo(4 - s.on_pace!, 6);
+    expect(s.target).toBeCloseTo(1.0, 6);
+    expect(s.stop).toBeCloseTo(4.0, 6);
+    expect(s.manage_by_dte).toBe(21);
+  });
+
+  it("is null for a rule that only watches part of a holding", async () => {
+    // scope 'leg' means the rule covers a fraction of someone else's credit, and a schedule
+    // built on it would be a schedule for a trade nobody put on
+    const { mid, pid } = heldCombo(2.0);
+    declare(pid, "2026-07-11");
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+    const [e] = await run(spreadOf({ [LEG_A]: 5.0, [LEG_B]: 1.0 }), true);
+    expect(e!.schedule).toBeNull();
+  });
+
+  it("is null for a rule spanning two Positions, which have no single Opened", async () => {
+    // two Positions put on different days have no one DTE at entry, and a blended pace line
+    // would hide that rather than say it. ADR 0004 allows the span; this declines to guess.
+    const { mid, pid } = heldCombo(2.0);
+    declare(pid, "2026-07-11");
+    const other = "p2".padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'other', null, ?, 1, 1.0, ?, '2026-08-01 00:00:00.000000', '2026-08-01', null)`,
+    ).run(other, EXPIRY, toSqliteJson([{ side: "sold", option_type: "PUT", strike: 7100 }]));
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, other);
+
+    const [e] = await run(spreadOf({ [LEG_A]: 5.0, [LEG_B]: 1.0 }), true);
+    expect(e!.positions).toHaveLength(2);
+    expect(e!.schedule).toBeNull();
   });
 });
