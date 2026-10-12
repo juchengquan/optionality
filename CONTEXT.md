@@ -35,6 +35,36 @@ Entry minus Cost to close, across the contracts held. The one figure expressed i
 than points, because it is the one you act on.
 _Avoid_: profit, return, pnl
 
+**DTE**:
+Days from today until a Position's or Leg's expiry. Always this abbreviation — the trader's unit
+for how much time a structure has left.
+_Avoid_: days to expiry, time to expiry, tenor
+
+**Opened**:
+The day you put a Position on. A different fact from the day you recorded it here, and the one
+the decay maths needs — a Position entered at 45 DTE and told to the app a fortnight later has
+an Opened of the earlier day.
+_Avoid_: created, added, entry date (that last one invites confusion with Entry, which is a price)
+
+**On-pace**:
+What a Position's Cost to close would be at a given DTE if nothing but time had passed. A
+REFERENCE, never a rule: it says whether a trade is working, and no alarm is ever raised from it.
+_Avoid_: expected value, fair value, theoretical price, target
+
+**Target**:
+The Cost to close at which you take the profit, as a fraction of Entry. Flat in DTE — time does
+not change what you are willing to accept, only whether you have got it yet.
+_Avoid_: take profit, TP, goal
+
+**Stop**:
+The Cost to close at which the trade is over, as a multiple of Entry. Also flat in DTE.
+_Avoid_: stop loss, SL, max loss
+
+**Manage-by**:
+The DTE at which a Position is dealt with whatever its P&L, because the risk of holding stops
+being paid for. A deadline, not a level.
+_Avoid_: roll date, close date, expiry (that word means the contract's own date)
+
 **Monitor**:
 A rule that watches one value and raises an alarm when it crosses a threshold. It watches
 either a single Leg or the Position as a whole. A Monitor exists to warn, never to record what

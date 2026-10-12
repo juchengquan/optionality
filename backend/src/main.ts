@@ -14,6 +14,7 @@ import { serve } from "@hono/node-server";
 
 import { createApp } from "./app.ts";
 import type { Deps } from "./deps.ts";
+import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
 import { OpendClient } from "./opend/client.ts";
@@ -27,6 +28,13 @@ import { Worker } from "./worker.ts";
 
 const settings = settingsFromEnv();
 const db = openDatabase(settings.dbPath);
+
+/** Before anything serves. The schema and the code that reads it travel together in the working
+ *  tree (ADR 0009), so they must not be able to get out of step — and a failure here is fatal on
+ *  purpose: a service that starts on a schema it does not match is worse than one that does not
+ *  start. launchd's KeepAlive will keep trying, and the log will say which migration. */
+const applied = migrate(db);
+if (applied.length > 0) console.info(`applied ${applied.length} migration(s): ${applied.join(", ")}`);
 const send = telegramSender(settings.telegramBotToken, settings.telegramChatId);
 
 const opend = new OpendClient({

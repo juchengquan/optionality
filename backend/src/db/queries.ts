@@ -11,7 +11,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { COLUMNS } from "./rows.ts";
 import type {
-  ConfigRow, MonitorRow, PositionRow, ReportRow, RunRow, ScheduleRow,
+  ConfigRow, MonitorRow, PositionRow, PositionSampleRow, ReportRow, RunRow, ScheduleRow,
 } from "./rows.ts";
 
 export function listConfigs(db: DatabaseSync): ConfigRow[] {
@@ -284,6 +284,17 @@ export function orphanMonitors(db: DatabaseSync): MonitorRow[] {
 
 export function setMonitorScope(db: DatabaseSync, id: string, scope: string | null): void {
   db.prepare("update monitors set scope = ? where id = ?").run(scope, id);
+}
+
+/** One observation of a Position's Cost to close, keyed on the market day (ADR 0011).
+ *
+ *  REPLACE, not IGNORE: the sweep runs every minute and the row should converge on the settled
+ *  mark, so the last write of a market day is the one that stays. */
+export function recordPositionSample(db: DatabaseSync, row: PositionSampleRow): void {
+  db.prepare(
+    `insert or replace into position_samples (position_id, observed_on, dte, cost_to_close)
+     values (?, ?, ?, ?)`,
+  ).run(row.position_id, row.observed_on, row.dte, row.cost_to_close);
 }
 
 export function insertRun(db: DatabaseSync, row: RunRow): RunRow {

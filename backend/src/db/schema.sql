@@ -81,6 +81,8 @@ CREATE TABLE positions (
 	entry FLOAT,
 	legs JSON NOT NULL,
 	created_at DATETIME NOT NULL,
+	opened_at VARCHAR(10),
+	manage_notified_at DATETIME,
 	PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX ix_positions_name ON positions (name);
@@ -97,6 +99,14 @@ CREATE TABLE monitor_positions (
 	FOREIGN KEY(position_id) REFERENCES positions (id)
 );
 
+CREATE TABLE position_samples (
+	position_id VARCHAR(32) NOT NULL,
+	observed_on VARCHAR(10) NOT NULL,
+	dte INTEGER NOT NULL,
+	cost_to_close FLOAT NOT NULL,
+	PRIMARY KEY (position_id, observed_on),
+	FOREIGN KEY(position_id) REFERENCES positions (id)
+);
 CREATE TABLE reports (
 	run_id VARCHAR(32) NOT NULL,
 	summary JSON NOT NULL,

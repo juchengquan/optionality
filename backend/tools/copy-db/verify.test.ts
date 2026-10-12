@@ -55,8 +55,10 @@ describe("an identical copy", () => {
     const r = verify(a, b);
     expect(r.divergences).toEqual([]);
     // the count is part of the result: a clean report from a comparison that walked nothing
-    // reads exactly like a real one
-    expect(r.compared).toBe(35);
+    // reads exactly like a real one. It moved 35 -> 37 when `positions` gained opened_at and
+    // manage_notified_at (ADR 0011) — which is the count earning its keep, not noise: a schema
+    // change that did NOT move it would mean the new columns were going uncompared.
+    expect(r.compared).toBe(37);
     expect(r.rows).toBe(5);
   });
 });

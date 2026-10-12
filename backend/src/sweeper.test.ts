@@ -564,3 +564,124 @@ describe("positions in the batch", () => {
     expect(s.cachedRecords().byCode[buildSpxCode(future(), "CALL", 8050)]).toBeTruthy();
   });
 });
+
+describe("recording what a Position was worth", () => {
+  /** One observation per Position per market day, so the √T decay shape can be checked against
+   *  this book rather than defended on arithmetic — it had one confirming observation when it was
+   *  chosen (ADR 0011). Nothing reads these yet; that is the point of starting now. */
+  const held = (name: string, over: Partial<{ strike_date: string; legs: unknown }> = {}) => {
+    const id = name.padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, ?, null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', null, null)`,
+    ).run(id, name, over.strike_date ?? future(), toSqliteJson(over.legs ?? [
+      { side: "sold", option_type: "CALL", strike: 8050 },
+      { side: "bought", option_type: "CALL", strike: 8075 },
+    ]));
+    return id;
+  };
+  const samples = () => db.prepare(
+    "select position_id, observed_on, dte, cost_to_close from position_samples order by position_id",
+  ).all() as { position_id: string; observed_on: string; dte: number; cost_to_close: number }[];
+
+  const spread = (sold: number, bought: number): QuoteFetcher => (codes) =>
+    Promise.resolve(codes.map((c) => ({
+      code: c, name: c,
+      mid_price: c === buildSpxCode(future(), "CALL", 8050) ? sold : bought,
+    })));
+
+  it("writes one row per Position, with the Cost to close and the dashboard's DTE", async () => {
+    const id = held("held");
+    await sweeper(spread(5.0, 1.0)).sweep();
+
+    // sold 5.00 and bought 1.00: 4.00 to buy the spread back
+    expect(samples()).toEqual([
+      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 4 },
+    ]);
+  });
+
+  it("keeps the LAST sweep of a market day, not the first", async () => {
+    // the sweep runs every 60 seconds and a day of samples is a day, not 1,440 of them. Last
+    // rather than first because the service runs through the close, so the row converges on the
+    // settled mark instead of the opening spread.
+    const id = held("held");
+    await sweeper(spread(5.0, 1.0)).sweep();
+    now = new Date("2026-10-01T19:55:00Z");
+    await sweeper(spread(4.0, 1.0)).sweep();
+
+    expect(samples()).toEqual([
+      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 3 },
+    ]);
+  });
+
+  it("keys the day where the option TRADES, not where UTC is", async () => {
+    // the hazard the sweeper's own expiry comment names: for the hours New York is behind UTC the
+    // two dates differ, and `dte` beside it is reckoned from the market date. A sample keyed on
+    // the UTC day would pair a New York Wednesday with a Thursday's DTE.
+    now = new Date("2026-10-01T02:00:00Z"); // 22:00 on 2026-09-30 in New York
+    held("held");
+    await sweeper(spread(5.0, 1.0)).sweep();
+
+    expect(samples()[0]!.observed_on).toBe("2026-09-30");
+    expect(now.toISOString().slice(0, 10)).toBe("2026-10-01"); // and the UTC day is not that
+  });
+
+  it("records a Position whose Opened nobody has entered yet", async () => {
+    // the sample is raw: (DTE, Cost to close) means something without an Opened, and filling the
+    // Opened in later makes the history it already collected interpretable. Waiting for the field
+    // would throw away the days between.
+    held("unopened");
+    await sweeper(spread(5.0, 1.0)).sweep();
+    expect(samples()).toHaveLength(1);
+    const p = db.prepare("select opened_at from positions").get() as { opened_at: string | null };
+    expect(p.opened_at).toBeNull();
+  });
+
+  it("skips a Position it could not price, QUIETLY", async () => {
+    // one unpriced leg and the Cost to close is unknown, not zero — the same all-or-nothing rule
+    // the dashboard holds to. A half-priced observation would quietly bend the curve.
+    //
+    // The silence is the half worth asserting. The column is NOT NULL and the write is wrapped in
+    // a catch, so dropping the guard still records nothing — it just logs a failure for every
+    // unpriced Position on every sweep, once a minute, for ever. A mutation sweep found that this
+    // test could not tell those apart.
+    const errors: unknown[][] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => { errors.push(args); };
+    try {
+      held("held");
+      await sweeper((codes) => Promise.resolve(
+        codes.filter((c) => c !== buildSpxCode(future(), "CALL", 8075))
+          .map((c) => ({ code: c, name: c, mid_price: 5.0 })),
+      )).sweep();
+    } finally {
+      console.error = realError;
+    }
+    expect(samples()).toEqual([]);
+    expect(errors, `an unpriced Position should be silent, not logged: ${JSON.stringify(errors)}`)
+      .toEqual([]);
+  });
+
+  it("stops recording once a Position has expired", async () => {
+    held("gone", { strike_date: past() });
+    await sweeper(spread(5.0, 1.0)).sweep();
+    expect(samples()).toEqual([]);
+  });
+
+  it("does not stop the sweep if recording fails", async () => {
+    // the sweep's job is the alarm. A sample is a nice-to-have and must never be the reason a
+    // breach goes unmessaged, so the write is guarded like the telegram send is.
+    const id = held("held");
+    monitor({ threshold: 0.05 });
+    db.exec("DROP TABLE position_samples");
+    const s = sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, option_delta: 0.9, mid_price: 5.0,
+    }))));
+    await s.sweep();
+
+    expect(sent.some((t) => t.includes("⚠️")), "the alarm still went out").toBe(true);
+    expect(s.lastSweepOk()).toBe(true);
+    expect(id).toBeTruthy();
+  });
+});

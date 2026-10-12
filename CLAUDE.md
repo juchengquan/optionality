@@ -35,10 +35,21 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
-- Schema change: edit `service/models.py`, then
+- **Schema change (TypeScript, which is what is live):** add a `.sql` file to
+  `backend/src/db/migrations/` AND put the same shape in `backend/src/db/schema.sql`, then update
+  `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `db/rows.ts` — the compiler and
+  `rows.test.ts` tie those three together, so a half-done change fails rather than drifts.
+  `main.ts` applies what is pending at boot and a failure there is fatal on purpose. A database
+  built from `schema.sql` is STAMPED, not migrated (ADR 0011). `make deploy` backs the file up
+  before it restarts, so the backup predates the migration. **Never edit a migration that has
+  run.**
+- Schema change (Python, the rollback until phase 10): edit `service/models.py`, then
   `OPTIONALITY_DB_PATH=data/optionality.db uv run alembic revision --autogenerate -m "..."` and
   `... alembic upgrade head`. Alembic runs in batch mode (SQLite table rebuilds). **Squash a branch's
   migrations before it merges; never touch shipped migrations.** Startup `create_all` covers fresh DBs.
+  The two schemas have DIVERGED since ADR 0011 — `position_samples`, `schema_migrations` and the two
+  new `positions` columns exist only on the TypeScript side, so a rollback loses the exit schedules
+  on top of everything entered since the cutover.
 - uv only, never pip. Python ≥ 3.12. TDD: write the failing test first; the whole codebase was built that way.
 
 ## Layout (`src/optionality/`)

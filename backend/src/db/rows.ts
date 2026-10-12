@@ -28,10 +28,16 @@ export const COLUMNS = {
   ],
   positions: [
     "id", "name", "strategy", "strike_date", "contracts", "entry", "legs", "created_at",
+    // appended, because ALTER TABLE adds at the end and a migrated database lists them here
+    "opened_at", "manage_notified_at",
   ],
+  position_samples: ["position_id", "observed_on", "dte", "cost_to_close"],
   monitor_positions: ["monitor_id", "position_id"],
   reports: ["run_id", "summary", "html", "created_at"],
   alembic_version: ["version_num"],
+  /** bookkeeping, like alembic_version beside it: COLUMNS covers every table the schema creates,
+   *  and a table left out of it is a table nothing checks (db/migrate.ts) */
+  schema_migrations: ["name", "applied_at"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type TableName = keyof typeof COLUMNS;
@@ -50,10 +56,12 @@ export const NULLABLE = {
   monitors: [
     "legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at",
   ],
-  positions: ["strategy", "entry"],
+  positions: ["strategy", "entry", "opened_at", "manage_notified_at"],
+  position_samples: [],
   monitor_positions: [],
   reports: [],
   alembic_version: [],
+  schema_migrations: [],
 } as const satisfies Record<TableName, readonly string[]>;
 
 export interface ConfigRow {
@@ -130,6 +138,23 @@ export interface PositionRow {
   /** JSON text */
   legs: string;
   created_at: string;
+  /** the day the Position was PUT ON, which created_at is not; null until someone says */
+  opened_at: string | null;
+  /** sent-once marker for the manage-by notice */
+  manage_notified_at: string | null;
+}
+
+export interface SchemaMigrationRow {
+  name: string;
+  applied_at: string;
+}
+
+/** One observation of a Position's Cost to close, one per market day (ADR 0011). */
+export interface PositionSampleRow {
+  position_id: string;
+  observed_on: string;
+  dte: number;
+  cost_to_close: number;
 }
 
 export interface MonitorPositionRow {
@@ -167,6 +192,12 @@ type _Positions = Checked<Exact<keyof PositionRow, (typeof COLUMNS.positions)[nu
 type _MonitorPositions = Checked<
   Exact<keyof MonitorPositionRow, (typeof COLUMNS.monitor_positions)[number]>
 >;
+type _PositionSamples = Checked<
+  Exact<keyof PositionSampleRow, (typeof COLUMNS.position_samples)[number]>
+>;
+type _SchemaMigrations = Checked<
+  Exact<keyof SchemaMigrationRow, (typeof COLUMNS.schema_migrations)[number]>
+>;
 type _Reports = Checked<Exact<keyof ReportRow, (typeof COLUMNS.reports)[number]>>;
 type _Alembic = Checked<
   Exact<keyof AlembicVersionRow, (typeof COLUMNS.alembic_version)[number]>
@@ -186,6 +217,12 @@ type _PositionsNull = Checked<Exact<NullableKeys<PositionRow> & string, (typeof 
 type _MonitorPositionsNull = Checked<
   Exact<NullableKeys<MonitorPositionRow> & string, (typeof NULLABLE.monitor_positions)[number]>
 >;
+type _PositionSamplesNull = Checked<
+  Exact<NullableKeys<PositionSampleRow> & string, (typeof NULLABLE.position_samples)[number]>
+>;
+type _SchemaMigrationsNull = Checked<
+  Exact<NullableKeys<SchemaMigrationRow> & string, (typeof NULLABLE.schema_migrations)[number]>
+>;
 type _ReportsNull = Checked<Exact<NullableKeys<ReportRow> & string, (typeof NULLABLE.reports)[number]>>;
 type _AlembicNull = Checked<
   Exact<NullableKeys<AlembicVersionRow> & string, (typeof NULLABLE.alembic_version)[number]>
@@ -199,7 +236,8 @@ type _AlembicNull = Checked<
  *  and `npm run typecheck` names the column that is missing and from which side.
  */
 export type SchemaChecks = [
-  _Configs, _Schedules, _Runs, _Monitors, _Positions, _MonitorPositions, _Reports, _Alembic,
+  _Configs, _Schedules, _Runs, _Monitors, _Positions, _MonitorPositions, _PositionSamples,
+  _Reports, _Alembic, _SchemaMigrations,
   _ConfigsNull, _SchedulesNull, _RunsNull, _MonitorsNull, _PositionsNull, _MonitorPositionsNull,
-  _ReportsNull, _AlembicNull,
+  _PositionSamplesNull, _ReportsNull, _AlembicNull, _SchemaMigrationsNull,
 ];

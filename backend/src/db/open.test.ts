@@ -33,13 +33,31 @@ const position = (id: string, name: string) =>
     values (?, ?, '2026-10-16', 1, '[]', ?)`).run(id, name, now);
 
 describe("the schema", () => {
-  it("creates every table the Python has", () => {
+  it("creates every table the Python has, plus the two that are ours alone", () => {
     const names = db.prepare("select name from sqlite_master where type='table' order by name")
       .all().map((r) => (r as { name: string }).name);
     expect(names).toEqual([
-      "alembic_version", "configs", "monitor_positions", "monitors", "positions",
-      "reports", "runs", "schedules",
+      "alembic_version", "configs", "monitor_positions", "monitors", "position_samples",
+      "positions", "reports", "runs", "schedules", "schema_migrations",
     ]);
+  });
+
+  it("has diverged from the Python's schema, deliberately and for the first time", () => {
+    // Until ADR 0011 this file was byte-compatible with SQLAlchemy's create_all, which is what
+    // made `make copy-db` and the rollback honest. `position_samples`, `schema_migrations` and the
+    // two new positions columns exist only here. The rollback is correspondingly weaker: it
+    // already lost everything entered since the cutover, and now loses the exit schedules too.
+    // Stated as a test so the next person adding a table knows what they are spending.
+    const names = new Set(
+      db.prepare("select name from sqlite_master where type='table'").all()
+        .map((r) => (r as { name: string }).name),
+    );
+    expect([...names].filter((n) => ["position_samples", "schema_migrations"].includes(n)).sort())
+      .toEqual(["position_samples", "schema_migrations"]);
+
+    const positions = (db.prepare("select name from pragma_table_info('positions')").all() as
+      { name: string }[]).map((r) => r.name);
+    expect(positions.slice(-2)).toEqual(["opened_at", "manage_notified_at"]);
   });
 
   it("creates every index under the name SQLAlchemy gives it", () => {
