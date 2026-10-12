@@ -120,6 +120,8 @@ export function positionRoutes(deps: Deps) {
         entry: p.entry ?? null,
         legs: toSqliteJson(p.legs),
         created_at: toSqlDatetime(deps.now()),
+        opened_at: p.opened_at ?? null,
+        manage_notified_at: null,
       };
       // strict gate, as for monitors: nothing enters the table unverified
       const codes = [...new Set(positionLegCodes(toPosition(row)))].sort();
@@ -145,6 +147,7 @@ export function positionRoutes(deps: Deps) {
       if (given.entry !== undefined) changes.entry = given.entry;
       if (given.contracts !== undefined) changes.contracts = given.contracts;
       if (given.strategy !== undefined) changes.strategy = given.strategy;
+      if (given.opened_at !== undefined) changes.opened_at = given.opened_at;
       return c.json(PositionOut.parse(out(updatePositionFields(db, id, changes))), 200);
     })
 

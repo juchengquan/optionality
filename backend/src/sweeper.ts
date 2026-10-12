@@ -10,14 +10,15 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
+import { daysToExpiry, marketDate } from "./domain/expiry.ts";
 import { isBreached, monitorLegCodes, monitorValue } from "./domain/monitor.ts";
-import { positionLegCodes } from "./domain/position.ts";
+import { costToClose, positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
-  positionsForMonitors, updateMonitorFields,
+  positionsForMonitors, recordPositionSample, updateMonitorFields,
 } from "./db/queries.ts";
-import type { MonitorRow } from "./db/rows.ts";
+import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
 import { toSqliteBool } from "./db/values.ts";
 import type { Settings } from "./env.ts";
@@ -157,15 +158,22 @@ export class MonitorSweeper {
 
   async sweep(): Promise<void> {
     const { db } = this.deps;
-    this.sweepAt = this.now();
-    const today = utcDate(this.sweepAt);
+    // held as a local as well as on the instance: a sweep takes real time, and every date the
+    // sweep reckons — expiry, and the samples' market day — must come from ONE instant or a
+    // sweep straddling midnight disagrees with itself
+    const at = this.now();
+    this.sweepAt = at;
+    const today = utcDate(at);
 
     const active = await this.runExpiryLifecycle(today);
 
     // positions join the batch even when nothing alarms on them: the dashboard values them from
     // this same fetch, and a held position must not read as "—" merely because you happen not to be
     // watching it. This widens the batch only — the alarm loop below still runs over `active`.
-    const positionCodes = listPositions(db).flatMap((p) => positionLegCodes(toPosition(p)));
+    // the rows, not only their codes: the same list is what the samples below are written from,
+    // so a Position cannot be in the batch and missing from the record
+    const positionRows = listPositions(db);
+    const positionCodes = positionRows.flatMap((p) => positionLegCodes(toPosition(p)));
     const codes = [...new Set([
       ...active.flatMap((m) => monitorLegCodes(toMonitor(m))),
       ...positionCodes,
@@ -196,6 +204,36 @@ export class MonitorSweeper {
       records.map((r) => [String(r.code), r]),
     );
     await this.evaluate(surviving, byCode);
+    this.recordSamples(positionRows, byCode, at);
+  }
+
+  /** One observation per Position per market day, so the decay shape can be checked against this
+   *  book rather than defended on arithmetic (ADR 0011). Nothing reads these yet.
+   *
+   *  Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a
+   *  sample is a nice-to-have that must never be the reason a breach went unmessaged.
+   *
+   *  The day is the MARKET day, matching the `dte` stored beside it and the dashboard's column.
+   *  Deliberately not `utcDate` above — that is the expiry reckoning, and the two differ for the
+   *  hours New York is behind UTC, which would pair a New York Wednesday with Thursday's DTE. */
+  private recordSamples(
+    rows: PositionRow[], byCode: Record<string, QuoteRecord>, at: Date,
+  ): void {
+    const observedOn = marketDate(at);
+    for (const row of rows) {
+      try {
+        const dte = daysToExpiry(row.strike_date, at);
+        if (dte < 0) continue;
+        // unknown, not zero: one unpriced leg and there is no observation to make
+        const cost = costToClose(toPosition(row), byCode);
+        if (cost === null) continue;
+        recordPositionSample(this.deps.db, {
+          position_id: row.id, observed_on: observedOn, dte, cost_to_close: cost,
+        });
+      } catch (err) {
+        console.error(`recording a sample for ${row.name} failed:`, err);
+      }
+    }
   }
 
   /** Mute with a notice on expiry; delete quietly after the grace period.

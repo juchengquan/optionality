@@ -8,6 +8,8 @@
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
+import { stampAll } from "./migrate.ts";
+
 const SCHEMA = new URL("./schema.sql", import.meta.url);
 
 /** Open an existing database for reading and writing, with the pragmas the Python sets.
@@ -35,10 +37,14 @@ export function applySchema(db: DatabaseSync): void {
   db.exec(readFileSync(SCHEMA, "utf8"));
 }
 
-/** A new database with the schema applied. Used by the copy and by every test. */
+/** A new database with the schema applied. Used by the copy and by every test.
+ *
+ *  Stamped, not migrated: schema.sql carries the current shape, so every migration's effect is
+ *  already present and applying one would fail on a duplicate column. See db/migrate.ts. */
 export function createDatabase(path: string): DatabaseSync {
   const db = openDatabase(path);
   applySchema(db);
+  stampAll(db);
   return db;
 }
 

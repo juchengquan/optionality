@@ -35,6 +35,9 @@ export const PositionIn = z.object({
   entry: z.number().nullish(),
   contracts: z.int().min(1).optional(),
   strategy: z.string().nullish(),
+  /** the day it was PUT ON, which is not the day it is recorded here. Null means no exit
+   *  schedule: the decay shape needs a DTE at entry and will not guess one (ADR 0011). */
+  opened_at: StrikeDate.nullish(),
 });
 
 /** Legs are never edited here — a different structure is a different holding. */
@@ -42,4 +45,7 @@ export const PositionPatch = z.object({
   entry: z.number().optional(),
   contracts: z.int().min(1).optional(),
   strategy: z.string().optional(),
+  /** settable after the fact, which is the only way the Positions recorded before this existed
+   *  can get one — created_at is right for some of them and wrong for the rest */
+  opened_at: StrikeDate.optional(),
 });
