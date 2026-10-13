@@ -93,6 +93,26 @@ export function positionLegCodes(position: Position, scope?: string | null): str
   );
 }
 
+/** Every leg's reading of one INTENSIVE field — IV, vega — as a code -> value map, or null if
+ *  any leg is missing it.
+ *
+ *  Not a sum, which is the point: these fields do not add up across a structure (a condor has no
+ *  IV), so the only honest record is per leg, and combining them later is a weighted mean rather
+ *  than an addition. All-or-nothing for the same reason costToClose is: a map over half the legs
+ *  invites an answer computed from half a structure.
+ */
+export function legReadings(
+  position: Position, byCode: ByCode, field: string,
+): Record<string, number> | null {
+  const readings: Record<string, number> = {};
+  for (const code of positionLegCodes(position)) {
+    const value = byCode[code]?.[field];
+    if (value === null || value === undefined) return null;
+    readings[code] = Number(value);
+  }
+  return readings;
+}
+
 /** Points needed to buy the position back: sold legs cost, bought legs return. */
 export function costToClose(p: Position, byCode: ByCode, scope?: string | null): number | null {
   return signedSum(p, byCode, "mid_price", 1, scope);

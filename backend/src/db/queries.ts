@@ -305,9 +305,11 @@ export function stampManageNotified(db: DatabaseSync, id: string, at: string): v
 export function recordPositionSample(db: DatabaseSync, row: PositionSampleRow): void {
   db.prepare(
     `insert or replace into position_samples
-       (position_id, observed_on, dte, cost_to_close, legs_iv)
-     values (?, ?, ?, ?, ?)`,
-  ).run(row.position_id, row.observed_on, row.dte, row.cost_to_close, row.legs_iv);
+       (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
+     values (?, ?, ?, ?, ?, ?)`,
+  ).run(
+    row.position_id, row.observed_on, row.dte, row.cost_to_close, row.legs_iv, row.legs_vega,
+  );
 }
 
 /** The sample already stored for this Position on this market day, if any.

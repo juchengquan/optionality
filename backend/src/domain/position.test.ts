@@ -11,7 +11,7 @@ import { buildSpxCode } from "./contract.ts";
 import { comboFieldSum, type Monitor } from "./monitor.ts";
 import {
   combinedCostToClose, combinedEntry, combinedPnl, contractSize, costToClose, costToCloseOf,
-  positionGreek, positionLegCodes, positionPnl, positionsHolding,
+  legReadings, positionGreek, positionLegCodes, positionPnl, positionsHolding,
   type ByCode, type Position,
 } from "./position.ts";
 
@@ -40,6 +40,40 @@ function quotes(p: Position, mids: number[], extra: Record<string, number> = {})
     codes.map((code, i) => [code, { code, mid_price: mids[i]!, option_contract_size: 100, ...extra }]),
   );
 }
+
+describe("reading an intensive field off every leg", () => {
+  // IV and vega do NOT add up across a structure — "IV is never summed" is ratified, and a
+  // condor's legs can sit at 10.5% and 22%. So the only honest record of them is per leg, and
+  // combining them later is a weighted mean rather than an addition.
+  it("maps every leg's code to its own reading", () => {
+    const p = condor();
+    const by = quotes(p, [5.0, 2.0, 3.0, 1.5], { option_implied_volatility: 0 });
+    const codes = positionLegCodes(p);
+    for (const [i, code] of codes.entries()) by[code]!.option_implied_volatility = 10 + i;
+
+    expect(legReadings(p, by, "option_implied_volatility")).toEqual({
+      [codes[0]!]: 10, [codes[1]!]: 11, [codes[2]!]: 12, [codes[3]!]: 13,
+    });
+  });
+
+  it("gives nothing at all when one leg is missing the field", () => {
+    // all-or-nothing, like costToClose: a map over three of four legs invites a vol figure
+    // computed from three quarters of a structure, which is a figure about nothing.
+    const p = condor();
+    const by = quotes(p, [5.0, 2.0, 3.0, 1.5], { option_vega: 1.0 });
+    delete by[positionLegCodes(p)[2]!]!.option_vega;
+
+    expect(legReadings(p, by, "option_vega")).toBeNull();
+  });
+
+  it("treats a leg with no quote at all as missing, not as zero", () => {
+    const p = condor();
+    const by = quotes(p, [5.0, 2.0, 3.0, 1.5], { option_vega: 1.0 });
+    delete by[positionLegCodes(p)[0]!];
+
+    expect(legReadings(p, by, "option_vega")).toBeNull();
+  });
+});
 
 describe("cost to close", () => {
   it("buys back what you sold", () => {
