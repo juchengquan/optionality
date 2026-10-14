@@ -223,7 +223,7 @@ describe("a four-digit strike fits in the box that takes it", () => {
       const beside = Math.abs(box.getBoundingClientRect().top - select.getBoundingClientRect().top) < 4;
 
       if (w < 500) {
-        // "long"/"short" plus CALL/PUT plus four digits do not fit in 260px — measured, which is
+        // "sold"/"bought" plus CALL/PUT plus four digits do not fit in 260px — measured, which is
         // how the words came to be hidden behind the chevron in the first place. So the box takes
         // the next line, whole, rather than everything being squeezed past legibility.
         expect(beside, "the strike is still crammed onto the selects' line").toBe(false);
@@ -257,6 +257,16 @@ describe("a select you can read", () => {
         const label = select.getAttribute("aria-label") ?? select.id;
         expect(longest, `${label}: longest option needs ${Math.round(longest)}px of ${Math.round(room)}px`)
           .toBeLessThanOrEqual(room);
+        // ...and with room to spare, on the control whose words are the widest. "Fits" alone was
+        // satisfied at +1px when "short" became "bought", and a 1px margin is not a margin: the
+        // measurement here is this browser's font and the owner's is not necessarily the same, so
+        // 10% of the word is the least that can be called clearance. Without this the min-w on
+        // that select could be deleted and every test would stay green, which is how the inert
+        // classes in this file got found.
+        if (label.endsWith("sign")) {
+          expect(room - longest, `${label}: only ${Math.round(room - longest)}px of clearance`)
+            .toBeGreaterThanOrEqual(longest * 0.1);
+        }
       }
     });
   }

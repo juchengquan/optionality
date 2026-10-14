@@ -31,8 +31,8 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
   const [threshold, setThreshold] = useState<number | null>(null);
   // The holding, if there is one. A combo derives each leg's side from the sign the user gave it;
   // a lone option has no sign and can be either side, so this asks. It has to: entry is a net
-  // credit RECEIVED, so a long is stored negative, and a long recorded positive reports a P&L of
-  // +1300 where +300 is right. The form owns that signing so the number typed is always what
+  // credit RECEIVED, so a bought leg is stored negative, and one recorded positive reports a P&L
+  // of +1300 where +300 is right. The form owns that signing so the number typed is always what
   // moved — "paid 5.00" is 5.00 here and −5.00 in the service.
   const [side, setSide] = useState("sold");
   const [entry, setEntry] = useState<number | null>(null);
@@ -179,12 +179,31 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
                   repo at once, and the add-combo form is where a holding's SIDES are derived from
                   these, so the wrong reading inverts a P&L rather than failing. The stored value
                   is still ±1 — only the label changed.
-                  short/long rather than sold/bought because a combo you merely WATCH has no
-                  sides: you have not sold anything. The entry field below is where it becomes a
-                  holding, and that translation is stated in the sheet's description. */}
-              <NativeSelect aria-label={`leg ${i + 1} sign`} value={leg.sign}
+
+                  sold/bought, which is the ratified vocabulary: CONTEXT.md's Side entry puts
+                  long/short on its Avoid line, and this control said "long"/"short" while the
+                  add-monitor form beside it said "sold"/"bought" for the same fact. One word per
+                  concept, and these ARE the same concept — the sides of a holding are derived
+                  from exactly these signs, by exactly this mapping.
+
+                  It overstates things for a combo you only WATCH, where nothing has been sold.
+                  That was the reason for long/short, and it does not survive the trade: those
+                  words imply a position just as much, while also being forbidden and silent
+                  about which sign they mean.
+
+                  The ORDER is untouched, and so is the default: `BLANK.sign` is "+" and the
+                  select is value-controlled, so reordering would move nothing except the diff.
+                  A credit structure's inner legs are sold, so bought-first is arguably the wrong
+                  default to offer — but that is a question about what the form posts when nobody
+                  touches it, not about what the words mean, and it would silently invert a
+                  holding. Only the labels changed here. */}
+              {/* min-w because "bought" needs 44px of the 45px this box gave it — measured. The
+                  word it replaced, "short", wanted 34px, so the relabelling ate the margin whole.
+                  A select does not scroll, so the overflow would have been SILENT, and font
+                  metrics differ enough between platforms that +1px is not a margin. */}
+              <NativeSelect className="min-w-24" aria-label={`leg ${i + 1} sign`} value={leg.sign}
                             onChange={(e) => setLeg(i, { sign: e.target.value })}>
-                <option value="+">long</option><option value="-">short</option>
+                <option value="+">bought</option><option value="-">sold</option>
               </NativeSelect>
               <NativeSelect aria-label={`leg ${i + 1} type`} value={leg.option_type}
                             onChange={(e) => setLeg(i, { option_type: e.target.value })}>
@@ -193,7 +212,7 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
               {/* A div of my own around the NumberField, because Base UI's wrapper is the flex
                   item and its className goes to the inner input — so this is the only way to give
                   the strike a minimum. Below that minimum the row wraps and the box takes the
-                  next line whole, which is what a phone does: "long"/"short" and CALL/PUT and
+                  next line whole, which is what a phone does: "sold"/"bought" and CALL/PUT and
                   four digits do not fit on 260px together, measured. A desk keeps one line.
 
                   "strike (blank = skip)" wants 138px and the box has ~100px of text room on a

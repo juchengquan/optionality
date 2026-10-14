@@ -269,7 +269,7 @@ describe("adding a combo", () => {
     // monitor form, so anything read from it afterwards is the wrong form's.
     const sign = within(combo).getByLabelText("leg 1 sign") as HTMLSelectElement;
     expect([...sign.options].map((o) => [o.value, o.textContent]))
-      .toEqual([["+", "long"], ["-", "short"]]);
+      .toEqual([["+", "bought"], ["-", "sold"]]);
 
     await fillCondor(combo, "7.4");
     await waitFor(() => expect(posted).toHaveLength(2));

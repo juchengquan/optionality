@@ -23,7 +23,8 @@ _Avoid_: option, contract (when the thing you mean is held rather than merely tr
 
 **Side**:
 Whether a Leg was sold or bought. A fact about the Position, not a choice about how to add its
-legs up — so it is never expressed as a +/- sign the trader picks.
+legs up. It is never SHOWN as a +/- sign: where a combo's legs are being described, each one is
+still named sold or bought, and the sign is only how that is stored and summed.
 _Avoid_: direction (that word means above/below on a Monitor), sign, long/short
 
 **Cost to close**:
