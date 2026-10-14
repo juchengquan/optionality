@@ -80,6 +80,23 @@ export type Vol = Exclude<Infer<typeof client.positions[":id"]["vol"]["$get"]>, 
 export const fetchVol = (id: string) =>
   read<Vol>(client.positions[":id"].vol.$get({ param: { id } }), `/positions/${id}/vol`);
 export const fetchMonitors = () => read<Monitor[]>(client.monitors.$get(), "/monitors");
+
+/** What is actually HELD, with its live figures and its exit schedule.
+ *
+ *  FETCHED ON DEMAND, never on the poll. This route makes its own bounded OpenD batch — one
+ *  snapshot call for every leg of every holding, a documented live-call exception like /quotes —
+ *  so polling it would mean a second batch per interval per open tab, and ADR 0010 is explicit
+ *  that polling is not free. Entry and Opened barely move; the figures beside them are worth a
+ *  click.
+ *
+ *  It exists because the dashboard rendered RULES only, so a holding no rule watches had no
+ *  screen at all — found with a live put spread carrying an entry, a P&L and a full schedule
+ *  that nothing displayed. */
+export type Holding = Awaited<ReturnType<typeof fetchHoldings>>[number];
+export const fetchHoldings = () =>
+  read<Exclude<Infer<typeof client.positions.values.$get>, { detail: string }>>(
+    client.positions.values.$get(), "/positions/values",
+  );
 export const fetchHealth = () => read<Health>(client.health.$get(), "/health");
 
 /** A write, whose only interesting answer is whether it was refused. */

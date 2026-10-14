@@ -13,6 +13,7 @@ import { AddPanel, AddTrigger, type Adding } from "./AddPanel";
 import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, writeHidden } from "./columns";
 import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
+import { Holdings } from "./Holdings";
 import { RowDetail, type DetailTarget } from "./RowDetail";
 import { Settings } from "./Settings";
 import { useTableFit } from "./useTableFit";
@@ -262,6 +263,8 @@ export function App() {
         onOpenChange={(o) => { if (!o) setDetail(null); }}
       />
       {quotes.length === 0 && !error ? <p>Watchlist is empty.</p> : null}
+
+      <Holdings reloadKey={pollFrom} />
 
       <MutedTables
         monitors={monitors}
