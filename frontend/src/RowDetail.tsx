@@ -2,7 +2,9 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 
-import type { Entry } from "./api";
+import { useEffect, useState } from "react";
+
+import { fetchVol, type Entry, type Vol } from "./api";
 import { useDismissOnBack } from "./useDismissOnBack";
 import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
 import { alarmText, DASH, fmt, legSummary, shortContract } from "./format";
@@ -28,6 +30,18 @@ export function RowDetail({
   onOpenChange: (open: boolean) => void;
 }) {
   useDismissOnBack(open, () => onOpenChange(false));
+  // Fetched when the sheet opens, not carried on /quotes: this changes once a market day while
+  // that payload is polled every 15 seconds per open tab (ADR 0010). Asked for the holding the
+  // SCHEDULE names — `positions[0]` is the same row today and would stop being so silently.
+  const askFor = open ? entry?.schedule?.position_id : undefined;
+  const [vol, setVol] = useState<Vol | null>(null);
+  useEffect(() => {
+    if (!askFor) { setVol(null); return; }
+    let live = true;
+    // a failed read costs the line and nothing else — the sheet's figures all came with the row
+    fetchVol(askFor).then((v) => { if (live) setVol(v); }).catch(() => { if (live) setVol(null); });
+    return () => { live = false; };
+  }, [askFor]);
   if (!entry) return null;
   // the identity is the title, the alarm is the subtitle, and entry has its own editable
   // row below — everything else is a figure. NOT filtered by PROTECTED: that set grew to
@@ -58,7 +72,22 @@ export function RowDetail({
   // version of this needs the sign of the vega and the sign of the gap both right to be read
   // safely. Guarded against a zero vega, which would print Infinity beside a figure you act on.
   const netVega = entry.combo_greeks?.option_vega ?? null;
-  const volPoints = schedule && schedule.pace_gap !== null && netVega !== null && netVega !== 0
+  // What vol ACTUALLY did, where the chain of samples reaches back to the day it was Opened. The
+  // remainder is everything the √T shape is not — spot above all, which is what kills a condor —
+  // and is deliberately left unattributed rather than called noise, because it is usually the
+  // larger half. The two close onto the gap by construction: rest is defined as the difference.
+  //
+  // `days >= 1`: a baseline row on its own is a true zero and not a measurement, so there is
+  // nothing to decompose on the day a trade was put on.
+  const measured = vol !== null && vol.vol !== null && (vol.days ?? 0) >= 1
+    && schedule && schedule.pace_gap !== null
+    ? { vol: vol.vol, rest: schedule.pace_gap - vol.vol, days: vol.days! }
+    : null;
+  // The hypothetical, for a holding with no baseline — which is every Position declared after the
+  // fact. Superseded by `measured` where that exists and NEVER shown beside it: one says what vol
+  // would explain and the other what it did, and two vol figures on one line is a riddle.
+  const volPoints = measured === null
+    && schedule && schedule.pace_gap !== null && netVega !== null && netVega !== 0
     ? Math.abs(schedule.pace_gap / netVega)
     : null;
 
@@ -107,6 +136,29 @@ export function RowDetail({
                 </>
               )}
             </p>
+            {measured === null ? null : (
+              <>
+                {/* Words, not signs. A vol part is POSITIVE when it hurts, the opposite of every
+                    other figure in this sheet, and the gap beside it is already worded for the
+                    same reason. "cost you 0.30 · the rest saved you 0.97" cannot be read the
+                    wrong way round; "+0.30 / -0.97" invites exactly that. */}
+                <p className="meta">
+                  {`vol ${measured.vol >= 0 ? "cost" : "saved"} you `}
+                  {Math.abs(measured.vol).toFixed(2)}
+                  {` · the rest ${measured.rest >= 0 ? "cost" : "saved"} you `}
+                  {Math.abs(measured.rest).toFixed(2)}
+                </p>
+                <p className="meta">
+                  {`over ${measured.days} market day${measured.days === 1 ? "" : "s"}`}
+                  {netVega === null ? null : (
+                    <>
+                      {" · net vega "}
+                      {fmt(netVega, "vega")}
+                    </>
+                  )}
+                </p>
+              </>
+            )}
             {volPoints === null ? null : (
               <p className="meta">
                 {`${volPoints.toFixed(2)} vol points would cover this gap · net vega `}

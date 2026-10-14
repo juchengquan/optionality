@@ -461,6 +461,17 @@ describe("the exit schedule on a watchlist entry", () => {
     expect(e!.schedule).toBeNull();
   });
 
+  it("names the holding it is FOR, so no client has to infer it from `positions`", async () => {
+    // The detail sheet fetches this holding's own vol history by that id. `positions[0]` is the
+    // same Position today, because a schedule needs scope "all" and exactly one holding — but a
+    // client relying on that would follow the next change to either condition onto the wrong
+    // trade in silence. A mutation sweep found nothing could tell a wrong id from the right one.
+    const { pid } = heldCombo(2.0);
+    declare(pid, "2026-07-11");
+    const [e] = await run(spreadOf({ [LEG_A]: 5.0, [LEG_B]: 1.0 }), true);
+    expect(e!.schedule!.position_id).toBe(pid);
+  });
+
   it("rides on the same payload as the value, so the gap is against THAT cost", async () => {
     const { pid } = heldCombo(2.0);
     // Opened long before NOW, because an Opened in the future reads as unknown by design.

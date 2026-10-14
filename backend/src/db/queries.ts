@@ -292,6 +292,13 @@ export function clearPositionSamples(db: DatabaseSync, id: string): void {
   db.prepare("delete from position_samples where position_id = ?").run(id);
 }
 
+/** Every sample for one Position, oldest first — the order a day-by-day measurement needs. */
+export function listPositionSamples(db: DatabaseSync, id: string): PositionSampleRow[] {
+  return db.prepare(
+    "select * from position_samples where position_id = ? order by observed_on",
+  ).all(id) as unknown as PositionSampleRow[];
+}
+
 /** Stamp a Position as having had its manage-by notice, so it is said once and not once a
  *  minute. The sweep runs every minute. */
 export function stampManageNotified(db: DatabaseSync, id: string, at: string): void {

@@ -79,15 +79,47 @@ number under every figure the feature displays.
 assumes IV holds still; `position_samples` therefore also carries `legs_iv` and `legs_vega`, a JSON
 map each, so the assumption can be measured before anything is built on top of it. Per LEG, not per
 structure: "IV is never summed" is ratified, and the live condor runs 10.5% on its calls against
-21-22% on its puts, so a single σ for it would be a fiction. The vegas are the weight those IVs
-have to be combined with — points of value per point of IV — which is the only principled way four
-numbers become the one an adjustment multiplies by.
+21-22% on its puts, so a single σ for it would be a fiction. The vegas are each leg's own
+sensitivity, points of value per point of IV.
+
+**There is no single σ, and the attempt to build one gets the sign wrong.** The vegas were added
+believing they were the WEIGHTS for a vol average, which the reference would then be multiplied by.
+Measured on the live condor over 2026-10-12 to 10-14 the two methods disagreed in SIGN: per leg and
+signed, vol cost 0.30; through one |vega|-weighted σ, vol saved 0.29. 0.59 points apart, 9% of the
+credit, and larger than the gap being explained. The cause is that the weighted σ fell — the puts
+carry weight and their IV dropped — while the structure is short the highest-vega leg, the 8200
+call, whose IV rose. An average cancels exactly what matters. So the adjustment is a signed sum over
+legs, `Σ sign × vega × Δσ`, with no σ for the structure anywhere in it. The migration comment on
+0003 still states the superseded reason; this is the record.
+
+**It is additive, not multiplicative, and that is a fact about spreads.** Each leg of the condor
+carries 3.3 to 4.3 points of vega and they net to -1.25 — 92% cancels. Multiplying a 6.86 credit by
+a vol ratio treats the structure as though its whole value answered to vol the way one option's
+extrinsic does; through net vega the same move is roughly three times larger. The per-leg signed sum
+is the first-order truth for both a spread and a single contract, so there is one formula.
 
 **A sample's vol can never be reconstructed after its day.** IV and vega are both only knowable at
 the instant they were observed, so a row written without them is permanently unweightable, and that
 is why both columns landed before the adjustment rather than with it. The cost is small (~135 bytes
 a map, taking a row from ~65 to ~335; ~250KB a year for three Positions) and the alternative is not
 cheaper later, it is impossible later.
+
+**The gap is split, and the line is not moved.** `on_pace` keeps no IV input, because the samples
+exist so the exponent can be fitted against a fixed reference — a line that moved with vol would
+leave nothing to fit, and the one falsifiable claim here would stop being checkable. Instead the gap
+is reported as a vol part and a remainder. The remainder is deliberately NOT attributed: spot, skew
+beyond first order and the shape being approximate at 0.12 delta all live in it, and on the first
+days measured it was the larger half. Words rather than signs on screen — "vol cost you 0.30 · the
+rest saved you 0.97" — because a vol part is positive when it HURTS, the opposite of every other
+figure on the row, and the gap beside it is already worded for that reason.
+
+**The chain must be whole or it says nothing.** A sample from the day it was Opened, no market day
+missing in between, both maps present every day. A step of more than 4 days in DTE is a hole
+(Friday to Tuesday across a holiday Monday is the widest honest step), and bridging one would charge
+a single day with a move that happened over several. Vega is taken going INTO each day's move, the
+sensitivity actually held when vol moved; start, end and midpoint spanned 0.034 points over two days
+on the live condor, so the choice is small and has a meaning rather than being a numerical
+refinement.
 
 **The adjustment cannot be computed for the Position that motivated it.** It is a ratio — today's
 vol against the vol at Opened — and recording began 2026-10-12, six days after the 1120 condor was

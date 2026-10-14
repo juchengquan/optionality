@@ -5,6 +5,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
+import { buildSpxCode } from "../domain/contract.ts";
 import { type Harness, body, harness, json, pricedFetcher } from "../testing.ts";
 
 let h: Harness;
@@ -50,6 +51,68 @@ const makeMonitor = (over: Record<string, unknown>) =>
 
 const makePosition = (name: string, strikeDate: string, legs: unknown[]) =>
   post({ name, strike_date: strikeDate, legs }).then(created201);
+
+describe("what vol did to a holding, over its own samples", () => {
+  /** The route reads history, which no other route does: every figure elsewhere comes from one
+   *  live batch. It is a separate request from `/quotes` on purpose — the dashboard polls that
+   *  every 15 seconds per open tab, and this changes once a market day (ADR 0011). */
+  const sample = (
+    id: string, on: string, dte: number,
+    iv: Record<string, number> | null, vega: Record<string, number> | null,
+  ) => {
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
+       values (?, ?, ?, 3.0, ?, ?)`,
+    ).run(id, on, dte, iv === null ? null : JSON.stringify(iv), vega === null ? null : JSON.stringify(vega));
+  };
+  const legCodes = () => CONDOR_LEGS.map((l) => buildSpxCode(EXPIRY, l.option_type as "CALL" | "PUT", l.strike));
+  const flat = (v: number) => Object.fromEntries(legCodes().map((c) => [c, v]));
+
+  it("measures the vol move from the day it was opened", async () => {
+    start();
+    const id = await created201(await post(condor({ opened_at: "2026-10-06" })));
+    const [sc] = legCodes();
+    sample(id, "2026-10-06", 45, flat(10), flat(4));
+    sample(id, "2026-10-07", 44, { ...flat(10), [sc!]: 11 }, flat(4));
+
+    const resp = await h.call(`/positions/${id}/vol`);
+    expect(resp.status).toBe(200);
+    // the 8050 call is SOLD, so a point on its vol costs its vega to buy back
+    expect(await body(resp)).toEqual({ vol: 4, from: "2026-10-06", to: "2026-10-07", days: 1 });
+  });
+
+  it("says so plainly when there is no baseline, rather than guessing one", async () => {
+    // the live condor's case, and the shape every Position declared after the fact is in
+    start();
+    const id = await created201(await post(condor({ opened_at: "2026-10-06" })));
+    sample(id, "2026-10-12", 39, flat(10), flat(4));
+    sample(id, "2026-10-13", 38, flat(11), flat(4));
+
+    const resp = await h.call(`/positions/${id}/vol`);
+    expect(resp.status).toBe(200);
+    expect(await body(resp)).toEqual({ vol: null, from: null, to: null, days: null });
+  });
+
+  it("is 404 for a Position that does not exist", async () => {
+    start();
+    expect((await h.call("/positions/nope/vol")).status).toBe(404);
+  });
+
+  it("survives a sample whose stored JSON will not parse", async () => {
+    // the maps are written by the sweeper and read here; a corrupt one should cost the figure,
+    // never the request. Nothing else on the dashboard would load if this threw.
+    start();
+    const id = await created201(await post(condor({ opened_at: "2026-10-06" })));
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
+       values (?, '2026-10-06', 45, 3.0, '{not json', null)`,
+    ).run(id);
+
+    const resp = await h.call(`/positions/${id}/vol`);
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).vol).toBeNull();
+  });
+});
 
 describe("the round trip", () => {
   it("creates, lists and deletes", async () => {
