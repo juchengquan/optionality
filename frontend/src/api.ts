@@ -244,6 +244,18 @@ export async function recordHolding(
   row: Entry, rule: Record<string, unknown> | undefined, values: HoldingValues,
 ): Promise<void> {
   const whole = row.scope === "all" ? row.positions : [];
+  // An empty `whole` means this rule covers no WHOLE holding — it does not mean nothing holds
+  // these contracts. A leg rule watches part of someone else's structure, and its entry would be
+  // a fraction of that holding's credit, so there is nothing here to record. Reading the two as
+  // the same thing posted a Position named after the rule and collided with the one already
+  // there: `409 position '1120_BS_7100' already exists`. The worse outcome it also prevents is a
+  // second Position claiming contracts the first holds, which makes BOTH un-adoptable.
+  if (whole.length === 0 && row.positions.length > 0) {
+    throw new Error(
+      `that entry belongs to the holding ${row.positions.map((p) => p.name).join(", ")},`
+      + " not to a rule covering part of it",
+    );
+  }
   if (whole.length === 1) {
     const body: Record<string, unknown> = { entry: values.entry };
     // omitted rather than nulled: PositionPatch takes no null, and "leave it alone" is the right

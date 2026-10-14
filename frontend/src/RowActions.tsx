@@ -120,6 +120,20 @@ export function HoldingForm({ entry, onHolding }: {
   // EntryCell's box, down to its placeholder.
   if (whole.length > 1) return null;
 
+  // A rule covering PART of a holding has no entry of its own — that figure is a fraction of
+  // someone else's credit. Offering the form here posted a Position named after the rule and hit
+  // the one already there, so this says where the entry actually lives rather than leaving a
+  // blank space that invites the attempt again.
+  if (whole.length === 0 && entry.positions.length > 0) {
+    return (
+      <p className="meta">
+        {"part of "}
+        {entry.positions.map((p) => p.name).join(", ")}
+        {" — its entry and opened date are set on that holding's own row"}
+      </p>
+    );
+  }
+
   return (
     <form
       className="flex flex-wrap items-end gap-2"
