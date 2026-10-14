@@ -346,6 +346,8 @@ const EntryOut = z.object({
   /** the exit schedule, null where there is no single declared holding to schedule (ADR 0011) */
   schedule: z.object({
     dte_at_open: z.number(),
+    /** the holding this schedule is FOR, so a client never has to infer it from `positions` */
+    position_id: z.string(),
     on_pace: z.number().nullable(),
     pace_gap: z.number().nullable(),
     target: z.number().nullable(),

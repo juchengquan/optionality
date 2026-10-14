@@ -25,18 +25,21 @@ const scheduled = {
   legs: [{ sign: -1, option_type: "CALL", strike: 8200 }],
   combo_value: -6.45, combo_greeks: {},
   schedule: {
-    dte_at_open: 45, on_pace: 6.39, pace_gap: 0.06,
+    dte_at_open: 45, on_pace: 6.39, pace_gap: 0.06, position_id: "p1",
     target: 3.43, stop: 13.72, target_dte: 11, manage_by_dte: 21,
   },
 };
 const unscheduled = { ...scheduled, id: "c2", code: "1030_bs_8100", schedule: null, entry: 3.37 };
 
-function mockApi(rows: unknown[]) {
+const NO_VOL = { vol: null, from: null, to: null, days: null };
+
+function mockApi(rows: unknown[], vol: unknown = NO_VOL) {
   vi.stubGlobal("fetch", vi.fn((url: string) =>
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        url.endsWith("/quotes") ? rows : url.endsWith("/monitors") ? [] : health),
+        url.endsWith("/vol") ? vol
+          : url.endsWith("/quotes") ? rows : url.endsWith("/monitors") ? [] : health),
     } as Response)));
 }
 
@@ -263,5 +266,115 @@ describe("where the on-pace figure comes from", () => {
     render(<App />);
     const sheet = await openRow("1120_IC_7100_8200");
     expect(sheet.textContent).toContain("-5.00 × √(39 ÷ 45)");
+  });
+});
+
+describe("how much of the gap was vol", () => {
+  /** The √T line assumes IV held still, and it never does. This splits the gap into the part vol
+   *  accounts for and a remainder that is deliberately NOT attributed — spot lives in there, and
+   *  spot is what actually kills a condor (ADR 0011).
+   *
+   *  Words rather than signs, for the reason the gap itself is worded: a vol part is positive when
+   *  it HURTS, which is the opposite of every other figure on the row.
+   */
+  const ahead = {
+    ...scheduled,
+    schedule: { ...scheduled.schedule, pace_gap: -0.67 },
+    combo_greeks: { option_vega: -1.26 },
+  };
+
+  it("splits the gap into vol and the rest, in words", async () => {
+    // gap -0.67 is 0.67 AHEAD; vol put you 0.30 behind, so everything else gave you 0.97
+    mockApi([ahead], { vol: 0.296, from: "2026-10-06", to: "2026-10-14", days: 6 });
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    await waitFor(() => expect(within(sheet).getByText(/vol cost you/)).toBeTruthy());
+    const line = within(sheet).getByText(/vol cost you/).textContent ?? "";
+    expect(line).toContain("vol cost you 0.30");
+    expect(line).toContain("the rest saved you 0.97");
+  });
+
+  it("says vol SAVED you when it moved your way", async () => {
+    mockApi([ahead], { vol: -0.4, from: "2026-10-06", to: "2026-10-14", days: 6 });
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    await waitFor(() => expect(within(sheet).getByText(/vol saved you/)).toBeTruthy());
+    const line = within(sheet).getByText(/vol saved you/).textContent ?? "";
+    expect(line).toContain("vol saved you 0.40");
+    expect(line).toContain("the rest saved you 0.27");
+  });
+
+  it("the two parts add back up to the gap the sheet shows", async () => {
+    // the decomposition is only honest if it closes: whatever is not vol is in the remainder,
+    // including the difference between this fetch's instant and the row's.
+    mockApi([ahead], { vol: 0.296, from: "2026-10-06", to: "2026-10-14", days: 6 });
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    await waitFor(() => expect(within(sheet).getByText(/vol cost you/)).toBeTruthy());
+    const line = within(sheet).getByText(/vol cost you/).textContent ?? "";
+    const [volPart, restPart] = [...line.matchAll(/(cost|saved) you (\d+\.\d+)/g)]
+      .map((m) => (m[1] === "cost" ? 1 : -1) * Number(m[2]));
+    expect(volPart! + restPart!).toBeCloseTo(-0.67, 2);
+  });
+
+  it("says how many days back the measurement reaches", async () => {
+    mockApi([ahead], { vol: 0.296, from: "2026-10-06", to: "2026-10-14", days: 6 });
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    await waitFor(() => expect(within(sheet).getByText(/6 market days/)).toBeTruthy());
+  });
+
+  it("falls back to what vol WOULD explain when there is no baseline", async () => {
+    // the live condor: recording began six days after it was opened, so there is nothing to
+    // measure against and the hypothetical is all there is to say.
+    mockApi([ahead], NO_VOL);
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    await waitFor(() => expect(within(sheet).getByText(/would cover this gap/)).toBeTruthy());
+    expect(within(sheet).queryByText(/vol cost you/)).toBeNull();
+  });
+
+  it("never shows the measurement and the hypothetical together", async () => {
+    mockApi([ahead], { vol: 0.296, from: "2026-10-06", to: "2026-10-14", days: 6 });
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    await waitFor(() => expect(within(sheet).getByText(/vol cost you/)).toBeTruthy());
+    expect(within(sheet).queryByText(/would cover this gap/)).toBeNull();
+  });
+
+  it("shows the hypothetical on the day it was opened, with no day yet measured", async () => {
+    // days: 0 is a true zero and not a measurement — the baseline row on its own says nothing
+    // about what vol has done, so there is nothing to decompose.
+    mockApi([ahead], { vol: 0, from: "2026-10-14", to: "2026-10-14", days: 0 });
+    render(<App />);
+    const sheet = await openRow("1120_IC_7100_8200");
+    await waitFor(() => expect(within(sheet).getByText(/would cover this gap/)).toBeTruthy());
+    expect(within(sheet).queryByText(/vol cost you/)).toBeNull();
+  });
+
+  it("asks about the holding the SCHEDULE names, not whatever is first in positions", async () => {
+    const twoNamed = {
+      ...ahead,
+      positions: [{ id: "other", name: "x" }, { id: "p1", name: "1120_IC_7100_8200" }],
+    };
+    mockApi([twoNamed], { vol: 0.296, from: "2026-10-06", to: "2026-10-14", days: 6 });
+    render(<App />);
+    await openRow("1120_IC_7100_8200");
+    await waitFor(() => {
+      const urls = (globalThis.fetch as unknown as { mock: { calls: string[][] } }).mock.calls
+        .map((c) => c[0]!);
+      expect(urls.some((u) => u.includes("/positions/p1/vol"))).toBe(true);
+      expect(urls.some((u) => u.includes("/positions/other/vol"))).toBe(false);
+    });
+  });
+
+  it("asks for nothing at all on a row with no schedule", async () => {
+    mockApi([unscheduled]);
+    render(<App />);
+    await openRow("1030_bs_8100");
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
+    const urls = (globalThis.fetch as unknown as { mock: { calls: string[][] } }).mock.calls
+      .map((c) => c[0]!);
+    expect(urls.some((u) => u.endsWith("/vol"))).toBe(false);
   });
 });

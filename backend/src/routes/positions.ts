@@ -12,7 +12,7 @@ import { POSITION_GREEK_FIELDS, contractSize, costToClose, positionGreek, positi
 import type { Deps } from "../deps.ts";
 import {
   clearPositionLinks, clearPositionSamples, deletePositionRow, findPosition, findPositionByName, insertPosition,
-  listPositions, updatePositionFields,
+  listPositionSamples, listPositions, updatePositionFields,
 } from "../db/queries.ts";
 import { atomic } from "../db/open.ts";
 import type { PositionRow } from "../db/rows.ts";
@@ -20,6 +20,7 @@ import { toSqliteJson } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
 import { dteAtOpen, exitLevels } from "../domain/exit.ts";
+import { volAttribution, type VolSample } from "../domain/vol.ts";
 import { daysToExpiry } from "../domain/expiry.ts";
 import type { Settings } from "../env.ts";
 import { toPosition } from "../hydrate.ts";
@@ -69,6 +70,15 @@ const PositionValues = PositionOut.extend({
   schedule: ScheduleOut,
 });
 
+/** What of a pace gap vol accounts for, measured over this holding's own samples — every field
+ *  null together where the chain is not whole enough to say (ADR 0011). */
+const VolOut = z.object({
+  vol: z.number().nullable(),
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+  days: z.number().nullable(),
+});
+
 /** The schedule for one stored Position, or null if its Opened was never declared.
  *
  *  Assembled here rather than in the domain because it is the one place that has the row, the
@@ -113,6 +123,20 @@ export function positionRoutes(deps: Deps) {
     opened_at: row.opened_at,
   });
 
+  /** A stored JSON map, or null — including when it will not parse. Written by the sweeper and
+   *  read here, so the two are the only places that know the encoding. */
+  const parseMap = (text: string | null): Record<string, number> | null => {
+    if (text === null) return null;
+    try {
+      const parsed: unknown = JSON.parse(text);
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, number>)
+        : null;
+    } catch {
+      return null;
+    }
+  };
+
   return new Hono()
     .get("/", (c) => c.json(z.array(PositionOut).parse(listPositions(db).map(out)), 200))
 
@@ -152,6 +176,31 @@ export function positionRoutes(deps: Deps) {
         })),
         200,
       );
+    })
+
+    /** What of this holding's pace gap vol accounts for (ADR 0011).
+     *
+     *  The ONLY route that reads history — every other figure in this service comes from one live
+     *  batch. Separate from `/quotes` on purpose: the dashboard polls that every 15 seconds per
+     *  open tab and this changes once a market day, so the detail sheet asks for it when opened.
+     *
+     *  The remainder is NOT returned, because it is not ours to compute: a caller subtracts this
+     *  from the gap it is showing, which keeps the gap and the vol part from being measured
+     *  against two different instants (ADR 0010).
+     */
+    .get("/:id/vol", (c) => {
+      const id = c.req.param("id");
+      const row = findPosition(db, id);
+      if (!row) throw notFound("position");
+      const samples: VolSample[] = listPositionSamples(db, id).map((s) => ({
+        observed_on: s.observed_on,
+        dte: s.dte,
+        // a corrupt map costs the figure, never the request: the whole sheet would fail to load
+        legs_iv: parseMap(s.legs_iv),
+        legs_vega: parseMap(s.legs_vega),
+      }));
+      const a = volAttribution(samples, toPosition(row));
+      return c.json(VolOut.parse(a ?? { vol: null, from: null, to: null, days: null }), 200);
     })
 
     .post("/", valid("json", PositionIn), async (c) => {

@@ -42,8 +42,13 @@ export interface WatchlistEntry {
   entry: number | null;
   pnl: number | null;
   fill: number | null;
-  /** the exit schedule, or null where there is no single holding to schedule (ADR 0011) */
-  schedule: (ExitLevels & { dte_at_open: number }) | null;
+  /** the exit schedule, or null where there is no single holding to schedule (ADR 0011).
+   *
+   *  `position_id` names the holding it is FOR. `positions` happens to hold exactly that one
+   *  wherever a schedule exists — a schedule needs `scope: "all"` and one Position — but a client
+   *  that read `positions[0]` would be relying on that coincidence, and the next change to either
+   *  condition would move the figure onto the wrong holding in silence. */
+  schedule: (ExitLevels & { dte_at_open: number; position_id: string }) | null;
 }
 
 /** What buildEntries needs, and deliberately no more: the engine's `triggered` and `last_value`
@@ -174,7 +179,7 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     if (held?.opened_at) {
       const openedDte = dteAtOpen(held.strike_date, held.opened_at);
       const levels = exitLevels(held.entry, openedDte, entry.dte, policy, entry.cost_to_close);
-      if (levels !== null) entry.schedule = { dte_at_open: openedDte, ...levels };
+      if (levels !== null) entry.schedule = { dte_at_open: openedDte, position_id: held.id, ...levels };
     }
     return entry;
   });

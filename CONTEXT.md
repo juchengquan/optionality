@@ -58,6 +58,24 @@ What a Position's Cost to close would be at a given DTE if nothing but time had 
 REFERENCE, never a rule: it says whether a trade is working, and no alarm is ever raised from it.
 _Avoid_: expected value, fair value, theoretical price, target
 
+**Pace gap**:
+How far a Position's Cost to close sits from its On-pace figure. BEHIND means costing more to buy
+back than time alone accounts for. Said in words wherever it is shown, because "behind" is bad
+while a positive P&L is good and a bare sign beside one invites reading the other.
+_Avoid_: pace error, drift, slippage, variance
+
+**Vol part**:
+How much of a Pace gap the movement in the legs' own implied volatilities accounts for, measured
+day by day from the day it was Opened. Each leg counts under its own IV and its own sensitivity;
+there is no volatility figure for a structure, and an average of its legs' can point the wrong way.
+_Avoid_: vol adjustment (it adjusts nothing — On-pace is never moved by it), IV of the position
+
+**The rest**:
+A Pace gap less its Vol part. Named and left unattributed on purpose: spot, skew and the decay
+shape's own approximation are all in it, and it is usually the larger half. Calling it noise would
+claim knowledge of it.
+_Avoid_: residual, unexplained, error, noise
+
 **Target**:
 The Cost to close at which you take the profit, as a fraction of Entry. Flat in DTE — time does
 not change what you are willing to accept, only whether you have got it yet.
