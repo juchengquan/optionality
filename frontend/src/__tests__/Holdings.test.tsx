@@ -198,3 +198,75 @@ describe("recording entry and Opened where the holding actually lives", () => {
       expect(calls.filter((u) => u.includes("/positions/values")).length).toBeGreaterThan(before));
   });
 });
+
+describe("the row #113 pointed at", () => {
+  /** Only testable once both changes exist, which is why it lands with the merge rather than in
+   *  either branch.
+   *
+   *  #113 stopped a leg rule from creating a duplicate Position and told the owner instead that
+   *  the entry "is set on that holding's own row". For a holding no rule watched there was no
+   *  such row — the advice named something that did not exist. This asserts the pair: the sheet
+   *  sends you somewhere, and somewhere is here, with the controls it promised.
+   */
+  const legRule = {
+    id: "mBS", code: "1120_BS_7100", field: "mid_price", threshold: 7.0,
+    direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
+    dte: 37, fill: null, scope: "leg",
+    positions: [{ id: "pBS", name: "1120_BS_7100" }],
+    cost_to_close: 2.35, entry: null, pnl: null, snapshot: null,
+    legs: [
+      { sign: -1, option_type: "PUT", strike: 7100 },
+      { sign: 1, option_type: "PUT", strike: 7050 },
+    ],
+    combo_value: -2.35, combo_greeks: {}, schedule: null,
+  };
+
+  function mockBoth(holdings: unknown[], rows: unknown[]) {
+    calls = [];
+    posted = [];
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        posted.push({ url, method, body: JSON.parse(init!.body as string) });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
+      }
+      calls.push(url);
+      const body = url.includes("/positions/values") ? holdings
+        : url.endsWith("/vol") ? { vol: null, from: null, to: null, days: null }
+        : url.endsWith("/quotes") ? rows : url.endsWith("/monitors") ? [] : health;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+    }));
+  }
+
+  it("names a holding the list can actually show, with the controls it promised", async () => {
+    mockBoth([{ ...spread, entry: null, opened_at: null, schedule: null }], [legRule]);
+    render(<App />);
+
+    // the sheet declines, and says where to go
+    await waitFor(() => expect(screen.getByText("1120_BS_7100")).toBeTruthy());
+    await userEvent.click(screen.getByText("1120_BS_7100"));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText(/its entry and opened date are set on that holding's own row/))
+      .toBeTruthy();
+    const named = within(sheet).getByText(/part of/).textContent ?? "";
+    expect(named).toContain("1120_BS_7100");
+
+    // ...and that row exists, with both controls on it
+    await userEvent.keyboard("{Escape}");
+    const panel = await holdingsOf();
+    const row = within(panel).getByTestId("holding-pBS");
+    expect(within(row).getByLabelText("entry", { exact: false })).toBeTruthy();
+    expect(within(row).getByLabelText("opened", { exact: false })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: /set/i })).toBeTruthy();
+  });
+
+  it("records nothing from the sheet, so the 409 cannot come back", async () => {
+    mockBoth([spread], [legRule]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1120_BS_7100")).toBeTruthy());
+    await userEvent.click(screen.getByText("1120_BS_7100"));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).queryByRole("button", { name: /record/i })).toBeNull();
+    expect(posted).toHaveLength(0);
+  });
+});
