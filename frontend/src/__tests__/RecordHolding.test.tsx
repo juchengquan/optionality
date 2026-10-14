@@ -265,3 +265,58 @@ describe("finding the rule the holding belongs to", () => {
     expect(posted).toHaveLength(0);
   });
 });
+
+describe("a rule that watches PART of someone else's holding", () => {
+  /** The live bug. `1120_BS_7100` names two legs of the 1120 condor, so its row carries
+   *  scope "leg" and `positions: [the condor]`. recordHolding derived `whole` from
+   *  `scope === "all"`, got an empty list, read that as "nothing is held" and posted a new
+   *  Position named after the rule — which already existed:
+   *
+   *      409  position '1120_BS_7100' already exists
+   *
+   *  An empty `whole` means "this rule covers no whole holding", NOT "nothing holds these
+   *  contracts". A leg rule has no entry of its own: "a leg rule watches part of a structure and
+   *  its P&L would be a fraction of someone else's credit" (watchlist.ts), so there is nothing
+   *  here to record and the holding's own row is where its entry and Opened belong.
+   */
+  const legRule = {
+    ...bare, id: "m4", code: "1120_BS_7100", scope: "leg",
+    positions: [{ id: "pIC", name: "1120_IC_7100_8200" }],
+  };
+
+  it("offers no holding form, because the entry is not this rule's to state", async () => {
+    mockApi([legRule], []);
+    render(<App />);
+    const sheet = await openRow("1120_BS_7100");
+    expect(within(sheet).queryByRole("button", { name: /record/i })).toBeNull();
+    expect(within(sheet).queryByLabelText("opened", { exact: false })).toBeNull();
+  });
+
+  it("names the holding whose row to use instead, rather than leaving a blank", async () => {
+    mockApi([legRule], []);
+    render(<App />);
+    const sheet = await openRow("1120_BS_7100");
+    expect(within(sheet).getByText(/1120_IC_7100_8200/)).toBeTruthy();
+  });
+
+  it("creates nothing even if asked directly", async () => {
+    // the form is gone, so this is the guard behind it: a create here collides on the name and
+    // a 409 is the best case — the worse one is a second Position claiming contracts the first
+    // already holds, which is what makes a holding un-adoptable.
+    mockApi([legRule], []);
+    render(<App />);
+    await openRow("1120_BS_7100");
+    const { recordHolding } = await import("../api");
+    await expect(recordHolding(legRule as never, undefined, { entry: 2.43 }))
+      .rejects.toThrow(/belongs to the holding/i);
+    expect(posted).toHaveLength(0);
+  });
+
+  it("still offers a create where nothing holds the contracts at all", async () => {
+    // the case #112 was for, unchanged: no Position anywhere covers these
+    mockApi([bare]);
+    render(<App />);
+    const sheet = await openRow("1130_IC_8200_7150");
+    expect(within(sheet).getByRole("button", { name: /record/i })).toBeTruthy();
+  });
+});
