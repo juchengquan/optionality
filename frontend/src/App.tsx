@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Settings2 } from "lucide-react";
 
 import "./app.css";
 import {
-  createWatch, deleteMonitor, fetchHealth, fetchMonitors, fetchQuotes,
+  createWatch, deleteMonitor, fetchHealth, fetchMonitors, fetchQuotes, recordHolding,
   patchMonitor, patchPosition, setTotalEntry,
   type Entry, type Health, type Monitor,
 } from "./api";
@@ -44,6 +44,8 @@ function readRefresh(fallback: number): number {
 export function App() {
   const [quotes, setQuotes] = useState<Entry[]>([]);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
+  // the same rows, for handlers that must not be rebuilt on every poll
+  const rules = useRef<Monitor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
@@ -69,6 +71,7 @@ export function App() {
       ]);
       setQuotes(q);
       setMonitors(m);
+      rules.current = m;
       setHealth(h);
       setError(null);
     } catch (e: unknown) {
@@ -131,6 +134,16 @@ export function App() {
       onRename: (id, name) => void act(() => patchMonitor(id, { name })),
       onEntry: (positionId, value) => void act(() => patchPosition(positionId, { entry: value })),
       onTotal: (monitorId, value) => void act(() => setTotalEntry(monitorId, value)),
+      // the rule is resolved HERE, from the /monitors state App already holds: a watchlist row
+      // carries no option_type or strike, so a lone contract's holding cannot be derived from
+      // the row alone, and no row component should have to hold both lists to find out
+      // the rule is resolved HERE, from the /monitors state App already holds: a watchlist row
+      // carries no option_type or strike, so a lone contract's holding cannot be derived from
+      // the row alone, and no row component should have to hold both lists to find out.
+      // Through a ref, so the handlers stay stable across polls — `act` reloads for us.
+      onHolding: (row, values) => void act(
+        () => recordHolding(row, rules.current.find((m) => m.id === row.id), values),
+      ),
     }),
     [act],
   );

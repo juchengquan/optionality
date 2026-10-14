@@ -141,6 +141,8 @@ describe("adding a single-leg monitor", () => {
       strike_date: "2026-11-20",
       entry: 5,
       legs: [{ side: "sold", option_type: "CALL", strike: 8100 }],
+      // stated rather than omitted: blank means "no schedule", which the service records as null
+      opened_at: null,
     });
   });
 
@@ -289,9 +291,44 @@ describe("adding a combo", () => {
         { side: "sold", option_type: "PUT", strike: 7100 },
         { side: "bought", option_type: "PUT", strike: 7050 },
       ],
+      // stated rather than omitted: blank means "no schedule", which the service records as null
+      opened_at: null,
     });
+    expect(posted[1]!.body.opened_at).toBeNull();
     // contracts is deliberately not sent — the service defaults it, and the form does not ask
     expect(posted[1]!.body).not.toHaveProperty("contracts");
+  });
+
+  /** Nothing in this app set Opened before — every schedule on screen got its date through the
+   *  API by hand. It decides the whole exit schedule, since on-pace, target DTE and manage-by all
+   *  read off the DTE at entry, and the day it is filled in is also the only day the vol
+   *  measurement can take a baseline (ADR 0011). */
+  it("sends the day it was put on, when the form states it", async () => {
+    const combo = await openForm("combo");
+    type(combo, "opened", "2026-10-14");
+    await fillCondor(combo, "7.4");
+
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1]!.body).toMatchObject({ entry: 7.4, opened_at: "2026-10-14" });
+    expect(() => PositionIn.parse(posted[1]!.body)).not.toThrow();
+  });
+
+  it("never sends that day to the RULE, which has no such field", async () => {
+    // the two bodies are split on purpose: a Monitor exists to warn, never to record what you
+    // own, and a stray field on it is a 422 at best
+    const combo = await openForm("combo");
+    type(combo, "opened", "2026-10-14");
+    await fillCondor(combo, "7.4");
+
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[0]!.url).toMatch(/\/monitors$/);
+    expect(() => MonitorCreateIn.parse(posted[0]!.body)).not.toThrow();
+    // The EXACT keys, not just "no opened_at". Zod strips unknown fields rather than refusing
+    // them, and MonitorCreateIn is a union so it has no .strict() — a plain parse happily passed
+    // a body carrying a stray `opened`, which a mutation sweep found. Anything new on the rule
+    // body has to be added here deliberately.
+    expect(Object.keys(posted[0]!.body).sort())
+      .toEqual(["compare", "direction", "field", "legs", "name", "strike_date", "threshold"]);
   });
 
   it("posts only the rule when the entry is left blank", async () => {
