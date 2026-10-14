@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 
-import type { Entry } from "./api";
+import type { Entry, HoldingValues } from "./api";
 import { IMMINENT_FILL, LEFT, signalColumns, type Column } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
 
@@ -64,6 +64,9 @@ export interface RowHandlers {
   onRename: (id: string, name: string) => void;
   onEntry: (positionId: string, value: number) => void;
   onTotal: (monitorId: string, value: number) => void;
+  /** Record what a holding cost and when it was put on — creating it where the rule has none.
+   *  App resolves the rule from its own /monitors state, so no component carries both lists. */
+  onHolding: (row: Entry, values: HoldingValues) => void;
 }
 
 export function WatchlistTable({

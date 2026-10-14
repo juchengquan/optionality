@@ -148,7 +148,10 @@ function holding(
 ): Record<string, unknown> {
   if (Array.isArray(monitor.legs)) {
     return {
-      name: monitor.name,
+      // the add-form's body spells it `name` and a /monitors row spells it `code`; everything
+      // else about a rule they agree on, and this is the only derivation of a holding in the
+      // client, so recording one afterwards cannot disagree with recording it at creation
+      name: monitor.name ?? monitor.code,
       strike_date: monitor.strike_date,
       entry,
       legs: holdingLegs(monitor.legs as ComboLeg[]),
@@ -180,12 +183,60 @@ function holding(
  *  wrongly is correctable from the row's own entry box; nothing here is a one-way door.
  */
 export async function createWatch(body: Record<string, unknown>): Promise<void> {
-  const { entry, side, ...monitor } =
-    body as { entry?: number | null; side?: string } & Record<string, unknown>;
+  const { entry, side, opened_at: openedAt, ...monitor } =
+    body as { entry?: number | null; side?: string; opened_at?: string | null }
+      & Record<string, unknown>;
   await sent(client.monitors.$post({ json: monitor as never }), "/monitors");
   if (entry === null || entry === undefined) return;
   await sent(
-    client.positions.$post({ json: holding(monitor, entry, side) as never }),
+    client.positions.$post({ json: holdingBody(monitor, { entry, side, opened_at: openedAt }) as never }),
     "/positions",
   );
+}
+
+export interface HoldingValues {
+  entry: number;
+  /** which way you are on a LONE option; a combo's sides come from its legs' signs */
+  side?: string;
+  /** the day it was PUT ON. Null means no exit schedule rather than a guessed one (ADR 0011). */
+  opened_at?: string | null;
+}
+
+/** The Position a rule would record, from the rule itself. Exported so that recording a holding
+ *  afterwards goes through the very same derivation as recording it at creation — the sides, the
+ *  name and the entry's sign are decided in exactly one place. */
+export function holdingBody(
+  rule: Record<string, unknown>, values: HoldingValues,
+): Record<string, unknown> {
+  return {
+    ...holding(rule, values.entry, values.side),
+    opened_at: values.opened_at ?? null,
+  };
+}
+
+/** Record what a rule's holding cost and when it was put on.
+ *
+ *  Creates the Position where the rule has none — the gap this closes: a combo added without an
+ *  entry has no Position at all, so the inline entry box, which finds its target in
+ *  `entry.positions`, had nothing to offer and the add-form was the only way in.
+ *
+ *  Patches where the holding exists, and falls back to the total-entry split where the rule spans
+ *  several — those have no single Opened, which is the same reason they get no schedule.
+ */
+export async function recordHolding(
+  row: Entry, rule: Record<string, unknown> | undefined, values: HoldingValues,
+): Promise<void> {
+  const whole = row.scope === "all" ? row.positions : [];
+  if (whole.length === 1) {
+    const body: Record<string, unknown> = { entry: values.entry };
+    // omitted rather than nulled: PositionPatch takes no null, and "leave it alone" is the right
+    // meaning for a field the form was not filled in for
+    if (values.opened_at) body.opened_at = values.opened_at;
+    await sent(client.positions[":id"].$patch({ param: { id: whole[0]!.id }, json: body as never }),
+      `/positions/${whole[0]!.id}`);
+    return;
+  }
+  if (whole.length > 1) return setTotalEntry(row.id, values.entry);
+  if (!rule) throw new Error("the rule this would belong to has not loaded yet");
+  await sent(client.positions.$post({ json: holdingBody(rule, values) as never }), "/positions");
 }

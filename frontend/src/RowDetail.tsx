@@ -8,7 +8,7 @@ import { fetchVol, type Entry, type Vol } from "./api";
 import { useDismissOnBack } from "./useDismissOnBack";
 import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
 import { alarmText, DASH, fmt, legSummary, shortContract } from "./format";
-import { EntryCell, RowActions } from "./RowActions";
+import { EntryCell, HoldingForm, RowActions } from "./RowActions";
 import { cellValue } from "./WatchlistTable";
 import type { RowHandlers } from "./WatchlistTable";
 
@@ -216,6 +216,7 @@ export function RowDetail({
             entryCell={
               <EntryCell entry={entry} onEntry={handlers.onEntry} onTotal={handlers.onTotal} />
             }
+            holdingForm={<HoldingForm entry={entry} onHolding={handlers.onHolding} />}
           />
         </div>
       </SheetContent>

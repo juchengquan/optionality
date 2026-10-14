@@ -36,6 +36,7 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
   // moved — "paid 5.00" is 5.00 here and −5.00 in the service.
   const [side, setSide] = useState("sold");
   const [entry, setEntry] = useState<number | null>(null);
+  const [openedAt, setOpenedAt] = useState("");
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
@@ -45,7 +46,7 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
         onSubmit={(e) => {
           e.preventDefault();
           if (strike === null || threshold === null) return;
-          onCreate({ ...form, strike, threshold, side, entry });
+          onCreate({ ...form, strike, threshold, side, entry, opened_at: openedAt || null });
         }}
       >
         <FieldGroup>
@@ -76,6 +77,19 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
             </NativeSelect>
             <NumberField id="m-entry" value={entry} onValueChange={setEntry}
                          placeholder={side === "sold" ? "received" : "paid"} />
+          </Field>
+          {/* The day the trade was PUT ON, which decides the whole exit schedule: on-pace,
+              target DTE and manage-by all read off the DTE at entry. Nothing in this app set it
+              before — every schedule on screen got its date through the API by hand.
+
+              Blank by default and never today: a date nobody chose would be wrong for exactly
+              the trades most likely to be recorded late, and it would be wrong INVISIBLY, under
+              figures as load-bearing as on-pace. Filling it in on the day also gives the vol
+              measurement its baseline, which is the only day that can (ADR 0011). */}
+          <Field>
+            <FieldLabel htmlFor="m-opened">opened</FieldLabel>
+            <Input id="m-opened" type="date" value={openedAt}
+                   onChange={(e) => setOpenedAt(e.target.value)} />
           </Field>
           <Field>
             <FieldLabel htmlFor="m-field">field</FieldLabel>
@@ -121,6 +135,7 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
   // null means "not held" rather than zero: a combo you only watch has no entry, and an entry
   // of 0 is a real credit of nothing. The service keeps the two apart, so the form must too.
   const [entry, setEntry] = useState<number | null>(null);
+  const [openedAt, setOpenedAt] = useState("");
   // two to start, up to six. The fixed six were an htmx artefact -- rendering a variable
   // number of rows server-side was awkward -- and that constraint left with htmx. A
   // vertical spread is two legs and an iron condor is four, so the old form drew two to
@@ -140,6 +155,7 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
           if (threshold === null) return;
           onCreate({
             name, strike_date: strikeDate, field, direction, compare, threshold, entry,
+            opened_at: openedAt || null,
             // blank rows are skipped, as on /ui
             legs: legs
               .filter((l) => l.strike !== null)
@@ -240,6 +256,22 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
             <FieldDescription>
               The credit taken in — negative if the structure cost you. Blank if you are only
               watching.
+            </FieldDescription>
+          </Field>
+          {/* The day the trade was PUT ON, which decides the whole exit schedule: on-pace,
+              target DTE and manage-by all read off the DTE at entry. Nothing in this app set it
+              before — every schedule on screen got its date through the API by hand.
+
+              Blank by default and never today: a date nobody chose would be wrong for exactly
+              the trades most likely to be recorded late, and it would be wrong INVISIBLY, under
+              figures as load-bearing as on-pace. Filling it in on the day also gives the vol
+              measurement its baseline, which is the only day that can (ADR 0011). */}
+          <Field>
+            <FieldLabel htmlFor="c-opened">opened</FieldLabel>
+            <Input id="c-opened" type="date" value={openedAt}
+                   onChange={(e) => setOpenedAt(e.target.value)} />
+            <FieldDescription>
+              The day it was put on. Needed for the exit schedule; blank leaves it out.
             </FieldDescription>
           </Field>
           <Field>
