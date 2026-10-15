@@ -98,6 +98,26 @@ anything.
 `data/optionality-ts.db` is left in place by the rollback, so nothing is lost by rolling back and
 trying again.
 
+**It will refuse once the two databases have diverged, which does not take long.** The sentence above
+is true of the first hours and stops being true after that: what has to be "retyped" grows into
+everything, and worse, the Python's frozen rows come BACK — holdings you have since closed reappear as
+open. Measured on 2026-10-15, thirteen days in: one holding lost, four closed ones restored, all seven
+alarm rules lost, every exit schedule and the whole vol history gone, the last of those unrebuildable
+because a leg's IV and vega are only knowable on the day they were observed. ADR 0011 put
+`positions.opened_at` and `position_samples` on the TypeScript side alone, so the Python has nowhere
+to keep them.
+
+`make rollback` therefore runs `backend/tools/rollback/guard.mjs` first and stops, printing exactly
+what would go. If you mean it anyway:
+
+```sh
+make rollback ROLLBACK_FORCE=--i-accept-the-loss
+```
+
+`cutover` passes that itself on its own failure path, and is the only thing that should: there the
+copy is seconds old, so the two agree and nothing is lost — and the alternative is a half-finished
+cutover with no way back.
+
 ## The window
 
 The Python stays installed, and its database stays current as of the cutover minute. Phase 10 — a month
