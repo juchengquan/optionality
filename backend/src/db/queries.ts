@@ -14,37 +14,8 @@ import type {
   ConfigRow, MonitorRow, PositionRow, PositionSampleRow, ReportRow, RunRow, ScheduleRow,
 } from "./rows.ts";
 
-export function listConfigs(db: DatabaseSync): ConfigRow[] {
-  return db.prepare("select * from configs order by name").all() as unknown as ConfigRow[];
-}
-
 export function findConfig(db: DatabaseSync, name: string): ConfigRow | undefined {
   return db.prepare("select * from configs where name = ?").get(name) as unknown as ConfigRow | undefined;
-}
-
-export function insertConfig(
-  db: DatabaseSync, row: Pick<ConfigRow, "name" | "task_type" | "body" | "created_at" | "updated_at">,
-): ConfigRow {
-  db.prepare(
-    "insert into configs (name, task_type, body, created_at, updated_at) values (?, ?, ?, ?, ?)",
-  ).run(row.name, row.task_type, row.body, row.created_at, row.updated_at);
-  return findConfig(db, row.name)!;
-}
-
-export function updateConfig(
-  db: DatabaseSync, name: string, taskType: string, body: string, updatedAt: string,
-): ConfigRow {
-  db.prepare("update configs set task_type = ?, body = ?, updated_at = ? where name = ?")
-    .run(taskType, body, updatedAt, name);
-  return findConfig(db, name)!;
-}
-
-export function deleteConfig(db: DatabaseSync, name: string): void {
-  db.prepare("delete from configs where name = ?").run(name);
-}
-
-export function schedulesUsingConfig(db: DatabaseSync, name: string): number {
-  return (db.prepare("select count(*) n from schedules where config_name = ?").get(name) as { n: number }).n;
 }
 
 export function listSchedules(db: DatabaseSync): ScheduleRow[] {
@@ -55,32 +26,6 @@ export function findSchedule(db: DatabaseSync, id: number): ScheduleRow | undefi
   return db.prepare("select * from schedules where id = ?").get(id) as unknown as ScheduleRow | undefined;
 }
 
-export function insertSchedule(
-  db: DatabaseSync, row: Omit<ScheduleRow, "id">,
-): ScheduleRow {
-  const info = db.prepare(
-    "insert into schedules (cron_expr, tz, task_type, config_name, enabled) values (?, ?, ?, ?, ?)",
-  ).run(row.cron_expr, row.tz, row.task_type, row.config_name, row.enabled);
-  return findSchedule(db, Number(info.lastInsertRowid))!;
-}
-
-export function updateSchedule(db: DatabaseSync, id: number, row: Omit<ScheduleRow, "id">): ScheduleRow {
-  db.prepare(
-    "update schedules set cron_expr = ?, tz = ?, task_type = ?, config_name = ?, enabled = ? where id = ?",
-  ).run(row.cron_expr, row.tz, row.task_type, row.config_name, row.enabled, id);
-  return findSchedule(db, id)!;
-}
-
-export function deleteSchedule(db: DatabaseSync, id: number): void {
-  db.prepare("delete from schedules where id = ?").run(id);
-}
-
-export interface RunFilter {
-  status?: string | undefined;
-  limit: number;
-}
-
-
 export function findRun(db: DatabaseSync, id: string): RunRow | undefined {
   return db.prepare("select * from runs where id = ?").get(id) as unknown as RunRow | undefined;
 }
@@ -89,7 +34,6 @@ export function findRun(db: DatabaseSync, id: string): RunRow | undefined {
 export function latestRun(db: DatabaseSync): RunRow | undefined {
   return db.prepare("select * from runs order by created_at desc limit 1").get() as unknown as RunRow | undefined;
 }
-
 
 /** Whether the database answers at all — /health reports rather than raising. */
 export function databaseResponds(db: DatabaseSync): boolean {

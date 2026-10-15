@@ -8,6 +8,7 @@ import { fetchVol, type Entry, type Vol } from "./api";
 import { useDismissOnBack } from "./useDismissOnBack";
 import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
 import { alarmText, DASH, fmt, legSummary, shortContract } from "./format";
+import { PaceLine } from "./PaceLine";
 import { EntryCell, HoldingForm, RowActions } from "./RowActions";
 import { cellValue } from "./WatchlistTable";
 import type { RowHandlers } from "./WatchlistTable";
@@ -124,18 +125,7 @@ export function RowDetail({
             what actually kills a condor. The Monitors watch that. */}
         {entry.schedule ? (
           <div className="px-4 pt-3 text-sm">
-            <p className="meta">
-              {`opened at ${entry.schedule.dte_at_open} DTE`}
-              {entry.schedule.pace_gap === null ? null : (
-                <>
-                  {" · "}
-                  <strong>
-                    {entry.schedule.pace_gap > 0 ? "behind" : "ahead"}
-                    {` by ${Math.abs(entry.schedule.pace_gap).toFixed(2)}`}
-                  </strong>
-                </>
-              )}
-            </p>
+            <PaceLine schedule={entry.schedule} />
             {measured === null ? null : (
               <>
                 {/* Words, not signs. A vol part is POSITIVE when it hurts, the opposite of every
