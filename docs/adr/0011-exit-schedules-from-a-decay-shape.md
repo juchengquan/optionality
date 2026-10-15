@@ -113,10 +113,18 @@ days measured it was the larger half. Words rather than signs on screen — "vol
 rest saved you 0.97" — because a vol part is positive when it HURTS, the opposite of every other
 figure on the row, and the gap beside it is already worded for that reason.
 
-**The chain must be whole or it says nothing.** A sample from the day it was Opened, no market day
-missing in between, both maps present every day. A step of more than 4 days in DTE is a hole
-(Friday to Tuesday across a holiday Monday is the widest honest step), and bridging one would charge
-a single day with a move that happened over several. Vega is taken going INTO each day's move, the
+**The chain must be whole or it says nothing.** A sample from the day it was Opened, every calendar
+day present in between, and a finite reading for every leg on every day. Consecutive samples must be
+exactly ONE day apart, which is exact rather than heuristic: the sampler keys a row to the New York
+calendar date on every sweep and has no market-day filter, so Saturdays and Sundays are in the chain
+like any other day and simply repeat Friday's close. A date absent therefore means the service was
+down for a whole New York day, which is a hole, and bridging one would charge a single day with a
+move that happened over several.
+
+The first version allowed a DTE step of up to 4, meaning to permit a weekend and a holiday Monday —
+and a code review showed it allowed Monday to Wednesday with Tuesday missing, which is the hole this
+paragraph promises to refuse. A DTE step cannot tell a holiday from an outage. A calendar-day step
+does not have to, and needs no holiday list to keep up to date. Vega is taken going INTO each day's move, the
 sensitivity actually held when vol moved; start, end and midpoint spanned 0.034 points over two days
 on the live condor, so the choice is small and has a meaning rather than being a numerical
 refinement.

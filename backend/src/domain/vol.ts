@@ -34,10 +34,13 @@ export interface VolAttribution {
   days: number;
 }
 
-/** The largest fall in DTE between two consecutive market days that is NOT a missing day: a
- *  Friday to a Tuesday across a holiday Monday. A bigger step means the chain has a hole, and
- *  bridging it would charge one day with a move that happened over several. */
-const MAX_STEP_DAYS = 4;
+/** A finite number, and nothing else that `typeof` would call one.
+ *
+ *  `undefined` was the only thing checked, so a reading stored as JSON `null` passed and then
+ *  contributed a zero weight and a zero move — "vol did nothing" where the truth was "cannot
+ *  say". That is reachable from the writer, not only from a hand-edited row: a quote field that
+ *  `Number()`s to NaN used to be stored, and `JSON.stringify(NaN)` is `null`. */
+const reading = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /** Vol's share of the gap, or null when it cannot be said.
  *
@@ -63,15 +66,23 @@ export function volAttribution(
   for (const s of samples) {
     if (s.legs_iv === null || s.legs_vega === null) return null;
     for (const code of codes) {
-      if (s.legs_iv[code] === undefined || s.legs_vega[code] === undefined) return null;
+      if (!reading(s.legs_iv[code]) || !reading(s.legs_vega[code])) return null;
     }
   }
 
   let vol = 0;
   for (let d = 1; d < samples.length; d++) {
     const prev = samples[d - 1]!, cur = samples[d]!;
-    const step = prev.dte - cur.dte;
-    if (step < 1 || step > MAX_STEP_DAYS) return null;
+    // EXACTLY one day. The sampler keys a row to the New York calendar date (`marketDate`) on
+    // every sweep, weekends included — there is no market-day filter anywhere — so consecutive
+    // rows are consecutive calendar days and any larger step is a hole in the record.
+    //
+    // This was `step > 4`, meant to allow a weekend and a holiday Monday. It allowed Mon -> Wed
+    // with Tuesday absent, which is the hole the docstring promises to refuse, and it priced the
+    // whole two-day move at Monday's vega while reporting `days: 1`. A code review found it.
+    // Needing no holiday calendar is the point: a DTE step cannot tell a holiday from an outage,
+    // and a calendar-day step does not have to.
+    if (prev.dte - cur.dte !== 1) return null;
     for (const [i, c] of codes.entries()) {
       // the vega held GOING INTO the move, which is the sensitivity you were actually carrying
       // when vol moved. Measured on the live condor, start/end/average spanned 0.034 points over
@@ -79,6 +90,10 @@ export function volAttribution(
       vol += signs[i]! * prev.legs_vega![c]! * (cur.legs_iv![c]! - prev.legs_iv![c]!);
     }
   }
+
+  // the backstop. Every reading is finite and every step is one day, so this cannot fire — but
+  // the route's own schema REJECTS NaN, which would answer 500 where the contract says null.
+  if (!Number.isFinite(vol)) return null;
 
   return {
     vol,

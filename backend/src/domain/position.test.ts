@@ -56,6 +56,18 @@ describe("reading an intensive field off every leg", () => {
     });
   });
 
+  it("gives nothing when a reading is present but does not parse as a number", () => {
+    // This stored `Number(value)` unchecked, so a field OpenD sends as something unparseable
+    // became NaN — and `toSqliteJson` writes NaN as `null`, which the reader downstream took for
+    // a zero and reported as "vol did nothing". A code review traced that chain; this is its
+    // first link. A mutation sweep then showed nothing drove this function with such a value.
+    const p = condor();
+    const by = quotes(p, [5.0, 2.0, 3.0, 1.5], { option_implied_volatility: 10 });
+    (by[positionLegCodes(p)[1]!] as Record<string, unknown>).option_implied_volatility = "n/a";
+
+    expect(legReadings(p, by, "option_implied_volatility")).toBeNull();
+  });
+
   it("gives nothing at all when one leg is missing the field", () => {
     // all-or-nothing, like costToClose: a map over three of four legs invites a vol figure
     // computed from three quarters of a structure, which is a figure about nothing.
