@@ -168,7 +168,7 @@ const holdingLegs = (legs: ComboLeg[]) =>
  *  the number typed there is only ever what moved.
  */
 function holding(
-  monitor: Record<string, unknown>, entry: number, side: string | undefined,
+  monitor: Record<string, unknown>, entry: number | null, side: string | undefined,
 ): Record<string, unknown> {
   if (Array.isArray(monitor.legs)) {
     return {
@@ -186,7 +186,8 @@ function holding(
   return {
     name: `${String(monitor.strike_date)}_${optionType === "CALL" ? "C" : "P"}${String(monitor.strike)}`,
     strike_date: monitor.strike_date,
-    entry: bought ? -entry : entry,
+    // a null has no sign to flip, and `-null` is -0 — which would record a debit of nothing
+    entry: entry === null ? null : (bought ? -entry : entry),
     legs: [{ side: bought ? "bought" : "sold", option_type: optionType, strike: monitor.strike }],
   };
 }
@@ -211,15 +212,23 @@ export async function createWatch(body: Record<string, unknown>): Promise<void> 
     body as { entry?: number | null; side?: string; opened_at?: string | null }
       & Record<string, unknown>;
   await sent(client.monitors.$post({ json: monitor as never }), "/monitors");
-  if (entry === null || entry === undefined) return;
+  // Either figure is reason enough to record the holding. This returned on a blank entry and took
+  // a declared Opened with it, silently — plausible, since you know when you put the trade on
+  // before you know the fill. PositionIn takes a nullable entry and exitLevels yields a schedule
+  // from opened_at alone, so a holding with a date and no credit is worth having.
+  if ((entry === null || entry === undefined) && !openedAt) return;
   await sent(
-    client.positions.$post({ json: holdingBody(monitor, { entry, side, opened_at: openedAt }) as never }),
+    client.positions.$post({
+      json: holdingBody(monitor, { entry: entry ?? null, side, opened_at: openedAt }) as never,
+    }),
     "/positions",
   );
 }
 
 export interface HoldingValues {
-  entry: number;
+  /** null where only the Opened date is known — the holding is still worth recording, and its
+   *  P&L reads unknown rather than inventing one (PositionIn's entry is nullish). */
+  entry: number | null;
   /** which way you are on a LONE option; a combo's sides come from its legs' signs */
   side?: string;
   /** the day it was PUT ON. Null means no exit schedule rather than a guessed one (ADR 0011). */
@@ -264,15 +273,21 @@ export async function recordHolding(
     );
   }
   if (whole.length === 1) {
-    const body: Record<string, unknown> = { entry: values.entry };
-    // omitted rather than nulled: PositionPatch takes no null, and "leave it alone" is the right
-    // meaning for a field the form was not filled in for
+    // each omitted rather than nulled: PositionPatch takes no null, and "leave it alone" is the
+    // right meaning for a field the form was not filled in for
+    const body: Record<string, unknown> = {};
+    if (values.entry !== null) body.entry = values.entry;
     if (values.opened_at) body.opened_at = values.opened_at;
+    if (Object.keys(body).length === 0) return;
     await sent(client.positions[":id"].$patch({ param: { id: whole[0]!.id }, json: body as never }),
       `/positions/${whole[0]!.id}`);
     return;
   }
-  if (whole.length > 1) return setTotalEntry(row.id, values.entry);
+  // a split needs a credit to split; there is nothing to apportion from a date alone
+  if (whole.length > 1) {
+    if (values.entry === null) return;
+    return setTotalEntry(row.id, values.entry);
+  }
   if (!rule) throw new Error("the rule this would belong to has not loaded yet");
   await sent(client.positions.$post({ json: holdingBody(rule, values) as never }), "/positions");
 }

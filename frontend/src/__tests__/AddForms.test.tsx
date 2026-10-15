@@ -124,6 +124,22 @@ describe("adding a single-leg monitor", () => {
     fireEvent.submit(within(monitor).getByRole("button", { name: "watch" }).closest("form")!);
   }
 
+  it("records a null entry, not a signed zero, on a bought leg with only a date", async () => {
+    // The single-leg branch signs the entry — a debit is stored negative — and `-null` is -0,
+    // which JSON.stringify writes as 0. That is materially worse than null: an entry of 0 means
+    // "I paid nothing" and gives a P&L computed from a credit of zero, where null means unknown
+    // and reads as a dash. A mutation sweep found nothing covering it.
+    const monitor = await openForm("monitor");
+    type(monitor, "opened", "2026-10-14");
+    await fillCall(monitor, "bought");
+
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1]!.url).toMatch(/\/positions$/);
+    expect(posted[1]!.body).toMatchObject({ entry: null, opened_at: "2026-10-14" });
+    expect(Object.is(posted[1]!.body.entry, -0), "a signed zero is not an absent entry").toBe(false);
+    expect(() => PositionIn.parse(posted[1]!.body)).not.toThrow();
+  });
+
   it("records the holding too, when an entry is given", async () => {
     const monitor = await openForm("monitor");
     await fillCall(monitor, "sold", "5.00");
@@ -329,6 +345,23 @@ describe("adding a combo", () => {
     // body has to be added here deliberately.
     expect(Object.keys(posted[0]!.body).sort())
       .toEqual(["compare", "direction", "field", "legs", "name", "strike_date", "threshold"]);
+  });
+
+  it("records the opened date even with no entry, rather than dropping it", async () => {
+    // createWatch returned before POSTing /positions when entry was blank, so a date typed into
+    // the new field went with it — silently. Plausible: you know when you put the trade on and
+    // want to check the fill before recording the credit. A code review found it.
+    //
+    // PositionIn takes a nullable entry and exitLevels yields a schedule from opened_at alone, so
+    // the holding is worth creating with the date and no credit.
+    const combo = await openForm("combo");
+    type(combo, "opened", "2026-10-14");
+    await fillCondor(combo);
+
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1]!.url).toMatch(/\/positions$/);
+    expect(posted[1]!.body).toMatchObject({ entry: null, opened_at: "2026-10-14" });
+    expect(() => PositionIn.parse(posted[1]!.body)).not.toThrow();
   });
 
   it("posts only the rule when the entry is left blank", async () => {
