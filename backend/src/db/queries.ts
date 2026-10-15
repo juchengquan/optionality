@@ -273,6 +273,22 @@ export function orphanMonitors(db: DatabaseSync): MonitorRow[] {
   ).all() as unknown as MonitorRow[];
 }
 
+/** Forget the scope of every monitor that no longer has a holding.
+ *
+ *  Scope says HOW a rule covers its holding — "all" the whole structure, "leg" part of one — so it
+ *  is meaningless without one. Deleting a holding cleared the links and left the scope behind, and
+ *  the live US.SPXW261120C8200000 read scope "leg" while holding nothing at all.
+ *
+ *  Only the link-less — which is what makes it safe beside adoptOrphanMonitors in either order,
+ *  since adoption always sets a scope explicitly on what it places and so leaves nothing here to
+ *  undo. Remove that guard and this wipes the scope of every monitor, holding or not. */
+export function clearScopeOfOrphans(db: DatabaseSync): void {
+  db.prepare(
+    `update monitors set scope = null
+     where scope is not null and id not in (select monitor_id from monitor_positions)`,
+  ).run();
+}
+
 export function setMonitorScope(db: DatabaseSync, id: string, scope: string | null): void {
   db.prepare("update monitors set scope = ? where id = ?").run(scope, id);
 }

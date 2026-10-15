@@ -176,6 +176,62 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
     expect(rows.find((r) => r.id === rid)?.entry, "the entry the rule could not see").toBe(1.2);
   });
 
+  it("clears the scope of a rule left holding nothing, so it stops claiming one", async () => {
+    // A rule's scope says HOW it covers its holding — "all" the whole thing, "leg" part of it.
+    // Deleting the holding cleared the link and left the scope behind, so the live
+    // US.SPXW261120C8200000 read scope "leg" while holding nothing at all. No figure derives
+    // from it (every one guards on positions being non-empty), so this is truthfulness rather
+    // than a wrong number — but a rule that says it watches part of something, beside an empty
+    // list of what, is a thing a reader has to explain away.
+    start();
+    const only = await created201(await holdingOf("only", CONDOR_LEGS, 3.0));
+    const rid = (await body(await h.call("/monitors", json({
+      field: "option_delta", threshold: 0.2, strike_date: EXPIRY,
+      option_type: "CALL", strike: 8050, direction: "above",
+    })))).id as string;
+    // one leg of the condor, so it covers part of it
+    expect(links(rid)).toEqual([[only], "leg"]);
+
+    expect((await h.call(`/positions/${only}`, { method: "DELETE" })).status).toBe(204);
+    expect(links(rid), "no holding, and no claim to one").toEqual([[], null]);
+  });
+
+  it("leaves the scope of a rule that still HAS a holding", async () => {
+    // only the link-less are cleared: a rule whose holding survives must keep saying how it
+    // covers it, or the next sweep reads a whole-position rule as a leg rule
+    start();
+    const keep = await created201(await holdingOf("keep", CONDOR_LEGS, 3.0));
+    const rid = (await body(await h.call("/monitors", json({
+      field: "option_delta", threshold: 0.2, strike_date: EXPIRY,
+      option_type: "CALL", strike: 8050, direction: "above",
+    })))).id as string;
+    const other = await created201(await holdingOf("other", [
+      { side: "sold", option_type: "PUT", strike: 6000 },
+      { side: "bought", option_type: "PUT", strike: 5950 },
+    ], 0.5));
+
+    expect((await h.call(`/positions/${other}`, { method: "DELETE" })).status).toBe(204);
+    expect(links(rid), "untouched").toEqual([[keep], "leg"]);
+  });
+
+  it("keeps the scope adoption worked out, rather than clearing it straight after", async () => {
+    // The clearing sits beside adoption in the same transaction, and this is what says the two do
+    // not fight. Order-independent, which the first version of the comment beside the code denied:
+    // clearing skips anything with a link and adoption always sets a scope on what it places, so
+    // each only touches rows the other leaves alone. A mutation sweep swapped them and nothing
+    // failed, which is how that was found.
+    start();
+    const wide = await created201(await holdingOf("wide", CONDOR_LEGS, 3.0));
+    const rid = await spreadRule();
+    const narrow = await created201(await holdingOf("narrow", [
+      { side: "sold", option_type: "PUT", strike: 7100 },
+      { side: "bought", option_type: "PUT", strike: 7075 },
+    ], 1.2));
+
+    await h.call(`/positions/${wide}`, { method: "DELETE" });
+    expect(links(rid), "adopted, and its new scope kept").toEqual([[narrow], "all"]);
+  });
+
   it("leaves a rule that already has a link alone", async () => {
     // only orphans are considered, so a rule that has worked for weeks cannot lose its holding
     // because of something that happened to another one
@@ -207,7 +263,8 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
       })),
     })))).id as string;
     await h.call(`/positions/${only}`, { method: "DELETE" });
-    expect(links(rid), "nothing holds these contracts now").toEqual([[], "all"]);
+    // and no scope either: it covered a holding that is gone
+    expect(links(rid), "nothing holds these contracts now").toEqual([[], null]);
   });
 });
 
@@ -521,9 +578,10 @@ describe("deleting a holding", () => {
 
     expect((await h.call(`/positions/${pid}`, { method: "DELETE" })).status).toBe(204);
     // the rule survives: nothing here deletes one as a side effect. It simply stops knowing what it
-    // was watching, and would be adopted again if the holding came back.
+    // was watching — links AND scope, since a scope says how it covers a holding it no longer has —
+    // and would be adopted again if the holding came back.
     expect(h.db.prepare("select id from monitors where id = ?").get(mid)).toBeTruthy();
-    expect(links(mid)).toEqual([[], "leg"]);
+    expect(links(mid), "no links, and no scope claiming one").toEqual([[], null]);
   });
 
   it("re-adopts the rule if the holding comes back", async () => {
@@ -594,9 +652,16 @@ describe("gaps the single-position tests cannot show", () => {
     expect(links(mid)).toEqual([[pid], "leg"]);
   });
 
-  it("leaves a stale scope alone on a monitor it cannot find a holding for", async () => {
-    // after the holding goes the monitor keeps the scope it had, with no links. Adoption that
-    // cleared it would be taking something away, which is the one thing it must never do.
+  it("ADOPTION never clears a scope — the delete does, and nothing else", async () => {
+    // This asserted the opposite until 2026-10-15, and the reason it gave was narrower than the
+    // behaviour it pinned: "adoption that cleared it would be taking something away, which is the
+    // one thing it must never do". That constraint is on ADOPTION, and it still holds — the
+    // clearing lives in clearScopeOfOrphans, called from the delete route after adoption has had
+    // its turn. Keeping the scope after the holding went was what fell out, not what was chosen,
+    // and it left the live US.SPXW261120C8200000 reading scope "leg" while holding nothing.
+    //
+    // Both halves are here: the delete clears, and a LATER unrelated holding appearing does not
+    // touch the monitor at all, which is the original concern made explicit.
     start();
     const pid = await makePosition("held", "2026-10-16", [
       { side: "sold", option_type: "CALL", strike: 8050 },
@@ -604,12 +669,30 @@ describe("gaps the single-position tests cannot show", () => {
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     await h.call(`/positions/${pid}`, { method: "DELETE" });
-    expect(links(mid)).toEqual([[], "leg"]);
+    expect(links(mid), "the delete clears it").toEqual([[], null]);
 
     await makePosition("elsewhere", "2026-11-20", [
       { side: "sold", option_type: "CALL", strike: 9000 },
     ]);
-    expect(links(mid)).toEqual([[], "leg"]);
+    expect(links(mid), "and adoption leaves it exactly as it was").toEqual([[], null]);
+  });
+
+  it("adoption leaves a scope it cannot place ALONE, rather than clearing it", async () => {
+    // the original concern, as its own test: a monitor whose holding is still there keeps its
+    // scope when an unrelated holding is created, and POST /positions must never reach for it.
+    // Set up by hand, because the only route that clears a scope is the delete.
+    start();
+    const pid = await makePosition("held", "2026-10-16", [
+      { side: "sold", option_type: "CALL", strike: 8050 },
+      { side: "bought", option_type: "CALL", strike: 8075 },
+    ]);
+    const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
+    expect(links(mid)).toEqual([[pid], "leg"]);
+
+    await makePosition("elsewhere", "2026-11-20", [
+      { side: "sold", option_type: "CALL", strike: 9000 },
+    ]);
+    expect(links(mid), "untouched by someone else's holding").toEqual([[pid], "leg"]);
   });
 });
 
