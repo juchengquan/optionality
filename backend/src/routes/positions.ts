@@ -11,7 +11,8 @@ import { z } from "zod";
 import { POSITION_GREEK_FIELDS, contractSize, costToClose, positionGreek, positionLegCodes, positionPnl } from "../domain/position.ts";
 import type { Deps } from "../deps.ts";
 import {
-  clearPositionLinks, clearPositionSamples, deletePositionRow, findPosition, findPositionByName, insertPosition,
+  clearPositionLinks, clearPositionSamples, clearScopeOfOrphans, deletePositionRow, findPosition,
+  findPositionByName, insertPosition,
   listPositionSamples, listPositions, updatePositionFields,
 } from "../db/queries.ts";
 import { atomic } from "../db/open.ts";
@@ -280,6 +281,14 @@ export function positionRoutes(deps: Deps) {
         clearPositionSamples(db, id);
         deletePositionRow(db, id);
         adoptOrphanMonitors(db);
+        // ...and whatever adoption could not place stops claiming a scope it has no holding for.
+        //
+        // The ORDER does not matter, though the first spelling of this comment claimed it did —
+        // a mutation sweep swapped the two lines and nothing failed, which is how the claim was
+        // found. It cannot matter: clearing skips anything with a link, and adoption always sets
+        // a scope explicitly on what it places, so each line only ever touches rows the other
+        // leaves alone. The link guard is the load-bearing part, not the sequence.
+        clearScopeOfOrphans(db);
       });
       return c.body(null, 204);
     });
