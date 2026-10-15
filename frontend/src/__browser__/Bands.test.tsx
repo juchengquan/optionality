@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -22,7 +22,7 @@ const base = {
 };
 
 async function bandColour(fill: number, triggered: boolean): Promise<string> {
-  document.body.innerHTML = "";
+  cleanup();
   window.fetch = ((url: string) =>
     Promise.resolve({
       ok: true,
@@ -45,7 +45,7 @@ async function bandColour(fill: number, triggered: boolean): Promise<string> {
   return (image.match(/(?:oklch|rgba?)\([^)]*\)/g) ?? []).join(" ");
 }
 
-afterEach(async () => { document.body.innerHTML = ""; await page.viewport(1280, 900); });
+afterEach(async () => { cleanup(); await page.viewport(1280, 900); });
 
 describe("the three fill states", () => {
   it("look different from each other", async () => {

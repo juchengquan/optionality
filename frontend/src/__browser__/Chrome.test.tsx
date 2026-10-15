@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -36,7 +36,7 @@ function sameLine(a: Element, b: Element): boolean {
   return Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) < 8;
 }
 
-afterEach(async () => { document.body.innerHTML = ""; await page.viewport(1280, 900); });
+afterEach(async () => { cleanup(); await page.viewport(1280, 900); });
 
 describe("where the controls sit", () => {
   it("puts a table's column picker on that table's heading line", async () => {

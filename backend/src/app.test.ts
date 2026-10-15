@@ -99,8 +99,15 @@ describe("the bearer token", () => {
   it("guards every route except /health", async () => {
     start();
     // every surviving route, not a sample of them: the run-pipeline paths this used to walk were
-    // removed, and a list that names paths which no longer exist passes by vacuity
-    for (const path of ["/monitors", "/positions", "/positions/values", "/positions/x/vol", "/spx/quote"]) {
+    // removed, and a list that names paths which no longer exist passes by vacuity.
+    //
+    // /quotes was missing from the first version of this list, which a code review caught — the
+    // dashboard's main poll and the one route here that triggers a live OpenD batch, so exactly
+    // the one worth guarding. Derived from app.ts's mounts rather than remembered: /health,
+    // /quotes, /monitors*, /positions*, /spx/quote.
+    for (const path of [
+      "/quotes", "/monitors", "/positions", "/positions/values", "/positions/x/vol", "/spx/quote",
+    ]) {
       expect((await h.call(path, { anonymous: true })).status, path).toBe(401);
     }
     expect((await h.call("/health", { anonymous: true })).status).toBe(200);

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -43,7 +43,7 @@ function mockApi(rows: unknown[] = [row]) {
     })) as unknown as typeof fetch;
 }
 
-afterEach(async () => { document.body.innerHTML = ""; await page.viewport(1280, 900); });
+afterEach(async () => { cleanup(); await page.viewport(1280, 900); });
 
 describe("the name column while swiping", () => {
   it("stays where it is when the table is scrolled sideways", async () => {

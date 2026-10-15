@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -86,7 +86,12 @@ function headers(): string[] {
 }
 
 afterEach(async () => {
-  document.body.innerHTML = "";
+  // cleanup(), not `document.body.innerHTML = ""`. Wiping the body rips the DOM out from under
+  // React while it still holds fiber references to those nodes, so its next unmount calls
+  // removeChild on a node whose parent is gone — which surfaced as two unhandled
+  // NotFoundErrors and made `make test-ui` exit non-zero while every test reported passing.
+  // Vitest's own warning on that is "this might cause false positive tests".
+  cleanup();
   await page.viewport(1280, 900);
 });
 
@@ -269,7 +274,8 @@ describe("fitting, measured for real", () => {
     await atWidth(360);
     const wide = headers().length;
 
-    document.body.innerHTML = "";
+    // unmount the first App before mounting the second, for the same reason
+    cleanup();
     mockApi([{ ...row, snapshot: { ...row.snapshot, name: "SPX C1" } }]);
     render(<App />);
     await atWidth(360);

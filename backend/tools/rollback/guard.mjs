@@ -41,13 +41,6 @@ for (const path of [python, typescript]) {
 }
 
 const open = (path) => new DatabaseSync(path, { readOnly: true });
-const names = (db, table, column) => {
-  try {
-    return db.prepare(`select ${column} v from ${table} order by ${column}`).all().map((r) => r.v);
-  } catch {
-    return [];
-  }
-};
 const count = (db, table, where = "") => {
   try {
     return db.prepare(`select count(*) n from ${table} ${where}`).get().n;
@@ -57,13 +50,85 @@ const count = (db, table, where = "") => {
   }
 };
 
+/** The columns the OWNER sets, and deliberately not the engine's.
+ *
+ *  This compared names and codes alone, so it answered "a rollback would lose nothing" and exited
+ *  0 while every edit since the cutover was about to be discarded — a corrected entry, a moved
+ *  threshold, a rule muted by hand. A code review found it by building the case.
+ *
+ *  `triggered`, `last_value`, `last_checked_at`, `last_alarm_at`, `scope` and `disabled_reason`
+ *  are left out on purpose: the sweep rewrites them every fifteen seconds, so including them
+ *  would make "they agree" unreachable within one sweep of the cutover — and the cutover's own
+ *  failure path depends on reaching it. */
 const py = open(python);
 const ts = open(typescript);
 
-const lostPositions = names(ts, "positions", "name").filter((n) => !names(py, "positions", "name").includes(n));
-const backPositions = names(py, "positions", "name").filter((n) => !names(ts, "positions", "name").includes(n));
-const lostMonitors = names(ts, "monitors", "code").filter((c) => !names(py, "monitors", "code").includes(c));
-const backMonitors = names(py, "monitors", "code").filter((c) => !names(ts, "monitors", "code").includes(c));
+const WATCHED = {
+  positions: ["entry", "contracts", "strategy", "strike_date", "legs"],
+  monitors: ["threshold", "direction", "compare", "enabled", "strike_date", "option_type",
+    "strike", "legs"],
+};
+
+/** Rows by the identity a rollback would match them on, with the watched columns beside each.
+ *
+ *  A monitor's identity is (code, field), not code: `uq_monitor_code_field UNIQUE (code, field)`
+ *  means one contract legitimately carries several rules — a mid, a delta and a vega alarm — and
+ *  comparing codes alone made two of three invisible. */
+const columnsOf = (db, table) => {
+  try {
+    return new Set(db.prepare("select name from pragma_table_info(?)").all(table).map((r) => r.name));
+  } catch {
+    return new Set();
+  }
+};
+
+/** The watched columns both sides actually have.
+ *
+ *  Computed once from both schemas rather than probed per side: the first spelling narrowed the
+ *  shared WATCHED array in place as it probed, so whichever database was read first silently
+ *  decided what the other was compared on. A column only one side has is not comparable at all —
+ *  `opened_at` is the live example, and it is counted separately as a total loss. */
+const comparable = (table) => {
+  const both = columnsOf(py, table);
+  const mine = columnsOf(ts, table);
+  return WATCHED[table].filter((c) => both.has(c) && mine.has(c));
+};
+
+const rowsOf = (db, table, key, cols) => {
+  const out = new Map();
+  try {
+    for (const r of db.prepare(`select ${[...key, ...cols].join(", ")} from ${table}`).all()) {
+      out.set(key.map((k) => r[k]).join(" / "), r);
+    }
+  } catch {
+    return new Map();
+  }
+  return out;
+};
+
+const diff = (table, key) => {
+  const cols = comparable(table);
+  const before = rowsOf(py, table, key, cols);
+  const after = rowsOf(ts, table, key, cols);
+  const lost = [...after.keys()].filter((k) => !before.has(k));
+  const back = [...before.keys()].filter((k) => !after.has(k));
+  const changed = [];
+  for (const [k, now] of after) {
+    const was = before.get(k);
+    if (!was) continue;
+    for (const col of cols) {
+      if (String(now[col]) !== String(was[col])) {
+        changed.push(`${k} (${col} ${was[col]} -> ${now[col]})`);
+      }
+    }
+  }
+  return { lost, back, changed };
+};
+
+const pos = diff("positions", ["name"]);
+const mon = diff("monitors", ["code", "field"]);
+const { lost: lostPositions, back: backPositions } = pos;
+const { lost: lostMonitors, back: backMonitors } = mon;
 const schedules = count(ts, "positions", "where opened_at is not null");
 const samples = count(ts, "position_samples");
 
@@ -76,14 +141,24 @@ if (backPositions.length) {
   lines.push(`  holdings RESTORED:  ${backPositions.join(", ")}`);
   lines.push("                      (shown as open again, whether or not you closed them)");
 }
+if (pos.changed.length) {
+  lines.push(`  holdings CHANGED:   ${pos.changed.join("; ")}`);
+  lines.push("                      (the Python's older values come back in their place)");
+}
 if (lostMonitors.length) lines.push(`  alarm rules LOST:   ${lostMonitors.join(", ")}`);
 if (backMonitors.length) lines.push(`  alarm rules BACK:   ${backMonitors.join(", ")}`);
+if (mon.changed.length) lines.push(`  alarm rules CHANGED: ${mon.changed.join("; ")}`);
 // total, not partial: the Python schema has no column and no table for these
 if (schedules) lines.push(`  ${schedules} exit schedule${schedules === 1 ? "" : "s"} LOST entirely — the Python has no opened_at`);
-if (samples) lines.push(`  ${samples} daily sample${samples === 1 ? "" : "s"} LOST entirely, and unrebuildable`);
-lines.push("                      (a leg's IV and vega are only knowable on the day)");
+if (samples) {
+  lines.push(`  ${samples} daily sample${samples === 1 ? "" : "s"} LOST entirely, and unrebuildable`);
+  // inside the guard, not after it: as a bare push it printed beneath whatever line came last,
+  // which on a names-only difference was a justification for something not being lost
+  lines.push("                      (a leg's IV and vega are only knowable on the day)");
+}
 
-if (lostPositions.length + backPositions.length + lostMonitors.length + backMonitors.length
+if (lostPositions.length + backPositions.length + pos.changed.length
+    + lostMonitors.length + backMonitors.length + mon.changed.length
     + schedules + samples === 0) {
   console.log("the two databases agree — a rollback would lose nothing");
   process.exit(0);
