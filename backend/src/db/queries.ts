@@ -80,12 +80,6 @@ export interface RunFilter {
   limit: number;
 }
 
-export function listRuns(db: DatabaseSync, filter: RunFilter): RunRow[] {
-  const where = filter.status ? "where status = ?" : "";
-  const sql = `select * from runs ${where} order by created_at desc limit ?`;
-  const params = filter.status ? [filter.status, filter.limit] : [filter.limit];
-  return db.prepare(sql).all(...params) as unknown as RunRow[];
-}
 
 export function findRun(db: DatabaseSync, id: string): RunRow | undefined {
   return db.prepare("select * from runs where id = ?").get(id) as unknown as RunRow | undefined;
@@ -96,9 +90,6 @@ export function latestRun(db: DatabaseSync): RunRow | undefined {
   return db.prepare("select * from runs order by created_at desc limit 1").get() as unknown as RunRow | undefined;
 }
 
-export function findReport(db: DatabaseSync, runId: string): ReportRow | undefined {
-  return db.prepare("select * from reports where run_id = ?").get(runId) as unknown as ReportRow | undefined;
-}
 
 /** Whether the database answers at all — /health reports rather than raising. */
 export function databaseResponds(db: DatabaseSync): boolean {

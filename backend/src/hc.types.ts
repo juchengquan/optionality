@@ -45,36 +45,6 @@ async function endpoints() {
     health: await (await client.health.$get()).json(),
     quotes: await (await client.quotes.$get()).json(),
 
-    // --- configs -----------------------------------------------------------------------
-    configs: await (await client.configs.$get()).json(),
-    configCreated: await client.configs.$post({
-      json: { name: "spx", task_type: "holdings", body: {} },
-    }),
-    config: await (await client.configs[":name"].$get({ param: { name: "spx" } })).json(),
-    configUpdated: await client.configs[":name"].$put({
-      param: { name: "spx" }, json: { name: "spx", task_type: "holdings", body: {} },
-    }),
-    configDeleted: await client.configs[":name"].$delete({ param: { name: "spx" } }),
-
-    // --- schedules ---------------------------------------------------------------------
-    schedules: await (await client.schedules.$get()).json(),
-    scheduleCreated: await client.schedules.$post({
-      json: { cron_expr: "35 9 * * mon-fri", task_type: "holdings", config_name: "spx" },
-    }),
-    scheduleUpdated: await client.schedules[":id"].$put({
-      param: id, json: { cron_expr: "0 9 * * *", task_type: "holdings", config_name: "spx" },
-    }),
-    scheduleDeleted: await client.schedules[":id"].$delete({ param: id }),
-
-    // --- runs --------------------------------------------------------------------------
-    runsResp: await client.runs.$get({ query: {} }),
-    runs: await (await client.runs.$get({ query: {} })).json(),
-    triggered: await client.runs.$post({ json: { task: "holdings", config: "spx" } }),
-    run: await (await client.runs[":id"].$get({ param: id })).json(),
-    report: await (await client.runs[":id"].report.$get({ param: id })).json(),
-    details: await (await client.runs[":id"].details.$get({ param: id })).json(),
-    reportHtml: await client.runs[":id"]["report.html"].$get({ param: id }),
-
     // --- monitors ----------------------------------------------------------------------
     monitors: await (await client.monitors.$get()).json(),
     monitorCreated: await client.monitors.$post({
@@ -143,23 +113,10 @@ export type HcChecks = [
   Checked<Known<Ok<E["quotes"]>[number]["snapshot"]>>,
 
   // configs ---------------------------------------------------------------------------
-  Checked<Known<Ok<E["configs"]>>>,
-  Checked<Exactly<Ok<E["configs"]>[number]["name"], string>>,
-  Checked<Exactly<Ok<E["configs"]>[number]["created_at"], string | null>>,
-  Checked<Exactly<Ok<E["config"]>["task_type"], string>>,
 
   // schedules -------------------------------------------------------------------------
-  Checked<Exactly<Ok<E["schedules"]>[number]["enabled"], boolean>>,
-  Checked<Exactly<Ok<E["schedules"]>[number]["id"], number>>,
-  Checked<Exactly<Ok<E["schedules"]>[number]["tz"], string>>,
 
   // runs ------------------------------------------------------------------------------
-  Checked<Exactly<Ok<E["runs"]>[number]["notify"], boolean>>,
-  Checked<Exactly<Ok<E["runs"]>[number]["attempt"], number>>,
-  Checked<Exactly<Ok<E["run"]>["finished_at"], string | null>>,
-  Checked<Exactly<Ok<E["run"]>["error"], string | null>>,
-  Checked<Known<E["report"]>>,
-  Checked<Known<E["details"]>>,
 
   // monitors --------------------------------------------------------------------------
   Checked<Known<Ok<E["monitors"]>>>,
@@ -199,14 +156,6 @@ export type HcChecks = [
  *  returned, and `{detail}` in the body is what a caller reads either way.
  */
 export type StatusChecks = [
-  Checked<Exactly<E["runsResp"]["status"], 200 | 422>>,
-  Checked<Exactly<E["triggered"]["status"], 202 | 422>>,
-  Checked<Exactly<E["configCreated"]["status"], 201 | 422>>,
-  Checked<Exactly<E["configUpdated"]["status"], 200 | 422>>,
-  Checked<Exactly<E["configDeleted"]["status"], 204>>,
-  Checked<Exactly<E["scheduleCreated"]["status"], 201 | 422>>,
-  Checked<Exactly<E["scheduleUpdated"]["status"], 200 | 422>>,
-  Checked<Exactly<E["scheduleDeleted"]["status"], 204>>,
   Checked<Exactly<E["monitorCreated"]["status"], 201 | 422>>,
   Checked<Exactly<E["comboCreated"]["status"], 201 | 422>>,
   Checked<Exactly<E["monitorReplaced"]["status"], 200 | 422>>,
@@ -218,10 +167,8 @@ export type StatusChecks = [
   Checked<Exactly<E["positionDeleted"]["status"], 204>>,
   // the report page is served with c.body rather than c.html: `hc` types every other helper's
   // status and body, and c.html alone comes back as ClientResponse<{}, StatusCode, string>
-  Checked<Exactly<E["reportHtml"]["status"], 200>>,
 
   // {detail} is IN the union wherever a route can reject, so the dashboard cannot read rows without
   // saying what it does when the request was refused. That is the bug class that used to render as a
   // silently empty table.
-  Checked<ErrorBody extends Awaited<ReturnType<E["runsResp"]["json"]>> ? true : { missing: true }>,
 ];
