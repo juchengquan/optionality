@@ -62,7 +62,9 @@ _Avoid_: expected value, fair value, theoretical price, target
 **Holding**:
 A Position, said the way the dashboard says it. The holdings list is the only screen that shows
 one whether or not a rule watches it — every other figure on the dashboard hangs off a Monitor,
-so a Position nothing watches used to appear nowhere at all.
+so a Position nothing watches used to appear nowhere at all. Deleting one is the only deliberate
+removal of a holding there is, and it takes the holding's recorded history with it: entry and
+Opened can be typed again, the daily samples cannot. The rules are kept.
 _Avoid_: trade, lot, leg (a Leg is part of one)
 
 **Pace gap**:

@@ -12,12 +12,16 @@ import {
  *
  *  Muting stays unguarded. It undoes with one click, so asking would be noise. */
 export function ConfirmDelete({
-  name, what, onConfirm, children,
+  name, what, onConfirm, children, description,
 }: {
   name: string;
   what: string;
   onConfirm: () => void;
   children?: React.ReactNode;
+  /** What is lost, where the default is wrong for the subject. A holding has no threshold and
+   *  cannot be muted, so the monitor wording below would reassure about the wrong things and
+   *  stay silent about the one that matters: its recorded history. */
+  description?: React.ReactNode;
 }) {
   return (
     <AlertDialog>
@@ -28,8 +32,12 @@ export function ConfirmDelete({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes the {what} for good, along with its threshold and any entry recorded
-            against it. Muting keeps the row and can be undone.
+            {description ?? (
+              <>
+                This removes the {what} for good, along with its threshold and any entry recorded
+                against it. Muting keeps the row and can be undone.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
