@@ -263,10 +263,23 @@ export function positionRoutes(deps: Deps) {
       // The Monitors survive — nothing here deletes a rule as a side effect. They simply stop knowing
       // what they were watching, and would be adopted again if the holding came back. The samples do
       // NOT: they describe this holding and mean nothing without it.
+      //
+      // ...and then the rules this delete just orphaned get a chance at whatever is LEFT. A link is
+      // otherwise only ever worked out when something is created, so a rule that lost its holding
+      // here stayed orphaned for ever — reported from the live dashboard as `409 position
+      // '1120_BS_7100' already exists`, on a rule showing no positions beside a holding that had an
+      // entry and an opened date and covered its contracts exactly. The dashboard offered to create
+      // the holding it already had, because nothing told it one was there.
+      //
+      // Safe by adoptOrphanMonitors's own design: it looks only at monitors with no link and only
+      // ever adds. "What you already have cannot be taken away by something you subsequently hold"
+      // — nor by something you subsequently drop. Inside the transaction, so a rule is never left
+      // pointing at a row that is half gone.
       await atomic(db, () => {
         clearPositionLinks(db, id);
         clearPositionSamples(db, id);
         deletePositionRow(db, id);
+        adoptOrphanMonitors(db);
       });
       return c.body(null, 204);
     });
