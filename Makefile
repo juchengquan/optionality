@@ -16,6 +16,7 @@ NODE_BIN = $(shell command -v node)
 CADDY_BIN = $(shell command -v caddy)
 # the TypeScript service's own database, a copy taken at cutover. The Python's is never opened again.
 TS_DB = data/optionality-ts.db
+PY_DB = data/optionality.db
 
 # where the dashboard is mounted on the tailnet. Baked into the bundle at build time,
 # because `tailscale serve` strips the prefix and the page cannot discover it (ADR 0006).
@@ -202,7 +203,8 @@ cutover: cutover-preflight
 		|| { $(MAKE) --no-print-directory restore-python; echo "the API would not install; the Python service is back"; exit 1; }
 	@sleep 4
 	@curl -fsS http://127.0.0.1:31415/health > /tmp/optionality-cutover-health.json \
-		|| { $(MAKE) --no-print-directory rollback; echo "the new API did not answer; rolled back"; exit 1; }
+		|| { $(MAKE) --no-print-directory rollback ROLLBACK_FORCE=--i-accept-the-loss; \
+			 echo "the new API did not answer; rolled back"; exit 1; }
 	@python3 -c "import json;h=json.load(open('/tmp/optionality-cutover-health.json'));\
 print('  db      ', h['db']);print('  opend   ', h['opend']);print('  alarms  ', h['monitor']['alarms']['label']);\
 print('  sweep at', h['monitor']['last_sweep_at'])"
@@ -230,7 +232,17 @@ cutover-preflight:
 	@echo "preflight passed"
 
 # Stop Node, start Python. Its database was never opened by the new service.
+# The guard goes FIRST, before anything is swapped. `make rollback` used to boot out the agent,
+# print /health and say "rolled back" — saying nothing about the database, which has diverged from
+# the Python's since the cutover. Measured on the live pair: a rollback would have restored four
+# positions that had been deliberately closed, lost the one actually held, lost every alarm rule,
+# and lost all exit schedules and the whole vol history. See backend/tools/rollback/guard.mjs.
+#
+# ROLLBACK_FORCE is how `cutover` gets past it, and the only place that should: there, the
+# TypeScript database was copied from the Python's seconds earlier, so there is nothing to lose —
+# and the alternative is a half-finished cutover with no way back.
 rollback:
+	@node backend/tools/rollback/guard.mjs $(PY_DB) $(TS_DB) $(ROLLBACK_FORCE)
 	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
 	rm -f $(API_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(LAUNCHD_PLIST)
