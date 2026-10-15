@@ -59,6 +59,12 @@ What a Position's Cost to close would be at a given DTE if nothing but time had 
 REFERENCE, never a rule: it says whether a trade is working, and no alarm is ever raised from it.
 _Avoid_: expected value, fair value, theoretical price, target
 
+**Holding**:
+A Position, said the way the dashboard says it. The holdings list is the only screen that shows
+one whether or not a rule watches it — every other figure on the dashboard hangs off a Monitor,
+so a Position nothing watches used to appear nowhere at all.
+_Avoid_: trade, lot, leg (a Leg is part of one)
+
 **Pace gap**:
 How far a Position's Cost to close sits from its On-pace figure. BEHIND means costing more to buy
 back than time alone accounts for. Said in words wherever it is shown, because "behind" is bad
