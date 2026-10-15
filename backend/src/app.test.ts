@@ -74,31 +74,33 @@ describe("/health", () => {
 
 describe("the bearer token", () => {
   it("rejects a request without one", async () => {
-    const resp = await start().call("/runs", { anonymous: true });
+    const resp = await start().call("/monitors", { anonymous: true });
     expect(resp.status).toBe(401);
     expect(await resp.json()).toEqual({ detail: "unauthorized" });
   });
 
   it("rejects a wrong one", async () => {
-    const resp = await start().call("/runs", {
+    const resp = await start().call("/monitors", {
       anonymous: true, headers: { Authorization: "Bearer nope" },
     });
     expect(resp.status).toBe(401);
   });
 
   it("accepts the right one", async () => {
-    expect((await start().call("/runs")).status).toBe(200);
+    expect((await start().call("/monitors")).status).toBe(200);
   });
 
   it("asks for nothing when no token is configured", async () => {
     // the owner's deployment sets API_TOKEN; a local run without one must still work
-    expect((await start({ settings: { apiToken: "" } }).call("/runs", { anonymous: true })).status)
+    expect((await start({ settings: { apiToken: "" } }).call("/monitors", { anonymous: true })).status)
       .toBe(200);
   });
 
   it("guards every route except /health", async () => {
     start();
-    for (const path of ["/configs", "/schedules", "/runs", "/runs/anything"]) {
+    // every surviving route, not a sample of them: the run-pipeline paths this used to walk were
+    // removed, and a list that names paths which no longer exist passes by vacuity
+    for (const path of ["/monitors", "/positions", "/positions/values", "/positions/x/vol", "/spx/quote"]) {
       expect((await h.call(path, { anonymous: true })).status, path).toBe(401);
     }
     expect((await h.call("/health", { anonymous: true })).status).toBe(200);
@@ -109,11 +111,11 @@ describe("the error shape", () => {
   it("is the {detail} the dashboard reads, on every failure path", async () => {
     start();
     // 404 from a missing row, 422 from a bad payload, 401 from a missing token — all one shape
-    const missing = await h.call("/configs/ghost");
+    const missing = await h.call("/positions/ghost/vol");
     expect(missing.status).toBe(404);
-    expect(await missing.json()).toEqual({ detail: "config not found" });
+    expect(await missing.json()).toEqual({ detail: "position not found" });
 
-    const bad = await h.call("/configs", {
+    const bad = await h.call("/positions", {
       method: "POST", body: JSON.stringify({ name: 1 }),
       headers: { "Content-Type": "application/json" },
     });

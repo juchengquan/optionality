@@ -8,13 +8,10 @@
 import { Hono } from "hono";
 
 import type { Deps } from "./deps.ts";
-import { configRoutes } from "./routes/configs.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { monitorRoutes, quoteRoutes } from "./routes/monitors.ts";
 import { positionRoutes } from "./routes/positions.ts";
 import { spxRoutes } from "./routes/spx.ts";
-import { runRoutes } from "./routes/runs.ts";
-import { scheduleRoutes } from "./routes/schedules.ts";
 
 /** Paths reachable without a token. `/health` is open because whatever is checking on the service
  *  may be the thing that has lost its credentials, and because the dashboard reads it to find out
@@ -38,11 +35,18 @@ export function createApp(deps: Deps) {
       }
       return next();
     })
+    // The run pipeline's routes — /runs, /configs, /schedules, fifteen endpoints — were mounted
+    // here and are gone. The owner stopped using it: two runs in the service's life, both
+    // triggered by hand on 2026-08-10, zero schedules ever. The dashboard never called any of
+    // them and neither did the bot, which goes straight to the database.
+    //
+    // The MACHINERY is still here on purpose: the worker still owns run execution, which is a
+    // ratified invariant, and the scheduler, the four tables and /health's `last_run` all stay.
+    // What is gone is the only way to reach it over HTTP, so a run can now be created only by the
+    // scheduler, from a schedule that can only be inserted with SQL. That is deliberate, not an
+    // oversight — do not put the routes back to "fix" it without asking.
     .route("/", healthRoutes(deps))
     .route("/", quoteRoutes(deps))
-    .route("/configs", configRoutes(deps))
-    .route("/schedules", scheduleRoutes(deps))
-    .route("/runs", runRoutes(deps))
     .route("/monitors", monitorRoutes(deps))
     .route("/positions", positionRoutes(deps))
     .route("/spx", spxRoutes(deps));
