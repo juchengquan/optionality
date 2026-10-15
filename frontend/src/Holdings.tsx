@@ -5,7 +5,8 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 
-import { fetchHoldings, type Holding } from "./api";
+import { deletePosition, fetchHoldings, type Holding } from "./api";
+import { ConfirmDelete } from "./ConfirmDelete";
 import { DASH, fmt } from "./format";
 
 /** What you actually HOLD, as distinct from what is watched.
@@ -105,7 +106,26 @@ function HoldingRow({ holding, onSaved }: { holding: Holding; onSaved: () => voi
           </p>
         </>
       )}
-      <HoldingEdit holding={holding} onSaved={onSaved} />
+      <div className="flex flex-wrap items-end gap-2">
+        <HoldingEdit holding={holding} onSaved={onSaved} />
+        {/* Guarded like a rule delete, and for a stronger reason: a rule can be MUTED instead and
+            unmuted with one click, and a holding cannot. Entry and Opened could be typed again;
+            the samples could not, since IV and vega are only knowable on the day they were
+            observed — for the live condor they are the only vol history that exists. */}
+        <ConfirmDelete
+          name={holding.name}
+          what="holding"
+          description={
+            <>
+              This removes the holding for good, with its entry, its opened date and its recorded
+              history — the daily cost to close and the per-leg volatility and vega, which no
+              later sweep can rebuild. The alarm rules are kept; they stop knowing what they were
+              watching.
+            </>
+          }
+          onConfirm={() => { void (async () => { await deletePosition(holding.id); onSaved(); })(); }}
+        />
+      </div>
     </div>
   );
 }
@@ -120,15 +140,19 @@ function HoldingEdit({ holding, onSaved }: { holding: Holding; onSaved: () => vo
   const [value, setValue] = useState<number | null>(holding.entry);
   const [openedAt, setOpenedAt] = useState(holding.opened_at ?? "");
 
-  // No flex-wrap on the row below: it reads like the obvious guard against these controls being
-  // squeezed, and it is inert. Measured at 320, 390 and 1280 — the row never wraps, because flex
-  // items SHRINK first: at 320px the entry field goes 96px -> 81px and the date 160px -> 159px,
-  // and both stay above the minimums the browser test asserts. Below 320px is untested and
-  // unclaimed. A mutation sweep found removing the class changed nothing, the same finding as the
-  // shrink-0 and flex-1 in AddForms.tsx.
+  // `min-w-0` is load-bearing, not decoration. This form sits inside a flex row beside the delete
+  // button, and a flex item's default `min-width: auto` refuses to shrink below its content — so
+  // the form measured 312px inside a 296px container at 320px and pushed the page sideways. The
+  // browser test caught it. With min-w-0 the fields shrink as they did before it was nested.
+  //
+  // No flex-wrap here, though: it reads like the obvious guard against these controls being
+  // squeezed, and it is inert. The row never wraps because the fields shrink first — at 320px the
+  // entry field goes 96px -> 81px and the date 160px -> 159px, both still above the minimums the
+  // browser test asserts. Below 320px is untested and unclaimed. A mutation sweep found removing
+  // the class changed nothing, the same finding as the shrink-0 and flex-1 in AddForms.tsx.
   return (
     <form
-      className="mt-2 flex items-end gap-2"
+      className="mt-2 flex min-w-0 items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         if (value === null) return;

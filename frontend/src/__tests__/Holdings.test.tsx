@@ -50,7 +50,7 @@ function mockApi(holdings: unknown[]) {
   vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     if (method !== "GET") {
-      posted.push({ url, method, body: JSON.parse(init!.body as string) });
+      posted.push({ url, method, body: init?.body ? JSON.parse(init.body as string) : {} });
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
     }
     calls.push(url);
@@ -227,7 +227,7 @@ describe("the row #113 pointed at", () => {
     vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
       if (method !== "GET") {
-        posted.push({ url, method, body: JSON.parse(init!.body as string) });
+        posted.push({ url, method, body: init?.body ? JSON.parse(init.body as string) : {} });
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
       }
       calls.push(url);
@@ -268,5 +268,88 @@ describe("the row #113 pointed at", () => {
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).queryByRole("button", { name: /record/i })).toBeNull();
     expect(posted).toHaveLength(0);
+  });
+});
+
+describe("deleting a holding", () => {
+  /** There was no way to do it from the UI at all. The route has always existed and is carefully
+   *  guarded — it clears the monitor links and the samples in one transaction, because both
+   *  reference the row — but the frontend never called it, so removing a holding meant an HTTP
+   *  request by hand.
+   *
+   *  Guarded like a monitor delete, and for a stronger reason: a monitor can be MUTED instead and
+   *  unmuted with one click. A holding cannot. And its samples go with it — the daily cost to
+   *  close, per-leg IV and per-leg vega that no later sweep can reconstruct, which for the live
+   *  condor is the only vol history that exists.
+   */
+  const deleted = () => posted.filter((p) => p.method === "DELETE");
+
+  it("asks before doing it, and does nothing until confirmed", async () => {
+    mockApi([spread]);
+    render(<App />);
+    const panel = await holdingsOf();
+    const row = within(panel).getByTestId("holding-pBS");
+    await userEvent.click(within(row).getByRole("button", { name: /delete/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/1120_BS_7100/)).toBeTruthy();
+    expect(deleted()).toHaveLength(0);
+
+    await userEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
+    expect(deleted()).toHaveLength(0);
+  });
+
+  it("says that the recorded history goes with it, which cannot be rebuilt", async () => {
+    // the half worth warning about: entry and Opened can be typed again, the samples cannot.
+    // IV and vega are only knowable on the day they were observed (ADR 0011).
+    mockApi([spread]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(
+      within(within(panel).getByTestId("holding-pBS")).getByRole("button", { name: /delete/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    const text = dialog.textContent ?? "";
+    expect(text).toMatch(/volatility|vega|history/i);
+    expect(text).not.toMatch(/threshold/i);
+    expect(text).not.toMatch(/mut(e|ing)/i);
+  });
+
+  it("says the alarm rules survive, because they do", async () => {
+    // nothing here deletes a rule as a side effect: they stop knowing what they watched and
+    // would be adopted again if the holding came back
+    mockApi([spread]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(
+      within(within(panel).getByTestId("holding-pBS")).getByRole("button", { name: /delete/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect((dialog.textContent ?? "")).toMatch(/rules?.*(kept|survive|remain)/i);
+  });
+
+  it("deletes the holding by its own id once confirmed", async () => {
+    mockApi([spread]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(
+      within(within(panel).getByTestId("holding-pBS")).getByRole("button", { name: /delete/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(deleted()).toHaveLength(1));
+    expect(deleted()[0]!.url).toMatch(/\/positions\/pBS$/);
+  });
+
+  it("re-reads the list afterwards, so the row goes without a manual refresh", async () => {
+    mockApi([spread]);
+    render(<App />);
+    const panel = await holdingsOf();
+    const before = calls.filter((u) => u.includes("/positions/values")).length;
+    await userEvent.click(
+      within(within(panel).getByTestId("holding-pBS")).getByRole("button", { name: /delete/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() =>
+      expect(calls.filter((u) => u.includes("/positions/values")).length).toBeGreaterThan(before));
   });
 });

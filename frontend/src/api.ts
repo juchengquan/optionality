@@ -119,6 +119,13 @@ export const deleteMonitor = (id: string) =>
 export const patchPosition = (id: string, body: Record<string, unknown>) =>
   sent(client.positions[":id"].$patch({ param: { id }, json: body }), `/positions/${id}`);
 
+/** Remove a holding. The route clears its monitor links and its samples in the same transaction,
+ *  because both reference the row — so this also discards the daily cost to close, per-leg IV and
+ *  per-leg vega, which no later sweep can reconstruct (ADR 0011). The rules themselves survive
+ *  and would adopt the holding again if it came back. */
+export const deletePosition = (id: string) =>
+  sent(client.positions[":id"].$delete({ param: { id } }), `/positions/${id}`);
+
 /** Record a credit taken in across everything a rule spans; the server derives the one wing
  *  that has no rule of its own, so the per-wing credits stay the single source of truth. */
 export const setTotalEntry = (monitorId: string, entry: number) =>
