@@ -55,6 +55,25 @@ The absolute base path proved itself in the same test, in the negative: the page
 `/probe` still asked for `/opt/assets/...`, because the bundle knows where it was built to
 live. That is the coupling this ADR accepts, and it is visible rather than subtle.
 
+## The API token is deliberately unset, and that is parked
+
+`API_TOKEN` is empty in the owner's `.env`, so `app.ts`'s bearer check is skipped and every route
+is reachable by anything on the tailnet. The one defence is the tailnet itself, which is the
+posture this ADR chose: one hostname, one origin, no CORS and no auth change.
+
+Examined on 2026-10-15 and **parked, knowingly**. It is recorded here so it is a decision rather
+than an oversight, and so nobody re-discovers it as news.
+
+What makes it tolerable: the tailnet is a private network of the owner's own devices, the service
+holds no credentials beyond what `.env` already has, and there is no public ingress. What it costs:
+the destructive routes are reachable without a secret — `DELETE /positions/:id`, which also drops
+that holding's samples, and `DELETE /monitors/:id`. #118 removed fifteen read-and-write endpoints,
+which did not change the posture but did raise the destructive share of what remains.
+
+Setting it is a one-line `.env` change plus the same value in whatever calls the API by hand; the
+dashboard needs nothing, because it is same-origin and the browser is already inside the tailnet.
+That stays true whenever the owner wants it, which is why parking costs nothing to reverse.
+
 ## The skew banner retired in ADR 0009 phase 8
 
 The contract version and the banner it fed were the answer to "a bundle can outlive the API it was
