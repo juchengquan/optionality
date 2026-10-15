@@ -130,3 +130,42 @@ Two things to watch during it:
 - **the sweep's own account of itself**: `alarms: active`. `STALLED (n failed sweeps)` means the
   OpenD websocket is not answering, and the Python used the TCP port — so this is the one failure mode
   the cutover newly exposes.
+
+## Phase 10's scope grew, because its premise changed
+
+ADR 0009 narrowed phase 10 from "delete `src/optionality/`" to "delete the Python that was ported",
+keeping `core.py`, `apis/`, `notification/` and `datatype/` **on the grounds that the run pipeline
+needs them**. On 2026-10-15 the owner said he had stopped using the run pipeline, and #118 removed
+its fifteen HTTP endpoints, so that premise no longer holds: a run can now be created only by the
+scheduler, from a schedule that can only be inserted with SQL. The pipeline is unreachable, and the
+Python it would have called is unreachable with it.
+
+So phase 10 also retires, deliberately rather than as a side effect:
+
+- `worker.ts` — it can never be given work again. Its `queueDepth()` reaches four readers that
+  will all report a constant zero: `/health`, the Telegram bot's status line
+  (`bot.ts:460`), and the dashboard twice — the `degraded` gate at `App.tsx:182`
+  (`health.queue_depth > 0`) and the visible `· queue: 0` beside it at line 228. **This retires a
+  ratified invariant** — "one worker thread owns run execution" — so it wants a line in the ADR,
+  not a quiet deletion.
+- the scheduler's CRON half: `fireSchedule`, `refreshJobs`, and `config-body.ts`'s `TaskType`.
+- `/health`'s `last_run` and `queue_depth`, and both dashboard readers of the latter. A frontend
+  change as well as a backend one, which is why it belongs with the deletion rather than ahead of
+  it.
+- the `configs`, `schedules`, `runs` and `reports` tables.
+- `core.py`, `apis/`, `notification/` and `datatype/` — the Python ADR 0009 had kept.
+
+**What must NOT go with it:** the scheduler itself. `main.ts` calls
+`scheduler.startSweep(settings.monitorIntervalSeconds, () => sweeper.sweep())`, so the scheduler is
+what drives the alarm sweep. Only its cron half is dead. Deleting the scheduler stops the alarms.
+
+Two things were done early, on 2026-10-15, so phase 10 does not have to:
+
+- **the differentials were cashed in.** ADR 0009 requires anything they find to be committed as a
+  TypeScript test before the Python goes. `make diff-api` reported 0 divergences over 19,265
+  compared values across 400 cases, and `make diff-opend` 0 over 288 across 8 live contracts, so
+  nothing is owed. `make diff-services` was deliberately not run: it starts the Python service, and
+  the bot token allows exactly one `getUpdates` consumer.
+- **a tag**, `python-before-phase-10`, because the repo had none and "git preserves it" was
+  otherwise unlabelled. 73 files come back from
+  `git show python-before-phase-10:src/optionality/service/monitor.py`.
