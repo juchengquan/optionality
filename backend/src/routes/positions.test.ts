@@ -114,6 +114,103 @@ describe("what vol did to a holding, over its own samples", () => {
   });
 });
 
+describe("deleting a holding frees the rules its contracts were blocking", () => {
+  /** Reported from the live dashboard: adding an entry answered `409 position '1120_BS_7100'
+   *  already exists`, on a rule whose row showed no positions at all beside a holding that had
+   *  an entry and an opened date.
+   *
+   *  The chain, as the live database recorded it. A condor held the two strikes, so the rule was
+   *  linked to the condor with scope "leg". A put spread at those same strikes was added later
+   *  and changed nothing, because only ORPHANS are considered. The condor was then deleted, and
+   *  deleting a holding clears its links — so the rule lost the only one it had. Nothing
+   *  recomputes a link outside a create, so it stayed orphaned, invisible to the holding that was
+   *  now the unambiguous owner of its contracts. The dashboard then offered to create a holding
+   *  whose name was already taken, and the 409 was the server catching it.
+   *
+   *  Re-adopting after a delete is safe by adoptOrphanMonitors's own design: it looks only at
+   *  monitors with no link and only ever adds. "What you already have cannot be taken away by
+   *  something you subsequently hold" — nor by something you subsequently drop.
+   */
+  const holdingOf = (name: string, legs: unknown[], entry: number) =>
+    post(condor({ name, legs, entry }));
+
+  const spreadRule = async () => (await body(await h.call("/monitors", json({
+    name: "spread_rule", strike_date: EXPIRY, field: "mid_price", threshold: 1,
+    direction: "above", legs: [
+      { sign: -1, option_type: "PUT", strike: 7100 },
+      { sign: 1, option_type: "PUT", strike: 7075 },
+    ],
+  })))).id as string;
+
+  it("adopts the holding left behind, which the delete had orphaned it from", async () => {
+    start();
+    const wide = await created201(await holdingOf("wide", CONDOR_LEGS, 3.0));
+    const rid = await spreadRule();
+    // the condor holds these strikes among others, so the rule watches part of it
+    expect(links(rid), "linked to the wider holding").toEqual([[wide], "leg"]);
+
+    // the narrower holding arrives later and changes nothing: only orphans are considered
+    const narrow = await created201(await holdingOf("narrow", [
+      { side: "sold", option_type: "PUT", strike: 7100 },
+      { side: "bought", option_type: "PUT", strike: 7075 },
+    ], 1.2));
+    expect(links(rid), "still the wider one").toEqual([[wide], "leg"]);
+
+    // deleting the wider holding clears that link. Without re-adoption the rule is orphaned for
+    // ever, beside a holding that now covers its contracts exactly.
+    expect((await h.call(`/positions/${wide}`, { method: "DELETE" })).status).toBe(204);
+    expect(links(rid)).toEqual([[narrow], "all"]);
+  });
+
+  it("reports the holding's entry afterwards, which is what the owner could not see", async () => {
+    start();
+    const wide = await created201(await holdingOf("wide", CONDOR_LEGS, 3.0));
+    const rid = await spreadRule();
+    await created201(await holdingOf("narrow", [
+      { side: "sold", option_type: "PUT", strike: 7100 },
+      { side: "bought", option_type: "PUT", strike: 7075 },
+    ], 1.2));
+    await h.call(`/positions/${wide}`, { method: "DELETE" });
+
+    const rows = await body(await h.call("/quotes")) as { id: string; entry: number | null }[];
+    expect(rows.find((r) => r.id === rid)?.entry, "the entry the rule could not see").toBe(1.2);
+  });
+
+  it("leaves a rule that already has a link alone", async () => {
+    // only orphans are considered, so a rule that has worked for weeks cannot lose its holding
+    // because of something that happened to another one
+    start();
+    const keep = await created201(await holdingOf("keep", CONDOR_LEGS, 3.0));
+    const rid = (await body(await h.call("/monitors", json({
+      name: "whole_rule", strike_date: EXPIRY, field: "mid_price", threshold: 1,
+      direction: "above", legs: CONDOR_LEGS.map((l) => ({
+        sign: l.side === "sold" ? -1 : 1, option_type: l.option_type, strike: l.strike,
+      })),
+    })))).id as string;
+    expect(links(rid)).toEqual([[keep], "all"]);
+
+    const other = await created201(await holdingOf("other", [
+      { side: "sold", option_type: "PUT", strike: 6000 },
+      { side: "bought", option_type: "PUT", strike: 5950 },
+    ], 0.5));
+    expect((await h.call(`/positions/${other}`, { method: "DELETE" })).status).toBe(204);
+    expect(links(rid), "untouched by an unrelated delete").toEqual([[keep], "all"]);
+  });
+
+  it("adopts nothing when the delete leaves nothing to adopt", async () => {
+    start();
+    const only = await created201(await holdingOf("only", CONDOR_LEGS, 3.0));
+    const rid = (await body(await h.call("/monitors", json({
+      name: "whole_rule", strike_date: EXPIRY, field: "mid_price", threshold: 1,
+      direction: "above", legs: CONDOR_LEGS.map((l) => ({
+        sign: l.side === "sold" ? -1 : 1, option_type: l.option_type, strike: l.strike,
+      })),
+    })))).id as string;
+    await h.call(`/positions/${only}`, { method: "DELETE" });
+    expect(links(rid), "nothing holds these contracts now").toEqual([[], "all"]);
+  });
+});
+
 describe("the round trip", () => {
   it("creates, lists and deletes", async () => {
     start();
