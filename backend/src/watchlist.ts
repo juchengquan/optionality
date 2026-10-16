@@ -155,22 +155,23 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     // sweep's stored column while every figure beside it came from this fetch, so a row could show
     // a value past its threshold with no bell, or a bell beside a value well inside it (ADR 0010).
     //
-    // A rule backed by a Position is measured on its cost to close, which cannot be negative — so
-    // the comparison is always above/abs regardless of the rule's own mode, matching what the
-    // dashboard has shown since the sign reconciliation.
-    const measured = positions.length > 0 && isCombo
-      ? { value: entry.cost_to_close, direction: "above", compare: "abs" }
-      : {
-        value: isCombo ? (comboValue ?? null) : ((snapshot?.[m.field] ?? null) as number | null),
-        direction: m.direction,
-        compare: m.compare,
-      };
-    entry.fill = thresholdFill(measured.value, m.threshold, measured.direction, measured.compare);
+    // It is the rule's OWN field, under the rule's own direction and compare — `monitorValue` for a
+    // combo, which is the very call the sweep evaluates it with. A held combo used to be measured
+    // on its cost to close instead, with above/abs forced: that is a PRICE, which a delta rule's
+    // threshold is not, so a delta alarm rang here for ever while the sweep stayed silent. Its cost
+    // to close is still shown, in its own column; it is not what any alarm is decided by.
+    //
+    // The price cases are unchanged: under compare 'abs' the sign washes out, so a combo summing to
+    // -4.00 and a 4.00 cost to close give the same bell and the same bar.
+    const watched = isCombo
+      ? (comboValue ?? null)
+      : ((snapshot?.[m.field] ?? null) as number | null);
+    entry.fill = thresholdFill(watched, m.threshold, m.direction, m.compare);
     // An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
-    // stored state would be back, by the other door. isBreached is the ENGINE's own predicate, so
-    // the bell flips at the exact threshold and cannot drift from how the alarm is decided.
-    entry.triggered = measured.value !== null
-      && isBreached(measured.value, m.threshold, measured.direction, measured.compare);
+    // stored state would be back, by the other door. isBreached is the ENGINE's own predicate fed
+    // the ENGINE's own value, so the bell flips at the exact threshold and cannot drift from how an
+    // alarm is decided.
+    entry.triggered = watched !== null && isBreached(watched, m.threshold, m.direction, m.compare);
 
     // Built from THIS entry's own cost to close, so the gap is the gap against the figure the row
     // shows. Fetching /positions/values beside it on the dashboard would compute it against a

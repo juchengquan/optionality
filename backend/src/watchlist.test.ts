@@ -312,10 +312,17 @@ describe("guards that are easy to lose", () => {
     expect(quotes[0]!.snapshot).toBeNull();
   });
 
-  it("counts a position-backed rule's fill upward even when the rule says below and signed", async () => {
-    // cost to close cannot be negative, so the comparison is forced to above/abs. A rule written
-    // "below, signed" would otherwise invert the bar and show a nearly-safe position as nearly
+  it("measures a position-backed rule under the rule's OWN mode, bar and bell together", async () => {
+    // Was "counts a position-backed rule's fill upward even when the rule says below and signed":
+    // the comparison was forced to above/abs because cost to close cannot be negative, and this
+    // asserted 50%. The stated fear was an inverted bar calling a nearly-safe position nearly
     // breached.
+    //
+    // The rule's own verdict on 0.80 against "below 1.60, signed" is BREACHED — isBreached gives
+    // 0.80 <= 1.60 — which is what a profit-taking alarm is for, and the sweep fires it. So the old
+    // bar read "halfway there" beside no bell while Telegram had already sent: the drift ADR 0010
+    // forbids, in the one case that asserted the bar and never the bell. The bar now follows the
+    // rule it belongs to, and the bell with it.
     const pid = "p".repeat(32);
     db.prepare(
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
@@ -333,8 +340,10 @@ describe("guards that are easy to lose", () => {
       [LEG_A]: { mid_price: 1.2, option_contract_size: 100 },
       [LEG_B]: { mid_price: 0.4, option_contract_size: 100 },
     }), true);
-    // 0.8 of 1.6 counted upward. Under the rule's own below/signed mode it would be 1.6/0.8 -> 100.
-    expect(quotes[0]!.fill).toBe(50);
+    // 1.6/0.8 under the rule's own below/signed mode, capped at 100 — the target is met, not
+    // half-met, which is the same thing the bell now says.
+    expect(quotes[0]!.fill).toBe(100);
+    expect(quotes[0]!.triggered, "0.80 is below 1.60: the sweep rings this").toBe(true);
   });
 });
 
@@ -702,6 +711,27 @@ describe("a combo that covers only part of a holding", () => {
     // and the cost to close is still priced from the mids: 5.00 - 1.00
     expect(e!.cost_to_close).toBe(4);
     void mid;
+  });
+
+  it("rings what the ENGINE rings, whatever field a held combo watches", async () => {
+    // The bell and the fill were measured on cost_to_close for ANY held combo — a price — with
+    // direction and compare forced to above/abs, discarding the rule's own. So this delta rule
+    // rang permanently off the condor's 4.00 while the sweep, comparing the delta sum through
+    // monitorValue, stayed silent. ADR 0010: the bell "cannot drift from how an alarm is decided",
+    // and the claim sat three lines under the code that broke it.
+    //
+    // The price cases above are unaffected: under compare 'abs' the sign washes out, so |-4.00|
+    // and 4.00 give the same bell and the same 80% bar.
+    const mid = callSide({ field: "option_delta", threshold: 0.5 });
+    const pid = condorHeld();
+    db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
+    db.prepare("update monitors set scope = 'leg' where id = ?").run(mid);
+
+    const [e] = await run(priced, true);
+    expect(e!.cost_to_close, "the column is unchanged: still priced from the mids").toBe(4);
+    expect(e!.combo_value).toBeCloseTo(-0.1, 10);
+    expect(e!.triggered, "0.10 of a 0.50 threshold is calm, and the sweep agrees").toBe(false);
+    expect(e!.fill, "|-0.10| / 0.50").toBe(20);
   });
 
   it("gives an alarm covering the WHOLE holding the same number as before", async () => {
