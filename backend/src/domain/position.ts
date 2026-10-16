@@ -108,7 +108,13 @@ export function legReadings(
   for (const code of positionLegCodes(position)) {
     const value = byCode[code]?.[field];
     if (value === null || value === undefined) return null;
-    readings[code] = Number(value);
+    // FINITE, not merely present. This stored `Number(value)` unchecked, so a field that does not
+    // parse became NaN, `toSqliteJson` wrote it as `null`, and the reader downstream took that
+    // null for a zero — reported as "vol did nothing". Rejecting here means the map is absent
+    // rather than quietly wrong, which is the same all-or-nothing the rest of this file keeps.
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    readings[code] = n;
   }
   return readings;
 }

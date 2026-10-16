@@ -130,6 +130,12 @@ export function positionRoutes(deps: Deps) {
     if (text === null) return null;
     try {
       const parsed: unknown = JSON.parse(text);
+      // SHAPE only. A map holding a non-numeric reading used to give vol: NaN, which zod rejects,
+      // so the route answered 500 where its own comment promises the figure costs nothing but
+      // itself. That is fixed in volAttribution, which now requires every reading to be a finite
+      // number — and a value check here as well was unobservable: a mutation sweep removed it and
+      // nothing failed, because the domain guard catches the same values. One gate, where the rule
+      // lives, rather than two where only one is tested.
       return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
         ? (parsed as Record<string, number>)
         : null;
