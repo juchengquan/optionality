@@ -41,6 +41,15 @@ export interface SweeperDeps {
   now?: () => Date;
 }
 
+/** How many sweep intervals may pass with nothing starting before the engine calls itself stalled.
+ *
+ *  One sweep can legitimately overrun a tick — a batch takes real time. Four in a row is not an
+ *  overrun, it is a sweep that is not coming back, and /health must stop calling that "active".
+ *  scheduler.ts's watchdog abandons at the same age, so the engine says stalled and then recovers
+ *  itself rather than waiting for a restart.
+ */
+export const STALE_AFTER_SWEEPS = 4;
+
 /** The date a sweep reckons expiry against: the UTC day, as the Python's `utcnow().date()` gives.
  *
  *  Deliberately NOT the market date, even though `dte` on the dashboard is. The two genuinely differ
@@ -65,6 +74,9 @@ export class MonitorSweeper {
   lastRecords: QuoteRecord[] = [];
   lastBadCodes: string[] = [];
   fetchAt: Date | null = null;
+  /** What the last batch actually did: null before any was asked for. A port probe cannot answer
+   *  this — OpenD can hold the socket open and refuse to log in (2026-10-16). */
+  fetchOk: boolean | null = null;
 
   /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
    *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
@@ -89,8 +101,26 @@ export class MonitorSweeper {
     return this.fetchAt;
   }
 
+  /** How long since a sweep last BEGAN, if that is longer than the engine tolerates.
+   *
+   *  `sweepAt` is stamped at the start of a sweep on purpose — one instant per sweep — which makes
+   *  it a start time, not a completion. Nothing else notices a sweep that began and never ended.
+   */
+  private staleFor(): number | null {
+    if (this.sweepAt === null) return null;   // nothing has started: that is "starting", not stalled
+    const age = (this.now().getTime() - this.sweepAt.getTime()) / 1000;
+    const limit = this.deps.settings.monitorIntervalSeconds * STALE_AFTER_SWEEPS;
+    return age > limit ? age : null;
+  }
+
   lastSweepOk(): boolean {
+    if (this.staleFor() !== null) return false;
     return this.sweepOk ?? true;
+  }
+
+  /** Whether the last batch came back, for /health to report in place of a port probe. */
+  lastFetchOk(): boolean | null {
+    return this.fetchOk;
   }
 
   consecutiveFailures(): number {
@@ -100,6 +130,11 @@ export class MonitorSweeper {
   /** The human label the status strip shows. Derived here so the engine gives its own account of
    *  its health rather than the client inferring one. */
   alarmState(): { label: string; bad: boolean } {
+    // a sweep that never came back outranks whatever the last one that did come back reported
+    const stale = this.staleFor();
+    if (stale !== null) {
+      return { label: `STALLED (no sweep for ${Math.round(stale)}s)`, bad: true };
+    }
     if (this.sweepOk === null) return { label: "starting", bad: false };
     if (this.sweepOk) return { label: "active", bad: false };
     const n = this.consecutiveFailuresCount;
@@ -190,7 +225,9 @@ export class MonitorSweeper {
     let badCodes: string[];
     try {
       ({ records, bad: badCodes } = await fetchResilient(codes, this.deps.fetchQuotes));
+      this.fetchOk = true;
     } catch (err) {
+      this.fetchOk = false;
       console.error("monitor sweep snapshot failed:", err);
       await this.recordFailure();
       return;
@@ -451,14 +488,25 @@ export class MonitorSweeper {
     return this.secondsSinceAlarm(monitor, now) >= this.deps.settings.alarmCooldownSeconds;
   }
 
-  private async recordFailure(): Promise<void> {
+  /** A sweep the loop gave up waiting for (scheduler.ts's watchdog).
+   *
+   *  Counted as a failure, because a sweep that never returned told us less than one that failed:
+   *  without this the next tick simply starts another and the stall leaves no trace anywhere.
+   */
+  async recordStall(ageSeconds: number): Promise<void> {
+    const age = Math.round(ageSeconds);
+    console.error(`monitor sweep abandoned after ${age}s`);
+    await this.recordFailure(`a sweep stuck for ${age}s`);
+  }
+
+  private async recordFailure(reason = "OpenD unreachable?"): Promise<void> {
     this.sweepOk = false;
     this.consecutiveFailuresCount += 1;
     // edge-triggered: once, at the threshold, not once per failure
     if (this.consecutiveFailuresCount === this.deps.settings.degradedAfterFailures) {
       await this.notify(
         `⚠️ monitoring degraded: ${this.consecutiveFailuresCount} consecutive sweep failures `
-        + "(OpenD unreachable?)",
+        + `(${reason})`,
       );
     }
   }

@@ -24,6 +24,26 @@ describe("/health", () => {
     expect(data.last_run).toBeNull();
   });
 
+  it("reports the last fetch for opend, not a port that merely accepts", async () => {
+    // 2026-10-16: OpenD held the socket open and would not log in. The probe said true, every
+    // OpenD-backed route returned 502, and the dashboard showed a green light for a gateway the
+    // service could not speak to. What the last batch actually did is the only honest answer, and
+    // it costs no extra call.
+    const h2 = start({ opend: true });
+    h2.sweeper.fetchOk = false;
+    const data = await body(await h2.call("/health", { anonymous: true }));
+    expect(data.opend).toBe(false);
+  });
+
+  it("falls back to the port probe only while nothing has been fetched yet", async () => {
+    // a service that has not asked yet cannot report what asking would do, and "unknown" is not one
+    // of the two values this field has
+    const h2 = start({ opend: true });
+    expect(h2.sweeper.fetchOk).toBeNull();
+    const data = await body(await h2.call("/health", { anonymous: true }));
+    expect(data.opend).toBe(true);
+  });
+
   it("no longer carries a contract version, because the compiler has replaced it", async () => {
     // the dashboard used to compare one against its own to decide whether it had been built against
     // the API it was talking to. Since phase 8 it takes its TYPES from the API, so a shape that has
