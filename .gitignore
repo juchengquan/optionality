@@ -189,7 +189,13 @@ _examples/
 
 # optionality service
 data/
-opend/
+# The OpenD INSTALL, at the repository root — anchored, because a bare `opend/` matches a directory
+# of that name at ANY depth. It silently excluded backend/src/opend/ (the whole websocket client the
+# API cannot start without) and backend/tools/opend/ (the diff-opend differential CLAUDE.md names)
+# from 2026-10-02 until 2026-10-16: present in the working tree node runs, absent from the clone.
+# The rule two lines below is the evidence — it was written to keep that tool's output out, which a
+# bare rule made unreachable, since git does not descend into a directory it has already excluded.
+/opend/
 # frontend: dependencies are not committed, the BUILT bundle is (see ADR 0005)
 frontend/node_modules/
 node_modules/
