@@ -82,6 +82,14 @@ export interface SnapshotResponse {
 export interface MoomooClient {
   onlogin?: (ok: boolean, msg: unknown) => void;
   start(ip: string, port: number, ssl: boolean, key: string): void;
+  /** The inner connection, and the ONLY thing that can hang it up.
+   *
+   *  `stop()` below is not that: it unregisters a push callback and returns. Nothing in the
+   *  package's public surface closes a socket, so this is reached for deliberately — the library's
+   *  own `start()` reaches for the same field to close the previous connection. Optional because a
+   *  fake need not have one, and because a version that drops the field must not crash the sweep.
+   */
+  websock?: { close: () => void };
   GetSecuritySnapshot(req: {
     c2s: { securityList: Security[] };
   }): Promise<SnapshotResponse>;
