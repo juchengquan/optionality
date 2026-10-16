@@ -312,3 +312,30 @@ describe("fitting, measured for real", () => {
     expect(narrow).toBeLessThan(wide);
   });
 });
+
+/** The affordance on the alarm figure. Its whole content is a visual claim — "this is tappable" —
+ *  so jsdom can assert the span and the title and learn nothing about whether anything is drawn.
+ *  Reported twice as there being no way to edit a combo's threshold: the way was there, and
+ *  nothing on the row pointed at it. */
+describe("the alarm figure says it can be edited", () => {
+  it("draws an underline under the threshold, and is big enough to tap", async () => {
+    mockApi([combo]);
+    await atWidth(390);
+    render(<App />);
+    await new Promise((r) => setTimeout(r, 250));
+
+    const mark = document.querySelector("span.editable") as HTMLElement | null;
+    expect(mark, "the alarm figure carries the affordance").toBeTruthy();
+    const cs = getComputedStyle(mark!);
+    expect(cs.textDecorationLine, "underlined").toBe("underline");
+    expect(cs.textDecorationStyle, "dotted, not a link's solid rule").toBe("dotted");
+    expect(cs.cursor).toBe("pointer");
+
+    const r = mark!.getBoundingClientRect();
+    expect(r.width, "drawn at all").toBeGreaterThan(20);
+    expect(r.height).toBeGreaterThan(8);
+    // and it is inside the viewport at phone width, where the owner reads it
+    expect(r.left).toBeGreaterThanOrEqual(0);
+    expect(r.right).toBeLessThanOrEqual(390);
+  });
+});
