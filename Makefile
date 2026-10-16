@@ -38,9 +38,11 @@ test:
 #   a SNAPSHOT database  taken with the online backup, never cp (CLAUDE.md). A second sweeper
 #                        writing live rows can stamp last_alarm_at and suppress a real alarm's
 #                        cooldown, so a local instance gets its own copy of the real data.
-#   TELEGRAM_* blank     the bot token allows ONE getUpdates consumer (CLAUDE.md); a second poller
-#                        would steal the live bot's updates. Shell variables beat --env-file, so
-#                        blanking them here overrides .env.
+#   TELEGRAM_* blank     belt and braces, NOT the thing that keeps the bot off: the bot is gated on
+#                        OPTIONALITY_BOT=1 (main.ts), which only the plist sets, so a local run
+#                        never polls getUpdates in the first place. Blanking the pair stops a local
+#                        instance SENDING anything — a sweep here must not message the owner.
+#                        Shell variables beat --env-file, which is what makes the blanking bite.
 #   a long sweep         one sweep at startup is unavoidable (the loop fires immediately, on
 #                        purpose), and 3600 stops it becoming a second sweeper after that.
 # PORT is left alone: main.ts defaults to 31417, so it cannot collide with the live 31415.
