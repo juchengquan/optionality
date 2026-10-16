@@ -137,9 +137,6 @@ export function App() {
       onTotal: (monitorId, value) => void act(() => setTotalEntry(monitorId, value)),
       // the rule is resolved HERE, from the /monitors state App already holds: a watchlist row
       // carries no option_type or strike, so a lone contract's holding cannot be derived from
-      // the row alone, and no row component should have to hold both lists to find out
-      // the rule is resolved HERE, from the /monitors state App already holds: a watchlist row
-      // carries no option_type or strike, so a lone contract's holding cannot be derived from
       // the row alone, and no row component should have to hold both lists to find out.
       // Through a ref, so the handlers stay stable across polls — `act` reloads for us.
       onHolding: (row, values) => void act(
@@ -264,7 +261,7 @@ export function App() {
       />
       {quotes.length === 0 && !error ? <p>Watchlist is empty.</p> : null}
 
-      <Holdings reloadKey={pollFrom} />
+      <Holdings reloadKey={pollFrom} act={act} />
 
       <MutedTables
         monitors={monitors}

@@ -689,6 +689,26 @@ describe("recording what a Position was worth", () => {
     });
   });
 
+  it("records a row on a SATURDAY, which the vol chain depends on", async () => {
+    // volAttribution requires consecutive samples to be exactly one calendar day apart, and that
+    // is only exact because this writes every day: marketDate is the New York CALENDAR date and
+    // there is no market-day filter anywhere. If the sampler ever starts skipping non-market days,
+    // this fails here rather than silently killing the vol figure for every holding.
+    const id = held("held");
+    // 2026-10-17 is a Saturday; 14:00 UTC is mid-morning in New York
+    const saved = now;
+    now = new Date("2026-10-17T14:00:00Z");
+    try {
+      await sweeper(spread(5.0, 1.0)).sweep();
+    } finally {
+      now = saved;
+    }
+
+    const row = db.prepare("select observed_on from position_samples where position_id = ?").get(id) as
+      { observed_on: string } | undefined;
+    expect(row?.observed_on, "a Saturday row").toBe("2026-10-17");
+  });
+
   it("records each leg's vega beside its IV, because a weighted vol needs weights", async () => {
     // The adjustment multiplies the pace reference by one vol ratio, and these legs do not share a
     // vol — 10.5 against 22.1 here, and the same 2x skew on the owner's live condor. Collapsing

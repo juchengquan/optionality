@@ -19,15 +19,3 @@ export const HOLDINGS_BODY = {
   ],
 } as const;
 
-export const STRATEGY_BODY = {
-  notification: { file: { file_path: "./out.html" } },
-  code_information: { type: "index", name: "SPX", market: "US" },
-  option_strategy: {
-    strategy: "iron_condor",
-    expiry_date_distance: { min: 5, max: 20 },
-    options: [
-      { option_type: "PUT", filter: { delta_min: -0.15, delta_max: -0.05 }, stride: 25 },
-      { option_type: "CALL", filter: { delta_min: 0.05, delta_max: 0.15 }, stride: 25 },
-    ],
-  },
-} as const;

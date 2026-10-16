@@ -93,6 +93,41 @@ describe("what vol did to a holding, over its own samples", () => {
     expect(await body(resp)).toEqual({ vol: null, from: null, to: null, days: null });
   });
 
+  it("survives a sample whose stored reading is not a number", async () => {
+    // The route's own comment promises "a corrupt map costs the figure, never the request", and
+    // only unparseable TEXT was covered. A map that parses but holds a string gave vol: NaN, and
+    // the output schema REJECTS NaN — so the request answered 500 instead of a null figure. Found
+    // by a code review; the 500 path had no test at all.
+    start();
+    const id = await created201(await post(condor({ opened_at: "2026-10-06" })));
+    const [sc] = legCodes();
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
+       values (?, '2026-10-06', 45, 3.0, ?, ?)`,
+    ).run(id, JSON.stringify({ ...flat(10), [sc!]: "not a number" }), JSON.stringify(flat(4)));
+
+    const resp = await h.call(`/positions/${id}/vol`);
+    expect(resp.status, "a figure it cannot compute is not a server error").toBe(200);
+    expect((await body(resp)).vol).toBeNull();
+  });
+
+  it("survives a sample whose stored reading is a JSON null", async () => {
+    // how a bad OpenD field actually lands: Number() of it is NaN, and JSON.stringify writes NaN
+    // as null. The writer now rejects it, so this is the reader holding the line for rows already
+    // stored that way.
+    start();
+    const id = await created201(await post(condor({ opened_at: "2026-10-06" })));
+    const [sc] = legCodes();
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
+       values (?, '2026-10-06', 45, 3.0, ?, ?)`,
+    ).run(id, JSON.stringify({ ...flat(10), [sc!]: null }), JSON.stringify(flat(4)));
+
+    const resp = await h.call(`/positions/${id}/vol`);
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).vol).toBeNull();
+  });
+
   it("is 404 for a Position that does not exist", async () => {
     start();
     expect((await h.call("/positions/nope/vol")).status).toBe(404);
