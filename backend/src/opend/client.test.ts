@@ -13,6 +13,8 @@ interface Script {
   loginOk?: boolean;
   /** never calls onlogin at all */
   loginSilent?: boolean;
+  /** accepts the request and never answers it, as a logged-in OpenD that has gone quiet does */
+  respondSilent?: boolean;
   respond?: (codes: string[]) => SnapshotResponse | Promise<SnapshotResponse>;
 }
 
@@ -44,6 +46,7 @@ class FakeMoomoo implements MoomooClient {
     const codes = req.c2s.securityList.map((s) => s.code);
     this.asked.push(codes);
     this.shared.asked.push(codes);
+    if (this.script.respondSilent) return new Promise<SnapshotResponse>(() => { /* never */ });
     const respond = this.script.respond
       ?? ((cs: string[]) => ({
         retType: 0,
@@ -67,7 +70,7 @@ interface Shared {
 function harness(script: Script = {}) {
   const shared: Shared = { starts: 0, stops: 0, asked: [] };
   const client = new OpendClient({
-    host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50,
+    host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 50,
     create: () => new FakeMoomoo(script, shared),
   });
   return { client, shared };
@@ -180,6 +183,31 @@ describe("failing", () => {
     await expect(client.snapshot(["US.X"])).rejects.toThrow(/snapshot API failed: socket closed/);
     expect(shared.stops).toBe(1);
     fail = false;
+    await client.snapshot(["US.X"]);
+    expect(shared.starts).toBe(2);
+  });
+
+  it("gives up rather than hanging when the request never answers", async () => {
+    // What happened on 2026-10-16. The login half was already bounded; this half was not, so a
+    // logged-in OpenD that stopped answering left the await unsettled for ever. The sweep never
+    // threw, so nothing counted a failure and /health went on reporting "active" while the alarm
+    // engine was dead.
+    const { client } = harness({ respondSilent: true });
+    await expect(client.snapshot(["US.X"])).rejects.toThrow(/request timed out after 50ms/);
+  });
+
+  it("drops the connection when a request times out, so the next call reconnects", async () => {
+    // the timed-out request may still be in flight on a socket we have stopped listening to; the
+    // next caller must not inherit it
+    let silent = true;
+    const shared: Shared = { starts: 0, stops: 0, asked: [] };
+    const client = new OpendClient({
+      host: "h", port: 1, key: "k", loginTimeoutMs: 50, requestTimeoutMs: 50,
+      create: () => new FakeMoomoo({ get respondSilent() { return silent; } }, shared),
+    });
+    await expect(client.snapshot(["US.X"])).rejects.toThrow(/timed out/);
+    expect(shared.stops).toBe(1);
+    silent = false;
     await client.snapshot(["US.X"]);
     expect(shared.starts).toBe(2);
   });

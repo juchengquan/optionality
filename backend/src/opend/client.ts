@@ -27,8 +27,33 @@ export interface OpendConfig {
   /** OpenD's websocket key, in plaintext; the library hashes it */
   key: string;
   loginTimeoutMs?: number;
+  /** Bounds the ASK, where loginTimeoutMs bounds the handshake. A logged-in OpenD can accept a
+   *  request and never answer it, and the library's promise then never settles — which stopped the
+   *  alarm engine dead on 2026-10-16. Shorter than the sweep watchdog on purpose: the fetch should
+   *  fail and be counted, not be abandoned by the loop. */
+  requestTimeoutMs?: number;
   /** supplied by a test; the real one is the npm package's default export */
   create?: () => MoomooClient;
+}
+
+/** Stop waiting, which is NOT the same as cancelling: the request may still be in flight on a
+ *  socket nobody is listening to any more. That is why every caller of this closes the connection,
+ *  so the next call starts a new one rather than inheriting a queue it cannot see.
+ */
+function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`OpenD ${what} timed out after ${ms}ms`)),
+      ms,
+    );
+    work.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    );
+  });
 }
 
 /** `US.SPXW261030C8100000` as moomoo wants it, and back again. */
@@ -110,9 +135,11 @@ export class OpendClient {
     let response;
     try {
       const client = await this.connect();
-      response = await client.GetSecuritySnapshot({
-        c2s: { securityList: codes.map(toSecurity) },
-      });
+      response = await withTimeout(
+        client.GetSecuritySnapshot({ c2s: { securityList: codes.map(toSecurity) } }),
+        this.config.requestTimeoutMs ?? 10_000,
+        "request",
+      );
     } catch (err) {
       // any failure, including a dropped socket, costs the connection
       this.close();
