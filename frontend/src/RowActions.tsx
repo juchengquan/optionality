@@ -10,6 +10,18 @@ import { NativeSelect } from "@/components/ui/native-select";
 import type { Entry, HoldingValues } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
 
+/** Whether there is an entry to type here at all: a rule covering WHOLE holdings, and at least one
+ *  of them.
+ *
+ *  A rule watching part of a structure has no entry of its own — that figure would be a fraction of
+ *  someone else's credit (ADR 0003) — and an unheld rule has nothing to attach one to. Exported so
+ *  the box and its label cannot disagree: the labelled row used to go up around a box that rendered
+ *  nothing, leaving the word "entry" beside empty space, which reads as a control that has broken.
+ */
+export function hasEntryToType(entry: Entry): boolean {
+  return entry.scope === "all" && entry.positions.length > 0;
+}
+
 /** Threshold, mute and delete. No optimistic update on any of them: these change what the
  *  alarm engine does, and the server's answer is the only truth about that. */
 export function RowActions({
@@ -46,7 +58,7 @@ export function RowActions({
         </form>
       </Labelled>
 
-      {entryCell ? <Labelled label="entry">{entryCell}</Labelled> : null}
+      {entryCell && hasEntryToType(entry) ? <Labelled label="entry">{entryCell}</Labelled> : null}
 
       {holdingForm ? <Labelled label="holding">{holdingForm}</Labelled> : null}
 
@@ -184,10 +196,10 @@ export function EntryCell({
 }) {
   const whole = entry.scope === "all" ? entry.positions : [];
   const single = whole.length === 1 ? whole[0] : undefined;
-  const spanning = whole.length > 1;
   const [value, setValue] = useState<number | null>(entry.entry);
 
-  if (!single && !spanning) return null;
+  // the same predicate the labelled wrapper reads, so one of them cannot render without the other
+  if (!hasEntryToType(entry)) return null;
   return (
     <form
       className="flex items-center gap-2"
