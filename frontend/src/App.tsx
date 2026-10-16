@@ -264,7 +264,7 @@ export function App() {
       />
       {quotes.length === 0 && !error ? <p>Watchlist is empty.</p> : null}
 
-      <Holdings reloadKey={pollFrom} />
+      <Holdings reloadKey={pollFrom} act={act} />
 
       <MutedTables
         monitors={monitors}

@@ -353,3 +353,77 @@ describe("deleting a holding", () => {
       expect(calls.filter((u) => u.includes("/positions/values")).length).toBeGreaterThan(before));
   });
 });
+
+describe("when a write is refused", () => {
+  /** Three findings from a code review, all the same shape: the owner acts and nothing happens,
+   *  with no message saying why.
+   *
+   *  Every other mutation on the dashboard goes through App's `act`, which puts the service's own
+   *  words in a toast — the service explains its refusals properly, so its words are what should
+   *  be shown. These two writes went through a bare `void (async () => {...})()` with no catch, so
+   *  a refusal became an unhandled promise rejection: no toast, no reload, the row untouched.
+   */
+  function mockRefusing(holdings: unknown[], detail: string) {
+    calls = [];
+    posted = [];
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        posted.push({ url, method, body: init?.body ? JSON.parse(init.body as string) : {} });
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail }) } as Response);
+      }
+      calls.push(url);
+      const body = url.includes("/positions/values") ? holdings
+        : url.endsWith("/vol") ? { vol: null, from: null, to: null, days: null }
+        : url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+    }));
+  }
+
+  it("says why, in the service's own words, when a patch is refused", async () => {
+    mockRefusing([undated], "position not found");
+    render(<App />);
+    const panel = await holdingsOf();
+    const row = within(panel).getByTestId("holding-pX");
+    fireEvent.change(within(row).getByLabelText("entry", { exact: false }), { target: { value: "3.1" } });
+    await userEvent.click(within(row).getByRole("button", { name: /set/i }));
+
+    await waitFor(() => expect(screen.getByText("position not found")).toBeTruthy());
+  });
+
+  it("says why when a delete is refused", async () => {
+    mockRefusing([spread], "position not found");
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(
+      within(within(panel).getByTestId("holding-pBS")).getByRole("button", { name: /delete/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(screen.getByText("position not found")).toBeTruthy());
+  });
+
+  it("records the opened date alone, rather than refusing in silence", async () => {
+    // `if (value === null) return;` made the button a no-op on a holding with no entry — the very
+    // case the panel exists for, directly under a line telling the owner to set a date there.
+    // exitLevels yields a schedule from opened_at alone, so the date by itself is meaningful.
+    mockApi([undated]);
+    render(<App />);
+    const panel = await holdingsOf();
+    const row = within(panel).getByTestId("holding-pX");
+    fireEvent.change(within(row).getByLabelText("opened", { exact: false }), { target: { value: "2026-10-09" } });
+    await userEvent.click(within(row).getByRole("button", { name: /set/i }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.body).toEqual({ opened_at: "2026-10-09" });
+  });
+
+  it("still sends nothing when neither field was filled in", async () => {
+    mockApi([undated]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(
+      within(within(panel).getByTestId("holding-pX")).getByRole("button", { name: /set/i }));
+    expect(posted).toHaveLength(0);
+  });
+});
