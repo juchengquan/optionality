@@ -74,12 +74,16 @@ const combo = (over: Record<string, unknown> = {}) => monitor({
   ...over,
 });
 
-const sweeper = (fetchQuotes: QuoteFetcher, over: Partial<Settings> = {}) =>
+const sweeper = (
+  fetchQuotes: QuoteFetcher, over: Partial<Settings> = {},
+  /** overridden only where the test is about a send that FAILS, which a collecting fake cannot do */
+  send: (text: string) => void | Promise<void> = (text) => { sent.push(text); },
+) =>
   new MonitorSweeper({
     db,
     settings: settingsFor({ ...BASE, ...over }),
     fetchQuotes,
-    send: (text) => { sent.push(text); },
+    send,
     now: () => now,
   });
 
@@ -1027,6 +1031,44 @@ describe("the manage-by notice", () => {
     // Entry 6.86 opened at 45 DTE, now 21: on-pace 4.69, and 4.40 is ahead of it
     expect(notices()[0]).toMatch(/4\.69/);
     expect(notices()[0]).toMatch(/ahead/i);
+  });
+
+  it("tries again next sweep when the notice could not be delivered", async () => {
+    // ADR 0011: "Manage-by raises exactly one notice." A send that throws must leave the deadline
+    // un-stamped, or that one notice is zero notices — for ever, since the stamp is what stops it
+    // being raised again.
+    //
+    // The case below this one is named "if the notice fails" but unconfigures telegram, where the
+    // send is a no-op that cannot fail. Nothing exercised a send that throws, and `notify` swallows
+    // every send error — it must, because the sweep's job is the alarm — so the stamp could not be
+    // conditioned on it throwing, however the comment there read.
+    const id = held("condor", daysFromNow(-24), 21);
+    const fetch = quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 });
+    let down = true;
+    const flaky = (text: string) => {
+      if (down) throw new Error("telegram down");
+      sent.push(text);
+    };
+
+    await sweeper(fetch, {}, flaky).sweep();
+    expect(notices(), "nothing reached the phone").toHaveLength(0);
+    expect(notifiedAt(id), "so the deadline must still be owed").toBeNull();
+
+    down = false;
+    await sweeper(fetch, {}, flaky).sweep();
+    expect(notices(), "the next sweep delivers it").toHaveLength(1);
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
+  it("stamps the deadline when telegram is not configured, rather than owing it for ever", async () => {
+    // "not configured" is not a failure to retry: there is nowhere to deliver, and a notice held
+    // open would be reconsidered every 15 seconds for ever, logging the same line each time. So it
+    // counts as delivered-as-far-as-possible, which is the one asymmetry in notify's answer.
+    const id = held("condor", daysFromNow(-24), 21);
+    const fetch = quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 });
+    await sweeper(fetch, { telegramBotToken: "", telegramChatId: "" }).sweep();
+    expect(notices()).toHaveLength(0);
+    expect(notifiedAt(id)).toBeTruthy();
   });
 
   it("does not stop the sweep, nor the alarms, if the notice fails", async () => {

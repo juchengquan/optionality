@@ -181,16 +181,26 @@ export class MonitorSweeper {
   }
 
   // --- the sweep ---------------------------------------------------------------------------
-  private async notify(text: string): Promise<void> {
+  /** Send, and say whether it got through.
+   *
+   *  A failed send must never stop a sweep — its job is the alarm — so this swallows the error.
+   *  That makes "did it throw" useless to a caller, and the manage-by notice needs the answer: it
+   *  is raised ONCE, so a stamp written after an undelivered notice loses it for ever. Hence a
+   *  return value rather than a rethrow. Telegram not being configured counts as delivered: there
+   *  is nothing to retry, and retrying every sweep would log the same line for ever.
+   */
+  private async notify(text: string): Promise<boolean> {
     const { settings } = this.deps;
     if (!settings.telegramBotToken || !settings.telegramChatId) {
       console.info(`telegram not configured; alarm suppressed: ${text}`);
-      return;
+      return true;
     }
     try {
       await this.deps.send(text);
+      return true;
     } catch (err) {
       console.error("telegram send failed:", err);
+      return false;
     }
   }
 
@@ -281,11 +291,12 @@ export class MonitorSweeper {
             line += ` — ${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
           }
         }
-        // stamped BEFORE the send, and only when the send does not throw: the order below means
-        // a failed send is retried next sweep rather than swallowed, while a successful one is
-        // never repeated
-        await this.notify(line);
-        stampManageNotified(this.deps.db, row.id, toSqlDatetime(at));
+        // stamped only once the notice has actually been delivered, so an undelivered one is
+        // retried next sweep while a delivered one is never repeated. `notify` swallows a failed
+        // send and therefore cannot be relied on to throw — it reports instead.
+        if (await this.notify(line)) {
+          stampManageNotified(this.deps.db, row.id, toSqlDatetime(at));
+        }
       } catch (err) {
         console.error(`manage-by notice for ${row.name} failed:`, err);
       }
