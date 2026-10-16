@@ -7,7 +7,8 @@ import { NumberField } from "@/components/ui/number-field";
 
 import { deletePosition, fetchHoldings, patchPosition, type Holding } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
-import { DASH, fmt } from "./format";
+import { fmt } from "./format";
+import { PaceLine } from "./PaceLine";
 
 /** What you actually HOLD, as distinct from what is watched.
  *
@@ -85,7 +86,9 @@ function HoldingRow({ holding, onSaved, act }: {
         {([
           ["entry", fmt(holding.entry, "mid")],
           ["cost to close", fmt(holding.cost_to_close, "mid")],
-          ["P&L", holding.pnl === null ? DASH : String(holding.pnl)],
+          // fmt, not String: WatchlistTable prints the same figure as 8.00, and a bare 8 broke
+          // the tabular-nums alignment of the grid it sits in
+          ["P&L", fmt(holding.pnl, "mid")],
           ["dte", String(holding.dte)],
         ] as [string, string][]).map(([label, value]) => (
           <div key={label}>
@@ -94,31 +97,9 @@ function HoldingRow({ holding, onSaved, act }: {
           </div>
         ))}
       </dl>
-      {/* The same words the row sheet uses, for the same reason: BEHIND means costing more than
-          time alone accounts for, and a bare signed gap beside a P&L — where positive is good —
-          reads backwards (RowDetail.tsx:89). */}
       {s === null ? (
         <p className="meta">no opened date, so no exit schedule — set one below</p>
-      ) : (
-        <>
-          <p className="meta">
-            {`opened at ${s.dte_at_open} DTE`}
-            {s.pace_gap === null ? null : (
-              <>
-                {" · "}
-                <strong>
-                  {s.pace_gap > 0 ? "behind" : "ahead"}
-                  {` by ${Math.abs(s.pace_gap).toFixed(2)}`}
-                </strong>
-              </>
-            )}
-          </p>
-          <p className="meta">
-            {`on pace ${fmt(s.on_pace, "mid")} · target ${fmt(s.target, "mid")}`}
-            {` · stop ${fmt(s.stop, "mid")} · manage by ${s.manage_by_dte} DTE`}
-          </p>
-        </>
-      )}
+      ) : <PaceLine schedule={s} />}
       <div className="flex flex-wrap items-end gap-2">
         <HoldingEdit holding={holding} onSaved={onSaved} act={act} />
         {/* Guarded like a rule delete, and for a stronger reason: a rule can be MUTED instead and

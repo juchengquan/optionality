@@ -70,7 +70,16 @@ const CONFIG_SCHEMAS = {
   holdings: OptionHoldingsConfig,
 } as const satisfies Record<TaskType, z.ZodType>;
 
-/** Why this body is not a valid config of this type, or null if it is. */
+/** Why this body is not a valid config of this type, or null if it is.
+ *
+ *  UNREACHABLE since #118 removed the /configs routes, and so is everything above it bar
+ *  TASK_TYPES and TaskType, which scheduler.ts and ports.ts still import. Left in place rather
+ *  than gutted: phase 10 (2026-11-02) removes the run pipeline whole, and this file describes the
+ *  Python config format it describes — two edits to the same file for seventeen days.
+ *
+ *  The consequence to know, since this was the only validation `configs` ever had: the single
+ *  remaining way to write one is raw SQL, so a malformed body is no longer refused at the write
+ *  and fails inside the worker's subprocess instead, in the background. */
 export function configBodyError(taskType: TaskType, body: unknown): string | null {
   const result = CONFIG_SCHEMAS[taskType].safeParse(body);
   return result.success ? null : z.prettifyError(result.error);

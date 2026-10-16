@@ -127,6 +127,11 @@ describe("a holding nothing watches", () => {
     expect(text).toContain("2.43");
     expect(text).toContain("2.35");
     expect(text).toContain("37");
+    // two decimals, like every other money figure on the dashboard. `String(pnl)` printed a bare
+    // 8 where WatchlistTable prints 8.00 for the same number, which broke the tabular-nums
+    // alignment of the grid it sits in — a code review caught the inconsistency, and a mutation
+    // sweep then showed nothing here could tell the two apart.
+    expect(text).toContain("8.00");
   });
 
   it("shows its exit schedule, worded the way the row sheet words it", async () => {
