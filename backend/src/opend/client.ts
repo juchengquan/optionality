@@ -63,7 +63,16 @@ function toSecurity(code: string): Security {
 }
 
 export class OpendClient {
+  /** The logged-in client, or null when the next call must log in again. */
   private client: MoomooClient | null = null;
+  /** The client OBJECT, kept for the life of the process even while `client` is null.
+   *
+   *  Calling `start()` again on the same object makes the library close the previous socket itself.
+   *  Building a fresh object instead orphans the old one: `stop()` does not close anything, and the
+   *  base class re-opens that orphan every 1000ms for ever. Measured on 2026-10-16, after an OpenD
+   *  outage: 37 ESTABLISHED connections from one process and 10,794 login/disconnect cycles.
+   */
+  private instance: MoomooClient | null = null;
   private connecting: Promise<MoomooClient> | null = null;
 
   /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
@@ -93,7 +102,8 @@ export class OpendClient {
     const { host, port, key, loginTimeoutMs = 8000 } = this.config;
     if (!key) throw new Error("OpenD websocket key is not configured");
     const create = this.config.create ?? (await defaultFactory());
-    const client = create();
+    this.instance ??= create();
+    const client = this.instance;
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(
         () => reject(new Error(`OpenD login timed out after ${loginTimeoutMs}ms`)),
@@ -114,10 +124,17 @@ export class OpendClient {
     return client;
   }
 
-  /** Drop the connection so the next call makes a new one. */
+  /** Hang up, so the next call logs in again.
+   *
+   *  Both halves matter and neither is interchangeable: `stop()` unregisters the push callback,
+   *  `websock.close()` is what actually closes the socket, kills the library's reconnect timer and
+   *  rejects any request still outstanding. The object itself is kept — see `instance`.
+   */
   close(): void {
+    const client = this.client ?? this.instance;
     try {
-      this.client?.stop();
+      client?.stop();
+      client?.websock?.close();
     } catch {
       /* already gone */
     }

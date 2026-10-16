@@ -20,6 +20,8 @@ interface Script {
 
 class FakeMoomoo implements MoomooClient {
   onlogin?: (ok: boolean, msg: unknown) => void;
+  /** the inner connection the real library keeps, and the only thing that can hang it up */
+  websock: { close: () => void };
   started: { host: string; port: number; key: string }[] = [];
   stopped = 0;
   asked: string[][] = [];
@@ -32,6 +34,8 @@ class FakeMoomoo implements MoomooClient {
   constructor(script: Script, shared: Shared) {
     this.script = script;
     this.shared = shared;
+    shared.creates += 1;
+    this.websock = { close: () => { shared.hangups += 1; } };
   }
 
   start(host: string, port: number, _ssl: boolean, key: string): void {
@@ -55,6 +59,7 @@ class FakeMoomoo implements MoomooClient {
     return respond(codes);
   }
 
+  /** As the real one: it unregisters a push callback and does NOT close the socket. */
   stop(): void {
     this.stopped += 1;
     this.shared.stops += 1;
@@ -65,10 +70,14 @@ interface Shared {
   starts: number;
   stops: number;
   asked: string[][];
+  /** how many client OBJECTS were made. The library leaks a socket per object (see client.ts). */
+  creates: number;
+  /** how many times the inner socket was actually hung up */
+  hangups: number;
 }
 
 function harness(script: Script = {}) {
-  const shared: Shared = { starts: 0, stops: 0, asked: [] };
+  const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
   const client = new OpendClient({
     host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 50,
     create: () => new FakeMoomoo(script, shared),
@@ -116,7 +125,7 @@ describe("connecting", () => {
 
   it("tries again on the next call after a failure", async () => {
     let refuse = true;
-    const shared: Shared = { starts: 0, stops: 0, asked: [] };
+    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
     const client = new OpendClient({
       host: "h", port: 1, key: "k", loginTimeoutMs: 50,
       create: () => new FakeMoomoo({ get loginOk() { return !refuse; } }, shared),
@@ -170,7 +179,7 @@ describe("failing", () => {
     // a socket that has quietly died must produce a failed sweep and a visible last_sweep_ok: false,
     // not a silent stream of empty batches
     let fail = true;
-    const shared: Shared = { starts: 0, stops: 0, asked: [] };
+    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
     const client = new OpendClient({
       host: "h", port: 1, key: "k", loginTimeoutMs: 50,
       create: () => new FakeMoomoo({
@@ -200,7 +209,7 @@ describe("failing", () => {
     // the timed-out request may still be in flight on a socket we have stopped listening to; the
     // next caller must not inherit it
     let silent = true;
-    const shared: Shared = { starts: 0, stops: 0, asked: [] };
+    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
     const client = new OpendClient({
       host: "h", port: 1, key: "k", loginTimeoutMs: 50, requestTimeoutMs: 50,
       create: () => new FakeMoomoo({ get respondSilent() { return silent; } }, shared),
@@ -210,6 +219,36 @@ describe("failing", () => {
     silent = false;
     await client.snapshot(["US.X"]);
     expect(shared.starts).toBe(2);
+  });
+
+  it("hangs up the socket on failure, rather than leaving it to reconnect", async () => {
+    // The library's stop() only unregisters a push callback — it does not close anything, and the
+    // base class re-opens the socket every 1000ms for ever. Measured on 2026-10-16: 37 ESTABLISHED
+    // connections from one process to OpenD, and 10,794 login/disconnect cycles in its log.
+    const { client, shared } = harness({ respond: () => { throw new Error("socket closed"); } });
+    await expect(client.snapshot(["US.X"])).rejects.toThrow();
+    expect(shared.hangups).toBe(1);
+  });
+
+  it("reuses one client object, because a fresh one orphans the old socket", async () => {
+    // The library closes the previous socket itself when start() is called again on the SAME
+    // object (main.js: start -> websock.close()). Making a new object instead is what leaks.
+    let fail = true;
+    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
+    const client = new OpendClient({
+      host: "h", port: 1, key: "k", loginTimeoutMs: 50, requestTimeoutMs: 50,
+      create: () => new FakeMoomoo({
+        respond: () => {
+          if (fail) throw new Error("socket closed");
+          return { retType: 0, s2c: { snapshotList: [] } };
+        },
+      }, shared),
+    });
+    await expect(client.snapshot(["US.X"])).rejects.toThrow();
+    fail = false;
+    await client.snapshot(["US.X"]);
+    expect(shared.starts).toBe(2);     // logged in again
+    expect(shared.creates).toBe(1);    // on the same object
   });
 
   it("returns an empty list, not an error, when the batch comes back empty", async () => {
