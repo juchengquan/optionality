@@ -10,7 +10,7 @@ import { toSqlDatetime } from "./db/time.ts";
 import { toSqliteJson } from "./db/values.ts";
 import { settingsFor, type Settings } from "./env.ts";
 import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
-import { MonitorSweeper } from "./sweeper.ts";
+import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 
 const CODE = "US.SPXW261218C6500000";
 const POISON = "US.SPXW260918C99999000";
@@ -441,6 +441,70 @@ describe("the watchdog", () => {
     expect(s.alarmState()).toEqual({ label: "STALLED (1 failed sweep)", bad: true });
     s.consecutiveFailuresCount = 3;
     expect(s.alarmState()).toEqual({ label: "STALLED (3 failed sweeps)", bad: true });
+  });
+});
+
+/** The failure mode of 2026-10-16: not a sweep that failed, but a sweep that never came back.
+ *
+ *  Every field /health reads was green throughout — `sweepAt` is stamped when a sweep BEGINS, the
+ *  failure counters only move when a fetch returns, and `opend` was a TCP probe answered by a
+ *  gateway that would not log in. Three fields, no new information between them, and eight minutes
+ *  of a dead alarm engine reported as "active".
+ */
+describe("a sweep that never came back", () => {
+  const interval = settingsFor(BASE).monitorIntervalSeconds;
+
+  it("calls itself stalled when no sweep has begun for several intervals", () => {
+    const s = sweeper(() => Promise.resolve([]));
+    s.sweepOk = true;                                         // the last one that finished was fine
+    s.sweepAt = new Date(now.getTime() - interval * STALE_AFTER_SWEEPS * 1000 - 1000);
+    expect(s.lastSweepOk()).toBe(false);
+    const state = s.alarmState();
+    expect(state.bad).toBe(true);
+    expect(state.label).toMatch(/no sweep for \d+s/);
+  });
+
+  it("is not stalled merely because one sweep is in flight", () => {
+    // a sweep takes real time and may straddle a tick; that is overrun, not death
+    const s = sweeper(() => Promise.resolve([]));
+    s.sweepOk = true;
+    s.sweepAt = new Date(now.getTime() - interval * 1000);
+    expect(s.lastSweepOk()).toBe(true);
+    expect(s.alarmState()).toEqual({ label: "active", bad: false });
+  });
+
+  it("is starting, not stalled, before the first sweep", () => {
+    // launchd restarts after every merge, and a service that has not swept yet must not cry stall
+    const s = sweeper(() => Promise.resolve([]));
+    expect(s.lastSweepOk()).toBe(true);
+    expect(s.alarmState()).toEqual({ label: "starting", bad: false });
+  });
+
+  it("counts an abandoned sweep as a failure, and says so at the threshold", async () => {
+    // what the scheduler's watchdog calls. Without this a stall is cleared by the next tick and
+    // leaves no trace at all.
+    const s = sweeper(() => Promise.resolve([]));
+    const limit = settingsFor(BASE).degradedAfterFailures;
+    for (let i = 0; i < limit; i += 1) await s.recordStall(90);
+    expect(s.consecutiveFailures()).toBe(limit);
+    expect(s.lastSweepOk()).toBe(false);
+    expect(sent.filter((t) => t.includes("degraded"))).toHaveLength(1);
+    expect(sent.join("\n")).toContain("90");
+  });
+
+  it("reports what the last fetch did, which is not what a port probe can tell you", async () => {
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("Client connection failed!"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    expect(s.lastFetchOk()).toBeNull();                       // nothing asked yet, nothing to claim
+    await s.sweep();
+    expect(s.lastFetchOk()).toBe(false);
+    failing = false;
+    await s.sweep();
+    expect(s.lastFetchOk()).toBe(true);
   });
 });
 

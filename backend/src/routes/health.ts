@@ -50,10 +50,13 @@ export function healthRoutes(deps: Deps) {
     return c.json(
       HealthResponse.parse({
         db: ok,
-        // the WEBSOCKET port, not the TCP one the Python probes. The question /health answers is
-        // "can I reach OpenD the way I talk to it", and probing a port this service never uses
-        // would be a green light for a gateway it cannot speak to.
-        opend: await deps.opendReachable(settings.opendHost, settings.moomooWsPort),
+        // What the last batch did, falling back to the port probe only while nothing has been
+        // asked for yet. The probe alone was a green light for a gateway this service could not
+        // speak to: on 2026-10-16 OpenD held the WEBSOCKET port open and timed out every login, so
+        // this read true while every OpenD-backed route returned 502. An answered request is the
+        // only evidence that matters, and reusing the sweep's costs no extra call (ADR 0010).
+        opend: sweeper.lastFetchOk()
+          ?? await deps.opendReachable(settings.opendHost, settings.moomooWsPort),
         queue_depth: worker.queueDepth(),
         last_run: last
           ? {

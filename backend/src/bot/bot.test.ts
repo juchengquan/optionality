@@ -607,6 +607,7 @@ describe("/health", () => {
       sweeper: {
         lastSweepAt: () => new Date("2026-08-10T03:35:00Z"),
         lastFetchAt: () => null,
+        lastFetchOk: () => null,
         lastSweepOk: () => true,
         consecutiveFailures: () => 0,
         alarmState: () => ({ label: "active", bad: false }),
@@ -624,7 +625,8 @@ describe("/health", () => {
   it("leaves out the sweep time before the first sweep", async () => {
     const b = bot(echo, {}, {
       sweeper: {
-        lastSweepAt: () => null, lastFetchAt: () => null, lastSweepOk: () => true,
+        lastSweepAt: () => null, lastFetchAt: () => null, lastFetchOk: () => null,
+        lastSweepOk: () => true,
         consecutiveFailures: () => 0, alarmState: () => ({ label: "starting", bad: false }),
       },
     });

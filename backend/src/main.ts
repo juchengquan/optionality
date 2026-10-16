@@ -21,7 +21,7 @@ import { OpendClient } from "./opend/client.ts";
 import { probeOpend } from "./opend.ts";
 import { PythonRunner } from "./runner.ts";
 import { Scheduler } from "./scheduler.ts";
-import { MonitorSweeper } from "./sweeper.ts";
+import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
 import { TelegramBot } from "./bot/bot.ts";
 import { Worker } from "./worker.ts";
@@ -89,7 +89,14 @@ const armed = scheduler.refreshJobs();
 // sweep at once as well as on the interval. Without that every restart left the alarm engine quiet
 // and the dashboard's cache empty for a whole MONITOR_INTERVAL_SECONDS — and restarts happen after
 // every merge.
-scheduler.startSweep(settings.monitorIntervalSeconds, () => sweeper.sweep());
+scheduler.startSweep(settings.monitorIntervalSeconds, () => sweeper.sweep(), {
+  // the same age at which the engine calls itself stalled, so the two agree: /health says it, and
+  // the next tick does something about it rather than coalescing behind a sweep that is not coming
+  // back. The request timeout in opend/client.ts should mean this never fires; it fired on
+  // 2026-10-16 because nothing bounded the ask.
+  stallAfterSeconds: settings.monitorIntervalSeconds * STALE_AFTER_SWEEPS,
+  onStall: (age) => { void sweeper.recordStall(age); },
+});
 
 // one getUpdates consumer per token, and the Python is holding it until the cutover
 const botWanted = process.env.OPTIONALITY_BOT === "1"

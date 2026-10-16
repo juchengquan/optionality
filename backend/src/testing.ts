@@ -67,12 +67,15 @@ export class FakeScheduler {
 export class FakeSweeper {
   sweepAt: Date | null = null;
   fetchAt: Date | null = null;
+  /** null, as a service that has not asked yet: /health then falls back to the port probe */
+  fetchOk: boolean | null = null;
   ok = true;
   failures = 0;
   label = "watching";
   bad = false;
   lastSweepAt() { return this.sweepAt; }
   lastFetchAt() { return this.fetchAt; }
+  lastFetchOk() { return this.fetchOk; }
   lastSweepOk() { return this.ok; }
   consecutiveFailures() { return this.failures; }
   alarmState() { return { label: this.label, bad: this.bad }; }

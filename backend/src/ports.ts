@@ -48,6 +48,9 @@ export interface SweeperPort {
    *  client-side so the engine gives its own account (see health.py). */
   alarmState(): { label: string; bad: boolean };
   lastFetchAt(): Date | null;
+  /** What the last batch did, or null before one was asked for. /health reports this instead of a
+   *  port probe: a socket that accepts is not a gateway that answers. */
+  lastFetchOk(): boolean | null;
 }
 
 /** Whether OpenD is listening. A TCP connect in the Python; anything that answers the question
