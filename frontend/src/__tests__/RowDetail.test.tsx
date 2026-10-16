@@ -24,6 +24,18 @@ const leg = {
   },
 };
 
+/** An UNHELD combo — scope null, no positions — which is what every combo rule looks like
+ *  until a holding it watches is recorded. Copied from the live /quotes response. */
+const unheldCombo = {
+  id: "c1", code: "1130_BS_6950", field: "mid_price", threshold: 2.01,
+  direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-30",
+  dte: 45, fill: 72, scope: null, positions: [], cost_to_close: null,
+  schedule: null, entry: null, pnl: null, snapshot: null,
+  legs: [{ sign: -1, option_type: "PUT", strike: 6950 }, { sign: 1, option_type: "PUT", strike: 6900 }],
+  combo_value: -1.45,
+  combo_greeks: { option_delta: 0.006, option_gamma: 0, option_theta: 0.03, option_vega: -0.25 },
+};
+
 let calls: { method: string; body: unknown }[] = [];
 function mockApi(quotes: unknown[] = [leg]) {
   calls = [];
@@ -44,6 +56,45 @@ async function openDetail() {
   await userEvent.click(screen.getByText("261120 8100C"));
   return await screen.findByRole("dialog");
 }
+
+describe("an unheld combo's sheet", () => {
+  beforeEach(() => {
+    document.cookie = "ui_cols_single=;path=/";
+    document.cookie = "ui_cols_combo=;path=/";
+  });
+
+  it("offers no entry row at all, rather than a label with nothing beside it", async () => {
+    // EntryCell renders NOTHING for a rule that covers no whole holding — the figure would be a
+    // fraction of someone else's credit. But the labelled wrapper went up regardless, so the sheet
+    // showed the word "entry" with empty space where its box should be. A label with no control
+    // reads as a broken control, which is how this was reported.
+    mockApi([unheldCombo]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1130_BS_6950")).toBeTruthy());
+    await userEvent.click(screen.getByText("1130_BS_6950"));
+    const sheet = await screen.findByRole("dialog");
+
+    const rows = Array.from(sheet.querySelectorAll("span.w-20")).map((s) => s.textContent?.trim());
+    expect(rows, "no empty entry row").not.toContain("entry");
+    // and the controls that DO belong to an unheld combo are all there
+    expect(rows).toEqual(["threshold", "holding", "name"]);
+    for (const name of ["set", "record", "rename", "mute", "delete"]) {
+      expect(within(sheet).getByRole("button", { name }), name).toBeTruthy();
+    }
+  });
+
+  it("still shows the entry row once a holding is recorded against it", async () => {
+    // the row is absent because there is nothing to type, not because combos do not get one
+    mockApi([{ ...unheldCombo, scope: "all", positions: [{ id: "p1", name: "spread" }], entry: 1 }]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1130_BS_6950")).toBeTruthy());
+    await userEvent.click(screen.getByText("1130_BS_6950"));
+    const sheet = await screen.findByRole("dialog");
+
+    const rows = Array.from(sheet.querySelectorAll("span.w-20")).map((s) => s.textContent?.trim());
+    expect(rows).toContain("entry");
+  });
+});
 
 describe("the row detail sheet", () => {
   beforeEach(() => {
