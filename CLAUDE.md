@@ -31,7 +31,12 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
   loads under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached
   main unable to load at all), `make diff-api` / `make diff-opend` / `make diff-services` (the three
   differentials against the Python; see `backend/tools/*/README.md`).
-- `make serve` — run the API locally (loads `.env`). `make build-ui` / `check-ui` / `test-ui` for the frontend;
+- `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
+  with the sweep at an hour and the Telegram variables blanked, because the live service is always up
+  here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
+  unset (only the plist sets it); blanking the token additionally stops a local sweep from messaging
+  you. Port 31417, not 31415.
+- `make build-ui` / `check-ui` / `test-ui` for the frontend;
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).

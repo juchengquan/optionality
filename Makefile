@@ -31,9 +31,26 @@ format:
 test:
 	uv run pytest
 
-# 127.0.0.1: reachable only via the tailscale serve proxy (and localhost); never the LAN
+# The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
+# so the documented way to "run the API locally" started the retired implementation instead.
+#
+# Three things are forced, because the live service is always running on this box:
+#   a SNAPSHOT database  taken with the online backup, never cp (CLAUDE.md). A second sweeper
+#                        writing live rows can stamp last_alarm_at and suppress a real alarm's
+#                        cooldown, so a local instance gets its own copy of the real data.
+#   TELEGRAM_* blank     belt and braces, NOT the thing that keeps the bot off: the bot is gated on
+#                        OPTIONALITY_BOT=1 (main.ts), which only the plist sets, so a local run
+#                        never polls getUpdates in the first place. Blanking the pair stops a local
+#                        instance SENDING anything — a sweep here must not message the owner.
+#                        Shell variables beat --env-file, which is what makes the blanking bite.
+#   a long sweep         one sweep at startup is unavoidable (the loop fires immediately, on
+#                        purpose), and 3600 stops it becoming a second sweeper after that.
+# PORT is left alone: main.ts defaults to 31417, so it cannot collide with the live 31415.
+SERVE_DB = data/optionality-ts.db.serve
 serve:
-	uv run --env-file .env uvicorn --factory optionality.service.app:create_app --host 127.0.0.1 --port 31415
+	node backend/tools/backup/backup.mjs $(TS_DB) $(SERVE_DB)
+	OPTIONALITY_DB_PATH=$(SERVE_DB) TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID= \
+	  MONITOR_INTERVAL_SECONDS=3600 node --env-file=.env backend/src/main.ts
 
 # two suites, split by what they can prove. jsdom has no layout engine at all, so the
 # fitting mechanism is invisible to it — see ADR 0008. Both run here: the reason for

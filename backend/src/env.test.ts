@@ -5,6 +5,28 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULTS, settingsFromEnv } from "./env.ts";
 
+describe("which database", () => {
+  it("defaults to the TypeScript database, never the frozen rollback", () => {
+    // `data/optionality.db` is the Python's, "frozen at the cutover minute and never opened by the
+    // new service" (CLAUDE.md) — it is the rollback. It was the DEFAULT here, and `main.ts` opens
+    // and MIGRATES whatever it is given, at import time. The schemas diverged at ADR 0011, so one
+    // run with OPTIONALITY_DB_PATH unset would have ALTERed the rollback.
+    //
+    // Only the launchd plist supplied the variable; `.env` does not. So the live service was right
+    // and every other way of starting this code was wrong — a hand-run `node backend/src/main.ts`,
+    // or anything importing it. `check-loads.mjs` skips main.ts for its own reasons, which is the
+    // only thing that kept `make check-api` from doing it.
+    expect(DEFAULTS.dbPath).toBe("data/optionality-ts.db");
+    expect(settingsFromEnv({}).dbPath, "with nothing set at all").toBe("data/optionality-ts.db");
+    expect(DEFAULTS.dbPath, "the rollback is never the default").not.toBe("data/optionality.db");
+  });
+
+  it("still takes the path the deployment gives it", () => {
+    expect(settingsFromEnv({ OPTIONALITY_DB_PATH: "data/elsewhere.db" }).dbPath)
+      .toBe("data/elsewhere.db");
+  });
+});
+
 describe("numbers", () => {
   it("keeps rejecting a fractional COUNT, which is always a typo", () => {
     // int() in the Python, which raised rather than silently using the default: a mistyped

@@ -46,7 +46,12 @@ export interface Settings {
 }
 
 export const DEFAULTS: Settings = {
-  dbPath: "data/optionality.db",
+  // The TypeScript service's own database. NOT `data/optionality.db`, which is the Python's and is
+  // frozen at the cutover minute as the rollback (CLAUDE.md) — and `main.ts` opens and MIGRATES
+  // whatever this names, at import time, with the two schemas diverged since ADR 0011. The launchd
+  // plist has always set OPTIONALITY_DB_PATH, so the live service was right and every other way of
+  // starting this code was quietly pointed at the rollback.
+  dbPath: "data/optionality-ts.db",
   opendHost: "127.0.0.1",
   opendPort: 11111,
   moomooWsPort: 33333,
