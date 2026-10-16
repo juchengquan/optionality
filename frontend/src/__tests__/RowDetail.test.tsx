@@ -57,6 +57,63 @@ async function openDetail() {
   return await screen.findByRole("dialog");
 }
 
+describe("editing the threshold from the table", () => {
+  beforeEach(() => {
+    document.cookie = "ui_cols_single=;path=/";
+    document.cookie = "ui_cols_combo=;path=/";
+  });
+
+  /** The number in the alarm column IS the threshold, so it is the thing to tap when you want to
+   *  change it. The controls moved into the sheet when the actions column retired (ADR 0008's
+   *  column budget), and nothing on the row said so — reported twice as "no way to edit the
+   *  threshold for combos".
+   *
+   *  The sheet already focuses its first control, which is the threshold box, so tapping the figure
+   *  is the whole edit: tap, type, set. No column spent, no focus plumbing needed — only an
+   *  affordance saying the figure is a door. */
+  it("opens the sheet with the cursor already in the threshold box", async () => {
+    mockApi([unheldCombo]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1130_BS_6950")).toBeTruthy());
+
+    await userEvent.click(screen.getByTitle("edit the threshold"));
+    const sheet = await screen.findByRole("dialog");
+    const box = within(sheet).getAllByRole("textbox")[0];
+
+    expect(document.activeElement, "the threshold box has focus").toBe(box);
+    expect((box as HTMLInputElement).value).toBe("2.01");
+  });
+
+  it("leaves the rest of the row opening the sheet exactly as before", async () => {
+    // the figure is a way IN, not the only one: the whole row still opens the sheet, and the sheet
+    // focuses its first control either way — which is why this needed no focus plumbing at all
+    mockApi([unheldCombo]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1130_BS_6950")).toBeTruthy());
+
+    await userEvent.click(screen.getByText("1130_BS_6950"));
+    const sheet = await screen.findByRole("dialog");
+
+    expect(within(sheet).getByRole("button", { name: "set" })).toBeTruthy();
+    expect(document.activeElement).toBe(within(sheet).getAllByRole("textbox")[0]);
+  });
+
+  it("sends the new threshold the sheet's own way", async () => {
+    mockApi([unheldCombo]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1130_BS_6950")).toBeTruthy());
+    await userEvent.click(screen.getByTitle("edit the threshold"));
+    const sheet = await screen.findByRole("dialog");
+
+    await userEvent.clear(within(sheet).getAllByRole("textbox")[0]!);
+    await userEvent.type(within(sheet).getAllByRole("textbox")[0]!, "2.5");
+    await userEvent.click(within(sheet).getByRole("button", { name: "set" }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toEqual({ method: "PATCH", body: { threshold: 2.5 } });
+  });
+});
+
 describe("an unheld combo's sheet", () => {
   beforeEach(() => {
     document.cookie = "ui_cols_single=;path=/";

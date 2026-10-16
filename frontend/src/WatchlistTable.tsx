@@ -154,8 +154,15 @@ export function WatchlistTable({
                           {entry.triggered && signal.bell === identity ? " 🔔" : null}
                         </>
                       ) : c.key === "alarm" ? (
+                        // The threshold IS this figure, so this is what you tap to change it. The
+                        // row's own click opens the sheet and the sheet focuses the threshold box,
+                        // so no handler belongs here — only the signal that the figure is a door.
+                        // Without it the controls were three steps away with nothing pointing at
+                        // them, which read as there being no way to edit a combo's threshold.
                         <>
-                          {cellValue(entry, c.key, isCombo)}
+                          <span className="editable" title="edit the threshold">
+                            {cellValue(entry, c.key, isCombo)}
+                          </span>
                           {entry.triggered && signal.bell === "alarm" ? " 🔔" : null}
                         </>
                       ) : (
