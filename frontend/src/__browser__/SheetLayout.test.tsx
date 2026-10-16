@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -48,7 +48,7 @@ function sameLine(a: Element, b: Element): boolean {
   return Math.abs((ra.top + ra.height / 2) - (rb.top + rb.height / 2)) < 6;
 }
 
-afterEach(() => { document.body.innerHTML = ""; });
+afterEach(() => { cleanup(); });
 
 describe("the detail sheet's controls", () => {
   it("keeps each box on the same line as its button", async () => {

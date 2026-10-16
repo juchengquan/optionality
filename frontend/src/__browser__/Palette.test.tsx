@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -44,7 +44,7 @@ function hueOf(token: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-afterEach(async () => { document.body.innerHTML = ""; await page.viewport(1280, 900); });
+afterEach(async () => { cleanup(); await page.viewport(1280, 900); });
 
 describe("the alarm palette", () => {
   it("is expressed in the same colour space as the rest of the app", async () => {

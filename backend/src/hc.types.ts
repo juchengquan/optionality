@@ -34,7 +34,7 @@ type Ok<T> = T extends ErrorBody ? never : T;
 
 /** Every endpoint, called the way the dashboard will call it.
  *
- *  All twenty-nine. A route added without a line here is a route nothing has type-checked, which is
+ *  EVERY one of them. A route added without a line here is a route nothing has type-checked, which is
  *  the only way the guarantee quietly stops being true.
  */
 async function endpoints() {
@@ -78,11 +78,18 @@ async function endpoints() {
     }),
     positionPatched: await client.positions[":id"].$patch({ param: id, json: { entry: 3.0 } }),
     positionDeleted: await client.positions[":id"].$delete({ param: id }),
+    // the only route reading history. Added in #110 and missed here until a code review pointed
+    // at the rule above — the one new route was the one route nothing type-checked, and renaming
+    // `days` would have compiled on both sides and landed as a missing line in the sheet.
+    vol: await (await client.positions[":id"].vol.$get({ param: id })).json(),
 
     // --- one contract's quote ----------------------------------------------------------
     spx: await (await client.spx.quote.$get({
       query: { strike_date: "2026-12-18", option_type: "CALL", strike: "6500" },
     })).json(),
+    spxResp: await client.spx.quote.$get({
+      query: { strike_date: "2026-12-18", option_type: "CALL", strike: "6500" },
+    }),
   };
 }
 
@@ -168,7 +175,23 @@ export type StatusChecks = [
   // the report page is served with c.body rather than c.html: `hc` types every other helper's
   // status and body, and c.html alone comes back as ClientResponse<{}, StatusCode, string>
 
-  // {detail} is IN the union wherever a route can reject, so the dashboard cannot read rows without
-  // saying what it does when the request was refused. That is the bug class that used to render as a
-  // silently empty table.
+  // {detail} is IN the union wherever a route VALIDATES its input, so the dashboard cannot read
+  // rows without saying what it does when the request was refused. That is the bug class that used
+  // to render as a silently empty table.
+  //
+  // This pointed at /runs until #118 removed it, and the assertion went with the route while the
+  // paragraph above stayed — so the file claimed a proof it no longer carried, which a code review
+  // caught.
+  //
+  // Re-pointed, and NARROWER than that paragraph says, which is worth stating rather than
+  // papering over. The arm comes from the `valid()` middleware, so only VALIDATED routes declare
+  // it. A route that rejects by `throw notFound(...)` or `throw httpError(...)` returns through
+  // app.ts's onError, which `hc` never sees in the route's own type — measured: /positions/values,
+  // /positions/:id/vol and /quotes carry no {detail} arm at all, while POST /monitors, POST
+  // /positions and /spx/quote do. So this proves the shape for the routes that validate, and the
+  // narrowing on the thrown paths rests on app.ts's onError returning one shape, which its own
+  // test asserts.
+  Checked<ErrorBody extends Awaited<ReturnType<E["monitorCreated"]["json"]>> ? true : false>,
+  Checked<ErrorBody extends Awaited<ReturnType<E["positionCreated"]["json"]>> ? true : false>,
+  Checked<ErrorBody extends Awaited<ReturnType<E["spxResp"]["json"]>> ? true : false>,
 ];

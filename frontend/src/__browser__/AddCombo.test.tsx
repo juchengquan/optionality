@@ -62,10 +62,16 @@ const held = (el: HTMLInputElement) => (GROUP ? el.value.split(GROUP).join("") :
 const strikeBox = (form: HTMLElement, n: number) =>
   within(form).getByLabelText(`leg ${n}`, { exact: true }) as HTMLInputElement;
 
-/** `cleanup()` here, rather than the `document.body.innerHTML = ""` the rest of this suite
- *  uses: this form closes its Sheet on submit, and wiping the body mid-exit-animation takes
- *  away the portal node React is itself about to remove. `removeChild` then throws — after
- *  the test has already passed — and the run fails with no failing assertion to point at. */
+/** `cleanup()`, which is now what the whole suite does — and this comment is why.
+ *
+ *  Wiping the body takes away the portal node React is itself about to remove, so `removeChild`
+ *  throws AFTER the test has already passed, and the run fails with no failing assertion to point
+ *  at. This file knew that and used cleanup(); the other six kept wiping, Fitting.test.tsx threw
+ *  two of these on every run, and `make test-ui` exited non-zero for weeks while every suite
+ *  reported passing. The diagnosis was sitting here the whole time.
+ *
+ *  Vitest says it plainly — "this might cause false positive tests" — and it is only visible in
+ *  the exit code, which is exactly what a `| grep 'Tests '` throws away. */
 afterEach(async () => { cleanup(); await page.viewport(1280, 900); });
 
 describe("the leg rows", () => {
