@@ -27,7 +27,7 @@ import {
   patchThresholdError, thresholdError,
 } from "../schemas/monitor.ts";
 import { verifyContracts } from "../quotes.ts";
-import { displayStored } from "../timefmt.ts";
+import { displayStored } from "../db/time.ts";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 

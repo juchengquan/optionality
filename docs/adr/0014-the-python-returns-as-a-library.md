@@ -31,7 +31,7 @@ Three shapes were considered and rejected:
 - A package, `optionality`, in `python/`: contracts, expiry, quotes and OpenD access (tier 1),
   and the position, monitor, exit and vol maths (tier 2). Ported FROM THE TYPESCRIPT, module for
   module, with snake_case the only translation.
-- The TypeScript is canonical. Golden cases in `cases/` (moved to `tests/golden/` the same day:
+- The TypeScript is canonical. Golden cases in `cases/` (since moved to `testdata/golden/`:
   still shared ground, under a name that says test data), inputs written by hand in TypeScript and
   outputs computed by it, are checked by both suites; `make check-cases` fails when they are
   stale. A TypeScript fix therefore turns the Python red until it is ported.

@@ -1,4 +1,4 @@
-"""Timestamps for display. Mirrors backend/src/timefmt.ts.
+"""Timestamps for display. Mirrors backend/src/domain/timefmt.ts.
 
 Storage is UTC and display converts to a named zone; an empty zone means the machine's own. moomoo's
 `update_time` arrives as naive US/Eastern wall time and means the LAST TRADE, not freshness.

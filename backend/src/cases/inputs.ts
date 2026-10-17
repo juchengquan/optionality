@@ -1,7 +1,7 @@
 /** The golden cases' INPUTS, written by hand (ADR 0014).
  *
  *  Outputs are never written here: `build.ts` computes them by calling the TypeScript, which is
- *  canonical, and `tests/golden/*.json` is what that produces. A domain change therefore changes the
+ *  canonical, and `testdata/golden/*.json` is what that produces. A domain change therefore changes the
  *  expected outputs, `make check-cases` (and cases.test.ts) fail until they are regenerated, and
  *  the regenerated cases turn the Python red until it is ported.
  *

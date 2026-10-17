@@ -1,7 +1,7 @@
 # Golden cases
 
-Test DATA, not tests: the root `tests/` holds no code. The TypeScript writes these files and both
-suites read them, so they sit outside both packages (ADR 0014).
+Test data, not tests — hence `testdata/`. The TypeScript writes these files and both suites read
+them, so they sit outside both packages (ADR 0014).
 
 What the TypeScript domain computes for a fixed set of inputs, one file per module (ADR 0014).
 The TypeScript is canonical: these files are **generated**, never edited. `make cases` rewrites

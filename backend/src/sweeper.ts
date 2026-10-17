@@ -31,7 +31,7 @@ import { toSqliteBool, } from "./db/values.ts";
 import type { Settings } from "./env.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
 import { displayRecords, fetchResilient, type QuoteFetcher, type QuoteRecord } from "./quotes.ts";
-import { displayTime } from "./timefmt.ts";
+import { displayTime } from "./domain/timefmt.ts";
 import { buildEntries, type WatchlistEntry } from "./watchlist.ts";
 import { forEntry } from "./monitors.ts";
 

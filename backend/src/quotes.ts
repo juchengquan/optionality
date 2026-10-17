@@ -6,7 +6,7 @@
  *  rather than transport, so it can be tested without an OpenD at all.
  */
 import type { Quote } from "./domain/quote.ts";
-import { displayTime, marketTimeToDisplay } from "./timefmt.ts";
+import { displayTime, marketTimeToDisplay } from "./domain/timefmt.ts";
 
 /** One contract's live figures as moomoo returns them. The same shape the domain reads, so a
  *  record can go straight from a fetch into cost_to_close without being reshaped. */

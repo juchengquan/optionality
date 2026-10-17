@@ -12,7 +12,7 @@ phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them, and `data/opti
 Python's database, frozen at the 2026-10-02 cutover and never opened. There is no rollback.
 
 **The TypeScript domain is canonical** (`backend/src/domain/`). A Python package, `optionality` in
-`python/`, is ported FROM it for notebook use (ADR 0014) and held to it by the golden cases in `tests/golden/`,
+`python/`, is ported FROM it for notebook use (ADR 0014) and held to it by the golden cases in `testdata/golden/`,
 compared exactly. A TypeScript domain fix therefore makes `make test` red until the Python is ported.
 
 ## Commands
@@ -31,8 +31,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - TypeScript: `make test-api` (the suite), `make typecheck`, **`make check-api`** (every module loads
   under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached main
   unable to load at all).
-- **Golden cases:** a change to anything `backend/src/domain/` (or `timefmt.ts`) exports changes what
-  `tests/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
+- **Golden cases:** a change to anything `backend/src/domain/` exports changes what
+  `testdata/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
   — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
   exported domain function must have a case (ADR 0014).
 - `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
@@ -56,13 +56,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Layout
 
-- `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (pure
-  maths — canonical, see golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
+- `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (pure maths that
+  imports nothing outside itself — canonical, see golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
   Telegram bot), `opend/` (the moomoo websocket client), `db/` (schema, migrations, queries),
   `cases/` (the golden cases' inputs and builder).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
-- `tests/golden/` — the golden cases (generated test data; the root `tests/` holds no code). `tools/check-boundaries.mjs` — the package-boundary lint.
+- `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
   for module (snake_case the only translation), `_js.py` holds the JavaScript rounding the port must
   reproduce, `opend.py` needs the `opend` extra. `tests/test_cases.py` runs every golden case.

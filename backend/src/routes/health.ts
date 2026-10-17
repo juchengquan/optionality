@@ -16,7 +16,7 @@ import { z } from "zod";
 import type { Deps } from "../deps.ts";
 import { databaseResponds } from "../db/queries.ts";
 import { documented } from "../openapi.ts";
-import { displayTime } from "../timefmt.ts";
+import { displayTime } from "../domain/timefmt.ts";
 
 export const HealthResponse = z.object({
   db: z.boolean(),

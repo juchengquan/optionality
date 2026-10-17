@@ -17,7 +17,7 @@ import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
 import { OpendClient } from "./opend/client.ts";
-import { probeOpend } from "./opend.ts";
+import { probeOpend } from "./opend/probe.ts";
 import { Scheduler } from "./scheduler.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";

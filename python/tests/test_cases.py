@@ -1,4 +1,4 @@
-"""Every golden case in tests/golden/, run against the Python (ADR 0014).
+"""Every golden case in testdata/golden/, run against the Python (ADR 0014).
 
 The TypeScript computed each `expect`; this package must reproduce it EXACTLY. There is no tolerance
 on purpose: the differences that matter are rounding at .5, and a tolerance is precisely what would
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
-CASES = Path(__file__).resolve().parents[2] / "tests" / "golden"
+CASES = Path(__file__).resolve().parents[2] / "testdata" / "golden"
 
 
 def snake(name: str) -> str:
@@ -92,7 +92,7 @@ ALL = list(load())
 
 
 def test_the_cases_are_there():
-    # a missing tests/golden/ directory would otherwise be a suite that passes by collecting nothing
+    # a missing testdata/golden/ directory would otherwise be a suite that passes by collecting nothing
     assert len(ALL) >= 100
 
 
