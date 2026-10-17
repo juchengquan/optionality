@@ -32,6 +32,7 @@ lint: check-boundaries
 check-boundaries:
 	node tools/check-boundaries.mjs
 
+# the Python only: the TypeScript has no formatter, by decision (CLAUDE.md says why)
 format:
 	uv run --directory python ruff format .
 

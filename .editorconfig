@@ -1,0 +1,27 @@
+# How the files here are laid out, so an editor keeps them that way. There is deliberately no
+# formatter for the TypeScript (CLAUDE.md says why); this, and the conventions written there, are
+# what keep it consistent. Written to describe the files as they already are, not to change them.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[*.{plist,template}]
+indent_size = 4
+
+# tabs are syntax in a Makefile, and the Caddyfile is written with them
+[{Makefile,Caddyfile}]
+indent_style = tab
+
+# the schema is written with tabs and some migrations with spaces; neither is wrong, so say nothing
+[*.sql]
+indent_style = unset
+indent_size = unset
