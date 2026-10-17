@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { displayStored, displayTime, marketTimeToDisplay } from "./timefmt.ts";
+import { displayTime, marketTimeToDisplay } from "./timefmt.ts";
 
 const TZ = "Asia/Singapore";
 
@@ -42,17 +42,6 @@ describe("displayTime", () => {
       .toBe("2026-01-15 07:00:00-05:00");
     expect(displayTime(new Date("2026-07-15T12:00:00Z"), "America/New_York"))
       .toBe("2026-07-15 08:00:00-04:00");
-  });
-});
-
-describe("displayStored", () => {
-  it("reads stored text and renders it in the display zone", () => {
-    // SQLite round-trips lose tzinfo; stored values are UTC by construction (CLAUDE.md)
-    expect(displayStored("2026-08-10 03:35:32.000000", TZ)).toBe("2026-08-10 11:35:32+08:00");
-  });
-
-  it("passes null through", () => {
-    expect(displayStored(null, TZ)).toBeNull();
   });
 });
 

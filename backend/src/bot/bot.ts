@@ -26,7 +26,7 @@ import { exitPolicy } from "../domain/exit.ts";
 import { holdingValues } from "../holdings.ts";
 import { linkToPositions, watchlistQuotes } from "../monitors.ts";
 import { verifyContracts, type QuoteFetcher, type QuoteRecord } from "../quotes.ts";
-import { displayTimeShort } from "../timefmt.ts";
+import { displayTimeShort } from "../domain/timefmt.ts";
 import {
   BOT_COMMANDS, FIELD_SHORT, HELP_TEXT, fmtValue, hasFormat, pyNumber, ruleText, shortCode, standingNote, table,
   thresholdError,

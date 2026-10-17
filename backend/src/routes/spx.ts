@@ -10,7 +10,7 @@ import { z } from "zod";
 import { buildSpxCode } from "../domain/contract.ts";
 import type { Deps } from "../deps.ts";
 import { httpError } from "../errors.ts";
-import { displayTime, marketTimeToDisplay } from "../timefmt.ts";
+import { displayTime, marketTimeToDisplay } from "../domain/timefmt.ts";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 

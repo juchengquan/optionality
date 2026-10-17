@@ -7,7 +7,7 @@
  *  `../../backend/src/app.ts` was exactly that, and it is what would have made splitting the
  *  repositories a refactor instead of a move.
  *
- *  `cases/` is the one shared directory: the golden cases are data both suites read, written by
+ *  `testdata/golden/` is the one shared directory: the golden cases are data both suites read, written by
  *  the TypeScript, and reading them by path is the point.
  *
  *  A script rather than ESLint: the repo has no ESLint, and one rule did not justify a toolchain.
@@ -20,7 +20,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const PACKAGES = ["backend", "frontend", "python"];
-const SHARED = ["cases"];
+const SHARED = ["testdata/golden"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".venv", "__pycache__", ".out"]);
 const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx)$/;
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/g;

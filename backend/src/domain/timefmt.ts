@@ -11,8 +11,7 @@
 
 // MARKET_TZ is the exchange's own zone — moomoo delivers market timestamps as naive strings in it.
 // domain/expiry.ts owns it, for deciding what day the market is on; one declaration, not two.
-import { MARKET_TZ } from "./domain/expiry.ts";
-import { fromSqlDatetime } from "./db/time.ts";
+import { MARKET_TZ } from "./expiry.ts";
 
 /** An empty DISPLAY_TZ means the host's own zone, which is what Python's astimezone() does. */
 function zone(tzName: string): string | undefined {
@@ -125,13 +124,6 @@ export function marketTimeToDisplay(value: string, tzName = ""): string {
   // untouched — the same trap build_spx_code had, caught the same way.
   if (naive === null) return value;
   return displayTime(new Date(instantOfWallTime(naive, MARKET_TZ)), tzName)!;
-}
-
-/** A stored timestamp as the API reports it. Stored text in, display string out — the two
- *  conversions always travel together, and splitting them is how a naive parse creeps in. */
-export function displayStored(stored: string | null | undefined, tzName = ""): string | null {
-  if (stored === null || stored === undefined) return null;
-  return displayTime(fromSqlDatetime(stored), tzName);
 }
 
 /** The short form the bot prints: `2026-08-10 11:35 +08`.

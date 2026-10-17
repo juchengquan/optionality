@@ -14,7 +14,7 @@ describe("which database", () => {
     //
     // Only the launchd plist supplied the variable; `.env` does not. So the live service was right
     // and every other way of starting this code was wrong — a hand-run `node backend/src/main.ts`,
-    // or anything importing it. `check-loads.mjs` skips main.ts for its own reasons, which is the
+    // or anything importing it. `check-loads.ts` skips main.ts for its own reasons, which is the
     // only thing that kept `make check-api` from doing it.
     expect(DEFAULTS.dbPath).toBe("data/optionality-ts.db");
     expect(settingsFromEnv({}).dbPath, "with nothing set at all").toBe("data/optionality-ts.db");

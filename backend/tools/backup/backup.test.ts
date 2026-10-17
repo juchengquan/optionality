@@ -19,7 +19,7 @@ let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "optionality-backup-")); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
-const SCRIPT = new URL("./backup.mjs", import.meta.url).pathname;
+const SCRIPT = new URL("./backup.ts", import.meta.url).pathname;
 
 /** A database with committed rows still sitting in the WAL, which is the live service's normal
  *  state: the sweep writes every 15 seconds and SQLite folds the log in at about 4MB. */

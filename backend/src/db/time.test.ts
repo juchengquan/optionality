@@ -2,7 +2,7 @@
  *  business there — which is exactly why it needs testing here, where it is ours (ADR 0009). */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { fromSqlDatetime, toSqlDatetime } from "./time.ts";
+import { displayStored, fromSqlDatetime, toSqlDatetime } from "./time.ts";
 
 describe("writing", () => {
   it("writes UTC wall time in SQLAlchemy's shape", () => {
@@ -64,5 +64,19 @@ describe("the zone the text is in", () => {
       const stored = "2026-09-01 15:39:11.940000";
       expect(toSqlDatetime(fromSqlDatetime(stored)), tz).toBe(stored);
     }
+  });
+});
+
+/** the owner's zone, so a UTC-only result cannot pass by coincidence */
+const DISPLAY_TZ = "Asia/Singapore";
+
+describe("displayStored", () => {
+  it("reads stored text and renders it in the display zone", () => {
+    // SQLite round-trips lose tzinfo; stored values are UTC by construction (CLAUDE.md)
+    expect(displayStored("2026-08-10 03:35:32.000000", DISPLAY_TZ)).toBe("2026-08-10 11:35:32+08:00");
+  });
+
+  it("passes null through", () => {
+    expect(displayStored(null, DISPLAY_TZ)).toBeNull();
   });
 });

@@ -4,6 +4,7 @@
  *  and six fractional digits. Keeping that format is what lets the Python open this file if the
  *  cutover has to be undone, so it is not an implementation detail to tidy up later.
  */
+import { displayTime } from "../domain/timefmt.ts";
 
 /** Format an instant the way the Python writes it. */
 export function toSqlDatetime(when: Date = new Date()): string {
@@ -25,4 +26,14 @@ export function fromSqlDatetime(value: string): Date {
   const ms = (m[3] ?? "").padEnd(3, "0").slice(0, 3);
   // the Z is the point: without it, Date.parse reads this naive text as the machine's local time
   return new Date(`${m[1]}T${m[2]}.${ms}Z`);
+}
+
+/** A stored timestamp as the API reports it. Stored text in, display string out — the two
+ *  conversions always travel together, and splitting them is how a naive parse creeps in.
+ *
+ *  Here rather than in domain/timefmt.ts, which is pure and canonical (the Python mirrors it):
+ *  reading the storage format is the database's business, and the one thing this adds. */
+export function displayStored(stored: string | null | undefined, tzName = ""): string | null {
+  if (stored === null || stored === undefined) return null;
+  return displayTime(fromSqlDatetime(stored), tzName);
 }

@@ -1,11 +1,11 @@
-/** `make cases` writes cases/*.json from the TypeScript; `make check-cases` (--check) only
+/** `make cases` writes testdata/golden/*.json from the TypeScript; `make check-cases` (--check) only
  *  compares, and fails if a file is missing or stale (ADR 0014). See backend/src/cases/. */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildCases, render } from "../src/cases/build.ts";
 
-const OUT = new URL("../../cases/", import.meta.url).pathname;
+const OUT = new URL("../../testdata/golden/", import.meta.url).pathname;
 const check = process.argv.includes("--check");
 const stale: string[] = [];
 

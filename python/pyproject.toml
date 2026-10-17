@@ -21,3 +21,20 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/optionality"]
+
+# the tools for this package's own suite and lint — `make test`, `make lint` and `make format` run them
+# here, in python/. Not installed by a notebook that depends on the package.
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 120
+# where the package is, so `optionality` sorts as first-party in every checkout
+src = ["src"]
+
+[tool.ruff.lint.per-file-ignores]
+# verify_contracts refuses on ANY failure, with what went wrong — the blind catch is its job
+"src/optionality/quotes.py" = ["BLE001"]
