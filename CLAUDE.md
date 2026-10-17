@@ -22,8 +22,14 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   how a commit passes while something it touched is broken: `make test` alone is only the Python
   package (every golden case, reproduced exactly). `make lint` is ruff plus `check-boundaries`: no
   package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
-  `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python; the
-  TypeScript has no formatter.
+  `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python only.
+- **The TypeScript has no formatter, by decision** (2026-10-17). Prettier and Biome were measured
+  against this code with its own settings: both rewrote about 120 of 143 files, nearly all of it
+  exploding the compact parameter lists below one-per-line, and Prettier dropped grouping
+  parentheses that carry meaning (`(s - t) + x` in `pySum`). The style is consistent without one —
+  keep it: **double quotes, semicolons, two-space indent, about 100 columns, related parameters on
+  one line**, comments as hand-wrapped prose. `.editorconfig` holds the mechanical part. Workspace
+  package names are their directory names (`backend`, `frontend`).
 - `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, restart BOTH
   agents (the API applies pending migrations at boot). launchd does not watch the repo and the agents
   run this working tree, so a merge that skips this leaves stale code running. Doing the steps by hand
