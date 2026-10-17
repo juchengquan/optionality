@@ -1,7 +1,11 @@
 /** `/health`, the one route that needs no token (ADR 0009, phase 5).
  *
- *  It is also how the dashboard decides whether it was built against the API it is talking to:
- *  the two deploy separately (ADR 0006), so `contract_version` is the only thing both sides read.
+ *  It is what the dashboard's Service panel reads: the database, OpenD, the queue, the last run and
+ *  the sweep's state. It carries no `contract_version` — that and the skew banner it fed went in
+ *  ADR 0009 phase 8, when the frontend started taking its types FROM this API (`hc<AppType>`), so a
+ *  response that has changed shape is a compile error in the frontend's workspace rather than a
+ *  runtime notice. The two services still deploy separately (ADR 0006); `make deploy` restarting
+ *  both is what addresses that.
  *
  *  Every branch reports rather than raises. A health endpoint that 500s when the database is gone
  *  tells you less than one that says `db: false`.

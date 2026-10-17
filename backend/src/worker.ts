@@ -9,7 +9,6 @@
  *  What the queue protects is unchanged: a run makes a minutes-long OpenD conversation, and the sweep
  *  makes a single bounded call every minute. Those must not become one request budget.
  */
-import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 import {
@@ -17,7 +16,7 @@ import {
 } from "./db/queries.ts";
 import type { RunRow } from "./db/rows.ts";
 import { toSqlDatetime } from "./db/time.ts";
-import { toSqliteBool } from "./db/values.ts";
+import { newId, toSqliteBool } from "./db/values.ts";
 import type { Settings } from "./env.ts";
 import type { CreateRunArgs } from "./ports.ts";
 import { PythonRunner, TaskFailed } from "./runner.ts";
@@ -33,9 +32,6 @@ export interface WorkerDeps {
   /** pinged after a SCHEDULED run succeeds, so a silent scheduler is noticed by something external */
   pingHealthcheck?: (url: string) => Promise<void>;
 }
-
-/** uuid4().hex in the Python — 32 hex characters, which the column is sized for. */
-const newId = () => randomUUID().replaceAll("-", "");
 
 export class Worker {
   private readonly deps: WorkerDeps;

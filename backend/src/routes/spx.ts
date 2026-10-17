@@ -14,8 +14,10 @@ import { displayTime, marketTimeToDisplay } from "../timefmt.ts";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 
-/** A query string carries strings, so the numbers are made here — see runs.ts for why the schema
- *  cannot do the coercion without making every parameter required of a typed client. */
+/** A query string carries strings, so the schema validates strings and the numbers are made in the
+ *  handler. Coercing in the schema would change the INPUT type a typed client sees, which is why
+ *  this service does it by hand. (The longer note lived in runs.ts, deleted with the run pipeline's
+ *  endpoints in #118.) */
 const QuoteQuery = z.object({
   strike_date: z.string(),
   option_type: z.enum(["CALL", "PUT"]),

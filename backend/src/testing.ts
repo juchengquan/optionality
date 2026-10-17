@@ -17,7 +17,6 @@ import { createApp } from "./app.ts";
 import { createDatabase } from "./db/open.ts";
 import { type Settings, settingsFor } from "./env.ts";
 import type { Deps } from "./deps.ts";
-import type { CreateRunArgs } from "./ports.ts";
 import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
 
 export const TOKEN = "tok";
@@ -43,16 +42,6 @@ export class FakeWorker {
   }
   submit(runId: string): void {
     this.submitted.push(runId);
-  }
-}
-
-export class FakeRunFactory {
-  readonly created: CreateRunArgs[] = [];
-  private n = 0;
-  createRun(args: CreateRunArgs): string {
-    this.created.push(args);
-    this.n += 1;
-    return `run${this.n}`.padEnd(32, "0");
   }
 }
 
@@ -86,7 +75,6 @@ export interface Harness {
   db: DatabaseSync;
   settings: Settings;
   worker: FakeWorker;
-  runs: FakeRunFactory;
   scheduler: FakeScheduler;
   sweeper: FakeSweeper;
   /** What the clock returns. Set it to state the time rather than wait for it. */
@@ -140,7 +128,6 @@ export function harness(options: HarnessOptions = {}): Harness {
     ...options.settings,
   });
   const worker = new FakeWorker();
-  const runs = new FakeRunFactory();
   const scheduler = new FakeScheduler();
   const sweeper = new FakeSweeper();
 
@@ -150,17 +137,15 @@ export function harness(options: HarnessOptions = {}): Harness {
     db,
     now: () => state.now,
     worker,
-    runs,
     scheduler,
     sweeper,
     opendReachable: () => Promise.resolve(options.opend ?? false),
     fetchQuotes: options.fetchQuotes ?? echoFetcher,
-    htmlDocument: (body) => `<html><body>${body}</body></html>`,
   };
 
   const app = createApp(deps);
   const h: Harness = {
-    app, db, settings, worker, runs, scheduler, sweeper,
+    app, db, settings, worker, scheduler, sweeper,
     get now() { return state.now; },
     set now(value: Date) { state.now = value; },
     close() {

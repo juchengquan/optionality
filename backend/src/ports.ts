@@ -27,12 +27,6 @@ export interface CreateRunArgs {
   notify: boolean;
 }
 
-/** Creating the run row. Separate from the worker because a schedule creates runs too, and in
- *  phase 6 that happens on a different thread from any request. */
-export interface RunFactoryPort {
-  createRun(args: CreateRunArgs): string;
-}
-
 /** The cron schedule. `refreshJobs` must only touch `schedule-*` job ids (CLAUDE.md). */
 export interface SchedulerPort {
   /** Rebuild the schedule from the database, after a schedule row changes. */
@@ -56,7 +50,3 @@ export interface SweeperPort {
 /** Whether OpenD is listening. A TCP connect in the Python; anything that answers the question
  *  will do, and /health must report rather than raise. */
 export type OpendProbe = (host: string, port: number) => Promise<boolean>;
-
-/** Wrapping a report's stored HTML into a document. Ported with the notifications in phase 7;
- *  until then the route needs only the shape. */
-export type HtmlDocument = (body: string) => string;

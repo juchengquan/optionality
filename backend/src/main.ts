@@ -62,13 +62,9 @@ const deps: Deps = {
   db,
   now: () => new Date(),
   worker,
-  runs: worker,
   scheduler,
   sweeper,
   opendReachable: probeOpend,
-  // the report page's wrapper. The Python's full_html_document adds a stylesheet; the stored html is
-  // already a document's body, and phase 7 brings the styling with the rest of the notifications.
-  htmlDocument: (body) => `<html><body>${body}</body></html>`,
   fetchQuotes: opend.asFetcher(),
 };
 

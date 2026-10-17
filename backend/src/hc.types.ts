@@ -127,12 +127,6 @@ export type HcChecks = [
   Checked<Exactly<
     NonNullable<Ok<E["quotes"]>[number]["schedule"]>["manage_by_due"], boolean>>,
 
-  // configs ---------------------------------------------------------------------------
-
-  // schedules -------------------------------------------------------------------------
-
-  // runs ------------------------------------------------------------------------------
-
   // monitors --------------------------------------------------------------------------
   Checked<Known<Ok<E["monitors"]>>>,
   // legs are null for a single leg and an array for a combo, which is how the dashboard decides

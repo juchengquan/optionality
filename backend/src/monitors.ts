@@ -5,6 +5,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { positionsHolding } from "./domain/position.ts";
+import { round4 } from "./domain/quote.ts";
 import { atomic } from "./db/open.ts";
 import {
   enabledMonitors, linkMonitorToPositions, listPositions, positionsForMonitor,
@@ -54,14 +55,8 @@ export async function applyTotalEntry(
   const others = positions.filter((p) => p.id !== target.id).map((p) => p.entry);
   if (others.some((e) => e === null)) return "set the other wings' credits first";
   const rest = (others as number[]).reduce((a, b) => a + b, 0);
-  // 4dp: a credit is quoted in points to two or three places, and rounding here is only to keep
-  // float noise out of a figure the owner reads back
   await atomic(db, () => setPositionEntry(db, target.id, round4(total - rest)));
   return null;
-}
-
-function round4(value: number): number {
-  return Number(value.toFixed(4));
 }
 
 /** A monitor row in the shape buildEntries needs — which no longer includes the engine's
