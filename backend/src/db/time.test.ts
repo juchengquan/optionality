@@ -2,7 +2,7 @@
  *  business there — which is exactly why it needs testing here, where it is ours (ADR 0009). */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { fromSqlDatetime, secondsSince, toSqlDatetime } from "./time.ts";
+import { fromSqlDatetime, toSqlDatetime } from "./time.ts";
 
 describe("writing", () => {
   it("writes UTC wall time in SQLAlchemy's shape", () => {
@@ -64,18 +64,5 @@ describe("the zone the text is in", () => {
       const stored = "2026-09-01 15:39:11.940000";
       expect(toSqlDatetime(fromSqlDatetime(stored)), tz).toBe(stored);
     }
-  });
-});
-
-describe("elapsed time", () => {
-  it("counts seconds from a stored timestamp", () => {
-    // what the alarm cooldown and the sweep watchdog ask for
-    const now = new Date("2026-09-01T15:40:11.940Z");
-    expect(secondsSince("2026-09-01 15:39:11.940183", now)).toBe(60);
-  });
-
-  it("is negative for a timestamp in the future rather than clamped", () => {
-    const now = new Date("2026-09-01T15:39:00.000Z");
-    expect(secondsSince("2026-09-01 15:39:11.000000", now)).toBe(-11);
   });
 });

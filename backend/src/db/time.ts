@@ -26,8 +26,3 @@ export function fromSqlDatetime(value: string): Date {
   // the Z is the point: without it, Date.parse reads this naive text as the machine's local time
   return new Date(`${m[1]}T${m[2]}.${ms}Z`);
 }
-
-/** Seconds between two stored datetimes, or since one. */
-export function secondsSince(value: string, now: Date = new Date()): number {
-  return (now.getTime() - fromSqlDatetime(value).getTime()) / 1000;
-}
