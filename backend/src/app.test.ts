@@ -57,6 +57,10 @@ describe("/health", () => {
       settings: { monitorIntervalSeconds: 45, expiredRetentionDays: 3, displayTz: "Asia/Singapore" },
     }).call("/health", { anonymous: true }));
     expect(data.settings).toEqual({
+      // the manage-by DTE is a knob too, and the dashboard needs it: it is the horizon the
+      // watchlist's pressure reading weighs fill against, and a second copy of 21 in the frontend
+      // would drift from EXIT_MANAGE_BY_DTE the first time it moved
+      manage_by_dte: 21,
       sweep_seconds: 45, expired_retention_days: 3, display_tz: "Asia/Singapore",
     });
   });

@@ -10,7 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddPanel, AddTrigger, type Adding } from "./AddPanel";
-import { COMBO_COLUMNS, SINGLE_COLUMNS, readHidden, writeHidden } from "./columns";
+import {
+  COMBO_COLUMNS, SINGLE_COLUMNS, readBand, readHidden, readSignal, writeBand, writeHidden,
+  writeSignal,
+} from "./columns";
 import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { Holdings } from "./Holdings";
@@ -51,6 +54,8 @@ export function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
+  const [reading, setReading] = useState(() => readSignal());
+  const [band, setBand] = useState(() => readBand());
   const [hiddenSingle, setHiddenSingle] = useState(() => readHidden("single"));
   const [hiddenCombo, setHiddenCombo] = useState(() => readHidden("combo"));
   const [refreshing, setRefreshing] = useState(false);
@@ -219,12 +224,14 @@ export function App() {
       <TopLine quotes={quotes} health={health} />
 
       <WatchlistTable title="Single-leg" entries={singles} columns={singleFit.columns} containerRef={singleFit.ref} isCombo={false}
+                      reading={reading} band={band} horizon={health?.settings.manage_by_dte ?? 21}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
                       add={<AddTrigger which="monitor" onOpen={() => setAdding("monitor")} />}
                       picker={<ColumnPicker table="single" label="Single-leg"
                         all={SINGLE_COLUMNS.filter((c) => singleFit.offered.has(c.key))}
                         hidden={hiddenSingle} onToggle={onToggle} onReset={onReset} />} />
       <WatchlistTable title="Combos" entries={combos} columns={comboFit.columns} containerRef={comboFit.ref} isCombo={true}
+                      reading={reading} band={band} horizon={health?.settings.manage_by_dte ?? 21}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
                       add={<AddTrigger which="combo" onOpen={() => setAdding("combo")} />}
                       picker={<ColumnPicker table="combo" label="Combos"
@@ -238,6 +245,10 @@ export function App() {
         onClose={() => setSettingsOpen(false)}
         quotes={quotes}
         health={health}
+        reading={reading}
+        band={band}
+        onReading={(s) => { setReading(s); writeSignal(s); }}
+        onBand={(n) => { setBand(n); writeBand(n); }}
         refresh={refresh}
         sweepSeconds={health?.settings.sweep_seconds}
         onRefresh={(n) => {

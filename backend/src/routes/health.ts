@@ -34,6 +34,10 @@ export const HealthResponse = z.object({
     fetched_at: z.string().nullable(),
   }),
   settings: z.object({
+    /** the horizon the dashboard weighs a fill against when it is reading pressure rather than
+     *  distance — one definition, because a second copy of 21 in the frontend drifts the first
+     *  time EXIT_MANAGE_BY_DTE moves */
+    manage_by_dte: z.number(),
     sweep_seconds: z.number(),
     expired_retention_days: z.number(),
     display_tz: z.string(),
@@ -77,6 +81,7 @@ export function healthRoutes(deps: Deps) {
         // knobs a client cannot guess: the sweep cadence the meta line names, and the retention
         // window the muted table counts down to
         settings: {
+          manage_by_dte: settings.exitManageByDte,
           sweep_seconds: settings.monitorIntervalSeconds,
           expired_retention_days: settings.expiredRetentionDays,
           display_tz: settings.displayTz,
