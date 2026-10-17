@@ -1,4 +1,4 @@
-/** Prune `make deploy`'s backups in data/ to the last 10, keeping every one that was given a name.
+/** Prune `make deploy`'s backups in data/ to the last 3, keeping every one that was given a name.
  *
  *    node prune-deploy.mjs <data dir>
  *
