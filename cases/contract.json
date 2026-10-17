@@ -1,0 +1,73 @@
+{
+  "module": "contract",
+  "cases": [
+    {
+      "fn": "normalizeStrikeDate",
+      "name": "dashed stays dashed",
+      "args": [
+        "2026-11-20"
+      ],
+      "expect": "2026-11-20"
+    },
+    {
+      "fn": "normalizeStrikeDate",
+      "name": "compact becomes dashed",
+      "args": [
+        "20261120"
+      ],
+      "expect": "2026-11-20"
+    },
+    {
+      "fn": "normalizeStrikeDate",
+      "name": "an impossible date is refused",
+      "args": [
+        "2026-13-45"
+      ],
+      "expect": {
+        "$throws": true
+      }
+    },
+    {
+      "fn": "buildSpxCode",
+      "name": "a put",
+      "args": [
+        "2026-11-20",
+        "PUT",
+        6500
+      ],
+      "expect": "US.SPXW261120P6500000"
+    },
+    {
+      "fn": "buildSpxCode",
+      "name": "a call from a compact date",
+      "args": [
+        "20261120",
+        "CALL",
+        7100
+      ],
+      "expect": "US.SPXW261120C7100000"
+    },
+    {
+      "fn": "buildSpxCode",
+      "name": "an end-of-month expiry",
+      "args": [
+        "2026-12-31",
+        "PUT",
+        6000
+      ],
+      "expect": "US.SPXW261231P6000000"
+    },
+    {
+      "fn": "buildSpxCode",
+      "name": "an impossible date is refused",
+      "args": [
+        "2026-02-30",
+        "PUT",
+        6000
+      ],
+      "expect": {
+        "$throws": true
+      }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-.PHONY: lint check-boundaries format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
+.PHONY: lint check-boundaries cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
 	diff-api diff-api-live diff-opend diff-services copy-db cutover cutover-preflight rollback restore-python \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui deploy \
@@ -142,6 +142,14 @@ deploy:
 	fi
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
+
+# The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
+# reproduce exactly. Generated, never edited; `test-api` fails too when they are stale.
+cases:
+	node backend/tools/cases.ts
+
+check-cases:
+	node backend/tools/cases.ts --check
 
 # the TypeScript backend (ADR 0009). No build target: Node runs the source directly, so there
 # is nothing to compile and nothing to commit — the frontend's dist has no backend equivalent.

@@ -1,0 +1,229 @@
+{
+  "module": "exit",
+  "cases": [
+    {
+      "fn": "dteAtOpen",
+      "name": "45 DTE",
+      "args": [
+        "2026-11-20",
+        "2026-10-06"
+      ],
+      "expect": 45
+    },
+    {
+      "fn": "dteAtOpen",
+      "name": "compact dates",
+      "args": [
+        "20261120",
+        "20261006"
+      ],
+      "expect": 45
+    },
+    {
+      "fn": "onPace",
+      "name": "halfway in time",
+      "args": [
+        3,
+        45,
+        22
+      ],
+      "expect": 2.097617696340303
+    },
+    {
+      "fn": "onPace",
+      "name": "on the day it was opened",
+      "args": [
+        3,
+        45,
+        45
+      ],
+      "expect": 3
+    },
+    {
+      "fn": "onPace",
+      "name": "later than it was opened is no figure",
+      "args": [
+        3,
+        45,
+        46
+      ],
+      "expect": null
+    },
+    {
+      "fn": "onPace",
+      "name": "no entry",
+      "args": [
+        null,
+        45,
+        22
+      ],
+      "expect": null
+    },
+    {
+      "fn": "exitLevels",
+      "name": "a credit, calm",
+      "args": [
+        3,
+        45,
+        30,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        },
+        1.9
+      ],
+      "expect": {
+        "on_pace": 2.449489742783178,
+        "pace_gap": -0.549489742783178,
+        "target": 1.5,
+        "stop": 6,
+        "target_dte": 11,
+        "manage_by_dte": 21,
+        "reached": null,
+        "manage_by_due": false
+      }
+    },
+    {
+      "fn": "exitLevels",
+      "name": "a credit at its stop",
+      "args": [
+        3,
+        45,
+        30,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        },
+        6
+      ],
+      "expect": {
+        "on_pace": 2.449489742783178,
+        "pace_gap": 3.550510257216822,
+        "target": 1.5,
+        "stop": 6,
+        "target_dte": 11,
+        "manage_by_dte": 21,
+        "reached": "stop",
+        "manage_by_due": false
+      }
+    },
+    {
+      "fn": "exitLevels",
+      "name": "a credit at its target",
+      "args": [
+        3,
+        45,
+        30,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        },
+        1.5
+      ],
+      "expect": {
+        "on_pace": 2.449489742783178,
+        "pace_gap": -0.9494897427831779,
+        "target": 1.5,
+        "stop": 6,
+        "target_dte": 11,
+        "manage_by_dte": 21,
+        "reached": "target",
+        "manage_by_due": false
+      }
+    },
+    {
+      "fn": "exitLevels",
+      "name": "a debit has no target or stop",
+      "args": [
+        -5,
+        45,
+        30,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        },
+        8
+      ],
+      "expect": {
+        "on_pace": -4.08248290463863,
+        "pace_gap": 12.082482904638631,
+        "target": null,
+        "stop": null,
+        "target_dte": null,
+        "manage_by_dte": 21,
+        "reached": null,
+        "manage_by_due": false
+      }
+    },
+    {
+      "fn": "exitLevels",
+      "name": "target DTE 12.5 rounds up, as Math.round does",
+      "args": [
+        3,
+        50,
+        30,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        },
+        null
+      ],
+      "expect": {
+        "on_pace": 2.32379000772445,
+        "pace_gap": null,
+        "target": 1.5,
+        "stop": 6,
+        "target_dte": 13,
+        "manage_by_dte": 21,
+        "reached": null,
+        "manage_by_due": false
+      }
+    },
+    {
+      "fn": "exitLevels",
+      "name": "manage-by is inclusive",
+      "args": [
+        3,
+        45,
+        21,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        },
+        2
+      ],
+      "expect": {
+        "on_pace": 2.0493901531919194,
+        "pace_gap": -0.04939015319191942,
+        "target": 1.5,
+        "stop": 6,
+        "target_dte": 11,
+        "manage_by_dte": 21,
+        "reached": null,
+        "manage_by_due": true
+      }
+    },
+    {
+      "fn": "exitLevels",
+      "name": "never declared opened",
+      "args": [
+        3,
+        null,
+        30,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        },
+        2
+      ],
+      "expect": null
+    }
+  ]
+}
