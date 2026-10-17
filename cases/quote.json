@@ -1,0 +1,45 @@
+{
+  "module": "quote",
+  "cases": [
+    {
+      "fn": "round4",
+      "name": "four places",
+      "args": [
+        1.23456
+      ],
+      "expect": 1.2346
+    },
+    {
+      "fn": "round4",
+      "name": "a decimal half that is not one in binary",
+      "args": [
+        1.00005
+      ],
+      "expect": 1.0001
+    },
+    {
+      "fn": "round4",
+      "name": "2.675",
+      "args": [
+        2.675
+      ],
+      "expect": 2.675
+    },
+    {
+      "fn": "round4",
+      "name": "negative",
+      "args": [
+        -0.12345
+      ],
+      "expect": -0.1235
+    },
+    {
+      "fn": "round4",
+      "name": "float noise",
+      "args": [
+        0.30000000000000004
+      ],
+      "expect": 0.3
+    }
+  ]
+}

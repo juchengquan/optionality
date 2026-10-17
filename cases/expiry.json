@@ -1,0 +1,79 @@
+{
+  "module": "expiry",
+  "cases": [
+    {
+      "fn": "marketDate",
+      "name": "one minute before New York's midnight",
+      "args": [
+        {
+          "$date": "2026-10-17T03:59:00.000Z"
+        }
+      ],
+      "expect": "2026-10-16"
+    },
+    {
+      "fn": "marketDate",
+      "name": "New York's midnight",
+      "args": [
+        {
+          "$date": "2026-10-17T04:00:00.000Z"
+        }
+      ],
+      "expect": "2026-10-17"
+    },
+    {
+      "fn": "marketDate",
+      "name": "the morning the clocks go back",
+      "args": [
+        {
+          "$date": "2026-11-01T05:30:00.000Z"
+        }
+      ],
+      "expect": "2026-11-01"
+    },
+    {
+      "fn": "daysToExpiry",
+      "name": "34 days out",
+      "args": [
+        "2026-11-20",
+        {
+          "$date": "2026-10-17T14:00:00.000Z"
+        }
+      ],
+      "expect": 34
+    },
+    {
+      "fn": "daysToExpiry",
+      "name": "late evening in New York is still that day",
+      "args": [
+        "2026-11-20",
+        {
+          "$date": "2026-10-18T03:30:00.000Z"
+        }
+      ],
+      "expect": 34
+    },
+    {
+      "fn": "daysToExpiry",
+      "name": "expiry day is zero",
+      "args": [
+        "2026-11-20",
+        {
+          "$date": "2026-11-20T15:00:00.000Z"
+        }
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "daysToExpiry",
+      "name": "after expiry is negative",
+      "args": [
+        "2026-11-20",
+        {
+          "$date": "2026-11-23T15:00:00.000Z"
+        }
+      ],
+      "expect": -3
+    }
+  ]
+}

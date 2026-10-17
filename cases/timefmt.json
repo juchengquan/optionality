@@ -1,0 +1,114 @@
+{
+  "module": "timefmt",
+  "cases": [
+    {
+      "fn": "displayTime",
+      "name": "in Singapore",
+      "args": [
+        {
+          "$date": "2026-10-17T05:26:06.000Z"
+        },
+        "Asia/Singapore"
+      ],
+      "expect": "2026-10-17 13:26:06+08:00"
+    },
+    {
+      "fn": "displayTime",
+      "name": "in New York, daylight time",
+      "args": [
+        {
+          "$date": "2026-10-17T05:26:06.000Z"
+        },
+        "America/New_York"
+      ],
+      "expect": "2026-10-17 01:26:06-04:00"
+    },
+    {
+      "fn": "displayTime",
+      "name": "in New York, standard time",
+      "args": [
+        {
+          "$date": "2026-11-17T05:26:06.000Z"
+        },
+        "America/New_York"
+      ],
+      "expect": "2026-11-17 00:26:06-05:00"
+    },
+    {
+      "fn": "displayTime",
+      "name": "in UTC",
+      "args": [
+        {
+          "$date": "2026-10-17T05:26:06.000Z"
+        },
+        "UTC"
+      ],
+      "expect": "2026-10-17 05:26:06+00:00"
+    },
+    {
+      "fn": "displayTime",
+      "name": "nothing to show",
+      "args": [
+        null,
+        "Asia/Singapore"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "short, in Singapore",
+      "args": [
+        {
+          "$date": "2026-10-17T05:26:06.000Z"
+        },
+        "Asia/Singapore"
+      ],
+      "expect": "2026-10-17 13:26 +08"
+    },
+    {
+      "fn": "marketTimeToDisplay",
+      "name": "moomoo's naive Eastern time",
+      "args": [
+        "2026-10-16 15:59:58",
+        "Asia/Singapore"
+      ],
+      "expect": "2026-10-17 03:59:58+08:00"
+    },
+    {
+      "fn": "marketTimeToDisplay",
+      "name": "with a fraction",
+      "args": [
+        "2026-10-16 15:59:58.125",
+        "Asia/Singapore"
+      ],
+      "expect": "2026-10-17 03:59:58+08:00"
+    },
+    {
+      "fn": "marketTimeToDisplay",
+      "name": "the hour that happens twice",
+      "args": [
+        "2026-11-01 01:30:00",
+        "UTC"
+      ],
+      "expect": "2026-11-01 05:30:00+00:00"
+    },
+    {
+      "fn": "marketTimeToDisplay",
+      "name": "not a time comes back untouched",
+      "args": [
+        "N/A",
+        "Asia/Singapore"
+      ],
+      "expect": "N/A"
+    },
+    {
+      "fn": "marketTimeToDisplay",
+      "name": "an impossible time comes back untouched",
+      "args": [
+        "2026-13-45 99:99:99",
+        "UTC"
+      ],
+      "expect": "2026-13-45 99:99:99"
+    }
+  ]
+}

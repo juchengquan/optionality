@@ -1,0 +1,598 @@
+{
+  "module": "monitor",
+  "cases": [
+    {
+      "fn": "monitorLegCodes",
+      "name": "a combo",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": [
+        "US.SPXW261120P6450000",
+        "US.SPXW261120P6500000",
+        "US.SPXW261120C7100000",
+        "US.SPXW261120C7150000"
+      ]
+    },
+    {
+      "fn": "monitorLegCodes",
+      "name": "a single contract",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        }
+      ],
+      "expect": [
+        "US.SPXW261120C7100000"
+      ]
+    },
+    {
+      "fn": "comboFieldError",
+      "name": "IV is never summed",
+      "args": [
+        "option_implied_volatility"
+      ],
+      "expect": "combos cannot watch option_implied_volatility: it is not additive across legs"
+    },
+    {
+      "fn": "comboFieldError",
+      "name": "mid is",
+      "args": [
+        "mid_price"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "comboFieldSum",
+      "name": "a condor's mids",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "mid_price": 1.5,
+            "option_delta": -0.08,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6500000": {
+            "mid_price": 3,
+            "option_delta": -0.15,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.1,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7100000": {
+            "mid_price": 5,
+            "option_delta": 0.18,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.4,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7150000": {
+            "mid_price": 2,
+            "option_delta": 0.1,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6000000": {
+            "mid_price": 8,
+            "option_delta": -0.02,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          }
+        },
+        "mid_price"
+      ],
+      "expect": -4.5
+    },
+    {
+      "fn": "comboFieldSum",
+      "name": "no partial sums",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "mid_price": 1.5,
+            "option_delta": -0.08,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7100000": {
+            "mid_price": 5,
+            "option_delta": 0.18,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.4,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7150000": {
+            "mid_price": 2,
+            "option_delta": 0.1,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6000000": {
+            "mid_price": 8,
+            "option_delta": -0.02,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          }
+        },
+        "mid_price"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "monitorValue",
+      "name": "a single contract",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "mid_price": 1.5,
+            "option_delta": -0.08,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6500000": {
+            "mid_price": 3,
+            "option_delta": -0.15,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.1,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7100000": {
+            "mid_price": 5,
+            "option_delta": 0.18,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.4,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7150000": {
+            "mid_price": 2,
+            "option_delta": 0.1,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6000000": {
+            "mid_price": 8,
+            "option_delta": -0.02,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          }
+        }
+      ],
+      "expect": 0.18
+    },
+    {
+      "fn": "monitorValue",
+      "name": "a combo",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "mid_price": 1.5,
+            "option_delta": -0.08,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6500000": {
+            "mid_price": 3,
+            "option_delta": -0.15,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.1,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7100000": {
+            "mid_price": 5,
+            "option_delta": 0.18,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.4,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7150000": {
+            "mid_price": 2,
+            "option_delta": 0.1,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6000000": {
+            "mid_price": 8,
+            "option_delta": -0.02,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          }
+        }
+      ],
+      "expect": -4.5
+    },
+    {
+      "fn": "monitorValue",
+      "name": "unpriced",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {}
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "halfway above",
+      "args": [
+        0.15,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": 50
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "12.5 rounds to even",
+      "args": [
+        0.125,
+        1,
+        "above",
+        "abs"
+      ],
+      "expect": 12
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "13.5 rounds to even",
+      "args": [
+        0.135,
+        1,
+        "above",
+        "abs"
+      ],
+      "expect": 14
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "past the threshold is full",
+      "args": [
+        0.5,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": 100
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "below",
+      "args": [
+        4,
+        2,
+        "below",
+        "abs"
+      ],
+      "expect": 50
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "below at zero",
+      "args": [
+        0,
+        2,
+        "below",
+        "abs"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "abs of a negative",
+      "args": [
+        -0.15,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": 50
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "signed and negative",
+      "args": [
+        -0.15,
+        0.3,
+        "above",
+        "signed"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "no value",
+      "args": [
+        null,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdFault",
+      "name": "abs needs a positive threshold",
+      "args": [
+        "abs",
+        0
+      ],
+      "expect": "abs-not-positive"
+    },
+    {
+      "fn": "thresholdFault",
+      "name": "signed may be negative",
+      "args": [
+        "signed",
+        -1.5
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdFault",
+      "name": "signed may not be zero",
+      "args": [
+        "signed",
+        0
+      ],
+      "expect": "signed-zero"
+    },
+    {
+      "fn": "isBreached",
+      "name": "exactly at the threshold, above",
+      "args": [
+        0.3,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isBreached",
+      "name": "just under, above",
+      "args": [
+        0.2999,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isBreached",
+      "name": "exactly at the threshold, below",
+      "args": [
+        2,
+        2,
+        "below",
+        "abs"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isBreached",
+      "name": "abs ignores the sign",
+      "args": [
+        -0.31,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isBreached",
+      "name": "signed below a negative threshold",
+      "args": [
+        -2.1,
+        -2,
+        "below",
+        "signed"
+      ],
+      "expect": true
+    }
+  ]
+}
