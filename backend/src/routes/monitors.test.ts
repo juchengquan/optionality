@@ -1,7 +1,8 @@
 /** `/monitors` and `/quotes`. Ported from tests/test_monitors_api.py (ADR 0009, phase 5).
  *
  *  Three of the Python's twenty-one do not come across as written:
- *  - `test_openapi_documents_both_monitor_shapes` reads /openapi.json, which Hono does not serve.
+ *  - `test_openapi_documents_both_monitor_shapes` reads /openapi.json, which Hono did not serve;
+ *    it lives in openapi.test.ts now that it does.
  *  - `test_health_exposes_monitor_sweep_state` asserts a sweep has already run at startup; there is
  *    no sweeper or lifespan until phase 6.
  *  - `test_delete_removes_the_position_links_first` creates its Position through /positions, which

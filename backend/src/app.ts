@@ -8,6 +8,7 @@
 import { Hono } from "hono";
 
 import type { Deps } from "./deps.ts";
+import { mountDocs } from "./openapi.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { monitorRoutes, quoteRoutes } from "./routes/monitors.ts";
 import { positionRoutes } from "./routes/positions.ts";
@@ -15,11 +16,12 @@ import { spxRoutes } from "./routes/spx.ts";
 
 /** Paths reachable without a token. `/health` is open because whatever is checking on the service
  *  may be the thing that has lost its credentials, and because the dashboard reads it to find out
- *  whether it is talking to the API it was built against (ADR 0006). */
-const OPEN_PATHS = new Set(["/health"]);
+ *  whether it is talking to the API it was built against (ADR 0006). The docs are open because the
+ *  page cannot hand a token to the fetch of its own spec, and the spec holds no data. */
+const OPEN_PATHS = new Set(["/health", "/openapi.json", "/docs"]);
 
 export function createApp(deps: Deps) {
-  return new Hono()
+  const app = new Hono()
     .onError((err, c) => {
       // an HTTPException already carries the {"detail": ...} body the dashboard reads; anything
       // else is a bug, and must still answer in the shape the dashboard can show
@@ -50,6 +52,10 @@ export function createApp(deps: Deps) {
     .route("/monitors", monitorRoutes(deps))
     .route("/positions", positionRoutes(deps))
     .route("/spx", spxRoutes(deps));
+  // after every other route, because the spec is generated from the routes already registered;
+  // and not part of the chain, so `AppType` stays the API's alone
+  mountDocs(app, deps.settings.rootPath, OPEN_PATHS);
+  return app;
 }
 
 /** What `hc` on the frontend is parameterised by. */

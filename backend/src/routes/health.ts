@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import type { Deps } from "../deps.ts";
 import { databaseResponds, latestRun } from "../db/queries.ts";
+import { documented } from "../openapi.ts";
 import { displayStored, displayTime } from "../timefmt.ts";
 
 const LastRun = z.object({
@@ -40,7 +41,7 @@ export const HealthResponse = z.object({
 });
 
 export function healthRoutes(deps: Deps) {
-  return new Hono().get("/health", async (c) => {
+  return new Hono().get("/health", documented("Service health; needs no token", { 200: HealthResponse }), async (c) => {
     const { settings, db, sweeper, worker } = deps;
     const tz = settings.displayTz;
     const ok = databaseResponds(db);

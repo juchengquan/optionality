@@ -5,10 +5,11 @@
  *  Wrapped once here so no route can get either wrong.
  *
  *  Built on Hono's own `validator` rather than @hono/zod-validator. That package declares a Zod
- *  peer range that includes ours, but npm hoists the shadcn CLI's zod 3 to the workspace root and
- *  the validator's types bind to THAT, not to the backend's zod 4 — so it will not compile against
- *  a copy it accepted. Hono's validator takes a plain function, couples to no version of anything,
- *  and still types `c.req.valid()` from what the function returns. One dependency fewer.
+ *  peer range that includes ours, but npm hoisted the shadcn CLI's zod 3 to the workspace root and
+ *  the validator's types bound to THAT, not to the backend's zod 4 — so it would not compile
+ *  against a copy it accepted. (The root now pins zod 4 for openapi.ts's sake, which may have cured
+ *  this; nobody has re-tried.) Hono's validator takes a plain function, couples to no version of
+ *  anything, and still types `c.req.valid()` from what the function returns. One dependency fewer.
  *
  *  One consequence shapes every schema in this directory: Hono derives the REQUEST type from the
  *  parsed type, so a field written `z.string().default("x")` is optional at runtime and REQUIRED of
@@ -21,6 +22,7 @@
  */
 import type { ValidationTargets } from "hono";
 import { validator } from "hono/validator";
+import { resolver, uniqueSymbol } from "hono-openapi";
 import { z } from "zod";
 import type { ZodType } from "zod";
 
@@ -34,9 +36,12 @@ export function valid<T extends ZodType, Target extends keyof ValidationTargets>
   // judge — so it takes the parsed branch and every field with a default becomes required of the
   // caller. Naming it here is what makes `tz` and `enabled` optional on a schedule, and `notify`
   // optional on a run, which is how the dashboard will actually call them.
-  return validator(target, (value, c) => {
+  const middleware = validator(target, (value, c) => {
     const result = schema.safeParse(value);
     if (!result.success) return c.json({ detail: z.prettifyError(result.error) }, 422);
     return result.data as z.output<T>;
   });
+  // the tag hono-openapi's own validator carries, so /openapi.json documents this request from the
+  // very schema that checks it (openapi.ts)
+  return Object.assign(middleware, { [uniqueSymbol]: { target, ...resolver(schema) } });
 }
