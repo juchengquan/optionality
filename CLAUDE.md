@@ -71,7 +71,9 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
   for module (snake_case the only translation), `_js.py` holds the JavaScript rounding the port must
-  reproduce, `opend.py` needs the `opend` extra. `tests/test_cases.py` runs every golden case.
+  reproduce, `opend.py` needs the `opend` extra, and `api.py` loads Positions and Monitors from the
+  live service (`OPTIONALITY_API` for its URL; not golden-cased — it mirrors no domain module).
+  `tests/test_cases.py` runs every golden case.
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
