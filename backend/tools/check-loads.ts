@@ -20,7 +20,7 @@ const SRC = join(ROOT, "backend/src");
  *  the service, not by importing it. */
 const SKIP = new Set(["backend/src/main.ts"]);
 
-function walk(dir) {
+function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const path = join(dir, entry);
     if (statSync(path).isDirectory()) return walk(path);
@@ -29,7 +29,7 @@ function walk(dir) {
   });
 }
 
-function load(path) {
+function load(path: string): Promise<{ path: string; ok: boolean; note?: string }> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(path)});`],
       { stdio: ["ignore", "ignore", "pipe"] });

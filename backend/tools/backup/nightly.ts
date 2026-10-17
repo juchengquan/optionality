@@ -1,10 +1,10 @@
 /** The nightly backup: a checked, gzipped online copy of the live database, and the history pruned.
  *
- *    node nightly.mjs <live.db> <backup dir> [--today YYYYMMDD]
+ *    node nightly.ts <live.db> <backup dir> [--today YYYYMMDD]
  *
  *  One file per night, `optionality-ts-YYYYMMDD.db.gz`, by this machine's own calendar. It is the
- *  same online backup `make deploy` takes (backup.mjs), so whatever is still in the write-ahead log
- *  is in it; it is checked (retention.mjs: verifyCopy) BEFORE it replaces anything, and compressed
+ *  same online backup `make deploy` takes (backup.ts), so whatever is still in the write-ahead log
+ *  is in it; it is checked (retention.ts: verifyCopy) BEFORE it replaces anything, and compressed
  *  into a single file, because syncing a SQLite file without its -wal is how a copy goes quietly
  *  wrong. Run twice in a night, the second run replaces the first.
  *
@@ -17,13 +17,13 @@ import { join } from "node:path";
 import { DatabaseSync, backup } from "node:sqlite";
 import { gzipSync } from "node:zlib";
 
-import { retainNightly, rowCounts, verifyCopy } from "./retention.mjs";
+import { retainNightly, rowCounts, verifyCopy } from "./retention.ts";
 
 const args = process.argv.slice(2);
 const [source, dir] = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--today");
 const todayFlag = args.indexOf("--today");
 if (!source || !dir) {
-  console.error("usage: node nightly.mjs <live.db> <backup dir> [--today YYYYMMDD]");
+  console.error("usage: node nightly.ts <live.db> <backup dir> [--today YYYYMMDD]");
   process.exit(2);
 }
 if (!existsSync(source)) {
@@ -33,7 +33,7 @@ if (!existsSync(source)) {
 
 const local = new Date();
 const today = todayFlag >= 0
-  ? args[todayFlag + 1]
+  ? (args[todayFlag + 1] ?? "")
   : `${local.getFullYear()}${String(local.getMonth() + 1).padStart(2, "0")}${String(local.getDate()).padStart(2, "0")}`;
 if (!/^\d{8}$/.test(today)) {
   console.error(`--today must be YYYYMMDD, not ${today}`);

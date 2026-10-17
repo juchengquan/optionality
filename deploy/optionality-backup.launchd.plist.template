@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- The nightly backup (backend/tools/backup/nightly.mjs): a checked, gzipped online copy of the
+    <!-- The nightly backup (backend/tools/backup/nightly.ts): a checked, gzipped online copy of the
          live database into __BACKUP_DIR__, pruned to 14 nights and 12 monthly. Not a service: it
          runs once a night and exits. Installed by `make launchd-backup-install`, which is also how
          the destination changes — re-run it with BACKUP_DIR=... -->
@@ -11,7 +11,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>__NODE__</string>
-        <string>backend/tools/backup/nightly.mjs</string>
+        <string>backend/tools/backup/nightly.ts</string>
         <string>data/optionality-ts.db</string>
         <string>__BACKUP_DIR__</string>
     </array>

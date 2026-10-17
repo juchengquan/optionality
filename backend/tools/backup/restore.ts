@@ -1,6 +1,6 @@
 /** Put a nightly backup back in place of the live database.
  *
- *    node restore.mjs <optionality-ts-YYYYMMDD.db.gz> <live.db>
+ *    node restore.ts <optionality-ts-YYYYMMDD.db.gz> <live.db>
  *
  *  `make restore FROM=...` stops the API around this; run by hand, stop it first — this refuses
  *  while anything has the live file open.
@@ -15,15 +15,15 @@ import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "nod
 import { DatabaseSync, backup } from "node:sqlite";
 import { gunzipSync } from "node:zlib";
 
-import { verifyCopy } from "./retention.mjs";
+import { verifyCopy } from "./retention.ts";
 
 const [from, live] = process.argv.slice(2);
 if (!from || !live) {
-  console.error("usage: node restore.mjs <backup.db.gz> <live.db>");
+  console.error("usage: node restore.ts <backup.db.gz> <live.db>");
   process.exit(2);
 }
 
-function inUse(path) {
+function inUse(path: string): boolean {
   try {
     execFileSync("lsof", ["-t", path], { stdio: ["ignore", "pipe", "ignore"] });
     return true; // lsof exits 0 only when something has it open
@@ -48,7 +48,7 @@ try {
 
 if (existsSync(live)) {
   const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
+  const p = (n: number) => String(n).padStart(2, "0");
   const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
   const kept = `${live}.bak-pre-restore-${stamp}`;
   // an online backup, so whatever was still in the live file's log is in what is kept

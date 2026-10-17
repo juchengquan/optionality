@@ -1,4 +1,4 @@
-.PHONY: lint check-boundaries cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
+.PHONY: check lint check-boundaries cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
@@ -39,6 +39,12 @@ format:
 test:
 	uv run --directory python pytest
 
+# EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
+# subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
+# the Python. check-ui comes last because it rebuilds the bundle.
+check: lint typecheck check-api check-cases test test-api test-ui check-ui
+	@echo "all checks passed"
+
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
 # so the documented way to "run the API locally" started the retired implementation instead.
 #
@@ -56,7 +62,7 @@ test:
 # PORT is left alone: main.ts defaults to 31417, so it cannot collide with the live 31415.
 SERVE_DB = data/optionality-ts.db.serve
 serve:
-	node backend/tools/backup/backup.mjs $(TS_DB) $(SERVE_DB)
+	node backend/tools/backup/backup.ts $(TS_DB) $(SERVE_DB)
 	OPTIONALITY_DB_PATH=$(SERVE_DB) TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID= \
 	  MONITOR_INTERVAL_SECONDS=3600 node --env-file=.env backend/src/main.ts
 
@@ -128,8 +134,8 @@ resolve-ui:
 deploy:
 	git pull --ff-only
 	npm install --silent
-	node backend/tools/backup/backup.mjs $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S)
-	node backend/tools/backup/prune-deploy.mjs data
+	node backend/tools/backup/backup.ts $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S)
+	node backend/tools/backup/prune-deploy.ts data
 	$(MAKE) launchd-api-restart
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
@@ -152,9 +158,9 @@ typecheck:
 
 # tsc is not enough. Node runs the backend by ERASING types, so syntax that would have to EMIT code
 # is rejected at load time — and tsc accepts it while vitest transforms it, so neither notices. Two
-# classes reached main unable to load at all. See backend/tools/check-loads.mjs.
+# classes reached main unable to load at all. See backend/tools/check-loads.ts.
 check-api:
-	node backend/tools/check-loads.mjs
+	node backend/tools/check-loads.ts
 
 launchd-api-install:
 	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
@@ -175,10 +181,10 @@ api-logs:
 	tail -f $(HOME)/Library/Logs/optionality-api.log
 
 # The nightly backup: a checked, gzipped online copy of the live database, kept 14 nights and 12
-# monthly (backend/tools/backup/nightly.mjs). `make backup` runs it now; the agent runs it at 06:00.
-# Restore with `make restore FROM=...`, never by copying a file over $(TS_DB) (see restore.mjs).
+# monthly (backend/tools/backup/nightly.ts). `make backup` runs it now; the agent runs it at 06:00.
+# Restore with `make restore FROM=...`, never by copying a file over $(TS_DB) (see restore.ts).
 backup:
-	node backend/tools/backup/nightly.mjs $(TS_DB) "$(BACKUP_DIR)"
+	node backend/tools/backup/nightly.ts $(TS_DB) "$(BACKUP_DIR)"
 
 # Put a nightly backup back: stops the API, restores (keeping what it replaces), starts the API, whose
 # boot migrates an older file forward. FROM is a file from $(BACKUP_DIR).
@@ -186,7 +192,7 @@ restore:
 	@test -n "$(FROM)" || { echo "usage: make restore FROM=$(BACKUP_DIR)/optionality-ts-YYYYMMDD.db.gz"; exit 1; }
 	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
 	@while launchctl print gui/$$(id -u)/$(API_LABEL) >/dev/null 2>&1; do sleep 1; done
-	node backend/tools/backup/restore.mjs "$(FROM)" $(TS_DB)
+	node backend/tools/backup/restore.ts "$(FROM)" $(TS_DB)
 	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
 	@sleep 3; curl -fsS http://127.0.0.1:31415/health | head -c 200; echo
 

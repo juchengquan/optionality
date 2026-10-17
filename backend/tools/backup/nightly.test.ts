@@ -13,13 +13,13 @@ import { DatabaseSync } from "node:sqlite";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { retainDeploy, retainNightly, verifyCopy } from "./retention.mjs";
+import { retainDeploy, retainNightly, verifyCopy } from "./retention.ts";
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "optionality-nightly-")); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
-const SCRIPT = new URL("./nightly.mjs", import.meta.url).pathname;
+const SCRIPT = new URL("./nightly.ts", import.meta.url).pathname;
 const nightly = (yyyymmdd: string) => `optionality-ts-${yyyymmdd}.db.gz`;
 
 /** every day from `from` for `n` days, as nightly file names */
@@ -164,7 +164,7 @@ describe("checking a copy before it is kept", () => {
 });
 
 describe("restoring a nightly backup", () => {
-  const RESTORE = new URL("./restore.mjs", import.meta.url).pathname;
+  const RESTORE = new URL("./restore.ts", import.meta.url).pathname;
   const run = (...args: string[]) => execFileSync(process.execPath, [RESTORE, ...args], { encoding: "utf8" });
 
   /** a nightly file holding `rows` monitors */

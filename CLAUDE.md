@@ -17,10 +17,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Commands
 
-- `make test` / `make lint` / `make format` — run all three before every commit. `make test` is the Python
-  package's suite: every golden case, reproduced exactly. `make lint` is ruff plus `check-boundaries`: no package
-  imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
-  `backend/schemas` for the input schemas; ADR 0014).
+- **`make check` before every commit** — everything, in one target: lint, typecheck, `check-api`,
+  `check-cases`, the Python suite, the API suite, both UI suites and `check-ui`. Running a subset is
+  how a commit passes while something it touched is broken: `make test` alone is only the Python
+  package (every golden case, reproduced exactly). `make lint` is ruff plus `check-boundaries`: no
+  package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
+  `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python; the
+  TypeScript has no formatter.
 - `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, restart BOTH
   agents (the API applies pending migrations at boot). launchd does not watch the repo and the agents
   run this working tree, so a merge that skips this leaves stale code running. Doing the steps by hand

@@ -18,7 +18,7 @@ import { DatabaseSync, backup } from "node:sqlite";
 
 const [source, target] = process.argv.slice(2);
 if (!source || !target) {
-  console.error("usage: node backup.mjs <source.db> <target.db>");
+  console.error("usage: node backup.ts <source.db> <target.db>");
   process.exit(2);
 }
 // loudly, rather than leaving a plausible empty file where a backup should be
