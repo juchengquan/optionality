@@ -9,8 +9,10 @@
  *  Every string here is asserted character for character in the tests, because they are read on a
  *  phone and a column that wraps is a table that cannot be read at all.
  */
+import type { HoldingValue } from "../holdings.ts";
 
 export const HELP_TEXT = `Commands:
+/holdings — where each Position stands: cost, P&L, pace
 /monitors — list the watchlist with live state
 /quotes — live prices (mid, bid/ask) for every watched code
 /greeks — live delta/gamma/theta for every watched code
@@ -29,6 +31,7 @@ export const HELP_TEXT = `Commands:
 
 /** The "/" autocomplete menu in the Telegram client. */
 export const BOT_COMMANDS = [
+  { command: "holdings", description: "Where each Position stands: cost, P&L, pace" },
   { command: "monitors", description: "List the watchlist with live state" },
   { command: "quotes", description: "Live prices (mid, bid/ask) for every watched code" },
   { command: "greeks", description: "Live delta/gamma/theta for every watched code" },
@@ -84,6 +87,24 @@ export function table(headers: string[], rows: string[][]): string {
     row.map((cell, i) => cell.padEnd(widths[i]!)).join("  ").replace(/\s+$/, ""),
   );
   return `<pre>${lines.join("\n")}</pre>`;
+}
+
+/** The one thing worth saying about a holding, in a cell.
+ *
+ *  A Level reached outranks a pace gap: a Target or a Stop is a decision already made, while the
+ *  gap is only a reading. The gap is said in WORDS, never as a bare sign — CONTEXT.md: "behind" is
+ *  bad while a positive P&L is good, and a sign beside one invites reading the other. That rule is
+ *  PaceLine's on the dashboard, and this is its second home on purpose: forty characters cannot
+ *  hold the sentence that one writes.
+ */
+export function standingNote(v: HoldingValue): string {
+  const s = v.schedule;
+  if (!s) return "—";
+  if (s.reached === "stop") return "STOP";
+  if (s.reached === "target") return "TARGET";
+  if (s.manage_by_due) return "MANAGE";
+  if (s.pace_gap === null) return "—";
+  return `${s.pace_gap > 0 ? "behind" : "ahead"} ${Math.abs(s.pace_gap).toFixed(2)}`;
 }
 
 const SPXW_CODE = /^US\.SPXW(\d{6})([CP])(\d+?)000$/;

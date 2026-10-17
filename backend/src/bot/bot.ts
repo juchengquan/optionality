@@ -22,11 +22,12 @@ import { fromSqliteBool, toSqliteBool, toSqliteJson } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import { toMonitor } from "../hydrate.ts";
 import { exitPolicy } from "../domain/exit.ts";
+import { holdingValues } from "../holdings.ts";
 import { linkToPositions, watchlistQuotes } from "../monitors.ts";
 import { verifyContracts, type QuoteFetcher, type QuoteRecord } from "../quotes.ts";
 import { displayTimeShort } from "../timefmt.ts";
 import {
-  BOT_COMMANDS, FIELD_SHORT, HELP_TEXT, fmtValue, hasFormat, pyNumber, ruleText, shortCode, table,
+  BOT_COMMANDS, FIELD_SHORT, HELP_TEXT, fmtValue, hasFormat, pyNumber, ruleText, shortCode, standingNote, table,
   thresholdError,
 } from "./format.ts";
 import type { SweeperPort, WorkerPort } from "../ports.ts";
@@ -180,6 +181,7 @@ export class TelegramBot {
       case "threshold": return this.threshold(args);
       case "rename": return this.rename(args);
       case "snapshot": return this.snapshot(args);
+      case "holdings": return this.holdings();
       case "health": return this.health();
       default: return HELP_TEXT;
     }
@@ -217,6 +219,35 @@ export class TelegramBot {
     return table(headers, quotes.map((q) => [
       shortCode(q.code) + (q.triggered ? " 🔔" : ""),
       ...cells(q.snapshot ?? {}),
+    ]));
+  }
+
+  /** Where each Position stands: what it costs to buy back, what that is worth, and the one thing
+   *  worth saying about it.
+   *
+   *  The figures come from holdings.ts — the same function `/positions/values` asks — so Telegram
+   *  and the dashboard cannot disagree about a cost, a P&L or a Level. Four columns, inside forty
+   *  characters, as every table reply here is (CLAUDE.md): a new question gets a new command, never
+   *  a fifth column.
+   */
+  private async holdings(): Promise<string> {
+    let valued;
+    try {
+      valued = await holdingValues(
+        this.deps.db, this.deps.fetchQuotes, this.now(), this.deps.settings,
+        this.deps.settings.displayTz,
+      );
+    } catch (err) {
+      return `Holdings failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    if (valued.values.length === 0) {
+      return "No holdings recorded. Record one on the dashboard, beside the rule that watches it.";
+    }
+    return table(["holding", "cost", "P&L", "note"], valued.values.map((v) => [
+      v.row.name,
+      v.cost === null ? "—" : v.cost.toFixed(2),
+      v.pnl === null ? "—" : String(Math.round(v.pnl)),
+      standingNote(v),
     ]));
   }
 

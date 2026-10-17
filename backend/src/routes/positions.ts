@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { POSITION_GREEK_FIELDS, contractSize, costToClose, positionGreek, positionLegCodes, positionPnl } from "../domain/position.ts";
+import { POSITION_GREEK_FIELDS, contractSize, positionGreek, positionLegCodes } from "../domain/position.ts";
 import type { Deps } from "../deps.ts";
 import {
   clearPositionLinks, clearPositionSamples, clearScopeOfOrphans, deletePositionRow, findPosition,
@@ -16,17 +16,15 @@ import {
   listPositionSamples, listPositions, updatePositionFields,
 } from "../db/queries.ts";
 import { atomic } from "../db/open.ts";
+import { holdingValues } from "../holdings.ts";
 import type { PositionRow } from "../db/rows.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
-import { dteAtOpen, exitLevels } from "../domain/exit.ts";
 import { volAttribution, type VolSample } from "../domain/vol.ts";
-import { daysToExpiry } from "../domain/expiry.ts";
-import type { Settings } from "../env.ts";
 import { toPosition } from "../hydrate.ts";
 import { adoptOrphanMonitors } from "../positions.ts";
-import { displayRecords, fetchResilient, verifyContracts } from "../quotes.ts";
+import { verifyContracts } from "../quotes.ts";
 import { DEFAULT_CONTRACTS, PositionIn, PositionPatch } from "../schemas/position.ts";
 import { displayStored, displayTime } from "../timefmt.ts";
 import { documented } from "../openapi.ts";
@@ -84,29 +82,6 @@ const VolOut = z.object({
   days: z.number().nullable(),
 });
 
-/** The schedule for one stored Position, or null if its Opened was never declared.
- *
- *  Assembled here rather than in the domain because it is the one place that has the row, the
- *  live Cost to close and the policy at once; `domain/exit.ts` holds the arithmetic and knows
- *  nothing about either.
- */
-function scheduleFor(
-  row: PositionRow, cost: number | null, now: Date, settings: Settings,
-): z.input<typeof ScheduleOut> {
-  if (row.opened_at === null) return null;
-  const openedDte = dteAtOpen(row.strike_date, row.opened_at);
-  const levels = exitLevels(
-    row.entry, openedDte, daysToExpiry(row.strike_date, now),
-    {
-      takeFraction: settings.exitTakeFraction,
-      stopMultiple: settings.exitStopMultiple,
-      manageByDte: settings.exitManageByDte,
-    },
-    cost,
-  );
-  return levels === null ? null : { dte_at_open: openedDte, ...levels };
-}
-
 const list = documented("List positions", { 200: z.array(PositionOut) });
 const values = documented("Live value, P&L and exit schedule of every position", { 200: z.array(PositionValues) }, [502]);
 const vol = documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]);
@@ -163,34 +138,29 @@ export function positionRoutes(deps: Deps) {
      *  One bounded snapshot call for every leg of every position, deduped — a documented live-call
      *  exception, like `/quotes` (CLAUDE.md). */
     .get("/values", values, async (c) => {
-      const rows = listPositions(db);
-      if (rows.length === 0) return values.reply(c, 200, []);
-      const positions = rows.map(toPosition);
-      const codes = [...new Set(positions.flatMap((p) => positionLegCodes(p)))].sort();
-      let byCode: Record<string, Record<string, unknown>>;
       const now = deps.now();
+      let valued;
       try {
-        const { records } = await fetchResilient(codes, deps.fetchQuotes);
-        byCode = displayRecords(records, tz, now);
+        valued = await holdingValues(db, deps.fetchQuotes, now, deps.settings, tz);
       } catch (err) {
         throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);
       }
+      // `values` is the route descriptor; the holdings are `held`
+      const { byCode, values: held } = valued;
+      if (held.length === 0) return values.reply(c, 200, []);
       const fetched = displayTime(now, tz);
-      return values.reply(c, 200, rows.map((row, i) => {
-          const p = positions[i]!;
-          return {
-            ...out(row),
-            cost_to_close: costToClose(p, byCode),
-            pnl: positionPnl(p, byCode),
-            contract_size: contractSize(byCode),
-            greeks: Object.fromEntries(
-              POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(p, byCode, f)]),
-            ),
-            fetched_at: fetched,
-            dte: daysToExpiry(row.strike_date, now),
-            schedule: scheduleFor(row, costToClose(p, byCode), now, deps.settings),
-          };
-        }));
+      return values.reply(c, 200, held.map((v) => ({
+        ...out(v.row),
+        cost_to_close: v.cost,
+        pnl: v.pnl,
+        contract_size: contractSize(byCode),
+        greeks: Object.fromEntries(
+          POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(v.position, byCode, f)]),
+        ),
+        fetched_at: fetched,
+        dte: v.dte,
+        schedule: v.schedule,
+      })));
     })
 
     /** What of this holding's pace gap vol accounts for (ADR 0011).
