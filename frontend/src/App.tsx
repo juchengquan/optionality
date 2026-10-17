@@ -181,7 +181,6 @@ export function App() {
   );
 
   const fetchedAt = health?.monitor.fetched_at;
-  // "something to say": a dead OpenD, an alarm engine that is not running, or work in the queue
 
   return (
     <main>

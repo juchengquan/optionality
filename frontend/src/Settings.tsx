@@ -87,14 +87,13 @@ export function Settings({
             )}
           </section>
 
-          {/* The facts the old strip carried, all of them, all the time — including a non-empty
-              queue, which is not a fault but is worth seeing: a run is executing. */}
+          {/* The facts the old strip carried, all of them, all the time. The run queue used to be
+              one; it went with the run pipeline in phase 10 (ADR 0014). */}
           <section data-testid="service">
             <h3 className="text-sm font-semibold mb-1">service</h3>
             <p className="meta">
               {`OpenD ${health ? (health.opend ? "up" : "down") : "unknown"}`}
               {health ? ` · alarms ${health.monitor.alarms.label}` : ""}
-              {health ? ` · queue ${health.queue_depth}` : ""}
             </p>
             {health?.monitor.last_sweep_at
               ? <p className="meta">{`last sweep ${health.monitor.last_sweep_at}`}</p>

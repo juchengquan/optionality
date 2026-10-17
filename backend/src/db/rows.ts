@@ -15,12 +15,6 @@
 
 /** Every column of every table, in the order schema.sql declares them. */
 export const COLUMNS = {
-  configs: ["id", "name", "task_type", "body", "created_at", "updated_at"],
-  schedules: ["id", "cron_expr", "tz", "task_type", "config_name", "enabled"],
-  runs: [
-    "id", "task_type", "config_name", "trigger", "notify", "attempt", "status", "error",
-    "created_at", "started_at", "finished_at",
-  ],
   monitors: [
     "id", "code", "strike_date", "option_type", "strike", "field", "threshold", "direction",
     "compare", "legs", "scope", "enabled", "disabled_reason", "triggered", "last_value",
@@ -37,10 +31,8 @@ export const COLUMNS = {
     "legs_iv", "legs_vega",
   ],
   monitor_positions: ["monitor_id", "position_id"],
-  reports: ["run_id", "summary", "html", "created_at"],
-  alembic_version: ["version_num"],
-  /** bookkeeping, like alembic_version beside it: COLUMNS covers every table the schema creates,
-   *  and a table left out of it is a table nothing checks (db/migrate.ts) */
+  /** bookkeeping: COLUMNS covers every table the schema creates, and a table left out of it is a
+   *  table nothing checks (db/migrate.ts) */
   schema_migrations: ["name", "applied_at"],
 } as const satisfies Record<string, readonly string[]>;
 
@@ -54,55 +46,14 @@ export type TableName = keyof typeof COLUMNS;
  *  the database, and the compiler checks it against the interfaces.
  */
 export const NULLABLE = {
-  configs: [],
-  schedules: [],
-  runs: ["error", "started_at", "finished_at"],
   monitors: [
     "legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at",
   ],
   positions: ["strategy", "entry", "opened_at", "manage_notified_at"],
   position_samples: ["legs_iv", "legs_vega"],
   monitor_positions: [],
-  reports: [],
-  alembic_version: [],
   schema_migrations: [],
 } as const satisfies Record<TableName, readonly string[]>;
-
-export interface ConfigRow {
-  id: number;
-  name: string;
-  task_type: string;
-  /** JSON text */
-  body: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ScheduleRow {
-  id: number;
-  cron_expr: string;
-  tz: string;
-  task_type: string;
-  config_name: string;
-  /** 0 | 1 */
-  enabled: number;
-}
-
-export interface RunRow {
-  id: string;
-  task_type: string;
-  config_name: string;
-  /** "schedule" | "api" — a reserved word in SQL, quoted in the DDL */
-  trigger: string;
-  /** 0 | 1 */
-  notify: number;
-  attempt: number;
-  status: string;
-  error: string | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-}
 
 export interface MonitorRow {
   id: string;
@@ -174,18 +125,6 @@ export interface MonitorPositionRow {
   position_id: string;
 }
 
-export interface ReportRow {
-  run_id: string;
-  /** JSON text */
-  summary: string;
-  html: string;
-  created_at: string;
-}
-
-export interface AlembicVersionRow {
-  version_num: string;
-}
-
 /** Fails to compile unless the two sets of names are exactly the same. */
 type Exact<A extends string, B extends string> = [A] extends [B]
   ? ([B] extends [A] ? true : { missingFromFirst: Exclude<B, A> })
@@ -196,9 +135,6 @@ type Checked<T extends true> = T;
 /** The keys of a row type whose value may be null. */
 type NullableKeys<T> = { [K in keyof T]-?: null extends T[K] ? K : never }[keyof T];
 
-type _Configs = Checked<Exact<keyof ConfigRow, (typeof COLUMNS.configs)[number]>>;
-type _Schedules = Checked<Exact<keyof ScheduleRow, (typeof COLUMNS.schedules)[number]>>;
-type _Runs = Checked<Exact<keyof RunRow, (typeof COLUMNS.runs)[number]>>;
 type _Monitors = Checked<Exact<keyof MonitorRow, (typeof COLUMNS.monitors)[number]>>;
 type _Positions = Checked<Exact<keyof PositionRow, (typeof COLUMNS.positions)[number]>>;
 type _MonitorPositions = Checked<
@@ -210,10 +146,6 @@ type _PositionSamples = Checked<
 type _SchemaMigrations = Checked<
   Exact<keyof SchemaMigrationRow, (typeof COLUMNS.schema_migrations)[number]>
 >;
-type _Reports = Checked<Exact<keyof ReportRow, (typeof COLUMNS.reports)[number]>>;
-type _Alembic = Checked<
-  Exact<keyof AlembicVersionRow, (typeof COLUMNS.alembic_version)[number]>
->;
 
 /** Compile-time proof that every interface above names exactly the columns COLUMNS does.
  *
@@ -221,9 +153,6 @@ type _Alembic = Checked<
  *  check the compiler throws away is no check at all. Add a column to one place and not the other
  *  and `npm run typecheck` names the column that is missing and from which side.
  */
-type _ConfigsNull = Checked<Exact<NullableKeys<ConfigRow> & string, (typeof NULLABLE.configs)[number]>>;
-type _SchedulesNull = Checked<Exact<NullableKeys<ScheduleRow> & string, (typeof NULLABLE.schedules)[number]>>;
-type _RunsNull = Checked<Exact<NullableKeys<RunRow> & string, (typeof NULLABLE.runs)[number]>>;
 type _MonitorsNull = Checked<Exact<NullableKeys<MonitorRow> & string, (typeof NULLABLE.monitors)[number]>>;
 type _PositionsNull = Checked<Exact<NullableKeys<PositionRow> & string, (typeof NULLABLE.positions)[number]>>;
 type _MonitorPositionsNull = Checked<
@@ -235,10 +164,6 @@ type _PositionSamplesNull = Checked<
 type _SchemaMigrationsNull = Checked<
   Exact<NullableKeys<SchemaMigrationRow> & string, (typeof NULLABLE.schema_migrations)[number]>
 >;
-type _ReportsNull = Checked<Exact<NullableKeys<ReportRow> & string, (typeof NULLABLE.reports)[number]>>;
-type _AlembicNull = Checked<
-  Exact<NullableKeys<AlembicVersionRow> & string, (typeof NULLABLE.alembic_version)[number]>
->;
 
 /** Compile-time proof that every interface above names exactly the columns COLUMNS does, and
  *  marks nullable exactly the columns NULLABLE does.
@@ -248,8 +173,6 @@ type _AlembicNull = Checked<
  *  and `npm run typecheck` names the column that is missing and from which side.
  */
 export type SchemaChecks = [
-  _Configs, _Schedules, _Runs, _Monitors, _Positions, _MonitorPositions, _PositionSamples,
-  _Reports, _Alembic, _SchemaMigrations,
-  _ConfigsNull, _SchedulesNull, _RunsNull, _MonitorsNull, _PositionsNull, _MonitorPositionsNull,
-  _PositionSamplesNull, _ReportsNull, _AlembicNull, _SchemaMigrationsNull,
+  _Monitors, _Positions, _MonitorPositions, _PositionSamples, _SchemaMigrations,
+  _MonitorsNull, _PositionsNull, _MonitorPositionsNull, _PositionSamplesNull, _SchemaMigrationsNull,
 ];

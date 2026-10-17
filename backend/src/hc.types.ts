@@ -101,14 +101,9 @@ export type HcChecks = [
   // /health ---------------------------------------------------------------------------
   Checked<Exactly<E["health"]["db"], boolean>>,
   Checked<Exactly<E["health"]["opend"], boolean>>,
-  Checked<Exactly<E["health"]["queue_depth"], number>>,
   Checked<Exactly<E["health"]["monitor"]["alarms"]["label"], string>>,
   Checked<Exactly<E["health"]["monitor"]["alarms"]["bad"], boolean>>,
   Checked<Exactly<E["health"]["settings"]["sweep_seconds"], number>>,
-  // nullable where the Python returns None: a run that has not started has no started_at, and the
-  // dashboard renders a dash rather than the string "null"
-  Checked<Exactly<E["health"]["last_run"],
-    { id: string; task_type: string; status: string; created_at: string | null } | null>>,
 
   // the watchlist entry the dashboard's table is built from ----------------------------
   Checked<Known<Ok<E["quotes"]>>>,

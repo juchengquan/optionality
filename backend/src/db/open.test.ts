@@ -33,21 +33,19 @@ const position = (id: string, name: string) =>
     values (?, ?, '2026-10-16', 1, '[]', ?)`).run(id, name, now);
 
 describe("the schema", () => {
-  it("creates every table the Python has, plus the two that are ours alone", () => {
+  it("creates the tables the alarm engine and the holdings use, and no others", () => {
+    // the run pipeline's four tables and alembic's bookkeeping went in phase 10 (ADR 0014)
     const names = db.prepare("select name from sqlite_master where type='table' order by name")
       .all().map((r) => (r as { name: string }).name);
     expect(names).toEqual([
-      "alembic_version", "configs", "monitor_positions", "monitors", "position_samples",
-      "positions", "reports", "runs", "schedules", "schema_migrations",
+      "monitor_positions", "monitors", "position_samples", "positions", "schema_migrations",
     ]);
   });
 
-  it("has diverged from the Python's schema, deliberately and for the first time", () => {
-    // Until ADR 0011 this file was byte-compatible with SQLAlchemy's create_all, which is what
-    // made `make copy-db` and the rollback honest. `position_samples`, `schema_migrations` and the
-    // two new positions columns exist only here. The rollback is correspondingly weaker: it
-    // already lost everything entered since the cutover, and now loses the exit schedules too.
-    // Stated as a test so the next person adding a table knows what they are spending.
+  it("carries what ADR 0011 added beyond the Python's schema", () => {
+    // `position_samples`, `schema_migrations` and the two newer positions columns never existed
+    // in the Python's models. That divergence is what weakened the rollback until phase 10
+    // removed it (ADR 0014).
     const names = new Set(
       db.prepare("select name from sqlite_master where type='table'").all()
         .map((r) => (r as { name: string }).name),
@@ -60,15 +58,12 @@ describe("the schema", () => {
     expect(positions.slice(-2)).toEqual(["opened_at", "manage_notified_at"]);
   });
 
-  it("creates every index under the name SQLAlchemy gives it", () => {
-    // the names matter: a migration the Python later runs against this file refers to them
+  it("creates every index under the name SQLAlchemy gave it", () => {
+    // kept from the Python's models so that a live file and a fresh one agree name for name
     const names = db.prepare(
       "select name from sqlite_master where type='index' and name not like 'sqlite_%' order by name",
     ).all().map((r) => (r as { name: string }).name);
-    expect(names).toEqual([
-      "ix_configs_name", "ix_monitors_code", "ix_positions_name",
-      "ix_runs_created_at", "ix_runs_status",
-    ]);
+    expect(names).toEqual(["ix_monitors_code", "ix_positions_name"]);
   });
 
   it("keeps a monitor's code and field unique together", () => {
@@ -104,11 +99,6 @@ describe("the pragmas", () => {
     expect(() => db.prepare("insert into monitor_positions values (?, ?)")
       .run("ghost".repeat(6) + "mm", "p".repeat(32)), "missing monitor, real position")
       .toThrow(/FOREIGN KEY/i);
-  });
-
-  it("enforces a report's link to its run", () => {
-    expect(() => db.prepare("insert into reports values (?, '{}', '', ?)")
-      .run("norun".repeat(6) + "xx", now)).toThrow(/FOREIGN KEY/i);
   });
 
   it("accepts a link whose both ends exist", () => {
@@ -177,18 +167,18 @@ describe("binding values", () => {
   it("refuses a JavaScript boolean, which is why the conversion helpers exist", () => {
     // node:sqlite will not bind true/false at all. Without toSqliteBool every enabled flag
     // would throw at the first write, or worse, be written as something else.
-    expect(() => db.prepare("insert into schedules values (1, '* * * * *', 'UTC', 'spx', 'c', ?)")
-      .run(true as never)).toThrow(/cannot be bound/i);
-    expect(() => db.prepare("insert into schedules values (2, '* * * * *', 'UTC', 'spx', 'c', ?)")
-      .run(toSqliteBool(true))).not.toThrow();
-    expect(db.prepare("select enabled from schedules where id = 2").get())
-      .toMatchObject({ enabled: 1 });
+    monitor("a".repeat(32));
+    expect(() => db.prepare("update monitors set enabled = ? where id = ?")
+      .run(true as never, "a".repeat(32))).toThrow(/cannot be bound/i);
+    expect(() => db.prepare("update monitors set enabled = ? where id = ?")
+      .run(toSqliteBool(true), "a".repeat(32))).not.toThrow();
+    expect(db.prepare("select enabled from monitors").get()).toMatchObject({ enabled: 1 });
   });
 
   it("round-trips a boolean through the column the Python writes 0 and 1 into", () => {
-    db.prepare("insert into schedules values (3, '* * * * *', 'UTC', 'spx', 'c', ?)")
-      .run(toSqliteBool(false));
-    const row = db.prepare("select enabled from schedules where id = 3").get() as { enabled: number };
+    monitor("a".repeat(32));
+    db.prepare("update monitors set enabled = ?").run(toSqliteBool(false));
+    const row = db.prepare("select enabled from monitors").get() as { enabled: number };
     expect(row.enabled).toBe(0);
     expect(fromSqliteBool(row.enabled)).toBe(false);
   });

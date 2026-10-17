@@ -35,7 +35,7 @@ const leg = {
 };
 
 const health = {
-  db: true, opend: true, queue_depth: 0,
+  db: true, opend: true,
   monitor: { last_sweep_at: "2026-09-24 15:00:00+08:00", alarms: { label: "active", bad: false }, fetched_at: "2026-09-24 15:00:00+08:00" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
 };

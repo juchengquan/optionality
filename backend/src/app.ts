@@ -38,15 +38,9 @@ export function createApp(deps: Deps) {
       return next();
     })
     // The run pipeline's routes — /runs, /configs, /schedules, fifteen endpoints — were mounted
-    // here and are gone. The owner stopped using it: two runs in the service's life, both
-    // triggered by hand on 2026-08-10, zero schedules ever. The dashboard never called any of
-    // them and neither did the bot, which goes straight to the database.
-    //
-    // The MACHINERY is still here on purpose: the worker still owns run execution, which is a
-    // ratified invariant, and the scheduler, the four tables and /health's `last_run` all stay.
-    // What is gone is the only way to reach it over HTTP, so a run can now be created only by the
-    // scheduler, from a schedule that can only be inserted with SQL. That is deliberate, not an
-    // oversight — do not put the routes back to "fix" it without asking.
+    // here until #118, and its machinery (the worker, the cron schedules, the four tables,
+    // /health's queue and last run) until phase 10 (ADR 0014). Two runs in the service's life,
+    // both by hand on 2026-08-10, zero schedules ever. Do not put any of it back without asking.
     .route("/", healthRoutes(deps))
     .route("/", quoteRoutes(deps))
     .route("/monitors", monitorRoutes(deps))

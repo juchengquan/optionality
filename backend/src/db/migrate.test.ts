@@ -222,3 +222,37 @@ describe("0004: a Leg's Side is long or short (ADR 0013)", () => {
     expect(legsOf(db, "done")).toEqual([{ side: "short", option_type: "CALL", strike: 7100 }]);
   });
 });
+
+describe("0005: the run pipeline's tables go with it (phase 10, ADR 0014)", () => {
+  const NAME = "0005-drop-the-run-pipeline.sql";
+  const GONE = ["configs", "schedules", "runs", "reports", "alembic_version"];
+
+  it("drops exactly the run pipeline's tables and alembic's, and keeps every other row", () => {
+    const db = createDatabase(join(dir, "behind.db"));
+    db.prepare(`delete from ${APPLIED_TABLE} where name = ?`).run(NAME);
+    // what 0005 removes has to exist first for the test to mean anything; a database one
+    // migration behind is built current, so the tables are put back the way they last were
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS configs (id INTEGER PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS schedules (id INTEGER PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS runs (id VARCHAR(32) PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) PRIMARY KEY);
+    `);
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+       values ('p1', '1120_IC', null, '2026-11-20', 1, 3.0, '[]', '2026-10-06 04:15:51')`,
+    ).run();
+
+    expect(migrate(db)).toEqual([NAME]);
+    expect(tables(db).filter((t) => GONE.includes(t))).toEqual([]);
+    expect(tables(db)).toEqual(expect.arrayContaining(
+      ["monitors", "positions", "monitor_positions", "position_samples", APPLIED_TABLE]));
+    expect(db.prepare("select count(*) n from positions").get()).toEqual({ n: 1 });
+  });
+
+  it("is what schema.sql describes, so a fresh database has none of them either", () => {
+    const db = createDatabase(join(dir, "fresh.db"));
+    expect(tables(db).filter((t) => GONE.includes(t))).toEqual([]);
+  });
+});

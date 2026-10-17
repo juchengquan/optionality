@@ -15,8 +15,9 @@ import type { DatabaseSync } from "node:sqlite";
 
 export const APPLIED_TABLE = "schema_migrations";
 
-/** Deliberately not `alembic_version`: that table belongs to alembic, holds a single revision
- *  hash, and is what the Python rollback reads. Two mechanisms, two records. */
+/** Deliberately not `alembic_version`: that table belonged to alembic, held a single revision
+ *  hash, and was what the Python rollback read — two mechanisms, two records. Migration 0005
+ *  dropped it with the rollback (phase 10). */
 function ensureTable(db: DatabaseSync): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS ${APPLIED_TABLE} (

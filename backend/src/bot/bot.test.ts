@@ -668,9 +668,8 @@ describe("/snapshot", () => {
 });
 
 describe("/health", () => {
-  it("reports the queue and the sweep, in the display zone", async () => {
+  it("reports the sweep, in the display zone", async () => {
     const b = bot(echo, { displayTz: "Asia/Singapore" }, {
-      worker: { queueDepth: () => 3, submit: () => {} },
       sweeper: {
         lastSweepAt: () => new Date("2026-08-10T03:35:00Z"),
         lastFetchAt: () => null,
@@ -681,7 +680,7 @@ describe("/health", () => {
       },
     });
     await b.handleUpdate(update("/health"));
-    expect(last()).toBe("Service is up.\nqueue depth: 3\nalarms: active — last sweep 2026-08-10 11:35 +08");
+    expect(last()).toBe("Service is up.\nalarms: active — last sweep 2026-08-10 11:35 +08");
   });
 
   it("says only that it is up when nothing else is wired", async () => {

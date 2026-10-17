@@ -20,8 +20,14 @@ describe("/health", () => {
     const data = await body(resp);
     expect(data.db).toBe(true);
     expect(data.opend).toBe(false); // nothing listens on the test port
-    expect(data.queue_depth).toBe(0);
-    expect(data.last_run).toBeNull();
+  });
+
+  it("no longer reports a run pipeline, because there is none (phase 10)", async () => {
+    // queue_depth could only ever be 0 and last_run only ever the 2026-08-10 run once the worker
+    // could not be given work; a field that cannot change is not a report
+    const data = await body(await start().call("/health", { anonymous: true }));
+    expect("queue_depth" in data).toBe(false);
+    expect("last_run" in data).toBe(false);
   });
 
   it("reports the last fetch for opend, not a port that merely accepts", async () => {
@@ -70,20 +76,6 @@ describe("/health", () => {
     expect(data.monitor).toEqual({
       last_sweep_at: null, last_sweep_ok: true, consecutive_failures: 0,
       alarms: { label: "watching", bad: false }, fetched_at: null,
-    });
-  });
-
-  it("reports the newest run once there is one", async () => {
-    start();
-    h.db.prepare(
-      `insert into runs (id, task_type, config_name, trigger, notify, attempt, status, created_at)
-       values (?, 'holdings', 'spx', 'api', 0, 1, 'succeeded', ?)`,
-    ).run("a".repeat(32), "2026-08-10 03:35:32.000000");
-    const data = await body(await h.call("/health", { anonymous: true }));
-    // display converts via DISPLAY_TZ; storage is UTC (CLAUDE.md)
-    expect(data.last_run).toEqual({
-      id: "a".repeat(32), task_type: "holdings", status: "succeeded",
-      created_at: "2026-08-10 11:35:32+08:00",
     });
   });
 

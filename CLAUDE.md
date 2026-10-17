@@ -5,34 +5,33 @@ SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot and 
 the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
 Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
 
-**The API is TypeScript as of 2026-10-02 (ADR 0009 phase 9).** Two implementations exist, and exactly
-ONE launchd agent is loaded — currently `com.optionality.api`:
+**The service is TypeScript (ADR 0009):** `com.optionality.api` runs `backend/src/main.ts` under node,
+on `data/optionality-ts.db`. Node runs the TypeScript directly, so what is in the working tree is what
+runs. The Python service it replaced, and the run pipeline (strategy and holdings scans), were deleted in
+phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them, and `data/optionality.db` is the
+Python's database, frozen at the 2026-10-02 cutover and never opened. There is no rollback.
 
-- `com.optionality.api` — node, `backend/src/main.ts`, database `data/optionality-ts.db`. The one to
-  work on. Node runs the TypeScript directly, so what is in the working tree is what runs.
-- `com.optionality.service` — uvicorn, `src/optionality/`, database `data/optionality.db`. **Not
-  loaded.** The rollback until phase 10 deletes it (a month after the cutover); its database is frozen
-  at the cutover minute and is never opened by the new service.
-
-`launchctl print gui/$(id -u)/com.optionality.api` says which is live. `make deploy` restarts whichever
-it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. The run pipeline
-(`core.py`, `apis/`, `notification/`) stays in Python either way, called as a subprocess.
+**The TypeScript domain is canonical** (`backend/src/domain/`). A Python package, `optionality` in
+`python/`, is being ported FROM it for notebook use (ADR 0014) and is held to it by the golden cases in
+`cases/` — compared exactly.
 
 ## Commands
 
-- `make test` / `make lint` / `make format` — run all three before every commit. `make lint` also runs
-  `check-boundaries`: no package imports another's source tree, only its package.json `exports`
-  (`backend` for `AppType`, `backend/schemas` for the input schemas; ADR 0014). Lint is ruff with a broad
-  external ruleset (expect rules far beyond the defaults; per-file `BLE001` ignores exist for the
-  worker/sweeper/bot, whose job is to survive any failure).
-- `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, migrate if the
-  Python is live, restart BOTH agents. launchd does not watch the repo and the agents run this working
-  tree, so a merge that skips this leaves stale code running. Doing the steps by hand is how the
-  dashboard and the API drift apart.
-- TypeScript side: `make test-api` (the suite), `make typecheck`, **`make check-api`** (every module
-  loads under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached
-  main unable to load at all), `make diff-api` / `make diff-opend` / `make diff-services` (the three
-  differentials against the Python; see `backend/tools/*/README.md`).
+- `make test` / `make lint` / `make format` — run all three before every commit. `make test` is the Python
+  package's suite (nothing until `python/` lands). `make lint` is ruff plus `check-boundaries`: no package
+  imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
+  `backend/schemas` for the input schemas; ADR 0014).
+- `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, restart BOTH
+  agents (the API applies pending migrations at boot). launchd does not watch the repo and the agents
+  run this working tree, so a merge that skips this leaves stale code running. Doing the steps by hand
+  is how the dashboard and the API drift apart.
+- TypeScript: `make test-api` (the suite), `make typecheck`, **`make check-api`** (every module loads
+  under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached main
+  unable to load at all).
+- **Golden cases:** a change to anything `backend/src/domain/` (or `timefmt.ts`) exports changes what
+  `cases/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
+  — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
+  exported domain function must have a case (ADR 0014).
 - `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
   with the sweep at an hour and the Telegram variables blanked, because the live service is always up
   here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
@@ -42,7 +41,7 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
-- **Schema change (TypeScript, which is what is live):** add a `.sql` file to
+- **Schema change:** add a `.sql` file to
   `backend/src/db/migrations/` AND put the same shape in `backend/src/db/schema.sql`, then update
   `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `db/rows.ts` — the compiler and
   `rows.test.ts` tie those three together, so a half-done change fails rather than drifts.
@@ -50,34 +49,25 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
   built from `schema.sql` is STAMPED, not migrated (ADR 0011). `make deploy` backs the file up
   before it restarts, so the backup predates the migration. **Never edit a migration that has
   run.**
-- Schema change (Python, the rollback until phase 10): edit `service/models.py`, then
-  `OPTIONALITY_DB_PATH=data/optionality.db uv run alembic revision --autogenerate -m "..."` and
-  `... alembic upgrade head`. Alembic runs in batch mode (SQLite table rebuilds). **Squash a branch's
-  migrations before it merges; never touch shipped migrations.** Startup `create_all` covers fresh DBs.
-  The two schemas have DIVERGED since ADR 0011 — `position_samples`, `schema_migrations` and the two
-  new `positions` columns exist only on the TypeScript side, so a rollback loses the exit schedules
-  on top of everything entered since the cutover.
 - uv only, never pip. Python ≥ 3.12. TDD: write the failing test first; the whole codebase was built that way.
 
-## Layout (`src/optionality/`)
+## Layout
 
-- `core.py` — run pipeline + `fetch_snapshot` (the worker and routes share it)
-- `apis/` moomoo + yfinance + `build_spx_code`/`normalize_strike_date`; `notification/` gmail, file, telegram
-- `service/`: `app.py` (factory, auth middleware, lifespan), `worker.py` (THE single job thread),
-  `scheduler.py` (APScheduler; `refresh_jobs` must only touch `schedule-*` job ids),
-  `monitor.py` (sweep, watchlist, `fetch_resilient`, `verify_contracts`), `telegram_bot.py` (long-poll bot),
-  `routes/` (`ui.py` is now only the React shell and its asset route),
-  `frontend/` (Vite + React + TS — the dashboard at `/ui`; built assets are COMMITTED under
-  `static/app/`, so node is never needed to run the service — `make build-ui`, `make check-ui`,
-  `make test-ui`. See ADR 0005. The htmx dashboard was retired once React reached parity.)
+- `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (pure
+  maths — canonical, see golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
+  and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
+  Telegram bot), `opend/` (the moomoo websocket client), `db/` (schema, migrations, queries),
+  `cases/` (the golden cases' inputs and builder).
+- `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
+- `cases/` — the golden cases (generated). `tools/check-boundaries.mjs` — the package-boundary lint.
+- `python/` — the `optionality` package, once it lands (ADR 0014).
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
-- One worker thread owns run execution. The sweep, `/spx/quote`, `/quotes`, `/positions/values`, and
-  creation probes make single bounded OpenD calls outside that queue — documented exceptions, not
-  violations. (`/positions/values` is polled by the dashboard's Holdings panel while it is open; it
-  shipped with ADR 0011 and was added to this list on 2026-10-17, having been a fifth exception in
-  the code and a fourth in this sentence for a fortnight.)
+- Every OpenD call is a single bounded one: the sweep, `/spx/quote`, `/quotes`, `/positions/values`
+  and the creation probes. (`/positions/values` is polled by the dashboard's Holdings panel while it is
+  open.) This read "one worker thread owns run execution, and these are the exceptions" until phase 10
+  retired the worker with the run pipeline it existed for (ADR 0014).
 - The whole watchlist is ONE `get_market_snapshot` call per sweep (combo legs join the batch, deduped).
   **The dashboard's poll is a live call of its own** — `/quotes`, one batch per poll per open tab — so its
   figures are current rather than up to one sweep old, and polling faster is NOT free (ADR 0010). What the
@@ -99,26 +89,26 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command
   (`/quotes`, `/greeks`, `/vol`), never a fifth column. `<pre>` + `parse_mode: HTML` only for table replies.
 - Timestamps: storage is UTC; display converts via `DISPLAY_TZ`. moomoo `update_time` arrives naive US-Eastern
-  and means LAST TRADE, not freshness — `fetched_at` is freshness. Schedule cron tz stays `America/New_York`.
+  and means LAST TRADE, not freshness — `fetched_at` is freshness.
 - Config: behavior knobs live in `.env` (which mirrors `.env.example`'s structure — active lines are overrides,
   commented lines show defaults); viewer preferences (dashboard refresh) live in browser cookies. No DB config
   layer.
-- Behind the path-stripping proxy, Starlette `Mount`s don't resolve — serve static assets via routes, not
-  `StaticFiles` (see `app_asset`). The React shell injects `root_path` for the same reason: the browser
-  sees `/opt/...` while the app sees `/...`.
+- Behind the path-stripping proxy the browser sees `/opt/...` while the app sees `/...`. The bundle is built
+  for its prefix (`UI_BASE`), and `ROOT_PATH` tells the API's `/docs` and `/openapi.json` theirs.
 
 ## Testing conventions
 
-- `tests/conftest.py`'s `client_factory` injects an echo `snapshot_fetcher` by default — tests must NEVER reach
-  the real moomoo SDK (it blocks indefinitely on dead ports; a missing fake looks like a hung suite).
-- Bot tests drive `TelegramBot.handle_update` directly with a `FakeApi`; sweep tests call
-  `MonitorSweeper.sweep()` with fake fetchers/senders. Dates in tests are computed relative to today.
+- `backend/src/testing.ts`'s `harness` injects an echo quote fetcher by default — tests must NEVER reach the
+  real moomoo SDK (it blocks indefinitely on dead ports; a missing fake looks like a hung suite).
+- Bot tests drive `TelegramBot.handleUpdate` directly with a fake API; sweep tests call
+  `MonitorSweeper.sweep()` with fake fetchers and senders. Dates in tests are derived from the harness's
+  fixed clock (`NOW`, `daysFromNow`), never the real one.
 
 ## Workflow & environment
 
 - Branch → PR → the owner merges (never merge or push to main directly). Restart the agent after landing.
 - `.env` is gitignored and holds live Telegram credentials — never commit it or echo its secrets into
-  committed files. `data/optionality-ts.db` is live state (watchlist, holdings, run history). The only backups are
+  committed files. `data/optionality-ts.db` is live state (watchlist, holdings, their daily samples). The only backups are
   the ones `make deploy` takes, immediately before it restarts and before any migration runs. They
   are taken with SQLite's online backup, NEVER `cp`: in WAL mode `cp` leaves the write-ahead log
   behind, so the copy is current only to the last checkpoint — 1 row of 500 when measured — and is

@@ -9,17 +9,12 @@
 export interface Settings {
   dbPath: string;
   opendHost: string;
-  /** OpenD's TCP port, which the Python SDK uses. Kept because it is what `.env` carries and what the
-   *  Python service talks to; this service uses the websocket one below. */
-  opendPort: number;
   /** OpenD's WEBSOCKET port. The npm client speaks nothing else — the SDK's TCP protocol has no
    *  JavaScript implementation (ADR 0009, phase 6). */
   moomooWsPort: number;
   /** OpenD's websocket key, in plaintext; the library hashes it. Gitignored, like the bot token. */
   moomooWsKey: string;
   apiToken: string;
-  healthcheckUrl: string;
-  retryDelaySeconds: number;
   monitorIntervalSeconds: number;
   /** min gap between a monitor's telegram messages (flap protection) */
   alarmCooldownSeconds: number;
@@ -53,12 +48,9 @@ export const DEFAULTS: Settings = {
   // starting this code was quietly pointed at the rollback.
   dbPath: "data/optionality-ts.db",
   opendHost: "127.0.0.1",
-  opendPort: 11111,
   moomooWsPort: 33333,
   moomooWsKey: "",
   apiToken: "",
-  healthcheckUrl: "",
-  retryDelaySeconds: 300,
   monitorIntervalSeconds: 60,
   alarmCooldownSeconds: 120,
   alarmRepeatSeconds: 1800,
@@ -79,12 +71,9 @@ export const DEFAULTS: Settings = {
 const FROM_ENV = {
   dbPath: "OPTIONALITY_DB_PATH",
   opendHost: "OPEND_HOST",
-  opendPort: "OPEND_PORT",
   moomooWsPort: "MOOMOO_WS_PORT",
   moomooWsKey: "MOOMOO_WS_KEY",
   apiToken: "API_TOKEN",
-  healthcheckUrl: "HEALTHCHECK_URL",
-  retryDelaySeconds: "RETRY_DELAY_SECONDS",
   monitorIntervalSeconds: "MONITOR_INTERVAL_SECONDS",
   alarmCooldownSeconds: "ALARM_COOLDOWN_SECONDS",
   alarmRepeatSeconds: "ALARM_REPEAT_SECONDS",

@@ -1,8 +1,8 @@
 /** `/health`, the one route that needs no token (ADR 0009, phase 5).
  *
- *  It is what the dashboard's Service panel reads: the database, OpenD, the queue, the last run and
- *  the sweep's state. It carries no `contract_version` — that and the skew banner it fed went in
- *  ADR 0009 phase 8, when the frontend started taking its types FROM this API (`hc<AppType>`), so a
+ *  It is what the dashboard's Service panel reads: the database, OpenD and the sweep's state. The
+ *  queue and the last run went with the run pipeline in phase 10 (ADR 0014). It carries no
+ *  `contract_version` — that and the skew banner it fed went in ADR 0009 phase 8, when the frontend started taking its types FROM this API (`hc<AppType>`), so a
  *  response that has changed shape is a compile error in the frontend's workspace rather than a
  *  runtime notice. The two services still deploy separately (ADR 0006); `make deploy` restarting
  *  both is what addresses that.
@@ -14,22 +14,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import type { Deps } from "../deps.ts";
-import { databaseResponds, latestRun } from "../db/queries.ts";
+import { databaseResponds } from "../db/queries.ts";
 import { documented } from "../openapi.ts";
-import { displayStored, displayTime } from "../timefmt.ts";
-
-const LastRun = z.object({
-  id: z.string(),
-  task_type: z.string(),
-  status: z.string(),
-  created_at: z.string().nullable(),
-});
+import { displayTime } from "../timefmt.ts";
 
 export const HealthResponse = z.object({
   db: z.boolean(),
   opend: z.boolean(),
-  queue_depth: z.number(),
-  last_run: LastRun.nullable(),
   monitor: z.object({
     last_sweep_at: z.string().nullable(),
     last_sweep_ok: z.boolean(),
@@ -52,11 +43,9 @@ const health = documented("Service health; needs no token", { 200: HealthRespons
 
 export function healthRoutes(deps: Deps) {
   return new Hono().get("/health", health, async (c) => {
-    const { settings, db, sweeper, worker } = deps;
+    const { settings, db, sweeper } = deps;
     const tz = settings.displayTz;
     const ok = databaseResponds(db);
-    // the latest run is only readable if the database answers at all
-    const last = ok ? latestRun(db) : undefined;
 
     return health.reply(c, 200, {
         db: ok,
@@ -67,15 +56,6 @@ export function healthRoutes(deps: Deps) {
         // only evidence that matters, and reusing the sweep's costs no extra call (ADR 0010).
         opend: sweeper.lastFetchOk()
           ?? await deps.opendReachable(settings.opendHost, settings.moomooWsPort),
-        queue_depth: worker.queueDepth(),
-        last_run: last
-          ? {
-              id: last.id,
-              task_type: last.task_type,
-              status: last.status,
-              created_at: displayStored(last.created_at, tz),
-            }
-          : null,
         monitor: {
           last_sweep_at: displayTime(sweeper.lastSweepAt(), tz),
           last_sweep_ok: sweeper.lastSweepOk(),

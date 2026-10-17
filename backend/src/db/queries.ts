@@ -10,30 +10,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { COLUMNS } from "./rows.ts";
-import type {
-  ConfigRow, MonitorRow, PositionRow, PositionSampleRow, ReportRow, RunRow, ScheduleRow,
-} from "./rows.ts";
-
-export function findConfig(db: DatabaseSync, name: string): ConfigRow | undefined {
-  return db.prepare("select * from configs where name = ?").get(name) as unknown as ConfigRow | undefined;
-}
-
-export function listSchedules(db: DatabaseSync): ScheduleRow[] {
-  return db.prepare("select * from schedules order by id").all() as unknown as ScheduleRow[];
-}
-
-export function findSchedule(db: DatabaseSync, id: number): ScheduleRow | undefined {
-  return db.prepare("select * from schedules where id = ?").get(id) as unknown as ScheduleRow | undefined;
-}
-
-export function findRun(db: DatabaseSync, id: string): RunRow | undefined {
-  return db.prepare("select * from runs where id = ?").get(id) as unknown as RunRow | undefined;
-}
-
-/** The newest run, for /health's `last_run`. */
-export function latestRun(db: DatabaseSync): RunRow | undefined {
-  return db.prepare("select * from runs order by created_at desc limit 1").get() as unknown as RunRow | undefined;
-}
+import type { MonitorRow, PositionRow, PositionSampleRow } from "./rows.ts";
 
 /** Whether the database answers at all — /health reports rather than raising. */
 export function databaseResponds(db: DatabaseSync): boolean {
@@ -281,27 +258,6 @@ export function findPositionSample(
   return db.prepare(
     "select * from position_samples where position_id = ? and observed_on = ?",
   ).get(positionId, observedOn) as unknown as PositionSampleRow | undefined;
-}
-
-export function insertRun(db: DatabaseSync, row: RunRow): RunRow {
-  const columns = COLUMNS.runs;
-  db.prepare(
-    `insert into runs (${columns.map((c) => `"${c}"`).join(", ")})
-     values (${columns.map(() => "?").join(", ")})`,
-  ).run(...columns.map((c) => row[c] as never));
-  return findRun(db, row.id)!;
-}
-
-export function updateRunFields(db: DatabaseSync, id: string, changes: Partial<RunRow>): void {
-  const keys = Object.keys(changes) as (keyof RunRow)[];
-  if (keys.length === 0) return;
-  db.prepare(`update runs set ${keys.map((k) => `"${k}" = ?`).join(", ")} where id = ?`)
-    .run(...keys.map((k) => changes[k] as never), id);
-}
-
-export function insertReport(db: DatabaseSync, row: ReportRow): void {
-  db.prepare("insert into reports (run_id, summary, html, created_at) values (?, ?, ?, ?)")
-    .run(row.run_id, row.summary, row.html, row.created_at);
 }
 
 /** Monitors a bot identifier might mean: the exact code, the joined-and-upcased form, an id prefix, or

@@ -2,9 +2,8 @@
  *
  *  The counterpart of the Python's `client_factory`, and it keeps that fixture's most important
  *  property: a test can NEVER reach the real moomoo SDK, because it blocks indefinitely on a dead
- *  port and a missing fake looks like a hung suite (CLAUDE.md). Here the ports simply have no real
- *  implementations yet — the worker, scheduler and sweeper arrive in phase 6 — so the fakes below
- *  are the only thing they can be.
+ *  port and a missing fake looks like a hung suite (CLAUDE.md). The sweeper and the OpenD probe are
+ *  faked below for the same reason.
  *
  *  Not a *.test.ts file: the route suites all import it, and phases 6 and 7 will too.
  */
@@ -33,25 +32,6 @@ export const daysFromNow = (n: number) =>
   new Date(NOW.getTime() + n * 86_400_000).toISOString().slice(0, 10);
 export const AUTH = { Authorization: `Bearer ${TOKEN}` };
 
-/** A worker that records instead of running. One worker owns run execution, and in a route test
- *  the thing under test is that the route handed over an id — not what happened next. */
-export class FakeWorker {
-  readonly submitted: string[] = [];
-  queueDepth(): number {
-    return this.submitted.length;
-  }
-  submit(runId: string): void {
-    this.submitted.push(runId);
-  }
-}
-
-export class FakeScheduler {
-  refreshes = 0;
-  refreshJobs(): void {
-    this.refreshes += 1;
-  }
-}
-
 /** A sweeper that has never swept, which is what a freshly started service looks like. */
 export class FakeSweeper {
   sweepAt: Date | null = null;
@@ -74,8 +54,6 @@ export interface Harness {
   app: ReturnType<typeof createApp>;
   db: DatabaseSync;
   settings: Settings;
-  worker: FakeWorker;
-  scheduler: FakeScheduler;
   sweeper: FakeSweeper;
   /** What the clock returns. Set it to state the time rather than wait for it. */
   now: Date;
@@ -127,8 +105,6 @@ export function harness(options: HarnessOptions = {}): Harness {
     monitorIntervalSeconds: 5,
     ...options.settings,
   });
-  const worker = new FakeWorker();
-  const scheduler = new FakeScheduler();
   const sweeper = new FakeSweeper();
 
   const state = { now: NOW };
@@ -136,8 +112,6 @@ export function harness(options: HarnessOptions = {}): Harness {
     settings,
     db,
     now: () => state.now,
-    worker,
-    scheduler,
     sweeper,
     opendReachable: () => Promise.resolve(options.opend ?? false),
     fetchQuotes: options.fetchQuotes ?? echoFetcher,
@@ -145,7 +119,7 @@ export function harness(options: HarnessOptions = {}): Harness {
 
   const app = createApp(deps);
   const h: Harness = {
-    app, db, settings, worker, scheduler, sweeper,
+    app, db, settings, sweeper,
     get now() { return state.now; },
     set now(value: Date) { state.now = value; },
     close() {

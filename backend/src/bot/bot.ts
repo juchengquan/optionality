@@ -31,7 +31,7 @@ import {
   BOT_COMMANDS, FIELD_SHORT, HELP_TEXT, fmtValue, hasFormat, pyNumber, ruleText, shortCode, standingNote, table,
   thresholdError,
 } from "./format.ts";
-import type { SweeperPort, WorkerPort } from "../ports.ts";
+import type { SweeperPort } from "../ports.ts";
 
 /** One call to the Telegram API. A fake in tests; HTTPS in production. */
 export type TelegramApi = (method: string, params: Record<string, string>) => Promise<unknown>;
@@ -42,7 +42,6 @@ export interface BotDeps {
   api: TelegramApi;
   fetchQuotes: QuoteFetcher;
   sweeper?: SweeperPort;
-  worker?: WorkerPort;
   now?: () => Date;
 }
 
@@ -486,7 +485,6 @@ export class TelegramBot {
 
   private health(): string {
     const lines: string[] = [];
-    if (this.deps.worker) lines.push(`queue depth: ${this.deps.worker.queueDepth()}`);
     if (this.deps.sweeper) {
       const { label } = this.deps.sweeper.alarmState();
       const sweptAt = displayTimeShort(this.deps.sweeper.lastSweepAt(), this.deps.settings.displayTz);
