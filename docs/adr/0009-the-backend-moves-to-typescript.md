@@ -239,3 +239,13 @@ cutover minute, so the rollback is one command and loses only what is typed duri
   `alembic/` are deleted — about how long it takes to meet a weekly edge case.
 - One test cannot be automated: that a real alarm reaches a real phone. The owner fires one
   deliberately at cutover.
+
+## Phase 10 happened
+
+2026-10-17, ahead of schedule, for the reason ADR 0014 gives. It went further than "delete the Python
+that was ported": the run pipeline this ADR kept in Python was unused (#118), so it went in both
+languages, and with it **a ratified invariant — "one worker thread owns run execution."** That
+invariant existed to serialise runs; with no runs there is nothing for it to protect, and what it
+implied for everything else (every OpenD call single and bounded) is kept in CLAUDE.md as an
+invariant of its own.
+

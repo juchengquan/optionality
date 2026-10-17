@@ -1,29 +1,9 @@
-/** When runs fire on their own. Ported from scheduler.py (ADR 0009, phase 6).
+/** The sweep loop, on a plain interval. What drives the alarm engine.
  *
- *  croner rather than APScheduler. It reads a five-field crontab the same way — `35 9 * * mon-fri`
- *  with a New York timezone fires at 09:35 Eastern, checked against the Python's own trigger. Schedule
- *  cron tz stays America/New_York (CLAUDE.md).
- */
-import type { DatabaseSync } from "node:sqlite";
-import { Cron } from "croner";
-
-import { findSchedule, listSchedules } from "./db/queries.ts";
-import { fromSqliteBool } from "./db/values.ts";
-import type { CreateRunArgs } from "./ports.ts";
-import type { TaskType } from "./schemas/config-body.ts";
-
-export interface SchedulerDeps {
-  db: DatabaseSync;
-  createRun: (args: CreateRunArgs) => string;
-  submit: (runId: string) => void;
-}
-
-/** The scheduler, holding the jobs it has created.
- *
- *  `refreshJobs` must only touch `schedule-*` jobs (CLAUDE.md): the monitor sweep is an interval job
- *  on the same scheduler and has to survive every reload, or editing a schedule would stop the alarm
- *  engine until the next restart. Here that is a separate map rather than an id prefix, so the rule
- *  is structural instead of a convention a future edit could break.
+ *  This held the cron schedule too, ported from scheduler.py (ADR 0009, phase 6): schedules armed
+ *  from the database and fired into the worker. That half went with the run pipeline in phase 10
+ *  (ADR 0014), and croner with it. This half must NOT go — main.ts calls `startSweep` with the
+ *  sweeper, so deleting the scheduler would stop the alarms.
  */
 /** What to do about a sweep that has not come back.
  *
@@ -41,32 +21,7 @@ export interface SweepWatchdog {
 }
 
 export class Scheduler {
-  private readonly scheduleJobs = new Map<number, Cron>();
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
-
-  /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
-   *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
-   *  so it is rejected outright at load time (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX). tsc accepts it and
-   *  vitest transforms it, which is how two of these reached main unable to run (see check-api). */
-  private readonly deps: SchedulerDeps;
-
-  constructor(deps: SchedulerDeps) {
-    this.deps = deps;
-  }
-
-  /** Rebuild the schedule jobs from the database. Returns how many are now armed. */
-  refreshJobs(): number {
-    for (const job of this.scheduleJobs.values()) job.stop();
-    this.scheduleJobs.clear();
-    for (const row of listSchedules(this.deps.db)) {
-      if (!fromSqliteBool(row.enabled)) continue;
-      const job = new Cron(row.cron_expr, { timezone: row.tz, protect: true }, () => {
-        this.fireSchedule(row.id);
-      });
-      this.scheduleJobs.set(row.id, job);
-    }
-    return this.scheduleJobs.size;
-  }
 
   /** The sweep, on a plain interval.
    *
@@ -116,38 +71,7 @@ export class Scheduler {
     this.sweepTimer = null;
   }
 
-  /** Job ids, for a test to see what is armed. */
-  armed(): number[] {
-    return [...this.scheduleJobs.keys()].sort((a, b) => a - b);
-  }
-
-  /** When the next fire is due, for a test to prove the timezone was honoured. */
-  nextRun(scheduleId: number): Date | null {
-    return this.scheduleJobs.get(scheduleId)?.nextRun() ?? null;
-  }
-
   stop(): void {
-    for (const job of this.scheduleJobs.values()) job.stop();
-    this.scheduleJobs.clear();
     this.stopSweep();
-  }
-
-  /** Create the run this schedule asks for and hand it to the worker.
-   *
-   *  Re-reads the row: the job was armed when the schedule looked one way, and between then and now
-   *  it may have been disabled or deleted. A fired job for a schedule that no longer wants to fire
-   *  does nothing.
-   */
-  fireSchedule(scheduleId: number): void {
-    const row = findSchedule(this.deps.db, scheduleId);
-    if (!row || !fromSqliteBool(row.enabled)) return;
-    const runId = this.deps.createRun({
-      taskType: row.task_type as TaskType,
-      configName: row.config_name,
-      trigger: "schedule",
-      // a scheduled run is one nobody is watching, so it says so when it finishes
-      notify: true,
-    });
-    this.deps.submit(runId);
   }
 }

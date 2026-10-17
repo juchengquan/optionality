@@ -1,14 +1,13 @@
 /** The process. launchd runs this file directly — Node executes TypeScript with no build step, which
  *  keeps the property that what is in the working tree is what runs (ADR 0009).
  *
- *  The whole service as of phase 7: the routes, the alarm engine, the schedule, the queue that owns run
- *  execution, and the bot. The cutover is phase 9 — until then this listens on a port of its own so it
- *  can run beside the Python without either moving.
+ *  The whole service: the routes, the alarm engine and its sweep loop, and the bot. The run pipeline —
+ *  the worker, its Python runner and the cron schedules that fed it — was retired in phase 10
+ *  (ADR 0014); nothing had used it since 2026-08-10.
  *
  *  **The bot is NOT started unless OPTIONALITY_BOT=1.** The token allows one getUpdates consumer
- *  (CLAUDE.md), and the Python service is holding it. Two consumers means each sees a random half of
- *  the owner's commands. The flag is how the cutover hands it over deliberately rather than by
- *  whichever process happened to start first.
+ *  (CLAUDE.md), and only the launchd plist sets the flag, so `make serve` and every other local run
+ *  cannot become a second consumer and take a random half of the owner's commands.
  */
 import { serve } from "@hono/node-server";
 
@@ -19,12 +18,10 @@ import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
 import { OpendClient } from "./opend/client.ts";
 import { probeOpend } from "./opend.ts";
-import { PythonRunner } from "./runner.ts";
 import { Scheduler } from "./scheduler.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
 import { TelegramBot } from "./bot/bot.ts";
-import { Worker } from "./worker.ts";
 
 const settings = settingsFromEnv();
 const db = openDatabase(settings.dbPath);
@@ -43,16 +40,7 @@ const opend = new OpendClient({
   key: settings.moomooWsKey,
 });
 
-/** The run pipeline stays in Python (ADR 0009 phase 6). `uv run` is invoked from the repository root,
- *  two levels up from this file — the same working tree launchd runs. */
-const runner = new PythonRunner({ cwd: new URL("../..", import.meta.url).pathname });
-
-const worker = new Worker({ db, settings, runner, send });
-const scheduler = new Scheduler({
-  db,
-  createRun: (args) => worker.createRun(args),
-  submit: (runId) => worker.submit(runId),
-});
+const scheduler = new Scheduler();
 const sweeper = new MonitorSweeper({
   db, settings, fetchQuotes: opend.asFetcher(), send,
 });
@@ -61,8 +49,6 @@ const deps: Deps = {
   settings,
   db,
   now: () => new Date(),
-  worker,
-  scheduler,
   sweeper,
   opendReachable: probeOpend,
   fetchQuotes: opend.asFetcher(),
@@ -78,10 +64,8 @@ const bot = new TelegramBot({
   api: telegramApi(settings.telegramBotToken),
   fetchQuotes: opend.asFetcher(),
   sweeper,
-  worker,
 });
 
-const armed = scheduler.refreshJobs();
 // sweep at once as well as on the interval. Without that every restart left the alarm engine quiet
 // and the dashboard's cache empty for a whole MONITOR_INTERVAL_SECONDS — and restarts happen after
 // every merge.
@@ -94,7 +78,7 @@ scheduler.startSweep(settings.monitorIntervalSeconds, () => sweeper.sweep(), {
   onStall: (age) => { void sweeper.recordStall(age); },
 });
 
-// one getUpdates consumer per token, and the Python is holding it until the cutover
+// one getUpdates consumer per token: only the plist sets the flag
 const botWanted = process.env.OPTIONALITY_BOT === "1"
   && Boolean(settings.telegramBotToken && settings.telegramChatId);
 if (botWanted) {
@@ -103,7 +87,7 @@ if (botWanted) {
 }
 
 console.log(
-  `optionality backend on 127.0.0.1:${port} — ${armed} schedule(s) armed, `
+  `optionality backend on 127.0.0.1:${port} — `
   + `sweeping every ${settings.monitorIntervalSeconds}s, `
   + `bot ${botWanted ? "polling" : "not started (set OPTIONALITY_BOT=1)"}`,
 );
@@ -145,7 +129,6 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     console.log(`${signal}: stopping`);
     bot.stop();
     scheduler.stop();
-    worker.stop();
     server.close();
     opend.close();
     db.close();

@@ -1,6 +1,7 @@
 {
   "name": "optionality",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "backend",

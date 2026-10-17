@@ -1,22 +1,17 @@
 .PHONY: lint check-boundaries cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
-	diff-api diff-api-live diff-opend diff-services copy-db cutover cutover-preflight rollback restore-python \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
-	serve build-ui check-ui deploy \
-	launchd-install launchd-restart launchd-uninstall \
-	launchd-ui-install launchd-ui-restart launchd-ui-uninstall logs ui-logs
+	serve build-ui check-ui resolve-ui deploy \
+	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs
 
-LAUNCHD_LABEL = com.optionality.service
-LAUNCHD_PLIST = $(HOME)/Library/LaunchAgents/$(LAUNCHD_LABEL).plist
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
 UI_LABEL = com.optionality.ui
 UI_PLIST = $(HOME)/Library/LaunchAgents/$(UI_LABEL).plist
-UV_BIN = $(shell command -v uv)
 NODE_BIN = $(shell command -v node)
 CADDY_BIN = $(shell command -v caddy)
-# the TypeScript service's own database, a copy taken at cutover. The Python's is never opened again.
+# the service's database. data/optionality.db beside it is the retired Python's, frozen at the
+# cutover and never opened again.
 TS_DB = data/optionality-ts.db
-PY_DB = data/optionality.db
 
 # where the dashboard is mounted on the tailnet. Baked into the bundle at build time,
 # because `tailscale serve` strips the prefix and the page cannot discover it (ADR 0006).
@@ -33,8 +28,9 @@ check-boundaries:
 format:
 	uv run ruff format .
 
+# the Python package's suite (ADR 0014). python/ arrives in step 5, ported from the TypeScript.
 test:
-	uv run pytest
+	@if [ -d python ]; then uv run pytest python; else echo "no Python package yet (ADR 0014, step 5)"; fi
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
 # so the documented way to "run the API locally" started the retired implementation instead.
@@ -115,31 +111,18 @@ resolve-ui:
 # The one path that keeps both services in step. Skew is the price of running them
 # separately (ADR 0006); this is what stops it happening by simple forgetfulness.
 #
-# Which API it restarts depends on which one is loaded, so this one target is correct before the
-# cutover and after it, and after a rollback.
-#
 # The backup is taken with SQLite's online backup, NOT `cp`. In WAL mode `cp` copies the main file
 # and leaves the write-ahead log beside it, so the copy is current only as far as the last
 # checkpoint — measured at 1 row of 500 on a scratch database, and still valid SQLite, which is
 # what makes it dangerous. This backup is the one taken immediately before a migration runs.
 #
-# And there IS a schema step for the TypeScript service now: `main.ts` applies what is pending in
-# backend/src/db/migrations at boot and fails fatally if one does not (ADR 0011). This comment said
-# otherwise, from when the schema was declared and never altered (ADR 0009 phase 4).
+# The schema step is the service's own: `main.ts` applies what is pending in
+# backend/src/db/migrations at boot and fails fatally if one does not (ADR 0011).
 deploy:
 	git pull --ff-only
-	@if launchctl print gui/$$(id -u)/$(API_LABEL) >/dev/null 2>&1; then \
-		echo "the TypeScript API is loaded"; \
-		npm install --silent; \
-		node backend/tools/backup/backup.mjs $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S); \
-		$(MAKE) launchd-api-restart; \
-	else \
-		echo "the Python service is loaded"; \
-		uv sync --quiet; \
-		node backend/tools/backup/backup.mjs data/optionality.db data/optionality.db.bak-$$(date +%Y%m%d-%H%M%S); \
-		OPTIONALITY_DB_PATH=data/optionality.db uv run alembic upgrade head; \
-		$(MAKE) launchd-restart; \
-	fi
+	npm install --silent
+	node backend/tools/backup/backup.mjs $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S)
+	$(MAKE) launchd-api-restart
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
 
@@ -165,121 +148,6 @@ typecheck:
 check-api:
 	node backend/tools/check-loads.mjs
 
-# the port is faithful or it is nothing (ADR 0009), and there is no recorded history to replay —
-# so these put the same inputs through both implementations and compare exactly. A porting tool,
-# not a suite: what it finds belongs in backend/src/**/*.test.ts. See backend/tools/differential.
-DIFF_OUT = $(CURDIR)/backend/tools/differential/.out
-diff-api:
-	mkdir -p $(DIFF_OUT)
-	python3 backend/tools/differential/gen_cases.py $(DIFF_OUT)/cases.json
-	uv run python backend/tools/differential/run_py.py $(DIFF_OUT)/cases.json $(DIFF_OUT)/py.json
-	node backend/tools/differential/run_ts.mjs $(DIFF_OUT)/cases.json $(DIFF_OUT)/ts.json
-	python3 backend/tools/differential/compare.py $(DIFF_OUT)/py.json $(DIFF_OUT)/ts.json 18000
-
-# reads the live DB and makes ONE bounded OpenD call, in a single process so both sides see the
-# same instant. Read-only.
-diff-api-live:
-	mkdir -p $(DIFF_OUT)
-	uv run --env-file .env python backend/tools/differential/live_py.py \
-		$(DIFF_OUT)/live_in.json $(DIFF_OUT)/live_py.json
-	node backend/tools/differential/live_ts.mjs $(DIFF_OUT)/live_in.json $(DIFF_OUT)/live_ts.json
-	python3 backend/tools/differential/compare.py $(DIFF_OUT)/live_py.json $(DIFF_OUT)/live_ts.json 40
-
-# the fresh TypeScript database, copied from the Python's and verified field by field (ADR 0009
-# phase 4). Snapshots the live file first, so a sweep landing mid-copy cannot read as corruption.
-# Never writes to data/optionality.db. Refuses to overwrite an existing target.
-NEXT_DB ?= data/optionality-next.db
-copy-db:
-	node backend/tools/copy-db/copy.ts data/optionality.db $(NEXT_DB)
-	uv run python backend/tools/copy-db/python_can_read.py $(NEXT_DB).snapshot $(NEXT_DB)
-
-# the TypeScript OpenD client against the Python SDK, field by field (ADR 0009 phase 6). Reads the
-# live watchlist's own contracts and brackets the TypeScript read between two Python reads, because
-# the market moves while we look at it. Needs OpenD up and its websocket enabled.
-OPEND_OUT = $(CURDIR)/backend/tools/opend/.out
-diff-opend:
-	mkdir -p $(OPEND_OUT)
-	uv run --env-file .env python backend/tools/opend/codes.py $(OPEND_OUT)/codes.json
-	uv run --env-file .env python backend/tools/opend/read_py.py $(OPEND_OUT)/codes.json $(OPEND_OUT)/before.json
-	node --env-file=.env backend/tools/opend/read_ts.mjs $(OPEND_OUT)/codes.json $(OPEND_OUT)/ts.json
-	uv run --env-file .env python backend/tools/opend/read_py.py $(OPEND_OUT)/codes.json $(OPEND_OUT)/after.json
-	python3 backend/tools/opend/compare.py $(OPEND_OUT)/before.json $(OPEND_OUT)/ts.json $(OPEND_OUT)/after.json
-
-# both services asked the same question within the same second (ADR 0009 phase 6). Starts the
-# TypeScript service against a FRESH copy of the live database, on a port of its own; never writes to
-# data/optionality.db. Needs the Python service running on 31415 and OpenD up.
-diff-services:
-	backend/tools/opend/both_services.sh
-
-# --- the cutover (ADR 0009 phase 9) --------------------------------------------------------------
-#
-# One agent at a time. The Python keeps its database and never opens the new one, so a rollback loses
-# nothing that existed before the window — only what was entered during it, which is retypable.
-#
-# Read docs/cutover.md first. The Telegram test at the end is the owner's, not the agent's.
-# Every step after the Python stops restores it on failure. The window where nothing is running should
-# be as short as possible, and it must not be left open by a step that did not work.
-cutover: cutover-preflight
-	@echo "--- stopping the Python service"
-	-launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL)
-	@echo "--- copying the database, verified field by field"
-	@node backend/tools/copy-db/copy.ts data/optionality.db $(TS_DB) \
-		|| { $(MAKE) --no-print-directory restore-python; echo "the copy failed; the Python service is back"; exit 1; }
-	@uv run --env-file .env python backend/tools/copy-db/python_can_read.py $(TS_DB).snapshot $(TS_DB) \
-		|| { rm -f $(TS_DB)*; $(MAKE) --no-print-directory restore-python; \
-			 echo "the Python could not read the copy; it is back, and the copy is removed"; exit 1; }
-	@echo "--- starting the TypeScript API on 31415"
-	@$(MAKE) --no-print-directory launchd-api-install \
-		|| { $(MAKE) --no-print-directory restore-python; echo "the API would not install; the Python service is back"; exit 1; }
-	@sleep 4
-	@curl -fsS http://127.0.0.1:31415/health > /tmp/optionality-cutover-health.json \
-		|| { $(MAKE) --no-print-directory rollback ROLLBACK_FORCE=--i-accept-the-loss; \
-			 echo "the new API did not answer; rolled back"; exit 1; }
-	@python3 -c "import json;h=json.load(open('/tmp/optionality-cutover-health.json'));\
-print('  db      ', h['db']);print('  opend   ', h['opend']);print('  alarms  ', h['monitor']['alarms']['label']);\
-print('  sweep at', h['monitor']['last_sweep_at'])"
-	@echo
-	@echo "cutover done. Now the one test that cannot be automated — see docs/cutover.md."
-
-# used by cutover's failure paths; not a step to run on its own
-restore-python:
-	-launchctl bootstrap gui/$$(id -u) $(LAUNCHD_PLIST)
-
-# Everything that has to be true before the switch, each checked rather than assumed. recovery.sh is
-# the one that bites silently: it lives outside the repo, rebuilds the whole tailscale table, and as
-# written would start the Python on a port Node holds.
-cutover-preflight:
-	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
-	@test ! -f $(TS_DB) || { echo "$(TS_DB) exists — move it aside deliberately"; exit 1; }
-	@grep -q 'com.optionality.api' $(HOME)/recovery.sh \
-		|| { echo "~/recovery.sh still boots only the Python agent — see docs/cutover.md"; exit 1; }
-	@node -e 'import("./backend/src/opend.ts").then(async m => { \
-		const port = Number(process.env.MOOMOO_WS_PORT || 33333); \
-		if (!await m.probeOpend("127.0.0.1", port)) { console.error("OpenD is not listening on " + port); process.exit(1); } \
-		console.log("OpenD answers on " + port); })' 
-	$(MAKE) check-api
-	npm test --workspace backend
-	@echo "preflight passed"
-
-# Stop Node, start Python. Its database was never opened by the new service.
-# The guard goes FIRST, before anything is swapped. `make rollback` used to boot out the agent,
-# print /health and say "rolled back" — saying nothing about the database, which has diverged from
-# the Python's since the cutover. Measured on the live pair: a rollback would have restored four
-# positions that had been deliberately closed, lost the one actually held, lost every alarm rule,
-# and lost all exit schedules and the whole vol history. See backend/tools/rollback/guard.mjs.
-#
-# ROLLBACK_FORCE is how `cutover` gets past it, and the only place that should: there, the
-# TypeScript database was copied from the Python's seconds earlier, so there is nothing to lose —
-# and the alternative is a half-finished cutover with no way back.
-rollback:
-	@node backend/tools/rollback/guard.mjs $(PY_DB) $(TS_DB) $(ROLLBACK_FORCE)
-	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
-	rm -f $(API_PLIST)
-	launchctl bootstrap gui/$$(id -u) $(LAUNCHD_PLIST)
-	@sleep 3
-	@curl -fsS http://127.0.0.1:31415/health | head -c 200; echo
-	@echo "rolled back to the Python service"
-
 launchd-api-install:
 	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
@@ -298,21 +166,6 @@ launchd-api-uninstall:
 api-logs:
 	tail -f $(HOME)/Library/Logs/optionality-api.log
 
-# install the service as a macOS launchd agent: starts at login, restarts on crash
-launchd-install:
-	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
-	sed -e 's|__UV__|$(UV_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
-		deploy/optionality.launchd.plist.template > $(LAUNCHD_PLIST)
-	plutil -lint $(LAUNCHD_PLIST)
-	launchctl bootstrap gui/$$(id -u) $(LAUNCHD_PLIST)
-
-launchd-restart:
-	launchctl kickstart -k gui/$$(id -u)/$(LAUNCHD_LABEL)
-
-launchd-uninstall:
-	-launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL)
-	rm -f $(LAUNCHD_PLIST)
-
 # the dashboard's own agent: Caddy, serving frontend/dist and nothing else
 launchd-ui-install:
 	@test -n "$(CADDY_BIN)" || { echo "caddy not found — brew install caddy"; exit 1; }
@@ -329,9 +182,6 @@ launchd-ui-restart:
 launchd-ui-uninstall:
 	-launchctl bootout gui/$$(id -u)/$(UI_LABEL)
 	rm -f $(UI_PLIST)
-
-logs:
-	tail -f $(HOME)/Library/Logs/optionality.log
 
 ui-logs:
 	tail -f $(HOME)/Library/Logs/optionality-ui.log

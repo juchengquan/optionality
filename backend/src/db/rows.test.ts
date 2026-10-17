@@ -82,9 +82,8 @@ describe("the relationships", () => {
       "monitor_id -> monitors.id",
       "position_id -> positions.id",
     ]);
-    expect(keys("reports")).toEqual(["run_id -> runs.id"]);
     // nothing else has one, and a stray reference would change what a delete is allowed to do
-    for (const t of ["configs", "schedules", "runs", "monitors", "positions", "alembic_version"]) {
+    for (const t of ["monitors", "positions"]) {
       expect(keys(t), t).toEqual([]);
     }
   });

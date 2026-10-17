@@ -7,7 +7,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { Settings } from "./env.ts";
-import type { OpendProbe, SchedulerPort, SweeperPort, WorkerPort } from "./ports.ts";
+import type { OpendProbe, SweeperPort } from "./ports.ts";
 import type { QuoteFetcher } from "./quotes.ts";
 
 export interface Deps {
@@ -15,12 +15,10 @@ export interface Deps {
   db: DatabaseSync;
   /** Injectable so that a test can state the time rather than wait for it. */
   now(): Date;
-  worker: WorkerPort;
-  scheduler: SchedulerPort;
   sweeper: SweeperPort;
   opendReachable: OpendProbe;
-  /** One bounded OpenD call. The creation probes and `/quotes` are documented exceptions to the
-   *  single-worker rule (CLAUDE.md); a test must never reach the real SDK, which blocks
-   *  indefinitely on a dead port so that a missing fake looks like a hung suite. */
+  /** One bounded OpenD call, for the creation probes and the live routes. A test must never reach
+   *  the real SDK, which blocks indefinitely on a dead port so that a missing fake looks like a
+   *  hung suite. */
   fetchQuotes: QuoteFetcher;
 }

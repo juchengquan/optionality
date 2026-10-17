@@ -17,7 +17,7 @@ import { App } from "../App";
  */
 
 const health = (over: Record<string, unknown> = {}) => ({
-  db: true, opend: true, queue_depth: 0,
+  db: true, opend: true,
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
   ...over,
@@ -158,15 +158,13 @@ describe("the top line, in place of the service status strip", () => {
     expect(line.textContent).toContain("stalled");
   });
 
-  it("leaves a non-empty queue to the Service panel, because it is not a fault", async () => {
-    mockApi([leg], health({ queue_depth: 3 }));
+  it("shows no queue in the Service panel, because there is no run pipeline (phase 10)", async () => {
+    mockApi([leg], health());
     render(<App />);
-    await screen.findByText("Single-leg");
-    expect(screen.queryByRole("status"), "a run executing needs nothing from you").toBeNull();
-
     await userEvent.click(await screen.findByRole("button", { name: "settings" }));
     const panel = await screen.findByRole("dialog");
-    expect(panel.textContent, "but it is still worth seeing").toContain("queue 3");
+    expect(panel.textContent).toContain("alarms");
+    expect(panel.textContent).not.toContain("queue");
   });
 
   it("lists a holding at its Level that the page cannot see", async () => {

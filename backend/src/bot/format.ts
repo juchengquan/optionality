@@ -44,7 +44,7 @@ export const BOT_COMMANDS = [
   { command: "threshold", description: "Change a monitor's threshold: NAME|contract value" },
   { command: "rename", description: "Rename a combo: OLD NEW" },
   { command: "snapshot", description: "Live quote: DATE CALL|PUT strike" },
-  { command: "health", description: "Queue and sweep status" },
+  { command: "health", description: "Alarm sweep status" },
   { command: "help", description: "Show usage" },
 ] as const;
 

@@ -1,5 +1,9 @@
 # The cutover
 
+> **Historical.** The cutover happened on 2026-10-02 and phase 10 deleted the Python, `make cutover`,
+> `make rollback` and every differential (see the end). Nothing below can be run any more; it is kept
+> as the record of how the move was made.
+
 Replacing the Python service with the TypeScript one (ADR 0009, phase 9). **Read this before running
 anything.** One agent runs at a time; the Python keeps its own database and never opens the new one.
 
@@ -182,3 +186,17 @@ Two things were done early, on 2026-10-15, so phase 10 does not have to:
 - **a tag**, `python-before-phase-10`, because the repo had none and "git preserves it" was
   otherwise unlabelled. 73 files come back from
   `git show python-before-phase-10:src/optionality/service/monitor.py`.
+
+## Phase 10 happened, earlier than planned
+
+On 2026-10-17, ahead of the 2026-11-02 date, because ADR 0014 brings a NEW Python package into the
+repo under the same `optionality` import name and one environment cannot hold both. Everything the
+list above names went: the Python service, `tests/`, `alembic/`, the run pipeline in both languages
+(the TypeScript worker and runner, the scheduler's cron half, `/health`'s `queue_depth` and
+`last_run`, and the four tables, dropped by migration 0005), the Python launchd plist, Docker, and the
+cutover, rollback and differential tooling. The scheduler's sweep loop stayed, as warned above.
+
+The rollback was not lost by this: it had been measured on 2026-10-15 as restoring four closed
+positions and dropping every monitor, so it was already a trap rather than a net. What remains is
+the tag `python-before-phase-10` for the code, `make deploy`'s online backups for the data, and
+`data/optionality.db`, the Python's database as it stood at the cutover minute.
