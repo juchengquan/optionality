@@ -56,12 +56,12 @@ const SPAN = "s".repeat(32);
 /** A condor: two spreads, one rule over the calls alone, and one spanning both (ADR 0004). */
 const spanning = (callsEntry: number | null = 2.87, putsEntry: number | null = null) => {
   position(CALLS, "calls", callsEntry, [
-    { side: "sold", option_type: "CALL", strike: 8050 },
-    { side: "bought", option_type: "CALL", strike: 8075 },
+    { side: "short", option_type: "CALL", strike: 8050 },
+    { side: "long", option_type: "CALL", strike: 8075 },
   ]);
   position(PUTS, "puts", putsEntry, [
-    { side: "sold", option_type: "PUT", strike: 7100 },
-    { side: "bought", option_type: "PUT", strike: 7075 },
+    { side: "short", option_type: "PUT", strike: 7100 },
+    { side: "long", option_type: "PUT", strike: 7075 },
   ]);
   rule(WING, "calls_rule", "all", [CALLS]);
   rule(SPAN, "span_rule", "all", [CALLS, PUTS]);

@@ -361,7 +361,7 @@ describe("the links to positions", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, ?, 'credit_spread', ?, 1, 2.0, ?, '2026-09-24 02:58:57.456253')`,
     ).run(id, name, strikeDate,
-      JSON.stringify([{ side: "sold", option_type: "CALL", strike }]));
+      JSON.stringify([{ side: "short", option_type: "CALL", strike }]));
 
   const linkCount = (monitorId: string) =>
     (h.db.prepare("select count(*) n from monitor_positions where monitor_id = ?").get(monitorId) as { n: number }).n;
@@ -495,12 +495,12 @@ describe("/monitors/:id/total-entry", () => {
     // scope "all". The Python's version of this test forges that scope by writing the Monitor
     // directly; going through the API means it is computed, and computed from the legs.
     seed("c".repeat(32), "calls", 2.87, [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     seed("p".repeat(32), "puts", null, [
-      { side: "sold", option_type: "PUT", strike: 7100 },
-      { side: "bought", option_type: "PUT", strike: 7075 },
+      { side: "short", option_type: "PUT", strike: 7100 },
+      { side: "long", option_type: "PUT", strike: 7075 },
     ]);
 
     const wing = await body(await post(combo({

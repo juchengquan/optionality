@@ -171,3 +171,54 @@ describe("the schema file itself", () => {
     db.close();
   });
 });
+
+describe("0004: a Leg's Side is long or short (ADR 0013)", () => {
+  const NAME = "0004-side-is-long-or-short.sql";
+  /** a database one migration behind: built current, then 0004 un-recorded */
+  function behind(): DatabaseSync {
+    const db = createDatabase(join(dir, "behind.db"));
+    db.prepare(`delete from ${APPLIED_TABLE} where name = ?`).run(NAME);
+    return db;
+  }
+  const insert = (db: DatabaseSync, id: string, legs: string) => db.prepare(
+    `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+     values (?, ?, null, '2026-11-20', 1, 6.86, ?, '2026-10-06 04:15:51')`,
+  ).run(id, id, legs);
+  const legsOf = (db: DatabaseSync, id: string) =>
+    JSON.parse((db.prepare("select legs from positions where id = ?").get(id) as { legs: string }).legs);
+
+  it("renames every Side, keeping the legs' order and every other field", () => {
+    const db = behind();
+    insert(db, "ic", JSON.stringify([
+      { side: "bought", option_type: "PUT", strike: 6450 },
+      { side: "sold", option_type: "PUT", strike: 6500 },
+      { side: "sold", option_type: "CALL", strike: 7100 },
+      { side: "bought", option_type: "CALL", strike: 7150 },
+    ]));
+    expect(migrate(db)).toEqual([NAME]);
+    expect(legsOf(db, "ic")).toEqual([
+      { side: "long", option_type: "PUT", strike: 6450 },
+      { side: "short", option_type: "PUT", strike: 6500 },
+      { side: "short", option_type: "CALL", strike: 7100 },
+      { side: "long", option_type: "CALL", strike: 7150 },
+    ]);
+  });
+
+  it("reads the JSON rather than matching text, so Python's spacing migrates too", () => {
+    // rows that came across from the Python database were written by json.dumps, which puts a
+    // space after every colon — a text replace of '"side":"sold"' would leave them untouched
+    const db = behind();
+    insert(db, "py", '[{"side": "sold", "option_type": "PUT", "strike": 6500.0}]');
+    migrate(db);
+    expect(legsOf(db, "py")).toEqual([{ side: "short", option_type: "PUT", strike: 6500 }]);
+  });
+
+  it("leaves a Position with no legs, and one already renamed, as they were", () => {
+    const db = behind();
+    insert(db, "empty", "[]");
+    insert(db, "done", '[{"side":"short","option_type":"CALL","strike":7100}]');
+    migrate(db);
+    expect(legsOf(db, "empty")).toEqual([]);
+    expect(legsOf(db, "done")).toEqual([{ side: "short", option_type: "CALL", strike: 7100 }]);
+  });
+});

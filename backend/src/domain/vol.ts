@@ -60,8 +60,8 @@ export function volAttribution(
   if (samples.length === 0 || samples[0]!.observed_on !== position.opened_at) return null;
 
   const codes = positionLegCodes(position);
-  // sold +1, bought -1: the signing costToClose uses, so the result is already in the gap's units
-  const signs = position.legs.map((l) => (l.side === "sold" ? 1 : -1));
+  // short +1, long -1: the signing costToClose uses, so the result is already in the gap's units
+  const signs = position.legs.map((l) => (l.side === "short" ? 1 : -1));
 
   for (const s of samples) {
     if (s.legs_iv === null || s.legs_vega === null) return null;

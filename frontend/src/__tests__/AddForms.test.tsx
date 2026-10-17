@@ -124,14 +124,14 @@ describe("adding a single-leg monitor", () => {
     fireEvent.submit(within(monitor).getByRole("button", { name: "watch" }).closest("form")!);
   }
 
-  it("records a null entry, not a signed zero, on a bought leg with only a date", async () => {
+  it("records a null entry, not a signed zero, on a long leg with only a date", async () => {
     // The single-leg branch signs the entry — a debit is stored negative — and `-null` is -0,
     // which JSON.stringify writes as 0. That is materially worse than null: an entry of 0 means
     // "I paid nothing" and gives a P&L computed from a credit of zero, where null means unknown
     // and reads as a dash. A mutation sweep found nothing covering it.
     const monitor = await openForm("monitor");
     type(monitor, "opened", "2026-10-14");
-    await fillCall(monitor, "bought");
+    await fillCall(monitor, "long");
 
     await waitFor(() => expect(posted).toHaveLength(2));
     expect(posted[1]!.url).toMatch(/\/positions$/);
@@ -142,7 +142,7 @@ describe("adding a single-leg monitor", () => {
 
   it("records the holding too, when an entry is given", async () => {
     const monitor = await openForm("monitor");
-    await fillCall(monitor, "sold", "5.00");
+    await fillCall(monitor, "short", "5.00");
 
     await waitFor(() => expect(posted).toHaveLength(2));
     expect(posted[0]!.url).toMatch(/\/monitors$/);
@@ -156,7 +156,7 @@ describe("adding a single-leg monitor", () => {
       name: "2026-11-20_C8100",
       strike_date: "2026-11-20",
       entry: 5,
-      legs: [{ side: "sold", option_type: "CALL", strike: 8100 }],
+      legs: [{ side: "short", option_type: "CALL", strike: 8100 }],
       // stated rather than omitted: blank means "no schedule", which the service records as null
       opened_at: null,
     });
@@ -168,12 +168,12 @@ describe("adding a single-leg monitor", () => {
     // 5.00, now worth 8.00: entry −5 gives +300, entry +5 gives +1300. Verified against
     // backend/src/domain/position.ts, not reasoned about.
     const monitor = await openForm("monitor");
-    await fillCall(monitor, "bought", "5.00");
+    await fillCall(monitor, "long", "5.00");
 
     await waitFor(() => expect(posted).toHaveLength(2));
     expect(posted[1]!.body).toMatchObject({
       entry: -5,
-      legs: [{ side: "bought", option_type: "CALL", strike: 8100 }],
+      legs: [{ side: "long", option_type: "CALL", strike: 8100 }],
     });
   });
 
@@ -189,7 +189,7 @@ describe("adding a single-leg monitor", () => {
 
   it("sends bodies the service's own schemas accept", async () => {
     const monitor = await openForm("monitor");
-    await fillCall(monitor, "bought", "5.00");
+    await fillCall(monitor, "long", "5.00");
     await waitFor(() => expect(posted).toHaveLength(2));
 
     const rule = MonitorCreateIn.safeParse(posted[0]!.body);
@@ -287,7 +287,7 @@ describe("adding a combo", () => {
     // monitor form, so anything read from it afterwards is the wrong form's.
     const sign = within(combo).getByLabelText("leg 1 sign") as HTMLSelectElement;
     expect([...sign.options].map((o) => [o.value, o.textContent]))
-      .toEqual([["+", "bought"], ["-", "sold"]]);
+      .toEqual([["+", "long"], ["-", "short"]]);
 
     await fillCondor(combo, "7.4");
     await waitFor(() => expect(posted).toHaveLength(2));
@@ -302,10 +302,10 @@ describe("adding a combo", () => {
       // `sign` is the combo's vocabulary and `side` the holding's: the minus the form offers
       // means short, and a short leg is one you sold. Reverse this and the P&L inverts.
       legs: [
-        { side: "sold", option_type: "CALL", strike: 8200 },
-        { side: "bought", option_type: "CALL", strike: 8250 },
-        { side: "sold", option_type: "PUT", strike: 7100 },
-        { side: "bought", option_type: "PUT", strike: 7050 },
+        { side: "short", option_type: "CALL", strike: 8200 },
+        { side: "long", option_type: "CALL", strike: 8250 },
+        { side: "short", option_type: "PUT", strike: 7100 },
+        { side: "long", option_type: "PUT", strike: 7050 },
       ],
       // stated rather than omitted: blank means "no schedule", which the service records as null
       opened_at: null,

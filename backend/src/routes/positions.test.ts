@@ -13,10 +13,10 @@ afterEach(() => h?.close());
 
 const EXPIRY = "2026-12-18";
 const CONDOR_LEGS = [
-  { side: "sold", option_type: "CALL", strike: 8050 },
-  { side: "bought", option_type: "CALL", strike: 8075 },
-  { side: "sold", option_type: "PUT", strike: 7100 },
-  { side: "bought", option_type: "PUT", strike: 7075 },
+  { side: "short", option_type: "CALL", strike: 8050 },
+  { side: "long", option_type: "CALL", strike: 8075 },
+  { side: "short", option_type: "PUT", strike: 7100 },
+  { side: "long", option_type: "PUT", strike: 7075 },
 ];
 const condor = (over: Record<string, unknown> = {}) => ({
   name: "1016_IC", strategy: "iron_condor", strike_date: EXPIRY, contracts: 1, entry: 3.0,
@@ -186,8 +186,8 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
 
     // the narrower holding arrives later and changes nothing: only orphans are considered
     const narrow = await created201(await holdingOf("narrow", [
-      { side: "sold", option_type: "PUT", strike: 7100 },
-      { side: "bought", option_type: "PUT", strike: 7075 },
+      { side: "short", option_type: "PUT", strike: 7100 },
+      { side: "long", option_type: "PUT", strike: 7075 },
     ], 1.2));
     expect(links(rid), "still the wider one").toEqual([[wide], "leg"]);
 
@@ -202,8 +202,8 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
     const wide = await created201(await holdingOf("wide", CONDOR_LEGS, 3.0));
     const rid = await spreadRule();
     await created201(await holdingOf("narrow", [
-      { side: "sold", option_type: "PUT", strike: 7100 },
-      { side: "bought", option_type: "PUT", strike: 7075 },
+      { side: "short", option_type: "PUT", strike: 7100 },
+      { side: "long", option_type: "PUT", strike: 7075 },
     ], 1.2));
     await h.call(`/positions/${wide}`, { method: "DELETE" });
 
@@ -241,8 +241,8 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
       option_type: "CALL", strike: 8050, direction: "above",
     })))).id as string;
     const other = await created201(await holdingOf("other", [
-      { side: "sold", option_type: "PUT", strike: 6000 },
-      { side: "bought", option_type: "PUT", strike: 5950 },
+      { side: "short", option_type: "PUT", strike: 6000 },
+      { side: "long", option_type: "PUT", strike: 5950 },
     ], 0.5));
 
     expect((await h.call(`/positions/${other}`, { method: "DELETE" })).status).toBe(204);
@@ -259,8 +259,8 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
     const wide = await created201(await holdingOf("wide", CONDOR_LEGS, 3.0));
     const rid = await spreadRule();
     const narrow = await created201(await holdingOf("narrow", [
-      { side: "sold", option_type: "PUT", strike: 7100 },
-      { side: "bought", option_type: "PUT", strike: 7075 },
+      { side: "short", option_type: "PUT", strike: 7100 },
+      { side: "long", option_type: "PUT", strike: 7075 },
     ], 1.2));
 
     await h.call(`/positions/${wide}`, { method: "DELETE" });
@@ -275,14 +275,14 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
     const rid = (await body(await h.call("/monitors", json({
       name: "whole_rule", strike_date: EXPIRY, field: "mid_price", threshold: 1,
       direction: "above", legs: CONDOR_LEGS.map((l) => ({
-        sign: l.side === "sold" ? -1 : 1, option_type: l.option_type, strike: l.strike,
+        sign: l.side === "short" ? -1 : 1, option_type: l.option_type, strike: l.strike,
       })),
     })))).id as string;
     expect(links(rid)).toEqual([[keep], "all"]);
 
     const other = await created201(await holdingOf("other", [
-      { side: "sold", option_type: "PUT", strike: 6000 },
-      { side: "bought", option_type: "PUT", strike: 5950 },
+      { side: "short", option_type: "PUT", strike: 6000 },
+      { side: "long", option_type: "PUT", strike: 5950 },
     ], 0.5));
     expect((await h.call(`/positions/${other}`, { method: "DELETE" })).status).toBe(204);
     expect(links(rid), "untouched by an unrelated delete").toEqual([[keep], "all"]);
@@ -294,7 +294,7 @@ describe("deleting a holding frees the rules its contracts were blocking", () =>
     const rid = (await body(await h.call("/monitors", json({
       name: "whole_rule", strike_date: EXPIRY, field: "mid_price", threshold: 1,
       direction: "above", legs: CONDOR_LEGS.map((l) => ({
-        sign: l.side === "sold" ? -1 : 1, option_type: l.option_type, strike: l.strike,
+        sign: l.side === "short" ? -1 : 1, option_type: l.option_type, strike: l.strike,
       })),
     })))).id as string;
     await h.call(`/positions/${only}`, { method: "DELETE" });
@@ -333,10 +333,14 @@ describe("the round trip", () => {
     expect((await post(condor({ name: "none", legs: [] }))).status).toBe(422);
   });
 
-  it("refuses a side that is neither sold nor bought", async () => {
+  it("refuses a side that is neither long nor short, including the old sold/bought", async () => {
+    // ADR 0013 renamed Side. A caller still sending the old word gets a 422 naming the field,
+    // not a holding whose legs every figure then reads as bought
     start();
-    expect((await post(condor({ legs: [{ side: "long", option_type: "CALL", strike: 8050 }] })))
-      .status).toBe(422);
+    for (const side of ["sold", "bought", "buy"]) {
+      expect((await post(condor({ legs: [{ side, option_type: "CALL", strike: 8050 }] })))
+        .status).toBe(422);
+    }
   });
 
   it("normalises a compact date, and refuses an impossible one", async () => {
@@ -395,7 +399,7 @@ describe("/positions/values", () => {
     expect(v.cost_to_close).toBe(4.5); // (5.0 + 3.0) sold back − (2.0 + 1.5) returned
     expect(v.pnl).toBe((3.0 - 4.5) * 2 * 100); // sold at 3.00, costs 4.50 to close
     expect(v.contract_size).toBe(100.0);
-    // exposure-signed, not cost-signed: two sold legs against two bought at 0.2 each
+    // exposure-signed, not cost-signed: two short legs against two long at 0.2 each
     expect(v.greeks.option_delta).toBe(0);
     expect(v.fetched_at).toMatch(/\+08:00$/);
   });
@@ -472,8 +476,8 @@ describe("a monitor finding the position that holds it", () => {
     // the derived total — silently applied only to monitors predating the backfill migration
     start();
     const pid = await makePosition("1016_bs_8050", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     expect(links(mid)).toEqual([[pid], "leg"]);
@@ -482,8 +486,8 @@ describe("a monitor finding the position that holds it", () => {
   it("calls it the whole position when the rule covers it exactly", async () => {
     start();
     const pid = await makePosition("1016_bs_8050", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({
       name: "1016_bs", strike_date: "2026-10-16", field: "mid_price", threshold: 9,
@@ -499,12 +503,12 @@ describe("a monitor finding the position that holds it", () => {
     // a combined stop over two credit spreads belongs to neither alone (ADR 0004)
     start();
     const calls = await makePosition("calls", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const puts = await makePosition("puts", "2026-10-16", [
-      { side: "sold", option_type: "PUT", strike: 7100 },
-      { side: "bought", option_type: "PUT", strike: 7075 },
+      { side: "short", option_type: "PUT", strike: 7100 },
+      { side: "long", option_type: "PUT", strike: 7075 },
     ]);
     const mid = await makeMonitor({
       name: "condor_stop", strike_date: "2026-10-16", field: "mid_price", threshold: 9,
@@ -530,12 +534,12 @@ describe("a monitor finding the position that holds it", () => {
   it("links nothing for a contract two positions hold", async () => {
     start();
     await makePosition("old_roll", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     await makePosition("new_roll", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8100 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8100 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     expect(links(mid)).toEqual([[], null]);
@@ -551,8 +555,8 @@ describe("a position adopting the monitors already watching it", () => {
     expect(links(mid)).toEqual([[], null]);
 
     const pid = await makePosition("1016_bs_8050", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     expect(links(mid)).toEqual([[pid], "leg"]);
   });
@@ -564,15 +568,15 @@ describe("a position adopting the monitors already watching it", () => {
     // nothing to explain it.
     start();
     const first = await makePosition("old_roll", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     expect(links(mid)).toEqual([[first], "leg"]);
 
     await makePosition("new_roll", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8100 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8100 },
     ]);
     expect(links(mid)).toEqual([[first], "leg"]);
   });
@@ -582,18 +586,18 @@ describe("a position adopting the monitors already watching it", () => {
     // position does not talk adoption into guessing
     start();
     await makePosition("old_roll", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     await makePosition("new_roll", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8100 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8100 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     expect(links(mid)).toEqual([[], null]);
 
     await makePosition("elsewhere", "2026-11-20", [
-      { side: "sold", option_type: "CALL", strike: 9000 },
+      { side: "short", option_type: "CALL", strike: 9000 },
     ]);
     expect(links(mid)).toEqual([[], null]);
   });
@@ -605,8 +609,8 @@ describe("deleting a holding", () => {
     // is linked, so deleting one was broken for all of them (#71).
     start();
     const pid = await makePosition("1016_bs_8050", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     expect(links(mid)).toEqual([[pid], "leg"]);
@@ -622,16 +626,16 @@ describe("deleting a holding", () => {
   it("re-adopts the rule if the holding comes back", async () => {
     start();
     const pid = await makePosition("1016_bs_8050", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     await h.call(`/positions/${pid}`, { method: "DELETE" });
     expect(links(mid)[0]).toEqual([]);
 
     const again = await makePosition("1016_bs_8050", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     expect(links(mid)).toEqual([[again], "leg"]);
   });
@@ -653,12 +657,12 @@ describe("gaps the single-position tests cannot show", () => {
     const asked: string[][] = [];
     start((codes) => { asked.push(codes); return pricedFetcher(codes); });
     await makePosition("a", EXPIRY, [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     await makePosition("b", EXPIRY, [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8100 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8100 },
     ]);
     asked.length = 0;
     await h.call("/positions/values");
@@ -673,15 +677,15 @@ describe("gaps the single-position tests cannot show", () => {
     // primary-key violation, so the unrelated creation would fail outright.
     start();
     const pid = await makePosition("held", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     expect(links(mid)).toEqual([[pid], "leg"]);
 
     const other = await post({
       name: "elsewhere", strike_date: "2026-11-20",
-      legs: [{ side: "sold", option_type: "CALL", strike: 9000 }],
+      legs: [{ side: "short", option_type: "CALL", strike: 9000 }],
     });
     expect(other.status).toBe(201);
     expect(links(mid)).toEqual([[pid], "leg"]);
@@ -699,15 +703,15 @@ describe("gaps the single-position tests cannot show", () => {
     // touch the monitor at all, which is the original concern made explicit.
     start();
     const pid = await makePosition("held", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     await h.call(`/positions/${pid}`, { method: "DELETE" });
     expect(links(mid), "the delete clears it").toEqual([[], null]);
 
     await makePosition("elsewhere", "2026-11-20", [
-      { side: "sold", option_type: "CALL", strike: 9000 },
+      { side: "short", option_type: "CALL", strike: 9000 },
     ]);
     expect(links(mid), "and adoption leaves it exactly as it was").toEqual([[], null]);
   });
@@ -718,14 +722,14 @@ describe("gaps the single-position tests cannot show", () => {
     // Set up by hand, because the only route that clears a scope is the delete.
     start();
     const pid = await makePosition("held", "2026-10-16", [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]);
     const mid = await makeMonitor({ strike_date: "2026-10-16", option_type: "CALL", strike: 8050 });
     expect(links(mid)).toEqual([[pid], "leg"]);
 
     await makePosition("elsewhere", "2026-11-20", [
-      { side: "sold", option_type: "CALL", strike: 9000 },
+      { side: "short", option_type: "CALL", strike: 9000 },
     ]);
     expect(links(mid), "untouched by someone else's holding").toEqual([[pid], "leg"]);
   });

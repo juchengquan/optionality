@@ -25,10 +25,10 @@ const condor = (entry: number | null = 3.0, contracts = 1): Position => ({
   contracts,
   entry,
   legs: [
-    { side: "sold", option_type: "CALL", strike: 8050 },
-    { side: "bought", option_type: "CALL", strike: 8075 },
-    { side: "sold", option_type: "PUT", strike: 7100 },
-    { side: "bought", option_type: "PUT", strike: 7075 },
+    { side: "short", option_type: "CALL", strike: 8050 },
+    { side: "long", option_type: "CALL", strike: 8075 },
+    { side: "short", option_type: "PUT", strike: 7100 },
+    { side: "long", option_type: "PUT", strike: 7075 },
   ],
 });
 
@@ -109,7 +109,7 @@ describe("cost to close", () => {
     const p = condor();
     const mids = [5.0, 2.0, 3.0, 4.45];
     const oldSignedSum = p.legs.reduce(
-      (n, leg, i) => n + (leg.side === "sold" ? -1 : 1) * mids[i]!, 0);
+      (n, leg, i) => n + (leg.side === "short" ? -1 : 1) * mids[i]!, 0);
     expect(Number(oldSignedSum.toFixed(2))).toBe(-1.55);
     expect(Number(costToClose(p, quotes(p, mids))!.toFixed(2))).toBe(1.55);
   });
@@ -117,16 +117,16 @@ describe("cost to close", () => {
 
 describe("exposure", () => {
   it("signs are the inverse of the cost-to-close signs", () => {
-    // a sold leg costs money to buy back (+) but contributes negative exposure (−)
+    // a short leg costs money to buy back (+) but contributes negative exposure (−)
     const p = condor();
     const byCode = quotes(p, [1.0, 1.0, 1.0, 1.0]);
     positionLegCodes(p).forEach((code, i) => {
       byCode[code]!.option_delta = p.legs[i]!.option_type === "CALL" ? 0.5 : -0.5;
     });
 
-    // cost to close: sold legs add, bought legs subtract → all mids equal → 0
+    // cost to close: short legs add, long legs subtract → all mids equal → 0
     expect(costToClose(p, byCode)).toBe(0);
-    // exposure: bought minus sold. bought(C .5 + P −.5) − sold(C .5 + P −.5) = 0
+    // exposure: long minus short. long(C .5 + P −.5) − short(C .5 + P −.5) = 0
     expect(positionGreek(p, byCode, "option_delta")).toBe(0);
 
     // now let the short call dominate, so the two signings cannot coincide by accident
@@ -170,23 +170,23 @@ describe("P&L", () => {
     // a long — closing it pays you — so P&L is entry − (−mid) = entry + mid, and only a negative
     // entry gives the right answer. A long call recorded with a positive entry reports double its
     // debit as profit, silently.
-    const lone = (side: "sold" | "bought", entry: number): Position => ({
+    const lone = (side: "short" | "long", entry: number): Position => ({
       name: "lone", strike_date: future(), contracts: 1, entry,
       legs: [{ side, option_type: "CALL", strike: 8100 }],
     });
 
     // sold for 5.00, now worth 3.00: up 2.00 a point, 100 a point
-    const sold = lone("sold", 5.0);
+    const sold = lone("short", 5.0);
     expect(costToClose(sold, quotes(sold, [3.0]))).toBe(3.0);
     expect(positionPnl(sold, quotes(sold, [3.0]))).toBe(200);
 
     // bought for 5.00, now worth 8.00: up 3.00. The debit is recorded as a NEGATIVE credit.
-    const long = lone("bought", -5.0);
+    const long = lone("long", -5.0);
     expect(costToClose(long, quotes(long, [8.0]))).toBe(-8.0);
     expect(positionPnl(long, quotes(long, [8.0]))).toBe(300);
 
     // and the trap itself, stated so it cannot be reintroduced quietly
-    expect(positionPnl(lone("bought", 5.0), quotes(long, [8.0]))).toBe(1300);
+    expect(positionPnl(lone("long", 5.0), quotes(long, [8.0]))).toBe(1300);
   });
 
   it("is unknown until an entry is recorded", () => {
@@ -230,15 +230,15 @@ describe("a stop spanning several positions", () => {
   const callSpread = (entry: number | null = 1.8): Position => ({
     name: "1016_bs_8050", strike_date: future(), contracts: 1, entry,
     legs: [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ],
   });
   const putSpread = (entry: number | null = 1.4): Position => ({
     name: "1016_bps_7100", strike_date: future(), contracts: 1, entry,
     legs: [
-      { side: "sold", option_type: "PUT", strike: 7100 },
-      { side: "bought", option_type: "PUT", strike: 7075 },
+      { side: "short", option_type: "PUT", strike: 7100 },
+      { side: "long", option_type: "PUT", strike: 7075 },
     ],
   });
   const bothQuotes = (ps: Position[], mids: number[]): ByCode => {
@@ -274,7 +274,7 @@ describe("a stop spanning several positions", () => {
 describe("arithmetic that has to match the Python exactly", () => {
   const withEntry = (entry: number): Position => ({
     name: "e", strike_date: future(), contracts: 1, entry,
-    legs: [{ side: "sold", option_type: "CALL", strike: 8050 }],
+    legs: [{ side: "short", option_type: "CALL", strike: 8050 }],
   });
 
   it("adds across positions the way CPython's sum() does, not left to right", () => {
@@ -304,8 +304,8 @@ describe("which positions a monitor is watching", () => {
   const spread = (id: string, strikes: [number, number], type: "CALL" | "PUT" = "CALL"): Position & { id: string } => ({
     id, name: id, strike_date: future(), contracts: 1, entry: 1.0,
     legs: [
-      { side: "sold", option_type: type, strike: strikes[0] },
-      { side: "bought", option_type: type, strike: strikes[1] },
+      { side: "short", option_type: type, strike: strikes[0] },
+      { side: "long", option_type: type, strike: strikes[1] },
     ],
   });
 
@@ -376,7 +376,7 @@ describe("the sign convention, so neither vocabulary can drift from the other", 
    *
    *  CANONICAL: minus is short, and a short leg is one you SOLD.
    */
-  const SIGN_FOR_SIDE = { sold: -1, bought: 1 } as const;
+  const SIGN_FOR_SIDE = { short: -1, long: 1 } as const;
 
   const asCombo = (p: Position): Monitor => ({
     code: p.name, strike_date: p.strike_date, option_type: "CMB", strike: 0,
@@ -403,8 +403,8 @@ describe("the sign convention, so neither vocabulary can drift from the other", 
   });
 
   it("makes a combo's greek and the same holding's greek ONE number, not two", () => {
-    // positionGreek signs a sold leg NEGATIVE, because that is the exposure you carry; the
-    // canonical -1 on a sold leg does the same. So these agree — and under the other reading
+    // positionGreek signs a short leg NEGATIVE, because that is the exposure you carry; the
+    // canonical -1 on a short leg does the same. So these agree — and under the other reading
     // every combo greek on the dashboard would be the exact negative of the holding's.
     const p = condor();
     const legCodes = positionLegCodes(p);
@@ -434,7 +434,7 @@ describe("costing a named subset of what you hold", () => {
     const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
     // the call wing: sold 8050 at 5.00, bought 8075 at 2.00
     expect(costToCloseOf([p], byCode, [CALL_A, CALL_B])).toBe(3);
-    // one sold leg on its own costs its mid to buy back
+    // one short leg on its own costs its mid to buy back
     expect(costToCloseOf([p], byCode, [CALL_A])).toBe(5);
     // and the whole set is the whole cost
     expect(costToCloseOf([p], byCode, positionLegCodes(p))).toBe(4.5);
@@ -460,11 +460,11 @@ describe("costing a named subset of what you hold", () => {
     // ADR 0004: a condor's stop may span both its spreads
     const calls: Position = {
       name: "calls", strike_date: future(), contracts: 1, entry: 3.0,
-      legs: [{ side: "sold", option_type: "CALL", strike: 8050 }],
+      legs: [{ side: "short", option_type: "CALL", strike: 8050 }],
     };
     const puts: Position = {
       name: "puts", strike_date: future(), contracts: 1, entry: 1.5,
-      legs: [{ side: "sold", option_type: "PUT", strike: 7100 }],
+      legs: [{ side: "short", option_type: "PUT", strike: 7100 }],
     };
     const byCode: ByCode = {
       [CALL_A]: { code: CALL_A, mid_price: 5.0 },

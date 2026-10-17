@@ -29,8 +29,10 @@ import { displayStored, displayTime } from "../timefmt.ts";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 
+/** `side` as the two values, not a string: a stored leg that still said "sold" would otherwise be
+ *  served as though nothing were wrong, and the dashboard would read it as long (ADR 0013). */
 const LegOut = z.object({
-  side: z.string(), option_type: z.string(), strike: z.number(),
+  side: z.enum(["short", "long"]), option_type: z.string(), strike: z.number(),
 });
 
 const PositionOut = z.object({

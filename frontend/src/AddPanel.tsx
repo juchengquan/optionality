@@ -51,7 +51,7 @@ export function AddPanel({
           <SheetTitle>{which === "combo" ? "Add combo" : "Add monitor"}</SheetTitle>
           <SheetDescription>
             {which === "combo"
-              ? "Each leg is sold or bought; the value is their signed sum, sold legs counting negative. An entry turns it into a holding on those same sides. A leg left blank is skipped."
+              ? "Each leg is long or short; the value is their signed sum, short legs counting negative. An entry turns it into a holding on those same sides. A leg left blank is skipped."
               : "One contract, one rule. The alarm fires at the threshold exactly."}
           </SheetDescription>
         </SheetHeader>

@@ -137,7 +137,7 @@ export const setTotalEntry = (monitorId: string, entry: number) =>
   );
 
 /** `sign` is the combo's vocabulary and `side` the holding's: the minus the add-combo form offers
- *  means short, and a short leg is one you sold. The two signings are inverses in the position
+ *  means short (ADR 0013). The two signings are inverses in the position
  *  maths (domain/position.ts), so reversing this would invert every P&L rather than fail.
  *
  *  One convention, stated the same way everywhere since 2026-10-06: the schema, the bot's help and
@@ -149,7 +149,7 @@ export const setTotalEntry = (monitorId: string, entry: number) =>
 interface ComboLeg { sign: number; option_type: string; strike: number }
 const holdingLegs = (legs: ComboLeg[]) =>
   legs.map((leg) => ({
-    side: leg.sign < 0 ? "sold" : "bought",
+    side: leg.sign < 0 ? "short" : "long",
     option_type: leg.option_type,
     strike: leg.strike,
   }));
@@ -184,13 +184,13 @@ function holding(
     };
   }
   const optionType = monitor.option_type as string;
-  const bought = side === "bought";
+  const long = side === "long";
   return {
     name: `${String(monitor.strike_date)}_${optionType === "CALL" ? "C" : "P"}${String(monitor.strike)}`,
     strike_date: monitor.strike_date,
     // a null has no sign to flip, and `-null` is -0 — which would record a debit of nothing
-    entry: entry === null ? null : (bought ? -entry : entry),
-    legs: [{ side: bought ? "bought" : "sold", option_type: optionType, strike: monitor.strike }],
+    entry: entry === null ? null : (long ? -entry : entry),
+    legs: [{ side: long ? "long" : "short", option_type: optionType, strike: monitor.strike }],
   };
 }
 

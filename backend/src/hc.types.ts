@@ -73,7 +73,7 @@ async function endpoints() {
     positionCreated: await client.positions.$post({
       json: {
         name: "1016_IC", strike_date: "2026-12-18",
-        legs: [{ side: "sold", option_type: "CALL", strike: 8050 }],
+        legs: [{ side: "short", option_type: "CALL", strike: 8050 }],
       },
     }),
     positionPatched: await client.positions[":id"].$patch({ param: id, json: { entry: 3.0 } }),
@@ -146,7 +146,7 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["positions"]>[number]["entry"], number | null>>,
   Checked<Exactly<Ok<E["positions"]>[number]["strategy"], string | null>>,
   Checked<Exactly<Ok<E["positions"]>[number]["legs"],
-    { side: string; option_type: string; strike: number }[]>>,
+    { side: "short" | "long"; option_type: string; strike: number }[]>>,
   Checked<Exactly<Ok<E["values"]>[number]["cost_to_close"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["pnl"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["contract_size"], number | null>>,

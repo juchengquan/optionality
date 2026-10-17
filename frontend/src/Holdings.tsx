@@ -80,7 +80,7 @@ function HoldingRow({ holding, onSaved, act }: {
     <div data-testid={`holding-${holding.id}`} className="border-t py-3">
       <p>
         <strong>{holding.name}</strong>
-        {` · ${holding.legs.map((l) => `${l.side === "sold" ? "-" : "+"}${l.option_type[0]}${l.strike}`).join(" ")}`}
+        {` · ${holding.legs.map((l) => `${l.side === "short" ? "-" : "+"}${l.option_type[0]}${l.strike}`).join(" ")}`}
       </p>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 tabular-nums sm:grid-cols-4">
         {([
