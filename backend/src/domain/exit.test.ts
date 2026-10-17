@@ -63,6 +63,41 @@ describe("on-pace", () => {
   });
 });
 
+describe("whether a Level has been reached", () => {
+  /** CONTEXT.md: a Level is a Cost to close you have already decided to act at — a Target you take
+   *  or a Stop that ends it — and it is "reached or not reached". Decided HERE, not on screen:
+   *  #129 was the dashboard measuring a figure its own way while the engine measured it another,
+   *  and a client-side `<=` would be a second definition of reached with nothing tying it to this
+   *  one. The Telegram bot can read the same answer. */
+  it("reaches AT the level, with no hysteresis either side", () => {
+    // the alarm invariant is "the 🔔 flips truthfully at the EXACT threshold — no value
+    // hysteresis", and a Level is held to the same standard
+    const target = 6.86 * 0.5;
+    const stop = 6.86 * 2;
+    expect(exitLevels(6.86, 45, 39, POLICY, target)!.reached, "exactly at target").toBe("target");
+    expect(exitLevels(6.86, 45, 39, POLICY, stop)!.reached, "exactly at stop").toBe("stop");
+    expect(exitLevels(6.86, 45, 39, POLICY, target + 0.01)!.reached, "a tick short").toBeNull();
+    expect(exitLevels(6.86, 45, 39, POLICY, stop - 0.01)!.reached, "a tick short").toBeNull();
+  });
+
+  it("reaches nothing while the cost sits between them", () => {
+    expect(exitLevels(6.86, 45, 39, POLICY, 6.5)!.reached).toBeNull();
+  });
+
+  it("reaches nothing it cannot compare", () => {
+    // no cost to close yet, and a debit has no Levels at all — the same reason target is null
+    expect(exitLevels(6.86, 45, 39, POLICY)!.reached, "no cost").toBeNull();
+    expect(exitLevels(-5, 45, 21, POLICY, -30)!.reached, "a debit has no Levels").toBeNull();
+  });
+
+  it("says the Manage-by deadline has arrived AT the deadline", () => {
+    // a deadline, not a level: it is about time, and it arrives whatever the P&L
+    expect(exitLevels(6.86, 45, 22, POLICY, 6.5)!.manage_by_due, "a day out").toBe(false);
+    expect(exitLevels(6.86, 45, 21, POLICY, 6.5)!.manage_by_due, "the day itself").toBe(true);
+    expect(exitLevels(6.86, 45, 3, POLICY, 6.5)!.manage_by_due, "well inside").toBe(true);
+  });
+});
+
 describe("the levels", () => {
   it("takes a fraction of Entry and stops at a multiple of it", () => {
     const l = exitLevels(6.86, 45, 39, POLICY)!;

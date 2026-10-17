@@ -782,6 +782,22 @@ describe("the exit schedule", () => {
     expect(s.on_pace).toBeCloseTo(6.86 * Math.sqrt(28 / 45), 6);
   });
 
+  it("carries whether a Level is reached, which the schema would otherwise strip", async () => {
+    // The hazard is not the arithmetic — exit.test.ts has that — it is zod. `ScheduleOut.parse`
+    // DROPS keys it does not name, silently, with the compiler happy and the suite green, so a
+    // field computed in the domain and never listed here reaches the dashboard as undefined.
+    start();
+    await created201(await post(spread({ opened_at: OPENED })));
+    const [p] = await values();
+    const s = p!.schedule!;
+
+    // 28 DTE against a 21-DTE deadline, and no cost to close in this fixture
+    expect(s.reached, "nothing to compare, so nothing reached").toBeNull();
+    expect(s.manage_by_due, "28 DTE is a week outside the deadline").toBe(false);
+    expect("reached" in s, "the key survives the schema").toBe(true);
+    expect("manage_by_due" in s).toBe(true);
+  });
+
   it("can be declared after the fact, which is the only way the existing five get one", async () => {
     start();
     const id = await created201(await post(spread()));

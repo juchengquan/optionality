@@ -85,6 +85,12 @@ shape's own approximation are all in it, and it is usually the larger half. Call
 claim knowledge of it.
 _Avoid_: residual, unexplained, error, noise
 
+**Level**:
+A Cost to close you have already decided to act at. There are two: a Target you take the profit at,
+and a Stop where the trade is over. Both are flat in DTE. A Level is reached or it is not, and
+reaching one sends nothing — which is what separates it from an Alarm.
+_Avoid_: trigger, signal, threshold (that word belongs to a Monitor)
+
 **Target**:
 The Cost to close at which you take the profit, as a fraction of Entry. Flat in DTE — time does
 not change what you are willing to accept, only whether you have got it yet.

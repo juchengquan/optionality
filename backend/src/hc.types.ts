@@ -118,6 +118,14 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["quotes"]>[number]["pnl"], number | null>>,
   Checked<Exactly<Ok<E["quotes"]>[number]["triggered"], boolean>>,
   Checked<Known<Ok<E["quotes"]>[number]["snapshot"]>>,
+  // The Levels a row has reached, which the dashboard's top line is built from. Asserted here
+  // because there are three places this can vanish without a word: the domain can compute it, the
+  // route's zod schema can strip it, and the client type can lose it — each with the compiler
+  // happy. The route tests cover the middle one; this covers the last.
+  Checked<Exactly<
+    NonNullable<Ok<E["quotes"]>[number]["schedule"]>["reached"], "target" | "stop" | null>>,
+  Checked<Exactly<
+    NonNullable<Ok<E["quotes"]>[number]["schedule"]>["manage_by_due"], boolean>>,
 
   // configs ---------------------------------------------------------------------------
 
