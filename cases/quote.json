@@ -40,6 +40,22 @@
         0.30000000000000004
       ],
       "expect": 0.3
+    },
+    {
+      "fn": "round4",
+      "name": "an exact binary half rounds up",
+      "args": [
+        0.03125
+      ],
+      "expect": 0.0313
+    },
+    {
+      "fn": "round4",
+      "name": "an exact binary half, negative, rounds away from zero",
+      "args": [
+        -0.03125
+      ],
+      "expect": -0.0313
     }
   ]
 }
