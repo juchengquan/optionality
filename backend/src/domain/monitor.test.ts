@@ -10,10 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSpxCode } from "./contract.ts";
-import {
-  type ByCode, type Monitor, comboFieldError, comboFieldSum, isBreached, monitorLegCodes,
-  monitorValue, thresholdFill,
-} from "./monitor.ts";
+import { comboFieldError, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdFault, thresholdFill, type ByCode, type Monitor } from "./monitor.ts";
 
 const EXPIRY = "2026-10-16";
 const code = (type: "CALL" | "PUT", strike: number) => buildSpxCode(EXPIRY, type, strike);
@@ -154,5 +151,31 @@ describe("the breach decision", () => {
     // throwing — a monitor that cannot decide is worse than one that errs toward warning
     expect(isBreached(0.6, 0.5, "sideways", "abs")).toBe(true);
     expect(isBreached(0.4, 0.5, "sideways", "abs")).toBe(false);
+  });
+});
+
+/** The threshold rule itself, which lived in three places under two signatures.
+ *
+ *  Both halves follow from the alarm flipping truthfully AT the threshold with no value hysteresis
+ *  (CLAUDE.md, ratified): a non-positive absolute threshold is breached by everything, and a signed
+ *  threshold of zero is a band of zero width that a value can sit exactly on.
+ */
+describe("why a threshold cannot be compared that way", () => {
+  it("refuses an absolute threshold that is not positive", () => {
+    expect(thresholdFault("abs", -0.5)).toBe("abs-not-positive");
+    expect(thresholdFault("abs", 0), "zero is breached by everything too").toBe("abs-not-positive");
+    expect(thresholdFault("abs", 0.01), "the smallest positive one is fine").toBeNull();
+  });
+
+  it("refuses a signed threshold of exactly zero, and only zero", () => {
+    expect(thresholdFault("signed", 0)).toBe("signed-zero");
+    expect(thresholdFault("signed", -4.05), "negative thresholds are legal when signed").toBeNull();
+    expect(thresholdFault("signed", 0.01)).toBeNull();
+  });
+
+  it("knows nothing about wording", () => {
+    // three surfaces say this three ways — the API long, the PATCH route short, the bot longer
+    // still because it is read without the form that produced it. The RULE is one.
+    expect(thresholdFault("abs", -1)).not.toContain(" ");
   });
 });

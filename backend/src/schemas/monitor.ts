@@ -7,6 +7,7 @@
 import { z } from "zod";
 
 import { normalizeStrikeDate } from "../domain/contract.ts";
+import { thresholdFault } from "../domain/monitor.ts";
 
 export const DEFAULT_SINGLE_FIELD = "option_delta";
 export const DEFAULT_COMBO_FIELD = "mid_price";
@@ -30,27 +31,31 @@ const StrikeDate = z.string().transform((value, ctx) => {
 const Direction = z.enum(["above", "below"]);
 const Compare = z.enum(["abs", "signed"]);
 
-/** Why this threshold cannot be compared this way, or null.
+/** The API's wording for a threshold the rule refuses, or null.
  *
- *  Both rules exist because the alarm flips truthfully AT the threshold, with no value hysteresis
- *  (CLAUDE.md). A non-positive absolute threshold would be breached by everything, and a signed
- *  threshold of zero is a band of zero width that a value can sit exactly on.
+ *  The rule itself is `thresholdFault` in domain/monitor.ts, beside the `isBreached` it protects.
+ *  It was written out here, again for PATCH below, and a third time in the bot — twice under this
+ *  same name with the arguments in opposite orders. Only the sentences differ, so only the
+ *  sentences stay at the edges.
  */
 export function thresholdError(compare: string, threshold: number): string | null {
-  if (compare === "abs" && threshold <= 0) {
-    return "threshold must be positive when compare='abs' (values are compared as absolutes)";
+  switch (thresholdFault(compare, threshold)) {
+    case "abs-not-positive":
+      return "threshold must be positive when compare='abs' (values are compared as absolutes)";
+    case "signed-zero":
+      return "signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01";
+    default:
+      return null;
   }
-  if (compare === "signed" && threshold === 0) {
-    return "signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01";
-  }
-  return null;
 }
 
 /** The shorter wording the PATCH route uses, kept because the dashboard shows these verbatim. */
 export function patchThresholdError(compare: string, threshold: number): string | null {
-  if (compare === "abs" && threshold <= 0) return "threshold must be positive when compare='abs'";
-  if (compare === "signed" && threshold === 0) return "signed threshold cannot be 0; use e.g. ±0.01";
-  return null;
+  switch (thresholdFault(compare, threshold)) {
+    case "abs-not-positive": return "threshold must be positive when compare='abs'";
+    case "signed-zero": return "signed threshold cannot be 0; use e.g. ±0.01";
+    default: return null;
+  }
 }
 
 export const MonitorIn = z.object({
