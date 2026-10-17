@@ -110,10 +110,17 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 - Branch → PR → the owner merges (never merge or push to main directly). Restart the agent after landing.
 - `.env` is gitignored and holds live Telegram credentials — never commit it or echo its secrets into
-  committed files. `data/optionality-ts.db` is live state (watchlist, holdings, their daily samples). The only backups are
-  the ones `make deploy` takes, immediately before it restarts and before any migration runs. They
-  are taken with SQLite's online backup, NEVER `cp`: in WAL mode `cp` leaves the write-ahead log
-  behind, so the copy is current only to the last checkpoint — 1 row of 500 when measured — and is
-  still valid SQLite, which is what makes it dangerous. There is no backup off this machine.
+  committed files. `data/optionality-ts.db` is live state (watchlist, holdings, their daily samples — the samples
+  are the one thing that cannot be re-entered). Two sets of backups, both SQLite's online backup,
+  NEVER `cp`: in WAL mode `cp` leaves the write-ahead log behind, so the copy is current only to the
+  last checkpoint — 1 row of 500 when measured — and is still valid SQLite, which is what makes it
+  dangerous.
+  - `make deploy` takes one before every restart and migration, in `data/`, and keeps the last 10
+    plus any renamed `optionality-ts.db.bak-pre-<what>-<stamp>` — rename one to keep it for good.
+  - `com.optionality.backup` (`make launchd-backup-install`) takes a checked, gzipped one at 06:00
+    into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` defaults
+    to `data/backups/`, i.e. still ON this machine, until it is pointed elsewhere.
+  - Restore only with `make restore FROM=<file>`. Copying a backup over the live file leaves its
+    `-wal` beside it, and SQLite replays that old log onto the restored data.
 - The Telegram bot token allows ONE `getUpdates` consumer: never run two service instances against it, and
   avoid external `getUpdates` curls while the service runs.
