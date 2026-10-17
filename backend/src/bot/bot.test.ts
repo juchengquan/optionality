@@ -23,6 +23,8 @@ import { TelegramBot } from "./bot.ts";
 /** Fixed, so a date-relative expectation cannot drift into a different market day overnight. */
 const NOW = new Date("2026-10-02T05:00:00Z");
 const FUTURE = "2026-11-01";
+/** 45 days before FUTURE, so a holding opened then has a schedule to speak of */
+const OPENED = "2026-09-17";
 const YYMMDD = "261101";
 const FAR = "2026-11-11";
 
@@ -370,6 +372,51 @@ describe("the live tables", () => {
     expect(last()).toContain("5.89");
   });
 
+  it("/holdings says where each Position stands, which no other command can", async () => {
+    // thirteen commands and every one about rules: there was no way to ask Telegram about the
+    // thing with money in it. The figures come from holdings.ts, the same function the dashboard's
+    // /positions/values asks — not a second definition of cost, P&L and the schedule.
+    const b = bot(quoting({ mid_price: 1.5, option_contract_size: 100 }));
+    await b.handleUpdate(update("/holdings"));
+    expect(last().toLowerCase(), "and it says so rather than printing an empty table")
+      .toContain("no holdings");
+
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'spread', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
+    ).run("p".repeat(32), FUTURE, toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8100 },
+    ]), OPENED);
+
+    await b.handleUpdate(update("/holdings"));
+    const reply = last();
+    expect(reply.startsWith("<pre>"), "a table reply is <pre> + HTML").toBe(true);
+    expect(lastParams().parse_mode).toBe("HTML");
+    expect(reply).toContain("spread");
+    expect(reply).toContain("1.50");        // cost to close, from the mid
+    expect(reply).toContain("50");          // P&L: (2.00 - 1.50) x 100
+    expect(reply.split("\n")[0]!.length, "four columns inside forty characters")
+      .toBeLessThanOrEqual(40);
+  });
+
+  it("/holdings names a Level it has reached, in place of the pace", async () => {
+    // a Target is reached or not reached (CONTEXT.md: Level), and reaching one is the thing worth
+    // saying — the pace gap is what it says when no Level has been
+    const b = bot(quoting({ mid_price: 0.5, option_contract_size: 100 }));
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'atTarget', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
+    ).run("q".repeat(32), FUTURE, toSqliteJson([
+      { side: "sold", option_type: "CALL", strike: 8100 },
+    ]), OPENED);
+
+    await b.handleUpdate(update("/holdings"));
+    // 0.50 is exactly half of a 2.00 credit, which is the Target
+    expect(last()).toContain("TARGET");
+  });
+
   it("shows an em dash per missing field rather than failing the table", async () => {
     const b = bot(quoting({}));
     await b.handleUpdate(update(`/watch ${FUTURE} CALL 8100 0.6`));
@@ -650,6 +697,9 @@ describe("the command menu", () => {
     const call = calls.find(([method]) => method === "setMyCommands")!;
     const published = JSON.parse(call[1].commands!) as { command: string; description: string }[];
     expect(published.map((c) => c.command)).toEqual([
+      // holdings leads: it is the only one about the thing with money in it, and every other
+      // command here is about a rule
+      "holdings",
       "monitors", "quotes", "greeks", "vol", "watch", "watchcombo", "unwatch", "combo",
       "threshold", "rename", "snapshot", "health", "help",
     ]);
