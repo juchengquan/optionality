@@ -15,9 +15,10 @@ CADDY_BIN = $(shell command -v caddy)
 # the service's database. data/optionality.db beside it is the retired Python's, frozen at the
 # cutover and never opened again.
 TS_DB = data/optionality-ts.db
-# where the nightly backups go. The ONE setting to change to move them off this machine: re-run
-# `make launchd-backup-install BACKUP_DIR=<path>`, e.g. a folder in iCloud Drive.
-BACKUP_DIR ?= data/backups
+# where the nightly backups go: iCloud Drive, so they leave this machine (chosen 2026-10-17). The
+# default is the destination ON PURPOSE — a reinstall that forgot the argument must not quietly move
+# them back onto the disk they protect. Override with BACKUP_DIR=<path>.
+BACKUP_DIR ?= $(HOME)/Library/Mobile Documents/com~apple~CloudDocs/optionality-backups
 
 # where the dashboard is mounted on the tailnet. Baked into the bundle at build time,
 # because `tailscale serve` strips the prefix and the page cannot discover it (ADR 0006).

@@ -118,8 +118,9 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   - `make deploy` takes one before every restart and migration, in `data/`, and keeps the last 10
     plus any renamed `optionality-ts.db.bak-pre-<what>-<stamp>` — rename one to keep it for good.
   - `com.optionality.backup` (`make launchd-backup-install`) takes a checked, gzipped one at 06:00
-    into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` defaults
-    to `data/backups/`, i.e. still ON this machine, until it is pointed elsewhere.
+    into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` is a
+    folder in iCloud Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/optionality-backups`),
+    which is what takes them off this machine; the Python-era archive is in its `archive/`.
   - Restore only with `make restore FROM=<file>`. Copying a backup over the live file leaves its
     `-wal` beside it, and SQLite replays that old log onto the restored data.
 - The Telegram bot token allows ONE `getUpdates` consumer: never run two service instances against it, and
