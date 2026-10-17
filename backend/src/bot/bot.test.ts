@@ -386,7 +386,7 @@ describe("the live tables", () => {
                               opened_at, manage_notified_at)
        values (?, 'spread', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
     ).run("p".repeat(32), FUTURE, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "short", option_type: "CALL", strike: 8100 },
     ]), OPENED);
 
     await b.handleUpdate(update("/holdings"));
@@ -410,7 +410,7 @@ describe("the live tables", () => {
                               opened_at, manage_notified_at)
        values (?, 'pacer', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
     ).run("r".repeat(32), FUTURE, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "short", option_type: "CALL", strike: 8100 },
     ]), OPENED);
 
     await b.handleUpdate(update("/holdings"));
@@ -429,7 +429,7 @@ describe("the live tables", () => {
                               opened_at, manage_notified_at)
        values (?, 'atTarget', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
     ).run("q".repeat(32), FUTURE, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
+      { side: "short", option_type: "CALL", strike: 8100 },
     ]), OPENED);
 
     await b.handleUpdate(update("/holdings"));
@@ -592,7 +592,7 @@ describe("/unwatch", () => {
     db.prepare(
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, 'held', 'credit_spread', ?, 1, 2.0, ?, '2026-10-01 00:00:00.000000')`,
-    ).run("p".repeat(32), FUTURE, toSqliteJson([{ side: "sold", option_type: "CALL", strike: 6500 }]));
+    ).run("p".repeat(32), FUTURE, toSqliteJson([{ side: "short", option_type: "CALL", strike: 6500 }]));
     await b.handleUpdate(update(`/watch ${FUTURE} CALL 6500 0.6`));
     const id = monitors()[0]!.id;
     expect(db.prepare("select count(*) n from monitor_positions").get()).toMatchObject({ n: 1 });
@@ -615,8 +615,8 @@ describe("linking, which the Python's bot does not do", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, 'spread', 'credit_spread', ?, 1, 2.5, ?, '2026-10-01 00:00:00.000000')`,
     ).run("p".repeat(32), FUTURE, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]));
 
     await b.handleUpdate(update(`/watchcombo spread ${FUTURE} +C8100 -C8150 10 below`));

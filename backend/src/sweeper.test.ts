@@ -362,7 +362,7 @@ describe("the expiry lifecycle", () => {
     db.prepare(
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, 'held', 'credit_spread', ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000')`,
-    ).run(pid, daysFromNow(-30), toSqliteJson([{ side: "sold", option_type: "CALL", strike: 8050 }]));
+    ).run(pid, daysFromNow(-30), toSqliteJson([{ side: "short", option_type: "CALL", strike: 8050 }]));
     const id = monitor({ strike_date: daysFromNow(-30), scope: "all", enabled: 0, disabled_reason: "expired" });
     db.prepare("insert into monitor_positions values (?, ?)").run(id, pid);
 
@@ -600,8 +600,8 @@ describe("positions in the batch", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, 'held', 'credit_spread', ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000')`,
     ).run("p".repeat(32), future(), toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]));
     monitor();
     const asked: string[][] = [];
@@ -620,7 +620,7 @@ describe("positions in the batch", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, 'held', 'credit_spread', ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000')`,
     ).run("p".repeat(32), future(), toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8050 },
+      { side: "short", option_type: "CALL", strike: 8050 },
     ]));
     // no monitors at all: the position's legs are fetched and nothing alarms
     const s = sweeper((codes) => Promise.resolve(
@@ -644,8 +644,8 @@ describe("recording what a Position was worth", () => {
                               opened_at, manage_notified_at)
        values (?, ?, null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', null, null)`,
     ).run(id, name, over.strike_date ?? future(), toSqliteJson(over.legs ?? [
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]));
     return id;
   };
@@ -866,8 +866,8 @@ describe("how often the sampler actually writes", () => {
                               opened_at, manage_notified_at)
        values (?, ?, null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', null, null)`,
     ).run(id, name, future(), toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8050 },
-      { side: "bought", option_type: "CALL", strike: 8075 },
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
     ]));
     return id;
   };
@@ -956,7 +956,7 @@ describe("the manage-by notice", () => {
                               opened_at, manage_notified_at)
        values (?, ?, null, ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', ?, null)`,
     ).run(id, name, daysFromNow(dteLeft), toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8050 },
+      { side: "short", option_type: "CALL", strike: 8050 },
     ]), openedAt);
     return id;
   };

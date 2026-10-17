@@ -123,7 +123,7 @@ export function HoldingForm({ entry, onHolding }: {
   const [openedAt, setOpenedAt] = useState("");
   // a lone contract has no signs to read a side from, so it has to be asked — exactly as the
   // add-monitor form asks. A combo's sides come from its legs.
-  const [side, setSide] = useState("sold");
+  const [side, setSide] = useState("short");
   const isCombo = Array.isArray(entry.legs);
 
   // Nothing to add for a rule spanning several holdings: the split credit is what EntryCell
@@ -168,7 +168,7 @@ export function HoldingForm({ entry, onHolding }: {
           <FieldLabel htmlFor={`h-side-${entry.id}`}>side</FieldLabel>
           <NativeSelect id={`h-side-${entry.id}`} value={side}
                         onChange={(e) => setSide(e.target.value)}>
-            <option value="sold">sold</option><option value="bought">bought</option>
+            <option value="short">short</option><option value="long">long</option>
           </NativeSelect>
         </Field>
       )}

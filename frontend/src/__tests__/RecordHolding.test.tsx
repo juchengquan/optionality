@@ -108,10 +108,10 @@ describe("recording a holding on a rule that has none", () => {
       entry: 7.05,
       opened_at: "2026-10-14",
       legs: [
-        { side: "sold", option_type: "CALL", strike: 8200 },
-        { side: "bought", option_type: "CALL", strike: 8250 },
-        { side: "sold", option_type: "PUT", strike: 7150 },
-        { side: "bought", option_type: "PUT", strike: 7100 },
+        { side: "short", option_type: "CALL", strike: 8200 },
+        { side: "long", option_type: "CALL", strike: 8250 },
+        { side: "short", option_type: "PUT", strike: 7150 },
+        { side: "long", option_type: "PUT", strike: 7100 },
       ],
     });
   });
@@ -177,15 +177,15 @@ describe("one derivation, so the two surfaces cannot disagree", () => {
     expect(holdingBody(fromRule, values)).toEqual(holdingBody(fromForm, values));
   });
 
-  it("signs a lone bought contract's entry negative, whichever surface asked", () => {
+  it("signs a lone long contract's entry negative, whichever surface asked", () => {
     // entry is a net credit RECEIVED, so a debit is negative; a long recorded positive reports
     // more than double its real profit. Asserted here because the sheet now asks for a side too.
     const rule = { code: "x", strike_date: "2026-11-20", option_type: "CALL", strike: 8100 };
-    expect(holdingBody(rule, { entry: 5, side: "bought" })).toMatchObject({
+    expect(holdingBody(rule, { entry: 5, side: "long" })).toMatchObject({
       name: "2026-11-20_C8100", entry: -5,
-      legs: [{ side: "bought", option_type: "CALL", strike: 8100 }],
+      legs: [{ side: "long", option_type: "CALL", strike: 8100 }],
     });
-    expect(holdingBody(rule, { entry: 5, side: "sold" })).toMatchObject({ entry: 5 });
+    expect(holdingBody(rule, { entry: 5, side: "short" })).toMatchObject({ entry: 5 });
   });
 
   it("states Opened as null when none was given, rather than leaving it out", () => {

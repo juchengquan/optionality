@@ -21,7 +21,7 @@ const StrikeDate = z.string().transform((value, ctx) => {
 });
 
 export const LegIn = z.object({
-  side: z.enum(["sold", "bought"]),
+  side: z.enum(["short", "long"]),
   option_type: z.enum(["CALL", "PUT"]),
   strike: z.number(),
 });

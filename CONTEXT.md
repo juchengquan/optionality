@@ -22,15 +22,19 @@ else's Monitor, and those are different facts about it.
 _Avoid_: option, contract (when the thing you mean is held rather than merely tradeable)
 
 **Side**:
-Whether a Leg was sold or bought. A fact about the Position, not a choice about how to add its
-legs up. It is never SHOWN as a +/- sign: where a combo's legs are being described, each one is
-still named sold or bought, and the sign is only how that is stored and summed.
-_Avoid_: direction (that word means above/below on a Monitor), sign, long/short
+Whether you are long or short a Leg: long if you bought it, short if you sold it. A fact about
+the Position, not a choice about how to add its legs up. It is never SHOWN as a +/- sign: where a
+combo's legs are being described, each one is still named long or short, and the sign is only how
+that is stored and summed. Greek exposure is never described with these words — it is always a
+signed number — so "short" means a Leg and nothing else.
+_Avoid_: direction (that word means above/below on a Monitor), sign, sold/bought (those are the
+trades that open or close a Leg, not the Side it leaves you on)
 
 **Cost to close**:
-What it would cost right now to buy back the options in question — a Position's Legs, or the
-Contracts a Monitor names, which are not always the same set. Always positive for a credit
-structure, and reported only where you hold those Contracts.
+What it would cost right now to close the options in question — buy back the short ones, sell
+the long ones — whether those are a Position's Legs or the Contracts a Monitor names, which are
+not always the same set. Always positive for a credit structure, and reported only where you hold
+those Contracts.
 _Avoid_: combo value, signed sum, mid
 
 **Entry**:

@@ -219,8 +219,8 @@ describe("the holdings a rule watches", () => {
   it("reports cost to close, entry and P&L for a rule covering whole positions", async () => {
     const pid = "p".repeat(32);
     position(pid, "spread", 2.5, [
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]);
     const mid = combo();
     link(mid, pid, "all");
@@ -241,8 +241,8 @@ describe("the holdings a rule watches", () => {
     // what the dashboard has shown since the sign reconciliation
     const pid = "p".repeat(32);
     position(pid, "spread", 2.5, [
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]);
     const mid = combo({ threshold: 1.6 });
     link(mid, pid, "all");
@@ -258,8 +258,8 @@ describe("the holdings a rule watches", () => {
     // a leg rule's P&L would be a fraction of someone else's credit
     const pid = "p".repeat(32);
     position(pid, "spread", 2.5, [
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]);
     const mid = monitor({ code: LEG_A, strike: 8100, field: "mid_price", threshold: 2 });
     link(mid, pid, "leg");
@@ -282,8 +282,8 @@ describe("the holdings a rule watches", () => {
     // without them the cost to close would be a partial sum
     const pid = "p".repeat(32);
     position(pid, "spread", 2.5, [
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]);
     const mid = monitor({ code: LEG_A, strike: 8100, field: "mid_price", threshold: 2 });
     link(mid, pid, "leg");
@@ -328,8 +328,8 @@ describe("guards that are easy to lose", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, 'spread', 'credit_spread', ?, 1, 2.5, ?, '2026-08-01 00:00:00.000000')`,
     ).run(pid, EXPIRY, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]));
     const mid = combo({ threshold: 1.6 });
     db.prepare("update monitors set direction = 'below', compare = 'signed' where id = ?").run(mid);
@@ -405,8 +405,8 @@ describe("the bell and the value share an instant", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
        values (?, ?, null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000')`,
     ).run("p1".padEnd(32, "0"), "spread", EXPIRY, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]));
     db.prepare("insert into monitor_positions values (?, ?)").run(mid, "p1".padEnd(32, "0"));
     db.prepare("update monitors set scope = 'all', triggered = 0 where id = ?").run(mid);
@@ -456,8 +456,8 @@ describe("the exit schedule on a watchlist entry", () => {
                               opened_at, manage_notified_at)
        values (?, 'spread', null, ?, 1, ?, ?, '2026-08-01 00:00:00.000000', null, null)`,
     ).run(pid, EXPIRY, entry, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]));
     db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
     db.prepare("update monitors set scope = 'all' where id = ?").run(mid);
@@ -522,7 +522,7 @@ describe("the exit schedule on a watchlist entry", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
                               opened_at, manage_notified_at)
        values (?, 'other', null, ?, 1, 1.0, ?, '2026-08-01 00:00:00.000000', '2026-08-01', null)`,
-    ).run(other, EXPIRY, toSqliteJson([{ side: "sold", option_type: "PUT", strike: 7100 }]));
+    ).run(other, EXPIRY, toSqliteJson([{ side: "short", option_type: "PUT", strike: 7100 }]));
     db.prepare("insert into monitor_positions values (?, ?)").run(mid, other);
 
     const [e] = await run(spreadOf({ [LEG_A]: 5.0, [LEG_B]: 1.0 }), true);
@@ -552,8 +552,8 @@ describe("a rule that watches only PART of a holding", () => {
                               opened_at, manage_notified_at)
        values (?, 'condor', 'iron_condor', ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', null, null)`,
     ).run(pid, EXPIRY, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
     ]));
     return pid;
   };
@@ -586,7 +586,7 @@ describe("a rule that watches only PART of a holding", () => {
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
                               opened_at, manage_notified_at)
        values (?, 'lone call', null, ?, 1, 5.0, ?, '2026-08-01 00:00:00.000000', null, null)`,
-    ).run(pid, EXPIRY, toSqliteJson([{ side: "sold", option_type: "CALL", strike: 8100 }]));
+    ).run(pid, EXPIRY, toSqliteJson([{ side: "short", option_type: "CALL", strike: 8100 }]));
     const mid = monitor({ strike: 8100, code: LEG_A, field: "option_delta", threshold: 0.18 });
     db.prepare("insert into monitor_positions values (?, ?)").run(mid, pid);
     db.prepare("update monitors set scope = 'all' where id = ?").run(mid);
@@ -646,10 +646,10 @@ describe("a combo that covers only part of a holding", () => {
                               opened_at, manage_notified_at)
        values (?, 'condor', 'iron_condor', ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', null, null)`,
     ).run(pid, EXPIRY, toSqliteJson([
-      { side: "sold", option_type: "CALL", strike: 8100 },
-      { side: "bought", option_type: "CALL", strike: 8150 },
-      { side: "sold", option_type: "PUT", strike: 7100 },
-      { side: "bought", option_type: "PUT", strike: 7050 },
+      { side: "short", option_type: "CALL", strike: 8100 },
+      { side: "long", option_type: "CALL", strike: 8150 },
+      { side: "short", option_type: "PUT", strike: 7100 },
+      { side: "long", option_type: "PUT", strike: 7050 },
     ]));
     return pid;
   };

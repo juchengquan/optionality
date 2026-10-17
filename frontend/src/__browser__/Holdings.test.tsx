@@ -23,8 +23,8 @@ const spread = {
   id: "pBS", name: "1120_BS_7100", strategy: null, strike_date: "2026-11-20",
   contracts: 1, entry: 2.43, created_at: "x", opened_at: "2026-10-06",
   legs: [
-    { side: "sold", option_type: "PUT", strike: 7100 },
-    { side: "bought", option_type: "PUT", strike: 7050 },
+    { side: "short", option_type: "PUT", strike: 7100 },
+    { side: "long", option_type: "PUT", strike: 7050 },
   ],
   cost_to_close: 2.35, pnl: 8, contract_size: 100, fetched_at: "x", dte: 37,
   greeks: { option_delta: -0.04, option_vega: -0.8 },

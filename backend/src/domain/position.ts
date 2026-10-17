@@ -2,14 +2,17 @@
  *  worth. Ported from service/position.py (ADR 0009, phase 3).
  *
  *  Every figure derives from each Leg's recorded Side. Note the two signings are INVERSES:
- *  buying back a sold leg COSTS money, while that same sold leg contributes NEGATIVE exposure.
+ *  buying back a short leg COSTS money, while that same short leg contributes NEGATIVE exposure.
  *  Keeping both in one place is what makes them impossible to confuse.
  *
  */
 import { buildSpxCode } from "./contract.ts";
 import type { ByCode } from "./quote.ts";
 
-export type Side = "sold" | "bought";
+/** long if you bought it, short if you sold it (ADR 0013). sold/bought name the TRADES that open
+ *  or close a Leg; greek exposure is only ever a signed number, so "short" means a Leg and
+ *  nothing else. */
+export type Side = "short" | "long";
 export type OptionType = "CALL" | "PUT";
 
 export interface Leg {
@@ -67,7 +70,7 @@ function roundMoney(value: number): number {
 
 /** Sum `field` over the scoped legs; null if ANY is missing — never a partial position. */
 function signedSum(
-  position: Position, byCode: ByCode, field: string, soldSign: number, scope?: string | null,
+  position: Position, byCode: ByCode, field: string, shortSign: number, scope?: string | null,
 ): number | null {
   const legs = scopedLegs(position, scope);
   const codes = positionLegCodes(position, scope);
@@ -75,7 +78,7 @@ function signedSum(
   for (const [i, leg] of legs.entries()) {
     const value = byCode[codes[i]!]?.[field];
     if (value === null || value === undefined) return null;
-    total += (leg.side === "sold" ? soldSign : -soldSign) * Number(value);
+    total += (leg.side === "short" ? shortSign : -shortSign) * Number(value);
   }
   return total;
 }
@@ -119,12 +122,12 @@ export function legReadings(
   return readings;
 }
 
-/** Points needed to buy the position back: sold legs cost, bought legs return. */
+/** Points needed to close the position: short legs cost to buy back, long legs return. */
 export function costToClose(p: Position, byCode: ByCode, scope?: string | null): number | null {
   return signedSum(p, byCode, "mid_price", 1, scope);
 }
 
-/** Exposure-signed sum: a sold leg's greek counts AGAINST you, hence soldSign = −1. This is the
+/** Exposure-signed sum: a short leg's greek counts AGAINST you, hence shortSign = −1. This is the
  *  inverse of costToClose's signing, and keeping both in one file is what makes them hard to
  *  confuse. */
 export function positionGreek(
@@ -156,9 +159,9 @@ export function costToCloseOf(
       if (!named.has(code)) continue;
       const mid = byCode[code]?.mid_price;
       if (mid === null || mid === undefined) return null;
-      // buying back a leg you sold COSTS; closing one you bought returns. The inverse of the
+      // buying back a short leg COSTS; selling a long one returns. The inverse of the
       // exposure signing above, which is why both live in this file.
-      total += (leg.side === "sold" ? 1 : -1) * Number(mid);
+      total += (leg.side === "short" ? 1 : -1) * Number(mid);
       found += 1;
     }
   }

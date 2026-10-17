@@ -70,7 +70,7 @@ export const MonitorIn = z.object({
 });
 
 export const ComboLegIn = z.object({
-  /** MINUS IS SHORT: −1 is a leg you sold, +1 a leg you bought. The combo's value is the signed
+  /** MINUS IS SHORT: −1 is a short leg, +1 a long one. The combo's value is the signed
    *  sum under those signs, so a credit structure's value is the NEGATIVE of its cost to close —
    *  which `compare: abs` is indifferent to, and which is why a position-backed row switches to
    *  `cost_to_close` on the dashboard.

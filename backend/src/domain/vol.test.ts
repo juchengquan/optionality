@@ -22,10 +22,10 @@ const condor = (openedAt: string | null = "2026-10-06"): Position => ({
   entry: 6.86,
   opened_at: openedAt,
   legs: [
-    { side: "sold", option_type: "CALL", strike: 8200 },
-    { side: "bought", option_type: "CALL", strike: 8250 },
-    { side: "sold", option_type: "PUT", strike: 7100 },
-    { side: "bought", option_type: "PUT", strike: 7050 },
+    { side: "short", option_type: "CALL", strike: 8200 },
+    { side: "long", option_type: "CALL", strike: 8250 },
+    { side: "short", option_type: "PUT", strike: 7100 },
+    { side: "long", option_type: "PUT", strike: 7050 },
   ],
 });
 
@@ -78,7 +78,7 @@ describe("what vol did to the cost of closing", () => {
       day("2026-10-06", 45, [10, 10, 22, 22], VEGA),
       day("2026-10-07", 44, [11, 11, 21, 21], VEGA),
     ], condor());
-    // calls: +4 (sold) -3 (bought) = +1 ; puts: -(-3.5) ... sold put IV fell, so cheaper: -3.5
+    // calls: +4 (short) -3 (long) = +1 ; puts: -(-3.5) ... sold put IV fell, so cheaper: -3.5
     // bought put fell, so you get less back: +3
     expect(a?.vol).toBeCloseTo(4 - 3 - 3.5 + 3, 10);
   });
