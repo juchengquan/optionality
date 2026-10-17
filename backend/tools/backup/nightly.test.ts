@@ -67,18 +67,18 @@ describe("which nightly backups are kept", () => {
 describe("which deploy backups are kept", () => {
   const deploy = (stamp: string) => `optionality-ts.db.bak-${stamp}`;
 
-  it("keeps the last 10 and every backup that was given a name", () => {
+  it("keeps the last 3 and every backup that was given a name", () => {
     const rotating = Array.from({ length: 15 }, (_, i) => deploy(`202610${String(i + 1).padStart(2, "0")}-120000`));
     const named = ["optionality-ts.db.bak-predelete-20261012-214223", "optionality-ts.db.bak-pre-0005-20261017-154615"];
     const { keep, drop } = retainDeploy([...rotating, ...named]);
     expect(keep).toEqual(expect.arrayContaining(named));
-    expect(keep.filter((f) => rotating.includes(f))).toEqual(rotating.slice(-10));
-    expect(drop).toEqual(rotating.slice(0, 5));
+    expect(keep.filter((f) => rotating.includes(f))).toEqual(rotating.slice(-3));
+    expect(drop).toEqual(rotating.slice(0, 12));
   });
 
   it("takes a dropped backup's -wal and -shm with it", () => {
     const old = deploy("20261001-120000");
-    const files = [old, `${old}-wal`, `${old}-shm`, ...Array.from({ length: 10 }, (_, i) => deploy(`2026101${i}-120000`))];
+    const files = [old, `${old}-wal`, `${old}-shm`, ...Array.from({ length: 3 }, (_, i) => deploy(`2026101${i}-120000`))];
     expect(retainDeploy(files).drop.sort()).toEqual([old, `${old}-shm`, `${old}-wal`]);
   });
 

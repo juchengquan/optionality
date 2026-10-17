@@ -115,7 +115,7 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   NEVER `cp`: in WAL mode `cp` leaves the write-ahead log behind, so the copy is current only to the
   last checkpoint — 1 row of 500 when measured — and is still valid SQLite, which is what makes it
   dangerous.
-  - `make deploy` takes one before every restart and migration, in `data/`, and keeps the last 10
+  - `make deploy` takes one before every restart and migration, in `data/`, and keeps the last 3
     plus any renamed `optionality-ts.db.bak-pre-<what>-<stamp>` — rename one to keep it for good.
   - `com.optionality.backup` (`make launchd-backup-install`) takes a checked, gzipped one at 06:00
     into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` is a

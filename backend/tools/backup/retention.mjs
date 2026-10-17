@@ -25,9 +25,11 @@ export function retainNightly(files) {
 }
 
 const DEPLOY = /^optionality-ts\.db\.bak-(\d{8}-\d{6})$/;
-const DEPLOY_KEPT = 10;
+// three, not more: the nightly backups hold the history (and leave the machine); a deploy backup only
+// has to cover "the deploy I just did went wrong", and today's ten were ten copies of the same data
+const DEPLOY_KEPT = 3;
 
-/** `make deploy`'s backups: the last 10 that carry only a timestamp, and every one that was given a
+/** `make deploy`'s backups: the last 3 that carry only a timestamp, and every one that was given a
  *  name (`bak-predelete-...`, `bak-pre-0005-...`), which is how a backup taken before something
  *  destructive is kept for good. A dropped backup takes its -wal and -shm with it. */
 export function retainDeploy(files) {
