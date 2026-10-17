@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The nightly backup (backend/tools/backup/nightly.mjs): a checked, gzipped online copy of the
+         live database into __BACKUP_DIR__, pruned to 14 nights and 12 monthly. Not a service: it
+         runs once a night and exits. Installed by `make launchd-backup-install`, which is also how
+         the destination changes — re-run it with BACKUP_DIR=... -->
+    <key>Label</key>
+    <string>com.optionality.backup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE__</string>
+        <string>backend/tools/backup/nightly.mjs</string>
+        <string>data/optionality-ts.db</string>
+        <string>__BACKUP_DIR__</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+    <!-- 06:00 here, after the US close in either half of the year, so the day's sample is in it.
+         A night the machine sleeps through runs on wake. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/optionality-backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/optionality-backup.log</string>
+</dict>
+</plist>

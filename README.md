@@ -81,6 +81,9 @@ Telegram allows one long-poll consumer per token. Only the launchd agent starts 
   restart or re-login it. This is the most common failure.
 - **After a merge:** `make deploy`. launchd does not watch the repo, so a merge alone changes nothing
   that runs.
+- **Backups:** `make backup` takes one now; the `com.optionality.backup` agent takes one nightly
+  (`make launchd-backup-install`, `BACKUP_DIR=<folder>` to put them elsewhere). To roll back to one:
+  `make restore FROM=<file>`, which stops the API, keeps what it replaces, and starts it again.
 - **Developing:** see `CLAUDE.md` for the commands, the invariants and the schema-change procedure.
 
 ## License

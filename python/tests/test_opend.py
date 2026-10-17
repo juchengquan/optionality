@@ -2,9 +2,9 @@
 blocks for ever on a dead port, so a missing fake looks like a hung suite (CLAUDE.md)."""
 
 import pytest
-from optionality.quotes import fetch_resilient, verify_contracts
 
 from optionality import opend
+from optionality.quotes import fetch_resilient, verify_contracts
 
 A, B, C = "US.SPXW261120P6500000", "US.SPXW261120P6501000", "US.SPXW261120C7100000"
 

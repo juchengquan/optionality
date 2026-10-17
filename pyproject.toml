@@ -24,6 +24,9 @@ dev = [
 
 [tool.ruff]
 line-length = 120
+# where the package is, so `optionality` sorts as first-party in every checkout. Without it ruff
+# guessed, and a worktree and the main checkout disagreed about the same file.
+src = ["python/src"]
 
 [tool.ruff.lint.per-file-ignores]
 # verify_contracts refuses on ANY failure, with what went wrong — the blind catch is its job

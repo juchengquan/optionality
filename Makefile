@@ -1,17 +1,23 @@
 .PHONY: lint check-boundaries cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui resolve-ui deploy \
-	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs
+	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
+	backup restore launchd-backup-install launchd-backup-uninstall backup-logs
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
 UI_LABEL = com.optionality.ui
 UI_PLIST = $(HOME)/Library/LaunchAgents/$(UI_LABEL).plist
+BACKUP_LABEL = com.optionality.backup
+BACKUP_PLIST = $(HOME)/Library/LaunchAgents/$(BACKUP_LABEL).plist
 NODE_BIN = $(shell command -v node)
 CADDY_BIN = $(shell command -v caddy)
 # the service's database. data/optionality.db beside it is the retired Python's, frozen at the
 # cutover and never opened again.
 TS_DB = data/optionality-ts.db
+# where the nightly backups go. The ONE setting to change to move them off this machine: re-run
+# `make launchd-backup-install BACKUP_DIR=<path>`, e.g. a folder in iCloud Drive.
+BACKUP_DIR ?= data/backups
 
 # where the dashboard is mounted on the tailnet. Baked into the bundle at build time,
 # because `tailscale serve` strips the prefix and the page cannot discover it (ADR 0006).
@@ -122,6 +128,7 @@ deploy:
 	git pull --ff-only
 	npm install --silent
 	node backend/tools/backup/backup.mjs $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S)
+	node backend/tools/backup/prune-deploy.mjs data
 	$(MAKE) launchd-api-restart
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
@@ -165,6 +172,39 @@ launchd-api-uninstall:
 
 api-logs:
 	tail -f $(HOME)/Library/Logs/optionality-api.log
+
+# The nightly backup: a checked, gzipped online copy of the live database, kept 14 nights and 12
+# monthly (backend/tools/backup/nightly.mjs). `make backup` runs it now; the agent runs it at 06:00.
+# Restore with `make restore FROM=...`, never by copying a file over $(TS_DB) (see restore.mjs).
+backup:
+	node backend/tools/backup/nightly.mjs $(TS_DB) "$(BACKUP_DIR)"
+
+# Put a nightly backup back: stops the API, restores (keeping what it replaces), starts the API, whose
+# boot migrates an older file forward. FROM is a file from $(BACKUP_DIR).
+restore:
+	@test -n "$(FROM)" || { echo "usage: make restore FROM=$(BACKUP_DIR)/optionality-ts-YYYYMMDD.db.gz"; exit 1; }
+	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
+	@while launchctl print gui/$$(id -u)/$(API_LABEL) >/dev/null 2>&1; do sleep 1; done
+	node backend/tools/backup/restore.mjs "$(FROM)" $(TS_DB)
+	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
+	@sleep 3; curl -fsS http://127.0.0.1:31415/health | head -c 200; echo
+
+launchd-backup-install:
+	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
+	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs "$(BACKUP_DIR)"
+	-launchctl bootout gui/$$(id -u)/$(BACKUP_LABEL) 2>/dev/null
+	sed -e 's|__NODE__|$(NODE_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
+		-e "s|__BACKUP_DIR__|$$(cd "$(BACKUP_DIR)" && pwd)|g" \
+		deploy/optionality-backup.launchd.plist.template > $(BACKUP_PLIST)
+	plutil -lint $(BACKUP_PLIST)
+	launchctl bootstrap gui/$$(id -u) $(BACKUP_PLIST)
+
+launchd-backup-uninstall:
+	-launchctl bootout gui/$$(id -u)/$(BACKUP_LABEL)
+	rm -f $(BACKUP_PLIST)
+
+backup-logs:
+	tail -f $(HOME)/Library/Logs/optionality-backup.log
 
 # the dashboard's own agent: Caddy, serving frontend/dist and nothing else
 launchd-ui-install:
