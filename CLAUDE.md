@@ -20,7 +20,9 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
 
 ## Commands
 
-- `make test` / `make lint` / `make format` — run all three before every commit. Lint is ruff with a broad
+- `make test` / `make lint` / `make format` — run all three before every commit. `make lint` also runs
+  `check-boundaries`: no package imports another's source tree, only its package.json `exports`
+  (`backend` for `AppType`, `backend/schemas` for the input schemas; ADR 0014). Lint is ruff with a broad
   external ruleset (expect rules far beyond the defaults; per-file `BLE001` ignores exist for the
   worker/sweeper/bot, whose job is to survive any failure).
 - `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, migrate if the
