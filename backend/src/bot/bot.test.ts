@@ -408,16 +408,16 @@ describe("the live tables", () => {
     db.prepare(
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
                               opened_at, manage_notified_at)
-       values (?, 'behindOne', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
+       values (?, 'pacer', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
     ).run("r".repeat(32), FUTURE, toSqliteJson([
       { side: "sold", option_type: "CALL", strike: 8100 },
     ]), OPENED);
 
     await b.handleUpdate(update("/holdings"));
-    // opened at 45 DTE, now 30: on-pace is 2.00 x sqrt(30/45) = 1.63, and 1.80 costs more
-    expect(last()).toContain("behind");
-    expect(last(), "the number is there too, just not alone").toContain("0.17");
-    expect(last(), "and never a bare sign").not.toContain("+0.17");
+    // opened at 45 DTE, now 30: on-pace is 2.00 x sqrt(30/45) = 1.63, and 1.80 costs more.
+    // The word and the figure asserted TOGETHER: the holding was first named "behindOne", so
+    // "behind" appeared in the name column and the assertion could not fail.
+    expect(last()).toContain("behind 0.17");
   });
 
   it("/holdings names a Level it has reached, in place of the pace", async () => {
