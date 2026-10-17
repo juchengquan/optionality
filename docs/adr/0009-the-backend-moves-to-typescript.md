@@ -1,251 +1,79 @@
----
-status: accepted
----
+# 9. The backend moves to TypeScript
 
-# The backend moves to TypeScript
+Date: 2026-10-01
 
-The service works. It has run unattended for months, it has 3,278 lines of tests, and nothing
-about it is failing. It is being rewritten anyway, on the owner's call, because they would
-rather maintain one language than two and would rather write TypeScript than Python. That is a
-legitimate thing to want from a tool you maintain alone, and this ADR exists because a future
-reader will otherwise assume there was a technical forcing function. There was not.
+## Status
 
-## The cheaper answer was declined knowingly
+Accepted, and complete: the cutover was 2026-10-02 and phase 10 deleted the Python on 2026-10-17.
+The Python returned afterwards as a library checked against this code (ADR 0014).
 
-The stated goal was sharing structures between backend and frontend. Concretely that is **six
-hand-written interfaces** in `frontend/src/api.ts` — `PositionRef`, `Snapshot`, `Leg`, `Entry`,
-`Monitor`, `Health` — maintained against Python dictionaries with nothing checking they agree.
-No route declares a `response_model`, so the OpenAPI schema describes the 13 input shapes and
-not one response. `contract.json` and the skew banner exist precisely because nothing checks.
+## Decision
 
-That could have been fixed for a fraction of the cost: declare response models, generate
-TypeScript from the schema. It was put to the owner and declined. The rewrite is wanted for
-itself as well as for the types.
+The working Python service was rewritten in TypeScript on the owner's call: one language rather
+than two, and TypeScript rather than Python. There was no technical forcing function, and this is
+recorded so that nobody assumes one. The cheaper way to the stated goal — sharing types with the
+frontend — was to declare response models and generate TypeScript from the OpenAPI schema; it was
+put to the owner and declined. The rewrite was wanted for itself.
 
-## Feasibility, established before committing
-
-The one dependency that could have blocked this is moomoo's SDK, and the service uses a
-remarkably small part of it: connect, `get_option_chain`, `get_market_snapshot`, close.
-
-- `moomoo-api` exists on npm at the same version as the Python package, carrying both protocol
-  commands (`Qot_GetSecuritySnapshot` 3203, `Qot_GetOptionChain` 3209).
-- **It speaks only WebSocket.** OpenD's WebSocket port is a config option and is currently
-  commented out — port 22222 is the telnet console, and 33333 is not listening. Enabling it
-  means editing `OpenD.xml`, setting an auth key, and restarting the gateway to the owner's
-  brokerage account.
-- Everything else has a mainstream equivalent. Pandas is only converting frames to dicts and
-  formatting one date; nothing statistical.
-
-A Python sidecar owning the OpenD connection was considered and rejected: it would leave a
-Python process running for ever, which defeats the point.
-
-## The constraint that shapes everything: no side-by-side run
-
-**Quotes are never persisted.** There is no quotes table; `last_records` lives in memory on the
-sweeper so that a row's value and its bell come from the same instant. A second service with no
-sweeper has no figures to serve, so the API and the alarm engine cannot be separated.
-
-Combined with the ratified invariants — one `getUpdates` consumer, one worker owning runs, one
-batched quote call per sweep — there is no safe overlap period. Two services would double-alarm
-and double-write.
-
-So this is a cutover, and verification has to happen before it rather than during it. The
-proposal was a week of recording the running service's decisions and replaying them. The owner
-declined, on the grounds that a missing monitor can be re-added. **That reasoning does not cover
-the risk**, which is a monitor that is present, looks right, and quietly never fires — a sign
-flipped, `signed` compared as `abs`. It is recorded here as the owner's decision, knowingly
-taken. The mitigation instead is to port the 3,278 lines of tests FIRST and let them be the
-contract; many encode the stated invariants directly rather than the implementation.
-
-### Ported tests turned out not to be enough on their own
-
-Phase 3 showed the limit of that mitigation. Every ported test passed, and the port was still
-wrong in four ways — because **a ported test can only check what the Python thought to check.**
-`positions_holding` has no Python test, so porting test-by-test skipped the function entirely and
-the suite stayed green. The faithfulness bugs were worse than that: CPython's `sum()` has carried
-a compensation term since 3.12, so a plain `reduce` gives a different combined delta; `round()`
-rounds the stored double rather than the decimal, so `Math.round(v * 100) / 100` disagrees on
-twelve values in four hundred; and `build_spx_code` accepted one date spelling where Python takes
-two and would have built a code for the 30th of February.
-
-None of those are the kind of mistake a test written from the invariants would catch, because none
-of them is about the invariants. They are about one language's arithmetic quietly differing from
-another's. So the mitigation gained a second half: `backend/tools/differential` puts the same
-inputs through both implementations and compares them **exactly** — bit-for-bit, because both
-sides do the same arithmetic in the same order on the same doubles. It runs over generated inputs
-and over the owner's real positions against one live quote set.
-
-It is a porting tool, not a suite: the Python goes away in phase 10, so whatever it finds has to be
-written into a committed TypeScript test before the branch merges. And it is itself verified by
-breaking what it guards — ten mutations, ten caught, on the harness and on the committed tests
-alike. That discipline is here because this project has already shipped three assertions that
-could never fail (ADR 0008).
-
-## What was chosen
-
-- **Faithful port, not a redesign.** Every ratified invariant stays. Two hard changes at once
+- **A faithful port, not a redesign.** Every ratified invariant stayed; two hard changes at once
   means not knowing which one broke something.
 - **Hono with Zod**, because `hc<AppType>` gives the frontend the server's own types with no
-  generation step — the only option that pays back the stated reason. Fastify was the serious
-  alternative: more mature, better logging, and a Zod type provider — but its type sharing
-  needs an OpenAPI generation step, which is where the project already is.
-- **Node 25**, which runs TypeScript directly with no build step and no flags, and ships
-  `node:sqlite` so SQLite needs no native compilation. Bun is installed and faster, but is a
-  second runtime to maintain and the moomoo SDK is untested on it.
-- **Drizzle**, **croner** (timezone verified: NY 09:30 resolves correctly), **Vitest**, **npm
-  workspaces**.
-- **A fresh database with the 24 live rows copied in by script.** Nine Alembic migrations built
-  the current schema; matching it exactly from TypeScript is a silent risk, and 24 rows is small
-  enough to verify completely — every row, every field.
+  generation step. Fastify was the serious alternative, but its type sharing needs exactly that step.
+- **Node 25**, which runs TypeScript directly and ships `node:sqlite`.
+- **`node:sqlite` directly, no ORM.** Drizzle was chosen first, on a premise that did not hold:
+  its stable release has no `node:sqlite` driver, and the release candidate's `transaction()`
+  commits before an async body has run, so a throwing transaction keeps its rows. `better-sqlite3`
+  compiles from source on Node 25, which would put a build step on the deploy path. `db/rows.ts`
+  recovers the one thing an ORM would have given — a schema the database, the runtime and the
+  compiler agree on.
 
-## Correction: Drizzle was chosen on a premise that does not hold
+## What still binds
 
-This ADR chose Drizzle alongside Node 25's built-in `node:sqlite`. **Those two do not go
-together.** Stable Drizzle (0.45.3) ships no `node:sqlite` driver at all — only `better-sqlite3`,
-`bun-sqlite`, `libsql` and a generic proxy. The pairing exists in `1.0.0-rc.5`, and in that release
-candidate the driver's `transaction()` is written synchronously around async query builders:
+- **Node runs TypeScript by ERASING types.** Syntax that would have to emit code — parameter
+  properties, enums, namespaces, decorators, `import =` — is refused at load time, while `tsc` and
+  vitest both accept it. `make check-api` loads every module under Node; two classes once reached
+  main unable to load at all.
+- **The stored formats are SQLAlchemy's**: datetimes as naive-UTC text with six fractional digits,
+  booleans as 0 and 1. Kept at the cutover so the Python could open the file as a rollback; the
+  rollback is gone, and changing them now would be a migration with no reason left to make it.
+- **A typed client types requests from a schema's PARSED shape**, so a field written
+  `.default(x)` is required of `hc` callers. Optional fields are `.optional()`, with the default
+  applied where the value is used (`validate.ts`).
+- **The port reproduces Python's arithmetic where the Python had it**, because a ported test only
+  checks what the Python thought to check. CPython's `sum()` compensates (`pySum`), and `round()`
+  rounds the stored double (`roundMoney`) — both disagreed with the obvious JavaScript on real
+  values. The golden cases now hold the two implementations together (ADR 0014).
 
-```js
-const result = transaction(tx);   // the callback is async; this is a promise
-this.run(sql`commit`);            // committed before the body has done anything
-return result;                    // the rejection is never seen, so nothing rolls back
-```
+## The phases
 
-Verified directly: a throwing transaction leaves its row behind, and so does an explicit
-`tx.rollback()`. `node:sqlite`'s own `begin`/`rollback` is correct, so this is Drizzle's.
+Code cites these as "ADR 0009, phase N".
 
-`better-sqlite3` was the remaining stable route and has its own cost: no prebuilt binary for Node
-25 (ABI 141 is a 404), so it compiles from source on install and must be rebuilt after every Node
-upgrade. That puts a build step on the deploy path, which is the thing committing the frontend
-bundle was meant to avoid (ADR 0005, ADR 0006).
-
-**So: `node:sqlite` directly, no ORM.** Hono has no dependencies and neither does this, which
-leaves the backend with nothing to recompile when Node moves. The cost is real — hand-written SQL,
-no generated migrations, and no schema declared once that both the database and the types derive
-from. The last of those is the only one worth mitigating, and `db/rows.ts` does it: `schema.sql` is
-the database's truth, `COLUMNS`/`NULLABLE` the runtime's, and the row interfaces the compiler's,
-with the compiler tying the second to the third and `rows.test.ts` tying the first to the second.
-Nine kinds of drift between them were introduced on purpose; eight failed a test and one failed
-the typecheck.
-
-It also removes the argument for the ORM that was never strong here: the Python uses SQLAlchemy as
-a query builder (`session.scalars(select(...))`), not as an object graph, and `monitor_positions`
-is deliberately a plain table.
-
-## Correction: the stored formats stay SQLAlchemy's
-
-Datetimes stay as naive-UTC text with six fractional digits (`2026-09-01 15:39:11.940183`),
-booleans stay as 0 and 1, and the copy carries JSON across byte for byte including Python's
-spacing. Epoch-millisecond integers and native booleans would be pleasanter to work with.
-
-The reason not to is the cutover. There is no side-by-side run and no recording week, so if the
-TypeScript service misbehaves the only rollback is to point the Python at the new file and start
-it. That only works if the formats match, and it is verified rather than asserted:
-`python_can_read.py` opens the copy with SQLAlchemy, compares all 194 mapped field values
-including their Python types, and checks `alembic current` reports the head rather than an empty
-table. The schema therefore also carries `alembic_version`, stamped from the source.
-
-New rows written by TypeScript will differ from copied ones in one visible way: `JSON.stringify`
-writes `[{"sign":-1,...,"strike":8050}]` where Python writes `[{"sign": -1, ..., "strike": 8050.0}]`.
-The values are identical and both sides parse the other's text. Matching Python's formatting would
-mean writing a JSON serialiser to imitate another language's repr, and nothing reads those bytes
-except a JSON parser.
-
-## A note on the typed client, which is the whole point
-
-`hc` types a request from the schema's PARSED shape, not its input shape. A field written
-`z.string().default("x")` is optional at runtime and **required of a typed client** — so the
-dashboard would have to send `tz` and `enabled` on every schedule, and `notify` on every run.
-
-Hono's `validator` has an `InputType` parameter for exactly this, and it cannot be inferred: the
-place it would be inferred from is itself guarded by a conditional on `InputType`, which is
-circular, so it resolves to `unknown` and the parsed branch wins. Passing it explicitly means
-passing the route path too, and a `string` there loses the path the client is keyed by — `$post`
-simply disappears from the client.
-
-So optional fields are written `.optional()` and their defaults applied where the value is used,
-named once. The schema then states what the API actually accepts, which is what `hc` is for.
-`@hono/zod-validator` would have handled it, but npm hoists the shadcn CLI's zod 3 to the workspace
-root and that package's types bind to it rather than to the backend's zod 4 — it will not compile
-against a version it declares support for. Hono's own validator couples to nothing, so the backend
-keeps four runtime dependencies: hono, zod, croner, and the node server adapter.
-
-## Correction: Node runs TypeScript by ERASING it, which is narrower than it sounds
-
-"Node 25 runs TypeScript directly with no build step" is true, and the mechanism matters: it **strips
-types**. Any syntax that would have to EMIT code is rejected outright at load time — parameter
-properties, enums, namespaces, decorators, `import =`.
-
-`tsc` accepts all of them, and vitest transforms them properly, so neither the typecheck nor the test
-suite notices. Two classes reached main with `constructor(private readonly deps: Deps) {}` and could
-not be loaded by Node at all: 329 tests passed and `tsc --noEmit` was clean. `node --check` does not
-help either — it parses the syntax happily.
-
-`make check-api` loads every module in a short-lived subprocess, which is the only honest check. It is
-part of the gates from now on.
-
-## Correction: the run pipeline stays in Python
-
-The worker executes a strategy or holdings scan that produces an HTML report. Porting it means
-replacing pandas (DataFrame→HTML tables), the moomoo option-chain scan and yfinance: about 614 lines
-across four pandas modules, and the part of the codebase with the least test coverage.
-
-It has run **twice**, both on 2026-08-10, with no schedule configured. The sweep runs every sixty
-seconds. So the worker spawns `python -m optionality.runner` and stores what comes back. No divergence
-risk in the one output the owner reads as money, and everything used daily becomes TypeScript as
-intended. The owner's decision, knowingly taken.
-
-Phase 10 therefore narrows from "delete `src/optionality/`" to "delete the Python that was ported":
-`core.py`, `apis/`, `notification/` and `datatype/` stay, along with the `uv` environment. The service,
-the routes, the sweeper, the scheduler, the worker and the bot all go.
-
-It is reversible. If the scans start being used, they can be ported then, against a service that is
-already TypeScript.
-
-## Correction: the bot links what it creates
-
-The Python's `/watch` writes a Monitor and nothing else, so a monitor created from the phone has no
-entry and no P&L while the same monitor created from the dashboard has both. The linkage is a lookup
-rather than a guess (`positions_holding` returns nothing for a contract nothing holds and nothing for
-one held twice), so there is no reason the two doors should behave differently.
-
-The TypeScript bot links. It is the same omission #71 and #72 fixed on the API side, never carried to
-the bot, and it closes at the cutover rather than needing a Python fix first — the pre-cutover window
-is the only time the two differ.
+| Phase | What it was |
+|---|---|
+| 0 | OpenD's WebSocket API proven against the TCP SDK, field by field |
+| 1 | npm workspaces, a shared tsconfig, one test command |
+| 2 | the Python's 3,278 lines of tests ported, and failing |
+| 3 | the pure domain, verified against the Python |
+| 4 | the schema, and the 24 live rows copied and verified completely |
+| 5 | the HTTP routes in Hono with response schemas, `hc` proved over every one |
+| 6 | the sweeper, the worker and the schedule |
+| 7 | the Telegram bot, tested against a fake |
+| 8 | the frontend on `hc`; the contract version and skew banner retired |
+| 9 | the cutover, and a real alarm to a real phone |
+| 10 | the Python deleted |
 
 ## The cutover happened
 
-2026-10-02, 11:19 UTC. `com.optionality.api` (node) replaced `com.optionality.service` (uvicorn) on the
-same port, behind the same tailscale path, serving the same dashboard bundle. Nothing outside the
-machine moved.
-
-The decision this ADR was least sure of — "verification has to happen before the cutover rather than
-during it", with the recording week declined — held up. Four differentials carried it: the domain
-against the Python over 19,265 generated values, the OpenD client against the Python SDK over 288 live
-field values, both services' computed answers over 94 values and 172 required fields, and the database
-copy field by field. What they could not cover was one Telegram message to one phone, and that was
-done by hand.
-
-The window is open until phase 10. The Python's agent is still installed and its database frozen at the
-cutover minute, so the rollback is one command and loses only what is typed during the window.
-
-## Consequences
-
-- The Python database is never written to, which makes the first week genuinely reversible:
-  stop Node, start Python, and nothing has moved. Anything entered while Node was live is lost
-  on rollback, which for a few rows is retypable.
-- `contract.json` and the version-skew banner retire. The compiler replaces them.
-- Python stays on disk and runnable for a month before `src/optionality/`, `tests/` and
-  `alembic/` are deleted — about how long it takes to meet a weekly edge case.
-- One test cannot be automated: that a real alarm reaches a real phone. The owner fires one
-  deliberately at cutover.
+2026-10-02, 11:19 UTC: `com.optionality.api` replaced the Python on the same port, behind the same
+path, serving the same bundle. There was no side-by-side run — quotes are never persisted, so the
+alarm engine and the API cannot be separated, and two engines would double-alarm — so verification
+had to come first: four differentials compared the domain over 19,265 values, the OpenD client over
+288 live fields, both services' answers, and the copied database field by field.
 
 ## Phase 10 happened
 
-2026-10-17, ahead of schedule, for the reason ADR 0014 gives. It went further than "delete the Python
-that was ported": the run pipeline this ADR kept in Python was unused (#118), so it went in both
-languages, and with it **a ratified invariant — "one worker thread owns run execution."** That
-invariant existed to serialise runs; with no runs there is nothing for it to protect, and what it
-implied for everything else (every OpenD call single and bounded) is kept in CLAUDE.md as an
-invariant of its own.
-
+2026-10-17, ahead of schedule, for the reason ADR 0014 gives. The run pipeline this ADR had kept in
+Python was unused (#118), so it went in both languages, and with it **a ratified invariant — "one
+worker thread owns run execution."** It existed to serialise runs; with no runs it protects nothing,
+and what it implied for everything else — every OpenD call single and bounded — stays in CLAUDE.md
+as an invariant of its own.

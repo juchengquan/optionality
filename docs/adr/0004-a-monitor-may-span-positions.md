@@ -1,4 +1,12 @@
-# A Monitor may span several Positions
+# 4. A Monitor may span several Positions
+
+Date: 2026-09-24
+
+## Status
+
+Accepted.
+
+## Decision
 
 ADR 0003 kept an iron condor as one Position and gave Monitors a `calls`/`puts` scope so a wing
 could be watched. That rested on an assumption — that one credit was taken in for the condor,

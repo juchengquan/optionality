@@ -1,86 +1,41 @@
----
-status: supersedes part of ADR-0005
----
+# 6. The frontend and the API are two services
 
-# The frontend and the API are two services
+Date: 2026-09-24
 
-ADR 0005 put React in the same process as the API, served by a route. That was the right
-shape for growing it alongside htmx. The owner now wants them genuinely separate, which is a
-legitimate architectural preference and not one the current arrangement can satisfy by
-degrees — the frontend either ships with the API or it does not.
+## Status
 
-Caddy serves the built bundle on a local port; uvicorn keeps the JSON API on its own. Both
-sit behind the same tailnet hostname on different paths, so the browser sees **one origin**
-and no CORS or auth change is needed. Tailscale was verified to nest proxy paths before this
-was chosen. Its ability to serve a directory outright was tried first and refused — path
-serving is unsupported on the sandboxed macOS build — which is why a second process exists
-at all.
+Accepted. Replaced ADR 0005's arrangement of React served by a route in the API process. Its
+answer to version skew (a contract version and a banner) was retired by ADR 0009, phase 8.
 
-## What this costs, and what answers it
+## Decision
 
-**Version skew.** One artifact could not disagree with itself. Two can: a bundle expecting
-`cost_to_close` on `/quotes` against an API that no longer sends it. This is not theoretical
-— stale-process mismatches bit this project three times in a single day with only one process
-to keep in step, and separation makes the failure structural rather than accidental.
-
-Answered in two layers:
-
-- A **contract version**, one integer in one file, read by both. The bundle bakes the version
-  it was built against; the API reports its own on `/health`. When they differ the dashboard
-  says so, in words, instead of failing at whatever field happens to be missing. It is bumped
-  by hand and only for breaking changes, so it stays quiet enough to be believed.
-- A **single deploy path**, `make deploy`, which pulls, builds and restarts both. Drift then
-  requires going out of your way rather than merely forgetting.
-
-Neither prevents skew. Together they make it loud and make the ordinary path safe, which is
-the most an arrangement like this can honestly offer.
+Two launchd agents behind one tailnet hostname: Caddy serves the built bundle at `/opt` from a
+local port, and the API serves JSON at `/opt/api`. One hostname means **one origin**, so no CORS
+and no auth change. The separation was the owner's architectural preference, and the old
+arrangement could not satisfy it by degrees — the frontend either ships with the API or it does
+not. A second process exists only because tailscale cannot serve a directory itself on the
+sandboxed macOS build; that was tried first.
 
 ## Consequences
 
-- Caddy must not do HTTPS. Tailscale terminates TLS at the edge; Caddy binds to 127.0.0.1 and
-  speaks plain HTTP, exactly as uvicorn does.
-- Assets use relative paths, so the bundle is not coupled to the deploy prefix. That is
-  possible only because there is no client-side router — the same reason given in ADR 0005.
-- The API loses its `/ui`, `/app` and asset routes, and the shell template with them.
-- Two launchd agents, two restarts, two ways to be stale.
-
-## Outcome
-
-Verified end to end on a throwaway `/probe` path before `/opt` was touched: Caddy served the
-shell at both `/probe` and `/probe/`, its hashed assets resolved, and `/probe/api/health`
-reached uvicorn — two processes, one hostname, nesting intact. The tailscale config was
-snapshotted first and confirmed byte-identical after the probe was removed.
-
-The absolute base path proved itself in the same test, in the negative: the page served at
-`/probe` still asked for `/opt/assets/...`, because the bundle knows where it was built to
-live. That is the coupling this ADR accepts, and it is visible rather than subtle.
+- **Caddy does not do HTTPS.** Tailscale terminates TLS at the edge; Caddy binds to 127.0.0.1 and
+  speaks plain HTTP, as the API does.
+- **The bundle is built for its prefix** (`UI_BASE`, baked at build time), because `tailscale
+  serve` strips the path and the page cannot discover it. A visible coupling, accepted.
+- **Two agents, two ways to be stale.** `make deploy` restarts both, and is the only way to land a
+  merge. Shape drift between them is a compile error since the frontend takes its types from the
+  API (`hc<AppType>`, ADR 0009); what remains is a bundle from one commit served beside an API
+  from another, which is what restarting both addresses.
 
 ## The API token is deliberately unset, and that is parked
 
-`API_TOKEN` is empty in the owner's `.env`, so `app.ts`'s bearer check is skipped and every route
-is reachable by anything on the tailnet. The one defence is the tailnet itself, which is the
-posture this ADR chose: one hostname, one origin, no CORS and no auth change.
+`API_TOKEN` is empty, so the bearer check is skipped and every route is reachable from the tailnet;
+the tailnet is the one defence, which is the posture this decision chose. Examined on 2026-10-15
+and **parked, knowingly** — recorded so it is a decision rather than an oversight, and so nobody
+re-discovers it as news.
 
-Examined on 2026-10-15 and **parked, knowingly**. It is recorded here so it is a decision rather
-than an oversight, and so nobody re-discovers it as news.
-
-What makes it tolerable: the tailnet is a private network of the owner's own devices, the service
-holds no credentials beyond what `.env` already has, and there is no public ingress. What it costs:
-the destructive routes are reachable without a secret — `DELETE /positions/:id`, which also drops
-that holding's samples, and `DELETE /monitors/:id`. #118 removed fifteen read-and-write endpoints,
-which did not change the posture but did raise the destructive share of what remains.
-
-Setting it is a one-line `.env` change plus the same value in whatever calls the API by hand; the
-dashboard needs nothing, because it is same-origin and the browser is already inside the tailnet.
-That stays true whenever the owner wants it, which is why parking costs nothing to reverse.
-
-## The skew banner retired in ADR 0009 phase 8
-
-The contract version and the banner it fed were the answer to "a bundle can outlive the API it was
-built against". Since the frontend takes its types FROM the backend (`hc<AppType>`), a response that
-has changed shape is a compile error in the frontend's workspace — before the bundle is built, let
-alone deployed. A banner asks the owner to notice; a typecheck does not.
-
-What remains of the problem is real but smaller: the two services still deploy separately, so a bundle
-built from one commit can be served beside an API from another. `make deploy` restarting both is what
-addresses that, and it always was.
+Tolerable because the tailnet is a private network of the owner's own devices, the service holds no
+credentials beyond `.env`, and there is no public ingress. The cost: the destructive routes —
+`DELETE /positions/:id`, which also drops that holding's samples, and `DELETE /monitors/:id` — are
+reachable without a secret. Setting it is a one-line `.env` change; the dashboard needs nothing,
+being same-origin, which is why parking costs nothing to reverse.

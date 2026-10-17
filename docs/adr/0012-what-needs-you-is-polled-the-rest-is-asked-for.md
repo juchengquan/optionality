@@ -1,7 +1,3 @@
----
-status: accepted
----
-
 # 12. What needs you is polled; the rest is asked for
 
 Date: 2026-10-17
