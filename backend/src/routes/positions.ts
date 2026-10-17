@@ -107,6 +107,13 @@ function scheduleFor(
   return levels === null ? null : { dte_at_open: openedDte, ...levels };
 }
 
+const list = documented("List positions", { 200: z.array(PositionOut) });
+const values = documented("Live value, P&L and exit schedule of every position", { 200: z.array(PositionValues) }, [502]);
+const vol = documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]);
+const create = documented("Create a position", { 201: PositionOut }, [409]);
+const update = documented("Update a position", { 200: PositionOut }, [404]);
+const remove = documented("Delete a position", { 204: null }, [404]);
+
 /** uuid4().hex in the Python — 32 hex characters, which the column is sized for. */
 const newId = () => randomUUID().replaceAll("-", "");
 
@@ -149,15 +156,15 @@ export function positionRoutes(deps: Deps) {
   };
 
   return new Hono()
-    .get("/", documented("List positions", { 200: z.array(PositionOut) }), (c) => c.json(z.array(PositionOut).parse(listPositions(db).map(out)), 200))
+    .get("/", list, (c) => list.reply(c, 200, listPositions(db).map(out)))
 
     /** Live cost to close, exposure and P&L for every position.
      *
      *  One bounded snapshot call for every leg of every position, deduped — a documented live-call
      *  exception, like `/quotes` (CLAUDE.md). */
-    .get("/values", documented("Live value, P&L and exit schedule of every position", { 200: z.array(PositionValues) }, [502]), async (c) => {
+    .get("/values", values, async (c) => {
       const rows = listPositions(db);
-      if (rows.length === 0) return c.json([] as z.output<typeof PositionValues>[], 200);
+      if (rows.length === 0) return values.reply(c, 200, []);
       const positions = rows.map(toPosition);
       const codes = [...new Set(positions.flatMap((p) => positionLegCodes(p)))].sort();
       let byCode: Record<string, Record<string, unknown>>;
@@ -169,8 +176,7 @@ export function positionRoutes(deps: Deps) {
         throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);
       }
       const fetched = displayTime(now, tz);
-      return c.json(
-        z.array(PositionValues).parse(rows.map((row, i) => {
+      return values.reply(c, 200, rows.map((row, i) => {
           const p = positions[i]!;
           return {
             ...out(row),
@@ -184,9 +190,7 @@ export function positionRoutes(deps: Deps) {
             dte: daysToExpiry(row.strike_date, now),
             schedule: scheduleFor(row, costToClose(p, byCode), now, deps.settings),
           };
-        })),
-        200,
-      );
+        }));
     })
 
     /** What of this holding's pace gap vol accounts for (ADR 0011).
@@ -199,7 +203,7 @@ export function positionRoutes(deps: Deps) {
      *  from the gap it is showing, which keeps the gap and the vol part from being measured
      *  against two different instants (ADR 0010).
      */
-    .get("/:id/vol", documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]), (c) => {
+    .get("/:id/vol", vol, (c) => {
       const id = c.req.param("id");
       const row = findPosition(db, id);
       if (!row) throw notFound("position");
@@ -211,10 +215,10 @@ export function positionRoutes(deps: Deps) {
         legs_vega: parseMap(s.legs_vega),
       }));
       const a = volAttribution(samples, toPosition(row));
-      return c.json(VolOut.parse(a ?? { vol: null, from: null, to: null, days: null }), 200);
+      return vol.reply(c, 200, a ?? { vol: null, from: null, to: null, days: null });
     })
 
-    .post("/", documented("Create a position", { 201: PositionOut }, [409]), valid("json", PositionIn), async (c) => {
+    .post("/", create, valid("json", PositionIn), async (c) => {
       const p = c.req.valid("json");
       if (findPositionByName(db, p.name)) {
         throw httpError(409, `position '${p.name}' already exists`);
@@ -242,11 +246,11 @@ export function positionRoutes(deps: Deps) {
         adoptOrphanMonitors(db);
         return inserted;
       });
-      return c.json(PositionOut.parse(out(saved)), 201);
+      return create.reply(c, 201, out(saved));
     })
 
     /** Record what was taken in, after the fact. */
-    .patch("/:id", documented("Update a position", { 200: PositionOut }, [404]), valid("json", PositionPatch), (c) => {
+    .patch("/:id", update, valid("json", PositionPatch), (c) => {
       const given = c.req.valid("json");
       if (Object.keys(given).length === 0) throw httpError(422, "nothing to update");
       const id = c.req.param("id");
@@ -256,10 +260,10 @@ export function positionRoutes(deps: Deps) {
       if (given.contracts !== undefined) changes.contracts = given.contracts;
       if (given.strategy !== undefined) changes.strategy = given.strategy;
       if (given.opened_at !== undefined) changes.opened_at = given.opened_at;
-      return c.json(PositionOut.parse(out(updatePositionFields(db, id, changes))), 200);
+      return update.reply(c, 200, out(updatePositionFields(db, id, changes)));
     })
 
-    .delete("/:id", documented("Delete a position", { 204: null }, [404]), async (c) => {
+    .delete("/:id", remove, async (c) => {
       const id = c.req.param("id");
       if (!findPosition(db, id)) throw notFound("position");
       // the same foreign-key fault the monitor side had: monitor_positions is a plain table, so the

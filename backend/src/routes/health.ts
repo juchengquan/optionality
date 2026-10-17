@@ -44,16 +44,17 @@ export const HealthResponse = z.object({
   }),
 });
 
+const health = documented("Service health; needs no token", { 200: HealthResponse });
+
 export function healthRoutes(deps: Deps) {
-  return new Hono().get("/health", documented("Service health; needs no token", { 200: HealthResponse }), async (c) => {
+  return new Hono().get("/health", health, async (c) => {
     const { settings, db, sweeper, worker } = deps;
     const tz = settings.displayTz;
     const ok = databaseResponds(db);
     // the latest run is only readable if the database answers at all
     const last = ok ? latestRun(db) : undefined;
 
-    return c.json(
-      HealthResponse.parse({
+    return health.reply(c, 200, {
         db: ok,
         // What the last batch did, falling back to the port probe only while nothing has been
         // asked for yet. The probe alone was a green light for a gateway this service could not
@@ -86,8 +87,6 @@ export function healthRoutes(deps: Deps) {
           expired_retention_days: settings.expiredRetentionDays,
           display_tz: settings.displayTz,
         },
-      }),
-      200,
-    );
+      });
   });
 }

@@ -5,8 +5,14 @@
  *  carries the constraints the validator enforces, and each answer names the schema the handler
  *  parses it through. A spec that describes a looser API than the one that runs is worse than none.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
+import { Hono } from "hono";
+import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { documented } from "./openapi.ts";
 import { type Harness, body, harness } from "./testing.ts";
 
 let h: Harness;
@@ -95,5 +101,36 @@ describe("/openapi.json and /docs", () => {
     const op = (await spec(h)).paths["/positions"]!.post!;
     expect(op.responses["400"]).toBeUndefined();
     expect(JSON.stringify(op.responses["422"])).toContain("detail");
+  });
+});
+
+describe("documented(...).reply", () => {
+  // The schema a route documents and the schema its answer is checked against are the same object,
+  // because a route names it once. These hold that the one naming is the one that is enforced.
+  const Out = z.object({ n: z.number() });
+  const doc = documented("a route", { 200: Out });
+  const app = (data: unknown) => new Hono()
+    .onError((_err, c) => c.json({ detail: "internal error" }, 500))
+    .get("/", doc, (c) => doc.reply(c, 200, data));
+
+  it("answers with what the documented schema allows, and nothing more", async () => {
+    const resp = await app({ n: 1, extra: "dropped" }).request("/");
+    expect(resp.status).toBe(200);
+    expect(await resp.json()).toEqual({ n: 1 });
+  });
+
+  it("refuses to send what the documented schema does not allow", async () => {
+    // a 500 rather than a 200 the spec lies about — the same bargain `.parse` made before
+    expect((await app({ n: "one" }).request("/")).status).toBe(500);
+  });
+
+  it("is the only way a route sends JSON", () => {
+    // a bare c.json in a route is an answer no documented schema checked, which is the drift this
+    // exists to prevent. Errors go through httpError, and a 204 has no body to check.
+    const dir = join(import.meta.dirname, "routes");
+    const offenders = readdirSync(dir)
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+      .filter((f) => readFileSync(join(dir, f), "utf8").includes("c.json("));
+    expect(offenders).toEqual([]);
   });
 });

@@ -55,6 +55,13 @@ const MonitorOut = z.object({
   created_at: z.string().nullable(),
 });
 
+const list = documented("List monitors", { 200: z.array(MonitorOut) });
+const create = documented("Create a monitor, single or combo", { 201: MonitorOut }, [409]);
+const replace = documented("Replace a single monitor", { 200: MonitorOut }, [404, 409]);
+const update = documented("Update a monitor", { 200: MonitorOut }, [404, 409]);
+const totalEntry = documented("Spread a total entry across the holding", { 200: z.object({ ok: z.literal(true) }) }, [404]);
+const remove = documented("Delete a monitor", { 204: null }, [404]);
+
 /** uuid4().hex in the Python — 32 hex characters, no dashes, which the column is sized for. */
 const newId = () => randomUUID().replaceAll("-", "");
 
@@ -114,13 +121,13 @@ export function monitorRoutes(deps: Deps) {
   });
 
   return new Hono()
-    .get("/", documented("List monitors", { 200: z.array(MonitorOut) }), (c) => {
+    .get("/", list, (c) => {
       const rows = listMonitors(db);
       const owned = positionsForMonitors(db, rows.map((r) => r.id));
-      return c.json(z.array(MonitorOut).parse(rows.map((r) => out(r, owned))), 200);
+      return list.reply(c, 200, rows.map((r) => out(r, owned)));
     })
 
-    .post("/", documented("Create a monitor, single or combo", { 201: MonitorOut }, [409]), valid("json", MonitorCreateIn), async (c) => {
+    .post("/", create, valid("json", MonitorCreateIn), async (c) => {
       const payload = c.req.valid("json");
       // the payload shape decides: single-leg (option_type + strike) or combo (name + legs)
       return isCombo(payload) ? createCombo(payload) : createSingle(payload);
@@ -152,7 +159,7 @@ export function monitorRoutes(deps: Deps) {
           linkToPositions(db, inserted.id, [code]);
           return findMonitor(db, inserted.id)!;
         });
-        return c.json(MonitorOut.parse(out(saved)), 201);
+        return create.reply(c, 201, out(saved));
       }
 
       async function createCombo(p: z.output<typeof ComboMonitorIn>) {
@@ -188,11 +195,11 @@ export function monitorRoutes(deps: Deps) {
           linkToPositions(db, inserted.id, legCodes);
           return findMonitor(db, inserted.id)!;
         });
-        return c.json(MonitorOut.parse(out(saved)), 201);
+        return create.reply(c, 201, out(saved));
       }
     })
 
-    .put("/:id", documented("Replace a single monitor", { 200: MonitorOut }, [404, 409]), valid("json", MonitorIn), async (c) => {
+    .put("/:id", replace, valid("json", MonitorIn), async (c) => {
       const id = c.req.param("id");
       const row = findMonitor(db, id);
       if (!row) throw notFound("monitor");
@@ -221,10 +228,10 @@ export function monitorRoutes(deps: Deps) {
         compare: p.compare ?? DEFAULT_COMPARE,
         enabled: toSqliteBool(p.enabled ?? DEFAULT_ENABLED),
       });
-      return c.json(MonitorOut.parse(out(updated)), 200);
+      return replace.reply(c, 200, out(updated));
     })
 
-    .patch("/:id", documented("Update a monitor", { 200: MonitorOut }, [404, 409]), valid("json", MonitorPatch), (c) => {
+    .patch("/:id", update, valid("json", MonitorPatch), (c) => {
       const id = c.req.param("id");
       // An absent key means "leave it", not "set it to null". The Python needs exclude_none here
       // because Pydantic defaults every optional field to None and includes it; Zod omits an absent
@@ -266,18 +273,18 @@ export function monitorRoutes(deps: Deps) {
         // sweeper's own quarantine and expiry notices are not overwritten by a manual toggle
         changes.disabled_reason = given.enabled ? null : "manual";
       }
-      return c.json(MonitorOut.parse(out(updateMonitorFields(db, id, changes))), 200);
+      return update.reply(c, 200, out(updateMonitorFields(db, id, changes)));
     })
 
-    .post("/:id/total-entry", documented("Spread a total entry across the holding", { 200: z.object({ ok: z.literal(true) }) }, [404]), valid("json", TotalEntryIn), async (c) => {
+    .post("/:id/total-entry", totalEntry, valid("json", TotalEntryIn), async (c) => {
       const id = c.req.param("id");
       if (!findMonitor(db, id)) throw notFound("monitor");
       const why = await applyTotalEntry(db, id, c.req.valid("json").entry);
       if (why) throw httpError(422, why);
-      return c.json({ ok: true } as const, 200);
+      return totalEntry.reply(c, 200, { ok: true });
     })
 
-    .delete("/:id", documented("Delete a monitor", { 204: null }, [404]), async (c) => {
+    .delete("/:id", remove, async (c) => {
       const id = c.req.param("id");
       if (!findMonitor(db, id)) throw notFound("monitor");
       // monitor_positions is a plain table SQLAlchemy never managed, and it is not managed here
@@ -364,19 +371,18 @@ const EntryOut = z.object({
   fill: z.number().nullable(),
 });
 
+const quotes = documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]);
+
 /** `/quotes` — a live call for the whole watchlist, which the bot uses and the dashboard does not. */
 export function quoteRoutes(deps: Deps) {
-  return new Hono().get("/quotes", documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]), async (c) => {
+  return new Hono().get("/quotes", quotes, async (c) => {
     try {
-      return c.json(
-        z.array(EntryOut).parse(
-          await watchlistQuotes(deps.db, deps.settings.displayTz, deps.fetchQuotes, {
-            includeCombos: true,
-            now: deps.now(),
-            policy: exitPolicy(deps.settings),
-          }),
-        ),
-        200,
+      return quotes.reply(c, 200,
+        await watchlistQuotes(deps.db, deps.settings.displayTz, deps.fetchQuotes, {
+          includeCombos: true,
+          now: deps.now(),
+          policy: exitPolicy(deps.settings),
+        }),
       );
     } catch (err) {
       throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);

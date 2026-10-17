@@ -27,8 +27,10 @@ const QuoteOut = z.object({
   snapshot: z.record(z.string(), z.unknown()),
 });
 
+const quote = documented("One live quote for one SPX contract", { 200: QuoteOut }, [404, 502]);
+
 export function spxRoutes(deps: Deps) {
-  return new Hono().get("/quote", documented("One live quote for one SPX contract", { 200: QuoteOut }, [404, 502]), valid("query", QuoteQuery), async (c) => {
+  return new Hono().get("/quote", quote, valid("query", QuoteQuery), async (c) => {
     const { strike_date, option_type, strike } = c.req.valid("query");
     const asNumber = Number(strike);
     if (!Number.isFinite(asNumber)) throw httpError(422, `invalid strike: ${strike}`);
@@ -53,6 +55,6 @@ export function spxRoutes(deps: Deps) {
       snapshot.update_time = marketTimeToDisplay(String(snapshot.update_time), deps.settings.displayTz);
     }
     snapshot.fetched_at = displayTime(deps.now(), deps.settings.displayTz);
-    return c.json(QuoteOut.parse({ code, snapshot }), 200);
+    return quote.reply(c, 200, { code, snapshot });
   });
 }
