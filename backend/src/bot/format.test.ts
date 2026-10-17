@@ -157,20 +157,20 @@ describe("pyNumber", () => {
 
 describe("thresholdError", () => {
   it("says what to add, rather than only that it is wrong", () => {
-    expect(thresholdError(-0.5, "abs")).toBe(
+    expect(thresholdError("abs", -0.5)).toBe(
       "Threshold must be positive — abs monitors compare magnitudes. "
       + "Add 'signed' to compare raw values.",
     );
-    expect(thresholdError(0, "abs")).toMatch(/^Threshold must be positive/);
-    expect(thresholdError(0, "signed")).toBe(
+    expect(thresholdError("abs", 0)).toMatch(/^Threshold must be positive/);
+    expect(thresholdError("signed", 0)).toBe(
       "Signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01.",
     );
   });
 
   it("allows what should be allowed", () => {
-    expect(thresholdError(0.6, "abs")).toBeNull();
-    expect(thresholdError(-4.05, "signed")).toBeNull();
-    expect(thresholdError(0.01, "signed")).toBeNull();
+    expect(thresholdError("abs", 0.6)).toBeNull();
+    expect(thresholdError("signed", -4.05)).toBeNull();
+    expect(thresholdError("signed", 0.01)).toBeNull();
   });
 });
 

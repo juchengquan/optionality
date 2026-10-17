@@ -107,6 +107,26 @@ export function thresholdFill(
   return Math.max(0, Math.min(100, pyRoundToInt(ratio * 100)));
 }
 
+/** Why a threshold cannot be compared that way, or null — the FAULT, not the sentence.
+ *
+ *  Both halves follow from the alarm flipping truthfully AT the threshold, with no value hysteresis
+ *  (CLAUDE.md): a non-positive absolute threshold would be breached by everything, and a signed
+ *  threshold of zero is a band of zero width that a value can sit exactly on.
+ *
+ *  It answers with the fault rather than a message because three surfaces word it three ways — the
+ *  API long, the PATCH route short, the bot longer still because it is read without the form that
+ *  produced it. Before this the RULE was written out three times as well, twice under the same name
+ *  `thresholdError` with its two arguments in opposite orders. The wordings stay at the edges; the
+ *  rule lives here, beside `isBreached`, which is the predicate it protects.
+ */
+export type ThresholdFault = "abs-not-positive" | "signed-zero";
+
+export function thresholdFault(compare: string, threshold: number): ThresholdFault | null {
+  if (compare === "abs" && threshold <= 0) return "abs-not-positive";
+  if (compare === "signed" && threshold === 0) return "signed-zero";
+  return null;
+}
+
 /** Whether a value has breached its threshold.
  *
  *  abs mode compares magnitude; signed compares the raw value (negative thresholds legal). The

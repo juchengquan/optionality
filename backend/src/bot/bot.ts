@@ -268,7 +268,7 @@ export class TelegramBot {
       return usage;
     }
     const { field, direction, compare } = modifiers(args.slice(4, 7), "option_delta");
-    const bad = thresholdError(threshold, compare);
+    const bad = thresholdError(compare, threshold);
     if (bad) return bad;
 
     const missing = await verifyContracts([code], this.deps.fetchQuotes);
@@ -313,7 +313,7 @@ export class TelegramBot {
       return usage;
     }
     const { field, direction, compare } = modifiers(args.slice(i + 1, i + 4), "mid_price");
-    const bad = thresholdError(threshold, compare);
+    const bad = thresholdError(compare, threshold);
     if (bad) return bad;
     const notAdditive = comboFieldError(field);
     if (notAdditive) return notAdditive;
@@ -416,7 +416,7 @@ export class TelegramBot {
       return "Ambiguous — matches: " + found.map((m) => m.code).join(", ");
     }
     const monitor = found[0]!;
-    const bad = thresholdError(value, monitor.compare);
+    const bad = thresholdError(monitor.compare, value);
     if (bad) return bad;
     updateMonitorFields(this.deps.db, monitor.id, { threshold: value });
     return ruleText(monitor.code, monitor.field, value, monitor.direction, monitor.compare);

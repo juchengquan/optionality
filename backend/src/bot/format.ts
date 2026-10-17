@@ -9,6 +9,7 @@
  *  Every string here is asserted character for character in the tests, because they are read on a
  *  phone and a column that wraps is a table that cannot be read at all.
  */
+import { thresholdFault } from "../domain/monitor.ts";
 import type { HoldingValue } from "../holdings.ts";
 
 export const HELP_TEXT = `Commands:
@@ -131,17 +132,23 @@ export function fmtValue(key: string, value: unknown): string {
   return String(value);
 }
 
-/** Why this threshold cannot be compared this way, or null. The wording is the bot's own — longer than
- *  the API's, because it is read without the form that produced it. */
-export function thresholdError(threshold: number, compare: string): string | null {
-  if (compare === "abs" && threshold <= 0) {
-    return "Threshold must be positive — abs monitors compare magnitudes. "
-      + "Add 'signed' to compare raw values.";
+/** The bot's wording for a threshold the rule refuses, or null.
+ *
+ *  Longer than the API's, because it is read without the form that produced it. The rule is
+ *  `thresholdFault` in domain/monitor.ts. The arguments are `(compare, threshold)` like every other
+ *  caller of it: this took them the other way round while sharing the API function's name, and only
+ *  a string-versus-number mismatch kept the compiler from allowing the swap.
+ */
+export function thresholdError(compare: string, threshold: number): string | null {
+  switch (thresholdFault(compare, threshold)) {
+    case "abs-not-positive":
+      return "Threshold must be positive — abs monitors compare magnitudes. "
+        + "Add 'signed' to compare raw values.";
+    case "signed-zero":
+      return "Signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01.";
+    default:
+      return null;
   }
-  if (compare === "signed" && threshold === 0) {
-    return "Signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01.";
-  }
-  return null;
 }
 
 /** What a rule means, said back to the owner so a mistyped direction is visible at once. */
