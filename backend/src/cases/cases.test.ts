@@ -19,7 +19,7 @@ import * as timefmt from "../timefmt.ts";
 import { buildCases, render } from "./build.ts";
 import { INPUTS } from "./inputs.ts";
 
-const CASES = join(import.meta.dirname, "../../../cases");
+const CASES = join(import.meta.dirname, "../../../tests/golden");
 
 /** Exported, and deliberately not a case: each reads something only the service has. */
 const NOT_PORTED = new Set([
@@ -27,7 +27,7 @@ const NOT_PORTED = new Set([
   "timefmt.displayStored", // reads the database's storage format
 ]);
 
-describe("cases/", () => {
+describe("tests/golden/", () => {
   const built = buildCases();
 
   it("holds exactly what the TypeScript computes now — run `make cases` if this fails", () => {

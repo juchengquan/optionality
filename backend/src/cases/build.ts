@@ -7,7 +7,7 @@
  *  - `{"$set": [...]}` — a Set result, its members sorted
  *  - `{"$throws": true}` — the function threw; what it said is not part of the contract
  *
- *  `cases/README.md` repeats this for whoever reads the files from Python.
+ *  `tests/golden/README.md` repeats this for whoever reads the files from Python.
  */
 import * as contract from "../domain/contract.ts";
 import * as exit from "../domain/exit.ts";
@@ -43,7 +43,7 @@ export interface Case {
   expect: unknown;
 }
 
-/** Every module's cases, as the files under cases/ hold them. */
+/** Every module's cases, as the files under tests/golden/ hold them. */
 export function buildCases(): Record<string, { module: string; cases: Case[] }> {
   const out: Record<string, { module: string; cases: Case[] }> = {};
   for (const [name, inputs] of Object.entries(INPUTS)) {

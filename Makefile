@@ -35,7 +35,7 @@ check-boundaries:
 format:
 	uv run --directory python ruff format .
 
-# the Python package's suite (ADR 0014): every golden case in cases/, and the OpenD client with fakes
+# the Python package's suite (ADR 0014): every golden case in tests/golden/, and the OpenD client with fakes
 test:
 	uv run --directory python pytest
 

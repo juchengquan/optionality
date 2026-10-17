@@ -31,7 +31,8 @@ Three shapes were considered and rejected:
 - A package, `optionality`, in `python/`: contracts, expiry, quotes and OpenD access (tier 1),
   and the position, monitor, exit and vol maths (tier 2). Ported FROM THE TYPESCRIPT, module for
   module, with snake_case the only translation.
-- The TypeScript is canonical. Golden cases in `cases/`, inputs written by hand in TypeScript and
+- The TypeScript is canonical. Golden cases in `cases/` (moved to `tests/golden/` the same day:
+  still shared ground, under a name that says test data), inputs written by hand in TypeScript and
   outputs computed by it, are checked by both suites; `make check-cases` fails when they are
   stale. A TypeScript fix therefore turns the Python red until it is ported.
 - Comparison is EXACT. JavaScript's `Math.round` and Python's `round` disagree at .5 (0.125 →
