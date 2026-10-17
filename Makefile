@@ -27,17 +27,17 @@ UI_BASE ?= /opt/
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
 lint: check-boundaries
-	uv run ruff check .
+	uv run --directory python ruff check .
 
 check-boundaries:
 	node tools/check-boundaries.mjs
 
 format:
-	uv run ruff format .
+	uv run --directory python ruff format .
 
 # the Python package's suite (ADR 0014): every golden case in cases/, and the OpenD client with fakes
 test:
-	uv run pytest python
+	uv run --directory python pytest
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
 # so the documented way to "run the API locally" started the retired implementation instead.
