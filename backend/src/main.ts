@@ -108,6 +108,33 @@ console.log(
   + `bot ${botWanted ? "polling" : "not started (set OPTIONALITY_BOT=1)"}`,
 );
 
+/** Every way out of this process says so on the way.
+ *
+ *  On 2026-10-16 the service restarted at 15:55:45 and nothing anywhere said why: no `SIGTERM:
+ *  stopping` in our log, no crash report in DiagnosticReports, no launchd record, and the unified
+ *  log had already rolled past it. The agent has KeepAlive, so it healed itself and the only
+ *  evidence it had ever happened was a process whose start time disagreed with the deploy's.
+ *
+ *  These three turn the next one into something readable. `exit` fires for every path out — a
+ *  clean stop, an uncaught throw, a drained event loop, an explicit exit — so the log always ends
+ *  with a line saying which. The two before it exist because an unhandled rejection or an uncaught
+ *  exception otherwise takes the process down with its reason on stderr and nothing tying it to
+ *  this service. Both still exit non-zero: a server that keeps serving after an unhandled rejection
+ *  is in a state nobody has reasoned about, which is worse than a restart launchd will perform
+ *  anyway.
+ */
+process.on("uncaughtException", (err) => {
+  console.error("FATAL uncaughtException — exiting:", err);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("FATAL unhandledRejection — exiting:", reason);
+  process.exit(1);
+});
+process.on("exit", (code) => {
+  console.error(`process exiting with code ${code} (pid ${process.pid})`);
+});
+
 /** launchd sends SIGTERM on `kickstart -k`, which is how every deploy restarts this. Stopping in order
  *  matters: the scheduler must not arm another sweep while the database is closing. */
 let shuttingDown = false;
