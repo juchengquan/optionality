@@ -1,14 +1,20 @@
 # The workspace's Python tooling (ADR 0014). The Python service that lived here was deleted in
-# phase 10; the `python-before-phase-10` tag keeps it. The `optionality` package in python/ joins
-# as this workspace's member when it is ported from the TypeScript (ADR 0014, step 5).
+# phase 10; the `python-before-phase-10` tag keeps it. Its one member is the `optionality` package in
+# python/, ported from the TypeScript.
 [project]
 name = "optionality-workspace"
 version = "0"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["optionality"]
 
 [tool.uv]
 package = false
+
+[tool.uv.workspace]
+members = ["python"]
+
+[tool.uv.sources]
+optionality = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -18,3 +24,7 @@ dev = [
 
 [tool.ruff]
 line-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+# verify_contracts refuses on ANY failure, with what went wrong — the blind catch is its job
+"python/src/optionality/quotes.py" = ["BLE001"]

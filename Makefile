@@ -28,9 +28,9 @@ check-boundaries:
 format:
 	uv run ruff format .
 
-# the Python package's suite (ADR 0014). python/ arrives in step 5, ported from the TypeScript.
+# the Python package's suite (ADR 0014): every golden case in cases/, and the OpenD client with fakes
 test:
-	@if [ -d python ]; then uv run pytest python; else echo "no Python package yet (ADR 0014, step 5)"; fi
+	uv run pytest python
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
 # so the documented way to "run the API locally" started the retired implementation instead.
