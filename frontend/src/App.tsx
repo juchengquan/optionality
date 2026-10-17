@@ -15,6 +15,7 @@ import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { Holdings } from "./Holdings";
 import { RowDetail, type DetailTarget } from "./RowDetail";
+import { TopLine } from "./TopLine";
 import { Settings } from "./Settings";
 import { useTableFit } from "./useTableFit";
 import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
@@ -176,7 +177,6 @@ export function App() {
 
   const fetchedAt = health?.monitor.fetched_at;
   // "something to say": a dead OpenD, an alarm engine that is not running, or work in the queue
-  const degraded = Boolean(health && (!health.opend || health.monitor.alarms.bad || health.queue_depth > 0));
 
   return (
     <main>
@@ -211,20 +211,12 @@ export function App() {
         {health ? ` · service sweeps every ${health.settings.sweep_seconds}s` : ""}
       </p>
 
-      {/* The service's own state, shown ONLY when it has something to say.
-          It did not move into settings and must not: if OpenD is down or the alarm engine has
-          stalled, every figure below is suspect and the bell may be silent, which is exactly
-          when it cannot be a click away. A healthy idle service says nothing and the page keeps
-          the row. A non-empty queue is not a fault — a run is executing — but it is worth
-          seeing, so it counts as something to say. */}
-      {degraded && health ? (
-        <div className="health">
-          OpenD: <span className={health.opend ? undefined : "bad"}>{health.opend ? "up" : "DOWN"}</span>
-          {" · alarms: "}
-          <span className={health.monitor.alarms.bad ? "bad" : undefined}>{health.monitor.alarms.label}</span>
-          {` · queue: ${health.queue_depth}`}
-        </div>
-      ) : null}
+      {/* What needs you, and nothing when nothing does — the strip this replaced said the same
+          thing about faults and said it separately. It APPEARS rather than reports: a line that is
+          almost always the same becomes furniture, and the old strip's own comment is the reason
+          a fault must be on the page and not a click away. Its silence is not a verdict; the
+          Service panel is where the complete picture lives. */}
+      <TopLine quotes={quotes} health={health} />
 
       <WatchlistTable title="Single-leg" entries={singles} columns={singleFit.columns} containerRef={singleFit.ref} isCombo={false}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
