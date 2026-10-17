@@ -6,7 +6,7 @@ import { App } from "../App";
 import { holdingBody } from "../api";
 // the service's OWN schema, so a body this form sends can be proved acceptable rather than
 // assumed — the same contract the add-forms test holds to
-import { PositionIn } from "../../../backend/src/schemas/position.ts";
+import { PositionIn } from "backend/schemas";
 
 /** Recording what a holding cost, AFTER the rule was added.
  *

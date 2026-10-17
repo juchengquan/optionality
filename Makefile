@@ -1,4 +1,4 @@
-.PHONY: lint format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
+.PHONY: lint check-boundaries format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
 	diff-api diff-api-live diff-opend diff-services copy-db cutover cutover-preflight rollback restore-python \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui deploy \
@@ -22,8 +22,13 @@ PY_DB = data/optionality.db
 # because `tailscale serve` strips the prefix and the page cannot discover it (ADR 0006).
 UI_BASE ?= /opt/
 
-lint:
+# ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
+# into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
+lint: check-boundaries
 	uv run ruff check .
+
+check-boundaries:
+	node tools/check-boundaries.mjs
 
 format:
 	uv run ruff format .

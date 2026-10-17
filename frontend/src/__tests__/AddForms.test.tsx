@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 // the service's OWN schemas, not a copy of them — see the contract test at the end of this file
-import { MonitorCreateIn } from "../../../backend/src/schemas/monitor.ts";
-import { PositionIn } from "../../../backend/src/schemas/position.ts";
+import { MonitorCreateIn, PositionIn } from "backend/schemas";
 
 /** Phase 1 of the shadcn rebuild (ADR 0007): the two add-forms had NO tests, and they hold
  *  nine of the native selects phase 4 replaces. These assert what reaches the server, never

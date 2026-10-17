@@ -14,7 +14,7 @@
  */
 import { hc } from "hono/client";
 
-import type { AppType } from "../../backend/src/app.ts";
+import type { AppType } from "backend";
 
 /** Where the API lives, relative to wherever this bundle was deployed.
  *
