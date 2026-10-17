@@ -98,6 +98,19 @@ anything.
 `data/optionality-ts.db` is left in place by the rollback, so nothing is lost by rolling back and
 trying again.
 
+## A WAL sits beside the frozen database
+
+`data/optionality.db` has `-wal` and `-shm` files beside it, ~20 KB, left by the Python's last
+session and touched again on 2026-10-17 when the schema was read to confirm the TypeScript side had
+never migrated it. The schema and the data are unchanged — no `position_samples`, no
+`schema_migrations`, neither new `positions` column — but the file's mtime is no longer the cutover
+minute, so do not use that as evidence of anything.
+
+Nothing needs doing. SQLite recovers a WAL automatically when the database is next opened, which is
+what a rollback would do. It matters only for the rule CLAUDE.md already states: these files are
+copied with the online backup and NEVER with `cp`, because `cp` leaves the write-ahead log behind
+and the copy is current only to the last checkpoint.
+
 **It will refuse once the two databases have diverged, which does not take long.** The sentence above
 is true of the first hours and stops being true after that: what has to be "retyped" grows into
 everything, and worse, the Python's frozen rows come BACK — holdings you have since closed reappear as
