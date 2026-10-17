@@ -94,14 +94,26 @@ console.log(
 
 /** Every way out of this process says so on the way.
  *
- *  On 2026-10-16 the service restarted at 15:55:45 and nothing anywhere said why: no `SIGTERM:
- *  stopping` in our log, no crash report in DiagnosticReports, no launchd record, and the unified
- *  log had already rolled past it. The agent has KeepAlive, so it healed itself and the only
- *  evidence it had ever happened was a process whose start time disagreed with the deploy's.
+ *  On 2026-10-16 the service restarted at 15:55:45 and nothing in its own log said why: no
+ *  `SIGTERM: stopping`, no crash report for it, no launchd record.
  *
- *  These three turn the next one into something readable. `exit` fires for every path out — a
- *  clean stop, an uncaught throw, a drained event loop, an explicit exit — so the log always ends
- *  with a line saying which. The two before it exist because an unhandled rejection or an uncaught
+ *  Explained on 2026-10-17, and it was not this service: the MACHINE panicked. The report is
+ *  /Library/Logs/DiagnosticReports/panic-full-2026-10-16-155443.0002.panic — "userspace watchdog
+ *  timeout: no successful checkins from WindowServer in 120 seconds" — after half an hour of memory
+ *  pressure (two JetsamEvents at 14:59, with a python3.12 outside this repo at ~38 GB and fseventsd
+ *  at ~45 GB). `last` shows a reboot at 15:33 with no shutdown before it, which is what a panic
+ *  looks like. A panic signals nothing, so no handler below could have logged it.
+ *
+ *  It did not heal itself either. LaunchAgents load at GUI login, not at boot, and FileVault is on,
+ *  which disables automatic login: nothing ran — no API, no alarms, no bot — until the console
+ *  login at 15:55, 22 minutes later. That login also loaded the retired Python agent's plist, which
+ *  then crash-looped against this port from 15:56:12 until it was found and retired a day later.
+ *  For the next unexplained restart, look first at `last` (a reboot with no shutdown) and at
+ *  DiagnosticReports for a `.panic`.
+ *
+ *  These three turn a restart that IS this process's into something readable. `exit` fires for
+ *  every path out — a clean stop, an uncaught throw, a drained event loop, an explicit exit — so
+ *  the log always ends with a line saying which. The two before it exist because an unhandled rejection or an uncaught
  *  exception otherwise takes the process down with its reason on stderr and nothing tying it to
  *  this service. Both still exit non-zero: a server that keeps serving after an unhandled rejection
  *  is in a state nobody has reasoned about, which is worse than a restart launchd will perform

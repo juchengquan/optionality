@@ -33,7 +33,13 @@ tailscale serve --bg --set-path /opt/api http://127.0.0.1:31415
 ```
 
 and set `ROOT_PATH=/opt/api` in `.env` so the API's own docs, at `/opt/api/docs`, point at the right
-prefix. Enable automatic login so the agents, and OpenD, come back after an unattended reboot.
+prefix.
+
+**After a reboot, nothing runs until someone logs in at the console.** The agents start at GUI
+login, not at boot, and with FileVault on macOS disables automatic login. On 2026-10-16 a kernel
+panic rebooted the machine and the alarms were down for the 22 minutes until a console login
+(`backend/src/main.ts` has the record). Turning FileVault off would allow automatic login; for a
+planned restart, `sudo fdesetup authrestart` unlocks the disk once and keeps it on.
 
 `make serve` runs a second copy locally on port 31417, against a snapshot of the live database and with
 Telegram blanked, so it can never become a second writer or a second bot.
