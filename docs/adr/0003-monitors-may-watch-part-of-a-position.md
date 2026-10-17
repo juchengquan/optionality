@@ -1,4 +1,13 @@
-# Monitors may watch part of a Position
+# 3. Monitors may watch part of a Position
+
+Date: 2026-09-24
+
+## Status
+
+Accepted. Its premise — one credit taken in per condor — was corrected by ADR 0004; the scope it
+introduced stands.
+
+## Decision
 
 ADR 0001 said a Monitor watches either a single Leg or the Position as a whole. That was
 wrong, and the live watchlist shows why: `1016_bs_8050` is not a separate holding that happens
@@ -18,7 +27,7 @@ on screen ("1016_IC · calls"), survives leg reordering, and needs no subset lan
 - One Position per holding, so Entry stays unambiguous.
 - Positions are exposed over the JSON API, not on the dashboard. A Positions-first dashboard was
   built and rejected on review: the existing single-leg/combo tables read better for scanning
-  during a session. Per ADR 0002 the API is where the model has to be expressive anyway, so the
+  during a session. The API is where the model has to be expressive anyway (ADR 0005), so the
   screen can follow later or not at all.
 - Arbitrary subsets are not expressible. If a structure ever needs one, that is the point to
   revisit, not before.

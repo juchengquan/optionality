@@ -1,4 +1,13 @@
-# Positions own legs; Monitors only warn
+# 1. Positions own legs; Monitors only warn
+
+Date: 2026-09-24
+
+## Status
+
+Accepted. Amended by ADR 0003 (a Monitor may watch part of a Position) and ADR 0013 (a Side is now
+named long or short; "sold or bought" below is the wording of the time).
+
+## Decision
 
 A multi-leg Monitor used to carry its own legs and a +/- sign per leg chosen by the trader, so
 the structure you hold was recorded by the thing that alarms about it — delete the alarm and you
