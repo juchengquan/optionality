@@ -24,7 +24,7 @@ function breakable(name: string): React.ReactNode {
 /** Row plus column key to displayed text. Exported because the detail sheet shows every
  *  column whether or not the table is drawing it, and two of these would drift. */
 export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
-  const snap = entry.snapshot ?? {};
+  const snap = entry.quote ?? {};
   const greeks = entry.combo_greeks ?? {};
   const greek = (name: string, col: string) =>
     isCombo ? fmt(greeks[name] ?? null, col) : fmt(snap[name as keyof typeof snap] as number | null, col);
@@ -33,7 +33,7 @@ export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
     // the identity columns are DRAWN by the JSX below, badge and bell and all — but they
     // still have to answer here, because the fitting measurement asks this function how
     // wide every column needs to be and these are the widest on the page
-    case "contract": return shortContract(entry.snapshot?.name ?? entry.code);
+    case "contract": return shortContract(entry.quote?.name ?? entry.code);
     case "combo": return entry.code;
     case "dte": return String(entry.dte);
     case "legs": return entry.legs ? legSummary(entry.legs) : DASH;
@@ -156,7 +156,7 @@ export function WatchlistTable({
                     <td key={c.key} className={classes.join(" ") || undefined} style={style}>
                       {c.key === identity ? (
                         <>
-                          {breakable(isCombo ? entry.code : shortContract(entry.snapshot?.name ?? entry.code))}
+                          {breakable(isCombo ? entry.code : shortContract(entry.quote?.name ?? entry.code))}
                           {entry.error ? <span className="badge">{entry.error}</span> : null}
                           {entry.triggered && signal.bell === identity ? " 🔔" : null}
                         </>

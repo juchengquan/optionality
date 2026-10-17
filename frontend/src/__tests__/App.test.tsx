@@ -12,7 +12,7 @@ const wing = {
   dte: 22, fill: 29, scope: "all",
   positions: [{ id: "p1", name: "1016_bs_8050" }],
   cost_to_close: 0.8, entry: 2.87, pnl: 207,
-  snapshot: null,
+  quote: null,
   legs: [
     { sign: -1, option_type: "CALL", strike: 8050 },
     { sign: 1, option_type: "CALL", strike: 8075 },
@@ -31,7 +31,7 @@ const leg = {
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 57, fill: 84, scope: "leg", positions: [{ id: "p3", name: "1120_b_8100" }],
   cost_to_close: 3.75, entry: null, pnl: null,
-  snapshot: { name: "SPXW 261120 8100.00C", option_delta: 0.1685, mid_price: 31.5, bid_price: 31.3, ask_price: 31.7 },
+  quote: { name: "SPXW 261120 8100.00C", option_delta: 0.1685, mid_price: 31.5, bid_price: 31.3, ask_price: 31.7 },
 };
 
 const health = {

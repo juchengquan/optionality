@@ -17,7 +17,7 @@ const leg = {
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 57, fill: 84, scope: "leg", positions: [{ id: "p3", name: "1120_b_8100" }],
   cost_to_close: 3.75, entry: null, pnl: null,
-  snapshot: {
+  quote: {
     name: "SPXW 261120 8100.00C", option_delta: 0.1685, option_gamma: 0.00009,
     option_theta: -0.42, option_vega: 0.33, option_implied_volatility: 0.1712,
     mid_price: 31.5, bid_price: 31.3, ask_price: 31.7,
@@ -30,7 +30,7 @@ const unheldCombo = {
   id: "c1", code: "1130_BS_6950", field: "mid_price", threshold: 2.01,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-30",
   dte: 45, fill: 72, scope: null, positions: [], cost_to_close: null,
-  schedule: null, entry: null, pnl: null, snapshot: null,
+  schedule: null, entry: null, pnl: null, quote: null,
   legs: [{ sign: -1, option_type: "PUT", strike: 6950 }, { sign: 1, option_type: "PUT", strike: 6900 }],
   combo_value: -1.45,
   combo_greeks: { option_delta: 0.006, option_gamma: 0, option_theta: 0.03, option_vega: -0.25 },
@@ -197,7 +197,7 @@ describe("the row detail sheet", () => {
     expect(within(sheet).getByText("0.1685")).toBeTruthy();
 
     // the poll replaces every row object; the sheet must re-read, not hold a stale copy
-    mockApi([{ ...leg, snapshot: { ...leg.snapshot, option_delta: 0.2100 } }]);
+    mockApi([{ ...leg, quote: { ...leg.quote, option_delta: 0.2100 } }]);
     await userEvent.click(within(sheet).getByRole("button", { name: "mute" }));
 
     await waitFor(() => expect(within(sheet).getByText("0.2100")).toBeTruthy());

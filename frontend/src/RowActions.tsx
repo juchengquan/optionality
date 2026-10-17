@@ -82,7 +82,7 @@ export function RowActions({
       <div className="flex items-center gap-2 border-t pt-3 mt-1">
         <Button variant="ghost" size="sm" onClick={() => onPatch(entry.id, { enabled: false })}>mute</Button>
         <ConfirmDelete
-          name={isCombo ? entry.code : (entry.snapshot?.name ?? entry.code)}
+          name={isCombo ? entry.code : (entry.quote?.name ?? entry.code)}
           what={isCombo ? "combo and its alarm rule" : "alarm rule"}
           onConfirm={() => onDelete(entry.id)}
         />

@@ -216,7 +216,7 @@ export class TelegramBot {
     if (quotes.length === 0) return "Watchlist is empty. Add one with /watch.";
     return table(headers, quotes.map((q) => [
       shortCode(q.code) + (q.triggered ? " 🔔" : ""),
-      ...cells(q.snapshot ?? {}),
+      ...cells(q.quote ?? {}),
     ]));
   }
 

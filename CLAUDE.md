@@ -71,8 +71,11 @@ it is. `make cutover` / `make rollback` switch; see **docs/cutover.md** first. T
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
-- One worker thread owns run execution. The sweep, `/spx/quote`, `/quotes`, and creation probes make single
-  bounded OpenD calls outside that queue — documented exceptions, not violations.
+- One worker thread owns run execution. The sweep, `/spx/quote`, `/quotes`, `/positions/values`, and
+  creation probes make single bounded OpenD calls outside that queue — documented exceptions, not
+  violations. (`/positions/values` is polled by the dashboard's Holdings panel while it is open; it
+  shipped with ADR 0011 and was added to this list on 2026-10-17, having been a fifth exception in
+  the code and a fourth in this sentence for a fortnight.)
 - The whole watchlist is ONE `get_market_snapshot` call per sweep (combo legs join the batch, deduped).
   **The dashboard's poll is a live call of its own** — `/quotes`, one batch per poll per open tab — so its
   figures are current rather than up to one sweep old, and polling faster is NOT free (ADR 0010). What the

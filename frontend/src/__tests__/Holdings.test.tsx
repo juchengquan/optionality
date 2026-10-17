@@ -218,7 +218,7 @@ describe("the row #113 pointed at", () => {
     direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
     dte: 37, fill: null, scope: "leg",
     positions: [{ id: "pBS", name: "1120_BS_7100" }],
-    cost_to_close: 2.35, entry: null, pnl: null, snapshot: null,
+    cost_to_close: 2.35, entry: null, pnl: null, quote: null,
     legs: [
       { sign: -1, option_type: "PUT", strike: 7100 },
       { sign: 1, option_type: "PUT", strike: 7050 },

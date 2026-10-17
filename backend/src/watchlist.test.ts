@@ -113,15 +113,15 @@ describe("a single-leg entry", () => {
     expect(quotes).toHaveLength(1);
     expect(quotes[0]!.code).toBe(CODE);
     expect(quotes[0]!.threshold).toBe(0.6);
-    expect(quotes[0]!.snapshot!.option_delta).toBe(0.91);
+    expect(quotes[0]!.quote!.option_delta).toBe(0.91);
     // the call-time stamp: the honest "data as-of"
-    expect(quotes[0]!.snapshot!.fetched_at).toBe("2026-08-10 11:35:32+08:00");
+    expect(quotes[0]!.quote!.fetched_at).toBe("2026-08-10 11:35:32+08:00");
   });
 
   it("converts the market timestamp to the display zone", async () => {
     monitor();
     const quotes = await run(quoting({ [CODE]: { update_time: "2026-08-09 20:15:00", option_delta: 0.1 } }));
-    expect(quotes[0]!.snapshot!.update_time).toBe("2026-08-10 08:15:00+08:00");
+    expect(quotes[0]!.quote!.update_time).toBe("2026-08-10 08:15:00+08:00");
   });
 
   it("carries how long the contract has left", async () => {
@@ -155,8 +155,8 @@ describe("a combo entry", () => {
     expect(calls).toHaveLength(1);
     const c = quotes.find((q) => q.code === "sep-condor")!;
     expect(c.combo_value).toBeCloseTo(7.15, 10); // 26.4 - 19.25
-    expect(c.snapshot).toBeNull();
-    expect(quotes.find((q) => q.code === CODE)!.snapshot!.mid_price).toBe(26.4);
+    expect(c.quote).toBeNull();
+    expect(quotes.find((q) => q.code === CODE)!.quote!.mid_price).toBe(26.4);
   });
 
   it("reports greeks as signed sums, never an IV, and nothing where a leg is missing", async () => {
@@ -197,9 +197,9 @@ describe("an unknown contract", () => {
       return Promise.resolve(codes.map((code) => ({ code, option_delta: 0.7 })));
     };
     const quotes = await run(fetch, true);
-    expect(quotes.find((q) => q.code === CODE)!.snapshot!.option_delta).toBe(0.7);
+    expect(quotes.find((q) => q.code === CODE)!.quote!.option_delta).toBe(0.7);
     const poisoned = quotes.find((q) => q.code === POISON)!;
-    expect(poisoned.snapshot).toBeNull();
+    expect(poisoned.quote).toBeNull();
     expect(poisoned.error).toBe("unknown contract");
   });
 });
@@ -309,7 +309,7 @@ describe("guards that are easy to lose", () => {
       { code: "sep-condor", mid_price: 99 },
     ]);
     const quotes = await run(fetch, true);
-    expect(quotes[0]!.snapshot).toBeNull();
+    expect(quotes[0]!.quote).toBeNull();
   });
 
   it("measures a position-backed rule under the rule's OWN mode, bar and bell together", async () => {
@@ -365,7 +365,7 @@ describe("the bell and the value share an instant", () => {
     setEngineState(id, 0, 0.1); // the engine's record says calm; the market has moved since
     const [entry] = await run(quoting({ [CODE]: { option_delta: 0.7 } }));
 
-    expect(entry!.snapshot!.option_delta).toBe(0.7);
+    expect(entry!.quote!.option_delta).toBe(0.7);
     expect(entry!.triggered, "the row shows 0.7 against a 0.6 threshold and no bell").toBe(true);
   });
 
@@ -394,7 +394,7 @@ describe("the bell and the value share an instant", () => {
     setEngineState(id, 1, 0.9);
     const [entry] = await run(quoting({}));
 
-    expect(entry!.snapshot).toBeNull();
+    expect(entry!.quote).toBeNull();
     expect(entry!.triggered).toBe(false);
     expect(entry!.fill).toBeNull();
   });
@@ -571,7 +571,7 @@ describe("a rule that watches only PART of a holding", () => {
     expect(e!.scope).toBe("leg");
     // the row shows the CONTRACT's own figures — its mid is 5.00 — and nothing about the spread
     // it sits inside. The spread's 4.00 belongs on the spread's row.
-    expect(e!.snapshot!.mid_price).toBe(5);
+    expect(e!.quote!.mid_price).toBe(5);
     expect(e!.cost_to_close).toBeNull();
     expect(e!.entry).toBeNull();
     expect(e!.pnl).toBeNull();

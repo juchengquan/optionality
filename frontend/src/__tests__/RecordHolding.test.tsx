@@ -36,7 +36,7 @@ const bare = {
   id: "m1", code: "1130_IC_8200_7150", field: "mid_price", threshold: 7.0,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-30",
   dte: 47, fill: null, scope: null, positions: [],
-  cost_to_close: null, entry: null, pnl: null, snapshot: null,
+  cost_to_close: null, entry: null, pnl: null, quote: null,
   legs: LEGS, combo_value: -6.2, combo_greeks: {}, schedule: null,
 };
 /** the same rule as /monitors spells it: `code` for the name, and the legs with their signs */

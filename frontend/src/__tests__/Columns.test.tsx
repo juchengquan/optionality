@@ -14,7 +14,7 @@ const leg = {
   direction: "above", compare: "abs", triggered: true, strike_date: "2026-11-20",
   dte: 57, fill: 84, scope: "leg", positions: [{ id: "p1", name: "1120_b_8100" }],
   cost_to_close: 3.75, entry: null, pnl: null,
-  snapshot: { name: "SPXW 261120 8100.00C", option_delta: 0.1685, option_gamma: 0.0007,
+  quote: { name: "SPXW 261120 8100.00C", option_delta: 0.1685, option_gamma: 0.0007,
               option_theta: -0.9, option_vega: 7.8, option_implied_volatility: 11.3,
               mid_price: 31.5, bid_price: 31.3, ask_price: 31.7 },
 };

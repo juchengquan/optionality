@@ -29,7 +29,7 @@ const ORDER: Needed["kind"][] = ["fault", "stop", "alarm", "target", "manage"];
 const NAMED = 3;
 
 function rowName(entry: Entry): string {
-  return entry.legs ? entry.code : shortContract(entry.snapshot?.name ?? entry.code);
+  return entry.legs ? entry.code : shortContract(entry.quote?.name ?? entry.code);
 }
 
 /** @param holdings only the Service panel passes these: a holding reached a Level whether or not a

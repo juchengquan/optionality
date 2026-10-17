@@ -131,11 +131,11 @@ export function positionRoutes(deps: Deps) {
 
     /** Live cost to close, exposure and P&L for every position.
      *
-     *  One bounded snapshot call for every leg of every position, deduped. `Holdings.tsx` polls
-     *  this while the panel is open, so it is a live call on the dashboard's path like `/quotes` —
-     *  but CLAUDE.md's one-worker invariant names four exceptions (the sweep, `/spx/quote`,
-     *  `/quotes`, creation probes) and this is not one of them. Undocumented, not sanctioned: the
-     *  list is the owner's to change. */
+     *  One bounded live call for every leg of every position, deduped. `Holdings.tsx` polls this
+     *  while the panel is open, so it is a live call on the dashboard's path like `/quotes` — and
+     *  CLAUDE.md's one-worker invariant names it alongside the sweep, `/spx/quote`, `/quotes` and
+     *  creation probes. It was a fifth exception in the code and a fourth in that sentence until
+     *  2026-10-17, when the list was corrected rather than the route. */
     .get("/values", values, async (c) => {
       const now = deps.now();
       let valued;
