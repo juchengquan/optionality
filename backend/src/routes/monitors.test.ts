@@ -126,6 +126,25 @@ describe("thresholds", () => {
     expect((await put(id, single({ threshold: 0 }))).status).toBe(422);
   });
 
+  it("says WHICH rule the threshold broke, not merely that it broke one", async () => {
+    // Only the 422 was asserted, so the two sentences were interchangeable: a mutation swapping
+    // them broke nothing, and a signed zero could be refused with "must be positive when
+    // compare='abs'" — an error naming a mode you did not use.
+    h = harness();
+    const abs = await body(await post(single({ threshold: 0, compare: "abs" })));
+    expect(abs.detail, "the abs rule").toMatch(/must be positive when compare='abs'/);
+
+    const signed = await body(await post(single({ threshold: 0, compare: "signed" })));
+    expect(signed.detail, "the signed rule").toMatch(/signed threshold cannot be 0/);
+
+    // and PATCH keeps its own shorter wording for the same two faults
+    const id = (await body(await post(single()))).id;
+    const patchedAbs = await body(await patch(id, { threshold: 0, compare: "abs" }));
+    expect(patchedAbs.detail).toMatch(/must be positive when compare='abs'/);
+    const patchedSigned = await body(await patch(id, { threshold: 0, compare: "signed" }));
+    expect(patchedSigned.detail).toMatch(/signed threshold cannot be 0/);
+  });
+
   it("allows a negative threshold in signed mode, and refuses exactly zero", async () => {
     h = harness();
     const created = await post(single({
