@@ -53,11 +53,12 @@ describe("cases/", () => {
     expect(exported.filter((f) => !covered.has(f) && !NOT_PORTED.has(f))).toEqual([]);
   });
 
-  it("lands on each rounding rule's boundary", () => {
+  it("lands on each JavaScript rounding rule's boundary", () => {
     // the reason comparison is exact: these are where JavaScript and Python disagree
     const expectOf = (m: string, name: string) => built[m]!.cases.find((c) => c.name === name)!.expect;
     expect(expectOf("monitor", "12.5 rounds to even")).toBe(12);
     expect(expectOf("exit", "target DTE 12.5 rounds up, as Math.round does"))
       .toMatchObject({ target_dte: 13 });
+    expect(expectOf("quote", "an exact binary half rounds up")).toBe(0.0313); // Python: 0.0312
   });
 });

@@ -12,13 +12,13 @@ phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them, and `data/opti
 Python's database, frozen at the 2026-10-02 cutover and never opened. There is no rollback.
 
 **The TypeScript domain is canonical** (`backend/src/domain/`). A Python package, `optionality` in
-`python/`, is being ported FROM it for notebook use (ADR 0014) and is held to it by the golden cases in
-`cases/` — compared exactly.
+`python/`, is ported FROM it for notebook use (ADR 0014) and held to it by the golden cases in `cases/`,
+compared exactly. A TypeScript domain fix therefore makes `make test` red until the Python is ported.
 
 ## Commands
 
 - `make test` / `make lint` / `make format` — run all three before every commit. `make test` is the Python
-  package's suite (nothing until `python/` lands). `make lint` is ruff plus `check-boundaries`: no package
+  package's suite: every golden case, reproduced exactly. `make lint` is ruff plus `check-boundaries`: no package
   imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas; ADR 0014).
 - `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, restart BOTH
@@ -60,7 +60,9 @@ Python's database, frozen at the 2026-10-02 cutover and never opened. There is n
   `cases/` (the golden cases' inputs and builder).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
 - `cases/` — the golden cases (generated). `tools/check-boundaries.mjs` — the package-boundary lint.
-- `python/` — the `optionality` package, once it lands (ADR 0014).
+- `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
+  for module (snake_case the only translation), `_js.py` holds the JavaScript rounding the port must
+  reproduce, `opend.py` needs the `opend` extra. `tests/test_cases.py` runs every golden case.
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
