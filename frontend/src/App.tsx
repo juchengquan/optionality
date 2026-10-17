@@ -236,6 +236,8 @@ export function App() {
       <Settings
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        quotes={quotes}
+        health={health}
         refresh={refresh}
         sweepSeconds={health?.settings.sweep_seconds}
         onRefresh={(n) => {

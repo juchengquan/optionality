@@ -104,3 +104,31 @@ describe("how the line reads", () => {
     expect(screen.getByRole("status").textContent).toContain("1 needs you");
   });
 });
+
+describe("what only the Service panel can see", () => {
+  const holding = (over: Record<string, unknown> = {}) => ({
+    id: "p9", name: "1130_BS_6950", schedule: {
+      dte_at_open: 45, on_pace: 1, pace_gap: 0, target: 0.5, stop: 2,
+      target_dte: 11, manage_by_dte: 21, reached: "target", manage_by_due: false,
+    }, ...over,
+  } as never);
+
+  it("counts a holding no rule covers, which has no row to speak for it", () => {
+    // the glossary's whole reason for a holdings list: "a Position nothing watches used to appear
+    // nowhere at all". Its Levels are reached whether or not a rule is pointed at it.
+    expect(needs([], health(), [holding()]).map((n) => n.text)).toEqual(["1130_BS_6950 at target"]);
+  });
+
+  it("does not say the same holding twice when a row already spoke for it", () => {
+    // a rule covering one whole holding carries that holding's schedule, so the row and the
+    // holding are the same fact arriving by two routes
+    const covered = row({
+      schedule: schedule({ reached: "target", position_id: "p9" }),
+    });
+    expect(needs([covered], health(), [holding()])).toHaveLength(1);
+  });
+
+  it("passes none by default, which is what the page does", () => {
+    expect(needs([row()], health())).toEqual([]);
+  });
+});

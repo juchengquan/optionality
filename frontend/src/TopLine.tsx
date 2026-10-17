@@ -1,4 +1,4 @@
-import type { Entry, Health } from "./api";
+import type { Entry, Health, Holding } from "./api";
 import { shortContract } from "./format";
 
 /** The one line that says something needs you — and nothing at all when nothing does.
@@ -32,7 +32,13 @@ function rowName(entry: Entry): string {
   return entry.legs ? entry.code : shortContract(entry.snapshot?.name ?? entry.code);
 }
 
-export function needs(quotes: Entry[], health: Health | null): Needed[] {
+/** @param holdings only the Service panel passes these: a holding reached a Level whether or not a
+ *  rule covers it, and the page cannot afford the extra live batch per poll (ADR 0010). Where a
+ *  row already spoke for the same Position, the holding is skipped rather than said twice.
+ */
+export function needs(
+  quotes: Entry[], health: Health | null, holdings: Holding[] = [],
+): Needed[] {
   const out: Needed[] = [];
 
   if (health && !health.opend) {
@@ -52,6 +58,17 @@ export function needs(quotes: Entry[], health: Health | null): Needed[] {
     }
     if (e.schedule?.manage_by_due) {
       out.push({ kind: "manage", text: `${rowName(e)} at its manage-by` });
+    }
+  }
+  const spokenFor = new Set(
+    quotes.map((e) => e.schedule?.position_id).filter((id): id is string => Boolean(id)),
+  );
+  for (const h of holdings) {
+    if (spokenFor.has(h.id)) continue;
+    if (h.schedule?.reached === "stop") out.push({ kind: "stop", text: `${h.name} at stop` });
+    if (h.schedule?.reached === "target") out.push({ kind: "target", text: `${h.name} at target` });
+    if (h.schedule?.manage_by_due) {
+      out.push({ kind: "manage", text: `${h.name} at its manage-by` });
     }
   }
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
