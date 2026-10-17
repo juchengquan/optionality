@@ -4,7 +4,16 @@
  *  value — "Provided value cannot be bound to SQLite parameter" — so every write of `enabled`,
  *  `triggered` or `notify` has to go through here. The Python's rows hold 0 and 1, and so must
  *  ours, or the file stops being one both can read.
+ *
+ *  Minting an id belongs here for the same reason: it is a value shaped for a stored column.
  */
+import { randomUUID } from "node:crypto";
+
+/** A new row id: uuid4().hex in the Python — 32 hex characters, no dashes, which every
+ *  `id VARCHAR(32)` column is sized for. One definition, because a dashed uuid is 36. */
+export function newId(): string {
+  return randomUUID().replaceAll("-", "");
+}
 
 /** A boolean on its way into the database. */
 export function toSqliteBool(value: boolean): 0 | 1 {

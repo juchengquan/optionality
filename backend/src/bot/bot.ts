@@ -10,6 +10,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { buildSpxCode, normalizeStrikeDate } from "../domain/contract.ts";
 import { comboFieldError, monitorLegCodes } from "../domain/monitor.ts";
+import { round4 } from "../domain/quote.ts";
 import {
   findComboByName, findMonitorByCodeField, findMonitorsByIdentifier, insertMonitor, listMonitors,
   updateMonitorFields,
@@ -18,7 +19,7 @@ import { atomic } from "../db/open.ts";
 import type { MonitorRow } from "../db/rows.ts";
 import { clearMonitorLinks, deleteMonitorRow } from "../db/queries.ts";
 import { toSqlDatetime } from "../db/time.ts";
-import { fromSqliteBool, toSqliteBool, toSqliteJson } from "../db/values.ts";
+import { fromSqliteBool, newId, toSqliteBool, toSqliteJson } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import { toMonitor } from "../hydrate.ts";
 import { exitPolicy } from "../domain/exit.ts";
@@ -49,9 +50,6 @@ interface Update {
   update_id?: number;
   message?: { chat?: { id?: unknown }; text?: unknown };
 }
-
-/** uuid4().hex, as every other id in this service is. */
-const newId = () => crypto.randomUUID().replaceAll("-", "");
 
 const LEG_TOKEN = /^([+-])([CP])(\d+(?:\.\d+)?)$/;
 const SHORT_CONTRACT = /^(\d{6})([CP])(\d+)$/;
@@ -517,8 +515,4 @@ function modifiers(extras: string[], defaultField: string) {
     else field = extra;
   }
   return { field, direction, compare };
-}
-
-function round4(value: number): number {
-  return Number(value.toFixed(4));
 }

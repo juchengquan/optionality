@@ -1,9 +1,15 @@
 /** The alarm engine. Ported from monitor.py's MonitorSweeper (ADR 0009, phase 6).
  *
- *  One batched call per sweep for the WHOLE watchlist, and the dashboard makes no call of its own:
- *  it renders the records this kept, so a row's value and its 🔔 always come from the same instant
- *  (CLAUDE.md). The alarm flips truthfully AT the threshold — no value hysteresis; flapping is
- *  throttled by the per-monitor cooldown, and a persisting breach re-reminds on a fixed cadence.
+ *  One batched call per sweep for the WHOLE watchlist. The dashboard does NOT render those records:
+ *  it polls `/quotes` for a live batch of its own, one per poll per open tab (ADR 0010). A row's
+ *  value and its 🔔 still come from the same instant — `buildEntries` reads the watched figure once
+ *  and derives both the fill bar and the bell from it with `isBreached`, this engine's own
+ *  predicate — but that instant is the poll's, not the sweep's, so the dashboard's bell may lead or
+ *  lag what has been sent. `cachedRecords` (and `cachedQuotes`, built on it) still hold the sweep's
+ *  own view of its last batch; NO ROUTE CALLS EITHER, and the comments there say why they are kept.
+ *
+ *  The alarm flips truthfully AT the threshold — no value hysteresis; flapping is throttled by the
+ *  per-monitor cooldown, and a persisting breach re-reminds on a fixed cadence.
  *
  *  Nothing here is auto-deleted except an expired monitor past its retention window. An unknown
  *  contract is quarantined — disabled with a notice, kept for inspection — and never removed.

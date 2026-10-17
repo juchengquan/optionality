@@ -7,3 +7,12 @@
  */
 export type Quote = Record<string, unknown>;
 export type ByCode = Record<string, Quote>;
+
+/** A points figure derived from quotes, rounded for a human.
+ *
+ *  4dp: a credit is quoted in points to two or three places, and rounding is only to keep float
+ *  noise (7.4999999999999964) out of a figure the owner reads back or that is stored as an entry.
+ */
+export function round4(value: number): number {
+  return Number(value.toFixed(4));
+}

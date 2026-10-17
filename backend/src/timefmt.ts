@@ -9,10 +9,10 @@
  *  rendering of a timestamp, and it is the only part of this file the domain needs.
  */
 
+// MARKET_TZ is the exchange's own zone — moomoo delivers market timestamps as naive strings in it.
+// domain/expiry.ts owns it, for deciding what day the market is on; one declaration, not two.
+import { MARKET_TZ } from "./domain/expiry.ts";
 import { fromSqlDatetime } from "./db/time.ts";
-
-/** moomoo delivers market timestamps as naive strings in US Eastern exchange time. */
-const MARKET_TZ = "America/New_York";
 
 /** An empty DISPLAY_TZ means the host's own zone, which is what Python's astimezone() does. */
 function zone(tzName: string): string | undefined {

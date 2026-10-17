@@ -4,7 +4,6 @@
  *  never delete the record of what you own (ADR 0001). That asymmetry is the whole reason legs live
  *  here and not on a Monitor.
  */
-import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -18,7 +17,7 @@ import {
 import { atomic } from "../db/open.ts";
 import { holdingValues } from "../holdings.ts";
 import type { PositionRow } from "../db/rows.ts";
-import { toSqliteJson } from "../db/values.ts";
+import { newId, toSqliteJson } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
 import { volAttribution, type VolSample } from "../domain/vol.ts";
@@ -89,9 +88,6 @@ const create = documented("Create a position", { 201: PositionOut }, [409]);
 const update = documented("Update a position", { 200: PositionOut }, [404]);
 const remove = documented("Delete a position", { 204: null }, [404]);
 
-/** uuid4().hex in the Python — 32 hex characters, which the column is sized for. */
-const newId = () => randomUUID().replaceAll("-", "");
-
 export function positionRoutes(deps: Deps) {
   const { db, settings } = deps;
   const tz = settings.displayTz;
@@ -135,8 +131,11 @@ export function positionRoutes(deps: Deps) {
 
     /** Live cost to close, exposure and P&L for every position.
      *
-     *  One bounded snapshot call for every leg of every position, deduped — a documented live-call
-     *  exception, like `/quotes` (CLAUDE.md). */
+     *  One bounded snapshot call for every leg of every position, deduped. `Holdings.tsx` polls
+     *  this while the panel is open, so it is a live call on the dashboard's path like `/quotes` —
+     *  but CLAUDE.md's one-worker invariant names four exceptions (the sweep, `/spx/quote`,
+     *  `/quotes`, creation probes) and this is not one of them. Undocumented, not sanctioned: the
+     *  list is the owner's to change. */
     .get("/values", values, async (c) => {
       const now = deps.now();
       let valued;

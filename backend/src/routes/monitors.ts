@@ -4,7 +4,6 @@
  *  links it to whatever Position already holds its contracts rather than bringing a Position into
  *  being, and why deleting one leaves the Position alone.
  */
-import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -17,7 +16,7 @@ import {
 } from "../db/queries.ts";
 import { atomic } from "../db/open.ts";
 import type { MonitorRow } from "../db/rows.ts";
-import { fromSqliteBool, toSqliteBool, toSqliteJson } from "../db/values.ts";
+import { fromSqliteBool, newId, toSqliteBool, toSqliteJson } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { exitPolicy } from "../domain/exit.ts";
 import { httpError, notFound } from "../errors.ts";
@@ -61,9 +60,6 @@ const replace = documented("Replace a single monitor", { 200: MonitorOut }, [404
 const update = documented("Update a monitor", { 200: MonitorOut }, [404, 409]);
 const totalEntry = documented("Spread a total entry across the holding", { 200: z.object({ ok: z.literal(true) }) }, [404]);
 const remove = documented("Delete a monitor", { 204: null }, [404]);
-
-/** uuid4().hex in the Python — 32 hex characters, no dashes, which the column is sized for. */
-const newId = () => randomUUID().replaceAll("-", "");
 
 export function monitorRoutes(deps: Deps) {
   const { db, settings } = deps;
@@ -373,7 +369,10 @@ const EntryOut = z.object({
 
 const quotes = documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]);
 
-/** `/quotes` — a live call for the whole watchlist, which the bot uses and the dashboard does not. */
+/** `/quotes` — a live call for the whole watchlist, and the DASHBOARD is its main caller: one
+ *  batch per poll per open tab, which is what makes polling faster cost something (ADR 0010). The
+ *  bot's `/quotes`, `/greeks` and `/vol` answer the same question but go straight to
+ *  `watchlistQuotes` rather than through this route. */
 export function quoteRoutes(deps: Deps) {
   return new Hono().get("/quotes", quotes, async (c) => {
     try {
