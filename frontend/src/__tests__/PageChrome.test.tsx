@@ -36,12 +36,20 @@ const cmb = {
   legs: [{ sign: -1, option_type: "CALL", strike: 8200 }], combo_value: -4.0, combo_greeks: {},
 };
 
-function mockApi(quotes: unknown[], h: Record<string, unknown> = health()) {
+/** @param holdings what /positions/values answers. Defaulted to empty rather than falling through
+ *  to the health body: the Service panel reads holdings, and a mock that hands it an object where
+ *  the API promises an array fails inside the component rather than in the assertion. */
+function mockApi(
+  quotes: unknown[], h: Record<string, unknown> = health(), holdings: unknown[] = [],
+) {
   vi.stubGlobal("fetch", vi.fn((url: string) =>
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        url.endsWith("/quotes") ? quotes : url.endsWith("/monitors") ? [] : h),
+        url.endsWith("/quotes") ? quotes
+          : url.endsWith("/monitors") ? []
+            : url.includes("/positions") ? holdings
+              : h),
     } as Response)));
 }
 
@@ -120,21 +128,25 @@ describe("the settings sheet", () => {
   });
 });
 
-describe("the service status line", () => {
+/** These four pinned the `.health` strip. The strip is now the top line, which says the same
+ *  faults in the same place and appears the same way — so three of them keep their reasons and
+ *  change only what they read. The fourth moved: a non-empty queue is still worth seeing and is
+ *  still not a fault, so it belongs in the Service panel rather than in a line about what needs
+ *  you. A run executing needs nothing from you. */
+describe("the top line, in place of the service status strip", () => {
   it("says nothing at all while there is nothing to say", async () => {
     mockApi([leg]);
     render(<App />);
     await screen.findByText("Single-leg");
-    expect(document.querySelector(".health")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("appears, marked bad, when OpenD is down", async () => {
     mockApi([leg], health({ opend: false }));
     render(<App />);
-    await waitFor(() => expect(document.querySelector(".health")).toBeTruthy());
-    const line = document.querySelector(".health")!;
-    expect(line.textContent).toContain("DOWN");
-    expect(line.querySelector(".bad")!.textContent).toContain("DOWN");
+    const line = await waitFor(() => screen.getByRole("status"));
+    expect(line.textContent).toContain("OpenD down");
+    expect(line.className, "a fault is painted bad").toContain("bad");
   });
 
   it("appears when the alarm engine is not active, which is the quiet failure", async () => {
@@ -142,14 +154,50 @@ describe("the service status line", () => {
       monitor: { last_sweep_at: "x", fetched_at: "x", alarms: { label: "stalled", bad: true } },
     }));
     render(<App />);
-    await waitFor(() => expect(document.querySelector(".health")).toBeTruthy());
-    expect(document.querySelector(".health")!.textContent).toContain("stalled");
+    const line = await waitFor(() => screen.getByRole("status"));
+    expect(line.textContent).toContain("stalled");
   });
 
-  it("appears for a non-empty queue, which is not a fault but is worth seeing", async () => {
+  it("leaves a non-empty queue to the Service panel, because it is not a fault", async () => {
     mockApi([leg], health({ queue_depth: 3 }));
     render(<App />);
-    await waitFor(() => expect(document.querySelector(".health")).toBeTruthy());
-    expect(document.querySelector(".health")!.textContent).toContain("3");
+    await screen.findByText("Single-leg");
+    expect(screen.queryByRole("status"), "a run executing needs nothing from you").toBeNull();
+
+    await userEvent.click(await screen.findByRole("button", { name: "settings" }));
+    const panel = await screen.findByRole("dialog");
+    expect(panel.textContent, "but it is still worth seeing").toContain("queue 3");
+  });
+
+  it("lists a holding at its Level that the page cannot see", async () => {
+    // the page polls one batch per poll (ADR 0010) and a holding no rule covers has no row in it,
+    // so this is the ONLY surface that can say so — which is why the page never claims all clear
+    mockApi([leg], health(), [{
+      id: "p9", name: "1130_BS_6950", entry: 1, contracts: 1, strategy: null,
+      strike_date: "2026-11-30", legs: [], created_at: "x", opened_at: "2026-10-16",
+      cost_to_close: 0.4, pnl: 60, contract_size: 100, greeks: {}, fetched_at: "x", dte: 45,
+      schedule: {
+        dte_at_open: 45, on_pace: 1, pace_gap: -0.6, target: 0.5, stop: 2,
+        target_dte: 11, manage_by_dte: 21, reached: "target", manage_by_due: false,
+      },
+    }]);
+    render(<App />);
+    await screen.findByText("Single-leg");
+    expect(screen.queryByRole("status"), "the page is silent about it").toBeNull();
+
+    await userEvent.click(await screen.findByRole("button", { name: "settings" }));
+    const panel = await screen.findByRole("dialog");
+    expect(panel.textContent).toContain("1130_BS_6950 at target");
+  });
+
+  it("says in full what the page says by staying quiet", async () => {
+    mockApi([leg]);
+    render(<App />);
+    await screen.findByText("Single-leg");
+    await userEvent.click(await screen.findByRole("button", { name: "settings" }));
+    const panel = await screen.findByRole("dialog");
+
+    expect(panel.textContent).toContain("nothing needs you");
+    expect(panel.textContent).toContain("OpenD up");
   });
 });

@@ -142,6 +142,15 @@ tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(
 .badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.75rem;
          padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
          margin-left: 0.3rem; }
+/* The top line. Prominent without shouting: it only exists when it has something to say, so it
+   does not need to compete for attention with anything. `.bad` is added only for a fault or a
+   stop — a target reached is good news and red would read as the opposite. */
+.topline { border: 1px solid var(--border); border-left: 4px solid var(--muted-foreground);
+           border-radius: var(--radius-md); padding: 0.5rem 0.9rem; margin-bottom: 1rem;
+           font-size: 0.9375rem; }
+.topline.bad { border-color: var(--destructive); border-left-color: var(--destructive);
+               background: color-mix(in oklch, var(--destructive) 10%, var(--background)); }
+
 .health { color: var(--muted-foreground); font-size: 0.875rem; margin-bottom: 1.2rem; }
 /* the status strip and the refresh selector sit on one line at a desk and wrap on a
    phone, rather than deciding the page is wider than the screen */

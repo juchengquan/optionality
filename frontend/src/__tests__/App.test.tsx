@@ -145,3 +145,43 @@ describe("the legs, exactly once", () => {
     expect(cells.length, "the leg summary is rendered in more than one place").toBe(1);
   });
 });
+
+/** The one line that says something needs you, in place of the health row it replaces. */
+describe("the top line", () => {
+  it("stays away entirely when nothing needs you", async () => {
+    mockApi([wing, leg]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
+
+    expect(screen.queryByRole("status"), "no line, and no empty space either").toBeNull();
+    expect(screen.queryByText(/needs you|need you/)).toBeNull();
+  });
+
+  it("names what needs you when a rule is ringing", async () => {
+    mockApi([wing, spanning]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1016_IC")).toBeTruthy());
+
+    const line = screen.getByRole("status");
+    expect(line.textContent).toContain("1 needs you");
+    expect(line.textContent).toContain("1016_IC");
+    expect(line.textContent).toContain("ringing");
+  });
+
+  it("absorbs the health row, so a fault is said once and in the same place", async () => {
+    // the row this replaces printed "OpenD: DOWN · alarms: … · queue: 0" in its own strip. Two
+    // strips that each sometimes appear is two places to look at the moment you can least afford
+    // to look twice.
+    mockApi([wing], [], {
+      ...health, opend: false,
+      monitor: { ...health.monitor, alarms: { label: "STALLED (3 failed sweeps)", bad: true } },
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
+
+    const line = screen.getByRole("status");
+    expect(line.textContent).toContain("OpenD down");
+    expect(line.textContent).toContain("STALLED (3 failed sweeps)");
+    expect(screen.queryByText(/OpenD:/), "the old strip is gone").toBeNull();
+  });
+});

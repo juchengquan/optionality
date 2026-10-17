@@ -354,6 +354,9 @@ const EntryOut = z.object({
     stop: z.number().nullable(),
     target_dte: z.number().nullable(),
     manage_by_dte: z.number(),
+    /** which Level the Cost to close has reached, null for neither (CONTEXT.md: Level) */
+    reached: z.enum(["target", "stop"]).nullable(),
+    manage_by_due: z.boolean(),
   }).nullable(),
   entry: z.number().nullable(),
   pnl: z.number().nullable(),

@@ -57,6 +57,20 @@ export interface ExitLevels {
   /** the DTE at which decay ALONE reaches the Target, which is later than people expect */
   target_dte: number | null;
   manage_by_dte: number;
+  /** Which Level today's Cost to close has reached, or null for neither (CONTEXT.md: Level).
+   *
+   *  Decided in the service, not on screen. #129 was the dashboard measuring a figure its own way
+   *  while the engine measured it another — the bell rang for ever on a row the sweep called calm —
+   *  and a client-side `<=` would be a second definition of "reached" with nothing tying it to
+   *  this one. The bot can read the same answer when `/holdings` needs to say it.
+   *
+   *  Never both: a Target is a fraction of a credit and a Stop a multiple of it, so target < stop
+   *  whenever either exists at all.
+   */
+  reached: "target" | "stop" | null;
+  /** Whether the Manage-by deadline has arrived. A deadline, not a Level: it is about time, and
+   *  it arrives whatever the P&L. Inclusive, so the day itself counts. */
+  manage_by_due: boolean;
 }
 
 /** What a Position's Cost to close would be at `dte` if nothing but time had passed.
@@ -93,15 +107,27 @@ export function exitLevels(
   // a credit structure has something to keep a fraction of; a debit's max profit is unbounded,
   // so "take 50%" names nothing and the levels are honestly absent
   const credit = entry !== null && entry > 0;
+  const target = credit ? entry * (1 - policy.takeFraction) : null;
+  const stop = credit ? entry * policy.stopMultiple : null;
+  // AT the level counts, both sides, matching the alarm invariant: "the bell flips truthfully at
+  // the EXACT threshold — no value hysteresis". Stop is asked first; they cannot both hold, and
+  // the worse news winning is the right way round for a check that cannot.
+  let reached: "target" | "stop" | null = null;
+  if (costToClose !== null && target !== null && stop !== null) {
+    if (costToClose >= stop) reached = "stop";
+    else if (costToClose <= target) reached = "target";
+  }
   return {
     on_pace: pace,
     pace_gap: pace === null || costToClose === null ? null : costToClose - pace,
-    target: credit ? entry * (1 - policy.takeFraction) : null,
-    stop: credit ? entry * policy.stopMultiple : null,
+    target,
+    stop,
     // √(d/D₀) = 1 - take  →  d = D₀(1-take)²
     target_dte: credit && openedDte > 0
       ? Math.round(openedDte * (1 - policy.takeFraction) ** 2)
       : null,
     manage_by_dte: policy.manageByDte,
+    reached,
+    manage_by_due: dte <= policy.manageByDte,
   };
 }

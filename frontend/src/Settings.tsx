@@ -2,6 +2,10 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { useCallback, useEffect, useState } from "react";
+
+import { type Entry, type Health, type Holding, fetchHoldings } from "./api";
+import { needs } from "./TopLine";
 import { NativeSelect } from "@/components/ui/native-select";
 
 import { useDismissOnBack } from "./useDismissOnBack";
@@ -24,26 +28,70 @@ export const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
  *  section meant, which is the sign that the grouping is wrong.
  */
 export function Settings({
-  open, onClose, refresh, onRefresh, sweepSeconds,
+  open, onClose, refresh, onRefresh, sweepSeconds, quotes, health,
 }: {
   open: boolean;
   onClose: () => void;
   refresh: number;
+  quotes: Entry[];
+  health: Health | null;
   onRefresh: (seconds: number) => void;
   sweepSeconds?: number;
 }) {
   useDismissOnBack(open, onClose);
 
+  // Holdings only while open, as the holdings list itself does: /positions/values is a LIVE batch
+  // and the page polls one per poll already (ADR 0010). Opening this panel is a deliberate act, so
+  // the extra call is affordable here and nowhere else — which is what lets this surface see the
+  // Levels the top line cannot: a leg rule's holding, and a holding no rule watches at all.
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const load = useCallback(async () => {
+    try {
+      setHoldings(await fetchHoldings());
+    } catch {
+      setHoldings([]);   // the rest of the panel is still worth showing
+    }
+  }, []);
+  useEffect(() => { if (open) void load(); }, [open, load]);
+
+  const items = needs(quotes, health, holdings);
+
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent className="overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Settings</SheetTitle>
+          <SheetTitle>Service</SheetTitle>
           <SheetDescription>
-            Kept in this browser, not on the service — these are yours, not the watchlist's.
+            Where things stand, in full — including when nothing needs you, which the page says by
+            staying quiet.
           </SheetDescription>
         </SheetHeader>
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 flex flex-col gap-5">
+          <section data-testid="needs">
+            <h3 className="text-sm font-semibold mb-1">needs you</h3>
+            {items.length === 0 ? (
+              <p className="meta">nothing needs you</p>
+            ) : (
+              <ul className="meta">
+                {items.map((n) => <li key={n.kind + n.text}>{n.text}</li>)}
+              </ul>
+            )}
+          </section>
+
+          {/* The facts the old strip carried, all of them, all the time — including a non-empty
+              queue, which is not a fault but is worth seeing: a run is executing. */}
+          <section data-testid="service">
+            <h3 className="text-sm font-semibold mb-1">service</h3>
+            <p className="meta">
+              {`OpenD ${health ? (health.opend ? "up" : "down") : "unknown"}`}
+              {health ? ` · alarms ${health.monitor.alarms.label}` : ""}
+              {health ? ` · queue ${health.queue_depth}` : ""}
+            </p>
+            {health?.monitor.last_sweep_at
+              ? <p className="meta">{`last sweep ${health.monitor.last_sweep_at}`}</p>
+              : null}
+          </section>
+
           <Field>
             <FieldLabel htmlFor="s-refresh">refresh every</FieldLabel>
             <NativeSelect
