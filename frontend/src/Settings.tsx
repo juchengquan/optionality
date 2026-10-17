@@ -2,9 +2,11 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useCallback, useEffect, useState } from "react";
 
 import { type Entry, type Health, type Holding, fetchHoldings } from "./api";
+import { type Signal } from "./columns";
 import { needs } from "./TopLine";
 import { NativeSelect } from "@/components/ui/native-select";
 
@@ -28,13 +30,17 @@ export const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
  *  section meant, which is the sign that the grouping is wrong.
  */
 export function Settings({
-  open, onClose, refresh, onRefresh, sweepSeconds, quotes, health,
+  open, onClose, refresh, onRefresh, sweepSeconds, quotes, health, reading, band, onReading, onBand,
 }: {
   open: boolean;
   onClose: () => void;
   refresh: number;
   quotes: Entry[];
   health: Health | null;
+  reading: Signal;
+  band: number;
+  onReading: (signal: Signal) => void;
+  onBand: (band: number) => void;
   onRefresh: (seconds: number) => void;
   sweepSeconds?: number;
 }) {
@@ -44,6 +50,9 @@ export function Settings({
   // and the page polls one per poll already (ADR 0010). Opening this panel is a deliberate act, so
   // the extra call is affordable here and nowhere else — which is what lets this surface see the
   // Levels the top line cannot: a leg rule's holding, and a holding no rule watches at all.
+  const [bandText, setBandText] = useState(String(band));
+  useEffect(() => { if (open) setBandText(String(band)); }, [open, band]);
+
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const load = useCallback(async () => {
     try {
@@ -91,6 +100,54 @@ export function Settings({
               ? <p className="meta">{`last sweep ${health.monitor.last_sweep_at}`}</p>
               : null}
           </section>
+
+          <Field>
+            <FieldLabel htmlFor="s-signal">flag on</FieldLabel>
+            <NativeSelect
+              id="s-signal"
+              aria-label="flag on"
+              value={reading}
+              onChange={(e) => onReading(e.target.value === "pressure" ? "pressure" : "distance")}
+            >
+              <option value="distance">distance — how close to firing</option>
+              <option value="pressure">pressure — close, and soon</option>
+            </NativeSelect>
+            <FieldDescription>
+              What earns a row the second colour. <b>Distance</b> is the bar itself: one small move
+              and Telegram sends, whether expiry is tomorrow or in seven weeks. <b>Pressure</b>
+              weighs that by how little time is left, so 99% at 48 DTE sits quiet while 70% at 3 DTE
+              does not{health ? ` — the horizon is your manage-by, ${health.settings.manage_by_dte} DTE` : ""}.
+              Neither changes the bar, which is always the distance.
+            </FieldDescription>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="s-band">flag above</FieldLabel>
+            {/* The text is held here and only a VALID value is committed. Bound straight to the
+                number, the field cannot be edited at all: clearing it sends "" , which is rejected,
+                so React puts the old value back and every keystroke appends to it. Same reason
+                NumberField exists for the threshold box. */}
+            <Input
+              id="s-band"
+              aria-label="flag above"
+              type="number"
+              min={1}
+              max={100}
+              value={bandText}
+              onChange={(e) => {
+                setBandText(e.target.value);
+                const n = Number(e.target.value);
+                if (e.target.value !== "" && Number.isFinite(n) && n >= 1 && n <= 100) onBand(n);
+              }}
+              onBlur={() => setBandText(String(band))}
+            />
+            <FieldDescription>
+              The colour is worth having only while it stays rare. On 2026-10-17 the book read
+              99/97/94/94/88/53/49, so a band of 90 put four of seven rows in it. Pressure is a
+              discounted fill, so the two readings are not on one scale — switching to it without
+              lowering this turns the colour off rather than moving it.
+            </FieldDescription>
+          </Field>
 
           <Field>
             <FieldLabel htmlFor="s-refresh">refresh every</FieldLabel>

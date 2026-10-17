@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 
 import type { Entry, HoldingValues } from "./api";
-import { IMMINENT_FILL, LEFT, signalColumns, type Column } from "./columns";
+import { LEFT, imminentReading, signalColumns, type Column, type Signal } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
 
 /** Somewhere the name may fold when the column is capped on a narrow screen.
@@ -70,12 +70,19 @@ export interface RowHandlers {
 }
 
 export function WatchlistTable({
-  title, entries, columns, isCombo, onOpen, containerRef, picker, add,
+  title, entries, columns, isCombo, onOpen, containerRef, picker, add, reading, band, horizon,
 }: {
   title: string;
   entries: Entry[];
   columns: Column[];
   isCombo: boolean;
+  /** what the second colour is earned against, and the band it clears. The BAR is untouched by
+   *  both: it is always the distance travelled toward the threshold. Named `reading` because
+   *  `signal` is taken here by signalColumns' answer — which columns carry the bar and the bell. */
+  reading: Signal;
+  band: number;
+  /** the manage-by DTE, from /health — the horizon pressure weighs a fill against */
+  horizon: number;
   onOpen: (entry: Entry, isCombo: boolean) => void;
   containerRef?: React.Ref<HTMLDivElement>;
   /** this table's column choices, sat beside its name rather than in the page's chrome */
@@ -132,8 +139,8 @@ export function WatchlistTable({
                   const hl = c.key === signal.fill;
                   // a fired row has its own colour and outranks this: two markings on one
                   // row would say nothing about which state it is in
-                  const imminent =
-                    hl && !entry.triggered && entry.fill !== null && entry.fill >= IMMINENT_FILL;
+                  const imminent = hl && !entry.triggered && entry.fill !== null
+                    && imminentReading(entry.fill, entry.dte, reading, horizon) >= band;
                   const classes = [
                     hl ? "hl" : "",
                     imminent ? "imminent" : "",

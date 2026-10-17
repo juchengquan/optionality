@@ -71,6 +71,38 @@ export const COMBO_COLUMNS: Column[] = [
  */
 export const IMMINENT_FILL = 90;
 
+/** What the second colour is earned against, and the band it has to clear.
+ *
+ *  "distance" is the fill as it has always been: how far the value has travelled toward its
+ *  threshold. The comment above argues that is the honest reading, because the band is a fact
+ *  about the ALARM rather than a judgement about the trade — one small move and Telegram sends,
+ *  whether expiry is tomorrow or in seven weeks.
+ *
+ *  "pressure" makes the other claim on purpose: it weighs that distance by how little time is
+ *  left, so a 99% at 48 DTE sits quiet and a 70% at 3 DTE does not. Measured on 2026-10-17, the
+ *  live book was 99/97/94/94/88/53/49 at 44-48 DTE — four rows wearing a colour meant to be rare,
+ *  with the loudest of them the least urgent thing owned.
+ *
+ *  Neither touches the bar, which is always the distance. Length says how close; colour says
+ *  whether that closeness has been earned. Two channels, two meanings.
+ */
+export type Signal = "distance" | "pressure";
+
+export const DEFAULT_BAND = IMMINENT_FILL;
+
+/** The horizon is the manage-by DTE, served by /health so this is not a second copy of 21. */
+export function pressure(fill: number, dte: number, horizon: number): number {
+  if (horizon <= 0) return fill;
+  // inside the horizon there is nothing left to discount: close really is urgent there
+  return (fill * horizon) / Math.max(dte, horizon);
+}
+
+export function imminentReading(
+  fill: number, dte: number, signal: Signal, horizon: number,
+): number {
+  return signal === "pressure" ? pressure(fill, dte, horizon) : fill;
+}
+
 export const LEFT = new Set(["contract", "combo", "alarm", "entry"]);
 
 /** The cookie stores what is HIDDEN, not what is kept, so a column added later shows up by
@@ -83,6 +115,30 @@ export function readHidden(table: "single" | "combo"): Set<string> {
     ?.split("=")[1];
   const value = raw ? decodeURIComponent(raw).replace(/^"|"$/g, "") : "";
   return new Set(value.split(".").filter((k) => k && !isPinned(table, k)));
+}
+
+/** The signal and its band are viewer preferences, so they live in cookies beside the hidden
+ *  columns and the refresh interval — CLAUDE.md: behaviour knobs live in .env, viewer preferences
+ *  live in the browser, and there is no DB config layer. */
+export function readSignal(): Signal {
+  const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_signal="))?.split("=")[1];
+  return raw === "pressure" ? "pressure" : "distance";
+}
+
+export function writeSignal(signal: Signal): void {
+  document.cookie = `ui_signal=${signal};path=/;max-age=31536000;samesite=lax`;
+}
+
+/** Out-of-range or unparseable falls back rather than throwing: a cookie is user-editable, and a
+ *  band of NaN would flag every row or none with nothing on screen to explain it. */
+export function readBand(): number {
+  const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_band="))?.split("=")[1];
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 && n <= 100 ? n : DEFAULT_BAND;
+}
+
+export function writeBand(band: number): void {
+  document.cookie = `ui_band=${band};path=/;max-age=31536000;samesite=lax`;
 }
 
 export function writeHidden(table: "single" | "combo", hidden: Set<string>): void {
