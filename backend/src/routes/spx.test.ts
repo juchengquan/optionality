@@ -23,18 +23,18 @@ describe("one live quote", () => {
     expect(resp.status).toBe(200);
     const data = await body(resp);
     expect(data.code).toBe("US.SPXW261218C6500000");
-    expect(data.snapshot.last_price).toBe(12.3);
+    expect(data.quote.last_price).toBe(12.3);
     // the market timestamp is Eastern on the wire and the display zone on the way out
-    expect(data.snapshot.update_time).toBe("2026-08-10 08:15:00+08:00");
+    expect(data.quote.update_time).toBe("2026-08-10 08:15:00+08:00");
     // the call-time stamp beside the last-trade time: update_time means LAST TRADE, not freshness
-    expect(data.snapshot.fetched_at).toMatch(/\+08:00$/);
+    expect(data.quote.fetched_at).toMatch(/\+08:00$/);
   });
 
   it("leaves a quote with no update_time alone", async () => {
     h = harness({ fetchQuotes: (codes) => Promise.resolve([{ code: codes[0]!, last_price: 1 }]) });
     const data = await body(await ask(CALL_6500));
-    expect(data.snapshot.update_time).toBeUndefined();
-    expect(data.snapshot.fetched_at).toMatch(/\+08:00$/);
+    expect(data.quote.update_time).toBeUndefined();
+    expect(data.quote.fetched_at).toMatch(/\+08:00$/);
   });
 
   it("validates the parameters", async () => {

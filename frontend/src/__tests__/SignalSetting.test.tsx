@@ -15,7 +15,7 @@ const loud = {
   id: "m1", code: "1204_BS_6950", field: "mid_price", threshold: 2.79,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-12-04",
   dte: 48, fill: 99, scope: null, positions: [], cost_to_close: null, schedule: null,
-  entry: null, pnl: null, snapshot: null,
+  entry: null, pnl: null, quote: null,
   legs: [{ sign: -1, option_type: "PUT", strike: 6950 }, { sign: 1, option_type: "PUT", strike: 6900 }],
   combo_value: -2.75, combo_greeks: {},
 };

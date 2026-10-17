@@ -18,7 +18,7 @@ const base = {
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 57, scope: "leg", positions: [{ id: "p1", name: "1120_b_8100" }],
   cost_to_close: 3.75, entry: null, pnl: null,
-  snapshot: { name: "SPXW 261120 8100.00C", option_delta: 0.1685, mid_price: 31.5 },
+  quote: { name: "SPXW 261120 8100.00C", option_delta: 0.1685, mid_price: 31.5 },
 };
 
 async function bandColour(fill: number, triggered: boolean): Promise<string> {

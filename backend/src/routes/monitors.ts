@@ -307,7 +307,7 @@ export function monitorRoutes(deps: Deps) {
  *  while the service promised nothing of the kind, so the hand-written interface was a claim rather
  *  than a fact. With `hc` reading this, it is a fact.
  */
-const SnapshotOut = z.looseObject({
+const QuoteOut = z.looseObject({
   code: z.string().nullish(),
   name: z.string().nullish(),
   update_time: z.string().nullish(),
@@ -336,7 +336,7 @@ const EntryOut = z.object({
   /** breaching NOW, by the figures in this same row. The engine's own verdict and its last value
    *  live on /monitors, which is what that endpoint is for (ADR 0010). */
   triggered: z.boolean(),
-  snapshot: SnapshotOut.nullable(),
+  quote: QuoteOut.nullable(),
   legs: z.array(z.object({
     sign: z.number(), option_type: z.string(), strike: z.number(),
   })).optional(),

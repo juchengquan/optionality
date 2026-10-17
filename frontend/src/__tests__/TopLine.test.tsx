@@ -22,7 +22,7 @@ const row = (over: Record<string, unknown> = {}): Entry => ({
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 45, fill: 10, scope: "all", positions: [{ id: "p1", name: "spread" }],
   cost_to_close: 1, entry: 1, pnl: 0, schedule: null,
-  snapshot: { name: "SPXW 261120 8100.00C" }, ...over,
+  quote: { name: "SPXW 261120 8100.00C" }, ...over,
 } as unknown as Entry);
 
 describe("what needs you", () => {

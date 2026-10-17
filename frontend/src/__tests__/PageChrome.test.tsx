@@ -26,13 +26,13 @@ const leg = {
   id: "m1", code: "US.SPXW261120C8100000", field: "option_delta", threshold: 0.2,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 45, fill: 84, scope: "leg", positions: [], cost_to_close: null, entry: null, pnl: null,
-  snapshot: { name: "SPXW 261120 8100.00C", option_delta: 0.17, mid_price: 31.5 },
+  quote: { name: "SPXW 261120 8100.00C", option_delta: 0.17, mid_price: 31.5 },
 };
 const cmb = {
   id: "c1", code: "1120_IC", field: "mid_price", threshold: 7.81,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 45, fill: 50, scope: "all", positions: [{ id: "p1", name: "1120_IC" }],
-  cost_to_close: 4.0, entry: 6.86, pnl: 286, snapshot: null,
+  cost_to_close: 4.0, entry: 6.86, pnl: 286, quote: null,
   legs: [{ sign: -1, option_type: "CALL", strike: 8200 }], combo_value: -4.0, combo_greeks: {},
 };
 

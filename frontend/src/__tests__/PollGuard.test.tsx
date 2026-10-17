@@ -19,7 +19,7 @@ const wing = {
   id: "m1", code: "1016_bs_8050", field: "mid_price", threshold: 2.76,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-10-16",
   dte: 22, fill: 29, scope: "all", positions: [{ id: "p1", name: "1016_bs_8050" }],
-  cost_to_close: 0.8, entry: 2.87, pnl: 207, snapshot: null,
+  cost_to_close: 0.8, entry: 2.87, pnl: 207, quote: null,
   legs: [{ sign: -1, option_type: "CALL", strike: 8050 }], combo_value: -0.8, combo_greeks: {},
 };
 

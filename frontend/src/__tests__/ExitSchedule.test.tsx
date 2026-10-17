@@ -21,7 +21,7 @@ const scheduled = {
   id: "c1", code: "1120_IC_7100_8200", field: "mid_price", threshold: 7.51,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 39, fill: 86, scope: "all", positions: [{ id: "p1", name: "1120_IC_7100_8200" }],
-  cost_to_close: 6.45, entry: 6.86, pnl: 41, snapshot: null,
+  cost_to_close: 6.45, entry: 6.86, pnl: 41, quote: null,
   legs: [{ sign: -1, option_type: "CALL", strike: 8200 }],
   combo_value: -6.45, combo_greeks: {},
   schedule: {

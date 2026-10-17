@@ -534,7 +534,7 @@ describe("the sweep's cached view", () => {
 
     const { entries } = s.cachedQuotes();
     expect(entries).toHaveLength(1);
-    expect(entries[0]!.snapshot!.option_delta).toBe(0.7);
+    expect(entries[0]!.quote!.option_delta).toBe(0.7);
     expect(entries[0]!.triggered).toBe(true);
   });
 
@@ -559,7 +559,7 @@ describe("the sweep's cached view", () => {
     const other = "US.SPXW261218P6000000";
     monitor({ code: other, option_type: "PUT", strike: 6000 });
     const { entries } = s.cachedQuotes();
-    expect(entries.find((e) => e.code === other)!.snapshot).toBeNull();
+    expect(entries.find((e) => e.code === other)!.quote).toBeNull();
   });
 
   it("drops a quarantined monitor from the watchlist", async () => {
@@ -587,7 +587,7 @@ describe("the sweep's cached view", () => {
     db.prepare("update monitors set enabled = 1, disabled_reason = null where id = ?").run(poison);
 
     const entry = s.cachedQuotes().entries.find((e) => e.code === POISON)!;
-    expect(entry.snapshot).toBeNull();
+    expect(entry.quote).toBeNull();
     expect(entry.error).toBe("unknown contract");
   });
 });

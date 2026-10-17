@@ -21,7 +21,7 @@ const row = {
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 57, fill: 84, scope: "leg", positions: [{ id: "p1", name: "1120_b_8100" }],
   cost_to_close: 3.75, entry: null, pnl: null,
-  snapshot: {
+  quote: {
     name: "SPXW 261120 8100.00C", option_delta: 0.1685, option_gamma: 0.00009,
     option_theta: -0.42, option_vega: 0.33, option_implied_volatility: 0.1712,
     mid_price: 31.5, bid_price: 31.3, ask_price: 31.7,
@@ -51,7 +51,7 @@ const combo = {
     dte_at_open: 45, on_pace: 6.39, pace_gap: 0.06,
     target: 3.43, stop: 13.72, target_dte: 11, manage_by_dte: 21,
   },
-  snapshot: null,
+  quote: null,
 };
 
 /** the headers of one table, in order. `headers()` above reads BOTH tables at once, which is
@@ -268,7 +268,7 @@ describe("fitting, measured for real", () => {
   });
 
   it("fits fewer columns when the data is wider", async () => {
-    const longName = { ...row, snapshot: { ...row.snapshot, name: "SPXW 261120 8100.00C EXTRA LONG" } };
+    const longName = { ...row, quote: { ...row.quote, name: "SPXW 261120 8100.00C EXTRA LONG" } };
     mockApi([longName]);
     render(<App />);
     await atWidth(360);
@@ -276,7 +276,7 @@ describe("fitting, measured for real", () => {
 
     // unmount the first App before mounting the second, for the same reason
     cleanup();
-    mockApi([{ ...row, snapshot: { ...row.snapshot, name: "SPX C1" } }]);
+    mockApi([{ ...row, quote: { ...row.quote, name: "SPX C1" } }]);
     render(<App />);
     await atWidth(360);
 
@@ -289,7 +289,7 @@ describe("fitting, measured for real", () => {
     // is that the page stays still AND the whole name survives. This used to assert the
     // table overflowed, which was testing the mechanism rather than the outcome.
     const long = "SPXW 261120 8100.00C QUARANTINED LONG NAME";
-    mockApi([{ ...row, snapshot: { ...row.snapshot, name: long } }]);
+    mockApi([{ ...row, quote: { ...row.quote, name: long } }]);
     render(<App />);
     await atWidth(320);
 

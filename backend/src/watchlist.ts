@@ -30,7 +30,9 @@ export interface WatchlistEntry {
    *  and `/monitors` is where the engine's own record belongs. See ADR 0010. */
   triggered: boolean;
   /** the contract's own figures; null for a combo, which has no single contract */
-  snapshot: QuoteRecord | null;
+  /** the live figures for this contract, or null for a combo — CONTEXT.md calls this a Quote;
+   *  moomoo's "snapshot" stays in opend/, which is where their wire format belongs */
+  quote: QuoteRecord | null;
   legs?: MonitorLeg[];
   combo_value?: number | null;
   combo_greeks?: Record<string, number | null>;
@@ -76,7 +78,7 @@ export interface EntryInputs {
 
 /** Watchlist entries for a set of monitors against an already-fetched batch of records.
  *
- *  Combo entries carry their signed sum under `combo_value` and no per-contract snapshot: summing
+ *  Combo entries carry their signed sum under `combo_value` and no per-contract quote: summing
  *  other fields under the combo's signs would fabricate plausible-but-wrong aggregates, and IV is
  *  never summed at all (CLAUDE.md).
  */
@@ -85,7 +87,7 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
   return monitors.map((m) => {
     const isCombo = Boolean(m.legs && m.legs.length > 0);
     const positions = owned[m.id] ?? [];
-    const snapshot = isCombo ? null : (byCode[m.code] ?? null);
+    const quote = isCombo ? null : (byCode[m.code] ?? null);
 
     const comboValue = isCombo ? monitorValue(m, byCode) : undefined;
     // What it would cost to buy back the options in question (CONTEXT.md) — and "in question"
@@ -127,7 +129,7 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       compare: m.compare,
       // derived below, from the figure this row actually shows
       triggered: false,
-      snapshot,
+      quote,
       dte: daysToExpiry(m.strike_date, now),
       scope: m.scope,
       positions: positions.map((p) => ({ id: p.id, name: p.name })),
@@ -165,7 +167,7 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     // -4.00 and a 4.00 cost to close give the same bell and the same bar.
     const watched = isCombo
       ? (comboValue ?? null)
-      : ((snapshot?.[m.field] ?? null) as number | null);
+      : ((quote?.[m.field] ?? null) as number | null);
     entry.fill = thresholdFill(watched, m.threshold, m.direction, m.compare);
     // An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
     // stored state would be back, by the other door. isBreached is the ENGINE's own predicate fed

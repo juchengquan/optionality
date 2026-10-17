@@ -17,7 +17,7 @@ const combo = {
   id: "m2", code: "1016_bs_8050", field: "mid_price", threshold: 2.76,
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-10-16",
   dte: 22, fill: 29, scope: "all", positions: [{ id: "p2", name: "1016_bs_8050" }],
-  cost_to_close: 0.8, entry: 2.87, pnl: 207, snapshot: null,
+  cost_to_close: 0.8, entry: 2.87, pnl: 207, quote: null,
   combo_value: -0.8, combo_greeks: {},
   legs: [{ sign: -1, option_type: "CALL", strike: 8050 },
          { sign: 1, option_type: "CALL", strike: 8075 }],
@@ -27,7 +27,7 @@ const row = {
   direction: "above", compare: "abs", triggered: false, strike_date: "2026-11-20",
   dte: 57, fill: 84, scope: "leg", positions: [{ id: "p1", name: "1120_b_8100" }],
   cost_to_close: 3.75, entry: null, pnl: null,
-  snapshot: {
+  quote: {
     name: "SPXW 261120 8100.00C", option_delta: 0.1685, option_gamma: 0.00009,
     option_theta: -0.42, option_vega: 0.33, option_implied_volatility: 0.1712,
     mid_price: 31.5, bid_price: 31.3, ask_price: 31.7,

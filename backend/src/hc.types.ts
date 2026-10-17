@@ -117,7 +117,7 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["quotes"]>[number]["cost_to_close"], number | null>>,
   Checked<Exactly<Ok<E["quotes"]>[number]["pnl"], number | null>>,
   Checked<Exactly<Ok<E["quotes"]>[number]["triggered"], boolean>>,
-  Checked<Known<Ok<E["quotes"]>[number]["snapshot"]>>,
+  Checked<Known<Ok<E["quotes"]>[number]["quote"]>>,
   // The Levels a row has reached, which the dashboard's top line is built from. Asserted here
   // because there are three places this can vanish without a word: the domain can compute it, the
   // route's zod schema can strip it, and the client type can lose it — each with the compiler
@@ -154,7 +154,7 @@ export type HcChecks = [
 
   // one contract ----------------------------------------------------------------------
   Checked<Exactly<Ok<E["spx"]>["code"], string>>,
-  Checked<Known<Ok<E["spx"]>["snapshot"]>>,
+  Checked<Known<Ok<E["spx"]>["quote"]>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.

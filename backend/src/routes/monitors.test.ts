@@ -424,7 +424,7 @@ describe("/quotes", () => {
     expect(calls).toBe(0);
   });
 
-  it("carries each monitor's own snapshot and threshold", async () => {
+  it("carries each monitor's own quote and threshold", async () => {
     h = harness();
     await post(single());
     const code = (await body(await h.call("/monitors")))[0].code;
@@ -434,7 +434,7 @@ describe("/quotes", () => {
     await post(single());
     const quotes = await body(await h.call("/quotes"));
     expect(quotes).toHaveLength(1);
-    expect(quotes[0].snapshot.option_delta).toBe(0.33);
+    expect(quotes[0].quote.option_delta).toBe(0.33);
     expect(quotes[0].threshold).toBe(0.6);
     expect(quotes[0].dte).toBe(30);
   });

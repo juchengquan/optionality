@@ -42,7 +42,9 @@ type MonitorsResponse = Exclude<Infer<typeof client.monitors.$get>, { detail: st
 export type Entry = QuotesResponse[number];
 export type Monitor = MonitorsResponse[number];
 export type Health = Exclude<Infer<typeof client.health.$get>, { detail: string }>;
-export type Snapshot = NonNullable<Entry["snapshot"]>;
+/** The live figures for one contract. CONTEXT.md calls this a Quote; moomoo's "snapshot"
+ *  stays in the service's opend/ layer, which is where their wire format belongs. */
+export type Quote = NonNullable<Entry["quote"]>;
 export type Leg = NonNullable<Entry["legs"]>[number];
 // PositionRef is not re-exported: nothing imported it. The old interface declared a `name` the
 // components never read — they take `entry.positions` whole and use `.id`. Five types replace six.

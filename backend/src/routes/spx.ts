@@ -26,7 +26,7 @@ const QuoteQuery = z.object({
 
 const QuoteOut = z.object({
   code: z.string(),
-  snapshot: z.record(z.string(), z.unknown()),
+  quote: z.record(z.string(), z.unknown()),
 });
 
 const quote = documented("One live quote for one SPX contract", { 200: QuoteOut }, [404, 502]);
@@ -52,11 +52,13 @@ export function spxRoutes(deps: Deps) {
     }
     if (records.length === 0) throw httpError(404, `no data for ${code}`);
 
-    const snapshot = { ...records[0]! };
-    if (snapshot.update_time) {
-      snapshot.update_time = marketTimeToDisplay(String(snapshot.update_time), deps.settings.displayTz);
+    // `record` rather than `snapshot`: this is moomoo's wire shape on the way in, and a Quote on
+    // the way out. `quote` is the route descriptor, so the local cannot take that name.
+    const record = { ...records[0]! };
+    if (record.update_time) {
+      record.update_time = marketTimeToDisplay(String(record.update_time), deps.settings.displayTz);
     }
-    snapshot.fetched_at = displayTime(deps.now(), deps.settings.displayTz);
-    return quote.reply(c, 200, { code, snapshot });
+    record.fetched_at = displayTime(deps.now(), deps.settings.displayTz);
+    return quote.reply(c, 200, { code, quote: record });
   });
 }

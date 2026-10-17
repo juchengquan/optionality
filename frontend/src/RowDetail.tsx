@@ -96,7 +96,7 @@ export function RowDetail({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isCombo ? entry.code : shortContract(entry.snapshot?.name ?? entry.code)}</SheetTitle>
+          <SheetTitle>{isCombo ? entry.code : shortContract(entry.quote?.name ?? entry.code)}</SheetTitle>
           <SheetDescription>
             {alarmText(entry.field, entry.direction, entry.threshold, entry.compare)}
             {entry.triggered ? " 🔔" : null}
