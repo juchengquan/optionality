@@ -131,6 +131,9 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "round4", name: "2.675", args: [2.675] },
     { fn: "round4", name: "negative", args: [-0.12345] },
     { fn: "round4", name: "float noise", args: [0.1 + 0.2] },
+    // exactly half in binary, the only place toFixed (ties up) and Python's round (ties even) part
+    { fn: "round4", name: "an exact binary half rounds up", args: [0.03125] },
+    { fn: "round4", name: "an exact binary half, negative, rounds away from zero", args: [-0.03125] },
   ],
   position: [
     { fn: "scopedLegs", name: "the calls of a condor", args: [condor, "calls"] },
