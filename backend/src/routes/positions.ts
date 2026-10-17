@@ -29,6 +29,7 @@ import { adoptOrphanMonitors } from "../positions.ts";
 import { displayRecords, fetchResilient, verifyContracts } from "../quotes.ts";
 import { DEFAULT_CONTRACTS, PositionIn, PositionPatch } from "../schemas/position.ts";
 import { displayStored, displayTime } from "../timefmt.ts";
+import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 
 const LegOut = z.object({
@@ -145,13 +146,13 @@ export function positionRoutes(deps: Deps) {
   };
 
   return new Hono()
-    .get("/", (c) => c.json(z.array(PositionOut).parse(listPositions(db).map(out)), 200))
+    .get("/", documented("List positions", { 200: z.array(PositionOut) }), (c) => c.json(z.array(PositionOut).parse(listPositions(db).map(out)), 200))
 
     /** Live cost to close, exposure and P&L for every position.
      *
      *  One bounded snapshot call for every leg of every position, deduped — a documented live-call
      *  exception, like `/quotes` (CLAUDE.md). */
-    .get("/values", async (c) => {
+    .get("/values", documented("Live value, P&L and exit schedule of every position", { 200: z.array(PositionValues) }, [502]), async (c) => {
       const rows = listPositions(db);
       if (rows.length === 0) return c.json([] as z.output<typeof PositionValues>[], 200);
       const positions = rows.map(toPosition);
@@ -195,7 +196,7 @@ export function positionRoutes(deps: Deps) {
      *  from the gap it is showing, which keeps the gap and the vol part from being measured
      *  against two different instants (ADR 0010).
      */
-    .get("/:id/vol", (c) => {
+    .get("/:id/vol", documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]), (c) => {
       const id = c.req.param("id");
       const row = findPosition(db, id);
       if (!row) throw notFound("position");
@@ -210,7 +211,7 @@ export function positionRoutes(deps: Deps) {
       return c.json(VolOut.parse(a ?? { vol: null, from: null, to: null, days: null }), 200);
     })
 
-    .post("/", valid("json", PositionIn), async (c) => {
+    .post("/", documented("Create a position", { 201: PositionOut }, [409]), valid("json", PositionIn), async (c) => {
       const p = c.req.valid("json");
       if (findPositionByName(db, p.name)) {
         throw httpError(409, `position '${p.name}' already exists`);
@@ -242,7 +243,7 @@ export function positionRoutes(deps: Deps) {
     })
 
     /** Record what was taken in, after the fact. */
-    .patch("/:id", valid("json", PositionPatch), (c) => {
+    .patch("/:id", documented("Update a position", { 200: PositionOut }, [404]), valid("json", PositionPatch), (c) => {
       const given = c.req.valid("json");
       if (Object.keys(given).length === 0) throw httpError(422, "nothing to update");
       const id = c.req.param("id");
@@ -255,7 +256,7 @@ export function positionRoutes(deps: Deps) {
       return c.json(PositionOut.parse(out(updatePositionFields(db, id, changes))), 200);
     })
 
-    .delete("/:id", async (c) => {
+    .delete("/:id", documented("Delete a position", { 204: null }, [404]), async (c) => {
       const id = c.req.param("id");
       if (!findPosition(db, id)) throw notFound("position");
       // the same foreign-key fault the monitor side had: monitor_positions is a plain table, so the

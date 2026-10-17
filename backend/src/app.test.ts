@@ -2,8 +2,8 @@
  *
  *  Ported from tests/test_app.py (ADR 0009, phase 5). One of its four tests does not come across:
  *  `test_root_path_prefixes_openapi_url_for_reverse_proxy` asserts that FastAPI's /docs page points
- *  at a prefixed openapi.json. Hono serves no such page, so there is nothing to assert — recorded
- *  as a deliberate gap rather than quietly dropped. See the phase 5 notes in the plan.
+ *  at a prefixed openapi.json. Hono served no such page, so the port recorded it as a gap; since
+ *  /docs was added, the test lives in openapi.test.ts.
  */
 import { afterEach, describe, expect, it } from "vitest";
 

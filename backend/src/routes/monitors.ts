@@ -29,6 +29,7 @@ import {
 } from "../schemas/monitor.ts";
 import { verifyContracts } from "../quotes.ts";
 import { displayStored } from "../timefmt.ts";
+import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 
 const MonitorOut = z.object({
@@ -113,13 +114,13 @@ export function monitorRoutes(deps: Deps) {
   });
 
   return new Hono()
-    .get("/", (c) => {
+    .get("/", documented("List monitors", { 200: z.array(MonitorOut) }), (c) => {
       const rows = listMonitors(db);
       const owned = positionsForMonitors(db, rows.map((r) => r.id));
       return c.json(z.array(MonitorOut).parse(rows.map((r) => out(r, owned))), 200);
     })
 
-    .post("/", valid("json", MonitorCreateIn), async (c) => {
+    .post("/", documented("Create a monitor, single or combo", { 201: MonitorOut }, [409]), valid("json", MonitorCreateIn), async (c) => {
       const payload = c.req.valid("json");
       // the payload shape decides: single-leg (option_type + strike) or combo (name + legs)
       return isCombo(payload) ? createCombo(payload) : createSingle(payload);
@@ -191,7 +192,7 @@ export function monitorRoutes(deps: Deps) {
       }
     })
 
-    .put("/:id", valid("json", MonitorIn), async (c) => {
+    .put("/:id", documented("Replace a single monitor", { 200: MonitorOut }, [404, 409]), valid("json", MonitorIn), async (c) => {
       const id = c.req.param("id");
       const row = findMonitor(db, id);
       if (!row) throw notFound("monitor");
@@ -223,7 +224,7 @@ export function monitorRoutes(deps: Deps) {
       return c.json(MonitorOut.parse(out(updated)), 200);
     })
 
-    .patch("/:id", valid("json", MonitorPatch), (c) => {
+    .patch("/:id", documented("Update a monitor", { 200: MonitorOut }, [404, 409]), valid("json", MonitorPatch), (c) => {
       const id = c.req.param("id");
       // An absent key means "leave it", not "set it to null". The Python needs exclude_none here
       // because Pydantic defaults every optional field to None and includes it; Zod omits an absent
@@ -268,7 +269,7 @@ export function monitorRoutes(deps: Deps) {
       return c.json(MonitorOut.parse(out(updateMonitorFields(db, id, changes))), 200);
     })
 
-    .post("/:id/total-entry", valid("json", TotalEntryIn), async (c) => {
+    .post("/:id/total-entry", documented("Spread a total entry across the holding", { 200: z.object({ ok: z.literal(true) }) }, [404]), valid("json", TotalEntryIn), async (c) => {
       const id = c.req.param("id");
       if (!findMonitor(db, id)) throw notFound("monitor");
       const why = await applyTotalEntry(db, id, c.req.valid("json").entry);
@@ -276,7 +277,7 @@ export function monitorRoutes(deps: Deps) {
       return c.json({ ok: true } as const, 200);
     })
 
-    .delete("/:id", async (c) => {
+    .delete("/:id", documented("Delete a monitor", { 204: null }, [404]), async (c) => {
       const id = c.req.param("id");
       if (!findMonitor(db, id)) throw notFound("monitor");
       // monitor_positions is a plain table SQLAlchemy never managed, and it is not managed here
@@ -362,7 +363,7 @@ const EntryOut = z.object({
 
 /** `/quotes` — a live call for the whole watchlist, which the bot uses and the dashboard does not. */
 export function quoteRoutes(deps: Deps) {
-  return new Hono().get("/quotes", async (c) => {
+  return new Hono().get("/quotes", documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]), async (c) => {
     try {
       return c.json(
         z.array(EntryOut).parse(
