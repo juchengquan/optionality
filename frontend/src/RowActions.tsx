@@ -124,6 +124,7 @@ export function HoldingForm({ entry, onHolding }: {
   // a lone contract has no signs to read a side from, so it has to be asked — exactly as the
   // add-monitor form asks. A combo's sides come from its legs.
   const [side, setSide] = useState("short");
+  const [why, setWhy] = useState<string | null>(null);
   const isCombo = Array.isArray(entry.legs);
 
   // Nothing to add for a rule spanning several holdings: the split credit is what EntryCell
@@ -151,7 +152,19 @@ export function HoldingForm({ entry, onHolding }: {
       className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (value === null) return;
+        // Either field is enough. The API takes a Position with a null entry — its P&L then reads
+        // unknown rather than inventing one — and the holdings list's own edit form already
+        // patches whatever was filled in; this one demanded a credit and gave no sign when it did
+        // not get one.
+        if (value === null && openedAt === "") {
+          // A button that answers a press with silence is indistinguishable from a broken one.
+          // This read `if (value === null) return`, and on 2026-10-19 three attempts to record a
+          // holding went that way: no request, no message, nothing in the service log to show for
+          // it, because nothing had been sent.
+          setWhy("Type the entry or the day it was opened — a holding needs at least one.");
+          return;
+        }
+        setWhy(null);
         onHolding(entry, {
           entry: value,
           side: isCombo ? undefined : side,
@@ -183,6 +196,7 @@ export function HoldingForm({ entry, onHolding }: {
                onChange={(e) => setOpenedAt(e.target.value)} />
       </Field>
       <Button type="submit" variant="outline" size="sm">record</Button>
+      {why ? <p className="meta w-full" role="alert">{why}</p> : null}
     </form>
   );
 }
