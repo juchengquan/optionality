@@ -138,6 +138,23 @@ td.hl.imminent { background: linear-gradient(to right, var(--imm-fill) var(--fil
 tr.triggered td { background: var(--trig); }
 tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(--fill, 0%),
                                                  var(--trig-hl) var(--fill, 0%)); }
+/* A group heading inside the table (calls/puts, or one expiry). A label, not a row: no grid
+   lines, left-aligned, and the same small uppercase treatment the column headers use.
+
+   position: static UNDOES the sticky first-child rule above, which this cell would otherwise
+   inherit — it IS the first child, and freezing a heading that spans the whole width pins it
+   over the figures as they are swiped past it. Nothing about it needs to stay put: it names
+   the rows under it, which are what moves. */
+tr.group td {
+  position: static; box-shadow: none; border-left: none; border-right: none;
+  text-align: left; white-space: nowrap;
+  padding: 10px 10px 3px; background: var(--background);
+  font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted-foreground); font-weight: 600;
+}
+/* no rule above the first one: the table header is already a line, and two together read as
+   an empty band */
+tr.group:first-child td { padding-top: 4px; border-top: none; }
 .legs { font-size: 0.75rem; color: var(--muted-foreground); font-weight: 400; }
 .badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.75rem;
          padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;

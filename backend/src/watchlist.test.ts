@@ -806,3 +806,29 @@ describe("a combo that covers only part of a holding", () => {
     expect(e!.combo_value).toBe(-4);
   });
 });
+
+describe("what kind of contract a row is", () => {
+  /** The dashboard groups the watchlist by calls and puts, and a single-leg row carried nothing
+   *  to group BY: only `code`, moomoo's `US.SPXW261130C8100000`. Parsing the broker's code string
+   *  in the browser to decide what to draw is a derivation this service already owns — the column
+   *  is NOT NULL on monitors, so saying it costs nothing and no extra OpenD call.
+   */
+  it("names it on a single-leg row", async () => {
+    monitor({ option_type: "PUT" });
+    const [e] = await run(quoting({ [CODE]: { option_delta: 0.5 } }));
+    expect(e!.option_type).toBe("PUT");
+  });
+
+  it("says what the monitors table says for a combo, rather than inventing a kind", async () => {
+    // "CMB" is what a combo is stored as; the row also carries its legs, each with its own type,
+    // and the dashboard groups a combo by THOSE — all-CALL, all-PUT or mixed. Passing the stored
+    // value through keeps this route a report of the row rather than a second opinion about it.
+    combo();
+    const [e] = await run(quoting({
+      [buildSpxCode(EXPIRY, "CALL", 8100)]: { mid_price: 5.0 },
+      [buildSpxCode(EXPIRY, "CALL", 8150)]: { mid_price: 1.0 },
+    }), true);
+    expect(e!.option_type).toBe("CMB");
+    expect(e!.legs?.map((l) => l.option_type)).toEqual(["CALL", "CALL"]);
+  });
+});

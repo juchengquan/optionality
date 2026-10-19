@@ -329,6 +329,10 @@ const EntryOut = z.object({
   id: z.string(),
   code: z.string(),
   strike_date: z.string(),
+  /** CALL or PUT, and CMB for a combo. Named here as well as on the entry because `.parse()`
+   *  STRIPS what this object does not list: a field computed in the service and left out of the
+   *  schema vanishes between the two with nothing failing. */
+  option_type: z.string(),
   field: z.string(),
   threshold: z.number(),
   direction: z.string(),
