@@ -2521,6 +2521,85 @@
         },
         "scope": null
       }
+    },
+    {
+      "fn": "positionsHolding",
+      "name": "one leg shared, one strike unheld",
+      "args": [
+        [
+          {
+            "id": "p2",
+            "name": "1120_CS",
+            "strike_date": "2026-11-20",
+            "contracts": 1,
+            "entry": 1.4,
+            "legs": [
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        [
+          "US.SPXW261120C7150000",
+          "US.SPXW261120C7200000"
+        ]
+      ],
+      "expect": {
+        "found": {
+          "$set": [
+            "p2"
+          ]
+        },
+        "scope": "leg"
+      }
+    },
+    {
+      "fn": "positionsHolding",
+      "name": "more named than is held",
+      "args": [
+        [
+          {
+            "id": "p2",
+            "name": "1120_CS",
+            "strike_date": "2026-11-20",
+            "contracts": 1,
+            "entry": 1.4,
+            "legs": [
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        [
+          "US.SPXW261120C7100000",
+          "US.SPXW261120C7150000",
+          "US.SPXW261120C7200000"
+        ]
+      ],
+      "expect": {
+        "found": {
+          "$set": [
+            "p2"
+          ]
+        },
+        "scope": "all"
+      }
     }
   ]
 }
