@@ -5,7 +5,7 @@
  *  at a prefixed openapi.json. Hono served no such page, so the port recorded it as a gap; since
  *  /docs was added, the test lives in openapi.test.ts.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { type Harness, body, harness } from "./testing.ts";
 
@@ -127,6 +127,89 @@ describe("the bearer token", () => {
       expect((await h.call(path, { anonymous: true })).status, path).toBe(401);
     }
     expect((await h.call("/health", { anonymous: true })).status).toBe(200);
+  });
+});
+
+describe("a refusal in the log", () => {
+  /** A rejected write left no trace on the service at all.
+   *
+   *  2026-10-19: a holding would not record, and there was no way to tell from this side whether
+   *  the request had even arrived — `onError` formats the {detail} body and returns it without a
+   *  word, and a 401 from the auth middleware never reaches `onError` in the first place. The only
+   *  way to split "the browser never sent it" from "the service refused it" was to probe the API
+   *  by hand.
+   */
+  it("names the method, the path and the status of a refusal it threw", async () => {
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      seen.push(args.map(String).join(" "));
+    });
+    try {
+      start();
+      await h.call("/positions", {
+        method: "POST", body: JSON.stringify({ name: 1 }),
+        headers: { "Content-Type": "application/json" },
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    const lines = seen.filter((l) => l.includes("422"));
+    expect(lines.length, `expected exactly one 422 line; saw ${JSON.stringify(seen)}`).toBe(1);
+    expect(lines[0]).toContain("POST");
+    expect(lines[0]).toContain("/positions");
+    expect(lines[0], "and what was wrong with it").toContain("detail");
+  });
+
+  it("names one a route THREW, which is a different path through the app", async () => {
+    // httpError/notFound throw an HTTPException that onError turns into the {detail} body. A
+    // mutation sweep showed the other two cases here are both RETURNED — `valid()` answers 422
+    // itself — so without this the thrown path was logged by nothing and nothing noticed.
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      seen.push(args.map(String).join(" "));
+    });
+    try {
+      start();
+      await h.call("/positions/ghost/vol");
+    } finally {
+      spy.mockRestore();
+    }
+    const lines = seen.filter((l) => l.includes("404"));
+    expect(lines.length, `expected exactly one 404 line; saw ${JSON.stringify(seen)}`).toBe(1);
+    expect(lines[0]).toContain("/positions/ghost/vol");
+    expect(lines[0], "and why").toContain("position not found");
+  });
+
+  it("names one it merely returned, which never passes through onError", async () => {
+    // the auth middleware answers 401 with c.json rather than by throwing
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      seen.push(args.map(String).join(" "));
+    });
+    try {
+      start();
+      await h.call("/positions", { anonymous: true });
+    } finally {
+      spy.mockRestore();
+    }
+    const line = seen.find((l) => l.includes("401"));
+    expect(line, `nothing logged a 401; saw ${JSON.stringify(seen)}`).toBeTruthy();
+    expect(line).toContain("GET");
+  });
+
+  it("says nothing at all about a request that succeeded", async () => {
+    // the log is read by eye during an incident; a line per poll would bury the one that matters
+    const seen: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      seen.push(args.map(String).join(" "));
+    });
+    try {
+      start();
+      await h.call("/health", { anonymous: true });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(seen.filter((l) => l.includes("/health"))).toEqual([]);
   });
 });
 

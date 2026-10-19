@@ -20,12 +20,44 @@ import { spxRoutes } from "./routes/spx.ts";
  *  page cannot hand a token to the fetch of its own spec, and the spec holds no data. */
 const OPEN_PATHS = new Set(["/health", "/openapi.json", "/docs"]);
 
+/** A refusal says so, once, with enough to find it.
+ *
+ *  2026-10-19: a holding would not record, and nothing on this side could tell whether the request
+ *  had arrived at all — the {detail} body went back to the browser and the service said nothing.
+ *  Splitting "the browser never sent it" from "the service refused it" took a hand-made probe
+ *  against the live API.
+ *
+ *  Only 4xx and 5xx. The dashboard polls every 15 seconds per open tab, so a line per request would
+ *  bury the one line that matters under thousands that do not — and this log is read by eye during
+ *  an incident.
+ */
+function sayRefused(method: string, path: string, status: number, detail: string): void {
+  console.error(`${method} ${path} → ${status}${detail ? ` ${detail}` : ""}`);
+}
+
 export function createApp(deps: Deps) {
   const app = new Hono()
+    .use("*", async (c, next) => {
+      await next();
+      // ONE place for both kinds. A handler that RETURNS a refusal — `valid()`'s 422, the 401
+      // below — never reaches onError at all; a handler that THROWS one does, and onError's
+      // response then comes back out through this same await. Logging in both logged the thrown
+      // ones twice, which a test caught after a mutation sweep showed the thrown path was, until
+      // then, exercised by nothing.
+      if (c.res.status < 400) return;
+      let detail = "";
+      try {
+        detail = (await c.res.clone().text()).slice(0, 200);
+      } catch {
+        /* a body that cannot be read twice is not worth failing a request over */
+      }
+      sayRefused(c.req.method, c.req.path, c.res.status, detail);
+    })
     .onError((err, c) => {
       // an HTTPException already carries the {"detail": ...} body the dashboard reads; anything
       // else is a bug, and must still answer in the shape the dashboard can show
       if ("getResponse" in err && typeof err.getResponse === "function") return err.getResponse();
+      // the stack, which the one-line refusal above cannot carry and a bug needs
       console.error("unhandled error:", err);
       return c.json({ detail: "internal error" }, 500);
     })
