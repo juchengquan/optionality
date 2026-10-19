@@ -28,7 +28,9 @@ export function ConfirmDelete({
       <AlertDialogTrigger
         render={<Button type="button" variant="ghost" size="sm">{children ?? "delete"}</Button>}
       />
-      <AlertDialogContent>
+      {/* a reload would re-render the row this is anchored in and take the question away
+          mid-decision, so it holds the poll off (App.beingOperated) */}
+      <AlertDialogContent data-poll="hold">
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
           <AlertDialogDescription>

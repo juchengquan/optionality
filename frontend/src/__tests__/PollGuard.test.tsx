@@ -45,7 +45,18 @@ describe("the poll guard", () => {
     expect(beingOperated(document.body)).toBe(false);
   });
 
-  it("holds it while a threshold box has focus", async () => {
+  it("LETS it through while a threshold box has focus, which it used to hold", async () => {
+    /** Inverted on 2026-10-20, with the evidence rather than on taste.
+     *
+     *  Focus is not editing: a sheet's focus trap puts focus on the first control the moment it
+     *  opens, so "a box has focus" was true for every open sheet and the page stopped polling
+     *  with nothing being typed. And the protection was not real — Wipe.test.tsx lands a reload
+     *  on a half-typed threshold, the service answering a different number, and the typed text
+     *  survives, because these boxes hold their own state and stay mounted across a poll.
+     *
+     *  What remains held is what a reload genuinely disturbs, and it says so itself: the two
+     *  `data-poll="hold"` cases below.
+     */
     mockApi();
     render(<App />);
     await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
@@ -54,7 +65,7 @@ describe("the poll guard", () => {
     const box = within(sheet).getAllByRole("textbox")[0] as HTMLInputElement;
 
     box.focus();
-    expect(beingOperated(document.activeElement)).toBe(true);
+    expect(beingOperated(document.activeElement)).toBe(false);
   });
 
   it("holds it while a column picker is open", async () => {
