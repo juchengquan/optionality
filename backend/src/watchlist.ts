@@ -21,6 +21,10 @@ export interface WatchlistEntry {
   id: string;
   code: string;
   strike_date: string;
+  /** CALL, PUT, or the CMB a combo is stored as — what the monitors column says, passed through.
+   *  The dashboard groups by it, and a single-leg row used to carry nothing to group by: only
+   *  moomoo's `US.SPXW261130C8100000`, which would have had to be parsed in the browser. */
+  option_type: string;
   field: string;
   threshold: number;
   direction: string;
@@ -123,6 +127,7 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       id: m.id,
       code: m.code,
       strike_date: m.strike_date,
+      option_type: m.option_type,
       field: m.field,
       threshold: m.threshold,
       direction: m.direction,

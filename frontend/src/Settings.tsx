@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useCallback, useEffect, useState } from "react";
 
 import { type Entry, type Health, type Holding, fetchHoldings } from "./api";
-import { type Signal } from "./columns";
+import { type Grouping, type Signal } from "./columns";
 import { needs } from "./TopLine";
 import { NativeSelect } from "@/components/ui/native-select";
 
@@ -31,6 +31,7 @@ export const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
  */
 export function Settings({
   open, onClose, refresh, onRefresh, sweepSeconds, quotes, health, reading, band, onReading, onBand,
+  grouping, onGrouping,
 }: {
   open: boolean;
   onClose: () => void;
@@ -41,6 +42,8 @@ export function Settings({
   band: number;
   onReading: (signal: Signal) => void;
   onBand: (band: number) => void;
+  grouping: Grouping;
+  onGrouping: (grouping: Grouping) => void;
   onRefresh: (seconds: number) => void;
   sweepSeconds?: number;
 }) {
@@ -145,6 +148,29 @@ export function Settings({
               99/97/94/94/88/53/49, so a band of 90 put four of seven rows in it. Pressure is a
               discounted fill, so the two readings are not on one scale — switching to it without
               lowering this turns the colour off rather than moving it.
+            </FieldDescription>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="s-group">group rows by</FieldLabel>
+            <NativeSelect
+              id="s-group"
+              aria-label="group rows by"
+              value={grouping}
+              onChange={(e) => onGrouping(
+                e.target.value === "type" || e.target.value === "expiry" ? e.target.value : "none",
+              )}
+            >
+              <option value="none">nothing — one list, as the service returns it</option>
+              <option value="type">calls and puts</option>
+              <option value="expiry">expiry</option>
+            </NativeSelect>
+            <FieldDescription>
+              Divides each table without re-sorting it: every group keeps the order it already had.
+              <b>Calls and puts</b> puts the two wings of a structure together, calls above puts; a
+              spread is grouped by its legs, and a condor, being both, gets its own heading.{" "}
+              <b>Expiry</b> answers the other question a book of several asks — what is happening to
+              one of them. Neither draws a heading where there is only one group to head.
             </FieldDescription>
           </Field>
 

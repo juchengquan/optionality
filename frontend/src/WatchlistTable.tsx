@@ -1,7 +1,9 @@
 import { Fragment } from "react";
 
 import type { Entry, HoldingValues } from "./api";
-import { LEFT, imminentReading, signalColumns, type Column, type Signal } from "./columns";
+import {
+  LEFT, groupRows, imminentReading, signalColumns, type Column, type Grouping, type Signal,
+} from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
 
 /** Somewhere the name may fold when the column is capped on a narrow screen.
@@ -71,6 +73,7 @@ export interface RowHandlers {
 
 export function WatchlistTable({
   title, entries, columns, isCombo, onOpen, containerRef, picker, add, reading, band, horizon,
+  grouping,
 }: {
   title: string;
   entries: Entry[];
@@ -83,6 +86,9 @@ export function WatchlistTable({
   band: number;
   /** the manage-by DTE, from /health — the horizon pressure weighs a fill against */
   horizon: number;
+  /** how the rows are divided up. One group covering the whole table draws no divider, so a
+   *  watchlist of one expiry looks exactly as it did before (columns.ts: groupRows). */
+  grouping: Grouping;
   onOpen: (entry: Entry, isCombo: boolean) => void;
   containerRef?: React.Ref<HTMLDivElement>;
   /** this table's column choices, sat beside its name rather than in the page's chrome */
@@ -126,7 +132,16 @@ export function WatchlistTable({
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry) => {
+          {groupRows(entries, grouping).map((group) => (
+            <Fragment key={group.label ?? "all"}>
+            {group.label ? (
+              // a heading, not a row: it has nothing to open, so it carries no click handler and
+              // the sheet stays shut when it is tapped
+              <tr className="group">
+                <td colSpan={columns.length}>{group.label}</td>
+              </tr>
+            ) : null}
+            {group.rows.map((entry) => {
             const signal = signalColumns(entry, isCombo, shown);
             return (
               <tr
@@ -180,7 +195,9 @@ export function WatchlistTable({
                 })}
               </tr>
             );
-          })}
+            })}
+            </Fragment>
+          ))}
         </tbody>
       </table>
       </div>

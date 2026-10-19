@@ -1,5 +1,5 @@
 import type { Entry } from "./api";
-import { FIELD_COLUMN } from "./format";
+import { FIELD_COLUMN, shortDate } from "./format";
 
 export interface Column {
   key: string;
@@ -101,6 +101,75 @@ export function imminentReading(
   fill: number, dte: number, signal: Signal, horizon: number,
 ): number {
   return signal === "pressure" ? pressure(fill, dte, horizon) : fill;
+}
+
+/** How the rows are divided up inside a table.
+ *
+ *  Calls and puts because the two wings of a credit structure are the two halves of the question
+ *  "which side is moving"; expiry because a watchlist with several of them interleaves them, and
+ *  "what is happening to the 11-30s" is the other way to read the same book.
+ *
+ *  It PARTITIONS and never sorts: each group keeps the order the table already had, which is the
+ *  order the service returns. Grouping should not quietly become a re-sort.
+ */
+export type Grouping = "none" | "type" | "expiry";
+
+/** CALL, PUT, or MIXED for a structure holding both — a condor is both and neither, and calling
+ *  it one of them would file half of it under the wrong heading. A spread's kind comes from its
+ *  LEGS rather than the CMB it is stored as. */
+export function rowKind(entry: Entry): "CALL" | "PUT" | "MIXED" {
+  const legs = entry.legs;
+  if (legs && legs.length > 0) {
+    const kinds = new Set(legs.map((l) => l.option_type));
+    if (kinds.size === 1) return legs[0]!.option_type === "PUT" ? "PUT" : "CALL";
+    return "MIXED";
+  }
+  return entry.option_type === "PUT" ? "PUT" : "CALL";
+}
+
+export interface RowGroup {
+  /** null draws no divider: one group covering the whole table is not information, and on a phone
+   *  it costs a row of height to say nothing. */
+  label: string | null;
+  rows: Entry[];
+}
+
+const KIND_ORDER = ["CALL", "PUT", "MIXED"] as const;
+const KIND_LABEL = { CALL: "calls", PUT: "puts", MIXED: "both sides" } as const;
+
+export function groupRows(entries: Entry[], grouping: Grouping): RowGroup[] {
+  if (grouping === "none" || entries.length === 0) return [{ label: null, rows: entries }];
+
+  const buckets = new Map<string, Entry[]>();
+  for (const entry of entries) {
+    const key = grouping === "type" ? rowKind(entry) : entry.strike_date;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(entry); else buckets.set(key, [entry]);
+  }
+  // calls above puts, the way the wings are drawn; expiries nearest first, which the ISO date
+  // sorts as text
+  const keys = [...buckets.keys()].sort(grouping === "type"
+    ? (a, b) => KIND_ORDER.indexOf(a as "CALL") - KIND_ORDER.indexOf(b as "CALL")
+    : (a, b) => a.localeCompare(b));
+
+  if (keys.length === 1) return [{ label: null, rows: entries }];
+  return keys.map((key) => {
+    const rows = buckets.get(key)!;
+    const label = grouping === "type"
+      ? KIND_LABEL[key as keyof typeof KIND_LABEL]
+      // the DTE is the part worth reading, and it is the same for every row in the group
+      : `${shortDate(key)} · ${rows[0]!.dte} dte`;
+    return { label, rows };
+  });
+}
+
+export function readGrouping(): Grouping {
+  const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_group="))?.split("=")[1];
+  return raw === "type" || raw === "expiry" ? raw : "none";
+}
+
+export function writeGrouping(grouping: Grouping): void {
+  document.cookie = `ui_group=${grouping};path=/;max-age=31536000;samesite=lax`;
 }
 
 export const LEFT = new Set(["contract", "combo", "alarm", "entry"]);

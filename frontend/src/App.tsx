@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddPanel, AddTrigger, type Adding } from "./AddPanel";
 import {
-  COMBO_COLUMNS, SINGLE_COLUMNS, readBand, readHidden, readSignal, writeBand, writeHidden,
-  writeSignal,
+  COMBO_COLUMNS, SINGLE_COLUMNS, readBand, readGrouping, readHidden, readSignal, writeBand,
+  writeGrouping, writeHidden, writeSignal,
 } from "./columns";
 import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
@@ -55,6 +55,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
   const [reading, setReading] = useState(() => readSignal());
+  const [grouping, setGrouping] = useState(() => readGrouping());
   const [band, setBand] = useState(() => readBand());
   const [hiddenSingle, setHiddenSingle] = useState(() => readHidden("single"));
   const [hiddenCombo, setHiddenCombo] = useState(() => readHidden("combo"));
@@ -224,6 +225,7 @@ export function App() {
 
       <WatchlistTable title="Single-leg" entries={singles} columns={singleFit.columns} containerRef={singleFit.ref} isCombo={false}
                       reading={reading} band={band} horizon={health?.settings.manage_by_dte ?? 21}
+                      grouping={grouping}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
                       add={<AddTrigger which="monitor" onOpen={() => setAdding("monitor")} />}
                       picker={<ColumnPicker table="single" label="Single-leg"
@@ -231,6 +233,7 @@ export function App() {
                         hidden={hiddenSingle} onToggle={onToggle} onReset={onReset} />} />
       <WatchlistTable title="Combos" entries={combos} columns={comboFit.columns} containerRef={comboFit.ref} isCombo={true}
                       reading={reading} band={band} horizon={health?.settings.manage_by_dte ?? 21}
+                      grouping={grouping}
                       onOpen={(entry, isCombo) => setDetail({ entry, isCombo })}
                       add={<AddTrigger which="combo" onOpen={() => setAdding("combo")} />}
                       picker={<ColumnPicker table="combo" label="Combos"
@@ -248,6 +251,8 @@ export function App() {
         band={band}
         onReading={(s) => { setReading(s); writeSignal(s); }}
         onBand={(n) => { setBand(n); writeBand(n); }}
+        grouping={grouping}
+        onGrouping={(g) => { setGrouping(g); writeGrouping(g); }}
         refresh={refresh}
         sweepSeconds={health?.settings.sweep_seconds}
         onRefresh={(n) => {
