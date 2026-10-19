@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { recordHolding } from "../api";
 
 /** Recording a holding against a rule.
  *
@@ -103,5 +104,32 @@ describe("recording a holding against a rule", () => {
       within(sheet).getByText(/entry or the day/i),
       "but the form says so",
     ).toBeTruthy();
+  });
+});
+
+/** The same defect one layer down. recordHolding had two `return`s of its own, for cases the form
+ *  cannot now reach — and a function whose purpose that evening was to say what happened should not
+ *  be the second place that goes quiet. Called directly: no UI reaches these. */
+describe("recordHolding when there is nothing it can do", () => {
+  const position = (id: string) => ({ id, name: id, entry: null, opened_at: null });
+
+  it("says a date alone cannot be split across several holdings", async () => {
+    mockApi();
+    const row = {
+      ...combo, scope: "all", positions: [position("p1"), position("p2")],
+    } as unknown as Parameters<typeof recordHolding>[0];
+    await expect(recordHolding(row, rule, { entry: null, opened_at: "2026-10-06" }))
+      .rejects.toThrow(/credit is what gets split/);
+    expect(sent, "and sends nothing, which was already right").toHaveLength(0);
+  });
+
+  it("says so when a patch would carry no fields at all", async () => {
+    mockApi();
+    const row = {
+      ...combo, scope: "all", positions: [position("p1")],
+    } as unknown as Parameters<typeof recordHolding>[0];
+    await expect(recordHolding(row, rule, { entry: null, opened_at: null }))
+      .rejects.toThrow(/type the entry or the day/);
+    expect(sent).toHaveLength(0);
   });
 });

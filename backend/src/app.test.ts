@@ -211,6 +211,55 @@ describe("a refusal in the log", () => {
     }
     expect(seen.filter((l) => l.includes("/health"))).toEqual([]);
   });
+
+  it("names a write that SUCCEEDED, because a refusal is not the only thing worth seeing", async () => {
+    // 2026-10-19, the second half of the same incident: with refusals logged, a press to record the
+    // 11-30 spread still produced no line and no row. "The service refused nothing" and "the
+    // service was never asked" then read identically, so the log still could not say whether the
+    // browser had sent anything. A write is rare and owner-initiated — the flood the comment above
+    // guards against is GETs — so every write says so, whatever its status.
+    const seen: string[] = [];
+    const out = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      seen.push(args.map(String).join(" "));
+    });
+    try {
+      start();
+      const resp = await h.call("/positions", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "1130_BS_6950", strike_date: "2026-11-30", contracts: 1, entry: 2.35,
+          legs: [
+            { side: "short", option_type: "PUT", strike: 6950 },
+            { side: "long", option_type: "PUT", strike: 6900 },
+          ],
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+      expect(resp.status, await resp.text()).toBe(201);
+    } finally {
+      out.mockRestore();
+    }
+    const line = seen.find((l) => l.includes("/positions"));
+    expect(line, `nothing logged the write; saw ${JSON.stringify(seen)}`).toBeTruthy();
+    expect(line).toContain("POST");
+    expect(line).toContain("201");
+  });
+
+  it("still says nothing about a GET that succeeded, which is the flood", async () => {
+    const seen: string[] = [];
+    const spies = [
+      vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => { seen.push(a.map(String).join(" ")); }),
+      vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => { seen.push(a.map(String).join(" ")); }),
+    ];
+    try {
+      start();
+      await h.call("/monitors");
+      await h.call("/health", { anonymous: true });
+    } finally {
+      spies.forEach((s) => s.mockRestore());
+    }
+    expect(seen).toEqual([]);
+  });
 });
 
 describe("the error shape", () => {

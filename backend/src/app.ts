@@ -27,12 +27,21 @@ const OPEN_PATHS = new Set(["/health", "/openapi.json", "/docs"]);
  *  Splitting "the browser never sent it" from "the service refused it" took a hand-made probe
  *  against the live API.
  *
- *  Only 4xx and 5xx. The dashboard polls every 15 seconds per open tab, so a line per request would
- *  bury the one line that matters under thousands that do not — and this log is read by eye during
- *  an incident.
+ *  Every refusal, and every WRITE whatever its status. The second half was added the same evening,
+ *  after refusal logging alone proved too little: a press to record that spread still left no line
+ *  and no row, and "the service refused nothing" read exactly like "the service was never asked".
+ *  Only a line for the write itself splits those two, and it is the split that says whether the
+ *  fault is in the browser or here.
+ *
+ *  Reads that succeed stay silent, and they are the flood: the dashboard polls every 15 seconds per
+ *  open tab, so a line per GET would bury the one line that matters under thousands that do not.
+ *  Writes are owner-initiated and rare — a handful a day — so each one costs nothing to keep. This
+ *  log is read by eye during an incident.
  */
-function sayRefused(method: string, path: string, status: number, detail: string): void {
-  console.error(`${method} ${path} → ${status}${detail ? ` ${detail}` : ""}`);
+function sayRequest(method: string, path: string, status: number, detail: string): void {
+  const line = `${method} ${path} → ${status}${detail ? ` ${detail}` : ""}`;
+  // a refused request is the one being hunted; a write that worked is context around it
+  if (status >= 400) console.error(line); else console.log(line);
 }
 
 export function createApp(deps: Deps) {
@@ -44,14 +53,19 @@ export function createApp(deps: Deps) {
       // response then comes back out through this same await. Logging in both logged the thrown
       // ones twice, which a test caught after a mutation sweep showed the thrown path was, until
       // then, exercised by nothing.
-      if (c.res.status < 400) return;
+      const refused = c.res.status >= 400;
+      if (!refused && c.req.method === "GET") return;
       let detail = "";
-      try {
-        detail = (await c.res.clone().text()).slice(0, 200);
-      } catch {
-        /* a body that cannot be read twice is not worth failing a request over */
+      // only when something went wrong: a created Position's body is its whole shape, and the
+      // reason to log a write at all is that it happened, not what it returned
+      if (refused) {
+        try {
+          detail = (await c.res.clone().text()).slice(0, 200);
+        } catch {
+          /* a body that cannot be read twice is not worth failing a request over */
+        }
       }
-      sayRefused(c.req.method, c.req.path, c.res.status, detail);
+      sayRequest(c.req.method, c.req.path, c.res.status, detail);
     })
     .onError((err, c) => {
       // an HTTPException already carries the {"detail": ...} body the dashboard reads; anything

@@ -280,14 +280,24 @@ export async function recordHolding(
     const body: Record<string, unknown> = {};
     if (values.entry !== null) body.entry = values.entry;
     if (values.opened_at) body.opened_at = values.opened_at;
-    if (Object.keys(body).length === 0) return;
+    // not `return`: this function's whole job that evening was to be the thing that says what
+    // happened. The form guards this case too, and two layers both saying so beats either
+    // layer going quiet — a caller that gets neither a request nor a word cannot tell which.
+    if (Object.keys(body).length === 0) {
+      throw new Error("nothing to record — type the entry or the day it was opened");
+    }
     await sent(client.positions[":id"].$patch({ param: { id: whole[0]!.id }, json: body as never }),
       `/positions/${whole[0]!.id}`);
     return;
   }
   // a split needs a credit to split; there is nothing to apportion from a date alone
   if (whole.length > 1) {
-    if (values.entry === null) return;
+    if (values.entry === null) {
+      throw new Error(
+        `${whole.length} holdings share this rule, so a credit is what gets split between them —`
+        + " a date alone cannot be apportioned, and they have no single Opened to set",
+      );
+    }
     return setTotalEntry(row.id, values.entry);
   }
   if (!rule) throw new Error("the rule this would belong to has not loaded yet");
