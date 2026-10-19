@@ -24,17 +24,31 @@ import { useTableFit } from "./useTableFit";
 import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
 
 
-/** Is the user in the middle of something the poll would wipe?
+/** Is something on screen that a reload would genuinely disturb?
  *
- *  A reload replaces every row, so it must not land while a threshold is half-typed or a
- *  picker is open under the pointer. This list HAS gone stale once already: it named
- *  "details" until phase 4 retired that element, at which point the column pickers stopped
- *  being protected and nothing said so. Hence a test.
+ *  A reload replaces every row, so there has to be a way to hold it off. This decided that by
+ *  looking at what had FOCUS — any input, select, textarea or dialog — and focus is not editing.
+ *
+ *  2026-10-20, measured in a real browser: opening the Service panel moves focus onto its first
+ *  control (`flag on`), and opening a row's detail sheet moves it onto the threshold box. So the
+ *  page stopped polling for as long as either was open, with nothing being edited. The Service
+ *  panel is the only place the cadence can be set, which is how "I chose 30 seconds and nothing
+ *  ever refreshed" happened; and the manual button is behind the sheet and aria-hidden, so there
+ *  was no way out from the keyboard or the mouse. It also defeated the detail sheet, which
+ *  re-reads its row from the live list precisely so its figures stay live.
+ *
+ *  The protection it bought was illusory anyway. `Wipe.test.tsx` lands a reload on a half-typed
+ *  threshold, with the service answering a different number, and the typed text survives: these
+ *  boxes hold their own state and the components stay mounted across a poll. React was already
+ *  doing what the guard claimed to be doing.
+ *
+ *  What a reload DOES disturb is a surface built from the data: the column picker, whose list of
+ *  offered columns comes from the measured fit, and the delete confirmation, which is anchored in
+ *  a row. Those two say so with `data-poll="hold"` rather than being guessed at from a role — and
+ *  anything else that needs it can say so in one attribute.
  */
 export function beingOperated(el: Element | null): boolean {
-  // portalled dialogs cover the column pickers and the delete confirmation: focus moves
-  // into them when they open, so their role is what marks them busy
-  return Boolean(el?.closest("input, select, textarea, [role=dialog], [role=alertdialog]"));
+  return Boolean(el?.closest('[data-poll="hold"]'));
 }
 
 function readRefresh(fallback: number): number {
@@ -60,6 +74,9 @@ export function App() {
   const [hiddenSingle, setHiddenSingle] = useState(() => readHidden("single"));
   const [hiddenCombo, setHiddenCombo] = useState(() => readHidden("combo"));
   const [refreshing, setRefreshing] = useState(false);
+  // when THIS screen last fetched, which is not when the service last did. Set only on a fetch
+  // that succeeded, so it is never a claim about figures that did not arrive.
+  const [polledAt, setPolledAt] = useState<string | null>(null);
   // bumped by a manual refresh, which restarts the poll interval below. `/quotes` is a LIVE
   // call, so a click one second before a tick would otherwise cost two full-watchlist
   // snapshots a second apart — the button has to displace the next poll, not add to it.
@@ -81,6 +98,7 @@ export function App() {
       setMonitors(m);
       rules.current = m;
       setHealth(h);
+      setPolledAt(new Date().toLocaleTimeString());
       setError(null);
     } catch (e: unknown) {
       // the dashboard must still render when the service is unhappy. This banner means one
@@ -213,6 +231,11 @@ export function App() {
           soon a new one reaches it. */}
       <p className="meta">
         {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
+        {/* The service's figure says how fresh the FIGURES are; this one says only how recently
+            they reached this screen. Both, because they answer different questions and the page
+            had only the first: with the market shut no figure moves, so pressing refresh changed
+            nothing visible and the button looked broken. */}
+        {polledAt ? ` · screen updated ${polledAt}` : ""}
         {health ? ` · service sweeps every ${health.settings.sweep_seconds}s` : ""}
       </p>
 
