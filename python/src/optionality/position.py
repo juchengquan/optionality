@@ -175,7 +175,9 @@ def combined_greek(positions: list[Position], by_code: ByCode, field: str, scope
 
 def positions_holding(positions: list[Position], contracts: list[str]) -> Holding:
     """The Positions that hold these contracts. Nothing if a contract is held twice (ambiguous) or not
-    at all. "all" when the found Positions are covered exactly, "leg" when this is part of one."""
+    at all. "all" when every leg of every Position found is among these contracts, "leg" when this
+    watches part of one. Naming contracts beyond them does not stop it covering what IS held; a held
+    leg it does not name does."""
     owners: dict[str, list[str]] = {}
     for position in positions:
         for code in position_leg_codes(position):
@@ -185,5 +187,12 @@ def positions_holding(positions: list[Position], contracts: list[str]) -> Holdin
     found = frozenset(owner for code in contracts for owner in owners.get(code, []))
     if not found:
         return Holding(found=frozenset(), scope=None)
-    covered = sum(len(p.legs) for p in positions if p.id in found)
-    return Holding(found=found, scope="all" if covered == len(contracts) else "leg")
+    # membership, not cardinality: counting legs against contracts made an adjacent spread sharing
+    # one leg come out equal to covering the holding whole (2026-10-20)
+    watched = set(contracts)
+    covered = all(
+        all(code in watched for code in position_leg_codes(position))
+        for position in positions
+        if position.id in found
+    )
+    return Holding(found=found, scope="all" if covered else "leg")

@@ -354,6 +354,24 @@ describe("which positions a monitor is watching", () => {
     expect(scope).toBeNull();
   });
 
+  it("does not call it all when it shares one leg and names a strike nobody holds", () => {
+    /** 2026-10-20, from the live book. Two adjacent call spreads were watched, 8100/8150 and
+     *  8150/8200, and only the first was held. Setting that holding's entry made it appear on
+     *  the OTHER rule's row too — with its P&L, its cost to close and its exit schedule.
+     *
+     *  The link itself is right: the 8150 call really is part of that holding, so this rule
+     *  watches a leg of it. The scope was not. It was decided by comparing COUNTS — the
+     *  holding's two legs against the monitor's two contracts — so a rule sharing exactly one
+     *  leg and naming one strike nobody holds came out numerically equal to covering the
+     *  holding whole. Coverage is a question about membership, not cardinality.
+     */
+    const held = spread("held", [8100, 8150], "CALL");
+    const theOther = spread("other", [8150, 8200], "CALL");
+    const { found, scope } = positionsHolding([held], positionLegCodes(theOther));
+    expect([...found], "the shared leg is genuinely part of that holding").toEqual(["held"]);
+    expect(scope, "but it does not cover it — the 8200 call is held by nobody").toBe("leg");
+  });
+
   it("still links the unambiguous part of a monitor that also names a shared strike", () => {
     // the double-hold rule is about the ambiguous contract, so it refuses the whole link rather
     // than guessing which position the monitor meant

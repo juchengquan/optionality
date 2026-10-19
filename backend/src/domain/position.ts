@@ -254,8 +254,10 @@ export function combinedGreek(
  *    for a day, and the entry is then genuinely ambiguous. A wrong P&L is worse than an absent
  *    one — a missing figure makes you look, a wrong one does not.
  *
- *  Scope is "all" when the Positions found are covered exactly by the Monitor's contracts, and
- *  "leg" when it watches part of a larger structure. Several Positions at once is normal and not
+ *  Scope is "all" when every leg of every Position found is among the Monitor's contracts, and
+ *  "leg" when it watches part of a larger structure. The Monitor may name contracts beyond them —
+ *  strikes nobody holds — and that alone does not stop it covering what IS held; what stops it is
+ *  a held leg the Monitor does not watch. Several Positions at once is normal and not
  *  ambiguity: a condor's stop spans both its spreads (ADR 0004).
  */
 export function positionsHolding(
@@ -277,8 +279,14 @@ export function positionsHolding(
   const found = new Set(contracts.flatMap((code) => owners.get(code) ?? []));
   if (found.size === 0) return { found: new Set(), scope: null };
 
+  // MEMBERSHIP, not cardinality. This counted the found Positions' legs and compared the total
+  // against the number of contracts, which is the same number in the case that matters and in one
+  // that does not: on 2026-10-20 a rule on the 8150/8200 call spread shared one leg with a held
+  // 8100/8150 spread and named an 8200 nobody held — two against two, so it was called "all" and
+  // the holding's entry, P&L, cost to close and exit schedule all appeared on its row.
+  const watched = new Set(contracts);
   const covered = positions
     .filter((p) => found.has(p.id))
-    .reduce((n, p) => n + (p.legs?.length ?? 0), 0);
-  return { found, scope: covered === contracts.length ? "all" : "leg" };
+    .every((p) => positionLegCodes(p).every((code) => watched.has(code)));
+  return { found, scope: covered ? "all" : "leg" };
 }

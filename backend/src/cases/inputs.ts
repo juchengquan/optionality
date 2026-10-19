@@ -171,6 +171,19 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "positionsHolding", name: "two spreads together", args: [[callSpread, putSpread], [LP, SP, SC, LC]] },
     { fn: "positionsHolding", name: "a contract held twice is ambiguous", args: [[condor, putSpread], [SP]] },
     { fn: "positionsHolding", name: "nothing held", args: [[condor], [code("PUT", 6000)]] },
+    // the adjacent spread: one leg shared with a held spread, one strike nobody holds. Counting
+    // legs made this "all" and put the held spread's entry, P&L and schedule on its row
+    // (2026-10-20). No case here exercised the scope decision's shape, only its arithmetic.
+    {
+      fn: "positionsHolding", name: "one leg shared, one strike unheld",
+      args: [[callSpread], [LC, code("CALL", 7200)]],
+    },
+    // and the other side of the same question: naming MORE than is held still covers what is
+    // held, because every held leg is watched
+    {
+      fn: "positionsHolding", name: "more named than is held",
+      args: [[callSpread], [SC, LC, code("CALL", 7200)]],
+    },
   ],
   monitor: [
     { fn: "monitorLegCodes", name: "a combo", args: [combo] },
