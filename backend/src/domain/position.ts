@@ -144,28 +144,38 @@ export function positionGreek(
  *  under one of them and inverted under the other. Which way you are on a Leg is recorded on the
  *  holding and is not a matter of convention.
  *
- *  Null if any named Contract is unpriced, and null if none of them is held: a partial answer to
- *  "what would this cost" is worse than no answer.
+ *  Null unless EVERY named Contract is held exactly once and priced: a partial answer to "what
+ *  would this cost" is worse than no answer, which is the rule combos already follow for their
+ *  values (no partial sums; any missing leg skips the combo).
+ *
+ *  This said the same thing and enforced it only at the extreme — `found === 0` — so a rule naming
+ *  one contract you hold and one you do not reported the single leg. On 2026-10-20 the 1204_8150
+ *  rule, over the 8150/8200 calls with only the 8150 held as another spread's long leg, showed
+ *  −13.60: a figure for something you cannot trade as a unit, on a row about a spread you do not
+ *  hold. Held TWICE is refused for the reason positionsHolding refuses it — rolling leaves two
+ *  holdings sharing a strike for a day, and which one you would be closing is not knowable — and
+ *  it was being counted twice rather than refused.
  */
 export function costToCloseOf(
   positions: Position[], byCode: ByCode, codes: Iterable<string>,
 ): number | null {
   const named = new Set(codes);
   let total = 0;
-  let found = 0;
+  const found = new Set<string>();
   for (const position of positions) {
     for (const leg of position.legs) {
       const code = buildSpxCode(position.strike_date, leg.option_type, leg.strike);
       if (!named.has(code)) continue;
+      if (found.has(code)) return null; // two holdings share this strike
       const mid = byCode[code]?.mid_price;
       if (mid === null || mid === undefined) return null;
       // buying back a short leg COSTS; selling a long one returns. The inverse of the
       // exposure signing above, which is why both live in this file.
       total += (leg.side === "short" ? 1 : -1) * Number(mid);
-      found += 1;
+      found.add(code);
     }
   }
-  return found === 0 ? null : total;
+  return found.size === named.size ? total : null;
 }
 
 /** Points-to-money multiplier, taken from the quotes rather than assumed to be 100. */

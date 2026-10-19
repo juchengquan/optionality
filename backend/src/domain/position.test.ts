@@ -474,6 +474,36 @@ describe("costing a named subset of what you hold", () => {
     expect(costToCloseOf([], byCode, [CALL_A])).toBeNull();
   });
 
+  it("is unknown when SOME of the named Contracts is held, not a partial sum", () => {
+    /** 2026-10-20, found while verifying the scope fix. The 1204_8150 rule names the 8150 and
+     *  8200 calls; the 8150 is the long leg of a holding and the 8200 is held by nobody. It
+     *  reported −13.60, the value of that one leg: a figure for a thing you cannot trade as a
+     *  unit, on a row about a spread you do not hold.
+     *
+     *  This guard existed for the all-or-nothing case only — `found === 0` — while the comment
+     *  above it already stated the rule as "a partial answer is worse than no answer". Combos
+     *  follow exactly this principle for their values: no partial sums, any missing leg skips the
+     *  combo (CLAUDE.md). Cost to close is the same question.
+     */
+    const p = condor();
+    const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
+    const unheld = buildSpxCode(future(), "CALL", 8200);
+    byCode[unheld] = { code: unheld, mid_price: 1.1 }; // priced, just not held
+    expect(costToCloseOf([p], byCode, [CALL_B, unheld])).toBeNull();
+  });
+
+  it("is unknown when a named Contract is held twice, which is ambiguous", () => {
+    // the same reason positionsHolding refuses a double-held contract: rolling leaves two
+    // holdings sharing a strike for a day, and WHICH one you would be closing is not knowable
+    const a = condor();
+    const b: Position = {
+      name: "rolled", strike_date: future(), contracts: 1, entry: 1.0,
+      legs: [{ side: "short", option_type: "CALL", strike: 8050 }],
+    };
+    const byCode = quotes(a, [5.0, 2.0, 3.0, 1.5]);
+    expect(costToCloseOf([a, b], byCode, [CALL_A])).toBeNull();
+  });
+
   it("adds up across several holdings, as a rule spanning them would", () => {
     // ADR 0004: a condor's stop may span both its spreads
     const calls: Position = {

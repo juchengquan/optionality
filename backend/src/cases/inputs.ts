@@ -155,6 +155,17 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "costToCloseOf", name: "a wing across two holdings", args: [[callSpread, putSpread], quotes, [SC, SP]] },
     { fn: "costToCloseOf", name: "nothing named is held", args: [[condor], quotes, [code("PUT", 6000)]] },
     { fn: "costToCloseOf", name: "a named contract unpriced", args: [[condor], missingShortPut, [SP, SC]] },
+    // one named contract held, one held by nobody: the single leg's value is not an answer to
+    // "what would this cost" (2026-10-20). Priced, so the unpriced guard is not what refuses it.
+    {
+      fn: "costToCloseOf", name: "one named contract is held, the other by nobody",
+      args: [[condor], quotes, [SC, code("CALL", 7200)]],
+    },
+    // and held twice, which was being counted twice rather than refused
+    {
+      fn: "costToCloseOf", name: "a named contract held twice",
+      args: [[condor, putSpread], quotes, [SP]],
+    },
     { fn: "contractSize", name: "from the quotes", args: [quotes] },
     { fn: "contractSize", name: "no quotes", args: [{}] },
     { fn: "positionPnl", name: "a condor", args: [condor, quotes] },

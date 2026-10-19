@@ -113,22 +113,26 @@ def position_greek(position: Position, by_code: ByCode, field: str, scope: str |
 def cost_to_close_of(positions: list[Position], by_code: ByCode, codes: Iterable[str]) -> float | None:
     """What it would cost to close just these Contracts, out of what you hold (#105).
 
-    By Side, never from a combo's signs. None if any named Contract is unpriced, and None if none of
-    them is held: a partial answer to "what would this cost" is worse than none."""
+    By Side, never from a combo's signs. None unless EVERY named Contract is held exactly once and
+    priced: a partial answer to "what would this cost" is worse than none, which is the rule combos
+    already follow for their values. Held twice is ambiguous for the reason positions_holding
+    refuses it, and was being counted twice rather than refused (2026-10-20)."""
     named = set(codes)
     total = 0.0
-    found = 0
+    found: set[str] = set()
     for position in positions:
         for leg in position.legs:
             code = build_spx_code(position.strike_date, leg.option_type, leg.strike)
             if code not in named:
                 continue
+            if code in found:  # two holdings share this strike
+                return None
             mid = _value(by_code, code, "mid_price")
             if mid is None:
                 return None
             total += (1 if leg.side == "short" else -1) * number(mid)
-            found += 1
-    return None if found == 0 else total
+            found.add(code)
+    return total if len(found) == len(named) else None
 
 
 def contract_size(by_code: ByCode) -> float | None:
