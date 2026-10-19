@@ -1479,6 +1479,206 @@
       "expect": null
     },
     {
+      "fn": "costToCloseOf",
+      "name": "one named contract is held, the other by nobody",
+      "args": [
+        [
+          {
+            "id": "p1",
+            "name": "1120_IC",
+            "strike_date": "2026-11-20",
+            "contracts": 2,
+            "entry": 3,
+            "strategy": "iron condor",
+            "opened_at": "2026-10-06",
+            "legs": [
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              },
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        {
+          "US.SPXW261120P6450000": {
+            "mid_price": 1.5,
+            "option_delta": -0.08,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6500000": {
+            "mid_price": 3,
+            "option_delta": -0.15,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.1,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7100000": {
+            "mid_price": 5,
+            "option_delta": 0.18,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.4,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7150000": {
+            "mid_price": 2,
+            "option_delta": 0.1,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6000000": {
+            "mid_price": 8,
+            "option_delta": -0.02,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          }
+        },
+        [
+          "US.SPXW261120C7100000",
+          "US.SPXW261120C7200000"
+        ]
+      ],
+      "expect": null
+    },
+    {
+      "fn": "costToCloseOf",
+      "name": "a named contract held twice",
+      "args": [
+        [
+          {
+            "id": "p1",
+            "name": "1120_IC",
+            "strike_date": "2026-11-20",
+            "contracts": 2,
+            "entry": 3,
+            "strategy": "iron condor",
+            "opened_at": "2026-10-06",
+            "legs": [
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              },
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          },
+          {
+            "id": "p3",
+            "name": "1120_PS",
+            "strike_date": "2026-11-20",
+            "contracts": 1,
+            "entry": 1.6,
+            "legs": [
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              }
+            ]
+          }
+        ],
+        {
+          "US.SPXW261120P6450000": {
+            "mid_price": 1.5,
+            "option_delta": -0.08,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6500000": {
+            "mid_price": 3,
+            "option_delta": -0.15,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.1,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7100000": {
+            "mid_price": 5,
+            "option_delta": 0.18,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.4,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7150000": {
+            "mid_price": 2,
+            "option_delta": 0.1,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6000000": {
+            "mid_price": 8,
+            "option_delta": -0.02,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          }
+        },
+        [
+          "US.SPXW261120P6500000"
+        ]
+      ],
+      "expect": null
+    },
+    {
       "fn": "contractSize",
       "name": "from the quotes",
       "args": [
