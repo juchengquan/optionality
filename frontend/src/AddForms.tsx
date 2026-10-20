@@ -5,6 +5,8 @@ import {
   Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+
+import { OpenedField } from "./OpenedField";
 import { NativeSelect } from "@/components/ui/native-select";
 import { NumberField } from "@/components/ui/number-field";
 
@@ -86,11 +88,7 @@ export function AddMonitor({ onCreate }: { onCreate: (body: Record<string, unkno
               the trades most likely to be recorded late, and it would be wrong INVISIBLY, under
               figures as load-bearing as on-pace. Filling it in on the day also gives the vol
               measurement its baseline, which is the only day that can (ADR 0011). */}
-          <Field>
-            <FieldLabel htmlFor="m-opened">opened</FieldLabel>
-            <Input id="m-opened" type="date" value={openedAt}
-                   onChange={(e) => setOpenedAt(e.target.value)} />
-          </Field>
+          <OpenedField id="m-opened" value={openedAt} onChange={setOpenedAt} />
           <Field>
             <FieldLabel htmlFor="m-field">field</FieldLabel>
             <NativeSelect id="m-field" value={form.field} onChange={(e) => set("field", e.target.value)}>
@@ -261,14 +259,8 @@ export function AddCombo({ onCreate }: { onCreate: (body: Record<string, unknown
               the trades most likely to be recorded late, and it would be wrong INVISIBLY, under
               figures as load-bearing as on-pace. Filling it in on the day also gives the vol
               measurement its baseline, which is the only day that can (ADR 0011). */}
-          <Field>
-            <FieldLabel htmlFor="c-opened">opened</FieldLabel>
-            <Input id="c-opened" type="date" value={openedAt}
-                   onChange={(e) => setOpenedAt(e.target.value)} />
-            <FieldDescription>
-              The day it was put on. Needed for the exit schedule; blank leaves it out.
-            </FieldDescription>
-          </Field>
+          <OpenedField id="c-opened" value={openedAt} onChange={setOpenedAt}
+                       description="The day it was put on. Needed for the exit schedule; blank leaves it out. " />
           <Field>
             <FieldLabel htmlFor="c-field">field</FieldLabel>
             <NativeSelect id="c-field" value={field} onChange={(e) => setField(e.target.value)}>

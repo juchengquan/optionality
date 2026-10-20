@@ -9,6 +9,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 
 import type { Entry, HoldingValues } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
+import { OpenedField } from "./OpenedField";
 
 /** Whether there is an entry to type here at all: a rule covering WHOLE holdings, and at least one
  *  of them.
@@ -185,16 +186,9 @@ export function HoldingForm({ entry, onHolding }: {
           </NativeSelect>
         </Field>
       )}
-      <Field className="w-40">
-          {/* The only control in this app that sets Opened. Nothing set it before, so every
-              schedule on screen got its date through the API by hand. Left BLANK rather than
-              defaulting to today: a date nobody chose, under a figure as load-bearing as
-              on-pace, is the guess ADR 0011 refuses — and it is wrong for exactly the trades
-              most likely to be recorded late. */}
-          <FieldLabel htmlFor={`h-opened-${entry.id}`}>opened</FieldLabel>
-        <Input id={`h-opened-${entry.id}`} type="date" value={openedAt}
-               onChange={(e) => setOpenedAt(e.target.value)} />
-      </Field>
+      {/* why it is blank, and which calendar it means: OpenedField */}
+      <OpenedField className="w-44" id={`h-opened-${entry.id}`}
+                   value={openedAt} onChange={setOpenedAt} />
       <Button type="submit" variant="outline" size="sm">record</Button>
       {why ? <p className="meta w-full" role="alert">{why}</p> : null}
     </form>
