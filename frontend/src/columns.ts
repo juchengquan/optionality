@@ -368,6 +368,38 @@ export function offerable(
  *  exact for them. It is an approximation only for the identity column's proportional
  *  text, which is why CELL_PADDING carries a little slack.
  */
+/** The badges drawn beside the name, in the order they appear.
+ *
+ *  A LEG rule — one watching part of a holding — said so in the table only by what it did not
+ *  draw: entry, P&L and on-pace are blank for it, and blank for a rule holding nothing too, so
+ *  the two read identically. Recording 1130_8100 on 2026-10-20 turned the adjacent 1130_8150 into
+ *  a leg rule and nothing on its row changed; the distinction existed only in the detail sheet,
+ *  which says it in a full sentence because it has the room.
+ *
+ *  It lives HERE, beside `widthsFromContent`, because a badge is width: the fitting is told in
+ *  text how wide a column must be (ADR 0008), and the identity column is the one frozen at every
+ *  scroll position. Carried as a wrapper around `cellValue` first — which left the allowance one
+ *  call site away from the measuring, and a mutation sweep showed that call site could be reverted
+ *  with every test still green. Nothing passes it now; the measuring reads it.
+ */
+export function identityBadges(entry: Entry): { text: string; title?: string; quiet?: boolean }[] {
+  const out: { text: string; title?: string; quiet?: boolean }[] = [];
+  // a quarantined contract, and the only badge there has ever been: red, because it is a fault
+  if (entry.error) out.push({ text: entry.error });
+  // `positions` and not `scope` alone: an unlinked rule has no scope either, and it is precisely
+  // that row this has to look different from
+  if (entry.scope === "leg" && entry.positions.length > 0) {
+    out.push({
+      text: "leg",
+      // terse in the cell, whole on hover: the holding's name is what you came to the row to
+      // learn, and the sheet states it in full for anyone without a pointer
+      title: `part of ${entry.positions.map((p) => p.name).join(", ")}`,
+      quiet: true,
+    });
+  }
+  return out;
+}
+
 export function widthsFromContent(
   columns: Column[],
   rows: readonly Entry[],
@@ -379,7 +411,13 @@ export function widthsFromContent(
   const out: Record<string, number> = {};
   for (const c of columns) {
     let longest = c.label.length;
-    for (const r of rows) longest = Math.max(longest, cellText(r, c.key, isCombo).length);
+    // the badges are drawn beside the name, so the identity column has to be measured with them
+    const extra = c.key === (isCombo ? "combo" : "contract")
+      ? (r: Entry) => identityBadges(r).reduce((n, b) => n + b.text.length + 1, 0)
+      : () => 0;
+    for (const r of rows) {
+      longest = Math.max(longest, cellText(r, c.key, isCombo).length + extra(r));
+    }
     out[c.key] = Math.ceil(longest * charWidth) + CELL_PADDING;
   }
   return out;
