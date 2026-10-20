@@ -2,7 +2,8 @@ import { Fragment } from "react";
 
 import type { Entry, HoldingValues } from "./api";
 import {
-  LEFT, groupRows, imminentReading, signalColumns, type Column, type Grouping, type Signal,
+  LEFT, groupRows, identityBadges, imminentReading, signalColumns,
+  type Column, type Grouping, type Signal,
 } from "./columns";
 import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
 
@@ -172,7 +173,19 @@ export function WatchlistTable({
                       {c.key === identity ? (
                         <>
                           {breakable(isCombo ? entry.code : shortContract(entry.quote?.name ?? entry.code))}
-                          {entry.error ? <span className="badge">{entry.error}</span> : null}
+                          {identityBadges(entry).map((b) => (
+                            <Fragment key={b.text}>
+                              {/* `breakable` above puts a break opportunity BETWEEN the name's
+                                  parts and none after the last, so "8150" and the badge beside it
+                                  were one unbreakable unit: measured at 390px the frozen column
+                                  went from 88px to 93.66px, buying back the width its cap exists
+                                  to save. One <wbr> and the badge folds under the name instead. */}
+                              <wbr />
+                              <span className={b.quiet ? "badge quiet" : "badge"} title={b.title}>
+                                {b.text}
+                              </span>
+                            </Fragment>
+                          ))}
                           {entry.triggered && signal.bell === identity ? " 🔔" : null}
                         </>
                       ) : c.key === "alarm" ? (

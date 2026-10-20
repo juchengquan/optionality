@@ -159,6 +159,11 @@ tr.group:first-child td { padding-top: 4px; border-top: none; }
 .badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.75rem;
          padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
          margin-left: 0.3rem; }
+/* Information, not a fault. The red above belongs to a contract that has gone wrong; a rule
+   watching part of a holding is working exactly as designed, and red beside its name would say
+   the opposite. Muted, and a shade smaller than the name it qualifies. */
+.badge.quiet { background: var(--muted); color: var(--muted-foreground); font-size: 0.6875rem;
+               font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; }
 /* The top line. Prominent without shouting: it only exists when it has something to say, so it
    does not need to compete for attention with anything. `.bad` is added only for a fault or a
    stop — a target reached is good news and red would read as the opposite. */
