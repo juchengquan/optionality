@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { OpenedField } from "./OpenedField";
 import { NumberField } from "@/components/ui/number-field";
 
 import { deletePosition, fetchHoldings, patchPosition, type Holding } from "./api";
@@ -177,11 +177,8 @@ function HoldingEdit({ holding, onSaved, act }: {
         <FieldLabel htmlFor={`p-entry-${holding.id}`}>entry</FieldLabel>
         <NumberField id={`p-entry-${holding.id}`} value={value} onValueChange={setValue} />
       </Field>
-      <Field className="w-40">
-        <FieldLabel htmlFor={`p-opened-${holding.id}`}>opened</FieldLabel>
-        <Input id={`p-opened-${holding.id}`} type="date" value={openedAt}
-               onChange={(e) => setOpenedAt(e.target.value)} />
-      </Field>
+      <OpenedField className="w-44" id={`p-opened-${holding.id}`}
+                   value={openedAt} onChange={setOpenedAt} />
       <Button type="submit" variant="outline" size="sm">set</Button>
     </form>
   );

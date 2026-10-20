@@ -75,3 +75,24 @@ export function shortDate(iso: string): string {
   const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})$/.exec(iso);
   return m ? `${m[2]}${m[3]}${m[4]}` : iso;
 }
+
+/** Today's TRADING day, as the service counts it: the New York calendar date.
+ *
+ *  A mirror of `marketDate` in backend/src/domain/expiry.ts, four lines of Intl rather than an
+ *  import, because this package may not reach into the backend's source tree — only its declared
+ *  `exports`, which carry types and the input schemas and no runtime (check-boundaries, ADR 0014).
+ *  The domain copy is canonical; this one exists so the browser can NAME the day without a round
+ *  trip, and `en-CA` is what makes it YYYY-MM-DD with no arithmetic of our own.
+ *
+ *  It matters because `position_samples.observed_on` is keyed to this calendar and a holding's
+ *  `opened_at` has to agree with its first sample or the vol attribution is null. Singapore runs
+ *  12 hours ahead of New York, so for the whole local morning — which is when a trade is recorded,
+ *  the US session having closed at 04:00 — the local date is a day ahead of this one.
+ */
+const MARKET_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+export function marketDay(now: Date = new Date()): string {
+  return MARKET_DAY.format(now);
+}
