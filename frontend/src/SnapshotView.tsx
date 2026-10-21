@@ -2,6 +2,7 @@ import type { Entry, Health } from "./api";
 import {
   COMBO_COLUMNS, SINGLE_COLUMNS, visible, type Grouping, type Signal,
 } from "./columns";
+import { Freshness } from "./Freshness";
 import { TopLine } from "./TopLine";
 import { WatchlistTable } from "./WatchlistTable";
 
@@ -38,14 +39,12 @@ export function SnapshotView({
   return (
     <div className="snapshot">
       <h2>optionality watchlist</h2>
-      {/* The only thing in the picture that dates it. A screenshot with no timestamp is worthless
-          a week later, and both cadences are kept because they answer different questions: the
-          SERVICE decides how fresh the figures are, the screen only when they arrived. */}
-      <p className="meta">
-        {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
-        {polledAt ? ` · screen updated ${polledAt}` : ""}
-        {health ? ` · service sweeps every ${health.settings.sweep_seconds}s` : ""}
-      </p>
+      {/* The only thing in the picture that dates it. A screenshot with no timestamp is
+          worthless a week later, and the SAME component as the page's — a second copy of this
+          markup lived here and was the one thing in the image that could contradict the screen.
+          It carries the session time too, which is what a reader outside this timezone needs. */}
+      <Freshness fetchedAt={fetchedAt} polledAt={polledAt}
+                 sweepSeconds={health?.settings.sweep_seconds ?? null} />
       <TopLine quotes={[...singles, ...combos]} health={health} />
       {singles.length > 0 ? (
         <WatchlistTable

@@ -19,6 +19,8 @@ import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { Holdings } from "./Holdings";
 import { RowDetail, type DetailTarget } from "./RowDetail";
+import { clockTime } from "./format";
+import { Freshness } from "./Freshness";
 import { SnapshotView } from "./SnapshotView";
 import { deliver, snapshotName } from "./snapshot";
 import { TopLine } from "./TopLine";
@@ -104,7 +106,7 @@ export function App() {
       setMonitors(m);
       rules.current = m;
       setHealth(h);
-      setPolledAt(new Date().toLocaleTimeString());
+      setPolledAt(clockTime(new Date()));
       setError(null);
     } catch (e: unknown) {
       // the dashboard must still render when the service is unhappy. This banner means one
@@ -290,18 +292,10 @@ export function App() {
 
       {/* Freshness, and nothing else. The interval that used to sit in this sentence is a
           preference set once and moved into the settings sheet; what is left is the one thing
-          worth reading every time you look at the screen. The two cadences stay worded
-          distinctly: the SERVICE decides how fresh the figures are, the screen only decides how
-          soon a new one reaches it. */}
-      <p className="meta">
-        {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
-        {/* The service's figure says how fresh the FIGURES are; this one says only how recently
-            they reached this screen. Both, because they answer different questions and the page
-            had only the first: with the market shut no figure moves, so pressing refresh changed
-            nothing visible and the button looked broken. */}
-        {polledAt ? ` · screen updated ${polledAt}` : ""}
-        {health ? ` · service sweeps every ${health.settings.sweep_seconds}s` : ""}
-      </p>
+          worth reading every time you look at the screen. Shared with the picture (Freshness),
+          so an image cannot tell a different story about its own freshness than the page. */}
+      <Freshness fetchedAt={fetchedAt ?? null} polledAt={polledAt}
+                 sweepSeconds={health?.settings.sweep_seconds ?? null} />
 
       {/* What needs you, and nothing when nothing does — the strip this replaced said the same
           thing about faults and said it separately. It APPEARS rather than reports: a line that is

@@ -36,7 +36,7 @@ function view(hidden?: { single?: Set<string>; combo?: Set<string> }) {
   return render(
     <SnapshotView
       singles={[single]} combos={[combo]} health={health}
-      fetchedAt="21:30:05" polledAt="21:30:07"
+      fetchedAt="2026-10-21 21:47:23+08:00" polledAt="21:30:07"
       grouping="none" reading="distance" band={80}
       hiddenSingle={hidden?.single ?? new Set()} hiddenCombo={hidden?.combo ?? new Set()}
     />,
@@ -74,8 +74,17 @@ describe("the snapshot tree", () => {
     // the picture that dates it
     view();
 
-    expect(screen.getByText(/fetched at 21:30:05/)).toBeTruthy();
+    expect(screen.getByText(/fetched at 2026-10-21 21:47:23/)).toBeTruthy();
     expect(screen.getByText(/screen updated 21:30:07/)).toBeTruthy();
+  });
+
+  it("names the SESSION time, for a reader who does not know this timezone", () => {
+    // the owner reads the dashboard in Singapore and trades a US session; a picture sent to
+    // someone else carries no zone at all unless this line says one
+    view();
+
+    expect(screen.getByText(/09:47:23 EDT/), "the image does not say where in the day it is")
+      .toBeTruthy();
   });
 
   it("draws no buttons — nothing in a picture can be pressed", () => {
