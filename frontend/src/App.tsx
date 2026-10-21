@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, Settings2 } from "lucide-react";
+import { ImageDown, RefreshCw, Settings2 } from "lucide-react";
+import { toBlob } from "html-to-image";
 
 import "./app.css";
 import {
@@ -18,6 +19,8 @@ import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { Holdings } from "./Holdings";
 import { RowDetail, type DetailTarget } from "./RowDetail";
+import { SnapshotView } from "./SnapshotView";
+import { deliver, snapshotName } from "./snapshot";
 import { TopLine } from "./TopLine";
 import { Settings } from "./Settings";
 import { useTableFit } from "./useTableFit";
@@ -86,6 +89,9 @@ export function App() {
   const [adding, setAdding] = useState<Adding>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detail, setDetail] = useState<DetailTarget | null>(null);
+  // the off-screen tree, mounted only while a picture is being taken
+  const [shooting, setShooting] = useState(false);
+  const shotRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -136,6 +142,60 @@ export function App() {
       setPollFrom((n) => n + 1);
     }
   }, [load]);
+
+  /** Save the page as a PNG, for pasting into a chat.
+   *
+   *  The picture is NOT this screen rasterized. `useTableFit` drops columns against the viewport
+   *  (ADR 0008), so a capture of the live page carries whatever subset your width allows — on a
+   *  phone, a fraction of the figures. SnapshotView renders again at a fixed width with every
+   *  ticked column, and that off-screen tree is what gets painted.
+   *
+   *  Holdings are the exception, and by their own nature: that panel has no measured columns, so
+   *  the LIVE node is cloned rather than re-rendered, which means it cannot drift from the panel
+   *  — it is the panel. Only when it is open, because fetching it would be a second bounded
+   *  OpenD batch on a button press, and it is fetched on demand precisely to keep it off the poll.
+   */
+  const saveImage = useCallback(async () => {
+    setShooting(true);
+    try {
+      // two frames: mounted is not laid out, and an unlaid-out tree paints as nothing
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      // the INNER node, not the stage. html-to-image copies the captured node's own computed
+      // style into the SVG it paints, so capturing the stage carried `position: fixed` and
+      // `left: -10000px` with it and the content landed outside the frame — a blank PNG of
+      // exactly the right size, which is the one failure shape that looks like success.
+      const stage = shotRef.current?.querySelector<HTMLElement>(".snapshot");
+      if (!stage) return;
+      const held = document.querySelector('[data-snapshot="holdings"]');
+      if (held) {
+        const copy = held.cloneNode(true) as HTMLElement;
+        // unwrap rather than remove: a button's TEXT is often the only label a figure has, and
+        // stripping it outright would take the words with the affordance. Forms go entirely —
+        // an empty input in a picture reads as a figure nobody filled in.
+        for (const control of copy.querySelectorAll("form")) control.remove();
+        for (const button of copy.querySelectorAll("button")) {
+          const words = (button.textContent ?? "").trim();
+          const span = document.createElement("span");
+          span.textContent = words;
+          button.replaceWith(...(words ? [span] : []));
+        }
+        const heading = document.createElement("h2");
+        heading.textContent = "holdings";
+        stage.append(heading, copy);
+      }
+      const blob = await toBlob(stage, { pixelRatio: 2 });
+      if (!blob) throw new Error("the image came back empty");
+      const how = await deliver(blob, snapshotName());
+      if (how === "downloaded") toast.add({ title: "saved as an image", type: "success" });
+    } catch (e: unknown) {
+      // never silence: a press that produces neither a picture nor a word is indistinguishable
+      // from a broken button
+      toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
+    } finally {
+      setShooting(false);
+    }
+  }, []);
 
   // every mutation reloads rather than patching local state: these change what the alarm
   // engine does, and the server's account of that is the only one that counts
@@ -211,6 +271,10 @@ export function App() {
         <h2>optionality watchlist</h2>
         <Button variant="ghost" size="sm" aria-label="settings" onClick={() => setSettingsOpen(true)}>
           <Settings2 />
+        </Button>
+        <Button variant="ghost" size="sm" aria-label="save as image"
+                disabled={shooting} onClick={() => void saveImage()}>
+          <ImageDown className={shooting ? "animate-pulse" : undefined} />
         </Button>
         <Button
           variant="ghost"
@@ -303,6 +367,19 @@ export function App() {
       />
 
 
+      {/* Off screen, not hidden: `display: none` has no layout, so there is nothing to paint.
+          aria-hidden because it is a duplicate of the page for a camera, not a second copy for
+          anyone reading it. */}
+      {shooting ? (
+        <div ref={shotRef} className="snapshot-stage" aria-hidden="true">
+          <SnapshotView
+            singles={singles} combos={combos} health={health}
+            fetchedAt={fetchedAt ?? null} polledAt={polledAt} grouping={grouping}
+            reading={reading} band={band}
+            hiddenSingle={hiddenSingle} hiddenCombo={hiddenCombo}
+          />
+        </div>
+      ) : null}
       <Toaster />
     </main>
   );
