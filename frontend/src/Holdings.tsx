@@ -56,8 +56,12 @@ export function Holdings({ reloadKey, act }: {
           {`${open ? "▾" : "▸"} holdings`}
         </Button>
       </h2>
+      {/* `data-snapshot` below is App's hook for the image: this panel is CLONED into the
+          picture rather than re-rendered, because it has no measured columns to widen
+          (App.saveImage). Kept separate from the test id on purpose — one is for tests, the
+          other is shipped behaviour that a test id would be the wrong thing to depend on. */}
       {!open ? null : (
-        <div data-testid="holdings">
+        <div data-testid="holdings" data-snapshot="holdings">
           {error !== null ? <p className="meta">{error}</p> : null}
           {rows === null ? <p className="meta">loading…</p>
             : rows.length === 0 ? <p className="meta">Nothing held.</p>

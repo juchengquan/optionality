@@ -1,0 +1,181 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { page } from "@vitest/browser/context";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { App } from "../App";
+import { SnapshotView } from "../SnapshotView";
+import { COMBO_COLUMNS } from "../columns";
+import type { Entry, Health } from "../api";
+
+/** The image, measured end to end.
+ *
+ *  The one thing the feature promises that the screen cannot give you is EVERY ticked column:
+ *  `useTableFit` drops columns against the viewport (ADR 0008), so at 390px the table on screen
+ *  is a subset and a screenshot of it would be a subset too. These run AT 390px deliberately —
+ *  the picture has to come out 1000px wide from a phone, or the feature is pointless.
+ */
+const health = {
+  db: true, opend: true,
+  monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "21:30:05" },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+};
+
+const combo = (over: Record<string, unknown>) => ({
+  field: "mid_price", threshold: 2.49, direction: "above", compare: "abs", triggered: false,
+  strike_date: "2026-11-30", option_type: "CMB", dte: 41, fill: 61, scope: null, positions: [],
+  cost_to_close: null, entry: null, pnl: null, schedule: null, quote: null,
+  combo_value: -3.05, combo_greeks: { option_delta: -0.0123, option_vega: -0.18 },
+  legs: [{ sign: -1, option_type: "CALL", strike: 8150 }, { sign: 1, option_type: "CALL", strike: 8200 }],
+  ...over,
+});
+const rows = [
+  combo({ id: "c1", code: "1130_8150" }),
+  combo({ id: "c2", code: "1120_IC_7100_8200", triggered: true, fill: 100 }),
+];
+
+function mockApi() {
+  window.fetch = ((url: string) =>
+    Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(
+        String(url).endsWith("/quotes") ? rows : String(url).endsWith("/monitors") ? [] : health),
+    })) as unknown as typeof fetch;
+}
+
+/** Take the share sheet's place, so the File the device would have received is the File asserted
+ *  on. Nothing else can see the image: it never touches the DOM and is never saved. */
+function catchShare(): { file: () => File | null } {
+  let caught: File | null = null;
+  Object.defineProperty(navigator, "canShare", { value: () => true, configurable: true });
+  Object.defineProperty(navigator, "share", {
+    value: (data: { files: File[] }) => { caught = data.files[0]!; return Promise.resolve(); },
+    configurable: true,
+  });
+  return { file: () => caught };
+}
+
+async function decode(file: File): Promise<{ w: number; h: number; at: (x: number, y: number) => string }> {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  await new Promise((done, fail) => {
+    img.onload = done;
+    img.onerror = () => fail(new Error("the PNG did not decode"));
+    img.src = url;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, 0, 0);
+  return {
+    w: img.naturalWidth,
+    h: img.naturalHeight,
+    at: (x, y) => {
+      const d = ctx.getImageData(x, y, 1, 1).data;
+      return `${d[0]},${d[1]},${d[2]},${d[3]}`;
+    },
+  };
+}
+
+afterEach(async () => {
+  cleanup();
+  await page.viewport(1280, 900);
+});
+
+describe("saving the page as an image", () => {
+  it("comes out at least 1000px wide from a 390px phone, at 2×", async () => {
+    await page.viewport(390, 900);
+    const shared = catchShare();
+    mockApi();
+    render(<App />);
+    await screen.findByText("1130_8150");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    const png = await decode(shared.file()!);
+    // Anything near 390 would mean the live page was captured and the figures cropped to
+    // whatever that width could hold.
+    // 1000 CSS px at pixelRatio 2, as a FLOOR: the stage grows where the figures need it (the
+    // 13-column combo table measures 1012px with this data) and never shrinks to the device.
+    expect(png.w, `image ${png.w}×${png.h}`).toBeGreaterThanOrEqual(2000);
+    expect(png.h, "an image with no height is a blank file").toBeGreaterThan(100);
+  });
+
+  it("is not blank where the page has colour", async () => {
+    // the html2canvas failure mode, asserted on the delivered file rather than on the node:
+    // oklch backgrounds and the fill gradient either arrive or the picture is a white grid
+    await page.viewport(390, 900);
+    const shared = catchShare();
+    mockApi();
+    render(<App />);
+    await screen.findByText("1130_8150");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    const png = await decode(shared.file()!);
+
+    // every pixel of a 2000-wide image, sampled on a grid: a blank capture is uniform, and a
+    // painted one is not. Counting distinct colours says so without naming any of them.
+    const seen = new Set<string>();
+    for (let y = 4; y < png.h; y += 17) {
+      for (let x = 4; x < png.w; x += 29) seen.add(png.at(x, y));
+    }
+    expect(seen.size, `only ${seen.size} distinct colours — the picture is blank`)
+      .toBeGreaterThan(3);
+  });
+
+  it("is still 1000px wide when the watchlist is short", async () => {
+    // The floor, which the full-width case cannot test: with one row and most columns unticked
+    // the content is far narrower than 1000px, and without a floor the image would shrink to it
+    // — so two days' pictures would not be the same size, which is half of what makes a daily
+    // record readable.
+    await page.viewport(390, 900);
+    const shared = catchShare();
+    window.fetch = ((url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(
+          String(url).endsWith("/quotes") ? [rows[0]]
+            : String(url).endsWith("/monitors") ? [] : health),
+      })) as unknown as typeof fetch;
+    document.cookie = `ui_cols_combo=${COMBO_COLUMNS.slice(3).map((c) => c.key).join(".")};path=/`;
+    render(<App />);
+    await screen.findByText("1130_8150");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    const png = await decode(shared.file()!);
+
+    expect(png.w, `a three-column table came out ${png.w}px wide`).toBe(2000);
+    document.cookie = "ui_cols_combo=;path=/";
+  });
+
+  it("draws every ticked column, with nothing left to scroll to", async () => {
+    // A scroll box in a still image shows its first screenful and hides the rest silently, which
+    // is this feature's whole reason for existing — so the stage must have nothing to scroll.
+    await page.viewport(390, 900);
+    const stage = document.createElement("div");
+    stage.className = "snapshot-stage";
+    document.body.append(stage);
+    render(
+      <SnapshotView
+        singles={[]} combos={rows as unknown as Entry[]} health={health as unknown as Health}
+        fetchedAt="21:30:05" polledAt="21:30:07" grouping="none" reading="distance" band={80}
+        hiddenSingle={new Set()} hiddenCombo={new Set()}
+      />,
+      { container: stage },
+    );
+    await new Promise((r) => setTimeout(r, 160));
+
+    const headers = [...stage.querySelectorAll("th")].map((h) => h.textContent);
+    for (const c of COMBO_COLUMNS) {
+      expect(headers, `"${c.label}" is not in the picture`).toContain(c.label);
+    }
+    for (const box of stage.querySelectorAll<HTMLElement>(".table-scroll")) {
+      expect(box.scrollWidth, "the table is clipped inside a scroll box")
+        .toBeLessThanOrEqual(box.clientWidth + 1);
+    }
+    stage.remove();
+  });
+});
