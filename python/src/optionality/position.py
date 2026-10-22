@@ -16,11 +16,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from optionality._js import number, truthy
-from optionality.contract import build_spx_code
+from optionality.contract import OptionType, build_spx_code
 from optionality.quote import ByCode
 
 type Side = Literal["short", "long"]
-type OptionType = Literal["CALL", "PUT"]
 
 POSITION_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")
 

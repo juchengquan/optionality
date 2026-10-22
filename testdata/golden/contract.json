@@ -68,6 +68,136 @@
       "expect": {
         "$throws": true
       }
+    },
+    {
+      "fn": "compactStrikeDate",
+      "name": "dashed",
+      "args": [
+        "2026-11-20"
+      ],
+      "expect": "261120"
+    },
+    {
+      "fn": "compactStrikeDate",
+      "name": "compact",
+      "args": [
+        "20261120"
+      ],
+      "expect": "261120"
+    },
+    {
+      "fn": "compactStrikeDate",
+      "name": "an impossible date is refused",
+      "args": [
+        "2026-02-30"
+      ],
+      "expect": {
+        "$throws": true
+      }
+    },
+    {
+      "fn": "parseSpxCode",
+      "name": "a put",
+      "args": [
+        "US.SPXW261120P6500000"
+      ],
+      "expect": {
+        "strike_date": "2026-11-20",
+        "option_type": "PUT",
+        "strike": 6500
+      }
+    },
+    {
+      "fn": "parseSpxCode",
+      "name": "a call",
+      "args": [
+        "US.SPXW261016C7100000"
+      ],
+      "expect": {
+        "strike_date": "2026-10-16",
+        "option_type": "CALL",
+        "strike": 7100
+      }
+    },
+    {
+      "fn": "parseSpxCode",
+      "name": "a code from somewhere else",
+      "args": [
+        "US.WEIRD123"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "parseSpxCode",
+      "name": "a combo's own name",
+      "args": [
+        "sep-condor"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "parseSpxCode",
+      "name": "a day that does not exist",
+      "args": [
+        "US.SPXW260230P6500000"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "parseSpxCode",
+      "name": "a strike with a leading zero",
+      "args": [
+        "US.SPXW261120P06500000"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "shortSpxCode",
+      "name": "a call",
+      "args": [
+        "US.SPXW260918C8100000"
+      ],
+      "expect": "260918 C8100"
+    },
+    {
+      "fn": "shortSpxCode",
+      "name": "a name it cannot read",
+      "args": [
+        "sep-condor"
+      ],
+      "expect": "sep-condor"
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "as the bot prints it",
+      "args": [
+        "260918 C8100"
+      ],
+      "expect": "US.SPXW260918C8100000"
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "as a person types it",
+      "args": [
+        "260918c8100"
+      ],
+      "expect": "US.SPXW260918C8100000"
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "not the short form at all",
+      "args": [
+        "sep-condor"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "a day that does not exist",
+      "args": [
+        "260230C8100"
+      ],
+      "expect": null
     }
   ]
 }
