@@ -28,6 +28,16 @@
       }
     },
     {
+      "fn": "normalizeStrikeDate",
+      "name": "a date with a time after it",
+      "args": [
+        "2026-11-20T00:00"
+      ],
+      "expect": {
+        "$throws": true
+      }
+    },
+    {
       "fn": "buildSpxCode",
       "name": "a put",
       "args": [
@@ -152,6 +162,22 @@
       "expect": null
     },
     {
+      "fn": "parseSpxCode",
+      "name": "a code with something before it",
+      "args": [
+        "XUS.SPXW261120P6500000"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "parseSpxCode",
+      "name": "a code with something after it",
+      "args": [
+        "US.SPXW261120P6500000X"
+      ],
+      "expect": null
+    },
+    {
       "fn": "shortSpxCode",
       "name": "a call",
       "args": [
@@ -196,6 +222,14 @@
       "name": "a day that does not exist",
       "args": [
         "260230C8100"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "a short form inside other text",
+      "args": [
+        "x260918C8100"
       ],
       "expect": null
     }
