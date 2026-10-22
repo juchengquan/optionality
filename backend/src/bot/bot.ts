@@ -8,7 +8,9 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { buildSpxCode, normalizeStrikeDate } from "../domain/contract.ts";
+import {
+  buildSpxCode, expandSpxShort, normalizeStrikeDate, shortSpxCode,
+} from "../domain/contract.ts";
 import { comboFieldError, monitorLegCodes } from "../domain/monitor.ts";
 import { round4 } from "../domain/quote.ts";
 import {
@@ -28,7 +30,7 @@ import { linkToPositions, watchlistQuotes } from "../monitors.ts";
 import { verifyContracts, type QuoteFetcher, type QuoteRecord } from "../quotes.ts";
 import { displayTimeShort } from "../domain/timefmt.ts";
 import {
-  BOT_COMMANDS, FIELD_SHORT, HELP_TEXT, fmtValue, hasFormat, pyNumber, ruleText, shortCode, standingNote, table,
+  BOT_COMMANDS, FIELD_SHORT, HELP_TEXT, fmtValue, hasFormat, pyNumber, ruleText, standingNote, table,
   thresholdError,
 } from "./format.ts";
 import type { SweeperPort } from "../ports.ts";
@@ -51,7 +53,6 @@ interface Update {
 }
 
 const LEG_TOKEN = /^([+-])([CP])(\d+(?:\.\d+)?)$/;
-const SHORT_CONTRACT = /^(\d{6})([CP])(\d+)$/;
 
 export class TelegramBot {
   private readonly deps: BotDeps;
@@ -197,7 +198,7 @@ export class TelegramBot {
         : hasFormat(m.field) ? fmtValue(m.field, m.last_value)
         : m.last_value.toFixed(4);
       const thr = `${m.direction === "below" ? "≤" : "≥"}${pyNumber(m.threshold)}`;
-      return [shortCode(m.code), FIELD_SHORT[m.field] ?? m.field, last, thr, state];
+      return [shortSpxCode(m.code), FIELD_SHORT[m.field] ?? m.field, last, thr, state];
     }));
   }
 
@@ -214,7 +215,7 @@ export class TelegramBot {
     }
     if (quotes.length === 0) return "Watchlist is empty. Add one with /watch.";
     return table(headers, quotes.map((q) => [
-      shortCode(q.code) + (q.triggered ? " 🔔" : ""),
+      shortSpxCode(q.code) + (q.triggered ? " 🔔" : ""),
       ...cells(q.quote ?? {}),
     ]));
   }
@@ -376,11 +377,11 @@ export class TelegramBot {
       const value = byCode[code]?.[monitor.field];
       const sign = leg.sign > 0 ? "+" : "-";
       if (value === undefined || value === null) {
-        rows.push([sign, shortCode(code), "—"]);
+        rows.push([sign, shortSpxCode(code), "—"]);
         complete = false;
       } else {
         total += leg.sign * Number(value);
-        rows.push([sign, shortCode(code), fmtValue(monitor.field, Number(value))]);
+        rows.push([sign, shortSpxCode(code), fmtValue(monitor.field, Number(value))]);
       }
     }
     // 4dp on the total, as the Python rounds it: a signed sum of three-decimal mids otherwise shows
@@ -394,8 +395,7 @@ export class TelegramBot {
   private matches(args: string[]): MonitorRow[] {
     const token = args[0] ?? "";
     const joined = args.join("").toUpperCase();
-    const short = SHORT_CONTRACT.exec(joined);
-    const expanded = short ? `US.SPXW${short[1]}${short[2]}${short[3]}000` : null;
+    const expanded = expandSpxShort(joined);
     return findMonitorsByIdentifier(this.deps.db, token, joined, expanded);
   }
 

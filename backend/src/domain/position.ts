@@ -7,13 +7,14 @@
  *
  */
 import { buildSpxCode } from "./contract.ts";
+import type { OptionType } from "./contract.ts";
 import type { ByCode } from "./quote.ts";
 
 /** long if you bought it, short if you sold it (ADR 0013). sold/bought name the TRADES that open
  *  or close a Leg; greek exposure is only ever a signed number, so "short" means a Leg and
  *  nothing else. */
 export type Side = "short" | "long";
-export type OptionType = "CALL" | "PUT";
+export type { OptionType };
 
 export interface Leg {
   side: Side;

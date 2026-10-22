@@ -108,16 +108,6 @@ export function standingNote(v: HoldingValue): string {
   return `${s.pace_gap > 0 ? "behind" : "ahead"} ${Math.abs(s.pace_gap).toFixed(2)}`;
 }
 
-const SPXW_CODE = /^US\.SPXW(\d{6})([CP])(\d+?)000$/;
-
-/** `US.SPXW261030C8100000` as `261030 C8100`. The SPXW and the trailing 000 are on every contract this
- *  service can create, so they carry no information and cost twelve of the forty characters. */
-export function shortCode(code: string): string {
-  const m = SPXW_CODE.exec(code);
-  if (!m) return code;
-  return `${m[1]} ${m[2]}${m[3]}`;
-}
-
 /** Whether this field has a format of its own, which decides 3 places against 4. */
 export function hasFormat(field: string): boolean {
   return field in FIELD_FORMATS;

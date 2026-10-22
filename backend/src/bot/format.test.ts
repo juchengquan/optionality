@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BOT_COMMANDS, HELP_TEXT, escapeHtml, fmtValue, hasFormat, pyNumber, ruleText, shortCode, table,
+  BOT_COMMANDS, HELP_TEXT, escapeHtml, fmtValue, hasFormat, pyNumber, ruleText, table,
   thresholdError,
 } from "./format.ts";
 
@@ -82,18 +82,6 @@ describe("table", () => {
     ).replace("<pre>", "").replace("</pre>", "").split("\n")[1]!;
     expect(row).toBe("261030 C8100  delta  0.046  ≥0.6  armed");
     expect(row.length).toBe(39);
-  });
-});
-
-describe("shortCode", () => {
-  it("drops the SPXW and the trailing 000, which every contract has", () => {
-    expect(shortCode("US.SPXW260918C8100000")).toBe("260918 C8100");
-    expect(shortCode("US.SPXW261218P6425000")).toBe("261218 P6425");
-  });
-
-  it("passes anything else through, including a combo's own name", () => {
-    expect(shortCode("US.WEIRD123")).toBe("US.WEIRD123");
-    expect(shortCode("sep-condor")).toBe("sep-condor");
   });
 });
 
