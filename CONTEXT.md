@@ -12,7 +12,9 @@ _Avoid_: holding, trade, structure
 
 **Contract**:
 One tradeable option: an expiry, a type and a strike. It exists whether or not you hold it — a
-Monitor can watch one you have never owned, and a Quote describes one.
+Monitor can watch one you have never owned, and a Quote describes one. Its code — the string that
+names it everywhere you look — is the system's own, built from those three facts; that a Provider
+accepts the same spelling is a convenience and not the definition.
 _Avoid_: instrument, option, leg (a Leg is a Contract you hold)
 
 **Leg**:
@@ -124,6 +126,22 @@ _Avoid_: watch, rule, alert, combo monitor, "a monitor on my condor" (say which 
 Live market data for a contract. Always this word — moomoo's "snapshot" jargon stays out of
 the domain.
 _Avoid_: snapshot, tick, price data
+
+**Provider**:
+Where Quotes come from: one market-data source the service is configured to use, settled before it
+starts and never mixed with another. Its whole job is to answer one question — the live figures for
+these Contracts, and the ones it could not price. Which figures it can supply is a fact about the
+ACCOUNT it speaks for rather than about the Provider: two accounts reaching the same Provider may
+differ on whether greeks arrive at all. It never trades, which is why it is not a broker here even
+when the company behind it is one.
+_Avoid_: broker, vendor, feed, API, data source, integration
+
+**Quarantine**:
+A Monitor the service has disabled itself because it cannot be evaluated — its Contract is unknown
+to the Provider, or the figure it watches never arrives. Always with a notice, and never deleted:
+the rule is still what you meant, and the reason is a fact about the data rather than about the
+rule. A Monitor you mute is a different thing, because you chose it.
+_Avoid_: disable, mute, remove, expire, pause
 
 **Sweep**:
 One pass of the alarm engine: fetch quotes for every enabled Monitor, evaluate each threshold,
