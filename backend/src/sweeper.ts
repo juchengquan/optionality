@@ -22,6 +22,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { isBreached, monitorLegCodes, monitorValue } from "./domain/monitor.ts";
+import type { Monitor } from "./domain/monitor.ts";
 import { exitPolicy } from "./domain/exit.ts";
 import { positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
@@ -82,7 +83,7 @@ function addDays(isoDate: string, days: number): string {
  *  entitlement looks like. Blaming the field for an unpriced leg would send the owner to the wrong
  *  question.
  */
-function silence(monitor: ReturnType<typeof toMonitor>, byCode: Record<string, QuoteRecord>): string {
+function silence(monitor: Monitor, byCode: Record<string, QuoteRecord>): string {
   const unpriced = monitorLegCodes(monitor).filter((code) => byCode[code] === undefined);
   if (unpriced.length > 0) return `no quote for ${unpriced.sort().join(", ")}`;
   return `no ${monitor.field} in the quote`;
