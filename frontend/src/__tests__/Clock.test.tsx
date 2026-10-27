@@ -25,7 +25,7 @@ describe("the screen's own clock", () => {
 
   it("puts a plain 24-hour time on the page, next to the service's", async () => {
     const health = {
-      db: true, opend: true,
+      db: true, provider: { name: "moomoo", ok: true },
       monitor: {
         last_sweep_at: "x", alarms: { label: "active", bad: false },
         fetched_at: "2026-10-21 21:47:23+08:00",

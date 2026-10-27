@@ -114,6 +114,8 @@ export interface HarnessOptions {
   settings?: Partial<Settings>;
   /** whether OpenD answers; false matches the Python's test port, where nothing listens */
   opend?: boolean;
+  /** The Provider's name, for the one test that checks /health prints it. */
+  providerName?: string;
   /** the bounded OpenD call. Defaults to the permissive echo. */
   fetchQuotes?: FakeProvider;
 }
@@ -137,8 +139,12 @@ export function harness(options: HarnessOptions = {}): Harness {
     db,
     now: () => state.now,
     sweeper,
-    opendReachable: () => Promise.resolve(options.opend ?? false),
-    fetchQuotes: options.fetchQuotes ? fakeFetcher(options.fetchQuotes) : echoFetcher,
+    provider: {
+      name: options.providerName ?? "moomoo",
+      fetchQuotes: options.fetchQuotes ? fakeFetcher(options.fetchQuotes) : echoFetcher,
+      reachable: () => Promise.resolve(options.opend ?? false),
+      close: () => { /* nothing to hang up */ },
+    },
   };
 
   const app = createApp(deps);

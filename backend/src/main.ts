@@ -16,8 +16,7 @@ import type { Deps } from "./deps.ts";
 import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
-import { OpendClient } from "./opend/client.ts";
-import { probeOpend } from "./opend/probe.ts";
+import { makeProvider } from "./provider.ts";
 import { Scheduler } from "./scheduler.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
@@ -34,15 +33,13 @@ const applied = migrate(db);
 if (applied.length > 0) console.info(`applied ${applied.length} migration(s): ${applied.join(", ")}`);
 const send = telegramSender(settings.telegramBotToken, settings.telegramChatId);
 
-const opend = new OpendClient({
-  host: settings.opendHost,
-  port: settings.moomooWsPort,
-  key: settings.moomooWsKey,
-});
+/** Chosen here and nowhere else: everything below takes the port, and only `/health` and the
+ *  shutdown below need the Provider itself (ADR 0015). An unknown name is fatal — see provider.ts. */
+const provider = makeProvider(settings);
 
 const scheduler = new Scheduler();
 const sweeper = new MonitorSweeper({
-  db, settings, fetchQuotes: opend.asFetcher(), send,
+  db, settings, fetchQuotes: provider.fetchQuotes, send,
 });
 
 const deps: Deps = {
@@ -50,8 +47,7 @@ const deps: Deps = {
   db,
   now: () => new Date(),
   sweeper,
-  opendReachable: probeOpend,
-  fetchQuotes: opend.asFetcher(),
+  provider,
 };
 
 const port = Number(process.env.PORT ?? 31417);
@@ -62,7 +58,7 @@ const bot = new TelegramBot({
   db,
   settings,
   api: telegramApi(settings.telegramBotToken),
-  fetchQuotes: opend.asFetcher(),
+  fetchQuotes: provider.fetchQuotes,
   sweeper,
 });
 
@@ -88,7 +84,7 @@ if (botWanted) {
 
 console.log(
   `optionality backend on 127.0.0.1:${port} — `
-  + `sweeping every ${settings.monitorIntervalSeconds}s, `
+  + `reading ${provider.name}, sweeping every ${settings.monitorIntervalSeconds}s, `
   + `bot ${botWanted ? "polling" : "not started (set OPTIONALITY_BOT=1)"}`,
 );
 
@@ -142,7 +138,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     bot.stop();
     scheduler.stop();
     server.close();
-    opend.close();
+    provider.close();
     db.close();
     process.exit(0);
   });

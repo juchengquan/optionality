@@ -35,7 +35,7 @@ const leg = {
 };
 
 const health = {
-  db: true, opend: true,
+  db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-09-24 15:00:00+08:00", alarms: { label: "active", bad: false }, fetched_at: "2026-09-24 15:00:00+08:00" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
 };
@@ -173,14 +173,14 @@ describe("the top line", () => {
     // strips that each sometimes appear is two places to look at the moment you can least afford
     // to look twice.
     mockApi([wing], [], {
-      ...health, opend: false,
+      ...health, provider: { name: "moomoo", ok: false },
       monitor: { ...health.monitor, alarms: { label: "STALLED (3 failed sweeps)", bad: true } },
     });
     render(<App />);
     await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
 
     const line = screen.getByRole("status");
-    expect(line.textContent).toContain("OpenD down");
+    expect(line.textContent).toContain("moomoo down");
     expect(line.textContent).toContain("STALLED (3 failed sweeps)");
     expect(screen.queryByText(/OpenD:/), "the old strip is gone").toBeNull();
   });

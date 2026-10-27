@@ -17,7 +17,7 @@ import { App } from "../App";
  */
 
 const health = (over: Record<string, unknown> = {}) => ({
-  db: true, opend: true,
+  db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
   ...over,
@@ -141,12 +141,23 @@ describe("the top line, in place of the service status strip", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
-  it("appears, marked bad, when OpenD is down", async () => {
-    mockApi([leg], health({ opend: false }));
+  it("appears, marked bad, when the Provider is down", async () => {
+    mockApi([leg], health({ provider: { name: "moomoo", ok: false } }));
     render(<App />);
     const line = await waitFor(() => screen.getByRole("status"));
-    expect(line.textContent).toContain("OpenD down");
+    expect(line.textContent).toContain("moomoo down");
     expect(line.className, "a fault is painted bad").toContain("bad");
+  });
+
+  it("names whichever Provider the service says, rather than one it was written against", async () => {
+    /** The guard for #169. Both assertions above would pass with "moomoo" hard-coded in the page,
+     *  which is exactly the state this replaced: the line said "OpenD" whatever was behind the
+     *  port. The name comes from /health or the dashboard is making it up. */
+    mockApi([leg], health({ provider: { name: "ibkr", ok: false } }));
+    render(<App />);
+    const line = await waitFor(() => screen.getByRole("status"));
+    expect(line.textContent).toContain("ibkr down");
+    expect(line.textContent).not.toContain("moomoo");
   });
 
   it("appears when the alarm engine is not active, which is the quiet failure", async () => {
@@ -196,6 +207,6 @@ describe("the top line, in place of the service status strip", () => {
     const panel = await screen.findByRole("dialog");
 
     expect(panel.textContent).toContain("nothing needs you");
-    expect(panel.textContent).toContain("OpenD up");
+    expect(panel.textContent).toContain("moomoo up");
   });
 });

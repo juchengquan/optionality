@@ -8,6 +8,9 @@
 
 export interface Settings {
   dbPath: string;
+  /** which Provider this deployment reads market data from; one per deployment, chosen before
+   *  boot (ADR 0015). provider.ts knows the names and refuses the rest. */
+  provider: string;
   opendHost: string;
   /** OpenD's WEBSOCKET port. The npm client speaks nothing else — the SDK's TCP protocol has no
    *  JavaScript implementation (ADR 0009, phase 6). */
@@ -50,6 +53,7 @@ export const DEFAULTS: Settings = {
   // plist has always set OPTIONALITY_DB_PATH, so the live service was right and every other way of
   // starting this code was quietly pointed at the rollback.
   dbPath: "data/optionality-ts.db",
+  provider: "moomoo",
   opendHost: "127.0.0.1",
   moomooWsPort: 33333,
   moomooWsKey: "",
@@ -76,6 +80,7 @@ export const DEFAULTS: Settings = {
  *  name the Python does not use. */
 const FROM_ENV = {
   dbPath: "OPTIONALITY_DB_PATH",
+  provider: "OPTIONALITY_PROVIDER",
   opendHost: "OPEND_HOST",
   moomooWsPort: "MOOMOO_WS_PORT",
   moomooWsKey: "MOOMOO_WS_KEY",

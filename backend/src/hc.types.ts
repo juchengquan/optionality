@@ -100,7 +100,8 @@ type E = Awaited<ReturnType<typeof endpoints>>;
 export type HcChecks = [
   // /health ---------------------------------------------------------------------------
   Checked<Exactly<E["health"]["db"], boolean>>,
-  Checked<Exactly<E["health"]["opend"], boolean>>,
+  Checked<Exactly<E["health"]["provider"]["name"], string>>,
+  Checked<Exactly<E["health"]["provider"]["ok"], boolean>>,
   Checked<Exactly<E["health"]["monitor"]["alarms"]["label"], string>>,
   Checked<Exactly<E["health"]["monitor"]["alarms"]["bad"], boolean>>,
   Checked<Exactly<E["health"]["settings"]["sweep_seconds"], number>>,

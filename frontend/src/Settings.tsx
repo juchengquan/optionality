@@ -21,7 +21,7 @@ export const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
  *  every time you look at the screen; how often the screen polls is a thing you set once. So the
  *  cadence moved in here and the freshness stayed out there.
  *
- *  Deliberately NOT in here: the service's own status. If OpenD is down or the alarm engine has
+ *  Deliberately NOT in here: the service's own status. If the Provider is down or the alarm engine has
  *  stalled, every figure on the page is suspect and the bell may be silent — that is exactly when
  *  it must not be a click away. It stays on the page, and shows only when it has something to say.
  *
@@ -95,7 +95,9 @@ export function Settings({
           <section data-testid="service">
             <h3 className="text-sm font-semibold mb-1">service</h3>
             <p className="meta">
-              {`OpenD ${health ? (health.opend ? "up" : "down") : "unknown"}`}
+              {/* the Provider names itself (ADR 0015): this said "OpenD" whatever was behind the
+                  port, and with a second Provider that would have been a lie on screen */}
+              {health ? `${health.provider.name} ${health.provider.ok ? "up" : "down"}` : "provider unknown"}
               {health ? ` · alarms ${health.monitor.alarms.label}` : ""}
             </p>
             {health?.monitor.last_sweep_at

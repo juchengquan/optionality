@@ -77,11 +77,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
-- Every OpenD call is a single bounded one: the sweep, `/spx/quote`, `/quotes`, `/positions/values`
-  and the creation probes. (`/positions/values` is polled by the dashboard's Holdings panel while it is
-  open.) This read "one worker thread owns run execution, and these are the exceptions" until phase 10
-  retired the worker with the run pipeline it existed for (ADR 0014).
-- The whole watchlist is ONE `get_market_snapshot` call per sweep (combo legs join the batch, deduped).
+- Every call to the **Provider** is a single bounded one: the sweep, `/spx/quote`, `/quotes`,
+  `/positions/values` and the creation probes. (`/positions/values` is polled by the dashboard's Holdings
+  panel while it is open.) This read "one worker thread owns run execution, and these are the exceptions"
+  until phase 10 retired the worker with the run pipeline it existed for (ADR 0014), and named OpenD until
+  ADR 0015 made the vendor one Provider among others — `OPTIONALITY_PROVIDER` chooses, and the rule holds
+  for whichever answers.
+- The whole watchlist is ONE snapshot call per sweep (combo legs join the batch, deduped).
   **The dashboard's poll is a live call of its own** — `/quotes`, one batch per poll per open tab — so its
   figures are current rather than up to one sweep old, and polling faster is NOT free (ADR 0010). What the
   earlier wording promised still holds and is what matters: a row's value and its 🔔 come from the same

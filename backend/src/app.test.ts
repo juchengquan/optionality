@@ -19,7 +19,16 @@ describe("/health", () => {
     expect(resp.status).toBe(200);
     const data = await body(resp);
     expect(data.db).toBe(true);
-    expect(data.opend).toBe(false); // nothing listens on the test port
+    // the Provider names itself: the dashboard said "OpenD" whatever was actually behind the
+    // port, and a second Provider would have made that a lie on screen (#169)
+    expect(data.provider).toEqual({ name: "moomoo", ok: false }); // nothing listens on the test port
+  });
+
+  it("reports the name of whichever Provider answered, not the one it was written against", async () => {
+    // the route must read the Provider's own name: hard-coding "moomoo" here would pass every
+    // other test in this file and put the wrong vendor on the dashboard the day a second one lands
+    const data = await body(await start({ providerName: "ibkr" }).call("/health", { anonymous: true }));
+    expect(data.provider.name).toBe("ibkr");
   });
 
   it("no longer reports a run pipeline, because there is none (phase 10)", async () => {
@@ -30,7 +39,7 @@ describe("/health", () => {
     expect("last_run" in data).toBe(false);
   });
 
-  it("reports the last fetch for opend, not a port that merely accepts", async () => {
+  it("reports the last fetch for the Provider, not a port that merely accepts", async () => {
     // 2026-10-16: OpenD held the socket open and would not log in. The probe said true, every
     // OpenD-backed route returned 502, and the dashboard showed a green light for a gateway the
     // service could not speak to. What the last batch actually did is the only honest answer, and
@@ -38,7 +47,7 @@ describe("/health", () => {
     const h2 = start({ opend: true });
     h2.sweeper.fetchOk = false;
     const data = await body(await h2.call("/health", { anonymous: true }));
-    expect(data.opend).toBe(false);
+    expect(data.provider.ok).toBe(false);
   });
 
   it("falls back to the port probe only while nothing has been fetched yet", async () => {
@@ -47,7 +56,7 @@ describe("/health", () => {
     const h2 = start({ opend: true });
     expect(h2.sweeper.fetchOk).toBeNull();
     const data = await body(await h2.call("/health", { anonymous: true }));
-    expect(data.opend).toBe(true);
+    expect(data.provider.ok).toBe(true);
   });
 
   it("no longer carries a contract version, because the compiler has replaced it", async () => {
