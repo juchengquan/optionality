@@ -28,6 +28,17 @@ const StrikeDate = z.string().transform((value, ctx) => {
   }
 });
 
+/** Every reason the service writes into `disabled_reason`, named once.
+ *
+ *  "unknown-contract" and "no-figure" are the two Quarantines — the service's own doing, because
+ *  the rule cannot be evaluated — and "manual" is the owner's. The dashboard groups its muted
+ *  tables BY this string, and a reason it has no group for renders in no group at all: the row
+ *  disappears from the page while sitting disabled in the database. So the list is published here
+ *  and the dashboard is held to it.
+ */
+export const DISABLED_REASONS = ["unknown-contract", "no-figure", "expired", "manual"] as const;
+export type DisabledReason = (typeof DISABLED_REASONS)[number];
+
 const Direction = z.enum(["above", "below"]);
 const Compare = z.enum(["abs", "signed"]);
 

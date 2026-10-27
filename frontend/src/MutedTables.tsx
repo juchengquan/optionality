@@ -3,9 +3,16 @@ import { Button } from "@/components/ui/button";
 
 import { ConfirmDelete } from "./ConfirmDelete";
 
-// most alarming first: a vanished contract needs attention, one you muted yourself does not
-const GROUPS: [string | null, string][] = [
+/** Most alarming first: the two Quarantines — the service's own doing, where a rule cannot be
+ *  evaluated at all — then expiry, then the rules you muted yourself.
+ *
+ *  Exported for its test, which holds this list against the backend's `DISABLED_REASONS`. A reason
+ *  with no group here renders in NO group, so the row would disappear from the page while sitting
+ *  disabled in the database (#167).
+ */
+export const GROUPS: [string | null, string][] = [
   ["unknown-contract", "Unknown contract"],
+  ["no-figure", "Figure never arrived"],
   ["expired", "Expired"],
   ["manual", "Muted by you"],
   [null, "Reason not recorded"],

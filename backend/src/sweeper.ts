@@ -11,13 +11,18 @@
  *  The alarm flips truthfully AT the threshold — no value hysteresis; flapping is throttled by the
  *  per-monitor cooldown, and a persisting breach re-reminds on a fixed cadence.
  *
- *  Nothing here is auto-deleted except an expired monitor past its retention window. An unknown
- *  contract is quarantined — disabled with a notice, kept for inspection — and never removed.
+ *  Nothing here is auto-deleted except an expired monitor past its retention window. A rule the
+ *  engine cannot evaluate is quarantined — disabled with a notice, kept for inspection — and never
+ *  removed. There are two such faults, and they are symmetrical: a contract the Provider does not
+ *  recognise, and a figure that never arrives for one it does. The second used to be a log line
+ *  and a `continue`, which is the quietest failure this service had: an alarm that cannot fire
+ *  reads exactly like one that is not breached (#167).
  */
 import type { DatabaseSync } from "node:sqlite";
 
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { isBreached, monitorLegCodes, monitorValue } from "./domain/monitor.ts";
+import type { Monitor } from "./domain/monitor.ts";
 import { exitPolicy } from "./domain/exit.ts";
 import { positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
@@ -29,6 +34,7 @@ import type { MonitorRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
 import { toSqliteBool, } from "./db/values.ts";
 import type { Settings } from "./env.ts";
+import type { DisabledReason } from "./schemas/monitor.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
 import { displayRecords, fetchResilient, type QuoteFetcher, type QuoteRecord } from "./quotes.ts";
 import { displayTime } from "./domain/timefmt.ts";
@@ -69,8 +75,31 @@ function addDays(isoDate: string, days: number): string {
   return new Date(Date.parse(`${isoDate}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+/** Why a rule's figure did not arrive, in the words the notice needs.
+ *
+ *  `monitorValue` answers null for two different faults and the notice is the only place the
+ *  difference shows: a leg that was never priced is the Provider missing a CONTRACT, while a
+ *  priced leg without the figure is the Provider not serving that FIELD — which is what an
+ *  entitlement looks like. Blaming the field for an unpriced leg would send the owner to the wrong
+ *  question.
+ */
+function silence(monitor: Monitor, byCode: Record<string, QuoteRecord>): string {
+  const unpriced = monitorLegCodes(monitor).filter((code) => byCode[code] === undefined);
+  if (unpriced.length > 0) return `no quote for ${unpriced.sort().join(", ")}`;
+  return `no ${monitor.field} in the quote`;
+}
+
 export class MonitorSweeper {
   consecutiveFailuresCount = 0;
+  /** Consecutive sweeps a monitor's figure has failed to arrive for, by monitor id.
+   *
+   *  In memory, like `consecutiveFailuresCount` and for the same reason: the claim is about a RUN
+   *  of sweeps, and a restart genuinely breaks the run — nothing was being swept while the service
+   *  was down, so a count carried across it would be about a stretch of time the engine did not
+   *  observe. The cost is that a deploy gives a silent rule its N sweeps again, which is the
+   *  conservative direction.
+   */
+  readonly silentSweeps = new Map<string, number>();
   sweepAt: Date | null = null;
   /** null until the first sweep: "starting" is a different thing from "working" */
   sweepOk: boolean | null = null;
@@ -219,6 +248,7 @@ export class MonitorSweeper {
     const today = utcDate(at);
 
     const active = await this.runExpiryLifecycle(today);
+    this.forgetSilenceBut(active);
 
     // positions join the batch even when nothing alarms on them: the dashboard values them from
     // this same fetch, and a held position must not read as "—" merely because you happen not to be
@@ -268,6 +298,19 @@ export class MonitorSweeper {
     );
   }
 
+  /** Drop the silence counts of rules this sweep is not evaluating.
+   *
+   *  Left behind, the map grows for ever and a rule unmuted weeks later resumes mid-count. Called
+   *  from `sweep` rather than from the alarm loop because a sweep with nothing to fetch returns
+   *  before the loop — and that is precisely the sweep after the last rule was deleted.
+   */
+  private forgetSilenceBut(active: MonitorRow[]): void {
+    const sweeping = new Set(active.map((m) => m.id));
+    for (const id of [...this.silentSweeps.keys()]) {
+      if (!sweeping.has(id)) this.silentSweeps.delete(id);
+    }
+  }
+
   /** Mute with a notice on expiry; delete quietly after the grace period.
    *
    *  Nothing else is ever auto-deleted, and an unknown-contract quarantine is kept for inspection
@@ -294,8 +337,9 @@ export class MonitorSweeper {
           deleteMonitorRow(db, monitor.id);
         } else if (monitor.strike_date < today) {
           if (monitor.enabled) {
+            const reason: DisabledReason = "expired";
             updateMonitorFields(db, monitor.id, {
-              enabled: toSqliteBool(false), disabled_reason: "expired",
+              enabled: toSqliteBool(false), disabled_reason: reason,
             });
             notices.push(
               `ℹ️ monitor ${monitor.code} expired (${monitor.strike_date}) — muted; `
@@ -312,7 +356,8 @@ export class MonitorSweeper {
     return active;
   }
 
-  /** Disable — never delete — monitors whose contracts moomoo does not recognise. */
+  /** Disable — never delete — monitors whose contracts the Provider does not recognise. Its twin
+   *  is the silence count in `evaluate`: the same answer to the other half of "cannot evaluate". */
   private async quarantineUnknown(
     active: MonitorRow[], bad: Set<string>,
   ): Promise<MonitorRow[]> {
@@ -326,8 +371,9 @@ export class MonitorSweeper {
           surviving.push(monitor);
           continue;
         }
+        const reason: DisabledReason = "unknown-contract";
         updateMonitorFields(db, monitor.id, {
-          enabled: toSqliteBool(false), disabled_reason: "unknown-contract",
+          enabled: toSqliteBool(false), disabled_reason: reason,
         });
         notices.push(
           `⚠️ monitor ${monitor.code} disabled: unknown contract ${hits.join(", ")} `
@@ -339,7 +385,12 @@ export class MonitorSweeper {
     return surviving;
   }
 
-  /** The alarm loop. */
+  /** The alarm loop — and, for a rule with no figure to evaluate, the count toward quarantine.
+   *
+   *  The count lives here rather than beside `quarantineUnknown` because this is the only place
+   *  that knows a figure did not arrive: the fetch succeeded, the contract was priced, and
+   *  `monitorValue` still answered null.
+   */
   private async evaluate(
     monitors: MonitorRow[], byCode: Record<string, QuoteRecord>,
   ): Promise<void> {
@@ -347,15 +398,33 @@ export class MonitorSweeper {
     const now = this.now();
     const stamp = toSqlDatetime(now);
     const notices: string[] = [];
+    const limit = settings.quarantineAfterSilentSweeps;
 
     await atomic(db, () => {
       for (const row of monitors) {
         const monitor = toMonitor(row);
         const value = monitorValue(monitor, byCode);
         if (value === null) {
-          console.warn(`no complete ${monitor.field} for ${monitor.code} in snapshot`);
+          const n = (this.silentSweeps.get(row.id) ?? 0) + 1;
+          this.silentSweeps.set(row.id, n);
+          const why = silence(monitor, byCode);
+          if (limit > 0 && n >= limit) {
+            const reason: DisabledReason = "no-figure";
+            updateMonitorFields(db, row.id, {
+              enabled: toSqliteBool(false), disabled_reason: reason,
+            });
+            // forgotten, not kept at the limit: unmuting the rule gives it its full count again
+            this.silentSweeps.delete(row.id);
+            notices.push(
+              `⚠️ monitor ${monitor.code} disabled: ${why} for ${n} consecutive sweeps`,
+            );
+          } else {
+            console.warn(`${why} for ${monitor.code} (${n}${limit > 0 ? `/${limit}` : ""})`);
+          }
           continue;
         }
+        // it arrived: the run of silence is over, and a run is what the limit counts
+        this.silentSweeps.delete(row.id);
         // re-read: the fetch was awaited, and a request may have changed the row in the meantime.
         // The Python re-reads for the same reason, across its session boundary.
         const current = findMonitor(db, row.id);
