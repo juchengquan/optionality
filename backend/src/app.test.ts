@@ -24,6 +24,13 @@ describe("/health", () => {
     expect(data.provider).toEqual({ name: "moomoo", ok: false }); // nothing listens on the test port
   });
 
+  it("reports the name of whichever Provider answered, not the one it was written against", async () => {
+    // the route must read the Provider's own name: hard-coding "moomoo" here would pass every
+    // other test in this file and put the wrong vendor on the dashboard the day a second one lands
+    const data = await body(await start({ providerName: "ibkr" }).call("/health", { anonymous: true }));
+    expect(data.provider.name).toBe("ibkr");
+  });
+
   it("no longer reports a run pipeline, because there is none (phase 10)", async () => {
     // queue_depth could only ever be 0 and last_run only ever the 2026-08-10 run once the worker
     // could not be given work; a field that cannot change is not a report
