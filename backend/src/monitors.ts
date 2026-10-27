@@ -12,7 +12,7 @@ import {
   positionsForMonitors, setPositionEntry, solelyWatchedPositions, updateMonitorFields,
 } from "./db/queries.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
-import { displayRecords, fetchResilient, type QuoteFetcher } from "./quotes.ts";
+import { displayRecords, type QuoteFetcher } from "./quotes.ts";
 import type { ExitPolicy } from "./domain/exit.ts";
 import { buildEntries, codesFor, type MonitorForEntry, type WatchlistEntry } from "./watchlist.ts";
 import type { Position } from "./domain/position.ts";
@@ -91,11 +91,11 @@ export async function watchlistQuotes(
     Object.entries(ownedRows).map(([id, ps]) => [id, ps.map(toPosition)]),
   );
   const now = options.now ?? new Date();
-  const { records, bad } = await fetchResilient(codesFor(monitors, owned), fetch);
+  const { records, unknown } = await fetch(codesFor(monitors, owned));
   return buildEntries({
     monitors,
     byCode: displayRecords(records, displayTz, now),
-    bad: new Set(bad),
+    bad: new Set(unknown),
     owned,
     now,
     policy: options.policy,

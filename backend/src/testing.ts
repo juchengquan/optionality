@@ -16,7 +16,7 @@ import { createApp } from "./app.ts";
 import { createDatabase } from "./db/open.ts";
 import { type Settings, settingsFor } from "./env.ts";
 import type { Deps } from "./deps.ts";
-import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
+import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "./quotes.ts";
 
 export const TOKEN = "tok";
 
@@ -62,27 +62,51 @@ export interface Harness {
   call(path: string, init?: RequestInit & { anonymous?: boolean }): Promise<Response>;
 }
 
+/** A batch in which every code was priced — what a fake Provider answers unless the test is about
+ *  one that was not. */
+export const priced = (records: QuoteRecord[]): QuoteBatch => ({ records, unknown: [] });
+
+/** What a test answers with: records alone, or a whole batch.
+ *
+ *  Nearly every test prices everything it is asked for, and writing `{ records, unknown: [] }`
+ *  forty times says nothing. The tests that are ABOUT a code the Provider cannot price answer with
+ *  the batch itself, and read as the exception they are (#168).
+ */
+export type FakeProvider = (codes: string[]) => Promise<QuoteRecord[] | QuoteBatch>;
+
+/** A fake Provider as the port wants it. */
+export function fakeFetcher(fetch: FakeProvider): QuoteFetcher {
+  return async (codes) => {
+    const answer = await fetch(codes);
+    return Array.isArray(answer) ? priced(answer) : answer;
+  };
+}
+
 /** The permissive default: every requested contract "exists". The same fixture the Python uses, and
  *  for the same reason — a test must never reach the real moomoo SDK, which blocks indefinitely on a
  *  dead port, so a missing fake looks like a hung suite rather than a failure (CLAUDE.md). */
 export const echoFetcher: QuoteFetcher = (codes) =>
-  Promise.resolve(codes.map((code) => ({ code })));
+  Promise.resolve(priced(codes.map((code) => ({ code }))));
 
 /** A fetcher that returns the given figures per code, and nothing for a code it does not know. */
 export function quoting(byCode: Record<string, QuoteRecord>): QuoteFetcher {
-  return (codes) => Promise.resolve(codes.filter((c) => c in byCode).map((c) => ({ code: c, ...byCode[c] })));
+  return (codes) =>
+    Promise.resolve(priced(codes.filter((c) => c in byCode).map((c) => ({ code: c, ...byCode[c] }))));
 }
 
-/** A fetcher that rejects the whole batch while a code containing `fragment` is in it, as moomoo
- *  does — and names the culprit WITHOUT its market prefix, which is why fetchResilient matches the
- *  name as a suffix rather than for equality. */
+/** A Provider that cannot price a code containing `fragment`, and says so.
+ *
+ *  It used to REJECT the batch with moomoo's own sentence, because containment lived above the
+ *  port and read that sentence. Now the port carries the answer: a fake Provider reports what it
+ *  could not price, and moomoo's prose is tested where it is spoken, in `opend/client.test.ts`
+ *  (#168). */
 export function poisonable(fragment: string): QuoteFetcher {
   return (codes) => {
-    const bad = codes.filter((c) => c.includes(fragment));
-    if (bad.length > 0) {
-      return Promise.reject(new Error(`snapshot API failed: Unknown stock. ${bad[0]!.replace(/^US\./, "")}`));
-    }
-    return Promise.resolve(codes.map((code) => ({ code })));
+    const unknown = codes.filter((c) => c.includes(fragment));
+    return Promise.resolve({
+      records: codes.filter((c) => !unknown.includes(c)).map((code) => ({ code })),
+      unknown,
+    });
   };
 }
 
@@ -91,7 +115,7 @@ export interface HarnessOptions {
   /** whether OpenD answers; false matches the Python's test port, where nothing listens */
   opend?: boolean;
   /** the bounded OpenD call. Defaults to the permissive echo. */
-  fetchQuotes?: QuoteFetcher;
+  fetchQuotes?: FakeProvider;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -114,7 +138,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     now: () => state.now,
     sweeper,
     opendReachable: () => Promise.resolve(options.opend ?? false),
-    fetchQuotes: options.fetchQuotes ?? echoFetcher,
+    fetchQuotes: options.fetchQuotes ? fakeFetcher(options.fetchQuotes) : echoFetcher,
   };
 
   const app = createApp(deps);
@@ -143,7 +167,7 @@ export function harness(options: HarnessOptions = {}): Harness {
 }
 
 /** The fetcher the position tests want: every leg priced, so cost to close and P&L are real. */
-export const pricedFetcher: QuoteFetcher = (codes) => Promise.resolve(codes.map((code) => {
+export const pricedFetcher: QuoteFetcher = (codes) => Promise.resolve(priced(codes.map((code) => {
   const mids: Record<string, number> = { C8050: 5.0, C8075: 2.0, P7100: 3.0, P7075: 1.5 };
   const hit = Object.entries(mids).find(([suffix]) => code.endsWith(`${suffix}000`));
   return {
@@ -152,7 +176,7 @@ export const pricedFetcher: QuoteFetcher = (codes) => Promise.resolve(codes.map(
     option_delta: 0.2,
     option_contract_size: 100.0,
   };
-}));
+})));
 
 /** POST JSON, the shape nearly every write test needs. */
 export function json(body: unknown): RequestInit {

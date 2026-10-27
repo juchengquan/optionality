@@ -14,7 +14,7 @@ import { listPositions } from "./db/queries.ts";
 import type { PositionRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
 import { toPosition } from "./hydrate.ts";
-import { displayRecords, fetchResilient, type QuoteFetcher } from "./quotes.ts";
+import { displayRecords, type QuoteFetcher } from "./quotes.ts";
 
 export interface HoldingValue {
   row: PositionRow;
@@ -56,7 +56,7 @@ export async function holdingValues(
 
   const positions = rows.map(toPosition);
   const codes = [...new Set(positions.flatMap((p) => positionLegCodes(p)))].sort();
-  const { records } = await fetchResilient(codes, fetchQuotes);
+  const { records } = await fetchQuotes(codes);
   const byCode = displayRecords(records, tz, now);
 
   return {

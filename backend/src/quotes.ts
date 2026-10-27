@@ -1,58 +1,38 @@
-/** Fetching live quotes, and surviving a contract moomoo has never heard of (ADR 0009, phase 5).
+/** The market-data port, and what the service does with what comes back (ADR 0009, phase 5).
  *
- *  The fetcher is a port. One worker thread owns run execution, and the sweep, `/spx/quote`,
- *  `/quotes` and the creation probes make single bounded OpenD calls outside that queue — those are
- *  documented exceptions, not violations (CLAUDE.md). What goes here is the part that is logic
- *  rather than transport, so it can be tested without an OpenD at all.
+ *  A Provider is anything that answers `QuoteFetcher` (ADR 0015): the sweep, `/spx/quote`,
+ *  `/quotes` and the creation probes each make one bounded call through it, which are the
+ *  documented exceptions the invariant names (CLAUDE.md). What goes here is logic rather than
+ *  transport, so it can be tested without a Provider at all.
+ *
+ *  The port used to answer with records alone and THROW for a contract the Provider could not
+ *  price — which left this module reading moomoo's error prose to find out which contract it was.
+ *  That belonged to moomoo (`opend/client.ts` has it now): a Provider knows its own failures in
+ *  its own terms, and what the service needs is the answer, not the sentence (#168).
  */
 import type { Quote } from "./domain/quote.ts";
 import { displayTime, marketTimeToDisplay } from "./domain/timefmt.ts";
 
-/** One contract's live figures as moomoo returns them. The same shape the domain reads, so a
+/** One contract's live figures as a Provider returns them. The same shape the domain reads, so a
  *  record can go straight from a fetch into cost_to_close without being reshaped. */
 export type QuoteRecord = Quote;
 
-/** A bounded batch call to OpenD. Phase 6 supplies the real one. */
-export type QuoteFetcher = (codes: string[]) => Promise<QuoteRecord[]>;
-
-/** moomoo names the offending contract in the error text, which is what makes containment safe. */
-const UNKNOWN_CODE = /Unknown stock\.?\s+([A-Z0-9.]+)/;
-
-export interface ResilientResult {
-  records: QuoteRecord[];
-  /** codes moomoo rejected as unknown, dropped from the batch */
-  bad: string[];
-}
-
-/** Batch snapshot that survives unknown contracts.
+/** What one bounded batch came back with: the quotes, and the codes that got none.
  *
- *  moomoo rejects the WHOLE batch when any code is unknown, naming the culprit; we drop it and
- *  retry so one bad contract cannot take the watchlist hostage. Any other error — connection,
- *  quota — is re-thrown untouched: containment engages only on the deterministic named-culprit
- *  case, because retrying a connection failure one code at a time would hide an outage as a
- *  watchlist full of unknown contracts.
+ *  Both, because they are different answers and the caller treats them differently — a code with
+ *  no quote may be an illiquid contract this minute, while a code the Provider does not recognise
+ *  is a rule that will never fire again and is quarantined for it. A Provider that cannot price a
+ *  contract reports it HERE rather than throwing: a throw is for a Provider that could not answer
+ *  at all, which is an outage and must never read as a watchlist full of unknown contracts.
  */
-export async function fetchResilient(
-  codes: string[], fetch: QuoteFetcher,
-): Promise<ResilientResult> {
-  let remaining = [...codes];
-  const bad: string[] = [];
-  while (remaining.length > 0) {
-    try {
-      return { records: await fetch(remaining), bad };
-    } catch (err) {
-      const match = UNKNOWN_CODE.exec(String(err instanceof Error ? err.message : err));
-      if (!match) throw err;
-      const culprit = match[1]!.replace(/\.+$/, "");
-      // moomoo may name the code with or without its market prefix
-      const hits = remaining.filter((c) => c === culprit || c.endsWith(culprit));
-      if (hits.length === 0) throw err; // cannot map the culprit to our codes: a generic failure
-      remaining = remaining.filter((c) => !hits.includes(c));
-      bad.push(...hits);
-    }
-  }
-  return { records: [], bad };
+export interface QuoteBatch {
+  records: QuoteRecord[];
+  /** codes the Provider answered about by saying it does not know them */
+  unknown: string[];
 }
+
+/** One bounded batch call to a Provider. `opend/client.ts` has moomoo's. */
+export type QuoteFetcher = (codes: string[]) => Promise<QuoteBatch>;
 
 /** An error message unless every code is a verified, existing contract.
  *
@@ -63,16 +43,18 @@ export async function fetchResilient(
 export async function verifyContracts(
   codes: string[], fetch: QuoteFetcher,
 ): Promise<string | null> {
-  let result: ResilientResult;
+  let batch: QuoteBatch;
   try {
-    result = await fetchResilient(codes, fetch);
+    batch = await fetch(codes);
   } catch (err) {
     return `cannot verify contract: OpenD unreachable (${err instanceof Error ? err.message : String(err)})`;
   }
-  if (result.bad.length > 0) {
-    return `contract does not exist: ${result.bad.join(", ")} — check strike and expiry`;
+  // both checks, though a code named unknown usually has no record either: a Provider that does
+  // both at once is contradicting itself, and a gate this strict takes the pessimistic reading
+  if (batch.unknown.length > 0) {
+    return `contract does not exist: ${batch.unknown.join(", ")} — check strike and expiry`;
   }
-  const returned = new Set(result.records.map((r) => r.code));
+  const returned = new Set(batch.records.map((r) => r.code));
   const missing = codes.filter((c) => !returned.has(c));
   if (missing.length > 0) {
     return `contract does not exist: ${missing.join(", ")} — check strike and expiry`;

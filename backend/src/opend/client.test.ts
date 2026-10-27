@@ -160,8 +160,8 @@ describe("asking", () => {
 });
 
 describe("failing", () => {
-  it("keeps the wording fetchResilient reads, so containment still works", async () => {
-    // moomoo names the unknown contract in retMsg, and fetchResilient reads that name to drop the
+  it("keeps the wording its own containment reads", async () => {
+    // moomoo names the unknown contract in retMsg, and `batch` below reads that name to drop the
     // culprit and retry. The "snapshot API failed:" prefix is the Python's.
     const { client } = harness({
       respond: () => ({ retType: -1, retMsg: "Unknown stock. SPXW261030C99999000" }),
@@ -263,6 +263,76 @@ describe("as a fetcher", () => {
   it("is the port the rest of the service already takes", async () => {
     const { client } = harness();
     const fetch = client.asFetcher();
-    expect((await fetch(["US.SPXW261030C8100000"]))[0]!.code).toBe("US.SPXW261030C8100000");
+    expect((await fetch(["US.SPXW261030C8100000"])).records[0]!.code).toBe("US.SPXW261030C8100000");
+  });
+});
+
+describe("containment: the vendor's error prose is the vendor's own business", () => {
+  /** This moved here from `fetchResilient` (#168). moomoo rejects the WHOLE batch when any code is
+   *  unknown and names the culprit in its error text; reading that text is how one bad contract is
+   *  kept from taking the watchlist hostage. It belongs to the client because it IS moomoo's
+   *  grammar — a second Provider reports a contract it cannot resolve in entirely different terms,
+   *  and the port above now carries the answer rather than the sentence (ADR 0015).
+   */
+  const POISON = "US.SPXW261030C99999000";
+  const GOOD = "US.SPXW261030C8100000";
+
+  /** Rejects the batch while it contains the poison, naming it WITHOUT its market prefix, as the
+   *  real OpenD does. */
+  const poisonous = (): Script => ({
+    respond: (codes) => (codes.includes(POISON.slice(3))
+      ? { retType: -1, retMsg: `Unknown stock. ${POISON.slice(3)}` }
+      : {
+        retType: 0,
+        s2c: { snapshotList: codes.map((code) => ({ basic: { security: { market: 11, code } } })) },
+      }),
+  });
+
+  it("drops the culprit, retries, and reports it as unknown", async () => {
+    const { client, shared } = harness(poisonous());
+
+    const batch = await client.batch([POISON, GOOD]);
+
+    expect(batch.unknown).toEqual([POISON]);
+    expect(batch.records.map((r) => r.code)).toEqual([GOOD]);
+    // two calls: the rejected batch and the retry without the culprit
+    expect(shared.asked).toHaveLength(2);
+  });
+
+  it("names the code in OUR spelling, not moomoo's", async () => {
+    // moomoo answers with the bare code; everything downstream — the quarantine, the dashboard's
+    // error badge, position_samples — is keyed by `US.`-prefixed codes
+    const { client } = harness(poisonous());
+    expect((await client.batch([POISON])).unknown).toEqual([POISON]);
+  });
+
+  it("gives back an empty batch rather than nothing when every code is unknown", async () => {
+    const { client } = harness(poisonous());
+    expect(await client.batch([POISON])).toEqual({ records: [], unknown: [POISON] });
+  });
+
+  it("re-throws anything that is not a named culprit, so an outage stays an outage", async () => {
+    // retrying a connection failure one code at a time would present an outage as a watchlist
+    // full of unknown contracts
+    const { client } = harness({ respond: () => ({ retType: -1, retMsg: "Client connection failed!" }) });
+    await expect(client.batch([GOOD])).rejects.toThrow(/Client connection failed/);
+  });
+
+  it("re-throws a culprit it cannot map to a code it asked for", async () => {
+    const { client } = harness({ respond: () => ({ retType: -1, retMsg: "Unknown stock. ZZ.NOTOURS" }) });
+    await expect(client.batch([GOOD])).rejects.toThrow(/ZZ\.NOTOURS/);
+  });
+
+  it("asks nothing and reports nothing for an empty batch", async () => {
+    const { client, shared } = harness();
+    expect(await client.batch([])).toEqual({ records: [], unknown: [] });
+    expect(shared.starts).toBe(0);
+  });
+
+  it("is what asFetcher hands the service", async () => {
+    const { client } = harness(poisonous());
+    const batch = await client.asFetcher()([POISON, GOOD]);
+    expect(batch.unknown).toEqual([POISON]);
+    expect(batch.records.map((r) => r.code)).toEqual([GOOD]);
   });
 });

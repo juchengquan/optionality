@@ -363,7 +363,7 @@ export class TelegramBot {
     const codes = monitorLegCodes(monitor);
     let records: QuoteRecord[];
     try {
-      records = await this.deps.fetchQuotes([...new Set(codes)].sort());
+      ({ records } = await this.deps.fetchQuotes([...new Set(codes)].sort()));
     } catch (err) {
       return `Combo failed: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -466,7 +466,7 @@ export class TelegramBot {
     }
     let records: QuoteRecord[];
     try {
-      records = await this.deps.fetchQuotes([code]);
+      ({ records } = await this.deps.fetchQuotes([code]));
     } catch (err) {
       return `Snapshot failed: ${err instanceof Error ? err.message : String(err)}`;
     }

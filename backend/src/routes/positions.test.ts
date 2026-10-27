@@ -6,7 +6,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildSpxCode } from "../domain/contract.ts";
-import { type Harness, body, harness, json, pricedFetcher } from "../testing.ts";
+import {
+  type FakeProvider, type Harness, body, harness, json, pricedFetcher,
+} from "../testing.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
@@ -23,7 +25,7 @@ const condor = (over: Record<string, unknown> = {}) => ({
   legs: CONDOR_LEGS, ...over,
 });
 
-const start = (fetchQuotes = pricedFetcher) => (h = harness({ fetchQuotes }));
+const start = (fetchQuotes: FakeProvider = pricedFetcher) => (h = harness({ fetchQuotes }));
 const post = (payload: unknown) => h.call("/positions", json(payload));
 const patch = (id: string, payload: unknown) =>
   h.call(`/positions/${id}`, { ...json(payload), method: "PATCH" });
@@ -368,12 +370,10 @@ describe("the round trip", () => {
 describe("the creation gate", () => {
   it("refuses while any leg does not exist, and persists nothing", async () => {
     // the same strict gate as monitors: nothing enters the table unverified
-    start((codes) => {
-      const bad = codes.filter((c) => c.endsWith("C8050000"));
-      if (bad.length > 0) {
-        return Promise.reject(new Error(`snapshot API failed: Unknown stock. ${bad[0]!.replace(/^US\./, "")}`));
-      }
-      return pricedFetcher(codes);
+    start(async (codes) => {
+      const unknown = codes.filter((c) => c.endsWith("C8050000"));
+      const { records } = await pricedFetcher(codes.filter((c) => !unknown.includes(c)));
+      return { records, unknown };
     });
     const resp = await post(condor());
     expect(resp.status).toBe(422);
@@ -408,8 +408,8 @@ describe("/positions/values", () => {
     // full quotes while creating, since the gate demands every leg exists; one dropped afterwards
     let complete = true;
     start(async (codes) => {
-      const priced = await pricedFetcher(codes);
-      return complete ? priced : priced.slice(0, -1);
+      const { records } = await pricedFetcher(codes);
+      return complete ? records : records.slice(0, -1);
     });
     expect((await post(condor())).status).toBe(201);
     complete = false;
