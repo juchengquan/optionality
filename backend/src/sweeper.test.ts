@@ -9,13 +9,14 @@ import { createDatabase } from "./db/open.ts";
 import { toSqlDatetime } from "./db/time.ts";
 import { toSqliteJson } from "./db/values.ts";
 import { settingsFor, type Settings } from "./env.ts";
-import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
+import type { QuoteRecord } from "./quotes.ts";
+import { type FakeProvider, fakeFetcher } from "./testing.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 
 const CODE = "US.SPXW261218C6500000";
+/** A contract the Provider cannot price. How it SAYS so is its own business and is tested in
+ *  `opend/client.test.ts`; what reaches the sweep is the code, named in the batch (#168). */
 const POISON = "US.SPXW260918C99999000";
-/** moomoo names the culprit without its market prefix. */
-const UNKNOWN_ERR = `snapshot API failed: Unknown stock. ${POISON.slice(3)}`;
 
 let dir: string;
 let db: ReturnType<typeof createDatabase>;
@@ -75,20 +76,20 @@ const combo = (over: Record<string, unknown> = {}) => monitor({
 });
 
 const sweeper = (
-  fetchQuotes: QuoteFetcher, over: Partial<Settings> = {},
+  fetchQuotes: FakeProvider, over: Partial<Settings> = {},
   /** overridden only where the test is about a send that FAILS, which a collecting fake cannot do */
   send: (text: string) => void | Promise<void> = (text) => { sent.push(text); },
 ) =>
   new MonitorSweeper({
     db,
     settings: settingsFor({ ...BASE, ...over }),
-    fetchQuotes,
+    fetchQuotes: fakeFetcher(fetchQuotes),
     send,
     now: () => now,
   });
 
 /** A fetcher returning one field per code, read from a mutable table so a test can move the market. */
-const quoting = (field: string, values: Record<string, number>): QuoteFetcher =>
+const quoting = (field: string, values: Record<string, number>): FakeProvider =>
   (codes) => Promise.resolve(
     codes.filter((c) => c in values).map((c) => ({ code: c, name: c, [field]: values[c] })),
   );
@@ -266,7 +267,7 @@ describe("how often it speaks", () => {
     const s = new MonitorSweeper({
       db,
       settings: settingsFor(BASE),
-      fetchQuotes: quoting("option_delta", { [CODE]: 0.9 }),
+      fetchQuotes: fakeFetcher(quoting("option_delta", { [CODE]: 0.9 })),
       send: () => { throw new Error("telegram is down"); },
       now: () => now,
     });
@@ -376,10 +377,14 @@ describe("the expiry lifecycle", () => {
 });
 
 describe("an unknown contract", () => {
-  const poisonable = (goodValue = 0.7): QuoteFetcher => (codes) => {
-    if (codes.includes(POISON)) return Promise.reject(new Error(UNKNOWN_ERR));
-    return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: goodValue })));
-  };
+  /** Reports the poison as unknown rather than rejecting the batch with moomoo's sentence: the
+   *  drop-and-retry that read that sentence is inside the moomoo client now, and the sweep is
+   *  handed the answer (#168). */
+  const poisonable = (goodValue = 0.7): FakeProvider => (codes) => Promise.resolve({
+    records: codes.filter((c) => c !== POISON)
+      .map((c) => ({ code: c, name: c, option_delta: goodValue })),
+    unknown: codes.filter((c) => c === POISON),
+  });
 
   it("is quarantined, not deleted, and the rest of the sweep still alarms", async () => {
     const good = monitor({ threshold: 0.6 });
@@ -562,13 +567,17 @@ describe("the sweep's cached view", () => {
     expect(entries.find((e) => e.code === other)!.quote).toBeNull();
   });
 
+  /** Prices everything but the poison and names it as unknown — what a Provider answers now that
+   *  its own error prose stays inside its client (#168). */
+  const poisoned: FakeProvider = (codes) => Promise.resolve({
+    records: codes.filter((c) => c !== POISON).map((c) => ({ code: c, name: c, option_delta: 0.7 })),
+    unknown: codes.filter((c) => c === POISON),
+  });
+
   it("drops a quarantined monitor from the watchlist", async () => {
     monitor({ code: POISON, strike: 99999 });
     monitor({ threshold: 0.6 });
-    const s = sweeper((codes) => {
-      if (codes.includes(POISON)) return Promise.reject(new Error(UNKNOWN_ERR));
-      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.7 })));
-    });
+    const s = sweeper(poisoned);
     await s.sweep();
     // the monitor was quarantined in the same sweep, so it is no longer enabled
     expect(s.cachedQuotes().entries.map((e) => e.code)).toEqual([CODE]);
@@ -579,10 +588,7 @@ describe("the sweep's cached view", () => {
     // same sweep, so it leaves the watchlist. Re-enable it and the row comes back with no snapshot —
     // "unknown contract" is what distinguishes that from a monitor created since the last sweep.
     const poison = monitor({ code: POISON, strike: 99999 });
-    const s = sweeper((codes) => {
-      if (codes.includes(POISON)) return Promise.reject(new Error(UNKNOWN_ERR));
-      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.7 })));
-    });
+    const s = sweeper(poisoned);
     await s.sweep();
     db.prepare("update monitors set enabled = 1, disabled_reason = null where id = ?").run(poison);
 
@@ -653,7 +659,7 @@ describe("recording what a Position was worth", () => {
     "select position_id, observed_on, dte, cost_to_close from position_samples order by position_id",
   ).all() as { position_id: string; observed_on: string; dte: number; cost_to_close: number }[];
 
-  const spread = (sold: number, bought: number): QuoteFetcher => (codes) =>
+  const spread = (sold: number, bought: number): FakeProvider => (codes) =>
     Promise.resolve(codes.map((c) => ({
       code: c, name: c,
       mid_price: c === buildSpxCode(future(), "CALL", 8050) ? sold : bought,
@@ -873,7 +879,7 @@ describe("how often the sampler actually writes", () => {
   };
   const writes = () =>
     (db.prepare("select total_changes() n").get() as { n: number }).n;
-  const quiet = (mid: number, iv: number, vega = 1.0): QuoteFetcher => (codes) =>
+  const quiet = (mid: number, iv: number, vega = 1.0): FakeProvider => (codes) =>
     Promise.resolve(codes.map((c) => ({
       code: c, name: c,
       mid_price: c === buildSpxCode(future(), "CALL", 8050) ? mid : 1.0,
@@ -1086,7 +1092,7 @@ describe("a figure that never arrives", () => {
   /** The quietest bug in the system until now: `monitorValue` comes back null, the sweep writes a
    *  log line and moves on, and the rule is never evaluated again. No notice, no marker, no
    *  disable — an alarm that cannot fire looks exactly like one that is not breached. */
-  const silent: QuoteFetcher = (codes) =>
+  const silent: FakeProvider = (codes) =>
     // the contract is priced, the watched figure simply is not in the record
     Promise.resolve(codes.map((c) => ({ code: c, name: c, mid_price: 4.2 })));
 
@@ -1114,7 +1120,7 @@ describe("a figure that never arrives", () => {
   it("counts CONSECUTIVE sweeps, so a figure that comes back is not a quarantine", async () => {
     const id = monitor();
     const values: Record<string, number> = {};
-    const flaky: QuoteFetcher = (codes) => Promise.resolve(codes.map(
+    const flaky: FakeProvider = (codes) => Promise.resolve(codes.map(
       (c) => (c in values ? { code: c, name: c, option_delta: values[c] } : { code: c, name: c }),
     ));
     const s = sweeper(flaky, few);
@@ -1136,7 +1142,7 @@ describe("a figure that never arrives", () => {
     // a provider that does not send the figure at all — and the notice is the only place it shows
     const id = combo();
     const leg = buildSpxCode(future(), "CALL", 8150);
-    const oneLeg: QuoteFetcher = (codes) => Promise.resolve(
+    const oneLeg: FakeProvider = (codes) => Promise.resolve(
       codes.filter((c) => c !== leg).map((c) => ({ code: c, name: c, mid_price: 4.2 })),
     );
     const s = sweeper(oneLeg, few);
@@ -1159,7 +1165,7 @@ describe("a figure that never arrives", () => {
     const other = buildSpxCode(future(), "PUT", 6425);
     const quiet = monitor();
     const loud = monitor({ code: other, option_type: "PUT", strike: 6425, threshold: 0.6 });
-    const half: QuoteFetcher = (codes) => Promise.resolve(codes.map(
+    const half: FakeProvider = (codes) => Promise.resolve(codes.map(
       (c) => (c === other ? { code: c, name: c, option_delta: 0.7 } : { code: c, name: c }),
     ));
     const s = sweeper(half, few);

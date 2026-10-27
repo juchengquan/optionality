@@ -12,6 +12,7 @@ import type { Deps } from "../deps.ts";
 import { httpError } from "../errors.ts";
 import { displayTime, marketTimeToDisplay } from "../domain/timefmt.ts";
 import { documented } from "../openapi.ts";
+import type { QuoteBatch } from "../quotes.ts";
 import { valid } from "../validate.ts";
 
 /** A query string carries strings, so the schema validates strings and the numbers are made in the
@@ -44,12 +45,17 @@ export function spxRoutes(deps: Deps) {
       throw httpError(422, `invalid strike_date: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    let records: Record<string, unknown>[];
+    let batch: QuoteBatch;
     try {
-      records = await deps.fetchQuotes([code]);
+      batch = await deps.fetchQuotes([code]);
     } catch (err) {
       throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+    // two faults, two sentences, one status: a contract the Provider does not recognise is not the
+    // same as one it knows and has no price for this minute. Before the port carried the answer
+    // this arrived as a thrown vendor sentence and read as a 502 — an outage that had not happened.
+    if (batch.unknown.includes(code)) throw httpError(404, `no such contract: ${code}`);
+    const records = batch.records;
     if (records.length === 0) throw httpError(404, `no data for ${code}`);
 
     // `record` rather than `snapshot`: this is moomoo's wire shape on the way in, and a Quote on

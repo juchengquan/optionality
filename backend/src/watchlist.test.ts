@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildSpxCode } from "./domain/contract.ts";
 import { createDatabase } from "./db/open.ts";
 import { toSqliteJson } from "./db/values.ts";
-import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
+import type { QuoteRecord } from "./quotes.ts";
+import { type FakeProvider, fakeFetcher } from "./testing.ts";
 import { watchlistQuotes } from "./monitors.ts";
 
 const TZ = "Asia/Singapore";
@@ -60,14 +61,14 @@ const combo = (over: Record<string, unknown> = {}) => monitor({
   ...over,
 });
 
-const quoting = (byCode: Record<string, QuoteRecord>): QuoteFetcher =>
+const quoting = (byCode: Record<string, QuoteRecord>): FakeProvider =>
   (codes) => Promise.resolve(codes.filter((c) => c in byCode).map((c) => ({ code: c, ...byCode[c] })));
 
 /** the shipped defaults, so these tests and `.env.example` cannot drift apart */
 const POLICY = { takeFraction: 0.5, stopMultiple: 2, manageByDte: 21 };
 
-const run = (fetch: QuoteFetcher, includeCombos = false) =>
-  watchlistQuotes(db, TZ, fetch, { includeCombos, now: NOW, policy: POLICY });
+const run = (fetch: FakeProvider, includeCombos = false) =>
+  watchlistQuotes(db, TZ, fakeFetcher(fetch), { includeCombos, now: NOW, policy: POLICY });
 
 describe("which monitors appear", () => {
   it("leaves combos out of the single-leg tables", async () => {
@@ -80,7 +81,7 @@ describe("which monitors appear", () => {
 
   it("makes no call at all when nothing is enabled", async () => {
     let calls = 0;
-    const counting: QuoteFetcher = (codes) => {
+    const counting: FakeProvider = (codes) => {
       calls += 1;
       return Promise.resolve(codes.map((code) => ({ code })));
     };
@@ -143,7 +144,7 @@ describe("a combo entry", () => {
     monitor();
     combo();
     const calls: string[][] = [];
-    const fetch: QuoteFetcher = (codes) => {
+    const fetch: FakeProvider = (codes) => {
       calls.push(codes);
       const prices: Record<string, number> = { [CODE]: 26.4, [LEG_A]: 26.4, [LEG_B]: 19.25 };
       return Promise.resolve(
@@ -165,7 +166,7 @@ describe("a combo entry", () => {
       [LEG_A]: { option_delta: 0.166, option_gamma: 0.0002, option_theta: -1.1 },
       [LEG_B]: { option_delta: 0.129, option_gamma: 0.0001, option_theta: -0.95 },
     };
-    const fetch: QuoteFetcher = (codes) => Promise.resolve(
+    const fetch: FakeProvider = (codes) => Promise.resolve(
       codes.map((c) => ({ code: c, mid_price: 1.0, option_implied_volatility: 22.0, ...legs[c] })),
     );
     const greeks = (await run(fetch, true))[0]!.combo_greeks!;
@@ -179,7 +180,7 @@ describe("a combo entry", () => {
   it("never sums implied volatility, even for a row that predates the rule", async () => {
     // both legs report 20.0; the old behaviour returned 40.0
     combo({ code: "legacy-iv", field: "option_implied_volatility" });
-    const fetch: QuoteFetcher = (codes) =>
+    const fetch: FakeProvider = (codes) =>
       Promise.resolve(codes.map((c) => ({ code: c, option_implied_volatility: 20.0 })));
     const quotes = await run(fetch, true);
     expect(quotes[0]!.combo_value).toBeNull();
@@ -190,12 +191,10 @@ describe("an unknown contract", () => {
   it("marks the poisoned entry and leaves the rest priced", async () => {
     monitor();
     monitor({ code: POISON, strike: 99999 });
-    const fetch: QuoteFetcher = (codes) => {
-      if (codes.includes(POISON)) {
-        return Promise.reject(new Error(`snapshot API failed: Unknown stock. ${POISON.slice(3)}`));
-      }
-      return Promise.resolve(codes.map((code) => ({ code, option_delta: 0.7 })));
-    };
+    const fetch: FakeProvider = (codes) => Promise.resolve({
+      records: codes.filter((c) => c !== POISON).map((code) => ({ code, option_delta: 0.7 })),
+      unknown: codes.filter((c) => c === POISON),
+    });
     const quotes = await run(fetch, true);
     expect(quotes.find((q) => q.code === CODE)!.quote!.option_delta).toBe(0.7);
     const poisoned = quotes.find((q) => q.code === POISON)!;
@@ -288,10 +287,10 @@ describe("the holdings a rule watches", () => {
     const mid = monitor({ code: LEG_A, strike: 8100, field: "mid_price", threshold: 2 });
     link(mid, pid, "leg");
     const asked: string[][] = [];
-    await watchlistQuotes(db, TZ, (codes) => {
+    await watchlistQuotes(db, TZ, fakeFetcher((codes) => {
       asked.push(codes);
       return Promise.resolve(codes.map((code) => ({ code })));
-    }, { now: NOW, policy: POLICY });
+    }), { now: NOW, policy: POLICY });
     expect(asked[0]).toEqual([LEG_A, LEG_B].sort());
   });
 });
@@ -304,7 +303,7 @@ describe("guards that are easy to lose", () => {
     // lookup happens to miss. Combo figures are signed sums; a single leg's snapshot beside them
     // would read as the combo's.
     combo({ code: "sep-condor" });
-    const fetch: QuoteFetcher = (codes) => Promise.resolve([
+    const fetch: FakeProvider = (codes) => Promise.resolve([
       ...codes.map((code) => ({ code, mid_price: 1 })),
       { code: "sep-condor", mid_price: 99 },
     ]);

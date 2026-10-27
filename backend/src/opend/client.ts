@@ -15,7 +15,7 @@
  */
 import type { MoomooClient, Security, Snapshot } from "./types.ts";
 import { toRecords } from "./snapshot.ts";
-import type { QuoteFetcher } from "../quotes.ts";
+import type { QuoteBatch, QuoteFetcher } from "../quotes.ts";
 
 /** Market 11 is the US. See snapshot.ts — the service deals in no other. */
 const US_MARKET = 11;
@@ -141,11 +141,10 @@ export class OpendClient {
     this.client = null;
   }
 
-  /** One batched snapshot for these codes.
+  /** One batched snapshot for these codes — the single bounded call the invariant names.
    *
-   *  The error text matters as much as the data: moomoo names an unknown contract in it, and
-   *  `fetchResilient` reads that name to drop the culprit and retry. Keeping the Python's
-   *  "snapshot API failed: ..." prefix is what makes the containment work unchanged.
+   *  Throws for everything, including an unknown contract: the error text is moomoo's and `batch`
+   *  below is what reads it. The Python's "snapshot API failed: ..." prefix is kept.
    */
   async snapshot(codes: string[]): Promise<ReturnType<typeof toRecords>> {
     if (codes.length === 0) return [];
@@ -169,11 +168,48 @@ export class OpendClient {
     return toRecords(list);
   }
 
+  /** A batch that survives a contract moomoo has never heard of.
+   *
+   *  moomoo rejects the WHOLE batch when any code is unknown, naming the culprit in its error
+   *  text; this drops it and retries, so one bad contract cannot take the watchlist hostage. Any
+   *  other error — connection, quota — is re-thrown untouched: containment engages only on the
+   *  deterministic named-culprit case, because retrying a connection failure one code at a time
+   *  would present an outage as a watchlist full of unknown contracts.
+   *
+   *  This loop used to live above the port, in `fetchResilient`, which meant the service itself
+   *  read moomoo's error prose. It is moomoo's grammar, so it is moomoo's business: the port now
+   *  carries the ANSWER — which codes could not be priced — and a second Provider reports its own
+   *  failures in its own terms (ADR 0015, #168).
+   */
+  async batch(codes: string[]): Promise<QuoteBatch> {
+    let remaining = [...codes];
+    const unknown: string[] = [];
+    while (remaining.length > 0) {
+      try {
+        return { records: await this.snapshot(remaining), unknown };
+      } catch (err) {
+        const match = UNKNOWN_CODE.exec(err instanceof Error ? err.message : String(err));
+        if (!match) throw err;
+        const culprit = match[1]!.replace(/\.+$/, "");
+        // moomoo may name the code with or without its market prefix, and everything downstream
+        // is keyed by ours
+        const hits = remaining.filter((c) => c === culprit || c.endsWith(culprit));
+        if (hits.length === 0) throw err; // cannot map the culprit to a code we asked for
+        remaining = remaining.filter((c) => !hits.includes(c));
+        unknown.push(...hits);
+      }
+    }
+    return { records: [], unknown };
+  }
+
   /** The port the rest of the service takes. */
   asFetcher(): QuoteFetcher {
-    return (codes) => this.snapshot(codes);
+    return (codes) => this.batch(codes);
   }
 }
+
+/** moomoo names the offending contract in the error text, which is what makes containment safe. */
+const UNKNOWN_CODE = /Unknown stock\.?\s+([A-Z0-9.]+)/;
 
 function describe(value: unknown): string {
   if (value instanceof Error) return value.message;

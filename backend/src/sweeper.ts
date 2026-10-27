@@ -36,7 +36,7 @@ import { toSqliteBool, } from "./db/values.ts";
 import type { Settings } from "./env.ts";
 import type { DisabledReason } from "./schemas/monitor.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
-import { displayRecords, fetchResilient, type QuoteFetcher, type QuoteRecord } from "./quotes.ts";
+import { displayRecords, type QuoteFetcher, type QuoteRecord } from "./quotes.ts";
 import { displayTime } from "./domain/timefmt.ts";
 import { buildEntries, type WatchlistEntry } from "./watchlist.ts";
 import { forEntry } from "./monitors.ts";
@@ -269,7 +269,7 @@ export class MonitorSweeper {
     let records: QuoteRecord[];
     let badCodes: string[];
     try {
-      ({ records, bad: badCodes } = await fetchResilient(codes, this.deps.fetchQuotes));
+      ({ records, unknown: badCodes } = await this.deps.fetchQuotes(codes));
       this.fetchOk = true;
     } catch (err) {
       this.fetchOk = false;

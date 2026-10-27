@@ -53,6 +53,19 @@ describe("one live quote", () => {
     expect((await body(resp)).detail).toBe("no data for US.SPXW261218C6500000");
   });
 
+  it("says no such CONTRACT when the provider does not know the code, which is not no data", async () => {
+    /** Added with the port's new shape (#168). This route calls the fetcher directly, so an
+     *  unknown contract used to arrive as a thrown moomoo sentence and read as a 502 — the
+     *  service claiming it could not reach the provider, when the provider had answered. Now the
+     *  batch names it, and two different faults get two different sentences under one status. */
+    h = harness({
+      fetchQuotes: (codes) => Promise.resolve({ records: [], unknown: [...codes] }),
+    });
+    const resp = await ask(CALL_6500);
+    expect(resp.status).toBe(404);
+    expect((await body(resp)).detail).toBe("no such contract: US.SPXW261218C6500000");
+  });
+
   it("is a 502 when the OpenD call fails, not a 500", async () => {
     h = harness({ fetchQuotes: () => Promise.reject(new Error("Client connection failed!")) });
     const resp = await ask(CALL_6500);

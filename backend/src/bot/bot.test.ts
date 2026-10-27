@@ -17,7 +17,8 @@ import { buildSpxCode } from "../domain/contract.ts";
 import { createDatabase } from "../db/open.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { settingsFor, type Settings } from "../env.ts";
-import type { QuoteFetcher, QuoteRecord } from "../quotes.ts";
+import type { QuoteRecord } from "../quotes.ts";
+import { type FakeProvider, fakeFetcher } from "../testing.ts";
 import { TelegramBot } from "./bot.ts";
 
 /** Fixed, so a date-relative expectation cannot drift into a different market day overnight. */
@@ -44,9 +45,9 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const echo: QuoteFetcher = (codes) => Promise.resolve(codes.map((code) => ({ code })));
+const echo: FakeProvider = (codes) => Promise.resolve(codes.map((code) => ({ code })));
 
-function bot(fetchQuotes: QuoteFetcher = echo, over: Partial<Settings> = {}, extra = {}) {
+function bot(fetchQuotes: FakeProvider = echo, over: Partial<Settings> = {}, extra = {}) {
   return new TelegramBot({
     db,
     settings: settingsFor({ telegramBotToken: "t", telegramChatId: "42", ...over }),
@@ -58,7 +59,7 @@ function bot(fetchQuotes: QuoteFetcher = echo, over: Partial<Settings> = {}, ext
       }
       return [];
     },
-    fetchQuotes,
+    fetchQuotes: fakeFetcher(fetchQuotes),
     now: () => NOW,
     ...extra,
   });
@@ -144,8 +145,7 @@ describe("/watch", () => {
   });
 
   it("refuses a contract moomoo does not have, and creates nothing", async () => {
-    const poison: QuoteFetcher = (codes) =>
-      Promise.reject(new Error(`snapshot API failed: Unknown stock. ${codes[0]!.slice(3)}`));
+    const poison: FakeProvider = (codes) => Promise.resolve({ records: [], unknown: [...codes] });
     await bot(poison).handleUpdate(update(`/watch ${FUTURE} CALL 99999 0.5`));
     expect(last()).toContain("does not exist");
     expect(monitors()).toEqual([]);
@@ -161,7 +161,7 @@ describe("/watch", () => {
 });
 
 describe("/watchcombo", () => {
-  const prices = (values: Record<string, number>): QuoteFetcher =>
+  const prices = (values: Record<string, number>): FakeProvider =>
     (codes) => Promise.resolve(
       codes.filter((c) => c in values).map((c) => ({ code: c, mid_price: values[c] })),
     );
@@ -321,7 +321,7 @@ describe("/monitors", () => {
 });
 
 describe("the live tables", () => {
-  const quoting = (fields: QuoteRecord): QuoteFetcher =>
+  const quoting = (fields: QuoteRecord): FakeProvider =>
     (codes) => Promise.resolve(codes.map((code) => ({ code, ...fields })));
 
   it("/quotes is a pure price view", async () => {
@@ -735,7 +735,7 @@ describe("the command menu", () => {
         if (method === "getUpdates" && params.offset === "-1") return [{ update_id: 77 }];
         return [];
       },
-      fetchQuotes: echo,
+      fetchQuotes: fakeFetcher(echo),
       now: () => NOW,
     });
     await b.start();
@@ -754,7 +754,7 @@ describe("the command menu", () => {
       db,
       settings: settingsFor({ telegramBotToken: "t", telegramChatId: "42" }),
       api: () => Promise.reject(new Error("telegram is down")),
-      fetchQuotes: echo,
+      fetchQuotes: fakeFetcher(echo),
       now: () => NOW,
     });
     await expect(b.start()).resolves.toBeUndefined();
