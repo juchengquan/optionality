@@ -119,6 +119,16 @@ describe("one batch", () => {
     }]);
   });
 
+  it("spends no snapshot call when nothing resolved", async () => {
+    // a watchlist of codes the gateway cannot place is a quarantine waiting to happen (#167), and
+    // asking for quotes on an empty list of conids is a request against the rate budget that can
+    // only answer nothing
+    const { client: ibkr, gw } = client();
+    expect(await ibkr.batch(["US.AAPL", "nonsense"]))
+      .toEqual({ records: [], unknown: ["US.AAPL", "nonsense"] });
+    expect(gw.paths.filter((p) => p.includes("marketdata/snapshot"))).toEqual([]);
+  });
+
   it("reports a contract with no conid as unknown and prices the rest", async () => {
     // one bad contract cannot take the watchlist hostage — the property moomoo's drop-and-retry
     // loop has (#168), reached here without a retry because resolution is per contract

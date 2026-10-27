@@ -85,7 +85,11 @@ export function toNumber(value: unknown): number | undefined {
     scale = SUFFIX[last]!;
     text = text.slice(0, -1);
   }
-  if (text === "" || !/^[-+]?\d*\.?\d+$/.test(text)) return undefined;
+  // "" is the gateway's way of saying a field it was asked for has no value — and `Number("")`
+  // is 0, which would read as a delta of nothing rather than as no delta at all. Everything else
+  // unreadable becomes NaN below, and NaN is the one answer this must never return: the domain
+  // reads an absent figure as "do not alarm" and reads NaN as a number it can compare.
+  if (text === "") return undefined;
   const n = Number(text) * scale;
   return Number.isFinite(n) ? n : undefined;
 }
