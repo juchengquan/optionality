@@ -24,6 +24,9 @@ export interface Settings {
   uiRefreshSeconds: number;
   /** consecutive sweep failures before the degraded telegram alert */
   degradedAfterFailures: number;
+  /** consecutive sweeps a monitor's figure may fail to arrive before it is quarantined; 0 never
+   *  quarantines and only warns, which is what the engine did before (#167) */
+  quarantineAfterSilentSweeps: number;
   /** muted-expired monitors are auto-deleted this many days after expiry */
   expiredRetentionDays: number;
   /** exit schedule (ADR 0011): the fraction of Entry taken as profit */
@@ -56,6 +59,9 @@ export const DEFAULTS: Settings = {
   alarmRepeatSeconds: 1800,
   uiRefreshSeconds: 30,
   degradedAfterFailures: 5,
+  // ten sweeps, so a gap of a few seconds is never a quarantine while a figure that is simply not
+  // served stops being waited for within minutes at any sweep interval
+  quarantineAfterSilentSweeps: 10,
   expiredRetentionDays: 7,
   exitTakeFraction: 0.5,
   exitStopMultiple: 2,
@@ -79,6 +85,7 @@ const FROM_ENV = {
   alarmRepeatSeconds: "ALARM_REPEAT_SECONDS",
   uiRefreshSeconds: "UI_REFRESH_SECONDS",
   degradedAfterFailures: "DEGRADED_AFTER_FAILURES",
+  quarantineAfterSilentSweeps: "QUARANTINE_AFTER_SILENT_SWEEPS",
   expiredRetentionDays: "EXPIRED_RETENTION_DAYS",
   exitTakeFraction: "EXIT_TAKE_FRACTION",
   exitStopMultiple: "EXIT_STOP_MULTIPLE",

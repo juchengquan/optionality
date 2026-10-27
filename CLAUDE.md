@@ -95,8 +95,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   throttles state-change messages; `ALARM_REPEAT_SECONDS` re-reminds persisting breaches. `compare: abs|signed`
   (signed → negative thresholds legal, exactly 0 never).
 - Retention: creation is gated by a live contract-existence probe (strict — rejects while OpenD is down).
-  Runtime unknown contracts → quarantine (disable + Telegram notice, NEVER delete). Expired monitors: mute with
-  notice, auto-delete after `EXPIRED_RETENTION_DAYS`. Nothing else is ever auto-deleted.
+  A rule the engine cannot evaluate → quarantine (disable + Telegram notice, NEVER delete), for either
+  fault: an unknown contract, or a watched figure that has not arrived for `QUARANTINE_AFTER_SILENT_SWEEPS`
+  consecutive sweeps (observed, never declared — what a provider serves depends on the account, not on its
+  code; 0 only logs). Expired monitors: mute with notice, auto-delete after `EXPIRED_RETENTION_DAYS`.
+  Nothing else is ever auto-deleted.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command

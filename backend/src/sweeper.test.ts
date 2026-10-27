@@ -1081,3 +1081,130 @@ describe("the manage-by notice", () => {
     expect(s.lastSweepOk()).toBe(true);
   });
 });
+
+describe("a figure that never arrives", () => {
+  /** The quietest bug in the system until now: `monitorValue` comes back null, the sweep writes a
+   *  log line and moves on, and the rule is never evaluated again. No notice, no marker, no
+   *  disable — an alarm that cannot fire looks exactly like one that is not breached. */
+  const silent: QuoteFetcher = (codes) =>
+    // the contract is priced, the watched figure simply is not in the record
+    Promise.resolve(codes.map((c) => ({ code: c, name: c, mid_price: 4.2 })));
+
+  const limit = 3;
+  const few: Partial<Settings> = { quarantineAfterSilentSweeps: limit };
+
+  it("is quarantined at the limit and not before, with a notice naming the field", async () => {
+    const id = monitor();
+    const s = sweeper(silent, few);
+
+    for (let i = 1; i < limit; i += 1) {
+      await s.sweep();
+      expect(row(id)!.enabled, `sweep ${i}`).toBe(1);
+      expect(sent).toEqual([]);
+    }
+    await s.sweep();
+
+    expect(row(id)!.enabled).toBe(0);
+    expect(row(id)!.disabled_reason).toBe("no-figure");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain("option_delta");
+    expect(sent[0]).toContain(String(limit));
+  });
+
+  it("counts CONSECUTIVE sweeps, so a figure that comes back is not a quarantine", async () => {
+    const id = monitor();
+    const values: Record<string, number> = {};
+    const flaky: QuoteFetcher = (codes) => Promise.resolve(codes.map(
+      (c) => (c in values ? { code: c, name: c, option_delta: values[c] } : { code: c, name: c }),
+    ));
+    const s = sweeper(flaky, few);
+
+    await s.sweep();
+    await s.sweep();
+    values[CODE] = 0.1;        // it arrived: the run of silence is over
+    await s.sweep();
+    delete values[CODE];
+    for (let i = 1; i < limit; i += 1) await s.sweep();
+
+    // without the reset this is the fifth silent sweep of six and the rule is long gone
+    expect(row(id)!.enabled).toBe(1);
+    expect(sent).toEqual([]);
+  });
+
+  it("says which leg went unpriced, rather than blaming the field", async () => {
+    // a combo is null when ANY leg is missing (no partial sums), which is a different fault from
+    // a provider that does not send the figure at all — and the notice is the only place it shows
+    const id = combo();
+    const leg = buildSpxCode(future(), "CALL", 8150);
+    const oneLeg: QuoteFetcher = (codes) => Promise.resolve(
+      codes.filter((c) => c !== leg).map((c) => ({ code: c, name: c, mid_price: 4.2 })),
+    );
+    const s = sweeper(oneLeg, few);
+
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+
+    expect(row(id)!.disabled_reason).toBe("no-figure");
+    expect(sent[0]).toContain(leg);
+    expect(sent[0]).not.toContain("mid_price");
+  });
+
+  it("says it once: the rule is disabled, so the next sweep has nothing to say", async () => {
+    monitor();
+    const s = sweeper(silent, few);
+    for (let i = 0; i < limit + 3; i += 1) await s.sweep();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("evaluates every other rule in the same sweep, and is not a sweep failure", async () => {
+    const other = buildSpxCode(future(), "PUT", 6425);
+    const quiet = monitor();
+    const loud = monitor({ code: other, option_type: "PUT", strike: 6425, threshold: 0.6 });
+    const half: QuoteFetcher = (codes) => Promise.resolve(codes.map(
+      (c) => (c === other ? { code: c, name: c, option_delta: 0.7 } : { code: c, name: c }),
+    ));
+    const s = sweeper(half, few);
+
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+
+    expect(row(quiet)!.enabled).toBe(0);
+    expect(row(loud)!.triggered).toBe(1);
+    expect(sent.filter((t) => t.includes("crossed"))).toHaveLength(1);
+    // containment: a rule that cannot be evaluated is not an engine that is failing
+    expect(s.lastSweepOk()).toBe(true);
+  });
+
+  it("gives an unmuted rule its full count again", async () => {
+    const id = monitor();
+    const s = sweeper(silent, few);
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+    expect(row(id)!.enabled).toBe(0);
+
+    db.prepare("update monitors set enabled = 1, disabled_reason = null where id = ?").run(id);
+    await s.sweep();
+
+    // not re-quarantined on the first silent sweep by a count the engine still remembered
+    expect(row(id)!.enabled).toBe(1);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("forgets a rule that is no longer being swept", async () => {
+    const id = monitor();
+    const s = sweeper(silent, few);
+    await s.sweep();
+    expect(s.silentSweeps.size).toBe(1);
+
+    db.prepare("delete from monitors where id = ?").run(id);
+    await s.sweep();
+
+    // left behind, the count grows for ever and a rule unmuted later resumes mid-count
+    expect(s.silentSweeps.size).toBe(0);
+  });
+
+  it("can be turned off, and then only warns — which is what it did before", async () => {
+    const id = monitor();
+    const s = sweeper(silent, { quarantineAfterSilentSweeps: 0 });
+    for (let i = 0; i < 12; i += 1) await s.sweep();
+    expect(row(id)!.enabled).toBe(1);
+    expect(sent).toEqual([]);
+  });
+});
