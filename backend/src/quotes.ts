@@ -49,6 +49,8 @@ export async function verifyContracts(
   } catch (err) {
     return `cannot verify contract: OpenD unreachable (${err instanceof Error ? err.message : String(err)})`;
   }
+  // both checks, though a code named unknown usually has no record either: a Provider that does
+  // both at once is contradicting itself, and a gate this strict takes the pessimistic reading
   if (batch.unknown.length > 0) {
     return `contract does not exist: ${batch.unknown.join(", ")} — check strike and expiry`;
   }

@@ -35,6 +35,18 @@ describe("verifyContracts", () => {
     expect(await verifyContracts([CODE], down)).toMatch(/unreachable/);
   });
 
+  it("takes the pessimistic reading when the Provider contradicts itself", async () => {
+    /** Found by mutating the `unknown` branch away: every test still passed, because a code that
+     *  is unknown normally has no record either and the missing-record check below catches it.
+     *  The branch is load-bearing only for this case — a Provider that prices a code AND names it
+     *  unknown — and at a creation gate that must be a refusal: the strictness is the point, and
+     *  the two answers cannot both be true. */
+    const contradictory = (codes: string[]): Promise<QuoteBatch> => Promise.resolve({
+      records: codes.map((code) => ({ code, option_delta: 0.7 })), unknown: [POISON],
+    });
+    expect(await verifyContracts([CODE, POISON], contradictory)).toMatch(/does not exist/);
+  });
+
   it("names a contract the batch simply did not come back with", async () => {
     // not named as unknown, and no record either: the Provider answered about the others and said
     // nothing at all about this one
