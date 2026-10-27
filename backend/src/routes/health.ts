@@ -1,7 +1,7 @@
 /** `/health`, the one route that needs no token (ADR 0009, phase 5).
  *
- *  It is what the dashboard's Service panel reads: the database, OpenD and the sweep's state. The
- *  queue and the last run went with the run pipeline in phase 10 (ADR 0014). It carries no
+ *  It is what the dashboard's Service panel reads: the database, the Provider and the sweep's
+ *  state. The queue and the last run went with the run pipeline in phase 10 (ADR 0014). It carries no
  *  `contract_version` — that and the skew banner it fed went in ADR 0009 phase 8, when the frontend started taking its types FROM this API (`hc<AppType>`), so a
  *  response that has changed shape is a compile error in the frontend's workspace rather than a
  *  runtime notice. The two services still deploy separately (ADR 0006); `make deploy` restarting
@@ -20,7 +20,10 @@ import { displayTime } from "../domain/timefmt.ts";
 
 export const HealthResponse = z.object({
   db: z.boolean(),
-  opend: z.boolean(),
+  /** Which Provider this deployment reads, and whether it is answering. It was `opend: boolean`
+   *  until #169 — the vendor's name on the API contract, which the dashboard then printed
+   *  whatever was actually behind the port (ADR 0015). */
+  provider: z.object({ name: z.string(), ok: z.boolean() }),
   monitor: z.object({
     last_sweep_at: z.string().nullable(),
     last_sweep_ok: z.boolean(),
@@ -49,13 +52,15 @@ export function healthRoutes(deps: Deps) {
 
     return health.reply(c, 200, {
         db: ok,
-        // What the last batch did, falling back to the port probe only while nothing has been
-        // asked for yet. The probe alone was a green light for a gateway this service could not
-        // speak to: on 2026-10-16 OpenD held the WEBSOCKET port open and timed out every login, so
-        // this read true while every OpenD-backed route returned 502. An answered request is the
-        // only evidence that matters, and reusing the sweep's costs no extra call (ADR 0010).
-        opend: sweeper.lastFetchOk()
-          ?? await deps.opendReachable(settings.opendHost, settings.moomooWsPort),
+        // What the last batch did, falling back to the Provider's own probe only while nothing
+        // has been asked for yet. The probe alone was a green light for a gateway this service
+        // could not speak to: on 2026-10-16 OpenD held the WEBSOCKET port open and timed out every
+        // login, so this read true while every market-data route returned 502. An answered request
+        // is the only evidence that matters, and reusing the sweep's costs no extra call (ADR 0010).
+        provider: {
+          name: deps.provider.name,
+          ok: sweeper.lastFetchOk() ?? await deps.provider.reachable(),
+        },
         monitor: {
           last_sweep_at: displayTime(sweeper.lastSweepAt(), tz),
           last_sweep_ok: sweeper.lastSweepOk(),

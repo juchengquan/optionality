@@ -47,7 +47,7 @@ export function spxRoutes(deps: Deps) {
 
     let batch: QuoteBatch;
     try {
-      batch = await deps.fetchQuotes([code]);
+      batch = await deps.provider.fetchQuotes([code]);
     } catch (err) {
       throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);
     }

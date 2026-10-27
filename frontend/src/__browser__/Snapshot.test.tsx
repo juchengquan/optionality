@@ -15,7 +15,7 @@ import type { Entry, Health } from "../api";
  *  the picture has to come out 1000px wide from a phone, or the feature is pointless.
  */
 const health = {
-  db: true, opend: true,
+  db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "21:30:05" },
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 };

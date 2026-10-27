@@ -7,8 +7,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { Settings } from "./env.ts";
-import type { OpendProbe, SweeperPort } from "./ports.ts";
-import type { QuoteFetcher } from "./quotes.ts";
+import type { ProviderClient, SweeperPort } from "./ports.ts";
 
 export interface Deps {
   settings: Settings;
@@ -16,9 +15,10 @@ export interface Deps {
   /** Injectable so that a test can state the time rather than wait for it. */
   now(): Date;
   sweeper: SweeperPort;
-  opendReachable: OpendProbe;
-  /** One bounded OpenD call, for the creation probes and the live routes. A test must never reach
-   *  the real SDK, which blocks indefinitely on a dead port so that a missing fake looks like a
-   *  hung suite. */
-  fetchQuotes: QuoteFetcher;
+  /** Where market data comes from: its name and state for `/health`, and the one bounded call the
+   *  creation probes and the live routes make (ADR 0015).
+   *
+   *  A test must never reach the real SDK, which blocks indefinitely on a dead port so that a
+   *  missing fake looks like a hung suite — `harness` supplies a fake Provider. */
+  provider: ProviderClient;
 }

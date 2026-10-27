@@ -143,7 +143,7 @@ export function positionRoutes(deps: Deps) {
       const now = deps.now();
       let valued;
       try {
-        valued = await holdingValues(db, deps.fetchQuotes, now, deps.settings, tz);
+        valued = await holdingValues(db, deps.provider.fetchQuotes, now, deps.settings, tz);
       } catch (err) {
         throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -209,7 +209,7 @@ export function positionRoutes(deps: Deps) {
       };
       // strict gate, as for monitors: nothing enters the table unverified
       const codes = [...new Set(positionLegCodes(toPosition(row)))].sort();
-      const error = await verifyContracts(codes, deps.fetchQuotes);
+      const error = await verifyContracts(codes, deps.provider.fetchQuotes);
       if (error) throw httpError(422, error);
 
       const saved = await atomic(db, () => {

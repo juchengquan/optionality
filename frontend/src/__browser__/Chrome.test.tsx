@@ -8,7 +8,7 @@ import { App } from "../App";
  *  data: the refresh selector, a row of picker buttons, and the freshness line. */
 
 const health = {
-  db: true, opend: true,
+  db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "08:44:09" },
   settings: { sweep_seconds: 15, expired_retention_days: 7 },
 };

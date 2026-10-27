@@ -11,7 +11,7 @@ import { App, beingOperated } from "../App";
  *  diagnosis of this very bug, so it is written down here.
  */
 const health = {
-  db: true, opend: true,
+  db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 };

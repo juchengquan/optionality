@@ -90,7 +90,7 @@ export function monitorRoutes(deps: Deps) {
    *  while OpenD is down, which is deliberate — a monitor on a contract that does not exist would
    *  quarantine itself on the first sweep, which is a worse way to find out. */
   const requireExisting = async (codes: string[]) => {
-    const error = await verifyContracts(codes, deps.fetchQuotes);
+    const error = await verifyContracts(codes, deps.provider.fetchQuotes);
     if (error) throw httpError(422, error);
   };
 
@@ -381,7 +381,7 @@ export function quoteRoutes(deps: Deps) {
   return new Hono().get("/quotes", quotes, async (c) => {
     try {
       return quotes.reply(c, 200,
-        await watchlistQuotes(deps.db, deps.settings.displayTz, deps.fetchQuotes, {
+        await watchlistQuotes(deps.db, deps.settings.displayTz, deps.provider.fetchQuotes, {
           includeCombos: true,
           now: deps.now(),
           policy: exitPolicy(deps.settings),

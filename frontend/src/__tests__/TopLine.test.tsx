@@ -5,7 +5,7 @@ import type { Entry, Health } from "../api";
 import { TopLine, needs } from "../TopLine";
 
 const health = (over: Record<string, unknown> = {}): Health => ({
-  db: true, opend: true,
+  db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
   settings: { sweep_seconds: 15, expired_retention_days: 7, display_tz: "Asia/Singapore" },
   ...over,
@@ -34,7 +34,7 @@ describe("what needs you", () => {
   it("puts a fault first, because it means the rest is drawn from stale figures", () => {
     const items = needs(
       [row({ triggered: true, schedule: schedule({ reached: "target" }) })],
-      health({ opend: false }),
+      health({ provider: { name: "moomoo", ok: false } }),
     );
     expect(items.map((n) => n.kind)).toEqual(["fault", "alarm", "target"]);
     expect(items[0]!.text).toContain("stale");

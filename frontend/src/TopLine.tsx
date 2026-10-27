@@ -4,7 +4,7 @@ import { shortContract } from "./format";
 /** The one line that says something needs you — and nothing at all when nothing does.
  *
  *  It APPEARS rather than reports: the health row it replaces worked the same way, and its own
- *  comment says why — "if OpenD is down or the alarm engine has stalled, every figure below is
+ *  comment says why — "if the Provider is down or the alarm engine has stalled, every figure below is
  *  suspect and the bell may be silent, which is exactly when it cannot be a click away". A line
  *  that is almost always the same becomes furniture and stops being read, which fails on the one
  *  day it matters.
@@ -41,8 +41,9 @@ export function needs(
 ): Needed[] {
   const out: Needed[] = [];
 
-  if (health && !health.opend) {
-    out.push({ kind: "fault", text: "OpenD down — the figures below are stale" });
+  if (health && !health.provider.ok) {
+    // named, not "OpenD": which Provider is down is the first thing you want to know (ADR 0015)
+    out.push({ kind: "fault", text: `${health.provider.name} down — the figures below are stale` });
   }
   if (health?.monitor.alarms.bad) {
     out.push({ kind: "fault", text: `alarms ${health.monitor.alarms.label}` });
