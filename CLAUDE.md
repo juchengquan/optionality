@@ -65,7 +65,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (pure maths that
   imports nothing outside itself — canonical, see golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
-  Telegram bot), `opend/` (the moomoo websocket client), `db/` (schema, migrations, queries),
+  Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (the Client Portal client, over plain
+  `fetch` — EXPERIMENTAL, proved against a stub gateway and never against a real one), `db/` (schema, migrations, queries),
   `cases/` (the golden cases' inputs and builder).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.

@@ -15,12 +15,13 @@
  *  found by the sweep and quarantined (ADR 0015, #167).
  */
 import type { Settings } from "./env.ts";
+import { ibkrProvider } from "./ibkr/provider.ts";
 import { moomooProvider } from "./opend/provider.ts";
 import type { ProviderClient } from "./ports.ts";
 
 /** Every Provider this build can be pointed at. The switch below must have a case for each, and
  *  `/health` reports whichever one answered. */
-export const PROVIDERS = ["moomoo"] as const;
+export const PROVIDERS = ["moomoo", "ibkr"] as const;
 export type ProviderName = (typeof PROVIDERS)[number];
 
 /** The Provider this deployment names, or a fatal error.
@@ -33,6 +34,8 @@ export function makeProvider(settings: Settings): ProviderClient {
   switch (settings.provider) {
     case "moomoo":
       return moomooProvider(settings);
+    case "ibkr":
+      return ibkrProvider(settings);
     default:
       throw new Error(
         `OPTIONALITY_PROVIDER: unknown provider '${settings.provider}' `

@@ -17,6 +17,9 @@ export interface Settings {
   moomooWsPort: number;
   /** OpenD's websocket key, in plaintext; the library hashes it. Gitignored, like the bot token. */
   moomooWsKey: string;
+  /** the IBKR Client Portal gateway's API root. Read only when `provider` is ibkr, and the
+   *  gateway runs on the owner's own machine — the service never reaches a vendor's host. */
+  ibkrGatewayUrl: string;
   apiToken: string;
   monitorIntervalSeconds: number;
   /** min gap between a monitor's telegram messages (flap protection) */
@@ -57,6 +60,10 @@ export const DEFAULTS: Settings = {
   opendHost: "127.0.0.1",
   moomooWsPort: 33333,
   moomooWsKey: "",
+  // the gateway's own default, over TLS with a self-signed certificate: Node's fetch refuses that
+  // until NODE_EXTRA_CA_CERTS names the gateway's certificate, which is the correct resolution and
+  // not disabling verification (ibkr/client.ts)
+  ibkrGatewayUrl: "https://127.0.0.1:5000/v1/api",
   apiToken: "",
   monitorIntervalSeconds: 60,
   alarmCooldownSeconds: 120,
@@ -84,6 +91,7 @@ const FROM_ENV = {
   opendHost: "OPEND_HOST",
   moomooWsPort: "MOOMOO_WS_PORT",
   moomooWsKey: "MOOMOO_WS_KEY",
+  ibkrGatewayUrl: "IBKR_GATEWAY_URL",
   apiToken: "API_TOKEN",
   monitorIntervalSeconds: "MONITOR_INTERVAL_SECONDS",
   alarmCooldownSeconds: "ALARM_COOLDOWN_SECONDS",
