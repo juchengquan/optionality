@@ -45,8 +45,14 @@ def display_time_short(when: datetime | None, tz_name: str = "") -> str | None:
 
     The zone is named with tzdata's abbreviation. The TypeScript names it with ICU's, and the two
     agree on America/New_York, UTC and every zone whose abbreviation IS an offset — Asia/Singapore
-    among them — but not where only tzdata has a name (Asia/Kolkata's IST, Europe/Paris's CET). The
-    TypeScript records the same divergence; there is no faithful way to drop names Python has.
+    among them — but not where only tzdata has a name (Asia/Kolkata's IST, Europe/Paris's CET).
+    There is no faithful way to drop names Python has.
+
+    This is the one function here that cannot reproduce the TypeScript, which for a year made it the
+    one function whose divergence nothing checked: its single golden case is in Asia/Singapore, a
+    zone where the two agree. Both answers are now measured in testdata/zone-abbreviations.json and
+    asserted on both sides (tests/test_zone_abbreviations.py). Europe/London is the row to read
+    first: ICU has GMT and lacks BST, so the same zone agrees in January and parts in July.
     """
     if when is None:
         return None

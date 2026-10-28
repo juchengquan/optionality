@@ -1,0 +1,30 @@
+{
+  "what": "How Python's tzdata and JavaScript's ICU name the same zone at the same instant, measured.",
+  "why": [
+    "display_time_short/displayTimeShort is the one formatting in the port that cannot be made",
+    "exact: Python names the zone with tzdata's own abbreviation, JavaScript with ICU's, and ICU has",
+    "fewer. The rows where they agree are golden cases and the Python must reproduce them exactly.",
+    "The rows where they do not are THIS file, and both suites assert their own column — so a change",
+    "in ICU fails the TypeScript's test, a change in tzdata fails the Python's, and neither side can",
+    "be quietly 'fixed' to match the other without a row here failing first.",
+    "Hand-written and NOT generated, unlike testdata/golden/: no implementation can compute the",
+    "other language's column. Deliberately not a golden case either — the golden mechanism compares",
+    "exactly and has no tolerance by design (testdata/golden/README.md), and an 'expected to differ'",
+    "escape hatch inside it is precisely the hole that would hide a rounding divergence that matters."
+  ],
+  "rows": [
+    { "zone": "Asia/Singapore", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 20:00 +08", "py": "2026-01-15 20:00 +08", "note": "the owner's own zone: an offset either way, which is why the bot has never shown the difference" },
+    { "zone": "America/New_York", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 07:00 EST", "py": "2026-01-15 07:00 EST", "note": "the market's zone, standard time; both libraries have the name" },
+    { "zone": "America/New_York", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 08:00 EDT", "py": "2026-07-15 08:00 EDT", "note": "the market's zone, daylight time" },
+    { "zone": "UTC", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 12:00 UTC", "py": "2026-01-15 12:00 UTC", "note": "storage's own zone" },
+    { "zone": "Asia/Kathmandu", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 17:45 +0545", "py": "2026-01-15 17:45 +0545", "note": "a 45-minute offset: both print +0545, which is what pins tzAbbreviation's four-digit spelling" },
+    { "zone": "Europe/London", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 12:00 GMT", "py": "2026-01-15 12:00 GMT", "note": "winter: ICU has GMT, so this half of London agrees" },
+    { "zone": "Europe/London", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 13:00 +01", "py": "2026-07-15 13:00 BST", "note": "summer: the same zone diverges, which is the sharpest case here — a zone is not agreeing or disagreeing, an INSTANT is" },
+    { "zone": "Asia/Kolkata", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 17:30 +0530", "py": "2026-01-15 17:30 IST", "note": "IST is also Irish and Israel Standard Time; the offset is the unambiguous one" },
+    { "zone": "Asia/Shanghai", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 20:00 +08", "py": "2026-01-15 20:00 CST", "note": "CST collides with America/Chicago's; note the TypeScript prints the same +08 as Singapore" },
+    { "zone": "Europe/Paris", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 13:00 +01", "py": "2026-01-15 13:00 CET", "note": "standard time" },
+    { "zone": "Europe/Paris", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 14:00 +02", "py": "2026-07-15 14:00 CEST", "note": "daylight time: both the name and the offset move" },
+    { "zone": "America/St_Johns", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 08:30 -0330", "py": "2026-01-15 08:30 NST", "note": "a negative half-hour offset, standard time" },
+    { "zone": "America/St_Johns", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 09:30 -0230", "py": "2026-07-15 09:30 NDT", "note": "daylight time: -0230, the one case where the four-digit spelling and a minus meet" }
+  ]
+}
