@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SnapshotView } from "../SnapshotView";
 import { deliver, snapshotName } from "../snapshot";
 import { COMBO_COLUMNS, SINGLE_COLUMNS } from "../columns";
-import type { Entry, Health } from "../api";
+import type { Entry, Health, Holding } from "../api";
 
 /** Saving the page as an image, to paste into a chat.
  *
@@ -32,13 +32,24 @@ const single = {
   quote: { name: "SPXW 261130 8100.00C", mid_price: 4.6, option_delta: 0.11 },
 } as unknown as Entry;
 
-function view(hidden?: { single?: Set<string>; combo?: Set<string> }) {
+const holding = {
+  id: "p1", name: "1204_BS_6950", entry: 2.72, cost_to_close: 1.02, pnl: 1.7, dte: 37,
+  opened_at: "2026-10-15", schedule: null,
+  legs: [{ side: "short", option_type: "PUT", strike: 6950 }, { side: "long", option_type: "PUT", strike: 6900 }],
+} as unknown as Holding;
+
+function view(
+  hidden?: { single?: Set<string>; combo?: Set<string> },
+  held?: { rows?: Holding[] | null; error?: string | null },
+) {
   return render(
     <SnapshotView
       singles={[single]} combos={[combo]} health={health}
       fetchedAt="2026-10-21 21:47:23+08:00" polledAt="21:30:07"
       grouping="none" reading="distance" band={80}
       hiddenSingle={hidden?.single ?? new Set()} hiddenCombo={hidden?.combo ?? new Set()}
+      holdings={held?.rows === undefined ? [holding] : held.rows}
+      holdingsError={held?.error ?? null}
     />,
   );
 }
@@ -91,6 +102,57 @@ describe("the snapshot tree", () => {
     view();
 
     expect(document.querySelectorAll("button")).toHaveLength(0);
+  });
+});
+
+describe("the holdings in the picture", () => {
+  /** What you HOLD is the half of the page a rule cannot state: the entry, the cost to close and
+   *  the P&L. The image carried them only while the panel happened to be OPEN, because it cloned
+   *  that panel's live node — so the same button produced two different pictures depending on a
+   *  disclosure triangle, and the one you get when you have not touched anything was the one
+   *  missing the money. */
+  it("carries the figures whether or not the panel is open", () => {
+    view();
+
+    expect(screen.getByText("1204_BS_6950")).toBeTruthy();
+    expect(screen.getByText(/-P6950 \+P6900/)).toBeTruthy();
+    const figures = [...document.querySelectorAll(".snapshot dd")].map((d) => d.textContent);
+    expect(figures, "the entry is not in the image").toContain("2.72");
+    expect(figures, "the cost to close is not in the image").toContain("1.02");
+    expect(figures, "the P&L is not in the image").toContain("1.70");
+  });
+
+  it("says so when the figures could not be read, rather than looking like nothing is held", () => {
+    // the one failure that must not be silent: an omitted section and an empty one look identical
+    // in a picture, and "nothing held" is a claim about the account
+    view(undefined, { rows: null, error: "/positions/values → 502" });
+
+    expect(screen.getByText(/502/)).toBeTruthy();
+    expect(screen.queryByText("1204_BS_6950")).toBeNull();
+  });
+
+  it("says nothing is held when nothing is, which is not the same as a failure", () => {
+    view(undefined, { rows: [] });
+
+    expect(screen.getByText(/Nothing held/)).toBeTruthy();
+  });
+
+  it("leaves the section out entirely while the figures have not arrived", () => {
+    // mid-fetch is not a state worth photographing: no heading at all beats a heading over
+    // "loading…", which in a still image reads as a holding that failed to render
+    view(undefined, { rows: null });
+
+    expect(screen.queryByText(/holdings/i)).toBeNull();
+  });
+
+  it("still draws no buttons, with the holdings in", () => {
+    // the clone it replaces had to strip forms and unwrap buttons by hand, because it was a copy
+    // of a panel built for editing. A rendered section has none to strip.
+    view();
+
+    expect(document.querySelectorAll("button")).toHaveLength(0);
+    expect(document.querySelectorAll("form")).toHaveLength(0);
+    expect(document.querySelectorAll("input")).toHaveLength(0);
   });
 });
 

@@ -4,9 +4,9 @@ import { toBlob } from "html-to-image";
 
 import "./app.css";
 import {
-  createWatch, deleteMonitor, fetchHealth, fetchMonitors, fetchQuotes, recordHolding,
-  patchMonitor, patchPosition, setTotalEntry,
-  type Entry, type Health, type Monitor,
+  createWatch, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes,
+  recordHolding, patchMonitor, patchPosition, setTotalEntry,
+  type Entry, type Health, type Holding, type Monitor,
 } from "./api";
 import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/toast";
@@ -95,6 +95,27 @@ export function App() {
   const [shooting, setShooting] = useState(false);
   const shotRef = useRef<HTMLDivElement>(null);
 
+  // Owned here, not in the panel: the image needs them whether or not that panel is open, and two
+  // copies of the same rows is how the picture and the page come to disagree. Still fetched on
+  // DEMAND — by opening the panel, by the refresh button, or by the camera — because every call
+  // reaches the Provider and nothing here belongs on the poll (ADR 0010).
+  const [holdings, setHoldings] = useState<Holding[] | null>(null);
+  const [holdingsError, setHoldingsError] = useState<string | null>(null);
+
+  const loadHoldings = useCallback(async () => {
+    try {
+      setHoldings(await fetchHoldings());
+      setHoldingsError(null);
+    } catch (e: unknown) {
+      // The rows are deliberately NOT cleared here. Both places that draw them print the error
+      // INSTEAD of the figures, so a cost to close nobody can vouch for is already unreachable —
+      // and a sweep proved it: clearing them as well changed nothing any test could see, in the
+      // panel or in the picture, because the error branch comes first in both. The guard that
+      // does the work is that precedence, and it is tested on both sides.
+      setHoldingsError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const [q, m, h] = await Promise.all([
@@ -152,14 +173,23 @@ export function App() {
    *  phone, a fraction of the figures. SnapshotView renders again at a fixed width with every
    *  ticked column, and that off-screen tree is what gets painted.
    *
-   *  Holdings are the exception, and by their own nature: that panel has no measured columns, so
-   *  the LIVE node is cloned rather than re-rendered, which means it cannot drift from the panel
-   *  — it is the panel. Only when it is open, because fetching it would be a second bounded
-   *  OpenD batch on a button press, and it is fetched on demand precisely to keep it off the poll.
+   *  Holdings are fetched HERE, by the press. They used to be a clone of the live panel's node,
+   *  which meant the picture carried them only while that panel happened to be open: the same
+   *  button produced two different images depending on a disclosure triangle, and the one you get
+   *  without touching anything was the one missing the money. They are rendered from the same
+   *  readout the panel uses now (Holdings.HoldingReadout), so the two still cannot disagree.
+   *
+   *  The press therefore costs one bounded `/positions/values` call, which is the reason it was
+   *  not done this way at first. It buys more than the open-panel case: the figures in the picture
+   *  are then as old as its freshness line says, where a panel opened ten minutes ago was not.
    */
   const saveImage = useCallback(async () => {
     setShooting(true);
     try {
+      // before the frames, so the stage is laid out WITH them: this is the one figure in the
+      // picture that is not already on screen, and awaiting it here is what lets the rest of the
+      // image be a single consistent instant
+      await loadHoldings();
       // two frames: mounted is not laid out, and an unlaid-out tree paints as nothing
       await new Promise(requestAnimationFrame);
       await new Promise(requestAnimationFrame);
@@ -169,23 +199,6 @@ export function App() {
       // exactly the right size, which is the one failure shape that looks like success.
       const stage = shotRef.current?.querySelector<HTMLElement>(".snapshot");
       if (!stage) return;
-      const held = document.querySelector('[data-snapshot="holdings"]');
-      if (held) {
-        const copy = held.cloneNode(true) as HTMLElement;
-        // unwrap rather than remove: a button's TEXT is often the only label a figure has, and
-        // stripping it outright would take the words with the affordance. Forms go entirely —
-        // an empty input in a picture reads as a figure nobody filled in.
-        for (const control of copy.querySelectorAll("form")) control.remove();
-        for (const button of copy.querySelectorAll("button")) {
-          const words = (button.textContent ?? "").trim();
-          const span = document.createElement("span");
-          span.textContent = words;
-          button.replaceWith(...(words ? [span] : []));
-        }
-        const heading = document.createElement("h2");
-        heading.textContent = "holdings";
-        stage.append(heading, copy);
-      }
       const blob = await toBlob(stage, { pixelRatio: 2 });
       if (!blob) throw new Error("the image came back empty");
       const how = await deliver(blob, snapshotName());
@@ -197,7 +210,7 @@ export function App() {
     } finally {
       setShooting(false);
     }
-  }, []);
+  }, [loadHoldings]);
 
   // every mutation reloads rather than patching local state: these change what the alarm
   // engine does, and the server's account of that is the only one that counts
@@ -351,7 +364,8 @@ export function App() {
       />
       {quotes.length === 0 && !error ? <p>Watchlist is empty.</p> : null}
 
-      <Holdings reloadKey={pollFrom} act={act} />
+      <Holdings reloadKey={pollFrom} rows={holdings} error={holdingsError}
+                load={loadHoldings} act={act} />
 
       <MutedTables
         monitors={monitors}
@@ -371,6 +385,7 @@ export function App() {
             fetchedAt={fetchedAt ?? null} polledAt={polledAt} grouping={grouping}
             reading={reading} band={band}
             hiddenSingle={hiddenSingle} hiddenCombo={hiddenCombo}
+            holdings={holdings} holdingsError={holdingsError}
           />
         </div>
       ) : null}

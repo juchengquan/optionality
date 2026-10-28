@@ -1,8 +1,9 @@
-import type { Entry, Health } from "./api";
+import type { Entry, Health, Holding } from "./api";
 import {
   COMBO_COLUMNS, SINGLE_COLUMNS, visible, type Grouping, type Signal,
 } from "./columns";
 import { Freshness } from "./Freshness";
+import { HoldingReadout } from "./Holdings";
 import { TopLine } from "./TopLine";
 import { WatchlistTable } from "./WatchlistTable";
 
@@ -20,7 +21,7 @@ import { WatchlistTable } from "./WatchlistTable";
  */
 export function SnapshotView({
   singles, combos, health, fetchedAt, polledAt, grouping, reading, band,
-  hiddenSingle, hiddenCombo,
+  hiddenSingle, hiddenCombo, holdings, holdingsError,
 }: {
   singles: Entry[];
   combos: Entry[];
@@ -33,6 +34,12 @@ export function SnapshotView({
   band: number;
   hiddenSingle: Set<string>;
   hiddenCombo: Set<string>;
+  /** What is HELD, which no rule states: the entry, the cost to close and the P&L. Null while the
+   *  figures have not arrived — the section is then left out rather than photographed mid-fetch. */
+  holdings: Holding[] | null;
+  /** why they could not be read, if they could not. An omitted section and an empty one look
+   *  identical in a still image, and "nothing held" is a claim about the account. */
+  holdingsError: string | null;
 }) {
   const horizon = health?.settings.manage_by_dte ?? 21;
   const nothing = () => {};
@@ -60,6 +67,21 @@ export function SnapshotView({
           onOpen={nothing}
         />
       ) : null}
+      {/* The half of the page a rule cannot state. Rendered from the same readout the panel uses,
+          so the two cannot disagree — and rendered whether or not that panel is open, which is
+          what the clone this replaces could not do (Holdings.HoldingReadout). */}
+      {holdings === null && holdingsError === null ? null : (
+        <section>
+          <h2>holdings</h2>
+          {holdingsError !== null ? <p className="meta">{holdingsError}</p>
+            : holdings!.length === 0 ? <p className="meta">Nothing held.</p>
+              : holdings!.map((h) => (
+                <div key={h.id} className="border-t py-3">
+                  <HoldingReadout holding={h} />
+                </div>
+              ))}
+        </section>
+      )}
     </div>
   );
 }
