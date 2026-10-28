@@ -141,6 +141,18 @@ deploy:
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
 
+# First contact with an IBKR gateway (ADR 0015, PR 6). NOT part of `make check`: it reaches a real
+# gateway, which no test may do. Safe while the live service runs — it opens the database read-only,
+# writes nothing and sends nothing — but it does spend market-data calls on both providers. The
+# readings it reports are pure functions, tested in backend/src/ibkr/first-contact.test.ts.
+ibkr-first-contact:
+	node --env-file=.env backend/tools/ibkr-first-contact.ts $(ARGS)
+
+# A stub gateway for the harness above, so its wiring can be exercised before an account exists.
+# It answers NO real market data; a report from a run against it proves the harness, nothing else.
+ibkr-fake-gateway:
+	node backend/tools/ibkr-fake-gateway.ts
+
 # The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
 # reproduce exactly. Generated, never edited; `test-api` fails too when they are stale.
 cases:
