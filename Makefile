@@ -1,4 +1,4 @@
-.PHONY: check lint check-boundaries cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
+.PHONY: check lint check-boundaries check-make-targets cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
@@ -26,11 +26,17 @@ UI_BASE ?= /opt/
 
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
-lint: check-boundaries
+lint: check-boundaries check-make-targets
 	uv run --directory python ruff check .
 
 check-boundaries:
 	node tools/check-boundaries.mjs
+
+# Every `make <target>` named in the code or in CLAUDE.md is one this file has. Two differentials
+# were deleted with the Python they compared against and nine comments went on naming them as the
+# live check. See tools/check-make-targets.mjs.
+check-make-targets:
+	node tools/check-make-targets.mjs
 
 # the Python only: the TypeScript has no formatter, by decision (CLAUDE.md says why)
 format:
