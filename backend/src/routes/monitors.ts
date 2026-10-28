@@ -223,16 +223,29 @@ export function monitorRoutes(deps: Deps) {
       if (findMonitorByCodeField(db, code, field, id)) {
         throw httpError(409, `monitor for (${code}, ${field}) already exists`);
       }
-      const updated = updateMonitorFields(db, id, {
-        code,
-        strike_date: p.strike_date,
-        option_type: p.option_type,
-        strike: p.strike,
-        field,
-        threshold: p.threshold,
-        direction: p.direction ?? DEFAULT_DIRECTION,
-        compare: p.compare ?? DEFAULT_COMPARE,
-        enabled: toSqliteBool(p.enabled ?? DEFAULT_ENABLED),
+      const updated = await atomic(db, () => {
+        const saved = updateMonitorFields(db, id, {
+          code,
+          strike_date: p.strike_date,
+          option_type: p.option_type,
+          strike: p.strike,
+          field,
+          threshold: p.threshold,
+          direction: p.direction ?? DEFAULT_DIRECTION,
+          compare: p.compare ?? DEFAULT_COMPARE,
+          enabled: toSqliteBool(p.enabled ?? DEFAULT_ENABLED),
+        });
+        if (code === row.code) return saved;
+        // This is the one edit that can MOVE a monitor to another contract, and the links have to
+        // follow it. They did not: the rule went on pointing at the holding of the strike it used
+        // to watch, so it inherited that holding's entry and showed a P&L for a position it no
+        // longer touched. Cleared before relinking, and `scope` with them — `linkToPositions`
+        // leaves it alone when nothing holds the new contract, which would keep a stale "all"
+        // over an empty list.
+        clearMonitorLinks(db, id);
+        updateMonitorFields(db, id, { scope: null });
+        linkToPositions(db, id, [code]);
+        return findMonitor(db, id)!;
       });
       return replace.reply(c, 200, one(updated));
     })

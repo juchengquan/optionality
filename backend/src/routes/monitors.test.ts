@@ -424,6 +424,48 @@ describe("the links to positions", () => {
     expect(h.db.prepare("select name from positions").get()).toMatchObject({ name: "del-target" });
   });
 
+  it("re-links a replaced monitor to whatever holds its NEW contract", async () => {
+    // PUT is the one edit that can move a monitor to a different contract, and the links did not
+    // follow it: the rule kept pointing at the holding of the strike it USED to watch, so it
+    // inherited that holding's entry and reported a P&L for a position it no longer touched.
+    // "Creating one links it to whatever Position already holds its contracts" has to hold for
+    // the edited row too, or the link means nothing after the first edit.
+    h = harness();
+    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
+    seedPosition("b".repeat(32), "seventy", "2026-12-18", 7000);
+    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
+    const created = await body(await post(payload));
+    expect(created.positions).toEqual([{ id: "a".repeat(32), name: "sixty-five" }]);
+
+    const moved = await body(await put(created.id, { ...payload, strike: 7000 }));
+    expect(moved.positions).toEqual([{ id: "b".repeat(32), name: "seventy" }]);
+    expect(linkCount(created.id)).toBe(1);
+  });
+
+  it("drops the links when a replaced monitor lands where nothing is held", async () => {
+    // the half that matters more: no holding means no entry and no P&L, which is honest. Keeping
+    // the old link here is what produced a figure for a contract the trader does not own.
+    h = harness();
+    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
+    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
+    const created = await body(await post(payload));
+    const moved = await body(await put(created.id, { ...payload, strike: 9999 }));
+    expect(moved.positions).toEqual([]);
+    expect(moved.scope).toBeNull();
+    expect(linkCount(created.id)).toBe(0);
+  });
+
+  it("leaves the links alone when a replacement does not move the contract", async () => {
+    // an edit to a threshold must not disturb the linkage, and must not need the probe either
+    h = harness();
+    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
+    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
+    const created = await body(await post(payload));
+    const same = await body(await put(created.id, { ...payload, threshold: 0.9 }));
+    expect(same.positions).toEqual([{ id: "a".repeat(32), name: "sixty-five" }]);
+    expect(same.scope).toBe("all");
+  });
+
   it("links nothing when no position holds the contract", async () => {
     // watching a strike you have no position in is legitimate; it simply has no entry and no P&L
     h = harness();
