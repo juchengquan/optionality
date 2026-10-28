@@ -4,8 +4,10 @@
  *  These are not ported. The Python functions have almost no unit tests of their own — they are
  *  reached through the sweeper, which needs a session, and `threshold_fill` has exactly ONE
  *  assertion in 3,278 lines of test (`fill == 50`, in test_api_seam.py). So these were written
- *  from the invariants in CLAUDE.md and then checked value-by-value against the Python with
- *  `make diff-api` (ADR 0009, phase 3).
+ *  from the invariants in CLAUDE.md and then checked value-by-value against the Python of the time,
+ *  by a differential named `diff-api` that went with it (#145). The comparison runs the other way round now: this
+ *  module is canonical and `python/src/optionality/monitor.py` is ported FROM it, held to
+ *  testdata/golden/monitor.json exactly (ADR 0014).
  */
 import { describe, expect, it } from "vitest";
 

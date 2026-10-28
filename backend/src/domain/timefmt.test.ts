@@ -4,8 +4,11 @@
  *  with Python's `tzname()`, which gives "+08" for Singapore where JavaScript gives "GMT+8". That
  *  needs deciding rather than guessing, so it travels with the bot in phase 7.
  *
- *  Every expectation below also runs against the Python in `make diff-api`, across nine zones and
- *  eight instants — including both daylight-saving boundaries.
+ *  Every expectation below also ran against the Python of the time, across nine zones and eight
+ *  instants — including both daylight-saving boundaries — in a differential named `diff-api` that
+ *  went with it (#145). The comparison runs the other way round now: this module is canonical and
+ *  `python/src/optionality/timefmt.py` is ported FROM it, held to testdata/golden/timefmt.json
+ *  exactly (ADR 0014).
  */
 import { describe, expect, it } from "vitest";
 

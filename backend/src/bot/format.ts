@@ -161,8 +161,11 @@ export function ruleText(
  *  - at 1e16 Python goes exponential too, where JavaScript waits until 1e21.
  *
  *  The exponent is read from `toExponential()` rather than computed with a logarithm, because
- *  `Math.log10` is approximate exactly at the boundaries this has to get right. Checked against
- *  Python across thirty values and four precisions by `make diff-api`.
+ *  `Math.log10` is approximate exactly at the boundaries this has to get right. It WAS checked
+ *  against the Python across thirty values and four precisions, by a differential named
+ *  `diff-api` that went with the service it compared against (#145) and cannot be re-run. Nothing replaced it here: the bot's
+ *  formatting is not domain, so it has no golden cases and no counterpart in `python/` — what holds
+ *  these boundaries is format.test.ts, which names each one.
  */
 export function pyNumber(value: number): string {
   if (Number.isNaN(value)) return "nan";
