@@ -50,7 +50,10 @@ function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> 
       (value) => { clearTimeout(timer); resolve(value); },
       (err: unknown) => {
         clearTimeout(timer);
-        reject(err instanceof Error ? err : new Error(String(err)));
+        // `describe`, not String(): the library rejects with a plain `{retType, retMsg, errCode}`,
+        // and String() of that is "[object Object]" — which threw moomoo's own sentence away and
+        // took the containment below with it (#175).
+        reject(err instanceof Error ? err : new Error(describe(err)));
       },
     );
   });
@@ -211,9 +214,36 @@ export class OpendClient {
 /** moomoo names the offending contract in the error text, which is what makes containment safe. */
 const UNKNOWN_CODE = /Unknown stock\.?\s+([A-Z0-9.]+)/;
 
+/** Whatever the library handed us, as a sentence.
+ *
+ *  The shape that matters is its own: `GetSecuritySnapshot` does not resolve a bad `retType`, it
+ *  REJECTS with `{retType, retMsg, errCode}` — a plain object, not an Error. Measured against the
+ *  live gateway on 2026-10-28: asking for `.SPX` gave `{"retType":-1,"retMsg":"US stock indices
+ *  are not supported","errCode":0}`, and asking for a contract that does not exist gave
+ *  `Unknown stock. <code>`. Both arrived at the service as `[object Object]`, so moomoo's sentence
+ *  never reached a log, a Telegram alert — or `UNKNOWN_CODE`, which is what made containment a
+ *  thing that worked only against tests (#175).
+ *
+ *  `retMsg` is preferred over the whole object because it is the sentence a human needs and the
+ *  one the regex reads. `errCode` is appended only when the message does not already carry it,
+ *  the same rule the IBKR client's `describeFetchError` follows for an errno. Anything else — no
+ *  message, an empty one, a shape nobody has seen — falls through to the whole object, which is
+ *  never empty and never loses what arrived. A `retType`-only branch was written and then deleted:
+ *  a sweep showed that `{"retType":-1}` already says it, so the branch only duplicated the
+ *  fallback.
+ */
 function describe(value: unknown): string {
   if (value instanceof Error) return value.message;
   if (typeof value === "string") return value;
+  if (value !== null && typeof value === "object") {
+    const { retMsg, errCode } = value as { retMsg?: unknown; errCode?: unknown };
+    if (typeof retMsg === "string" && retMsg !== "") {
+      const code = typeof errCode === "number" && errCode !== 0 && !retMsg.includes(String(errCode))
+        ? ` (errCode ${errCode})`
+        : "";
+      return `${retMsg}${code}`;
+    }
+  }
   return JSON.stringify(value);
 }
 
