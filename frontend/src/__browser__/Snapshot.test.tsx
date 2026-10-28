@@ -34,7 +34,7 @@ const rows = [
 ];
 
 const held = [{
-  id: "p1", name: "1120_IC_7100_8200", entry: 2.72, cost_to_close: 1.02, pnl: 1.7, dte: 41,
+  id: "p1", name: "held-condor", entry: 2.72, cost_to_close: 1.02, pnl: 1.7, dte: 41,
   opened_at: "2026-10-15", schedule: null,
   legs: [{ side: "short", option_type: "CALL", strike: 8150 }],
 }];
@@ -45,7 +45,7 @@ function mockApi() {
       ok: true,
       json: () => Promise.resolve(
         String(url).endsWith("/quotes") ? rows
-          : String(url).endsWith("/positions/values") ? held
+          : String(url).includes("/positions/values") ? held
             : String(url).endsWith("/monitors") ? [] : health),
     })) as unknown as typeof fetch;
 }
@@ -167,8 +167,10 @@ describe("saving the page as an image", () => {
     // a page you have not touched — which is how a daily record gets taken — gave you the picture
     // without the money in it.
     //
-    // Asserted on the delivered FILE's dimensions rather than on the DOM: the section has to be
-    // laid out before the capture, and a tree that is mounted but not laid out paints as nothing.
+    // Read off the STAGE while the shot is in progress, not off the delivered file. Height and
+    // byte count were the first version of this assertion and both pass with the holdings absent:
+    // a 13-column table is already 600px tall and 10KB. What has to be true is that the figures
+    // are in the tree being painted, laid out, at the moment it is painted.
     await page.viewport(390, 900);
     const shared = catchShare();
     mockApi();
@@ -177,14 +179,21 @@ describe("saving the page as an image", () => {
     expect(screen.queryByTestId("holdings"), "the panel is open before the press").toBeNull();
 
     (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
 
-    // the stage is still mounted at this point only in the failing case; assert on what the
-    // picture is instead — with the section in, it is taller than without
+    const staged = () => document.querySelector<HTMLElement>(".snapshot-stage .snapshot");
+    await expect.poll(() => staged()?.textContent ?? "", { timeout: 8000 })
+      .toContain("held-condor");
+    const stage = staged()!;
+    const figures = [...stage.querySelectorAll("dd")].map((d) => d.textContent);
+    expect(figures, "the entry is not in the picture").toContain("2.72");
+    expect(figures, "the P&L is not in the picture").toContain("1.70");
+    // laid out, not merely mounted: an unlaid-out tree paints as nothing, which is the one
+    // failure shape that looks like success
+    expect(stage.getBoundingClientRect().height).toBeGreaterThan(100);
+
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
     const png = await decode(shared.file()!);
-    expect(png.h, `image ${png.w}x${png.h}`).toBeGreaterThan(600);
-    expect(shared.file()!.size, "the file is implausibly small for a page with holdings")
-      .toBeGreaterThan(10_000);
+    expect(png.h, `image ${png.w}x${png.h}`).toBeGreaterThan(100);
   });
 
   it("draws the held figures into the stage, panel shut", async () => {

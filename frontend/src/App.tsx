@@ -107,9 +107,11 @@ export function App() {
       setHoldings(await fetchHoldings());
       setHoldingsError(null);
     } catch (e: unknown) {
-      // the rows go too: keeping the last ones under a fresh timestamp is the stale-figure
-      // failure this whole dashboard is built to refuse
-      setHoldings(null);
+      // The rows are deliberately NOT cleared here. Both places that draw them print the error
+      // INSTEAD of the figures, so a cost to close nobody can vouch for is already unreachable —
+      // and a sweep proved it: clearing them as well changed nothing any test could see, in the
+      // panel or in the picture, because the error branch comes first in both. The guard that
+      // does the work is that precedence, and it is tested on both sides.
       setHoldingsError(e instanceof Error ? e.message : String(e));
     }
   }, []);

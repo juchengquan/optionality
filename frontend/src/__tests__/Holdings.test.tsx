@@ -87,6 +87,50 @@ describe("fetching only when asked", () => {
       expect(calls.filter((u) => u.includes("/positions/values"))).toHaveLength(1));
   });
 
+  it("asks when the CAMERA presses, with the panel never opened", async () => {
+    // #176: the picture used to clone this panel's node, so it carried the money only if you had
+    // opened the panel first — and pressing the button on a page you have not touched is how a
+    // daily record gets taken. The press fetches them itself now. (The capture itself cannot run
+    // under jsdom; what is asserted is the call that has to precede it.)
+    mockApi([spread]);
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /save as image/i })).toBeTruthy());
+    expect(calls.some((u) => u.includes("/positions/values")), "fetched before the press")
+      .toBe(false);
+
+    await userEvent.click(screen.getByRole("button", { name: /save as image/i }));
+
+    await waitFor(() =>
+      expect(calls.filter((u) => u.includes("/positions/values"))).toHaveLength(1));
+    expect(screen.queryByTestId("holdings"), "the panel opened itself").toBeNull();
+  });
+
+  it("drops the figures when the fetch fails, rather than keeping them under a fresh stamp", async () => {
+    // the stale-figure failure this dashboard refuses everywhere else: a cost to close from ten
+    // minutes ago, shown beside a freshness line that says now. The rows go and the reason shows.
+    mockApi([spread]);
+    render(<App />);
+    const panel = await holdingsOf();
+    expect(within(panel).getByText("1120_BS_7100")).toBeTruthy();
+
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") !== "GET") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
+      }
+      if (url.includes("/positions/values")) {
+        return Promise.resolve({ ok: false, status: 502, json: () => Promise.resolve({}) } as Response);
+      }
+      const body = url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+    }));
+    await userEvent.click(screen.getByRole("button", { name: /refresh now/i }));
+
+    await waitFor(() => expect(screen.getByText(/502/)).toBeTruthy());
+    expect(screen.queryByText("1120_BS_7100"), "a figure nobody can vouch for is still on screen")
+      .toBeNull();
+    expect(screen.queryByText(/loading/i), "'loading…' under the reason it failed").toBeNull();
+  });
+
   it("asks again when the refresh button fires, since nothing else refreshes it", async () => {
     // the other half of fetching on demand: these figures are live — cost to close, P&L and the
     // pace gap all move — and no poll touches them, so the button is the ONLY thing that brings

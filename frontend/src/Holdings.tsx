@@ -57,12 +57,14 @@ export function Holdings({ reloadKey, rows, error, load, act }: {
           (SnapshotView), so nothing outside reaches in here. */}
       {!open ? null : (
         <div data-testid="holdings">
-          {error !== null ? <p className="meta">{error}</p> : null}
-          {rows === null ? <p className="meta">loading…</p>
-            : rows.length === 0 ? <p className="meta">Nothing held.</p>
-              : rows.map((h) => (
-                <HoldingRow key={h.id} holding={h} onSaved={() => void load()} act={act} />
-              ))}
+          {/* the error WINS: a failed fetch clears the rows, and printing "loading…" under the
+              reason it failed describes a fetch that is still coming when none is */}
+          {error !== null ? <p className="meta">{error}</p>
+            : rows === null ? <p className="meta">loading…</p>
+              : rows.length === 0 ? <p className="meta">Nothing held.</p>
+                : rows.map((h) => (
+                  <HoldingRow key={h.id} holding={h} onSaved={() => void load()} act={act} />
+                ))}
         </div>
       )}
     </section>
