@@ -466,6 +466,24 @@ describe("the links to positions", () => {
     expect(same.scope).toBe("all");
   });
 
+  it("keeps a link a second holding has since made ambiguous, when only the threshold moves", async () => {
+    // why the relinking is gated on the contract rather than run on every replacement: linking
+    // REFUSES an ambiguous contract, and rolling a spread leaves the old and the new sharing a
+    // strike for a day. Re-deciding the linkage on an edit that did not move the contract would
+    // drop a link that was unambiguous when it was made, taking the entry and the P&L with it —
+    // an edit to a threshold is not an occasion to reconsider what you own.
+    h = harness();
+    seedPosition("a".repeat(32), "old", "2026-12-18", 6500);
+    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
+    const created = await body(await post(payload));
+    expect(created.positions).toEqual([{ id: "a".repeat(32), name: "old" }]);
+
+    seedPosition("b".repeat(32), "rolled", "2026-12-18", 6500);
+    const same = await body(await put(created.id, { ...payload, threshold: 0.9 }));
+    expect(same.positions).toEqual([{ id: "a".repeat(32), name: "old" }]);
+    expect(linkCount(created.id)).toBe(1);
+  });
+
   it("links nothing when no position holds the contract", async () => {
     // watching a strike you have no position in is legitimate; it simply has no entry and no P&L
     h = harness();
