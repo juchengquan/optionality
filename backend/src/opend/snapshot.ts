@@ -6,9 +6,15 @@
  *  makes a monitor stop alarming.
  *
  *  So it covers exactly the fields the service consumes — the dashboard's columns, the bot's tables,
- *  and the domain's maths — and every one is checked against the Python at the same instant by
- *  `make diff-opend`. Fields nothing reads are left out: transcribing a column we never look at would
- *  be unverified either way.
+ *  and the domain's maths. Fields nothing reads are left out: transcribing a column we never look at
+ *  would be unverified either way.
+ *
+ *  Every one of them WAS checked against the Python SDK at the same instant, by a differential
+ *  named `diff-opend` that asked both clients for the owner's own contracts and compared the records: 288 field values
+ *  over 8 live contracts, no divergences (2026-10-15, docs/cutover.md). That target went with the
+ *  Python it compared against (#145) and cannot be run again — `git show python-before-phase-10` has
+ *  it. What holds the mapping now is snapshot.test.ts, which exists because a mutation sweep found
+ *  four wrong mappings the live comparison could not see.
  */
 import type { Long, Snapshot } from "./types.ts";
 import type { Quote } from "../domain/quote.ts";

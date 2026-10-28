@@ -1,11 +1,14 @@
 /** The protobuf-to-record mapping (ADR 0009, phase 6).
  *
- *  The live comparison (`make diff-opend`) checks this against the Python SDK for the owner's own
- *  contracts, which is the strongest evidence there is — 288 field values, no divergences. It cannot
- *  check what live data never produces, and a mutation sweep against it showed exactly where: a
- *  quote with one side missing, a volume that needs more than 32 bits, a contract whose multiplier
- *  and size differ, and a field that simply is not there. Four mapping mutations survived the live
- *  comparison untouched. They are what this file is for.
+ *  This file is now the only check on the mapping. The strongest evidence there ever was came from
+ *  outside it — a live comparison against the Python SDK on the owner's own contracts, 288 field
+ *  values with no divergences — but the `diff-opend` target went with the Python it compared against
+ *  (#145), so that reading is history (2026-10-15, docs/cutover.md) and not a thing to re-run.
+ *
+ *  It was never sufficient anyway, which is why these cases exist: it could not check what live data
+ *  never produces, and a mutation sweep against it showed exactly where. A quote with one side
+ *  missing, a volume that needs more than 32 bits, a contract whose multiplier and size differ, and
+ *  a field that simply is not there — four mapping mutations survived the live comparison untouched.
  */
 import { describe, expect, it } from "vitest";
 

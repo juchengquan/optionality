@@ -1,8 +1,9 @@
 /** The OpenD client's connection and failure behaviour (ADR 0009, phase 6).
  *
- *  Against a fake, never the real gateway: the live check is `make diff-opend`, and a test that
- *  reaches a real OpenD blocks indefinitely when it is down — a missing fake looks like a hung suite
- *  rather than a failure (CLAUDE.md).
+ *  Against a fake, never the real gateway: a test that reaches a real OpenD blocks indefinitely when
+ *  it is down, so a missing fake looks like a hung suite rather than a failure (CLAUDE.md). This
+ *  used to point at a `diff-opend` target as the live check; it went with the Python it compared
+ *  against (#145), and nothing in `make check` has reached a gateway since.
  */
 import { describe, expect, it } from "vitest";
 

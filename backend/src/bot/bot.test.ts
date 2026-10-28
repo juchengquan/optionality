@@ -308,7 +308,7 @@ describe("/monitors", () => {
     db.prepare("update monitors set last_value = 26.41235").run();
     await b.handleUpdate(update("/monitors"));
     // four places, rounded on the stored double exactly as Python's .4f does — checked against it
-    // across a range of values by make diff-api
+    // across a range of values by the `diff-api` differential, which went with the Python (#145)
     expect(last()).toContain("26.4123");
   });
 

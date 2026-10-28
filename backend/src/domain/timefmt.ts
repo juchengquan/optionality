@@ -137,7 +137,12 @@ export function marketTimeToDisplay(value: string, tzName = ""): string {
  *  They disagree where only Python has a name: Asia/Kolkata (IST vs +05:30), Asia/Shanghai (CST),
  *  Europe/Paris (CET/CEST), Europe/London in summer (BST), America/St_Johns (NST/NDT). Converting the
  *  offset back into those names would mean carrying a table of abbreviations that tzdata already has
- *  and ICU deliberately dropped. Recorded rather than faked; `make diff-api` names each one.
+ *  and ICU deliberately dropped. Recorded rather than faked — and this comment is now the whole
+ *  record: the `diff-api` target that measured each one went with the Python it compared against
+ *  (#145), and nothing visits these zones since. `displayTimeShort` has no unit test, and its
+ *  golden cases use Asia/Singapore, the zone where the two AGREE. So the five disagreements above
+ *  are documented and unpinned: add them to backend/src/cases/inputs.ts to make the port reproduce
+ *  them, and expect timefmt.py to need the work (ADR 0014).
  */
 export function displayTimeShort(when: Date | null | undefined, tzName = ""): string | null {
   if (when === null || when === undefined) return null;

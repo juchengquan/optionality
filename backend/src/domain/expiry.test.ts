@@ -2,7 +2,10 @@
  *
  *  Not ported — days_to_expiry has no test in the Python at all, which is why the one-day
  *  market-date subtlety in its docstring was worth pinning before anything else depends on it.
- *  Every expectation here was checked against the Python with `make diff-api` (ADR 0009, phase 3).
+ *  Every expectation here was checked value-by-value against the Python of the time, by a
+ *  differential named `diff-api` that went with it (#145). The comparison runs the other way round now: this
+ *  module is canonical and `python/src/optionality/expiry.py` is ported FROM it, held to
+ *  testdata/golden/expiry.json exactly (ADR 0014).
  *
  *  The instants are fixed, never `new Date()`: the whole point is the hours when New York and the
  *  owner's own calendar disagree, and a test that reads the wall clock would only visit them by
