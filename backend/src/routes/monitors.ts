@@ -86,6 +86,16 @@ export function monitorRoutes(deps: Deps) {
     created_at: displayStored(row.created_at, tz),
   });
 
+  /** One row, with the holdings linked to it READ BACK rather than assumed.
+   *
+   *  Every write answers through this. `out` alone defaults the map to empty, which is right for a
+   *  batch — the list route reads all the links in one query — and wrong for a single reply: it
+   *  answered `positions: []` beside the `scope: "all"` the same transaction had just set, so the
+   *  reply contradicted itself and a client re-rendering a row from it lost the holding's name and
+   *  its leg badge. One extra query per write, on the id that was just written.
+   */
+  const one = (row: MonitorRow) => out(row, positionsForMonitors(db, [row.id]));
+
   /** Strict gate: everything in the monitors table has been verified to exist on moomoo. Rejects
    *  while OpenD is down, which is deliberate — a monitor on a contract that does not exist would
    *  quarantine itself on the first sweep, which is a worse way to find out. */
@@ -155,7 +165,7 @@ export function monitorRoutes(deps: Deps) {
           linkToPositions(db, inserted.id, [code]);
           return findMonitor(db, inserted.id)!;
         });
-        return create.reply(c, 201, out(saved));
+        return create.reply(c, 201, one(saved));
       }
 
       async function createCombo(p: z.output<typeof ComboMonitorIn>) {
@@ -191,7 +201,7 @@ export function monitorRoutes(deps: Deps) {
           linkToPositions(db, inserted.id, legCodes);
           return findMonitor(db, inserted.id)!;
         });
-        return create.reply(c, 201, out(saved));
+        return create.reply(c, 201, one(saved));
       }
     })
 
@@ -213,18 +223,31 @@ export function monitorRoutes(deps: Deps) {
       if (findMonitorByCodeField(db, code, field, id)) {
         throw httpError(409, `monitor for (${code}, ${field}) already exists`);
       }
-      const updated = updateMonitorFields(db, id, {
-        code,
-        strike_date: p.strike_date,
-        option_type: p.option_type,
-        strike: p.strike,
-        field,
-        threshold: p.threshold,
-        direction: p.direction ?? DEFAULT_DIRECTION,
-        compare: p.compare ?? DEFAULT_COMPARE,
-        enabled: toSqliteBool(p.enabled ?? DEFAULT_ENABLED),
+      const updated = await atomic(db, () => {
+        const saved = updateMonitorFields(db, id, {
+          code,
+          strike_date: p.strike_date,
+          option_type: p.option_type,
+          strike: p.strike,
+          field,
+          threshold: p.threshold,
+          direction: p.direction ?? DEFAULT_DIRECTION,
+          compare: p.compare ?? DEFAULT_COMPARE,
+          enabled: toSqliteBool(p.enabled ?? DEFAULT_ENABLED),
+        });
+        if (code === row.code) return saved;
+        // This is the one edit that can MOVE a monitor to another contract, and the links have to
+        // follow it. They did not: the rule went on pointing at the holding of the strike it used
+        // to watch, so it inherited that holding's entry and showed a P&L for a position it no
+        // longer touched. Cleared before relinking, and `scope` with them — `linkToPositions`
+        // leaves it alone when nothing holds the new contract, which would keep a stale "all"
+        // over an empty list.
+        clearMonitorLinks(db, id);
+        updateMonitorFields(db, id, { scope: null });
+        linkToPositions(db, id, [code]);
+        return findMonitor(db, id)!;
       });
-      return replace.reply(c, 200, out(updated));
+      return replace.reply(c, 200, one(updated));
     })
 
     .patch("/:id", update, valid("json", MonitorPatch), (c) => {
@@ -269,7 +292,7 @@ export function monitorRoutes(deps: Deps) {
         // sweeper's own quarantine and expiry notices are not overwritten by a manual toggle
         changes.disabled_reason = given.enabled ? null : "manual";
       }
-      return update.reply(c, 200, out(updateMonitorFields(db, id, changes)));
+      return update.reply(c, 200, one(updateMonitorFields(db, id, changes)));
     })
 
     .post("/:id/total-entry", totalEntry, valid("json", TotalEntryIn), async (c) => {
