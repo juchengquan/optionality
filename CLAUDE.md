@@ -41,6 +41,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `testdata/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
   — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
   exported domain function must have a case (ADR 0014).
+- **`make ibkr-first-contact`** — the five questions about an IBKR gateway that only a gateway can
+  answer (ADR 0015): entitlements, the real pre-flight cost, what a dead session looks like from
+  inside the service, rate limits, and whether the two Providers agree on the same contract at the
+  same instant. NOT part of `make check` — it reaches a real gateway, which no test may do. Safe
+  while the live service runs: read-only on the database, no Telegram, no bot. Its READINGS are
+  pure functions with tests (`backend/src/ibkr/first-contact.test.ts`); `make ibkr-fake-gateway`
+  serves a stub so the runner itself can be exercised, and answers no real market data.
 - `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
   with the sweep at an hour and the Telegram variables blanked, because the live service is always up
   here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
