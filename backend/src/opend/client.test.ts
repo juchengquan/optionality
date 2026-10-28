@@ -12,6 +12,10 @@ import type { MoomooClient, SnapshotResponse } from "./types.ts";
 
 interface Script {
   loginOk?: boolean;
+  /** rejects the request with the library's own shape: a PLAIN OBJECT, not an Error. This is what
+   *  the real moomoo-api does on any retType != 0 — measured against the live gateway on
+   *  2026-10-28 — and modelling it as a resolved `{retType: -1}` is what hid #175. */
+  rejectWith?: (codes: string[]) => unknown;
   /** never calls onlogin at all */
   loginSilent?: boolean;
   /** accepts the request and never answers it, as a logged-in OpenD that has gone quiet does */
@@ -52,6 +56,10 @@ class FakeMoomoo implements MoomooClient {
     this.asked.push(codes);
     this.shared.asked.push(codes);
     if (this.script.respondSilent) return new Promise<SnapshotResponse>(() => { /* never */ });
+    if (this.script.rejectWith) {
+      const reason = this.script.rejectWith(codes);
+      if (reason !== undefined) return Promise.reject(reason);
+    }
     const respond = this.script.respond
       ?? ((cs: string[]) => ({
         retType: 0,
@@ -171,6 +179,31 @@ describe("failing", () => {
       .rejects.toThrow(/^snapshot API failed: Unknown stock\. SPXW261030C99999000$/);
   });
 
+  it("reads retMsg out of the library's own rejection, which is not an Error", async () => {
+    // The library REJECTS with `{retType, retMsg, errCode}` rather than resolving it, and a plain
+    // object is not an Error — so this arrived as `snapshot API failed: [object Object]`, with
+    // moomoo's sentence thrown away. Measured against the live gateway on 2026-10-28, where every
+    // refusal read that way.
+    const { client } = harness({
+      rejectWith: () => ({ retType: -1, retMsg: "Unknown stock. SPXW261030C99999000", errCode: 0 }),
+    });
+    await expect(client.snapshot(["US.SPXW261030C99999000"]))
+      .rejects.toThrow(/^snapshot API failed: Unknown stock\. SPXW261030C99999000$/);
+  });
+
+  it("keeps an errCode the message does not already carry", async () => {
+    const { client } = harness({
+      rejectWith: () => ({ retType: -1, retMsg: "quota exceeded", errCode: 429 }),
+    });
+    await expect(client.snapshot(["US.X"])).rejects.toThrow(/quota exceeded \(errCode 429\)/);
+  });
+
+  it("falls back to the whole object when a rejection carries no message at all", async () => {
+    // never silently empty: an unrecognised rejection shape must still say what it was
+    const { client } = harness({ rejectWith: () => ({ weird: true }) });
+    await expect(client.snapshot(["US.X"])).rejects.toThrow(/\{"weird":true\}/);
+  });
+
   it("says something useful when retType is bad and there is no message", async () => {
     const { client } = harness({ respond: () => ({ retType: -1 }) });
     await expect(client.snapshot(["US.X"])).rejects.toThrow(/retType -1/);
@@ -287,6 +320,31 @@ describe("containment: the vendor's error prose is the vendor's own business", (
         retType: 0,
         s2c: { snapshotList: codes.map((code) => ({ basic: { security: { market: 11, code } } })) },
       }),
+  });
+
+  /** The same poison, refused the way the real library refuses: by REJECTING with the plain
+   *  object. This is the shape that was live, and the one containment never faced. */
+  const poisonousForReal = (): Script => ({
+    rejectWith: (codes) => (codes.includes(POISON.slice(3))
+      ? { retType: -1, retMsg: `Unknown stock. ${POISON.slice(3)}`, errCode: 0 }
+      : undefined),
+    respond: (codes) => ({
+      retType: 0,
+      s2c: { snapshotList: codes.map((code) => ({ basic: { security: { market: 11, code } } })) },
+    }),
+  });
+
+  it("contains a culprit the library REJECTED rather than reported", async () => {
+    // #175, found by asking the live gateway for a contract it does not have: one unknown code
+    // took the whole watchlist's sweep down, because the culprit's name never survived into the
+    // message the containment reads. Every alarm stops, for one dead contract.
+    const { client, shared } = harness(poisonousForReal());
+
+    const batch = await client.batch([POISON, GOOD]);
+
+    expect(batch.unknown).toEqual([POISON]);
+    expect(batch.records.map((r) => r.code)).toEqual([GOOD]);
+    expect(shared.asked).toHaveLength(2);
   });
 
   it("drops the culprit, retries, and reports it as unknown", async () => {
