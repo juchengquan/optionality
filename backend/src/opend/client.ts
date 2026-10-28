@@ -226,21 +226,23 @@ const UNKNOWN_CODE = /Unknown stock\.?\s+([A-Z0-9.]+)/;
  *
  *  `retMsg` is preferred over the whole object because it is the sentence a human needs and the
  *  one the regex reads. `errCode` is appended only when the message does not already carry it,
- *  the same rule the IBKR client's `describeFetchError` follows for an errno.
+ *  the same rule the IBKR client's `describeFetchError` follows for an errno. Anything else — no
+ *  message, an empty one, a shape nobody has seen — falls through to the whole object, which is
+ *  never empty and never loses what arrived. A `retType`-only branch was written and then deleted:
+ *  a sweep showed that `{"retType":-1}` already says it, so the branch only duplicated the
+ *  fallback.
  */
 function describe(value: unknown): string {
   if (value instanceof Error) return value.message;
   if (typeof value === "string") return value;
   if (value !== null && typeof value === "object") {
-    const { retMsg, retType, errCode } = value as { retMsg?: unknown; retType?: unknown; errCode?: unknown };
+    const { retMsg, errCode } = value as { retMsg?: unknown; errCode?: unknown };
     if (typeof retMsg === "string" && retMsg !== "") {
       const code = typeof errCode === "number" && errCode !== 0 && !retMsg.includes(String(errCode))
         ? ` (errCode ${errCode})`
         : "";
       return `${retMsg}${code}`;
     }
-    // no message: retType alone still says more than the object's punctuation
-    if (typeof retType === "number" && retMsg === undefined) return `retType ${retType}`;
   }
   return JSON.stringify(value);
 }

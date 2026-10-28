@@ -204,6 +204,13 @@ describe("failing", () => {
     await expect(client.snapshot(["US.X"])).rejects.toThrow(/\{"weird":true\}/);
   });
 
+  it("prefers the whole object to an EMPTY retMsg", async () => {
+    // `snapshot API failed: ` with nothing after it is the one answer worse than the raw object:
+    // it reads as a service that does not know why it failed. The retType is right there.
+    const { client } = harness({ rejectWith: () => ({ retType: -1, retMsg: "", errCode: 0 }) });
+    await expect(client.snapshot(["US.X"])).rejects.toThrow(/\{"retType":-1,"retMsg":"","errCode":0\}/);
+  });
+
   it("says something useful when retType is bad and there is no message", async () => {
     const { client } = harness({ respond: () => ({ retType: -1 }) });
     await expect(client.snapshot(["US.X"])).rejects.toThrow(/retType -1/);
