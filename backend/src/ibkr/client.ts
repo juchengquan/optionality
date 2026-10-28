@@ -239,11 +239,11 @@ function withTimeout<T>(
   work: Promise<T>, ms: number, what: string, giveUp: () => void,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    // not unref'd either: this one IS awaited, and the whole point of it is to settle
     const timer = setTimeout(() => {
       giveUp();
       reject(new Timeout(`${what} timed out after ${ms}ms`));
     }, ms);
-    timer.unref?.();
     work.then(
       (value) => { clearTimeout(timer); resolve(value); },
       (err: unknown) => { clearTimeout(timer); reject(err); },
@@ -251,10 +251,22 @@ function withTimeout<T>(
   });
 }
 
-/** Not `setTimeout` at zero: a test with fake timers would wait for a tick nobody advances. */
+/** The wait between snapshot attempts.
+ *
+ *  NOT unref'd, which it was for one commit: an unref'd timer does not hold the event loop open,
+ *  so a process whose only pending work was this sleep EXITED in the middle of a batch — node
+ *  reports it as "Detected unsettled top-level await" and leaves with code 13. The live service
+ *  never showed it because its HTTP server holds the loop open, and no in-process test can show
+ *  it because the test runner holds it open too; `client.node.test.ts` spawns a process with
+ *  nothing else to do. The rule the timers here follow: unref what nobody is awaiting (the
+ *  keepalive interval), never what something is.
+ *
+ *  Zero is not `setTimeout(…, 0)` either: a test with fake timers would wait for a tick nobody
+ *  advances.
+ */
 function sleep(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve) => { setTimeout(resolve, ms).unref?.(); });
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
 }
 
 function describe(value: unknown): string {
