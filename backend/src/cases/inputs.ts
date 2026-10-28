@@ -140,6 +140,20 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "displayTime", name: "in UTC", args: [at("2026-10-17T05:26:06Z"), "UTC"] },
     { fn: "displayTime", name: "nothing to show", args: [null, "Asia/Singapore"] },
     { fn: "displayTimeShort", name: "short, in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },
+    // The zones where ICU and tzdata name the zone the SAME way, so the port can be held to them
+    // exactly. Every other zone is in testdata/zone-abbreviations.json and cannot be a case here:
+    // this is the one function whose output legitimately differs, and no tolerance belongs in a
+    // mechanism built on having none. Singapore above was the only row for a year, and it agrees —
+    // so the port could have drifted anywhere outside it.
+    { fn: "displayTimeShort", name: "short, in New York, standard time", args: [at("2026-01-15T12:00:00Z"), "America/New_York"] },
+    { fn: "displayTimeShort", name: "short, in New York, daylight time", args: [at("2026-07-15T12:00:00Z"), "America/New_York"] },
+    { fn: "displayTimeShort", name: "short, in UTC", args: [at("2026-01-15T12:00:00Z"), "UTC"] },
+    // a 45-minute offset, which is what holds the four-digit +0545 spelling rather than +05
+    { fn: "displayTimeShort", name: "short, on a three-quarter-hour offset", args: [at("2026-01-15T12:00:00Z"), "Asia/Kathmandu"] },
+    // London in WINTER only: ICU has GMT and lacks BST, so the same zone agrees in January and
+    // diverges in July — the July instant is in the table, not here
+    { fn: "displayTimeShort", name: "short, in London, where only winter agrees", args: [at("2026-01-15T12:00:00Z"), "Europe/London"] },
+    { fn: "displayTimeShort", name: "short, nothing to show", args: [null, "Asia/Singapore"] },
     { fn: "marketTimeToDisplay", name: "moomoo's naive Eastern time", args: ["2026-10-16 15:59:58", "Asia/Singapore"] },
     { fn: "marketTimeToDisplay", name: "with a fraction", args: ["2026-10-16 15:59:58.125", "Asia/Singapore"] },
     { fn: "marketTimeToDisplay", name: "the hour that happens twice", args: ["2026-11-01 01:30:00", "UTC"] },

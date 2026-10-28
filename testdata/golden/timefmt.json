@@ -66,6 +66,70 @@
       "expect": "2026-10-17 13:26 +08"
     },
     {
+      "fn": "displayTimeShort",
+      "name": "short, in New York, standard time",
+      "args": [
+        {
+          "$date": "2026-01-15T12:00:00.000Z"
+        },
+        "America/New_York"
+      ],
+      "expect": "2026-01-15 07:00 EST"
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "short, in New York, daylight time",
+      "args": [
+        {
+          "$date": "2026-07-15T12:00:00.000Z"
+        },
+        "America/New_York"
+      ],
+      "expect": "2026-07-15 08:00 EDT"
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "short, in UTC",
+      "args": [
+        {
+          "$date": "2026-01-15T12:00:00.000Z"
+        },
+        "UTC"
+      ],
+      "expect": "2026-01-15 12:00 UTC"
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "short, on a three-quarter-hour offset",
+      "args": [
+        {
+          "$date": "2026-01-15T12:00:00.000Z"
+        },
+        "Asia/Kathmandu"
+      ],
+      "expect": "2026-01-15 17:45 +0545"
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "short, in London, where only winter agrees",
+      "args": [
+        {
+          "$date": "2026-01-15T12:00:00.000Z"
+        },
+        "Europe/London"
+      ],
+      "expect": "2026-01-15 12:00 GMT"
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "short, nothing to show",
+      "args": [
+        null,
+        "Asia/Singapore"
+      ],
+      "expect": null
+    },
+    {
       "fn": "marketTimeToDisplay",
       "name": "moomoo's naive Eastern time",
       "args": [

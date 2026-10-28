@@ -134,15 +134,19 @@ export function marketTimeToDisplay(value: string, tzName = ""): string {
  *  `GMT+8` to tzdata's `+08` spelling — on every zone whose abbreviation IS an offset, which includes
  *  the owner's Asia/Singapore.
  *
- *  They disagree where only Python has a name: Asia/Kolkata (IST vs +05:30), Asia/Shanghai (CST),
+ *  They disagree where only Python has a name: Asia/Kolkata (IST vs +0530), Asia/Shanghai (CST),
  *  Europe/Paris (CET/CEST), Europe/London in summer (BST), America/St_Johns (NST/NDT). Converting the
  *  offset back into those names would mean carrying a table of abbreviations that tzdata already has
- *  and ICU deliberately dropped. Recorded rather than faked — and this comment is now the whole
- *  record: the `diff-api` target that measured each one went with the Python it compared against
- *  (#145), and nothing visits these zones since. `displayTimeShort` has no unit test, and its
- *  golden cases use Asia/Singapore, the zone where the two AGREE. So the five disagreements above
- *  are documented and unpinned: add them to backend/src/cases/inputs.ts to make the port reproduce
- *  them, and expect timefmt.py to need the work (ADR 0014).
+ *  and ICU deliberately dropped. Recorded rather than faked — and now MEASURED, in
+ *  testdata/zone-abbreviations.json, which both suites read: this file's column is asserted by
+ *  zone-abbreviations.test.ts and tzdata's by python/tests/test_zone_abbreviations.py, so a change
+ *  in either library fails on its own side. It had to be a table of its own because a golden case
+ *  compares exactly and must (ADR 0014): the instants where the two AGREE are golden cases, and the
+ *  seven where they do not cannot be.
+ *
+ *  Europe/London is the row worth knowing: ICU has GMT and lacks BST, so one DISPLAY_TZ reads
+ *  identically to the Python in January and differs from it in July. A zone is not agreeing or
+ *  disagreeing — an instant is.
  */
 export function displayTimeShort(when: Date | null | undefined, tzName = ""): string | null {
   if (when === null || when === undefined) return null;
