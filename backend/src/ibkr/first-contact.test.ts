@@ -157,10 +157,15 @@ describe("question 3 — what a dead session looks like from in here", () => {
   });
 
   it("notes a competing session rather than guessing what it does", () => {
+    // the status line prints `competing=` either way, so this asserts on the EXPLANATION: the
+    // client deliberately does not consult the flag, and what it does to market data is one of
+    // the things a first run should record.
     const finding = probeSession({
       status: { authenticated: true, connected: true, competing: true },
     });
-    expect(finding.lines.join("\n")).toMatch(/competing/i);
+    expect(finding.lines.join("\n")).toMatch(/another session has taken the connection over/i);
+    const quiet = probeSession({ status: { authenticated: true, connected: true } });
+    expect(quiet.lines.join("\n")).not.toMatch(/taken the connection over/i);
   });
 });
 
@@ -184,6 +189,16 @@ describe("question 4 — the rate limit, against this service's cadence", () => 
     });
     expect(finding.verdict).toBe("no");
     expect(finding.lines.join("\n")).toMatch(/429/);
+  });
+
+  it("counts a 503 as a refusal too, because it is what an overloaded gateway answers", () => {
+    // 429 is the documented one; a gateway buckling under a burst answers 503, and for THIS
+    // question both mean the same thing — it would not take what this service asked of it
+    const finding = probeRate({
+      batches: [{ calls: 2, ms: 100, statuses: [200, 503] }], sweepSeconds: 60,
+    });
+    expect(finding.verdict).toBe("no");
+    expect(finding.lines.join("\n")).toMatch(/503/);
   });
 });
 
@@ -234,12 +249,15 @@ describe("question 5 — whether the two providers agree", () => {
   it("compares only the fields both of them sent", () => {
     // IBKR sends no update_time and no rho. An absent figure on one side is question 1's
     // business, not a disagreement about the market.
+    // option_theta, which IS one of the compared fields — unlike option_rho and update_time,
+    // which IBKR never sends and this probe never looks at. A field on one side only must not
+    // read as a 100% disagreement, which is what comparing it against nothing computes.
     const finding = probeAgreement({
-      moomoo: [{ code: CALL, mid_price: 4.5, option_rho: 0.3 }],
+      moomoo: [{ code: CALL, mid_price: 4.5, option_theta: -0.85, option_rho: 0.3 }],
       ibkr: [{ code: CALL, mid_price: 4.5 }],
     });
     expect(finding.verdict).toBe("yes");
-    expect(finding.lines.join("\n")).not.toMatch(/option_rho/);
+    expect(finding.lines.join("\n")).not.toMatch(/option_theta|option_rho/);
   });
 });
 
@@ -289,12 +307,23 @@ describe("what actually went wrong", () => {
     expect(describeFetchError(err)).toBe("fetch failed: self-signed certificate");
   });
 
-  it("includes an errno code, which is often the whole diagnosis", () => {
+  it("includes an errno code the message itself does not mention", () => {
+    // undici's real shape, measured on this machine against the port AirPlay holds: the message
+    // names an address and a timeout, and the only word that says WHAT happened is the code.
+    const cause = Object.assign(
+      new Error("Connect Timeout Error (attempted address: 127.0.0.1:5000, timeout: 10000ms)"),
+      { code: "UND_ERR_CONNECT_TIMEOUT" },
+    );
+    expect(describeFetchError(new TypeError("fetch failed", { cause })))
+      .toMatch(/UND_ERR_CONNECT_TIMEOUT/);
+  });
+
+  it("does not repeat a code the message already carries", () => {
     const cause = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5001"), {
       code: "ECONNREFUSED",
     });
     expect(describeFetchError(new TypeError("fetch failed", { cause })))
-      .toMatch(/ECONNREFUSED/);
+      .toBe("fetch failed: connect ECONNREFUSED 127.0.0.1:5001");
   });
 
   it("does not repeat a cause that says the same thing twice", () => {
