@@ -374,11 +374,40 @@ describe("the links to positions", () => {
     const created = await body(await post(single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 })));
     expect(linkCount(created.id)).toBe(1);
     expect(created.scope).toBe("all");
-    // the create response does not carry the positions — the Python's does not either, it returns
-    // the row alone. The list is where a client sees them.
-    expect(created.positions).toEqual([]);
+    // The create response carries the links it has just made. It answered `positions: []` until
+    // #172 — the Python's did too, and the port kept it — which is a false statement about a row
+    // the same transaction linked: `scope: "all"` beside an empty list says "this covers a whole
+    // holding" and "no holding", and a client has no way to tell which half to believe. The list
+    // route is NOT the answer to that: it is a second call, so a client acting on the reply it
+    // just received acts on the lie.
+    expect(created.positions).toEqual([{ id: "p".repeat(32), name: "del-target" }]);
     const listed = await body(await h.call("/monitors"));
-    expect(listed[0].positions).toEqual([{ id: "p".repeat(32), name: "del-target" }]);
+    expect(listed[0].positions).toEqual(created.positions);
+  });
+
+  it("carries the links on a combo it has just linked by its legs", async () => {
+    // a combo links by its LEGS and never by its own name, so its reply is the one place the
+    // linkage is least guessable from the request
+    h = harness();
+    seedPosition("p".repeat(32), "wing", "2026-12-18", 8100);
+    const created = await body(await post(combo({ strike_date: "2026-12-18" })));
+    expect(created.positions).toEqual([{ id: "p".repeat(32), name: "wing" }]);
+  });
+
+  it("carries the links when a monitor is replaced or patched", async () => {
+    // an edit does not change the links, which is exactly why the reply must still state them:
+    // a client that re-renders a row from the PATCH response would otherwise lose the holding's
+    // name and its leg badge until the next poll
+    h = harness();
+    seedPosition("p".repeat(32), "del-target", "2026-12-18", 6500);
+    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
+    const created = await body(await post(payload));
+    // spelled out rather than compared to `created.positions`: two empty arrays are equal, so
+    // that comparison passes while every reply is wrong — the shape of a vacuous assertion
+    const linked = [{ id: "p".repeat(32), name: "del-target" }];
+    expect((await body(await patch(created.id, { threshold: 0.3 }))).positions).toEqual(linked);
+    expect((await body(await put(created.id, { ...payload, threshold: 0.4 }))).positions)
+      .toEqual(linked);
   });
 
   it("takes the links with it when the monitor goes, and leaves the position", async () => {
