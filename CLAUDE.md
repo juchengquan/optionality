@@ -8,8 +8,10 @@ Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve tabl
 **The service is TypeScript (ADR 0009):** `com.optionality.api` runs `backend/src/main.ts` under node,
 on `data/optionality-ts.db`. Node runs the TypeScript directly, so what is in the working tree is what
 runs. The Python service it replaced, and the run pipeline (strategy and holdings scans), were deleted in
-phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them, and `data/optionality.db` is the
-Python's database, frozen at the 2026-10-02 cutover and never opened. There is no rollback.
+phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them. The Python's own database,
+`data/optionality.db`, was frozen at the 2026-10-02 cutover and never opened again — and no longer
+sits in `data/` at all: it went into `archive/python-era-20261017.tar.gz` in `BACKUP_DIR` on
+2026-10-17, as `pyarch/optionality.db`. There is no rollback.
 
 **The TypeScript domain is canonical** (`backend/src/domain/`). A Python package, `optionality` in
 `python/`, is ported FROM it for notebook use (ADR 0014) and held to it by the golden cases in `testdata/golden/`,
@@ -79,8 +81,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
   for module (snake_case the only translation), `_js.py` holds the JavaScript rounding the port must
-  reproduce, `opend.py` needs the `opend` extra, and `api.py` loads Positions and Monitors from the
-  live service (`OPTIONALITY_API` for its URL; not golden-cased — it mirrors no domain module).
+  reproduce, `opend.py` needs the `opend` extra, `quotes.py` mirrors `backend/src/quotes.ts` so a
+  notebook batch survives an unknown contract too, and `api.py` loads Positions and Monitors from the
+  live service (`OPTIONALITY_API` for its URL). The last three are not golden-cased: they mirror no
+  domain module.
   `tests/test_cases.py` runs every golden case.
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking

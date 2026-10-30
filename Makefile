@@ -12,8 +12,8 @@ BACKUP_LABEL = com.optionality.backup
 BACKUP_PLIST = $(HOME)/Library/LaunchAgents/$(BACKUP_LABEL).plist
 NODE_BIN = $(shell command -v node)
 CADDY_BIN = $(shell command -v caddy)
-# the service's database. data/optionality.db beside it is the retired Python's, frozen at the
-# cutover and never opened again.
+# the service's database. The retired Python's, data/optionality.db, does not sit beside it any
+# more: it went into the backups' archive/ on 2026-10-17 (see CLAUDE.md).
 TS_DB = data/optionality-ts.db
 # where the nightly backups go: iCloud Drive, so they leave this machine (chosen 2026-10-17). The
 # default is the destination ON PURPOSE — a reinstall that forgot the argument must not quietly move

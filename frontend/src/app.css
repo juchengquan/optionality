@@ -226,22 +226,20 @@ button { cursor: pointer; }
 
 /* The snapshot stage: the page rendered again, off screen, for the camera.
    OFF SCREEN rather than `display: none` — a node with no layout paints as nothing. Fixed so it
-   cannot lengthen the real page or move its scroll position while a picture is taken.
-   The width is the whole point: 1000px regardless of the device, so every ticked column fits and
-   nothing is dropped by the fitting (ADR 0008). */
+   cannot lengthen the real page or move its scroll position while a picture is taken. The width
+   is the picture's own business, below. */
 .snapshot-stage { position: fixed; top: 0; left: -10000px; }
-/* An explicit background, or the PNG is transparent wherever the page's own ground shows
-   through — which in a chat is whatever colour that app happens to use. */
-/* A FLOOR, not a fixed width. 1000px is what makes every ticked column fit at any device width
-   — but measured against the owner's own book the 13-column combo table wants 1012px, and a
-   fixed width clipped it, which is the very thing this feature exists to prevent. So the picture
-   is 1000px unless the figures genuinely need more, and never less. */
-/* `width: max-content` is the ONE mechanism, and it does two jobs: the tables are never clipped
-   (their `.table-scroll` box has nothing left to scroll, so no `overflow` rule is needed here —
-   one was written and a mutation sweep reverted it with every test still green), and the picture
-   does not shrink to the device it was taken on.
-   `min-width` is the floor: 1000px even for a short watchlist, so two days' images are the same
-   size. Measured against the owner's own book the 13-column combo table wants 1012px, which is
-   why the floor is a floor and not a fixed width. */
+/* The picture itself. Three things are deliberate here.
+   An explicit `background`, or the PNG is transparent wherever the page's own ground shows
+   through — which in a chat is whatever colour that app happens to use.
+   `width: max-content` is the ONE width mechanism, and it does two jobs: the tables are never
+   clipped (their `.table-scroll` box has nothing left to scroll, so no `overflow` rule is needed
+   here — one was written and a mutation sweep reverted it with every test still green), and the
+   picture does not shrink to the device it was taken on, so every ticked column fits whatever
+   the fitting would have dropped on a phone (ADR 0008).
+   `min-width` is a FLOOR, not a fixed width: 1000px even for a short watchlist, so two days'
+   images are the same size — but no more than a floor, because measured against the owner's own
+   book the 13-column combo table wants 1012px, and a fixed width clipped it, which is the very
+   thing this feature exists to prevent. */
 .snapshot { min-width: 1000px; width: max-content;
             padding: 16px 16px 4px; background: var(--background); }
