@@ -170,8 +170,6 @@ export type StatusChecks = [
   Checked<Exactly<E["positionCreated"]["status"], 201 | 422>>,
   Checked<Exactly<E["positionPatched"]["status"], 200 | 422>>,
   Checked<Exactly<E["positionDeleted"]["status"], 204>>,
-  // the report page is served with c.body rather than c.html: `hc` types every other helper's
-  // status and body, and c.html alone comes back as ClientResponse<{}, StatusCode, string>
 
   // {detail} is IN the union wherever a route VALIDATES its input, so the dashboard cannot read
   // rows without saying what it does when the request was refused. That is the bug class that used
@@ -179,7 +177,10 @@ export type StatusChecks = [
   //
   // This pointed at /runs until #118 removed it, and the assertion went with the route while the
   // paragraph above stayed — so the file claimed a proof it no longer carried, which a code review
-  // caught.
+  // caught. It was not the only one: a second paragraph here explained why "the report page" used
+  // c.body rather than c.html, and that page was /runs/:id/report.html, which went in the same
+  // commit. Found in a sweep for vestigial prose, two reviews later. Nothing lints this — the
+  // sentence named no identifier, so check-make-targets' trick does not reach it.
   //
   // Re-pointed, and NARROWER than that paragraph says, which is worth stating rather than
   // papering over. The arm comes from the `valid()` middleware, so only VALIDATED routes declare

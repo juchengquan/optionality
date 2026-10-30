@@ -57,8 +57,11 @@ export function Holdings({ reloadKey, rows, error, load, act }: {
           (SnapshotView), so nothing outside reaches in here. */}
       {!open ? null : (
         <div data-testid="holdings">
-          {/* the error WINS: a failed fetch clears the rows, and printing "loading…" under the
-              reason it failed describes a fetch that is still coming when none is */}
+          {/* the error WINS over both of the others. Over "loading…", because printing it under
+              the reason the load failed describes a fetch that is still coming when none is; and
+              over the rows, which a failure deliberately LEAVES in place (App.loadHoldings) —
+              this precedence is what makes a cost to close nobody can vouch for unreachable, so
+              clearing them as well changed nothing a test could see. */}
           {error !== null ? <p className="meta">{error}</p>
             : rows === null ? <p className="meta">loading…</p>
               : rows.length === 0 ? <p className="meta">Nothing held.</p>
