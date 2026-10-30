@@ -22,7 +22,6 @@ import type { ProviderClient } from "./ports.ts";
 /** Every Provider this build can be pointed at. The switch below must have a case for each, and
  *  `/health` reports whichever one answered. */
 export const PROVIDERS = ["moomoo", "ibkr"] as const;
-export type ProviderName = (typeof PROVIDERS)[number];
 
 /** The Provider this deployment names, or a fatal error.
  *
