@@ -22,7 +22,7 @@ import { RowDetail, type DetailTarget } from "./RowDetail";
 import { clockTime } from "./format";
 import { Freshness } from "./Freshness";
 import { SnapshotView } from "./SnapshotView";
-import { deliver, snapshotName } from "./snapshot";
+import { captureBox, deliver, snapshotName } from "./snapshot";
 import { TopLine } from "./TopLine";
 import { Settings } from "./Settings";
 import { useTableFit } from "./useTableFit";
@@ -199,7 +199,11 @@ export function App() {
       // exactly the right size, which is the one failure shape that looks like success.
       const stage = shotRef.current?.querySelector<HTMLElement>(".snapshot");
       if (!stage) return;
-      const blob = await toBlob(stage, { pixelRatio: 2 });
+      // the SCROLL size, and a resolution that keeps the canvas inside what a device will paint.
+      // Both halves of a bug that took figures out of the picture three different ways — see
+      // captureBox, and `.snapshot .table-scroll` in app.css, which is what makes the scroll size
+      // mean the extent of the figures rather than the extent of the window onto them.
+      const blob = await toBlob(stage, captureBox(stage.scrollWidth, stage.scrollHeight));
       if (!blob) throw new Error("the image came back empty");
       const how = await deliver(blob, snapshotName());
       if (how === "downloaded") toast.add({ title: "saved as an image", type: "success" });

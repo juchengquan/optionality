@@ -6,6 +6,7 @@ import { App } from "../App";
 import { SnapshotView } from "../SnapshotView";
 import { COMBO_COLUMNS } from "../columns";
 import type { Entry, Health, Holding } from "../api";
+import { AREA_LIMIT, SIDE_LIMIT, captureBox } from "../snapshot";
 
 /** The image, measured end to end.
  *
@@ -39,15 +40,40 @@ const held = [{
   legs: [{ side: "short", option_type: "CALL", strike: 8150 }],
 }];
 
-function mockApi() {
+function mockApi(watchlist: unknown[] = rows) {
   window.fetch = ((url: string) =>
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        String(url).endsWith("/quotes") ? rows
+        String(url).endsWith("/quotes") ? watchlist
           : String(url).includes("/positions/values") ? held
             : String(url).endsWith("/monitors") ? [] : health),
     })) as unknown as typeof fetch;
+}
+
+/** The stage's measurements, taken WHILE it is up.
+ *
+ *  It is mounted only for the duration of the shot, so everything measured about the picture has to
+ *  be read between the press and the file arriving. A first version read it afterwards and got null.
+ */
+async function measureStage(): Promise<{ width: number; height: number; table: number; client: number }> {
+  await expect.poll(() => document.querySelector(".snapshot"), { timeout: 8000 }).toBeTruthy();
+  const snap = document.querySelector<HTMLElement>(".snapshot")!;
+  const table = snap.querySelector<HTMLElement>("table");
+  return {
+    width: snap.scrollWidth, height: snap.scrollHeight,
+    table: table?.offsetWidth ?? 0, client: snap.clientWidth,
+  };
+}
+
+/** Narrow the stage from OUTSIDE the app, which is the whole point: the press must survive a stage
+ *  that is not as wide as its widest table, however it got that way. A stylesheet is the only way
+ *  in — the app owns the node, as it does on the device. */
+function squeezeTheStage(px: number): HTMLStyleElement {
+  const style = document.createElement("style");
+  style.textContent = `.snapshot { width: ${px}px !important; min-width: 0 !important }`;
+  document.head.append(style);
+  return style;
 }
 
 /** Take the share sheet's place, so the File the device would have received is the File asserted
@@ -251,5 +277,67 @@ describe("saving the page as an image", () => {
         .toBeLessThanOrEqual(box.clientWidth + 1);
     }
     stage.remove();
+  });
+
+  it("keeps every column in the image even when the stage is narrower than the table", async () => {
+    // The test above asserts that the engine SIZES the stage to its widest table, which both
+    // engines do: `width: max-content` carries the table's width up through the scroll box. It
+    // passed throughout the bug it was meant to catch, because it checks the happy sizing rather
+    // than the consequence of losing it — and the owner's pictures came back with the right-hand
+    // figures gone, the cell text clipped and the bottom missing, all three at once.
+    //
+    // This states the consequence instead, THROUGH THE BUTTON: the stage is squeezed from outside
+    // the app, which is what any sizing difference amounts to, and the picture must still contain
+    // the whole table. Measured before the fix: 161px of a 13-column combo table outside the image
+    // in Chromium, 204px in WebKit. Going through the press is what makes this cover the capture
+    // itself — a first version called `captureBox` directly and a mutation sweep showed it proved
+    // nothing about the app, which could still ask for the offset size and lose the overflow.
+    await page.viewport(390, 900);
+    const shared = catchShare();
+    mockApi();
+    const style = squeezeTheStage(900);
+    render(<App />);
+    await screen.findByText("1130_8150");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+    const stage = await measureStage();
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+
+    expect(stage.table, "the squeeze did not actually overflow the stage")
+      .toBeGreaterThan(stage.client);
+
+    const png = await decode(shared.file()!);
+    const ratio = captureBox(stage.width, stage.height).pixelRatio;
+    expect(png.w / ratio, `the table is ${stage.table}px and the image ${png.w / ratio}px`)
+      .toBeGreaterThanOrEqual(stage.table);
+    style.remove();
+  });
+
+  it("drops resolution rather than the bottom when the watchlist is long", async () => {
+    // The other half of the same cause: a flat pixelRatio of 2 put the canvas over the area a
+    // device will paint, and an oversized canvas is not refused — it is answered half-painted, so
+    // the picture simply ends. Also through the press, for the same reason as above.
+    await page.viewport(390, 900);
+    const shared = catchShare();
+    const many = Array.from({ length: 140 }, (_, i) =>
+      ({ ...rows[0]!, id: `m${i}`, code: `1130_IC_${8000 + i}` }));
+    mockApi(many);
+    render(<App />);
+    await screen.findByText("1130_IC_8000");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+    const stage = await measureStage();
+    await expect.poll(() => shared.file(), { timeout: 15000 }).toBeTruthy();
+
+    const png = await decode(shared.file()!);
+    // the page has to be tall enough that a flat 2 would have crossed the cap, or this asserts
+    // nothing about the cap at all
+    expect(stage.width * 2 * stage.height * 2, "the page is not tall enough to test this")
+      .toBeGreaterThan(AREA_LIMIT);
+    expect(png.w * png.h, `${png.w}x${png.h}`).toBeLessThanOrEqual(AREA_LIMIT);
+    expect(Math.max(png.w, png.h)).toBeLessThanOrEqual(SIDE_LIMIT);
+    // and the full extent is still in it, at fewer pixels per CSS pixel
+    const ratio = captureBox(stage.width, stage.height).pixelRatio;
+    expect(png.h / ratio).toBeGreaterThanOrEqual(stage.height - 2);
   });
 });
