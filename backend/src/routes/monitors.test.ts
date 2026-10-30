@@ -503,6 +503,54 @@ describe("the links to positions", () => {
     expect(linkCount(created.id)).toBe(0);
     expect(created.scope).toBeNull();
   });
+
+  it("rolls the contract move back with the relink when linking fails", async () => {
+    // The two halves of a replacement that MOVES the contract — the new strike written to the row,
+    // and the links moved to follow it — are one decision, and `atomic` in the handler is the only
+    // thing that makes them one fact. Nothing asserted that until now: #172 fixed the links and
+    // recorded this gap in its own PR rather than closing it.
+    //
+    // What a half-applied move leaves behind is the exact bug #172 existed to kill, in reverse.
+    // The row would say 7000 while `monitor_positions` still pointed at the holding of 6500 — so
+    // the rule reports that holding's entry and a P&L for a contract it no longer watches, and
+    // this time with no edit in the log to explain it, because the request came back 500.
+    //
+    // The failure is injected in SQLite rather than by mocking the queries: a trigger that aborts
+    // the insert makes `linkToPositions` throw at the real boundary, so what is proved is the
+    // handler's transaction and not a stand-in for it.
+    h = harness();
+    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
+    seedPosition("b".repeat(32), "seventy", "2026-12-18", 7000);
+    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
+    const created = await body(await post(payload));
+    expect(created.positions).toEqual([{ id: "a".repeat(32), name: "sixty-five" }]);
+
+    h.db.exec(`create trigger no_links before insert on monitor_positions
+               begin select raise(abort, 'linking refused'); end`);
+    const moved = await put(created.id, { ...payload, strike: 7000 });
+    expect(moved.status).toBe(500);
+
+    // the row is untouched: the strike, the code built from it, and the threshold that rode along
+    const row = h.db.prepare("select code, strike, threshold, scope from monitors where id = ?")
+      .get(created.id) as { code: string; strike: number; threshold: number; scope: string };
+    expect(row.strike).toBe(6500);
+    expect(row.code).toBe(created.code);
+    expect(row.threshold).toBe(0.2);
+    // `scope` is nulled between the clear and the relink, so the rollback has to restore it too —
+    // "all" over a link that survived is the only reading that matches the database
+    expect(row.scope).toBe("all");
+
+    // and the link it already had is still there, rather than cleared by the half that ran first
+    expect(linkCount(created.id)).toBe(1);
+    expect(h.db.prepare("select position_id from monitor_positions where monitor_id = ?")
+      .get(created.id)).toMatchObject({ position_id: "a".repeat(32) });
+
+    // with the trigger gone the same edit goes through, which is what says the 500 was the
+    // trigger's doing and not a monitor left in a state that refuses every further edit
+    h.db.exec("drop trigger no_links");
+    const retried = await body(await put(created.id, { ...payload, strike: 7000 }));
+    expect(retried.positions).toEqual([{ id: "b".repeat(32), name: "seventy" }]);
+  });
 });
 
 describe("/quotes", () => {
