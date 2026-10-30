@@ -126,7 +126,6 @@ export const MonitorPatch = z.object({
 
 export const TotalEntryIn = z.object({ entry: z.number() });
 
-export type MonitorInput = z.output<typeof MonitorIn>;
 export type ComboMonitorInput = z.output<typeof ComboMonitorIn>;
 
 export function isCombo(payload: z.output<typeof MonitorCreateIn>): payload is ComboMonitorInput {
