@@ -21,6 +21,41 @@ export function snapshotName(now: Date = new Date()): string {
   return `optionality-${stamp}.png`;
 }
 
+/** The limits a canvas has to stay inside, and what the picture gives up to stay inside them.
+ *
+ *  Both are the SMALL end of what browsers allow, chosen deliberately: a canvas over the limit does
+ *  not raise — it comes back blank or half-painted, and a still image cannot tell you which, so the
+ *  cost of being generous here is a picture that silently ends early. iOS is the strict one and it
+ *  is also where these pictures are taken.
+ */
+export const AREA_LIMIT = 16_000_000;
+export const SIDE_LIMIT = 8_192;
+
+/** The box to capture, and the resolution it can be painted at.
+ *
+ *  Two bugs live here, and both produced the same symptom — a picture with figures missing.
+ *
+ *  The size is the stage's SCROLL size, not its offset size. `offsetWidth` is the box, and anything
+ *  overflowing it is simply absent from the image: measured in a real browser with the stage one
+ *  pixel narrower than its widest table, 161px of a 13-column combo table fell outside the picture
+ *  in Chromium and 204px in WebKit. `.snapshot .table-scroll` no longer clips (app.css), so the
+ *  scroll size is now the true extent of the figures rather than the extent of the window onto them.
+ *
+ *  The resolution is a CEILING of 2 that comes down as far as the limits demand. A flat 2 is what
+ *  took the bottom off: squeezed columns wrap, a wrapped page gets tall — 1535px to 4224px in the
+ *  same measurement — and 2000x8448 crosses the area cap, at which point the device answers with a
+ *  canvas that stops partway. Half the resolution of a complete picture beats all of it on a
+ *  picture that ends mid-table.
+ */
+export function captureBox(width: number, height: number): {
+  width: number; height: number; pixelRatio: number;
+} {
+  const pixelRatio = Math.min(
+    2, Math.sqrt(AREA_LIMIT / (width * height)), SIDE_LIMIT / width, SIDE_LIMIT / height,
+  );
+  return { width, height, pixelRatio };
+}
+
 /** What happened to the image: shared, saved, or neither because you closed the sheet. */
 export type Delivery = "shared" | "downloaded" | "cancelled";
 

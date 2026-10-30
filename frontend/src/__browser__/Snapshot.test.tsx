@@ -1,11 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
+import { toBlob } from "html-to-image";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../App";
 import { SnapshotView } from "../SnapshotView";
 import { COMBO_COLUMNS } from "../columns";
 import type { Entry, Health, Holding } from "../api";
+import { AREA_LIMIT, SIDE_LIMIT, captureBox } from "../snapshot";
 
 /** The image, measured end to end.
  *
@@ -251,5 +253,60 @@ describe("saving the page as an image", () => {
         .toBeLessThanOrEqual(box.clientWidth + 1);
     }
     stage.remove();
+  });
+
+  it("keeps every column in the image even when the stage is narrower than the table", async () => {
+    // The test above asserts that the engine SIZES the stage to its widest table, which both
+    // engines do: `width: max-content` carries the table's width up through the scroll box. It
+    // passed throughout the bug it was meant to catch, because it checks the happy sizing rather
+    // than the consequence of losing it — and the owner's pictures came back with the right-hand
+    // figures gone, the cell text clipped and the bottom missing, all three at once.
+    //
+    // This states the consequence instead. The stage is forced narrower than its widest table,
+    // which is what any sizing difference amounts to, and the picture must still contain the whole
+    // table. Measured before the fix: 161px of a 13-column combo table outside the image in
+    // Chromium, 204px in WebKit.
+    await page.viewport(390, 900);
+    const stage = document.createElement("div");
+    stage.className = "snapshot-stage";
+    document.body.append(stage);
+    render(
+      <SnapshotView
+        singles={[]} combos={rows as unknown as Entry[]} health={health as unknown as Health}
+        fetchedAt="21:30:05" polledAt="21:30:07" grouping="none" reading="distance" band={80}
+        hiddenSingle={new Set()} hiddenCombo={new Set()}
+        holdings={held as unknown as Holding[]} holdingsError={null}
+      />,
+      { container: stage },
+    );
+    await new Promise((r) => setTimeout(r, 160));
+
+    const snap = stage.querySelector<HTMLElement>(".snapshot")!;
+    snap.style.minWidth = "0";
+    snap.style.width = "900px";
+    await new Promise(requestAnimationFrame);
+    const table = snap.querySelector<HTMLElement>("table")!;
+    expect(table.offsetWidth, "the simulation did not actually squeeze the table")
+      .toBeGreaterThan(snap.clientWidth);
+
+    const box = captureBox(snap.scrollWidth, snap.scrollHeight);
+    const blob = await toBlob(snap, box);
+    const png = await decode(new File([blob!], "a.png", { type: "image/png" }));
+    expect(png.w / box.pixelRatio, `the table is ${table.offsetWidth}px and the image ${png.w / box.pixelRatio}px`)
+      .toBeGreaterThanOrEqual(table.offsetWidth);
+    stage.remove();
+  });
+
+  it("drops resolution rather than the bottom when the page is tall", async () => {
+    // the other half of the same bug: a flat pixelRatio of 2 put the canvas over the area a
+    // device will paint, and an oversized canvas comes back cut rather than refused
+    const tall = captureBox(1145, 4224);
+    expect(tall.pixelRatio).toBeLessThan(2);
+    const blob = await toBlob(document.body, tall);
+    const png = await decode(new File([blob!], "a.png", { type: "image/png" }));
+    expect(png.w * png.h, `${png.w}x${png.h}`).toBeLessThanOrEqual(AREA_LIMIT);
+    expect(Math.max(png.w, png.h)).toBeLessThanOrEqual(SIDE_LIMIT);
+    // the full extent is still asked for, at fewer pixels per CSS pixel
+    expect(png.w / tall.pixelRatio).toBeCloseTo(1145, 0);
   });
 });

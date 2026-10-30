@@ -237,9 +237,19 @@ button { cursor: pointer; }
    here — one was written and a mutation sweep reverted it with every test still green), and the
    picture does not shrink to the device it was taken on, so every ticked column fits whatever
    the fitting would have dropped on a phone (ADR 0008).
+   And `.table-scroll` must not clip inside it. Nothing in a picture can be scrolled, so the
+   scroll box here is a window onto figures with no way to move it — and it is the one thing that
+   can silently drop a column. The guarantee used to rest on `max-content` carrying the table's
+   width up THROUGH that box, which both engines happen to do; when anything makes the stage
+   narrower than its widest table, 161px of a 13-column combo table landed outside the image in
+   Chromium and 204px in WebKit, the squeezed columns wrapped, and the taller page then crossed
+   the canvas cap and lost its bottom as well. One cause, all three truncations. Removing the
+   clipping makes it impossible rather than unlikely, and lets the capture ask for the scroll size
+   and get the real extent (App.saveImage, snapshot.captureBox).
    `min-width` is a FLOOR, not a fixed width: 1000px even for a short watchlist, so two days'
    images are the same size — but no more than a floor, because measured against the owner's own
    book the 13-column combo table wants 1012px, and a fixed width clipped it, which is the very
    thing this feature exists to prevent. */
 .snapshot { min-width: 1000px; width: max-content;
             padding: 16px 16px 4px; background: var(--background); }
+.snapshot .table-scroll { overflow: visible; }

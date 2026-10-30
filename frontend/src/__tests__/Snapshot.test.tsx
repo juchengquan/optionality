@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SnapshotView } from "../SnapshotView";
-import { deliver, snapshotName } from "../snapshot";
+import { AREA_LIMIT, SIDE_LIMIT, captureBox, deliver, snapshotName } from "../snapshot";
 import { COMBO_COLUMNS, SINGLE_COLUMNS } from "../columns";
 import type { Entry, Health, Holding } from "../api";
 
@@ -159,6 +159,49 @@ describe("the holdings in the picture", () => {
 describe("the file name", () => {
   it("is dated and sortable", () => {
     expect(snapshotName(new Date("2026-10-21T13:30:00+08:00"))).toBe("optionality-20261021-1330.png");
+  });
+});
+
+describe("the box the image is captured in", () => {
+  // The bug these exist for: the picture was captured at the stage's offsetWidth and a flat
+  // pixelRatio of 2. Both are wrong at the edges — offsetWidth excludes anything that overflows,
+  // and 2 is not always reachable. Measured in a real browser: with the stage one pixel narrower
+  // than its widest table, 161px of a 13-column combo table fell outside the image in Chromium
+  // and 204px in WebKit, the squeezed columns pushed the page from 1535px to 4224px tall, and
+  // the resulting 2000x8448 canvas crossed the area cap iOS enforces — which is how one cause
+  // produced all three truncations at once: columns, cell text, and the bottom of the image.
+  it("captures the SCROLL size, so nothing that overflows is left out", () => {
+    expect(captureBox(1145, 900)).toMatchObject({ width: 1145, height: 900 });
+  });
+
+  it("keeps the doubled resolution whenever it fits", () => {
+    // the common case must not get worse: a normal book is nowhere near the caps
+    expect(captureBox(1328, 1536).pixelRatio).toBe(2);
+    expect(captureBox(1000, 2000).pixelRatio).toBe(2);
+  });
+
+  it("gives up resolution rather than the bottom of the image, over the area cap", () => {
+    // 1145 x 4224 at 2 is 19.3M pixels; iOS refuses and answers with a blank or partial canvas,
+    // which in a still image is indistinguishable from a page that ended there
+    const box = captureBox(1145, 4224);
+    expect(box.pixelRatio).toBeLessThan(2);
+    expect(box.width * box.height * box.pixelRatio ** 2).toBeLessThanOrEqual(AREA_LIMIT);
+    // and still the full extent, just painted with fewer pixels
+    expect(box).toMatchObject({ width: 1145, height: 4224 });
+  });
+
+  it("keeps each side under the limit too, not just the area", () => {
+    // a long thin page can sit under the area cap and still exceed the longest side a canvas
+    // will take, which fails the same silent way
+    const box = captureBox(900, 7000);
+    expect(box.height * box.pixelRatio).toBeLessThanOrEqual(SIDE_LIMIT);
+    expect(box.width * box.pixelRatio).toBeLessThanOrEqual(SIDE_LIMIT);
+  });
+
+  it("never scales a picture UP", () => {
+    // a short watchlist is not an excuse to ask for a 4x canvas: the ratio is a ceiling that
+    // only ever comes down
+    expect(captureBox(400, 300).pixelRatio).toBe(2);
   });
 });
 
