@@ -11,23 +11,25 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   buildSpxCode, expandSpxShort, normalizeStrikeDate, shortSpxCode,
 } from "../domain/contract.ts";
-import { comboFieldError, monitorLegCodes } from "../domain/monitor.ts";
+import { monitorLegCodes } from "../domain/monitor.ts";
 import { round4 } from "../domain/quote.ts";
 import {
-  findComboByName, findMonitorByCodeField, findMonitorsByIdentifier, insertMonitor, listMonitors,
+  type CreateFault, createComboMonitor, createSingleMonitor, isFault,
+} from "../create-monitor.ts";
+import {
+  findComboByName, findMonitorByCodeField, findMonitorsByIdentifier, listMonitors,
   updateMonitorFields,
 } from "../db/queries.ts";
 import { atomic } from "../db/open.ts";
 import type { MonitorRow } from "../db/rows.ts";
 import { clearMonitorLinks, deleteMonitorRow } from "../db/queries.ts";
-import { toSqlDatetime } from "../db/time.ts";
-import { fromSqliteBool, newId, toSqliteBool, toSqliteJson } from "../db/values.ts";
+import { fromSqliteBool } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import { toMonitor } from "../hydrate.ts";
 import { exitPolicy } from "../domain/exit.ts";
 import { holdingValues } from "../holdings.ts";
-import { linkToPositions, watchlistQuotes } from "../monitors.ts";
-import { verifyContracts, type QuoteFetcher, type QuoteRecord } from "../quotes.ts";
+import { watchlistQuotes } from "../monitors.ts";
+import { type QuoteFetcher, type QuoteRecord } from "../quotes.ts";
 import { displayTimeShort } from "../domain/timefmt.ts";
 import {
   BOT_COMMANDS, FIELD_SHORT, HELP_TEXT, fmtValue, hasFormat, pyNumber, ruleText, standingNote, table,
@@ -268,18 +270,12 @@ export class TelegramBot {
       return usage;
     }
     const { field, direction, compare } = modifiers(args.slice(4, 7), "option_delta");
-    const bad = thresholdError(compare, threshold);
-    if (bad) return bad;
 
-    const missing = await verifyContracts([code], this.deps.fetchQuotes);
-    if (missing) return missing;
-    if (findMonitorByCodeField(this.deps.db, code, field)) {
-      return `Already watching ${code} (${field}).`;
-    }
-    await this.insert({
-      code, strike_date: strikeDate, option_type: optionType, strike, field, threshold,
-      direction, compare, legs: null,
-    }, [code]);
+    const made = await createSingleMonitor(this.creating(), {
+      strike_date: strikeDate, option_type: optionType, strike, field, threshold,
+      direction, compare,
+    });
+    if (isFault(made)) return this.say(made);
     return ruleText(`Watching ${code}`, field, threshold, direction, compare);
   }
 
@@ -313,45 +309,29 @@ export class TelegramBot {
       return usage;
     }
     const { field, direction, compare } = modifiers(args.slice(i + 1, i + 4), "mid_price");
-    const bad = thresholdError(compare, threshold);
-    if (bad) return bad;
-    const notAdditive = comboFieldError(field);
-    if (notAdditive) return notAdditive;
 
-    const legCodes = [...new Set(legs.map((l) => buildSpxCode(strikeDate, l.option_type, l.strike)))].sort();
-    const missing = await verifyContracts(legCodes, this.deps.fetchQuotes);
-    if (missing) return missing;
-    if (findMonitorByCodeField(this.deps.db, name, field)) {
-      return `Already watching ${name} (${field}).`;
-    }
-    await this.insert({
-      code: name, strike_date: strikeDate, option_type: "CMB", strike: 0, field, threshold,
-      direction, compare, legs: toSqliteJson(legs),
-    }, legs.map((l) => buildSpxCode(strikeDate, l.option_type, l.strike)));
+    const made = await createComboMonitor(this.creating(), {
+      name, strike_date: strikeDate, legs, field, threshold, direction, compare,
+    });
+    if (isFault(made)) return this.say(made);
     return ruleText(
       `Watching combo ${name} (${legs.length} legs)`, field, threshold, direction, compare,
     );
   }
 
-  /** Write the monitor and attach it to whatever Position already holds its contracts.
-   *
-   *  The Python's bot does NOT link — only the API does — so a monitor created from the phone had no
-   *  entry and no P&L until something re-created it. The linkage is a lookup, not a guess (see
-   *  positionsHolding), so there is no reason for the two doors to behave differently. */
-  private async insert(fields: Partial<MonitorRow>, contracts: string[]): Promise<void> {
-    const { db } = this.deps;
-    await atomic(db, () => {
-      const row = insertMonitor(db, {
-        id: newId(),
-        code: "", strike_date: "", option_type: "", strike: 0, field: "", threshold: 0,
-        direction: "above", compare: "abs", legs: null, scope: null,
-        enabled: toSqliteBool(true), disabled_reason: null, triggered: toSqliteBool(false),
-        last_value: null, last_checked_at: null, last_alarm_at: null,
-        created_at: toSqlDatetime(this.now()),
-        ...fields,
-      } as MonitorRow);
-      linkToPositions(db, row.id, contracts);
-    });
+  /** What create-monitor.ts needs. The writing and the linking live there now, with the route's
+   *  copy of the same five steps — including the linking, which the Python's bot did NOT do, so a
+   *  monitor created from the phone had no entry and no P&L until something re-created it. */
+  private creating() {
+    return { db: this.deps.db, fetchQuotes: this.deps.fetchQuotes, now: () => this.now() };
+  }
+
+  /** A refusal, in the bot's own words. The route answers the same faults with statuses. */
+  private say(fault: CreateFault): string {
+    if (fault.kind === "duplicate") return `Already watching ${fault.code} (${fault.field}).`;
+    // the bot's own wording, which is longer than the API's on purpose (format.thresholdError)
+    if (fault.kind === "threshold") return thresholdError(fault.compare, fault.threshold)!;
+    return fault.message;
   }
 
   // --- reading one combo --------------------------------------------------------------------

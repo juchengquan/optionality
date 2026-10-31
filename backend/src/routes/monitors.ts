@@ -8,23 +8,24 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { buildSpxCode } from "../domain/contract.ts";
-import { comboFieldError } from "../domain/monitor.ts";
 import type { Deps } from "../deps.ts";
 import {
-  clearMonitorLinks, deleteMonitorRow, findMonitor, findMonitorByCodeField, insertMonitor,
+  clearMonitorLinks, deleteMonitorRow, findMonitor, findMonitorByCodeField,
   listMonitors, positionsForMonitors, updateMonitorFields,
 } from "../db/queries.ts";
 import { atomic } from "../db/open.ts";
+import {
+  type CreateFault, createComboMonitor, createSingleMonitor, isFault,
+} from "../create-monitor.ts";
 import type { MonitorRow } from "../db/rows.ts";
-import { fromSqliteBool, newId, toSqliteBool, toSqliteJson } from "../db/values.ts";
-import { toSqlDatetime } from "../db/time.ts";
+import { fromSqliteBool, toSqliteBool } from "../db/values.ts";
 import { exitPolicy } from "../domain/exit.ts";
 import { httpError, notFound } from "../errors.ts";
 import { applyTotalEntry, linkToPositions, watchlistQuotes } from "../monitors.ts";
 import {
-  ComboMonitorIn, DEFAULT_COMBO_FIELD, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_ENABLED,
-  DEFAULT_SINGLE_FIELD, MonitorCreateIn, MonitorIn, MonitorPatch, TotalEntryIn, isCombo,
-  patchThresholdError, thresholdError,
+  ComboMonitorIn, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_ENABLED, DEFAULT_SINGLE_FIELD,
+  MonitorCreateIn, MonitorIn, MonitorPatch, TotalEntryIn, isCombo, patchThresholdError,
+  thresholdError,
 } from "../schemas/monitor.ts";
 import { verifyContracts } from "../quotes.ts";
 import { displayStored } from "../db/time.ts";
@@ -104,27 +105,8 @@ export function monitorRoutes(deps: Deps) {
     if (error) throw httpError(422, error);
   };
 
-  const blank = (over: Partial<MonitorRow>): MonitorRow => ({
-    id: newId(),
-    code: "",
-    strike_date: "",
-    option_type: "",
-    strike: 0,
-    field: "",
-    threshold: 0,
-    direction: DEFAULT_DIRECTION,
-    compare: DEFAULT_COMPARE,
-    legs: null,
-    scope: null,
-    enabled: 1,
-    disabled_reason: null,
-    triggered: 0,
-    last_value: null,
-    last_checked_at: null,
-    last_alarm_at: null,
-    created_at: toSqlDatetime(deps.now()),
-    ...over,
-  });
+  /** What create-monitor.ts needs, which is the database, one Provider and a clock. */
+  const creating = { db, fetchQuotes: deps.provider.fetchQuotes, now: deps.now };
 
   return new Hono()
     .get("/", list, (c) => {
@@ -138,70 +120,43 @@ export function monitorRoutes(deps: Deps) {
       // the payload shape decides: single-leg (option_type + strike) or combo (name + legs)
       return isCombo(payload) ? createCombo(payload) : createSingle(payload);
 
-      async function createSingle(p: z.output<typeof MonitorIn>) {
-        const why = thresholdError(p.compare ?? DEFAULT_COMPARE, p.threshold);
-        if (why) throw httpError(422, why);
-        const code = buildSpxCode(p.strike_date, p.option_type, p.strike);
-        const field = p.field ?? DEFAULT_SINGLE_FIELD;
-        if (findMonitorByCodeField(db, code, field)) {
-          throw httpError(409, `monitor for (${code}, ${field}) already exists`);
+      /** Both faults and the row come back as values (create-monitor.ts); this is where they
+       *  become statuses. 422 for anything the rule itself is wrong about, 409 for a rule that
+       *  is already there — the wording is the API's, as the bot's is the bot's. */
+      async function reply(result: MonitorRow | CreateFault) {
+        if (!isFault(result)) return create.reply(c, 201, one(result));
+        if (result.kind === "duplicate") {
+          throw httpError(409, `monitor for (${result.code}, ${result.field}) already exists`);
         }
-        await requireExisting([code]);
-        const enabled = p.enabled ?? DEFAULT_ENABLED;
-        const row = blank({
-          code,
+        throw httpError(422, result.kind === "threshold"
+          ? thresholdError(result.compare, result.threshold)!
+          : result.message);
+      }
+
+      async function createSingle(p: z.output<typeof MonitorIn>) {
+        return reply(await createSingleMonitor(creating, {
           strike_date: p.strike_date,
           option_type: p.option_type,
           strike: p.strike,
-          field,
+          field: p.field,
           threshold: p.threshold,
-          direction: p.direction ?? DEFAULT_DIRECTION,
-          compare: p.compare ?? DEFAULT_COMPARE,
-          enabled: toSqliteBool(enabled),
-          disabled_reason: enabled ? null : "manual",
-        });
-        const saved = await atomic(db, () => {
-          const inserted = insertMonitor(db, row);
-          linkToPositions(db, inserted.id, [code]);
-          return findMonitor(db, inserted.id)!;
-        });
-        return create.reply(c, 201, one(saved));
+          direction: p.direction,
+          compare: p.compare,
+          enabled: p.enabled,
+        }));
       }
 
       async function createCombo(p: z.output<typeof ComboMonitorIn>) {
-        const field = p.field ?? DEFAULT_COMBO_FIELD;
-        // checked here rather than in the schema: inside a union, a refinement's message is buried
-        // under the other branch's "field required" errors
-        const notAdditive = comboFieldError(field);
-        if (notAdditive) throw httpError(422, notAdditive);
-        const why = thresholdError(p.compare ?? DEFAULT_COMPARE, p.threshold);
-        if (why) throw httpError(422, why);
-        if (findMonitorByCodeField(db, p.name, field)) {
-          throw httpError(409, `monitor for (${p.name}, ${field}) already exists`);
-        }
-        const legCodes = p.legs.map((leg) => buildSpxCode(p.strike_date, leg.option_type, leg.strike));
-        await requireExisting([...new Set(legCodes)].sort());
-        const enabled = p.enabled ?? DEFAULT_ENABLED;
-        const row = blank({
-          code: p.name,
+        return reply(await createComboMonitor(creating, {
+          name: p.name,
           strike_date: p.strike_date,
-          option_type: "CMB",
-          strike: 0,
-          field,
+          legs: p.legs,
+          field: p.field,
           threshold: p.threshold,
-          direction: p.direction ?? DEFAULT_DIRECTION,
-          compare: p.compare ?? DEFAULT_COMPARE,
-          legs: toSqliteJson(p.legs),
-          enabled: toSqliteBool(enabled),
-          disabled_reason: enabled ? null : "manual",
-        });
-        const saved = await atomic(db, () => {
-          const inserted = insertMonitor(db, row);
-          // a combo's contracts are its LEGS; its own code is a name the trader chose
-          linkToPositions(db, inserted.id, legCodes);
-          return findMonitor(db, inserted.id)!;
-        });
-        return create.reply(c, 201, one(saved));
+          direction: p.direction,
+          compare: p.compare,
+          enabled: p.enabled,
+        }));
       }
     })
 

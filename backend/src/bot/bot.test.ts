@@ -115,6 +115,43 @@ describe("/watch", () => {
     expect(monitors()[0]!.threshold).toBe(0.6);
   });
 
+  it("does not ask the Provider about a rule it already has", async () => {
+    // The two doors onto creation ran the same five steps in a different order: the route checked
+    // uniqueness and then probed, the bot probed and then checked. So /watch on something already
+    // watched spent a live Provider call to be told what the database already knew — and every
+    // call to the Provider in this service is meant to be a bounded, deliberate one (CLAUDE.md's
+    // invariants). Both doors go through create-monitor.ts now, which puts the free check first.
+    const asked: string[][] = [];
+    const counting: FakeProvider = (codes) => {
+      asked.push(codes);
+      return Promise.resolve(codes.map((code) => ({ code })));
+    };
+    const b = bot(counting);
+    await b.handleUpdate(update(`/watch ${FUTURE} CALL 6500 0.6`));
+    expect(asked, "creating one must still probe the contract").toHaveLength(1);
+
+    await b.handleUpdate(update(`/watch ${FUTURE} CALL 6500 0.7`));
+
+    expect(last().toLowerCase()).toContain("already");
+    expect(asked, "the duplicate was sent to the Provider anyway").toHaveLength(1);
+  });
+
+  it("refuses an unusable threshold before asking the Provider anything", async () => {
+    // the same rule one step earlier, and this one already held: a threshold the engine cannot
+    // evaluate is a local fact, so the call is not worth making. Pinned here because the extraction
+    // below fixes ONE order for both doors, and this is half of what that order has to preserve.
+    const asked: string[][] = [];
+    const counting: FakeProvider = (codes) => {
+      asked.push(codes);
+      return Promise.resolve(codes.map((code) => ({ code })));
+    };
+    await bot(counting).handleUpdate(update(`/watchcombo ic ${FUTURE} -C8100 +C8150 0 mid_price`));
+
+    expect(last().toLowerCase()).toContain("threshold");
+    expect(asked, "a local refusal still cost a Provider call").toHaveLength(0);
+    expect(monitors()).toHaveLength(0);
+  });
+
   it("normalises a compact date", async () => {
     await bot().handleUpdate(update(`/watch ${FUTURE.replaceAll("-", "")} CALL 6500 0.6`));
     expect(monitors()[0]!.strike_date).toBe(FUTURE);
@@ -148,6 +185,16 @@ describe("/watch", () => {
     const poison: FakeProvider = (codes) => Promise.resolve({ records: [], unknown: [...codes] });
     await bot(poison).handleUpdate(update(`/watch ${FUTURE} CALL 99999 0.5`));
     expect(last()).toContain("does not exist");
+    expect(monitors()).toEqual([]);
+  });
+
+  it("names the field before the threshold when both are wrong", async () => {
+    // the same precedence as the route's (monitors.test.ts), which is the point: this door used to
+    // answer the threshold first, so the same mistake got two different replies.
+    await bot().handleUpdate(update(
+      `/watchcombo iv ${FUTURE} -C8100 +C8150 -1 option_implied_volatility`,
+    ));
+    expect(last()).toContain("not additive");
     expect(monitors()).toEqual([]);
   });
 
