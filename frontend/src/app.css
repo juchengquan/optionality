@@ -253,3 +253,15 @@ button { cursor: pointer; }
 .snapshot { min-width: 1000px; width: max-content;
             padding: 16px 16px 4px; background: var(--background); }
 .snapshot .table-scroll { overflow: visible; }
+/* And with that box no longer scrolling, the frozen first column must stop being frozen.
+   `position: sticky` resolves against the nearest SCROLLING ancestor. That was `.table-scroll`,
+   inside which a picture has nothing to scroll, so sticky did nothing. Removing the clipping
+   promoted the PAGE to that role — and the stage sits at `left: -10000px`, so every table is far
+   to the left of the scrollport and each first cell was pushed as far right as its row allowed:
+   measured at x=873 in a 1016px row, the names painted over the last four columns. That is the
+   overlap the owner reported, and it is the same failure `tr.group td` above already undoes
+   sticky for. Nothing in a picture can be swiped, so static simply puts the column back where
+   the table put it.
+   The box-shadow above stays: it stood in for the collapsed border a swipe carries away, and with
+   the column static it lands on that border's own line, in that border's own colour. */
+.snapshot th:first-child, .snapshot td:first-child { position: static; }

@@ -34,6 +34,24 @@ const rows = [
   combo({ id: "c2", code: "1120_IC_7100_8200", triggered: true, fill: 100 }),
 ];
 
+/** A single-leg row, which the combos above cannot stand in for: the picture draws the two tables
+ *  one under the other, and the overlap below was reported as the combo table landing on the
+ *  single-leg one. */
+const single = (over: Record<string, unknown>) => ({
+  ...combo({}), option_type: "CALL", legs: null, combo_value: null, combo_greeks: null,
+  quote: {
+    name: "SPX 1130 C8150", mid_price: 2.2, bid_price: 2.1, ask_price: 2.3,
+    option_delta: -0.0123, option_gamma: 0.0001, option_theta: -0.4, option_vega: -0.18,
+    option_implied_volatility: 12.3, update_time: "2026-10-30 15:59:00",
+  },
+  ...over,
+});
+const bothKinds = [
+  single({ id: "s1", code: "1130_c8150" }),
+  single({ id: "s2", code: "1130_c8200", triggered: true, fill: 100 }),
+  ...rows,
+];
+
 const held = [{
   id: "p1", name: "held-condor", entry: 2.72, cost_to_close: 1.02, pnl: 1.7, dte: 41,
   opened_at: "2026-10-15", schedule: null,
@@ -339,5 +357,44 @@ describe("saving the page as an image", () => {
     // and the full extent is still in it, at fewer pixels per CSS pixel
     const ratio = captureBox(stage.width, stage.height).pixelRatio;
     expect(png.h / ratio).toBeGreaterThanOrEqual(stage.height - 2);
+  });
+
+  it("leaves the frozen column in its column rather than on top of the figures", async () => {
+    // What the owner saw after #179, worded as the combo section overlapping the single-leg one.
+    //
+    // The cause is the fix above and nothing else. `th:first-child` is `position: sticky; left: 0`
+    // so the name stays put while a row is swiped (app.css), and sticky resolves against the
+    // nearest SCROLLING ancestor — which was `.table-scroll` until that box stopped clipping. The
+    // page then became the scrollport, the stage sits at `left: -10000px` so the whole table is
+    // far to the left of it, and every first cell was shoved as far right as its row allowed:
+    // measured at x=873 in a 1016px row, painted over the last four columns.
+    //
+    // Measured on the stage mid-shot, through the press, because the offset the bug needs only
+    // exists there. Nothing in a picture can be swiped, so the claim is simply that the column is
+    // where the table put it.
+    await page.viewport(390, 900);
+    const shared = catchShare();
+    mockApi(bothKinds);
+    render(<App />);
+    await screen.findByText("1130_8150");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+    await expect.poll(() => document.querySelector(".snapshot"), { timeout: 8000 }).toBeTruthy();
+    const snap = document.querySelector<HTMLElement>(".snapshot")!;
+    const tables = [...snap.querySelectorAll("table")];
+    expect(tables.length, "both tables are in the picture").toBe(2);
+    for (const table of tables) {
+      for (const row of table.querySelectorAll("tr")) {
+        const cells = [...row.querySelectorAll<HTMLElement>("th, td")];
+        if (cells.length < 2) continue;  // the group heading spans the row
+        const first = cells[0]!.getBoundingClientRect();
+        const second = cells[1]!.getBoundingClientRect();
+        expect(first.left, `the frozen cell is ${Math.round(first.left - row.getBoundingClientRect().left)}px into its row`)
+          .toBeCloseTo(row.getBoundingClientRect().left, 0);
+        expect(first.right, "the frozen cell is painted over the next column")
+          .toBeLessThanOrEqual(second.left + 1);
+      }
+    }
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
   });
 });
