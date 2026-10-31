@@ -1,6 +1,6 @@
 .PHONY: check lint check-boundaries check-make-targets cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
-	serve build-ui check-ui resolve-ui deploy \
+	serve build-ui check-ui check-served-root resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs
 
@@ -26,11 +26,16 @@ UI_BASE ?= /opt/
 
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
-lint: check-boundaries check-make-targets
+lint: check-boundaries check-make-targets check-served-root
 	uv run --directory python ruff check .
 
 check-boundaries:
 	node tools/check-boundaries.mjs
+
+# frontend/dist is the live document root, not just a committed artefact: a target that deletes it
+# takes the dashboard down. See tools/check-served-root.mjs.
+check-served-root:
+	node tools/check-served-root.mjs
 
 # Every `make <target>` named in the code or in CLAUDE.md is one this file has. Two differentials
 # were deleted with the Python they compared against and nine comments went on naming them as the
@@ -96,25 +101,43 @@ build-ui:
 
 # A committed bundle can drift from its source; this is what catches it.
 #
-# The rm is not tidiness. Building over an existing dist hid a real bug for weeks: Tailwind
-# skips .gitignore'd paths, frontend/dist is deliberately not ignored, so it was scanning its
-# own previous output and emitting 3KB of utilities that existed only because a former build
-# mentioned them. This check never saw it, because it too built with a dist in place and so
-# compared a self-consistent result against itself. Building from nothing is what makes this
-# a reproducibility check rather than a self-agreement check.
+# It builds somewhere else and compares. frontend/dist is the directory CADDY SERVES — the UI
+# agent's OPTIONALITY_UI_ROOT points straight at it and file_server reads from disk per request —
+# so this used to begin `rm -rf frontend/dist` and took the live dashboard down for the length of
+# every check, and left it down if the build failed. CLAUDE.md says to run `make check` before
+# every commit, so that was several times a day.
+#
+# The rm was there for a real bug: Tailwind skips .gitignore'd paths, frontend/dist is deliberately
+# not ignored, so a build with a dist in place was scanning its own previous output and emitting
+# 3KB of utilities that existed only because a former build mentioned them. That cause is gone —
+# app.css pins `@import "tailwindcss" source(".")`, which scopes the scan to frontend/src — and the
+# rm with it: measured 2026-10-31, a build with a dist present and one without are byte-identical,
+# same content hashes in both filenames.
+#
+# Comparing the fresh build against the tree ON DISK, not `git diff`, which is a different claim.
+# A rebuild renames the hashed assets, so the new files are untracked and the old ones deleted;
+# git diff reported that as "stale" until they were staged, which made `make build-ui && make
+# check` fail for a reason that had nothing to do with the bundle being right.
 check-ui:
-	rm -rf frontend/dist
-	npm install --silent && cd frontend && VITE_BASE=$(UI_BASE) npm run build >/dev/null
-	@git diff --quiet -- frontend/dist \
-		|| { echo "frontend bundle is stale — run 'make build-ui' and commit the result"; exit 1; }
-	@echo "frontend bundle matches its source"
+	@npm install --silent
+	@out=$$(mktemp -d); \
+	if ! (cd frontend && VITE_BASE=$(UI_BASE) npx vite build --outDir $$out --emptyOutDir >/dev/null 2>&1); then \
+		rm -rf $$out; echo "the frontend build failed"; exit 1; \
+	fi; \
+	if diff -r $$out frontend/dist >/dev/null; then \
+		rm -rf $$out; echo "frontend bundle matches its source"; \
+	else \
+		rm -rf $$out; \
+		echo "frontend bundle is stale — run 'make build-ui' and commit the result"; exit 1; \
+	fi
 
 # Resolve a frontend/dist conflict, which is the only kind this repo produces regularly.
 #
 # Two branches that both touch the frontend commit different bundles, so dist collides as a
 # rename/rename on the hashed asset plus index.html. Neither side is right and no blend of them
-# is either: a build has exactly one correct answer for the merged source. So this throws both
-# away and rebuilds. Source conflicts must be settled first — the bundle is built FROM them —
+# is either: a build has exactly one correct answer for the merged source. So this rebuilds from
+# the merged source and stages whatever comes out. (It used to `rm -rf frontend/dist` first; that
+# is both unnecessary — vite empties its own outDir — and the live document root, see check-ui.) Source conflicts must be settled first — the bundle is built FROM them —
 # and it refuses to run while any remain rather than baking a conflict marker into the output.
 resolve-ui:
 	@unresolved=$$(git diff --name-only --diff-filter=U | grep -v '^frontend/dist/' || true); \
@@ -123,7 +146,6 @@ resolve-ui:
 		echo "$$unresolved" | sed 's/^/  /'; \
 		exit 1; \
 	fi
-	rm -rf frontend/dist
 	$(MAKE) build-ui
 	git add -A frontend/dist
 	@echo "frontend/dist rebuilt from the merged source and staged; continue the merge or rebase."

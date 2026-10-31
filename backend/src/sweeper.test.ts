@@ -1214,3 +1214,69 @@ describe("a figure that never arrives", () => {
     expect(sent).toEqual([]);
   });
 });
+
+/** A sweep that does not finish the work it was started for.
+ *
+ *  Everything below asserts the same thing from three directions: the engine's account of itself
+ *  must not say "active" for a sweep that evaluated nothing, or evaluated only part of the
+ *  watchlist. Before this, `recordSuccess` ran the moment the batch came back and everything after
+ *  it — quarantine, the alarm loop, the samples, the manage-by notices — was outside any failure
+ *  path. A throw there reached `scheduler`, which logs and returns, so `/health` went on reporting
+ *  `last_sweep_ok: true` and `alarms: "active"` with no alarm being evaluated at all. `staleFor()`
+ *  could not see it either: `sweepAt` is stamped at the START of a sweep, so one that begins every
+ *  15 seconds and throws every time looks perfectly fresh.
+ */
+describe("a sweep that cannot finish", () => {
+  // the failure is injected with a TRIGGER rather than a mock: it makes a real write fail inside
+  // the real transaction, which is the shape the live fault has (a corrupt row, a disk error),
+  // and it cannot drift from the code the way a stubbed method can.
+  const refuseUpdates = (where = "") =>
+    db.exec(`create trigger no_update before update on monitors ${where}
+             begin select raise(abort, 'refused'); end`);
+
+  it("is not a success when the work after the batch throws", async () => {
+    monitor();
+    const s = sweeper(quoting("option_delta", { [CODE]: 0.7 }));
+    refuseUpdates();
+
+    await s.sweep();   // resolves: the loop must never be killed by one bad sweep
+
+    expect(s.lastSweepOk(), "a sweep that evaluated nothing reported success").toBe(false);
+    expect(s.consecutiveFailures()).toBe(1);
+    expect(sent.filter((t) => t.includes("crossed"))).toHaveLength(0);
+  });
+
+  it("is not a success when the engine cannot even read a rule", async () => {
+    // the worst case, and the one that needs no trigger: a combo's leg codes are BUILT from its
+    // strike date (monitorLegCodes -> buildSpxCode -> parseStrikeDate, which throws), and that
+    // happens in the code assembly BEFORE the batch is asked for. The old shape recorded neither
+    // success nor failure there and left the previous sweep's verdict standing while nothing was
+    // swept at all. A single-leg rule carries its code already and cannot reach this.
+    combo({ strike_date: "the first of never" });
+    const s = sweeper(quoting("option_delta", { [CODE]: 0.7 }));
+
+    await s.sweep();
+
+    expect(s.lastSweepOk(), "no sweep happened and the engine said it was fine").toBe(false);
+    expect(s.consecutiveFailures()).toBe(1);
+  });
+
+  it("evaluates the rest of the watchlist when one row refuses", async () => {
+    // containment, and the reason the isolation is per row: a single poison row used to abort the
+    // whole transaction, so one unwritable monitor silenced every alarm beside it.
+    const bad = monitor();
+    const good = monitor({ code: buildSpxCode(future(), "CALL", 6600), strike: 6600 });
+    const s = sweeper(quoting("option_delta", {
+      [CODE]: 0.7, [buildSpxCode(future(), "CALL", 6600)]: 0.8,
+    }));
+    refuseUpdates(`when new.id = '${bad}'`);
+
+    await s.sweep();
+
+    expect(row(good)!.triggered, "the good rule was taken down with the bad one").toBe(1);
+    expect(sent.filter((t) => t.includes("crossed"))).toHaveLength(1);
+    // and still not a clean sweep: one rule was not evaluated, which the engine must own up to
+    expect(s.lastSweepOk()).toBe(false);
+    expect(row(bad)!.triggered).toBe(0);
+  });
+});
