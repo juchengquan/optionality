@@ -19,7 +19,14 @@ import * as vol from "../domain/vol.ts";
 import * as timefmt from "../domain/timefmt.ts";
 import { INPUTS } from "./inputs.ts";
 
-const MODULES: Record<string, Record<string, unknown>> = {
+/** Every module of the domain, by name. Exported because `cases.test.ts` holds it to the
+ *  DIRECTORY: this list and the one in that test were written out separately, so a new
+ *  `domain/greeks.ts` would have been absent from both and the test that covers "every function
+ *  the domain exports" would have passed over it in silence — no golden file required, no Python
+ *  port required, and ADR 0014's one guard against the two implementations drifting apart quietly
+ *  off. Static imports rather than a dynamic walk, so the compiler still checks every name; the
+ *  test is what makes the list complete. */
+export const MODULES: Record<string, Record<string, unknown>> = {
   contract, exit, expiry, monitor, position, quote, vol, timefmt,
 };
 

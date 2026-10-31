@@ -5,12 +5,13 @@
  *  how. Alembic was the alternative and it leaves in three weeks with the Python (phase 10), so
  *  this is the mechanism that outlives it. See ADR 0011.
  */
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { COLUMNS } from "./rows.ts";
 import { createDatabase, openDatabase } from "./open.ts";
 import { APPLIED_TABLE, migrate, pendingMigrations, stampAll } from "./migrate.ts";
 
@@ -254,5 +255,80 @@ describe("0005: the run pipeline's tables go with it (phase 10, ADR 0014)", () =
   it("is what schema.sql describes, so a fresh database has none of them either", () => {
     const db = createDatabase(join(dir, "fresh.db"));
     expect(tables(db).filter((t) => GONE.includes(t))).toEqual([]);
+  });
+});
+
+/** The two roads into a database must arrive at the same place.
+ *
+ *  A test database is BUILT from schema.sql and stamped; the live file is MIGRATED. Everything in
+ *  this suite above checks the second road against a hand-written fragment of the first, covering
+ *  `positions` and `position_samples` — which is what the migrations of the day touched. Nothing
+ *  compared the roads as wholes, and CLAUDE.md claims the compiler and rows.test.ts make a
+ *  half-done schema change fail rather than drift. They tie three legs of four: rows.test.ts
+ *  builds its subject with `createDatabase`, so it reads schema.sql, and the migrations directory
+ *  was compared to nothing at all.
+ *
+ *  Two changes passed every check and broke the live database:
+ *    a column added to schema.sql, COLUMNS, NULLABLE and the row interface with NO migration file
+ *      — green, because every test database is built from schema.sql; `no such column` after the
+ *      next deploy;
+ *    a migration writing NOT NULL DEFAULT '' for a column schema.sql leaves nullable — green, and
+ *      the live table then rejects the nulls NULLABLE and the row interface both promise.
+ *
+ *  This is what notices, and it needs a baseline that predates the first migration: schema-base.sql
+ *  (a transcription, see its header).
+ */
+describe("the two roads into a database", () => {
+  /** The database as it stood before migration 0001, with no schema_migrations table — so every
+   *  migration is pending, exactly as it was on the live file. */
+  const baseDatabase = (path: string) => {
+    const db = openDatabase(path);
+    db.exec(readFileSync(new URL("./schema-base.sql", import.meta.url), "utf8"));
+    return db;
+  };
+
+  /** Everything the code can depend on about a column: its name, its position, whether it may be
+   *  null, its default and whether it is the key. `columns()` above compares names only, which the
+   *  NOT NULL variant above walks straight past. */
+  const shape = (db: DatabaseSync, table: string) =>
+    db.prepare(`select name, type, "notnull", dflt_value, pk from pragma_table_info(?)`).all(table);
+
+  it("ends at the same shape, for every table the code reads", () => {
+    const migrated = baseDatabase(join(dir, "base.db"));
+    migrate(migrated);
+    const fresh = createDatabase(join(dir, "fresh.db"));
+
+    // COLUMNS is the list of tables the code reads, and its own comment says a table left out of
+    // it is a table nothing checks — so iterating it is what makes this cover the schema rather
+    // than a chosen corner of it.
+    for (const table of Object.keys(COLUMNS)) {
+      expect(shape(migrated, table), `${table} differs between the two roads`)
+        .toEqual(shape(fresh, table));
+    }
+    migrated.close();
+    fresh.close();
+  });
+
+  it("leaves no table behind on either road", () => {
+    // the other direction: a table created by schema.sql and by no migration is missing from the
+    // live file, and one the migrations fail to drop outlives the code that read it. 0005 drops
+    // five of those, and the baseline still has them because the live database did.
+    const migrated = baseDatabase(join(dir, "base2.db"));
+    migrate(migrated);
+    const fresh = createDatabase(join(dir, "fresh2.db"));
+
+    expect(tables(migrated).sort()).toEqual(tables(fresh).sort());
+    migrated.close();
+    fresh.close();
+  });
+
+  it("knows the baseline is older than every migration", () => {
+    // a baseline quietly brought up to date would make both tests above pass by agreeing with
+    // nothing. It is only a baseline while every migration still has work to do on it.
+    const db = baseDatabase(join(dir, "base3.db"));
+    expect(pendingMigrations(db)).toEqual(
+      readdirSync(new URL("./migrations/", import.meta.url)).filter((n) => n.endsWith(".sql")).sort(),
+    );
+    db.close();
   });
 });

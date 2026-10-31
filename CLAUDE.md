@@ -62,7 +62,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - **Schema change:** add a `.sql` file to
   `backend/src/db/migrations/` AND put the same shape in `backend/src/db/schema.sql`, then update
   `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `db/rows.ts` — the compiler and
-  `rows.test.ts` tie those three together, so a half-done change fails rather than drifts.
+  `rows.test.ts` tie those three together, so a half-done change fails rather than drifts. They tie
+  three legs of four: `rows.test.ts` builds its subject from `schema.sql`, so the MIGRATION is held
+  by `migrate.test.ts`'s "the two roads into a database", which migrates `db/schema-base.sql` (the
+  shape before 0001 — never edit it) and compares the result to a fresh database, column for column
+  and null for null. Without it a column added everywhere but the migrations passed every check and
+  reached the live file as `no such column`.
   `main.ts` applies what is pending at boot and a failure there is fatal on purpose. A database
   built from `schema.sql` is STAMPED, not migrated (ADR 0011). `make deploy` backs the file up
   before it restarts, so the backup predates the migration. **Never edit a migration that has
