@@ -58,22 +58,32 @@ beforeEach(() => {
 
 describe("saving the page as an image", () => {
   it("fetches the holdings BEFORE the stage is laid out", async () => {
-    // the one figure in the picture that is not already on screen. Awaited here is what makes
-    // the whole image a single instant; fetched after the frames, the stage is laid out without
-    // the holdings and they land in the picture at whatever height they were given.
+    // the one figure in the picture that is not already on screen. The two frames ARE the layout,
+    // so the claim is holdings-before-frames and not merely holdings-before-capture: fetched
+    // after them, the stage is laid out without the holdings and they land in the picture at
+    // whatever height they were given. A mutation that moved the fetch past the frames passed
+    // this test when it only asserted the capture came last.
     const order: string[] = [];
     const loadHoldings = vi.fn(async () => { order.push("holdings"); });
-    const { result } = renderHook(() => useSnapshot(loadHoldings));
-    let inner: HTMLElement | null = null;
+    const frames = vi.spyOn(globalThis, "requestAnimationFrame")
+      .mockImplementation((cb: FrameRequestCallback) => {
+        order.push("frame");
+        setTimeout(() => cb(0), 0);
+        return 0;
+      });
     toBlob.mockImplementation(() => { order.push("capture"); return Promise.resolve(new Blob()); });
 
-    await act(async () => {
-      inner = mountStage(result.current.stageRef);
-      await result.current.saveImage();
-    });
+    try {
+      const { result } = renderHook(() => useSnapshot(loadHoldings));
+      await act(async () => {
+        mountStage(result.current.stageRef);
+        await result.current.saveImage();
+      });
+    } finally {
+      frames.mockRestore();
+    }
 
-    expect(order).toEqual(["holdings", "capture"]);
-    expect(inner).not.toBeNull();
+    expect(order).toEqual(["holdings", "frame", "frame", "capture"]);
   });
 
   it("captures the inner node, not the off-screen wrapper", async () => {
