@@ -397,4 +397,59 @@ describe("saving the page as an image", () => {
     }
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
   });
+
+  it("does not let the narrow-screen rules into the picture", async () => {
+    // The overlap the owner reported twice, and the one thing in this feature that neither
+    // Chromium nor desktop WebKit reproduces. Driven on the real page through Playwright's iPhone
+    // profile — 393px, device pixel ratio 3, isMobile — the Combos table landed on top of the last
+    // single-leg rows and "holdings" on top of the last combo row.
+    //
+    // The cause is not the capture. `@media (max-width: 60rem)` keys off the VIEWPORT, so the
+    // phone's rules reach the stage although the stage is 1161px wide: the identity column becomes
+    // `white-space: normal`. In the live layout the name still fits on one line and the row
+    // measures 33px — and html-to-image copies every computed style onto its clone, that 33px
+    // included. Inside the SVG the cell is laid out a hair narrower, the name takes a second line,
+    // and the row cannot grow: the overflow spills out of the table and onto whatever is under it.
+    // One wrapped name is enough; there is no cap to cross and nothing in the file to say so.
+    //
+    // So the claim is the rule, not the pixels: a picture is never narrow, and nothing in it may
+    // wrap for a reason that belongs to the screen it was taken on. Asserted on BOTH trees at a
+    // phone viewport — the page keeps the wrap, the picture does not — because scoping is half of
+    // it; the live table needs that rule (`th:first-child`, app.css) and keeps it.
+    await page.viewport(390, 900);
+    mockApi(bothKinds);
+    render(<App />);
+    await screen.findByText("1130_8150");
+
+    const live = document.querySelector<HTMLElement>(".table-scroll td:first-child")!;
+    expect(getComputedStyle(live).whiteSpace, "the live page lost its narrow-screen wrap")
+      .toBe("normal");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+    await expect.poll(() => document.querySelector(".snapshot"), { timeout: 8000 }).toBeTruthy();
+    const snap = document.querySelector<HTMLElement>(".snapshot")!;
+
+    for (const cell of snap.querySelectorAll<HTMLElement>("td:first-child, th:first-child")) {
+      expect(getComputedStyle(cell).whiteSpace, `"${cell.textContent}" may wrap in the picture`)
+        .toBe("nowrap");
+    }
+  });
+
+  it("gives the held figures the same four columns from any device", async () => {
+    // The same cause, the harmless half, found while measuring the one above: the holdings grid is
+    // `grid-cols-2 sm:grid-cols-4`, and `sm:` is a viewport query too — so the same page, pressed
+    // on an iPad, put entry/cost to close/P&L/dte on one line and, pressed on a phone, on two.
+    // Two pictures of one book that do not look alike are worth less than either.
+    await page.viewport(390, 900);
+    mockApi(bothKinds);
+    render(<App />);
+    await screen.findByText("1130_8150");
+
+    (document.querySelector('[aria-label="save as image"]') as HTMLElement).click();
+    await expect.poll(() => document.querySelector(".snapshot dl"), { timeout: 8000 }).toBeTruthy();
+    const dl = document.querySelector<HTMLElement>(".snapshot dl")!;
+
+    expect(getComputedStyle(dl).gridTemplateColumns.split(" ").length,
+           "the picture's holdings follow the device's width").toBe(4);
+  });
 });
