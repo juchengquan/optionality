@@ -237,6 +237,27 @@ export interface HoldingValues {
   opened_at?: string | null;
 }
 
+/** Entry and Opened as a PATCH, or null when neither was given.
+ *
+ *  Three rules, and two doors onto them: `recordHolding` below patches a rule's own holding, and
+ *  the holdings panel's edit form patches a holding reached directly (Holdings.HoldingEdit).
+ *
+ *  Each field is OMITTED rather than nulled: PositionPatch takes no null, and "leave it alone" is
+ *  the right meaning for a field nobody touched — a null would read as "clear the entry I
+ *  recorded". Either field alone is enough, because `exitLevels` yields a schedule from
+ *  `opened_at` alone and a holding with a date and no credit is worth having. And neither is
+ *  NOTHING TO SEND, which the two copies of this had already drifted on: one threw and the other
+ *  returned in silence, under a line telling the owner to set a date right there.
+ */
+export function positionPatchBody(values: HoldingValues): Record<string, unknown> | null {
+  const body: Record<string, unknown> = {};
+  // `!== null`, not truthiness: 0 is a credit, and a spread put on for nothing is a real trade
+  if (values.entry !== null && values.entry !== undefined) body.entry = values.entry;
+  // truthiness here, because the empty string is what an untouched date box sends
+  if (values.opened_at) body.opened_at = values.opened_at;
+  return Object.keys(body).length === 0 ? null : body;
+}
+
 /** The Position a rule would record, from the rule itself. Exported so that recording a holding
  *  afterwards goes through the very same derivation as recording it at creation — the sides, the
  *  name and the entry's sign are decided in exactly one place. */
@@ -275,15 +296,11 @@ export async function recordHolding(
     );
   }
   if (whole.length === 1) {
-    // each omitted rather than nulled: PositionPatch takes no null, and "leave it alone" is the
-    // right meaning for a field the form was not filled in for
-    const body: Record<string, unknown> = {};
-    if (values.entry !== null) body.entry = values.entry;
-    if (values.opened_at) body.opened_at = values.opened_at;
+    const body = positionPatchBody(values);
     // not `return`: this function's whole job that evening was to be the thing that says what
     // happened. The form guards this case too, and two layers both saying so beats either
     // layer going quiet — a caller that gets neither a request nor a word cannot tell which.
-    if (Object.keys(body).length === 0) {
+    if (body === null) {
       throw new Error("nothing to record — type the entry or the day it was opened");
     }
     await sent(client.positions[":id"].$patch({ param: { id: whole[0]!.id }, json: body as never }),

@@ -40,9 +40,23 @@ export function AddPanel({
 }: {
   which: Adding;
   onClose: () => void;
-  onCreate: (body: Record<string, unknown>) => void;
+  /** whether the service TOOK it. The sheet closes on a yes and stays put on a no. */
+  onCreate: (body: Record<string, unknown>) => Promise<boolean>;
 }) {
   useDismissOnBack(which !== null, onClose);
+
+  /** Submit, and close only if it landed.
+   *
+   *  It closed the instant submit fired, before the request had gone. A refusal — a duplicate,
+   *  a dead contract, a threshold the service will not take — then arrived as a toast over a page
+   *  with no form on it, and the condor's thirteen fields had to be typed again to change the one
+   *  thing that was wrong. The forms hold their own state and are not unmounted, so staying open
+   *  is all it takes for the typing to survive.
+   */
+  const submit = (body: Record<string, unknown>) => {
+    // `act` answers rather than throwing, and has already put the service's words in a toast
+    void onCreate(body).then((landed) => { if (landed) onClose(); });
+  };
 
   return (
     <Sheet open={which !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -57,8 +71,8 @@ export function AddPanel({
         </SheetHeader>
         <div className="px-4 pb-4">
           {which === "combo"
-            ? <AddCombo onCreate={(b) => { onCreate(b); onClose(); }} />
-            : <AddMonitor onCreate={(b) => { onCreate(b); onClose(); }} />}
+            ? <AddCombo onCreate={submit} />
+            : <AddMonitor onCreate={submit} />}
         </div>
       </SheetContent>
     </Sheet>

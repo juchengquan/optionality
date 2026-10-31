@@ -3,7 +3,7 @@ import {
   COMBO_COLUMNS, SINGLE_COLUMNS, visible, type Grouping, type Signal,
 } from "./columns";
 import { Freshness } from "./Freshness";
-import { HoldingReadout } from "./Holdings";
+import { HoldingList, HoldingReadout } from "./Holdings";
 import { TopLine } from "./TopLine";
 import { WatchlistTable } from "./WatchlistTable";
 
@@ -70,16 +70,20 @@ export function SnapshotView({
       {/* The half of the page a rule cannot state. Rendered from the same readout the panel uses,
           so the two cannot disagree — and rendered whether or not that panel is open, which is
           what the clone this replaces could not do (Holdings.HoldingReadout). */}
+      {/* The heading goes with the figures: an "holdings" heading over nothing is a claim that
+          nothing is held, which is exactly what the ladder refuses to say before the figures have
+          arrived. `pending` is left out here for the same reason. */}
       {holdings === null && holdingsError === null ? null : (
         <section>
           <h2>holdings</h2>
-          {holdingsError !== null ? <p className="meta">{holdingsError}</p>
-            : holdings!.length === 0 ? <p className="meta">Nothing held.</p>
-              : holdings!.map((h) => (
-                <div key={h.id} className="border-t py-3">
-                  <HoldingReadout holding={h} />
-                </div>
-              ))}
+          <HoldingList
+            rows={holdings} error={holdingsError}
+            row={(h) => (
+              <div key={h.id} className="border-t py-3">
+                <HoldingReadout holding={h} />
+              </div>
+            )}
+          />
         </section>
       )}
     </div>
