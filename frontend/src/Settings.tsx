@@ -3,9 +3,9 @@ import {
 } from "@/components/ui/sheet";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { type Entry, type Health, type Holding, fetchHoldings } from "./api";
+import { type Entry, type Health, type Holding } from "./api";
 import { type Grouping, type Signal } from "./columns";
 import { needs } from "./TopLine";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -31,13 +31,20 @@ export const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
  */
 export function Settings({
   open, onClose, refresh, onRefresh, sweepSeconds, quotes, health, reading, band, onReading, onBand,
-  grouping, onGrouping,
+  grouping, onGrouping, holdings, holdingsError, loadHoldings,
 }: {
   open: boolean;
   onClose: () => void;
   refresh: number;
   quotes: Entry[];
   health: Health | null;
+  /** The page's rows, not a copy of its own. This panel had its own `fetchHoldings`, its own
+   *  state and its own catch — a second copy of what `App.loadHoldings` owns, which is the very
+   *  thing that made the picture and the holdings panel disagree once. "needs you" is where
+   *  disagreeing matters most: it is the only surface that names a holding no rule watches. */
+  holdings: Holding[] | null;
+  holdingsError: string | null;
+  loadHoldings: () => Promise<void>;
   reading: Signal;
   band: number;
   onReading: (signal: Signal) => void;
@@ -49,24 +56,18 @@ export function Settings({
 }) {
   useDismissOnBack(open, onClose);
 
-  // Holdings only while open, as the holdings list itself does: /positions/values is a LIVE batch
-  // and the page polls one per poll already (ADR 0010). Opening this panel is a deliberate act, so
-  // the extra call is affordable here and nowhere else — which is what lets this surface see the
-  // Levels the top line cannot: a leg rule's holding, and a holding no rule watches at all.
   const [bandText, setBandText] = useState(String(band));
   useEffect(() => { if (open) setBandText(String(band)); }, [open, band]);
 
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const load = useCallback(async () => {
-    try {
-      setHoldings(await fetchHoldings());
-    } catch {
-      setHoldings([]);   // the rest of the panel is still worth showing
-    }
-  }, []);
-  useEffect(() => { if (open) void load(); }, [open, load]);
+  // Asked for only while open, as the holdings list itself does: /positions/values is a LIVE
+  // batch and the page polls one per poll already (ADR 0010). Opening this panel is a deliberate
+  // act, so the extra call is affordable here and nowhere else — which is what lets this surface
+  // see the Levels the top line cannot: a leg rule's holding, and a holding no rule watches at
+  // all. The rows it asks for land in the PAGE's state, so the one fetch serves every surface
+  // that wants them.
+  useEffect(() => { if (open) void loadHoldings(); }, [open, loadHoldings]);
 
-  const items = needs(quotes, health, holdings);
+  const items = needs(quotes, health, holdings ?? []);
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -81,8 +82,16 @@ export function Settings({
         <div className="px-4 pb-4 flex flex-col gap-5">
           <section data-testid="needs">
             <h3 className="text-sm font-semibold mb-1">needs you</h3>
+            {/* and say so when the list cannot be complete. It fell back to NO holdings and
+                said nothing, so a panel whose own description promises "in full" could quietly
+                omit the one need no rule can state — a holding at its target that nothing
+                watches. The needs it CAN state are still listed; only the claim of fullness is
+                withdrawn. */}
+            {holdingsError !== null ? (
+              <p className="meta">{`the holdings could not be read, so this may be short — ${holdingsError}`}</p>
+            ) : null}
             {items.length === 0 ? (
-              <p className="meta">nothing needs you</p>
+              holdingsError === null ? <p className="meta">nothing needs you</p> : null
             ) : (
               <ul className="meta">
                 {items.map((n) => <li key={n.kind + n.text}>{n.text}</li>)}

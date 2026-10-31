@@ -5,7 +5,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { OpenedField } from "./OpenedField";
 import { NumberField } from "@/components/ui/number-field";
 
-import { deletePosition, patchPosition, type Holding } from "./api";
+import { deletePosition, patchPosition, positionPatchBody, type Holding } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
 import { fmt } from "./format";
 import { PaceLine } from "./PaceLine";
@@ -57,21 +57,42 @@ export function Holdings({ reloadKey, rows, error, load, act }: {
           (SnapshotView), so nothing outside reaches in here. */}
       {!open ? null : (
         <div data-testid="holdings">
-          {/* the error WINS over both of the others. Over "loading…", because printing it under
-              the reason the load failed describes a fetch that is still coming when none is; and
-              over the rows, which a failure deliberately LEAVES in place (App.loadHoldings) —
-              this precedence is what makes a cost to close nobody can vouch for unreachable, so
-              clearing them as well changed nothing a test could see. */}
-          {error !== null ? <p className="meta">{error}</p>
-            : rows === null ? <p className="meta">loading…</p>
-              : rows.length === 0 ? <p className="meta">Nothing held.</p>
-                : rows.map((h) => (
-                  <HoldingRow key={h.id} holding={h} onSaved={() => void load()} act={act} />
-                ))}
+          <HoldingList
+            rows={rows} error={error} pending={<p className="meta">loading…</p>}
+            row={(h) => <HoldingRow key={h.id} holding={h} onSaved={() => void load()} act={act} />}
+          />
         </div>
       )}
     </section>
   );
+}
+
+/** What is held, or why it cannot be said — in that order, for both doors onto it.
+ *
+ *  Four states: it could not be read, it has not arrived, nothing is held, here it is. The ORDER
+ *  is the load-bearing part and the reason this is one function rather than a ladder written out
+ *  in the panel and again in the picture (SnapshotView).
+ *
+ *  The error comes FIRST, over both of the others. Over "loading…", because printing that under
+ *  the reason the load failed describes a fetch that is still coming when none is. And over the
+ *  rows, which a failure deliberately LEAVES in place (App.loadHoldings): this precedence is the
+ *  only thing that makes a cost to close nobody can vouch for unreachable, which is why clearing
+ *  the rows as well changed nothing any test could see.
+ *
+ *  `pending` is each door's own, because the two want different things from "not yet": the panel
+ *  says loading…, and the picture shows nothing — an omitted section and an empty one look
+ *  identical in a still image, and "nothing held" is a claim about the account.
+ */
+export function HoldingList({ rows, error, pending = null, row }: {
+  rows: Holding[] | null;
+  error: string | null;
+  pending?: ReactNode;
+  row: (holding: Holding) => ReactNode;
+}) {
+  if (error !== null) return <p className="meta">{error}</p>;
+  if (rows === null) return pending;
+  if (rows.length === 0) return <p className="meta">Nothing held.</p>;
+  return rows.map(row);
 }
 
 /** One holding, as figures alone: the name, its legs, the money and the pace.
@@ -168,6 +189,7 @@ function HoldingEdit({ holding, onSaved, act }: {
 }) {
   const [value, setValue] = useState<number | null>(holding.entry);
   const [openedAt, setOpenedAt] = useState(holding.opened_at ?? "");
+  const [why, setWhy] = useState<string | null>(null);
 
   // `min-w-0` is load-bearing, not decoration. This form sits inside a flex row beside the delete
   // button, and a flex item's default `min-width: auto` refuses to shrink below its content — so
@@ -184,17 +206,21 @@ function HoldingEdit({ holding, onSaved, act }: {
       className="mt-2 flex min-w-0 items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        // whatever was filled in, each omitted rather than nulled: PositionPatch takes no null,
-        // and "leave it alone" is the right meaning for a field nobody touched.
+        // whatever was filled in, each omitted rather than nulled, and either field alone is
+        // enough — all three rules in one place, shared with the watchlist row's own form
+        // (api.positionPatchBody).
         //
         // `if (value === null) return` used to gate the whole thing on an entry, which made this
         // a silent no-op on a holding that has none — the very case the panel exists for, directly
-        // under a line telling the owner to set an opened date here. exitLevels yields a schedule
-        // from opened_at alone, so the date by itself is worth recording.
-        const body: Record<string, unknown> = {};
-        if (value !== null) body.entry = value;
-        if (openedAt !== "") body.opened_at = openedAt;
-        if (Object.keys(body).length === 0) return;
+        // under a line telling the owner to set an opened date here.
+        const body = positionPatchBody({ entry: value, opened_at: openedAt });
+        if (body === null) {
+          // and it must SAY so. Sending nothing was already right; saying nothing was the half
+          // this form still had wrong, in the same words the watchlist row uses (RowActions).
+          setWhy("Type the entry or the day it was opened — a holding needs at least one.");
+          return;
+        }
+        setWhy(null);
         act(async () => {
           await patchPosition(holding.id, body);
           onSaved();
@@ -208,6 +234,7 @@ function HoldingEdit({ holding, onSaved, act }: {
       <OpenedField className="w-44" id={`p-opened-${holding.id}`}
                    value={openedAt} onChange={setOpenedAt} />
       <Button type="submit" variant="outline" size="sm">set</Button>
+      {why ? <p className="meta w-full" role="alert">{why}</p> : null}
     </form>
   );
 }

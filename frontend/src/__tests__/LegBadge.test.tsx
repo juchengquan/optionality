@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import { COMBO_COLUMNS, identityBadges, widthsFromContent } from "../columns";
-import { cellValue } from "../WatchlistTable";
 import type { Entry } from "../api";
 
 /** A rule watching PART of a holding said so only by what it did NOT draw.
@@ -110,7 +109,7 @@ describe("what the column measuring is told", () => {
     code: "1130_8150", scope: "leg", positions: [{ id: "p1", name: "1130_8100" }],
   } as unknown as Entry;
   const width = (row: Entry, key: string) =>
-    widthsFromContent(COMBO_COLUMNS.filter((c) => c.key === key), [row], true, 10, cellValue)[key]!;
+    widthsFromContent(COMBO_COLUMNS.filter((c) => c.key === key), [row], true, 10)[key]!;
 
   it("counts the badge beside the name", () => {
     const whole = { ...legRow, scope: "all" } as unknown as Entry;

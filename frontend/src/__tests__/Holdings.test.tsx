@@ -467,12 +467,34 @@ describe("when a write is refused", () => {
     expect(posted[0]!.body).toEqual({ opened_at: "2026-10-09" });
   });
 
-  it("still sends nothing when neither field was filled in", async () => {
+  it("says why when neither field was filled in, rather than going quiet", async () => {
+    // it sent nothing, which was right, and said nothing, which was not: the same press that
+    // this panel exists for answers with silence, and a button that answers a press with silence
+    // is indistinguishable from a broken one. The watchlist row's own form already said so
+    // (RowActions), and this one shared everything with it except that.
     mockApi([undated]);
     render(<App />);
     const panel = await holdingsOf();
-    await userEvent.click(
-      within(within(panel).getByTestId("holding-pX")).getByRole("button", { name: /set/i }));
+    const row = within(panel).getByTestId("holding-pX");
+    await userEvent.click(within(row).getByRole("button", { name: /set/i }));
+
     expect(posted).toHaveLength(0);
+    expect(within(row).getByRole("alert").textContent).toMatch(/entry or the day it was opened/i);
+  });
+
+  it("takes the complaint back once something is typed", async () => {
+    mockApi([undated]);
+    render(<App />);
+    const panel = await holdingsOf();
+    const row = within(panel).getByTestId("holding-pX");
+    await userEvent.click(within(row).getByRole("button", { name: /set/i }));
+    expect(within(row).queryByRole("alert")).toBeTruthy();
+
+    fireEvent.change(within(row).getByLabelText("opened", { exact: false }),
+      { target: { value: "2026-10-09" } });
+    await userEvent.click(within(row).getByRole("button", { name: /set/i }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(within(row).queryByRole("alert"), "a complaint about a press that then worked").toBeNull();
   });
 });

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImageDown, RefreshCw, Settings2 } from "lucide-react";
-import { toBlob } from "html-to-image";
 
 import "./app.css";
 import {
@@ -22,9 +21,9 @@ import { RowDetail, type DetailTarget } from "./RowDetail";
 import { clockTime } from "./format";
 import { Freshness } from "./Freshness";
 import { SnapshotView } from "./SnapshotView";
-import { captureBox, deliver, snapshotName } from "./snapshot";
 import { TopLine } from "./TopLine";
 import { Settings } from "./Settings";
+import { useSnapshot } from "./useSnapshot";
 import { useTableFit } from "./useTableFit";
 import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
 
@@ -91,9 +90,6 @@ export function App() {
   const [adding, setAdding] = useState<Adding>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detail, setDetail] = useState<DetailTarget | null>(null);
-  // the off-screen tree, mounted only while a picture is being taken
-  const [shooting, setShooting] = useState(false);
-  const shotRef = useRef<HTMLDivElement>(null);
 
   // Owned here, not in the panel: the image needs them whether or not that panel is open, and two
   // copies of the same rows is how the picture and the page come to disagree. Still fetched on
@@ -166,67 +162,28 @@ export function App() {
     }
   }, [load]);
 
-  /** Save the page as a PNG, for pasting into a chat.
-   *
-   *  The picture is NOT this screen rasterized. `useTableFit` drops columns against the viewport
-   *  (ADR 0008), so a capture of the live page carries whatever subset your width allows — on a
-   *  phone, a fraction of the figures. SnapshotView renders again at a fixed width with every
-   *  ticked column, and that off-screen tree is what gets painted.
-   *
-   *  Holdings are fetched HERE, by the press. They used to be a clone of the live panel's node,
-   *  which meant the picture carried them only while that panel happened to be open: the same
-   *  button produced two different images depending on a disclosure triangle, and the one you get
-   *  without touching anything was the one missing the money. They are rendered from the same
-   *  readout the panel uses now (Holdings.HoldingReadout), so the two still cannot disagree.
-   *
-   *  The press therefore costs one bounded `/positions/values` call, which is the reason it was
-   *  not done this way at first. It buys more than the open-panel case: the figures in the picture
-   *  are then as old as its freshness line says, where a panel opened ten minutes ago was not.
-   */
-  const saveImage = useCallback(async () => {
-    setShooting(true);
-    try {
-      // before the frames, so the stage is laid out WITH them: this is the one figure in the
-      // picture that is not already on screen, and awaiting it here is what lets the rest of the
-      // image be a single consistent instant
-      await loadHoldings();
-      // two frames: mounted is not laid out, and an unlaid-out tree paints as nothing
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      // the INNER node, not the stage. html-to-image copies the captured node's own computed
-      // style into the SVG it paints, so capturing the stage carried `position: fixed` and
-      // `left: -10000px` with it and the content landed outside the frame — a blank PNG of
-      // exactly the right size, which is the one failure shape that looks like success.
-      const stage = shotRef.current?.querySelector<HTMLElement>(".snapshot");
-      if (!stage) return;
-      // the SCROLL size, and a resolution that keeps the canvas inside what a device will paint.
-      // Both halves of a bug that took figures out of the picture three different ways — see
-      // captureBox, and `.snapshot .table-scroll` in app.css, which is what makes the scroll size
-      // mean the extent of the figures rather than the extent of the window onto them.
-      const blob = await toBlob(stage, captureBox(stage.scrollWidth, stage.scrollHeight));
-      if (!blob) throw new Error("the image came back empty");
-      const how = await deliver(blob, snapshotName());
-      if (how === "downloaded") toast.add({ title: "saved as an image", type: "success" });
-    } catch (e: unknown) {
-      // never silence: a press that produces neither a picture nor a word is indistinguishable
-      // from a broken button
-      toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
-    } finally {
-      setShooting(false);
-    }
-  }, [loadHoldings]);
+  // the press, the off-screen stage's ref and the flag that mounts it (useSnapshot). Holdings
+  // are handed in because the page owns them: the image needs them whether or not the panel is
+  // open, and two copies of the same rows is how the picture and the page come to disagree.
+  const { shooting, stageRef, saveImage } = useSnapshot(loadHoldings);
 
   // every mutation reloads rather than patching local state: these change what the alarm
-  // engine does, and the server's account of that is the only one that counts
+  // engine does, and the server's account of that is the only one that counts.
+  //
+  // It answers whether the write LANDED. Almost every caller ignores that and should: the toast
+  // has already said what happened and the reloaded rows are the account of it. The add sheet
+  // cannot — it has to know whether to close itself or stay open over what you typed (AddPanel).
   const act = useCallback(
     async (fn: () => Promise<void>) => {
       try {
         await fn();
         await load();
+        return true;
       } catch (e: unknown) {
         // the service explains its refusals properly — a duplicate, a dead contract, an
         // unsplittable total — so its words go straight to the toast
         toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
+        return false;
       }
     },
     [load],
@@ -339,7 +296,7 @@ export function App() {
                         hidden={hiddenCombo} onToggle={onToggle} onReset={onReset} />} />
 
       <AddPanel which={adding} onClose={() => setAdding(null)}
-                onCreate={(body) => void act(() => createWatch(body))} />
+                onCreate={(body) => act(() => createWatch(body))} />
       <Settings
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -351,6 +308,9 @@ export function App() {
         onBand={(n) => { setBand(n); writeBand(n); }}
         grouping={grouping}
         onGrouping={(g) => { setGrouping(g); writeGrouping(g); }}
+        holdings={holdings}
+        holdingsError={holdingsError}
+        loadHoldings={loadHoldings}
         refresh={refresh}
         sweepSeconds={health?.settings.sweep_seconds}
         onRefresh={(n) => {
@@ -383,7 +343,7 @@ export function App() {
           aria-hidden because it is a duplicate of the page for a camera, not a second copy for
           anyone reading it. */}
       {shooting ? (
-        <div ref={shotRef} className="snapshot-stage" aria-hidden="true">
+        <div ref={stageRef} className="snapshot-stage" aria-hidden="true">
           <SnapshotView
             singles={singles} combos={combos} health={health}
             fetchedAt={fetchedAt ?? null} polledAt={polledAt} grouping={grouping}

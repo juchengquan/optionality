@@ -385,6 +385,33 @@ describe("adding a combo", () => {
     expect(posted[0]!.url).toMatch(/\/monitors$/);
   });
 
+  it("keeps the sheet open when the rule is refused, with what was typed still in it", async () => {
+    // The sheet closed the instant submit fired, before the request had even gone. A refusal —
+    // a duplicate, a dead contract, a threshold the service will not take — then arrived as a
+    // toast over a page with no form on it, and every one of the condor's thirteen fields had to
+    // be typed again to change the one thing that was wrong.
+    const combo = await openForm("combo", "monitor for (1120_IC, mid_price) already exists");
+    await fillCondor(combo, "7.4");
+
+    await waitFor(() => expect(screen.getByText(/already exists/)).toBeTruthy());
+    // by NAME: the toast is a dialog too, so "a dialog is still up" is not the claim — the
+    // claim is that this sheet, with this form in it, is still up
+    const still = screen.getByRole("dialog", { name: /add combo/i });
+    expect(within(still).getByLabelText("name", { exact: false }))
+      .toHaveProperty("value", "1120_IC_7100_8200");
+    expect(within(still).getByLabelText("leg 4", { exact: true })).toHaveProperty("value", "7050");
+    expect(within(still).getByLabelText("entry", { exact: false })).toHaveProperty("value", "7.4");
+  });
+
+  it("closes it when the service took the rule, so a success needs no second press", async () => {
+    const combo = await openForm("combo");
+    await fillCondor(combo, "7.4");
+
+    await waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /add combo/i })).toBeNull());
+  });
+
   it("sends bodies the service's own schemas accept", async () => {
     // Neither tsc nor the mock above can check this. `createWatch` casts with `as never` — Hono's
     // validator InputType cannot be inferred, which is why that cast exists at all — and the

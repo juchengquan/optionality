@@ -4,7 +4,6 @@ import type { Entry } from "./api";
 import {
   columnsFor, COMBO_COLUMNS, offerable, SINGLE_COLUMNS, widthsFromContent,
 } from "./columns";
-import { cellValue } from "./WatchlistTable";
 
 /** Measures the room a table actually has, and how wide a character actually is.
  *
@@ -67,7 +66,6 @@ export function useTableFit(table: "single" | "combo", rows: readonly Entry[], h
             rows,
             table === "combo",
             charWidth,
-            cellValue,
           )
         : null,
     [ready, table, rows, charWidth],

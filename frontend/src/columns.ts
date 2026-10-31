@@ -1,4 +1,5 @@
 import type { Entry } from "./api";
+import { cellValue } from "./cells";
 import { FIELD_COLUMN, shortDate } from "./format";
 
 export interface Column {
@@ -405,7 +406,6 @@ export function widthsFromContent(
   rows: readonly Entry[],
   isCombo: boolean,
   charWidth: number,
-  cellText: (row: Entry, key: string, isCombo: boolean) => string,
 ): Record<string, number> {
   const CELL_PADDING = 22; // 10px each side plus the border, per app.css
   const out: Record<string, number> = {};
@@ -416,7 +416,7 @@ export function widthsFromContent(
       ? (r: Entry) => identityBadges(r).reduce((n, b) => n + b.text.length + 1, 0)
       : () => 0;
     for (const r of rows) {
-      longest = Math.max(longest, cellText(r, c.key, isCombo).length + extra(r));
+      longest = Math.max(longest, cellValue(r, c.key, isCombo).length + extra(r));
     }
     out[c.key] = Math.ceil(longest * charWidth) + CELL_PADDING;
   }

@@ -10,7 +10,7 @@ import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
 import { alarmText, DASH, fmt, legSummary, shortContract } from "./format";
 import { PaceLine } from "./PaceLine";
 import { EntryCell, HoldingForm, RowActions } from "./RowActions";
-import { cellValue } from "./WatchlistTable";
+import { cellValue } from "./cells";
 import type { RowHandlers } from "./WatchlistTable";
 
 /** Everything about one row, at any screen size.

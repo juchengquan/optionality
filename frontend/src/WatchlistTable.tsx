@@ -5,7 +5,8 @@ import {
   LEFT, groupRows, identityBadges, imminentReading, signalColumns,
   type Column, type Grouping, type Signal,
 } from "./columns";
-import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
+import { cellValue } from "./cells";
+import { shortContract } from "./format";
 
 /** Somewhere the name may fold when the column is capped on a narrow screen.
  *
@@ -22,43 +23,6 @@ function breakable(name: string): React.ReactNode {
       {i < parts.length - 1 ? <wbr /> : null}
     </Fragment>
   ));
-}
-
-/** Row plus column key to displayed text. Exported because the detail sheet shows every
- *  column whether or not the table is drawing it, and two of these would drift. */
-export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
-  const snap = entry.quote ?? {};
-  const greeks = entry.combo_greeks ?? {};
-  const greek = (name: string, col: string) =>
-    isCombo ? fmt(greeks[name] ?? null, col) : fmt(snap[name as keyof typeof snap] as number | null, col);
-
-  switch (key) {
-    // the identity columns are DRAWN by the JSX below, badge and bell and all — but they
-    // still have to answer here, because the fitting measurement asks this function how
-    // wide every column needs to be and these are the widest on the page
-    case "contract": return shortContract(entry.quote?.name ?? entry.code);
-    case "combo": return entry.code;
-    case "dte": return String(entry.dte);
-    case "legs": return entry.legs ? legSummary(entry.legs) : DASH;
-    case "expiry": return shortDate(entry.strike_date);
-    case "alarm": return alarmText(entry.field, entry.direction, entry.threshold, entry.compare);
-    case "value": return fmt(entry.cost_to_close ?? entry.combo_value ?? null, "mid");
-    // blank rather than a dash-or-zero where there is no declared holding: a 0.00 here would
-    // read as "exactly on pace", which is the opposite of "no schedule"
-    case "on_pace": return entry.schedule?.on_pace == null ? "" : fmt(entry.schedule.on_pace, "mid");
-    case "entry": return entry.scope === "all" ? fmt(entry.entry, "mid") : "";
-    case "pnl": return entry.scope === "all" ? fmt(entry.pnl, "mid") : "";
-    case "delta": return greek("option_delta", "delta");
-    case "gamma": return greek("option_gamma", "gamma");
-    case "theta": return greek("option_theta", "theta");
-    case "vega": return greek("option_vega", "vega");
-    case "iv": return fmt(snap.option_implied_volatility ?? null, "iv");
-    case "mid": return fmt(snap.mid_price ?? null, "mid");
-    case "bid": return fmt(snap.bid_price ?? null, "bid");
-    case "ask": return fmt(snap.ask_price ?? null, "ask");
-    case "last_trade": return fmtText(snap.update_time);
-    default: return DASH;
-  }
 }
 
 export interface RowHandlers {

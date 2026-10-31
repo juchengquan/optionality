@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { recordHolding } from "../api";
+import { positionPatchBody, recordHolding } from "../api";
 
 /** Recording a holding against a rule.
  *
@@ -131,5 +131,40 @@ describe("recordHolding when there is nothing it can do", () => {
     await expect(recordHolding(row, rule, { entry: null, opened_at: null }))
       .rejects.toThrow(/type the entry or the day/);
     expect(sent).toHaveLength(0);
+  });
+});
+
+/** The patch body itself, which two doors build.
+ *
+ *  `recordHolding` builds it for a rule's own holding, and the holdings panel's edit form builds
+ *  it for a holding reached directly (Holdings.HoldingEdit). They were two copies of the same
+ *  three rules — omit rather than null, either field is enough, neither is nothing to send — and
+ *  they had already drifted on the last of the three: one threw, the other returned in silence.
+ */
+describe("entry and Opened as a patch", () => {
+  it("omits what was not filled in, rather than nulling it", () => {
+    // PositionPatch takes no null, and "leave it alone" is the right meaning for a field nobody
+    // touched — a null would mean "clear the entry I recorded"
+    expect(positionPatchBody({ entry: 2.72, opened_at: null })).toEqual({ entry: 2.72 });
+    expect(positionPatchBody({ entry: null, opened_at: "2026-10-09" }))
+      .toEqual({ opened_at: "2026-10-09" });
+  });
+
+  it("carries both when both were filled in", () => {
+    expect(positionPatchBody({ entry: 2.72, opened_at: "2026-10-09" }))
+      .toEqual({ entry: 2.72, opened_at: "2026-10-09" });
+  });
+
+  it("keeps a zero entry, which is a credit and not an absence", () => {
+    expect(positionPatchBody({ entry: 0, opened_at: null })).toEqual({ entry: 0 });
+  });
+
+  it("treats an empty date box as unfilled, since that is what the form sends", () => {
+    expect(positionPatchBody({ entry: null, opened_at: "" })).toBeNull();
+  });
+
+  it("answers null when there is nothing to send, so neither door can send an empty patch", () => {
+    expect(positionPatchBody({ entry: null, opened_at: null })).toBeNull();
+    expect(positionPatchBody({ entry: null })).toBeNull();
   });
 });
