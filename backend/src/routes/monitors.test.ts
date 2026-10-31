@@ -199,6 +199,24 @@ describe("combos", () => {
       .toBe("combo monitors cannot be edited in place; delete and recreate");
   });
 
+  it("names the field before the threshold when both are wrong", async () => {
+    // Precedence, pinned on both doors. The route checked the combo field first and the bot
+    // checked the threshold first, so one input had two answers depending on where you typed it;
+    // create-monitor.ts fixes one order and this is half of what holds it there (the other half is
+    // the same test in bot.test.ts). The field wins because it says the rule can never work,
+    // while a threshold is a number you can correct.
+    h = harness();
+    const resp = await post(combo({
+      name: "both-wrong", field: "option_implied_volatility", threshold: -1,
+      legs: [
+        { sign: 1, option_type: "CALL", strike: 8100 },
+        { sign: 1, option_type: "CALL", strike: 8150 },
+      ],
+    }));
+    expect(resp.status).toBe(422);
+    expect((await body(resp)).detail).toContain("not additive");
+  });
+
   it("cannot watch implied volatility", async () => {
     // IV is intensive: two 20% legs are not a 40% combo. Summing it is meaningless, so the field
     // is refused at the gate rather than producing a nonsense alarm.
