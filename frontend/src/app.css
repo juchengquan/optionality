@@ -265,3 +265,18 @@ button { cursor: pointer; }
    The box-shadow above stays: it stood in for the collapsed border a swipe carries away, and with
    the column static it lands on that border's own line, in that border's own colour. */
 .snapshot th:first-child, .snapshot td:first-child { position: static; }
+/* And the narrow-screen rules do not come with it either.
+   `@media (max-width: 60rem)` keys off the VIEWPORT, so a picture taken on a phone is laid out by
+   the phone's rules although it is 1161px wide: the identity column becomes `white-space: normal`
+   and the holdings grid halves to two columns. The second is only ugly — the same book photographed
+   on an iPad and on a phone did not look alike. The first took the picture apart. In the live
+   layout the name still fits on one line and the row measures 33px, and html-to-image copies every
+   computed style onto its clone, that 33px with it; inside the SVG the cell comes out a hair
+   narrower, the name takes a second line, and the row cannot grow. The overflow lands on whatever
+   is beneath — measured on an iPhone profile (393px, dpr 3): the Combos table across the last two
+   single-leg rows, "holdings" across the last combo row. One wrapped name is enough, and nothing
+   in the file says so.
+   A picture is never narrow, so nothing in it should fold for a reason that belongs to a screen.
+   The live table keeps the rule it needs (th:first-child, above): this undoes it HERE only. */
+.snapshot th:first-child, .snapshot td:first-child { white-space: nowrap; min-width: 0; }
+.snapshot dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
