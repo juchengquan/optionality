@@ -8,8 +8,10 @@
  *  lag what has been sent. `cachedRecords` (and `cachedQuotes`, built on it) still hold the sweep's
  *  own view of its last batch; NO ROUTE CALLS EITHER, and the comments there say why they are kept.
  *
- *  The alarm flips truthfully AT the threshold — no value hysteresis; flapping is throttled by the
- *  per-monitor cooldown, and a persisting breach re-reminds on a fixed cadence.
+ *  WHETHER a reading alarms is `alarm.ts` and not this file: the threshold rule, the cooldown that
+ *  throttles flapping and the cadence a persisting breach re-reminds on are one decision, and it
+ *  takes a reading and two knobs rather than a database. What is left here is the engine — getting
+ *  the quotes, deciding which rules are evaluable at all, writing the rows and sending the words.
  *
  *  Nothing here is auto-deleted except an expired monitor past its retention window. A rule the
  *  engine cannot evaluate is quarantined — disabled with a notice, kept for inspection — and never
@@ -21,7 +23,8 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { noticeManageBy, recordSamples } from "./positions.ts";
-import { isBreached, monitorLegCodes, monitorValue } from "./domain/monitor.ts";
+import { alarmPolicy, alarmTransition } from "./alarm.ts";
+import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
 import type { Monitor } from "./domain/monitor.ts";
 import { exitPolicy } from "./domain/exit.ts";
 import { positionLegCodes } from "./domain/position.ts";
@@ -83,6 +86,11 @@ function addDays(isoDate: string, days: number): string {
  *  entitlement looks like. Blaming the field for an unpriced leg would send the owner to the wrong
  *  question.
  */
+/** When this rule last said anything, as a clock reads it rather than as SQLite stores it. */
+function lastAlarmAt(monitor: MonitorRow): Date | null {
+  return monitor.last_alarm_at === null ? null : fromSqlDatetime(monitor.last_alarm_at);
+}
+
 function silence(monitor: Monitor, byCode: Record<string, QuoteRecord>): string {
   const unpriced = monitorLegCodes(monitor).filter((code) => byCode[code] === undefined);
   if (unpriced.length > 0) return `no quote for ${unpriced.sort().join(", ")}`;
@@ -416,7 +424,8 @@ export class MonitorSweeper {
     return surviving;
   }
 
-  /** The alarm loop — and, for a rule with no figure to evaluate, the count toward quarantine.
+  /** The alarm loop: a figure per rule, `alarm.ts`'s verdict on it, the write — and, for a rule
+   *  with no figure to evaluate at all, the count toward quarantine.
    *
    *  The count lives here rather than beside `quarantineUnknown` because this is the only place
    *  that knows a figure did not arrive: the fetch succeeded, the contract was priced, and
@@ -478,38 +487,21 @@ export class MonitorSweeper {
           if (!current) continue;
 
           const changes: Partial<MonitorRow> = { last_value: value, last_checked_at: stamp };
+          // the Provider's name for the contract where it has one: a combo's code IS its name,
+          // and a single's code is machine-readable rather than something to read on a phone
           const name = (byCode[monitor.code]?.name as string | undefined) || monitor.code;
-          const above = monitor.direction !== "below";
-          const breached = isBreached(value, monitor.threshold, monitor.direction, monitor.compare);
-          const [breachWord, recoverWord] = above
-            ? ["crossed ≥", "back below"]
-            : ["fell ≤", "back above"];
-          const wasTriggered = current.triggered !== 0;
-          const figure = value.toFixed(3);
-
-          if (breached && !wasTriggered) {
-            changes.triggered = toSqliteBool(true);
-            if (this.alarmAllowed(current, now)) {
-              changes.last_alarm_at = stamp;
-              notices.push(`⚠️ ${name}: ${monitor.field} ${figure} ${breachWord} ${monitor.threshold}`);
-            }
-          } else if (wasTriggered && !breached) {
-            changes.triggered = toSqliteBool(false);
-            if (this.alarmAllowed(current, now)) {
-              changes.last_alarm_at = stamp;
-              notices.push(`✅ ${name}: ${monitor.field} ${figure} ${recoverWord} ${monitor.threshold}`);
-            }
-          } else if (wasTriggered && breached) {
-            // a persisting breach re-alarms on a fixed cadence so it cannot be missed once and
-            // forgotten. 0 disables reminders entirely.
-            const repeat = settings.alarmRepeatSeconds;
-            const sign = breachWord.split(" ").at(-1);
-            if (repeat && this.secondsSinceAlarm(current, now) >= repeat) {
-              changes.last_alarm_at = stamp;
-              notices.push(
-                `⚠️ ${name}: ${monitor.field} ${figure} still ${sign} ${monitor.threshold} (reminder)`,
-              );
-            }
+          // the decision is alarm.ts's; what is left here is turning it into a row and a message
+          const decision = alarmTransition(
+            monitor, value, name,
+            { triggered: current.triggered !== 0, lastAlarmAt: lastAlarmAt(current) },
+            alarmPolicy(settings), now,
+          );
+          if (decision.triggered !== null) changes.triggered = toSqliteBool(decision.triggered);
+          if (decision.notice !== null) {
+            // one condition, not two: the stamp is the record of having SPOKEN, and moving it for
+            // a message that was never queued is what would mute the next reminder
+            changes.last_alarm_at = stamp;
+            notices.push(decision.notice);
           }
           updateMonitorFields(db, row.id, changes);
         } catch (err) {
@@ -521,15 +513,6 @@ export class MonitorSweeper {
     });
     for (const text of notices) await this.notify(text);
     return refused;
-  }
-
-  private secondsSinceAlarm(monitor: MonitorRow, now: Date): number {
-    if (monitor.last_alarm_at === null) return Number.POSITIVE_INFINITY;
-    return (now.getTime() - fromSqlDatetime(monitor.last_alarm_at).getTime()) / 1000;
-  }
-
-  private alarmAllowed(monitor: MonitorRow, now: Date): boolean {
-    return this.secondsSinceAlarm(monitor, now) >= this.deps.settings.alarmCooldownSeconds;
   }
 
   /** A sweep the loop gave up waiting for (scheduler.ts's watchdog).
