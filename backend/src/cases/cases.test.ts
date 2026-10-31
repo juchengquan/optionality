@@ -8,15 +8,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import * as contract from "../domain/contract.ts";
-import * as exit from "../domain/exit.ts";
-import * as expiry from "../domain/expiry.ts";
-import * as monitor from "../domain/monitor.ts";
-import * as position from "../domain/position.ts";
-import * as quote from "../domain/quote.ts";
-import * as vol from "../domain/vol.ts";
-import * as timefmt from "../domain/timefmt.ts";
-import { buildCases, render } from "./build.ts";
+import { MODULES, buildCases, render } from "./build.ts";
 import { INPUTS } from "./inputs.ts";
 
 const CASES = join(import.meta.dirname, "../../../testdata/golden");
@@ -44,9 +36,21 @@ describe("testdata/golden/", () => {
     expect(files.filter((f) => !(f.replace(/\.json$/, "") in built))).toEqual([]);
   });
 
+  it("knows every module the domain has", () => {
+    // What the test below rests on, and what it could not see. Both this file and build.ts named
+    // the eight modules by hand, so the coverage claim was only ever about the eight somebody had
+    // remembered to list: adding domain/greeks.ts and nothing else left every check green while
+    // its functions had no cases and no Python. The directory is the fact; the list must match it.
+    const onDisk = readdirSync(new URL("../domain/", import.meta.url))
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+      .map((f) => f.replace(/\.ts$/, ""))
+      .sort();
+    expect(Object.keys(MODULES).sort(), "a domain module nothing cases — add it to build.ts")
+      .toEqual(onDisk);
+  });
+
   it("covers every function the domain exports, so a new one cannot skip the Python", () => {
-    const modules = { contract, exit, expiry, monitor, position, quote, vol, timefmt };
-    const exported = Object.entries(modules).flatMap(([m, mod]) =>
+    const exported = Object.entries(MODULES).flatMap(([m, mod]) =>
       Object.entries(mod).filter(([, v]) => typeof v === "function").map(([fn]) => `${m}.${fn}`));
     const covered = new Set(Object.entries(INPUTS).flatMap(([m, cs]) => cs.map((c) => `${m}.${c.fn}`)));
     expect(exported.filter((f) => !covered.has(f) && !NOT_PORTED.has(f))).toEqual([]);
