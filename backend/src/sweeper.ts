@@ -238,7 +238,31 @@ export class MonitorSweeper {
     }
   }
 
+  /** One sweep, and an honest account of whether it happened.
+   *
+   *  The account is the whole point of the wrapper. `runSweep` below records success on its LAST
+   *  line, because everything between the batch and that line — quarantine, the alarm loop, the
+   *  samples, the manage-by notices — is work the sweep exists to do, and a sweep that did not do
+   *  it has not succeeded however cleanly the quotes arrived. Success used to be recorded the
+   *  moment the batch came back, which put all of that outside any failure path: a throw reached
+   *  `scheduler`, which logs and returns, and `/health` went on saying `last_sweep_ok: true` and
+   *  `alarms: "active"` with nothing being evaluated. `staleFor()` cannot see it either, since
+   *  `sweepAt` is stamped at the START of a sweep — one that begins every 15 seconds and throws
+   *  every time is never stale. The watchdog covers a sweep that HANGS, not one that throws.
+   *
+   *  It still resolves rather than rejecting: a broken sweep must not kill the loop, which is
+   *  `scheduler`'s rule and the reason its own catch stays where it is.
+   */
   async sweep(): Promise<void> {
+    try {
+      await this.runSweep();
+    } catch (err) {
+      console.error("monitor sweep failed:", err);
+      await this.recordFailure(`the sweep threw: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async runSweep(): Promise<void> {
     const { db } = this.deps;
     // held as a local as well as on the instance: a sweep takes real time, and every date the
     // sweep reckons — expiry, and the samples' market day — must come from ONE instant or a
@@ -277,7 +301,6 @@ export class MonitorSweeper {
       await this.recordFailure();
       return;
     }
-    await this.recordSuccess();
     this.lastRecords = records;
     this.lastBadCodes = badCodes;
     this.fetchAt = this.now();
@@ -288,7 +311,7 @@ export class MonitorSweeper {
     const byCode: Record<string, QuoteRecord> = Object.fromEntries(
       records.map((r) => [String(r.code), r]),
     );
-    await this.evaluate(surviving, byCode);
+    const refused = await this.evaluate(surviving, byCode);
     // Both are about POSITIONS, not about alarms. They live here only because this is where the
     // batch is, so they take it as an argument instead (positions.ts).
     recordSamples(db, positionRows, byCode, at);
@@ -296,6 +319,14 @@ export class MonitorSweeper {
       { db, settings: this.deps.settings, notify: (text) => this.notify(text) },
       positionRows, byCode, at,
     );
+    // A watchlist evaluated in part is not a swept watchlist. The rules that COULD be evaluated
+    // have been, which is what the containment in `evaluate` buys; saying so here is what stops
+    // the rest from going quiet without a word.
+    if (refused.length > 0) {
+      await this.recordFailure(`could not evaluate ${refused.join(", ")}`);
+      return;
+    }
+    await this.recordSuccess();
   }
 
   /** Drop the silence counts of rules this sweep is not evaluating.
@@ -393,81 +424,103 @@ export class MonitorSweeper {
    */
   private async evaluate(
     monitors: MonitorRow[], byCode: Record<string, QuoteRecord>,
-  ): Promise<void> {
+  ): Promise<string[]> {
     const { db, settings } = this.deps;
     const now = this.now();
     const stamp = toSqlDatetime(now);
     const notices: string[] = [];
     const limit = settings.quarantineAfterSilentSweeps;
+    /** the rules this sweep could not evaluate at all, named for the record the caller leaves */
+    const refused: string[] = [];
 
     await atomic(db, () => {
       for (const row of monitors) {
-        const monitor = toMonitor(row);
-        const value = monitorValue(monitor, byCode);
-        if (value === null) {
-          const n = (this.silentSweeps.get(row.id) ?? 0) + 1;
-          this.silentSweeps.set(row.id, n);
-          const why = silence(monitor, byCode);
-          if (limit > 0 && n >= limit) {
-            const reason: DisabledReason = "no-figure";
-            updateMonitorFields(db, row.id, {
-              enabled: toSqliteBool(false), disabled_reason: reason,
-            });
-            // forgotten, not kept at the limit: unmuting the rule gives it its full count again
-            this.silentSweeps.delete(row.id);
-            notices.push(
-              `⚠️ monitor ${monitor.code} disabled: ${why} for ${n} consecutive sweeps`,
-            );
-          } else {
-            console.warn(`${why} for ${monitor.code} (${n}${limit > 0 ? `/${limit}` : ""})`);
+        // Per ROW, inside the transaction, which is the only place it contains anything: one
+        // unreadable row — corrupt `legs`, an unparseable date, a write SQLite refuses — used to
+        // abort the whole batch and take every other rule's alarm with it. The rules that can be
+        // evaluated are, and `runSweep` reports the sweep as failed rather than clean.
+        //
+        // NOT a quarantine. That is reserved for the two faults the engine can diagnose — an
+        // unknown contract and a figure that never arrives — and disabling a rule over a fault
+        // nobody has read yet would silence it for a reason that might be a bug in here.
+        // where this row's messages start, so a row that fails takes its own back: it queued a
+        // "crossed" the instant before its write was refused, and sending that would announce a
+        // breach the database has no record of — which re-announces on every sweep after, since
+        // `triggered` never got written.
+        const mark = notices.length;
+        try {
+          const monitor = toMonitor(row);
+          const value = monitorValue(monitor, byCode);
+          if (value === null) {
+            const n = (this.silentSweeps.get(row.id) ?? 0) + 1;
+            this.silentSweeps.set(row.id, n);
+            const why = silence(monitor, byCode);
+            if (limit > 0 && n >= limit) {
+              const reason: DisabledReason = "no-figure";
+              updateMonitorFields(db, row.id, {
+                enabled: toSqliteBool(false), disabled_reason: reason,
+              });
+              // forgotten, not kept at the limit: unmuting the rule gives it its full count again
+              this.silentSweeps.delete(row.id);
+              notices.push(
+                `⚠️ monitor ${monitor.code} disabled: ${why} for ${n} consecutive sweeps`,
+              );
+            } else {
+              console.warn(`${why} for ${monitor.code} (${n}${limit > 0 ? `/${limit}` : ""})`);
+            }
+            continue;
           }
-          continue;
-        }
-        // it arrived: the run of silence is over, and a run is what the limit counts
-        this.silentSweeps.delete(row.id);
-        // re-read: the fetch was awaited, and a request may have changed the row in the meantime.
-        // The Python re-reads for the same reason, across its session boundary.
-        const current = findMonitor(db, row.id);
-        if (!current) continue;
+          // it arrived: the run of silence is over, and a run is what the limit counts
+          this.silentSweeps.delete(row.id);
+          // re-read: the fetch was awaited, and a request may have changed the row in the meantime.
+          // The Python re-reads for the same reason, across its session boundary.
+          const current = findMonitor(db, row.id);
+          if (!current) continue;
 
-        const changes: Partial<MonitorRow> = { last_value: value, last_checked_at: stamp };
-        const name = (byCode[monitor.code]?.name as string | undefined) || monitor.code;
-        const above = monitor.direction !== "below";
-        const breached = isBreached(value, monitor.threshold, monitor.direction, monitor.compare);
-        const [breachWord, recoverWord] = above
-          ? ["crossed ≥", "back below"]
-          : ["fell ≤", "back above"];
-        const wasTriggered = current.triggered !== 0;
-        const figure = value.toFixed(3);
+          const changes: Partial<MonitorRow> = { last_value: value, last_checked_at: stamp };
+          const name = (byCode[monitor.code]?.name as string | undefined) || monitor.code;
+          const above = monitor.direction !== "below";
+          const breached = isBreached(value, monitor.threshold, monitor.direction, monitor.compare);
+          const [breachWord, recoverWord] = above
+            ? ["crossed ≥", "back below"]
+            : ["fell ≤", "back above"];
+          const wasTriggered = current.triggered !== 0;
+          const figure = value.toFixed(3);
 
-        if (breached && !wasTriggered) {
-          changes.triggered = toSqliteBool(true);
-          if (this.alarmAllowed(current, now)) {
-            changes.last_alarm_at = stamp;
-            notices.push(`⚠️ ${name}: ${monitor.field} ${figure} ${breachWord} ${monitor.threshold}`);
+          if (breached && !wasTriggered) {
+            changes.triggered = toSqliteBool(true);
+            if (this.alarmAllowed(current, now)) {
+              changes.last_alarm_at = stamp;
+              notices.push(`⚠️ ${name}: ${monitor.field} ${figure} ${breachWord} ${monitor.threshold}`);
+            }
+          } else if (wasTriggered && !breached) {
+            changes.triggered = toSqliteBool(false);
+            if (this.alarmAllowed(current, now)) {
+              changes.last_alarm_at = stamp;
+              notices.push(`✅ ${name}: ${monitor.field} ${figure} ${recoverWord} ${monitor.threshold}`);
+            }
+          } else if (wasTriggered && breached) {
+            // a persisting breach re-alarms on a fixed cadence so it cannot be missed once and
+            // forgotten. 0 disables reminders entirely.
+            const repeat = settings.alarmRepeatSeconds;
+            const sign = breachWord.split(" ").at(-1);
+            if (repeat && this.secondsSinceAlarm(current, now) >= repeat) {
+              changes.last_alarm_at = stamp;
+              notices.push(
+                `⚠️ ${name}: ${monitor.field} ${figure} still ${sign} ${monitor.threshold} (reminder)`,
+              );
+            }
           }
-        } else if (wasTriggered && !breached) {
-          changes.triggered = toSqliteBool(false);
-          if (this.alarmAllowed(current, now)) {
-            changes.last_alarm_at = stamp;
-            notices.push(`✅ ${name}: ${monitor.field} ${figure} ${recoverWord} ${monitor.threshold}`);
-          }
-        } else if (wasTriggered && breached) {
-          // a persisting breach re-alarms on a fixed cadence so it cannot be missed once and
-          // forgotten. 0 disables reminders entirely.
-          const repeat = settings.alarmRepeatSeconds;
-          const sign = breachWord.split(" ").at(-1);
-          if (repeat && this.secondsSinceAlarm(current, now) >= repeat) {
-            changes.last_alarm_at = stamp;
-            notices.push(
-              `⚠️ ${name}: ${monitor.field} ${figure} still ${sign} ${monitor.threshold} (reminder)`,
-            );
-          }
+          updateMonitorFields(db, row.id, changes);
+        } catch (err) {
+          notices.length = mark;
+          refused.push(row.code);
+          console.error(`monitor ${row.code} could not be evaluated:`, err);
         }
-        updateMonitorFields(db, row.id, changes);
       }
     });
     for (const text of notices) await this.notify(text);
+    return refused;
   }
 
   private secondsSinceAlarm(monitor: MonitorRow, now: Date): number {
