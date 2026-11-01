@@ -15,10 +15,6 @@ export function fmt(value: number | null | undefined, column: string): string {
   return value.toFixed(PLACES[column] ?? 4);
 }
 
-export function fmtText(value: string | null | undefined): string {
-  return value ?? DASH;
-}
-
 /** +C8100 -C8150: the signs are what the signed-sum engine keys off, so a leg entered
  *  backwards is visible at a glance. */
 export function legSummary(legs: readonly Leg[]): string {
@@ -74,6 +70,30 @@ export function shortContract(name: string): string {
 export function shortDate(iso: string): string {
   const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})$/.exec(iso);
   return m ? `${m[2]}${m[3]}${m[4]}` : iso;
+}
+
+/** "2026-10-31 04:16:24+08:00" → "2026-10-31 04:16:24".
+ *
+ *  The service renders every timestamp it sends in DISPLAY_TZ, so the offset is identical on every
+ *  row of every table and carries no information at all — the same argument `shortContract` makes
+ *  about the SPXW prefix, and in the same place it matters: `last trade` is the widest column on
+ *  the single-leg table, measured at 245px against the live book, and six of its twenty-five
+ *  characters are this.
+ *
+ *  It stops at the offset. The DATE stays, because an SPX strike far from the money can go days
+ *  without a print — the live book's last trades were yesterday's — and a bare `04:16:24` reads as
+ *  this morning, which is a claim about liquidity rather than a shorter way of saying the same
+ *  thing.
+ *
+ *  Strict, and returns anything else untouched: "x" is what every fixture in this repo passes for
+ *  a timestamp, and a `Z` or a fractional second would mean the shape changed, which is a reason
+ *  to show it whole rather than to guess at it.
+ */
+const ZONED = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})[+-]\d{2}:\d{2}$/;
+
+export function shortStamp(served: string): string {
+  const m = ZONED.exec(served);
+  return m ? m[1]! : served;
 }
 
 /** Today's TRADING day, as the service counts it: the New York calendar date.
