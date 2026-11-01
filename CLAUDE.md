@@ -43,7 +43,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `testdata/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
   — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
   exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
-  holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port. The generator is `tools/cases.ts`, not
+  holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port.
+  Exported CONSTANTS are stated in the same files and compared too; they were mirrored on trust until
+  the coverage guard was found to filter on `typeof v === "function"`. **Generated under `TZ=UTC`**,
+  as the suites read them: a default zone is the running machine's, so an unpinned corpus would say
+  `+08:00` here and `+01:00` in Berlin. The generator is `tools/cases.ts`, not
   `backend/`'s: it also writes the two FINGERPRINT stamps (`backend/src/golden.ts` and
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
   repo-wide codegen step rather than something the backend may do. Both stamps are generated and

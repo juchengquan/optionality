@@ -66,7 +66,11 @@ describe("testdata/golden/", () => {
     const stated = Object.entries(built).flatMap(([m, file]) =>
       Object.keys(file.constants).map((k) => `${m}.${k}`));
     expect(exported.filter((n) => !stated.includes(n))).toEqual([]);
-    // and there IS something to compare, so a filter that quietly matched nothing would fail here
+    // and the converse, which is the half a sweep found missing: a FUNCTION in here would be
+    // invisible in the file, because JSON.stringify drops a function-valued key and the bytes come
+    // out identical. The in-memory build is where it can be seen.
+    expect(stated.filter((n) => !exported.includes(n))).toEqual([]);
+    // and there IS something to compare, so a filter that quietly matched nothing would pass above
     expect(stated.length).toBeGreaterThanOrEqual(4);
   });
 

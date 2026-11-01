@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { constantsOf } from "./build.ts";
 import { goldenHash, pythonStamp, STAMP_LENGTH, tsStamp } from "./stamp.ts";
 
 /** What the fingerprint must and must not notice (ADR 0016). */
@@ -47,5 +48,24 @@ describe("the stamps it writes", () => {
     expect(tsStamp("x")).toContain("do not edit");
     expect(pythonStamp("x")).toContain("make cases");
     expect(pythonStamp("x")).toContain("do not edit");
+  });
+});
+
+/** The constants a module states, which go into the same generated files (ADR 0017's follow-up). */
+describe("the constants a module states", () => {
+  it("come out in name order, whatever order they went in", () => {
+    // an ES module namespace is already sorted by spec, so the sort looks free — and a sweep showed
+    // it: removing it changed no byte of any case file. It is not free for a plain object, and the
+    // function is exported, so the determinism of the generated output is stated here instead.
+    expect(Object.keys(constantsOf({ ZEBRA: 1, APPLE: 2, MIDDLE: 3 })))
+      .toEqual(["APPLE", "MIDDLE", "ZEBRA"]);
+  });
+
+  it("leaves out the functions, which belong to the cases", () => {
+    expect(constantsOf({ A: 1, b: () => 2 })).toEqual({ A: 1 });
+  });
+
+  it("encodes a value JSON cannot carry, like any case would", () => {
+    expect(constantsOf({ S: new Set(["b", "a"]) })).toEqual({ S: { $set: ["a", "b"] } });
   });
 });
