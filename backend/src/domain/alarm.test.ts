@@ -137,3 +137,57 @@ describe("the policy", () => {
       .toEqual({ cooldownSeconds: 7, repeatSeconds: 11 });
   });
 });
+
+/** What the sentence says when the rule compares a MAGNITUDE.
+ *
+ *  `isBreached` compares `Math.abs(value)` under `compare: "abs"`, and the notice read
+ *  "option_delta -0.151 crossed ≥ 0.12" — where -0.151 is not ≥ 0.12 — and "back below 0.12" about
+ *  a value never above it. A short put's delta is negative by nature, so that is the ordinary
+ *  configuration (review, 2026-11-01, against a live rule then 90% of the way to firing). Every
+ *  alarm case used a positive value, so the corpus could not see it.
+ *
+ *  The fix mirrors the COMPARISON rather than the reading, because the test above requires the
+ *  figure to stay as it is — printing the magnitude would have made the sentence true and the
+ *  number unmatchable against the dashboard.
+ */
+describe("a rule that watches a magnitude", () => {
+  const put = rule({ field: "option_delta", threshold: 0.12, direction: "above", compare: "abs" });
+
+  it("mirrors the comparison so the relation is true of the figure it prints", () => {
+    const d = alarmTransition(put, -0.15, "1204_P6950", calm(), POLICY, NOW);
+    // -0.150 ≤ -0.12 is true; "crossed ≥ 0.12" was not
+    expect(d.notice).toBe("⚠️ 1204_P6950: option_delta -0.150 fell ≤ -0.12");
+  });
+
+  it("says the same on a reminder", () => {
+    const state = { triggered: true, lastAlarmAt: new Date(NOW.getTime() - 3_600_000) };
+    const d = alarmTransition(put, -0.15, "1204_P6950", state, POLICY, NOW);
+    expect(d.notice).toBe("⚠️ 1204_P6950: option_delta -0.150 still ≤ -0.12 (reminder)");
+  });
+
+  it("and on the way back, where the old wording was plainly false", () => {
+    const state = { triggered: true, lastAlarmAt: new Date(NOW.getTime() - 3_600_000) };
+    const d = alarmTransition(put, -0.09, "1204_P6950", state, POLICY, NOW);
+    // -0.090 is back ABOVE -0.12, which is where it recovered to
+    expect(d.notice).toBe("✅ 1204_P6950: option_delta -0.090 back above -0.12");
+  });
+
+  it("leaves a POSITIVE reading under the same rule exactly as it was", () => {
+    const d = alarmTransition(put, 0.15, "1204_C8100", calm(), POLICY, NOW);
+    expect(d.notice).toBe("⚠️ 1204_C8100: option_delta 0.150 crossed ≥ 0.12");
+  });
+
+  it("mirrors a below-rule the other way, so a decayed magnitude still reads true", () => {
+    // "alarm when |delta| ≤ 0.05": a negative reading breaches by being ABOVE -0.05
+    const decayed = rule({ threshold: 0.05, direction: "below", compare: "abs" });
+    const d = alarmTransition(decayed, -0.03, "1204_P6950", calm(), POLICY, NOW);
+    expect(d.notice).toBe("⚠️ 1204_P6950: option_delta -0.030 crossed ≥ -0.05");
+  });
+
+  it("leaves a signed rule reading exactly as it did, sign and all", () => {
+    // signed is where a negative threshold is legal and the sign is the whole point
+    const signed = rule({ threshold: -0.1, direction: "below", compare: "signed" });
+    const d = alarmTransition(signed, -0.15, "1204_P6950", calm(), POLICY, NOW);
+    expect(d.notice).toBe("⚠️ 1204_P6950: option_delta -0.150 fell ≤ -0.1");
+  });
+});

@@ -479,6 +479,175 @@
         "triggered": true,
         "notice": "⚠️ 1120_7100: option_delta 0.300 crossed ≥ 0.3"
       }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a negative reading breaches below the negated threshold",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        -0.42,
+        "1120_P6500",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_P6500: option_delta -0.420 fell ≤ -0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "and reminds in the same words",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        -0.42,
+        "1120_P6500",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:59:59.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": null,
+        "notice": "⚠️ 1120_P6500: option_delta -0.420 still ≤ -0.3 (reminder)"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "and recovers back ABOVE the negated threshold",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        -0.12,
+        "1120_P6500",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:59:59.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": false,
+        "notice": "✅ 1120_P6500: option_delta -0.120 back above -0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a decayed magnitude reads true under a below-rule",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.05,
+          "direction": "below",
+          "compare": "abs"
+        },
+        -0.03,
+        "1120_P6500",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_P6500: option_delta -0.030 crossed ≥ -0.05"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a signed rule is left exactly as it was",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": -0.1,
+          "direction": "below",
+          "compare": "signed"
+        },
+        -0.42,
+        "1120_P6500",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_P6500: option_delta -0.420 fell ≤ -0.1"
+      }
     }
   ]
 }

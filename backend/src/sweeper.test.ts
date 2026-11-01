@@ -1251,19 +1251,25 @@ describe("a sweep that cannot finish", () => {
     expect(sent.filter((t) => t.includes("crossed"))).toHaveLength(0);
   });
 
-  it("is not a success when the engine cannot even read a rule", async () => {
-    // the worst case, and the one that needs no trigger: a combo's leg codes are BUILT from its
-    // strike date (monitorLegCodes -> buildSpxCode -> parseStrikeDate, which throws), and that
-    // happens in the code assembly BEFORE the batch is asked for. The old shape recorded neither
-    // success nor failure there and left the previous sweep's verdict standing while nothing was
-    // swept at all. A single-leg rule carries its code already and cannot reach this.
-    combo({ strike_date: "the first of never" });
+  it("says so loudly when the engine cannot even read the only rule there is", async () => {
+    // A combo's leg codes are BUILT from its strike date (monitorLegCodes -> buildSpxCode ->
+    // parseStrikeDate, which throws), in the code assembly BEFORE the batch is asked for. A
+    // single-leg rule carries its code already and cannot reach this.
+    //
+    // #182 made this a FAILED sweep, because the shape before it recorded neither success nor
+    // failure and left the previous verdict standing while nothing was swept — a silent nothing,
+    // which is what that decision was about. It is not silent now: the row is quarantined and the
+    // owner is told, which is work, and the rest of the watchlist is swept instead of being
+    // sacrificed to signal one bad row (review 2026-11-01). The claim #182 cared about is kept
+    // here as the assertion that something was SAID.
+    const id = combo({ strike_date: "the first of never" });
     const s = sweeper(quoting("option_delta", { [CODE]: 0.7 }));
 
     await s.sweep();
 
-    expect(s.lastSweepOk(), "no sweep happened and the engine said it was fine").toBe(false);
-    expect(s.consecutiveFailures()).toBe(1);
+    expect(sent.some((t) => t.includes("could not be read")), "it must not pass in silence").toBe(true);
+    expect(row(id)!.enabled, "and the rule it cannot read is quarantined").toBe(0);
+    expect(row(id)!.disabled_reason).toBe("unreadable");
   });
 
   it("evaluates the rest of the watchlist when one row refuses", async () => {
@@ -1283,5 +1289,124 @@ describe("a sweep that cannot finish", () => {
     // and still not a clean sweep: one rule was not evaluated, which the engine must own up to
     expect(s.lastSweepOk()).toBe(false);
     expect(row(bad)!.triggered).toBe(0);
+  });
+});
+
+/** A row the engine cannot read costs ONE rule, not the sweep.
+ *
+ *  The watchlist was hydrated eagerly, before the fetch, outside any try — so `toMonitor`'s
+ *  JSON.parse or `buildSpxCode`'s refusal took the whole sweep down, every minute, with the healthy
+ *  rules beside it never evaluated and no alarm ever sent. The per-row guard in `evaluate`, whose
+ *  comment claims it covers "corrupt legs, an unparseable date", never got the chance.
+ *
+ *  This is #81's failure mode through a different door, found by review on 2026-11-01. It needs
+ *  corrupt data to start, which the write paths prevent — a hand edit, a bad import or a damaged
+ *  restore is the way in — and the cost when it starts is every alarm, silently.
+ */
+describe("a row the engine cannot read", () => {
+  const corrupt = (over: Record<string, unknown>) => {
+    const id = monitor(over);
+    return id;
+  };
+
+  it("is quarantined, and the healthy rule beside it is still swept", async () => {
+    const good = monitor();
+    // a combo whose strike_date the domain refuses: monitorLegCodes builds each leg's code from it
+    const bad = corrupt({
+      code: "cmb-bad", option_type: "CMB", strike: 0, field: "mid_price", strike_date: "not-a-date",
+      legs: [{ sign: 1, option_type: "CALL", strike: 8100 }],
+    });
+    const s = sweeper(quoting("option_delta", { [CODE]: 0.9 }));
+
+    await s.sweep();
+
+    expect(s.lastSweepOk(), "the sweep must not fail over one row").toBe(true);
+    expect(row(good)!.last_checked_at, "the healthy rule was evaluated").not.toBe(null);
+    expect(row(good)!.triggered).toBe(1);
+    expect(row(bad)!.enabled, "the unreadable rule is quarantined").toBe(0);
+    expect(row(bad)!.disabled_reason).toBe("unreadable");
+    expect(sent.some((t) => t.includes("cmb-bad") && t.includes("could not be read"))).toBe(true);
+  });
+
+  it("says so once, not every sweep", async () => {
+    corrupt({ code: "cmb-bad2", option_type: "CMB", strike: 0, legs: "{not json" as unknown });
+    const s = sweeper(quoting("option_delta", { [CODE]: 0.9 }));
+
+    await s.sweep();
+    const after = sent.length;
+    await s.sweep();
+
+    // quarantined on the first pass, so the second does not see it among the active rows
+    expect(sent.length, "a quarantined row is not re-announced").toBe(after);
+  });
+
+  it("keeps sweeping when a POSITION is the unreadable one", async () => {
+    const good = monitor();
+    db.prepare(`insert into positions (id, name, strategy, strike_date, contracts, entry, legs,
+      created_at) values ('pbad', 'broken', 'x', '2026-12-18', 1, 1.0, '{not json',
+      '2026-08-01 00:00:00.000000')`).run();
+    const s = sweeper(quoting("option_delta", { [CODE]: 0.9 }));
+
+    await s.sweep();
+
+    // a holding cannot be quarantined — it is not a rule — so it is skipped and the sweep goes on.
+    // The dashboard surfaces it: the panel has no figures for a row it cannot parse.
+    expect(s.lastSweepOk()).toBe(true);
+    expect(row(good)!.last_checked_at).not.toBe(null);
+  });
+});
+
+/** A rule changed DURING the sweep's fetch.
+ *
+ *  The sweep awaits a live Provider batch, which takes real time, and the re-read after it exists
+ *  because "a request may have changed the row in the meantime". It harvested `triggered` and
+ *  `last_alarm_at` and never looked at `enabled` — so muting a flapping rule from the dashboard or
+ *  the bot while a sweep was out got you the message anyway, with the flag left on so the eventual
+ *  unmute re-fired it (review 2026-11-01).
+ */
+describe("a rule muted while the sweep is out", () => {
+  it("is not alarmed, and its flag is left alone", async () => {
+    const id = monitor();
+    // mutes the row from inside the fetch, exactly as a concurrent PATCH would
+    const racing: FakeProvider = (codes) => {
+      db.prepare("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?").run(id);
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.9 })));
+    };
+    const s = sweeper(racing);
+
+    await s.sweep();
+
+    expect(sent.filter((t) => t.includes("crossed")), "it alarmed on a muted rule").toHaveLength(0);
+    expect(row(id)!.triggered, "and latched the flag on a disabled row").toBe(0);
+  });
+});
+
+/** A knob set to 0 in .env.
+ *
+ *  `env.ts` rejects empty and non-integer values but had no range check, and 0 is a plausible thing
+ *  to type because two neighbouring knobs document 0 as "off" (ALARM_REPEAT_SECONDS,
+ *  QUARANTINE_AFTER_SILENT_SWEEPS). For these two it is not off, it is broken: a degraded threshold
+ *  of 0 made `0 >= 0` true on a HEALTHY sweep and sent "recovered" every minute for ever, while
+ *  disabling the degraded alert it was meant to arm (review 2026-11-01).
+ */
+describe("a knob that cannot be zero", () => {
+  it("refuses a degraded threshold of zero rather than flooding the chat", () => {
+    expect(() => settingsFor({ ...BASE, degradedAfterFailures: 0 })).toThrow(/DEGRADED_AFTER_FAILURES/);
+  });
+
+  it("refuses a sweep interval of zero, which would thrash the scheduler", () => {
+    // setInterval(..., 0) plus a stall threshold of 0: permanently stalled, failing every tick
+    expect(() => settingsFor({ ...BASE, monitorIntervalSeconds: 0 })).toThrow(/MONITOR_INTERVAL_SECONDS/);
+  });
+
+  it("still allows the knobs that document zero as off", () => {
+    expect(() => settingsFor({ ...BASE, alarmRepeatSeconds: 0 })).not.toThrow();
+    expect(() => settingsFor({ ...BASE, quarantineAfterSilentSweeps: 0 })).not.toThrow();
+    expect(() => settingsFor({ ...BASE, expiredRetentionDays: 0 })).not.toThrow();
+  });
+
+  it("refuses a negative count anywhere", () => {
+    expect(() => settingsFor({ ...BASE, alarmRepeatSeconds: -1 })).toThrow();
+    expect(() => settingsFor({ ...BASE, quarantineAfterSilentSweeps: -1 })).toThrow();
   });
 });
