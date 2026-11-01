@@ -351,6 +351,10 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "silenceReason", name: "a leg with no quote at all", args: [combo, new Set([SP, SC, LC])] },
     { fn: "silenceReason", name: "two legs missing, named in sorted order",
       args: [combo, new Set([SC, LC])] },
+    // the put is EARLIER in the combo's legs and LATER in sorted order, so this is the case that
+    // tells the two apart — a sweep's notice must not depend on how the structure was entered
+    { fn: "silenceReason", name: "sorted, not in the order the legs were entered",
+      args: [combo, new Set([SP, LC])] },
     { fn: "silenceReason", name: "every leg priced, so the field itself is missing",
       args: [combo, new Set([LP, SP, SC, LC])] },
     { fn: "silenceReason", name: "a single contract with no quote", args: [single, new Set()] },

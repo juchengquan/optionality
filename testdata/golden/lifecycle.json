@@ -94,6 +94,51 @@
     },
     {
       "fn": "silenceReason",
+      "name": "sorted, not in the order the legs were entered",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7150000",
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": "no quote for US.SPXW261120C7100000, US.SPXW261120P6450000"
+    },
+    {
+      "fn": "silenceReason",
       "name": "every leg priced, so the field itself is missing",
       "args": [
         {
