@@ -13,8 +13,12 @@ import { spawn } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
+// resolved straight to this package's own source. It climbed to the repository root and joined
+// "backend/src" back on, which read as a tool reaching out of its package when ADR 0016 taught
+// check-boundaries to resolve paths — and it was never anything but indirection: the one directory
+// this walks is its own. The root is still wanted for the names it PRINTS, which are repo-relative.
+const SRC = new URL("../src", import.meta.url).pathname;
 const ROOT = new URL("../..", import.meta.url).pathname;
-const SRC = join(ROOT, "backend/src");
 
 /** main.ts is the entry point: loading it starts the service on purpose. It is checked by running
  *  the service, not by importing it. */

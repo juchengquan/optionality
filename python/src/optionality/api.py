@@ -18,12 +18,14 @@ client (`hc`) already holds to the routes. Standard library only, for two GET re
 
 import json
 import os
+from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from pydantic import TypeAdapter
 
+from optionality._ported import GOLDEN_CASES
 from optionality.monitor import Monitor
 from optionality.position import Position
 
@@ -75,3 +77,65 @@ def positions(base_url: str | None = None, token: str | None = None) -> list[Pos
 def monitors(base_url: str | None = None, token: str | None = None) -> list[Monitor]:
     """Every Monitor, enabled or not (`GET /monitors`)."""
     return TypeAdapter(list[Monitor]).validate_python(_get("/monitors", base_url, token))
+
+
+@dataclass(frozen=True)
+class Agreement:
+    """Whether this port and a running service hold the same golden cases.
+
+    `agrees` is True, False, or None for "could not tell" — and the object is TRUTHY unless it is
+    a definite no. A notebook on a plane must not report drift that is not there.
+
+    `reason` splits the two ways of not being able to tell, which the first version of this said
+    identically. Checked against the live service on 2026-11-01, before this field was deployed, it
+    reported "no service to compare with" about a service that was up and answering — it was simply
+    older than the check. "Nothing answered" and "it would not say" lead to different next moves:
+    one is a network, the other is a deploy.
+    """
+
+    mine: str
+    theirs: str | None
+    agrees: bool | None
+    reason: str = "compared"
+
+    def __bool__(self) -> bool:
+        return self.agrees is not False
+
+    def __str__(self) -> str:
+        if self.agrees is True:
+            return f"this port agrees with the service ({self.mine})"
+        if self.agrees is False:
+            return (
+                f"the engine has moved on: it holds {self.theirs}, this port was cut against "
+                f"{self.mine} — reinstall from a newer tag"
+            )
+        if self.reason == "silent":
+            return (
+                f"the service did not say which cases it holds — it is older than this check; "
+                f"this port was cut against {self.mine}"
+            )
+        return f"no service to compare with; this port was cut against {self.mine}"
+
+
+def agrees(base_url: str | None = None, token: str | None = None) -> Agreement:
+    """Ask the running service which golden cases it is, and compare (`GET /health`, ADR 0016).
+
+    The cases hold this port to the TypeScript at the moment it is WRITTEN. A notebook pins a tag
+    and keeps it, so the staleness it cannot otherwise see is "the engine has moved since my port
+    was cut" — the figures still compute, and still look right.
+
+        from optionality import api
+        print(api.agrees())        # first cell, once
+
+    Never called on import, and never raises: ADR 0014 exists so this package works with no service
+    running. No service, no verdict.
+    """
+    try:
+        health = _get("/health", base_url, token)
+    except ApiError:
+        return Agreement(GOLDEN_CASES, None, None, "unreachable")
+    # a service older than ADR 0016 answers without the field; that is not a disagreement
+    theirs = health.get("golden_cases") if isinstance(health, dict) else None
+    if not isinstance(theirs, str) or not theirs:
+        return Agreement(GOLDEN_CASES, None, None, "silent")
+    return Agreement(GOLDEN_CASES, theirs, theirs == GOLDEN_CASES)
