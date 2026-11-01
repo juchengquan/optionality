@@ -59,8 +59,24 @@ def _figure(value: float) -> str:
     return f"{to_fixed(value, 3):.3f}"
 
 
-def _below(monitor: Monitor) -> bool:
-    return monitor.direction == "below"
+def _mirrored(monitor: Monitor, value: float) -> bool:
+    """A magnitude rule that read a NEGATIVE figure, so the whole comparison is mirrored to suit it.
+
+    `is_breached` compares the magnitude under `compare: "abs"`, and the notice used to print the
+    raw value beside a signed comparison — `option_delta -0.151 crossed >= 0.12`, which is false.
+    The figure has to stay as it is, so that it matches the dashboard, so the COMPARISON moves:
+    |v| >= t with v < 0 is v <= -t, and |v| <= t is v >= -t. The direction word flips and the
+    threshold is shown negated, and every branch then reads true of the number beside it.
+    """
+    return monitor.compare != "signed" and value < 0
+
+
+def _threshold(monitor: Monitor, value: float) -> float:
+    return -monitor.threshold if _mirrored(monitor, value) else monitor.threshold
+
+
+def _below(monitor: Monitor, value: float) -> bool:
+    return (monitor.direction == "below") != _mirrored(monitor, value)
 
 
 def alarm_transition(
@@ -71,7 +87,8 @@ def alarm_transition(
     policy: AlarmPolicy,
     now: datetime,
 ) -> AlarmDecision:
-    sign = "≤" if _below(monitor) else "≥"
+    sign = "≤" if _below(monitor, value) else "≥"
+    shown = _threshold(monitor, value)
     breached = is_breached(value, monitor.threshold, monitor.direction, monitor.compare)
     if breached == state.triggered:
         # the flag already says this; the only thing left to decide is whether to re-remind
@@ -82,16 +99,16 @@ def alarm_transition(
             return UNCHANGED
         return AlarmDecision(
             triggered=None,
-            notice=f"⚠️ {name}: {monitor.field} {_figure(value)} still {sign} {monitor.threshold} (reminder)",
+            notice=f"⚠️ {name}: {monitor.field} {_figure(value)} still {sign} {shown} (reminder)",
         )
 
     # the state changed, and it is written whether or not the owner hears about it
     if _seconds_since(state.last_alarm_at, now) < policy.cooldown_seconds:
         return AlarmDecision(triggered=breached, notice=None)
     if breached:
-        word = "fell ≤" if _below(monitor) else "crossed ≥"
-        words = f"⚠️ {name}: {monitor.field} {_figure(value)} {word} {monitor.threshold}"
+        word = "fell ≤" if _below(monitor, value) else "crossed ≥"
+        words = f"⚠️ {name}: {monitor.field} {_figure(value)} {word} {shown}"
     else:
-        word = "back above" if _below(monitor) else "back below"
-        words = f"✅ {name}: {monitor.field} {_figure(value)} {word} {monitor.threshold}"
+        word = "back above" if _below(monitor, value) else "back below"
+        words = f"✅ {name}: {monitor.field} {_figure(value)} {word} {shown}"
     return AlarmDecision(triggered=breached, notice=words)

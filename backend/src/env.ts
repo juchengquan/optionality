@@ -113,6 +113,35 @@ const FROM_ENV = {
  *  typo — `EXIT_MANAGE_BY_DTE` is deliberately not here, because a DTE is a whole day. */
 const FRACTIONAL: ReadonlySet<keyof Settings> = new Set(["exitTakeFraction", "exitStopMultiple"]);
 
+/** Knobs that must be at least 1, because 0 is not "off" for them but broken.
+ *
+ *  `DEGRADED_AFTER_FAILURES=0` made `consecutiveFailures >= threshold` true on a HEALTHY sweep, so
+ *  the service sent "✅ monitoring recovered" every minute for ever while the degraded alert it was
+ *  meant to arm never fired at all. `MONITOR_INTERVAL_SECONDS=0` gives `setInterval(…, 0)` and a
+ *  stall threshold of 0, so `/health` reads permanently stalled and every tick records a failure.
+ *
+ *  0 IS off for the three left out — `ALARM_REPEAT_SECONDS`, `QUARANTINE_AFTER_SILENT_SWEEPS`,
+ *  `EXPIRED_RETENTION_DAYS` — which is exactly why 0 is a plausible thing to type here, and why
+ *  this list has to be explicit rather than "no zeroes anywhere" (review 2026-11-01).
+ */
+const AT_LEAST_ONE: readonly (keyof Settings)[] = [
+  "monitorIntervalSeconds", "degradedAfterFailures", "uiRefreshSeconds",
+];
+
+/** Every count is non-negative; some must be positive. Fatal, as a mistyped setting already is in
+ *  this file — the service should stop rather than run on a number that cannot mean anything. */
+export function checkSettings(settings: Settings): Settings {
+  for (const [key, value] of Object.entries(settings)) {
+    if (typeof value !== "number" || Number.isNaN(value)) continue;
+    const variable = FROM_ENV[key as keyof Settings] ?? key;
+    if (value < 0) throw new Error(`${variable} cannot be negative: ${value}`);
+    if (AT_LEAST_ONE.includes(key as keyof Settings) && value < 1) {
+      throw new Error(`${variable} must be at least 1: ${value}`);
+    }
+  }
+  return settings;
+}
+
 export function settingsFromEnv(env: Record<string, string | undefined> = process.env): Settings {
   const out = { ...DEFAULTS };
   for (const [key, variable] of Object.entries(FROM_ENV) as [keyof Settings, string][]) {
@@ -141,5 +170,7 @@ export function settingsFromEnv(env: Record<string, string | undefined> = proces
 
 /** Settings for a test, defaults everywhere the test does not care. */
 export function settingsFor(over: Partial<Settings> = {}): Settings {
-  return { ...DEFAULTS, ...over };
+  // checked here too: `settingsFor` is how every test builds Settings, so a knob the service would
+  // refuse must not be constructible in a test either
+  return checkSettings({ ...DEFAULTS, ...over });
 }

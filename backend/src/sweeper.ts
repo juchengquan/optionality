@@ -33,7 +33,7 @@ import {
   clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
   positionsForMonitors, updateMonitorFields,
 } from "./db/queries.ts";
-import type { MonitorRow } from "./db/rows.ts";
+import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
 import { toSqliteBool, } from "./db/values.ts";
 import type { Settings } from "./env.ts";
@@ -260,7 +260,7 @@ export class MonitorSweeper {
     this.sweepAt = at;
     const today = utcDate(at);
 
-    const active = await this.runExpiryLifecycle(today);
+    let active = await this.runExpiryLifecycle(today);
     this.forgetSilenceBut(active);
 
     // positions join the batch even when nothing alarms on them: the dashboard values them from
@@ -268,12 +268,42 @@ export class MonitorSweeper {
     // watching it. This widens the batch only — the alarm loop below still runs over `active`.
     // the rows, not only their codes: the same list is what the samples below are written from,
     // so a Position cannot be in the batch and missing from the record
-    const positionRows = listPositions(db);
-    const positionCodes = positionRows.flatMap((p) => positionLegCodes(toPosition(p)));
-    const codes = [...new Set([
-      ...active.flatMap((m) => monitorLegCodes(toMonitor(m))),
-      ...positionCodes,
-    ])].sort();
+    //
+    // HYDRATED PER ROW, inside a try. This ran as two bare flatMaps, so `toMonitor`'s JSON.parse
+    // or `buildSpxCode`'s refusal took the whole sweep down — every minute, with the healthy rules
+    // never evaluated and no alarm ever sent, which is #81's failure mode through a different door
+    // (review 2026-11-01). The per-row guard in `evaluate` below, whose comment claims it covers
+    // "corrupt legs, an unparseable date", never got the chance: this runs before the fetch.
+    //
+    // Filtering here also protects `quarantineUnknown`, which hydrates again inside a transaction.
+    const legible: MonitorRow[] = [];
+    const unreadable: MonitorRow[] = [];
+    const monitorCodes: string[] = [];
+    for (const monitor of active) {
+      try {
+        monitorCodes.push(...monitorLegCodes(toMonitor(monitor)));
+        legible.push(monitor);
+      } catch (err) {
+        console.warn(`cannot read monitor ${monitor.code}:`, err);
+        unreadable.push(monitor);
+      }
+    }
+    if (unreadable.length > 0) await this.quarantineUnreadable(unreadable);
+    active = legible;
+
+    // positions join the batch for the dashboard's sake, so an unreadable one costs its own figures
+    // and nothing else. A holding is not a rule and cannot be quarantined; the panel shows the gap.
+    const positionRows: PositionRow[] = [];
+    const positionCodes: string[] = [];
+    for (const position of listPositions(db)) {
+      try {
+        positionCodes.push(...positionLegCodes(toPosition(position)));
+        positionRows.push(position);
+      } catch (err) {
+        console.warn(`cannot read position ${position.name}:`, err);
+      }
+    }
+    const codes = [...new Set([...monitorCodes, ...positionCodes])].sort();
     if (codes.length === 0) {
       await this.recordSuccess();
       return;
@@ -373,6 +403,29 @@ export class MonitorSweeper {
 
   /** Disable — never delete — monitors whose contracts the Provider does not recognise. Its twin
    *  is the silence count in `evaluate`: the same answer to the other half of "cannot evaluate". */
+  /** A row the engine cannot hydrate: disabled with a notice, kept for inspection.
+   *
+   *  The same treatment an unknown contract gets, and for the same reason — a rule the engine
+   *  cannot evaluate is quarantined, never deleted (CLAUDE.md).
+   */
+  private async quarantineUnreadable(rows: MonitorRow[]): Promise<void> {
+    const { db } = this.deps;
+    const notices: string[] = [];
+    await atomic(db, () => {
+      for (const monitor of rows) {
+        const reason: DisabledReason = "unreadable";
+        updateMonitorFields(db, monitor.id, {
+          enabled: toSqliteBool(false), disabled_reason: reason,
+        });
+        notices.push(
+          `⚠️ monitor ${monitor.code} disabled: its row could not be read `
+          + "(corrupt legs, or a strike date this service refuses)",
+        );
+      }
+    });
+    for (const text of notices) await this.notify(text);
+  }
+
   private async quarantineUnknown(
     active: MonitorRow[], bad: Set<string>,
   ): Promise<MonitorRow[]> {
@@ -459,6 +512,12 @@ export class MonitorSweeper {
           // The Python re-reads for the same reason, across its session boundary.
           const current = findMonitor(db, row.id);
           if (!current) continue;
+          // INCLUDING whether it is still on. This harvested `triggered` and `last_alarm_at` and
+          // never looked at `enabled`, so muting a flapping rule from the dashboard or the bot
+          // while a sweep was out got you the message anyway — and left the flag on, so the
+          // eventual unmute re-fired it (review 2026-11-01). Deleted and muted are the same answer
+          // here: this reading is about a rule that is no longer being watched.
+          if (!current.enabled) continue;
 
           const changes: Partial<MonitorRow> = { last_value: value, last_checked_at: stamp };
           // the Provider's name for the contract where it has one: a combo's code IS its name,

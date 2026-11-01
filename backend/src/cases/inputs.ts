@@ -334,6 +334,31 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // exactly at the threshold is breached: the bell flips at the threshold, no hysteresis
     { fn: "alarmTransition", name: "exactly at the threshold is a breach",
       args: [single, 0.3, "1120_7100", state(false, null), alarms, NOW] },
+
+    // A NEGATIVE reading under `compare: "abs"`, which every case above missed — the ordinary
+    // shape of a short put's delta. The comparison is mirrored so the sentence is true of the
+    // figure it prints; printing the magnitude instead would have broken the older requirement
+    // that the number match the dashboard (review 2026-11-01).
+    { fn: "alarmTransition", name: "a negative reading breaches below the negated threshold",
+      args: [single, -0.42, "1120_P6500", state(false, null), alarms, NOW] },
+    { fn: "alarmTransition", name: "and reminds in the same words",
+      args: [single, -0.42, "1120_P6500", state(true, ago(3601)), alarms, NOW] },
+    { fn: "alarmTransition", name: "and recovers back ABOVE the negated threshold",
+      args: [single, -0.12, "1120_P6500", state(true, ago(3601)), alarms, NOW] },
+    // the mirror runs the other way for a below-rule: "alarm when the magnitude has decayed"
+    { fn: "alarmTransition", name: "a decayed magnitude reads true under a below-rule",
+      args: [{ ...single, threshold: 0.05, direction: "below" }, -0.03, "1120_P6500",
+             state(false, null), alarms, NOW] },
+    // exactly zero is NOT mirrored. Both wordings are arithmetically true there — 0 ≤ 0.05 and
+    // 0 ≥ -0.05 — so nothing but a case can say which one is printed, and the unmirrored reading is
+    // the one that reads naturally. `-0 < 0` is false, so a negative zero lands here too.
+    { fn: "alarmTransition", name: "a reading of exactly zero is not mirrored",
+      args: [{ ...single, threshold: 0.05, direction: "below" }, 0, "1120_P6500",
+             state(false, null), alarms, NOW] },
+    // signed is untouched: a negative threshold is legal there and the sign is the point
+    { fn: "alarmTransition", name: "a signed rule is left exactly as it was",
+      args: [{ ...single, threshold: -0.1, direction: "below", compare: "signed" }, -0.42,
+             "1120_P6500", state(false, null), alarms, NOW] },
   ],
   /** JavaScript's own rules, which the Python reimplements by hand (ADR 0017).
    *

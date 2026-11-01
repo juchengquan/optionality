@@ -68,8 +68,8 @@ export function alarmTransition(
     if (!repeatSeconds || secondsSince(state.lastAlarmAt, now) < repeatSeconds) return UNCHANGED;
     return {
       triggered: null,
-      notice: `⚠️ ${name}: ${monitor.field} ${figure(value)} still ${sign(monitor)} `
-        + `${monitor.threshold} (reminder)`,
+      notice: `⚠️ ${name}: ${monitor.field} ${figure(value)} still ${sign(monitor, value)} `
+        + `${threshold(monitor, value)} (reminder)`,
     };
   }
 
@@ -77,16 +77,43 @@ export function alarmTransition(
   const quiet = secondsSince(state.lastAlarmAt, now) < policy.cooldownSeconds;
   if (quiet) return { triggered: breached, notice: null };
   const words = breached
-    ? `⚠️ ${name}: ${monitor.field} ${figure(value)} ${crossWord(monitor)} ${monitor.threshold}`
-    : `✅ ${name}: ${monitor.field} ${figure(value)} ${backWord(monitor)} ${monitor.threshold}`;
+    ? `⚠️ ${name}: ${monitor.field} ${figure(value)} ${crossWord(monitor, value)} ${threshold(monitor, value)}`
+    : `✅ ${name}: ${monitor.field} ${figure(value)} ${backWord(monitor, value)} ${threshold(monitor, value)}`;
   return { triggered: breached, notice: words };
 }
 
+/** The sentence, restated so it is TRUE of the figure it prints.
+ *
+ *  Two things have to hold at once, and the first attempt at this broke the second.
+ *
+ *  It must not assert a falsehood. `isBreached` compares `Math.abs(value)` under `compare: "abs"`,
+ *  and the notice read `option_delta -0.151 crossed ≥ 0.12` — where -0.151 is not ≥ 0.12 — and
+ *  `back below 0.12` about a value never above it. A short put's delta is negative by nature, so
+ *  that is the owner's ordinary configuration, not a corner (review, 2026-11-01, against a live
+ *  rule then 90% of the way to firing).
+ *
+ *  And the FIGURE must stay as it is, which `alarm.test.ts` has required since this module was
+ *  written: "a notice reading 0.420 would not match the figure anywhere else on the dashboard".
+ *  Printing the magnitude would have satisfied the first and broken that.
+ *
+ *  So the comparison is mirrored instead of the reading. Under `abs` a negative reading breaches
+ *  exactly when it is on the far side of the NEGATED threshold — |v| ≥ t with v < 0 is v ≤ -t, and
+ *  |v| ≤ t is v ≥ -t — so the direction word flips and the threshold is shown negated. Every
+ *  branch then reads true of the number beside it, in all four combinations of direction and sign,
+ *  and a signed rule is untouched.
+ */
+const signedCompare = (monitor: Monitor) => monitor.compare === "signed";
 /** three decimals: a delta's third is the one that moves, and a mid's third is a tenth of a cent */
 const figure = (value: number) => value.toFixed(3);
+/** a magnitude rule read a negative figure, so the whole comparison is mirrored to suit it */
+const mirrored = (monitor: Monitor, value: number) => !signedCompare(monitor) && value < 0;
+const threshold = (monitor: Monitor, value: number) =>
+  mirrored(monitor, value) ? -monitor.threshold : monitor.threshold;
 
-/** anything that is not "below" is above, matching `isBreached` and the Python's `direction !=` */
-const below = (monitor: Monitor) => monitor.direction === "below";
-const sign = (monitor: Monitor) => (below(monitor) ? "≤" : "≥");
-const crossWord = (monitor: Monitor) => (below(monitor) ? "fell ≤" : "crossed ≥");
-const backWord = (monitor: Monitor) => (below(monitor) ? "back above" : "back below");
+/** anything that is not "below" is above, matching `isBreached` and the Python's `direction !=`.
+ *  Flipped when the comparison is mirrored, which is what keeps the relation true. */
+const below = (monitor: Monitor, value: number) =>
+  (monitor.direction === "below") !== mirrored(monitor, value);
+const sign = (m: Monitor, v: number) => (below(m, v) ? "≤" : "≥");
+const crossWord = (m: Monitor, v: number) => (below(m, v) ? "fell ≤" : "crossed ≥");
+const backWord = (m: Monitor, v: number) => (below(m, v) ? "back above" : "back below");

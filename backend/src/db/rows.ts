@@ -73,7 +73,8 @@ export interface MonitorRow {
   scope: string | null;
   /** 0 | 1 */
   enabled: number;
-  /** "manual" | "expired" | "unknown-contract" | null */
+  /** DISABLED_REASONS, or null: "manual" | "expired" | "unknown-contract" | "no-figure"
+   *  | "unreadable". See schemas/monitor.ts, which is where the list lives. */
   disabled_reason: string | null;
   /** 0 | 1 */
   triggered: number;

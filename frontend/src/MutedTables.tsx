@@ -13,6 +13,7 @@ import { ConfirmDelete } from "./ConfirmDelete";
 export const GROUPS: [string | null, string][] = [
   ["unknown-contract", "Unknown contract"],
   ["no-figure", "Figure never arrived"],
+  ["unreadable", "Could not be read"],
   ["expired", "Expired"],
   ["manual", "Muted by you"],
   [null, "Reason not recorded"],
