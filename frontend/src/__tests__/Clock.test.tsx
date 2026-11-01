@@ -15,12 +15,15 @@ import { clockTime } from "../format";
  */
 describe("the screen's own clock", () => {
   it("is 24-hour and digits only, whatever locale the device is in", () => {
-    expect(clockTime(new Date("2026-10-21T21:39:05+08:00"))).toBe("21:39:05");
+    // the instant is written in +08 and read in the suite's pinned UTC, so this states the
+    // device-zone conversion rather than agreeing with it by coincidence. 13, not "1:39:05 PM".
+    expect(clockTime(new Date("2026-10-21T21:39:05+08:00"))).toBe("13:39:05");
   });
 
   it("pads every field, so the line does not jitter as the seconds tick", () => {
-    // tabular-nums does nothing for a string that changes length
-    expect(clockTime(new Date("2026-10-21T09:08:07+08:00"))).toBe("09:08:07");
+    // tabular-nums does nothing for a string that changes length. 09:08:07 in +08 is 01:08:07
+    // here, which pads the hour as well as the minute and the second.
+    expect(clockTime(new Date("2026-10-21T09:08:07+08:00"))).toBe("01:08:07");
   });
 
   it("puts a plain 24-hour time on the page, next to the service's", async () => {

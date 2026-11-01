@@ -158,7 +158,8 @@ describe("the holdings in the picture", () => {
 
 describe("the file name", () => {
   it("is dated and sortable", () => {
-    expect(snapshotName(new Date("2026-10-21T13:30:00+08:00"))).toBe("optionality-20261021-1330.png");
+    // the device's zone, which the suite pins to UTC: 13:30 in +08 is 05:30 here
+    expect(snapshotName(new Date("2026-10-21T13:30:00+08:00"))).toBe("optionality-20261021-0530.png");
   });
 });
 
