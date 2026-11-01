@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
-from optionality._js import math_round
 from optionality.contract import normalize_strike_date
+from optionality.js import math_round
 
 
 class ExitPolicy(BaseModel):

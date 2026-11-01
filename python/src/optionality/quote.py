@@ -6,7 +6,7 @@ a model would either drop the ones a notebook wants or need changing whenever mo
 
 from typing import Any
 
-from optionality._js import to_fixed
+from optionality.js import to_fixed
 
 type Quote = dict[str, Any]
 type ByCode = dict[str, Quote]

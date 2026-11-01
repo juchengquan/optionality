@@ -23,9 +23,9 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { noticeManageBy, recordSamples } from "./positions.ts";
-import { alarmPolicy, alarmTransition } from "./alarm.ts";
+import { alarmPolicy, alarmTransition } from "./domain/alarm.ts";
+import { expiryVerdict, silenceVerdict } from "./domain/lifecycle.ts";
 import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
-import type { Monitor } from "./domain/monitor.ts";
 import { exitPolicy } from "./domain/exit.ts";
 import { positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
@@ -74,27 +74,8 @@ function utcDate(when: Date): string {
   return when.toISOString().slice(0, 10);
 }
 
-function addDays(isoDate: string, days: number): string {
-  return new Date(Date.parse(`${isoDate}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
-}
-
-/** Why a rule's figure did not arrive, in the words the notice needs.
- *
- *  `monitorValue` answers null for two different faults and the notice is the only place the
- *  difference shows: a leg that was never priced is the Provider missing a CONTRACT, while a
- *  priced leg without the figure is the Provider not serving that FIELD — which is what an
- *  entitlement looks like. Blaming the field for an unpriced leg would send the owner to the wrong
- *  question.
- */
-/** When this rule last said anything, as a clock reads it rather than as SQLite stores it. */
 function lastAlarmAt(monitor: MonitorRow): Date | null {
   return monitor.last_alarm_at === null ? null : fromSqlDatetime(monitor.last_alarm_at);
-}
-
-function silence(monitor: Monitor, byCode: Record<string, QuoteRecord>): string {
-  const unpriced = monitorLegCodes(monitor).filter((code) => byCode[code] === undefined);
-  if (unpriced.length > 0) return `no quote for ${unpriced.sort().join(", ")}`;
-  return `no ${monitor.field} in the quote`;
 }
 
 export class MonitorSweeper {
@@ -357,34 +338,29 @@ export class MonitorSweeper {
   private async runExpiryLifecycle(today: string): Promise<MonitorRow[]> {
     const { db, settings } = this.deps;
     const retention = settings.expiredRetentionDays;
-    const cutoff = addDays(today, -retention);
     const active: MonitorRow[] = [];
     const notices: string[] = [];
 
     await atomic(db, () => {
       for (const monitor of listMonitors(db)) {
-        if (monitor.strike_date < cutoff) {
-          // retention=0 path: it never got the muted notice, so say something now
-          if (monitor.enabled) {
-            notices.push(`ℹ️ monitor ${monitor.code} expired (${monitor.strike_date}) — removed`);
-          }
+        // the decision is `domain/lifecycle.expiryVerdict` (ADR 0017); this applies it
+        const verdict = expiryVerdict(
+          { code: monitor.code, strike_date: monitor.strike_date, enabled: Boolean(monitor.enabled) },
+          today, retention,
+        );
+        if (verdict.notice !== null) notices.push(verdict.notice);
+        if (verdict.action === "remove") {
           // the links go FIRST. monitor_positions is not managed for us, and deleting a linked
           // monitor raises FOREIGN KEY constraint failed — inside the sweep, every minute, so the
           // alarm engine stops altogether. The Python had this fault until it was found by writing
           // this port (#81). The Position stays: it is a holding.
           clearMonitorLinks(db, monitor.id);
           deleteMonitorRow(db, monitor.id);
-        } else if (monitor.strike_date < today) {
-          if (monitor.enabled) {
-            const reason: DisabledReason = "expired";
-            updateMonitorFields(db, monitor.id, {
-              enabled: toSqliteBool(false), disabled_reason: reason,
-            });
-            notices.push(
-              `ℹ️ monitor ${monitor.code} expired (${monitor.strike_date}) — muted; `
-              + `auto-removes in ${retention} days`,
-            );
-          }
+        } else if (verdict.action === "mute") {
+          const reason: DisabledReason = "expired";
+          updateMonitorFields(db, monitor.id, {
+            enabled: toSqliteBool(false), disabled_reason: reason,
+          });
         } else if (monitor.enabled) {
           active.push(monitor);
         }
@@ -461,22 +437,20 @@ export class MonitorSweeper {
           const monitor = toMonitor(row);
           const value = monitorValue(monitor, byCode);
           if (value === null) {
-            const n = (this.silentSweeps.get(row.id) ?? 0) + 1;
-            this.silentSweeps.set(row.id, n);
-            const why = silence(monitor, byCode);
-            if (limit > 0 && n >= limit) {
+            // the decision is `domain/lifecycle.silenceVerdict` (ADR 0017); this applies it
+            const verdict = silenceVerdict(
+              monitor, new Set(Object.keys(byCode)), this.silentSweeps.get(row.id) ?? 0, limit,
+            );
+            if (verdict.count === null) this.silentSweeps.delete(row.id);
+            else this.silentSweeps.set(row.id, verdict.count);
+            if (verdict.quarantine) {
               const reason: DisabledReason = "no-figure";
               updateMonitorFields(db, row.id, {
                 enabled: toSqliteBool(false), disabled_reason: reason,
               });
-              // forgotten, not kept at the limit: unmuting the rule gives it its full count again
-              this.silentSweeps.delete(row.id);
-              notices.push(
-                `⚠️ monitor ${monitor.code} disabled: ${why} for ${n} consecutive sweeps`,
-              );
-            } else {
-              console.warn(`${why} for ${monitor.code} (${n}${limit > 0 ? `/${limit}` : ""})`);
             }
+            if (verdict.notice !== null) notices.push(verdict.notice);
+            else console.warn(`silent: ${monitor.code} (${verdict.count}${limit > 0 ? `/${limit}` : ""})`);
             continue;
           }
           // it arrived: the run of silence is over, and a run is what the limit counts

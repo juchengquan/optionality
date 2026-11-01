@@ -10,6 +10,7 @@
  *  disagree, and the TypeScript itself rounds three ways (`Math.round` in exit and expiry, Python's
  *  half-to-even in thresholdFill, `toFixed` in round4).
  */
+import type { AlarmPolicy, AlarmState } from "../domain/alarm.ts";
 import { buildSpxCode } from "../domain/contract.ts";
 import type { ExitPolicy } from "../domain/exit.ts";
 import type { Monitor } from "../domain/monitor.ts";
@@ -79,6 +80,21 @@ const single: Monitor = {
 };
 
 const policy: ExitPolicy = { takeFraction: 0.5, stopMultiple: 2, manageByDte: 21 };
+
+/** The alarm decision's own fixtures (ADR 0017).
+ *
+ *  `now` and the stamps are fixed instants rather than offsets from today: the decision is
+ *  entirely about the gap between two times, and a case computed from `new Date()` would be a
+ *  different case every day.
+ */
+const NOW = new Date("2026-11-01T12:00:00Z");
+const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
+const state = (triggered: boolean, lastAlarmAt: Date | null): AlarmState => ({ triggered, lastAlarmAt });
+/** the service's own defaults: throttle a state change for 15 minutes, re-remind after an hour */
+const alarms: AlarmPolicy = { cooldownSeconds: 900, repeatSeconds: 3600 };
+const noRepeat: AlarmPolicy = { cooldownSeconds: 900, repeatSeconds: 0 };
+/** `direction: "below"` — the wording changes on every branch, which is the point of casing it */
+const falling: Monitor = { ...single, direction: "below", threshold: 0.3 };
 
 const sample = (observed_on: string, dte: number, iv: number[], vega: number[]): VolSample => ({
   observed_on, dte,
@@ -230,6 +246,151 @@ export const INPUTS: Record<string, CaseInput[]> = {
       fn: "positionsHolding", name: "more named than is held",
       args: [[callSpread], [SC, LC, code("CALL", 7200)]],
     },
+  ],
+  alarm: [
+    // the four transitions, each with the sentence it sends
+    { fn: "alarmTransition", name: "a first breach crosses and says so",
+      args: [single, 0.42, "1120_7100", state(false, null), alarms, NOW] },
+    { fn: "alarmTransition", name: "falling below fell rather than crossed",
+      args: [falling, 0.21, "1120_7100", state(false, null), alarms, NOW] },
+    { fn: "alarmTransition", name: "coming back is the other word again",
+      args: [single, 0.12, "1120_7100", state(true, ago(4000)), alarms, NOW] },
+    { fn: "alarmTransition", name: "coming back above, for a falling rule",
+      args: [falling, 0.44, "1120_7100", state(true, ago(4000)), alarms, NOW] },
+
+    // the flag moves whether or not the owner hears about it
+    { fn: "alarmTransition", name: "inside the cooldown the flag is written and nothing is said",
+      args: [single, 0.42, "1120_7100", state(false, ago(10)), alarms, NOW] },
+    { fn: "alarmTransition", name: "exactly at the cooldown is no longer inside it",
+      args: [single, 0.42, "1120_7100", state(false, ago(900)), alarms, NOW] },
+
+    // a breach that persists
+    { fn: "alarmTransition", name: "a persisting breach re-reminds once the cadence has passed",
+      args: [single, 0.42, "1120_7100", state(true, ago(3601)), alarms, NOW] },
+    { fn: "alarmTransition", name: "and says nothing before it has",
+      args: [single, 0.42, "1120_7100", state(true, ago(3599)), alarms, NOW] },
+    { fn: "alarmTransition", name: "a zero cadence never reminds",
+      args: [single, 0.42, "1120_7100", state(true, ago(999999)), noRepeat, NOW] },
+    { fn: "alarmTransition", name: "an unbreached rule that was not triggered says nothing at all",
+      args: [single, 0.12, "1120_7100", state(false, ago(10)), alarms, NOW] },
+
+    // never alarmed is long ago, not never: the first breach the cooldown swallowed leaves a flag
+    // and no stamp, and reading that as "too soon" would silence the rule for ever
+    { fn: "alarmTransition", name: "never alarmed counts as long ago",
+      args: [single, 0.42, "1120_7100", state(true, null), alarms, NOW] },
+
+    // the figure is three decimals, which is the one place toFixed is exercised by a case
+    { fn: "alarmTransition", name: "the figure is three decimals, rounded as JavaScript rounds",
+      args: [single, 0.3125, "1120_7100", state(false, null), alarms, NOW] },
+    // 0.0625 is an EXACT binary half at the third decimal, so the two languages part company
+    // inside the sentence: toFixed gives 0.063 and Python's round gives 0.062. The only case in
+    // this file where the notice itself carries a rounding divergence.
+    { fn: "alarmTransition", name: "an exact binary half in the figure rounds away from zero",
+      args: [falling, 0.0625, "1120_7100", state(false, null), alarms, NOW] },
+
+    // exactly at the threshold is breached: the bell flips at the threshold, no hysteresis
+    { fn: "alarmTransition", name: "exactly at the threshold is a breach",
+      args: [single, 0.3, "1120_7100", state(false, null), alarms, NOW] },
+  ],
+  /** JavaScript's own rules, which the Python reimplements by hand (ADR 0017).
+   *
+   *  Every one of these was a docstring claim until now. The five that were measured to diverge on
+   *  2026-11-01 are marked; the rest are here because a port that gets `Number("")` wrong would be
+   *  wrong everywhere a quote field is empty, and nothing said so.
+   */
+  js: [
+    // Math.round ties toward +Infinity; Python's round ties to even
+    { fn: "mathRound", name: "a half rounds up", args: [12.5] },
+    { fn: "mathRound", name: "a negative half rounds toward zero, not away", args: [-2.5] },
+    { fn: "mathRound", name: "minus a half is negative zero", args: [-0.5] },
+    { fn: "mathRound", name: "the largest double below a half rounds down", args: [0.49999999999999994] },
+    { fn: "mathRound", name: "NaN stays NaN", args: [NaN] },
+    { fn: "mathRound", name: "Infinity stays Infinity", args: [Infinity] },
+
+    // toFixed rounds the EXACT binary value and ties away from zero
+    { fn: "toFixed", name: "an exact binary half goes away from zero", args: [0.03125, 4] },
+    { fn: "toFixed", name: "a decimal half is below its own value in binary", args: [1.0005, 3] },
+    { fn: "toFixed", name: "three decimals of an exact binary half", args: [0.0625, 3] },
+    { fn: "toFixed", name: "a negative exact half", args: [-0.03125, 4] },
+    { fn: "toFixed", name: "no decimals at all", args: [2.5, 0] },
+    { fn: "toFixed", name: "NaN survives", args: [NaN, 2] },
+
+    // Number() on what a quote field can hold
+    { fn: "number", name: "the empty string is zero, not an error", args: [""] },
+    { fn: "number", name: "whitespace is trimmed", args: ["  12.5  "] },
+    { fn: "number", name: "a tab and a newline are whitespace too", args: ["\t-3\n"] },
+    { fn: "number", name: "null is zero", args: [null] },           // DIVERGED: the port said NaN
+    { fn: "number", name: "a bool is one or zero", args: [true] },
+    { fn: "number", name: "a hex literal", args: ["0x10"] },        // DIVERGED: the port said NaN
+    { fn: "number", name: "a binary literal", args: ["0b101"] },
+    { fn: "number", name: "an octal literal", args: ["0o17"] },
+    { fn: "number", name: "an exponent", args: ["1.5e3"] },
+    { fn: "number", name: "a leading plus", args: ["+7"] },
+    { fn: "number", name: "the word Infinity", args: ["Infinity"] },
+    { fn: "number", name: "and negative Infinity", args: ["-Infinity"] },
+    { fn: "number", name: "trailing rubbish is not a number", args: ["12abc"] },
+    { fn: "number", name: "an empty array is zero", args: [[]] },   // DIVERGED: the port said NaN
+    { fn: "number", name: "a one-element array is that element", args: [[5]] },
+    { fn: "number", name: "a longer array is not a number", args: [[1, 2]] },
+    { fn: "number", name: "an object is not a number", args: [{}] },
+    { fn: "number", name: "a signed hex literal is not a number", args: ["-0x10"] },
+
+    // truthiness
+    { fn: "truthy", name: "zero is falsy", args: [0] },
+    { fn: "truthy", name: "the string zero is not", args: ["0"] },
+    { fn: "truthy", name: "the empty string is falsy", args: [""] },
+    { fn: "truthy", name: "null is falsy", args: [null] },
+    { fn: "truthy", name: "NaN is falsy", args: [NaN] },
+    { fn: "truthy", name: "an empty array is TRUTHY", args: [[]] },  // DIVERGED: the port said false
+    { fn: "truthy", name: "an empty object is truthy too", args: [{}] },
+    { fn: "truthy", name: "a negative number is truthy", args: [-1] },
+  ],
+  /** What the sweep decides about a rule it cannot evaluate, and one that has expired (ADR 0017). */
+  lifecycle: [
+    // the reason a figure did not arrive, in the words the notice uses
+    { fn: "silenceReason", name: "a leg with no quote at all", args: [combo, new Set([SP, SC, LC])] },
+    { fn: "silenceReason", name: "two legs missing, named in sorted order",
+      args: [combo, new Set([SC, LC])] },
+    { fn: "silenceReason", name: "every leg priced, so the field itself is missing",
+      args: [combo, new Set([LP, SP, SC, LC])] },
+    { fn: "silenceReason", name: "a single contract with no quote", args: [single, new Set()] },
+
+    // the run of silence, and where it ends
+    { fn: "silenceVerdict", name: "a first silent sweep only counts",
+      args: [single, new Set(), 0, 3] },
+    { fn: "silenceVerdict", name: "one short of the limit still only counts",
+      args: [single, new Set(), 1, 3] },
+    { fn: "silenceVerdict", name: "reaching the limit quarantines and says so",
+      args: [single, new Set(), 2, 3] },
+    { fn: "silenceVerdict", name: "a limit of one quarantines on the first sweep",
+      args: [single, new Set(), 0, 1] },
+    // 0 only logs: quarantine is OBSERVED, never declared, and what a provider serves depends on
+    // the account rather than on its code
+    { fn: "silenceVerdict", name: "a limit of zero never quarantines, however long the run",
+      args: [single, new Set(), 99, 0] },
+    { fn: "silenceVerdict", name: "the count is forgotten rather than held at the limit",
+      args: [single, new Set(), 5, 3] },
+
+    // what becomes of a monitor whose expiry has passed
+    { fn: "expiryVerdict", name: "not expired yet, so nothing happens",
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-19", 7] },
+    { fn: "expiryVerdict", name: "expiry day itself is not past",
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-20", 7] },
+    { fn: "expiryVerdict", name: "the day after expiry mutes with a notice",
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-21", 7] },
+    { fn: "expiryVerdict", name: "already muted, so the mute is not announced twice",
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false }, "2026-11-21", 7] },
+    { fn: "expiryVerdict", name: "past the retention window it is removed, quietly if already muted",
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false }, "2026-11-28", 7] },
+    // retention 0: it never got the muted notice, so the removal is what says anything at all
+    { fn: "expiryVerdict", name: "zero retention removes the day after, and says so",
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-21", 0] },
+    { fn: "expiryVerdict", name: "the retention boundary itself is not past",
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false }, "2026-11-27", 7] },
+
+    { fn: "addDays", name: "across a month end", args: ["2026-11-28", 7] },
+    { fn: "addDays", name: "backwards across a month end", args: ["2026-12-03", -7] },
+    { fn: "addDays", name: "across a leap day", args: ["2028-02-28", 2] },
   ],
   monitor: [
     { fn: "monitorLegCodes", name: "a combo", args: [combo] },

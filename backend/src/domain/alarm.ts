@@ -17,7 +17,7 @@
  *  all. Collapsing them is how a throttled alarm re-announces itself on every sweep after — the
  *  flag never got written, so the next sweep sees the breach as fresh again.
  */
-import { isBreached, type Monitor } from "./domain/monitor.ts";
+import { isBreached, type Monitor } from "./monitor.ts";
 
 /** What the database says about this rule right now — re-read after the fetch, in the sweep. */
 export interface AlarmState {

@@ -42,7 +42,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - **Golden cases:** a change to anything `backend/src/domain/` exports changes what
   `testdata/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
   — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
-  exported domain function must have a case (ADR 0014). The generator is `tools/cases.ts`, not
+  exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
+  holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port. The generator is `tools/cases.ts`, not
   `backend/`'s: it also writes the two FINGERPRINT stamps (`backend/src/golden.ts` and
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
   repo-wide codegen step rather than something the backend may do. Both stamps are generated and
@@ -80,8 +81,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Layout
 
-- `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (pure maths that
-  imports nothing outside itself — canonical, see golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
+- `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (everything pure
+  and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
+  `alarm.ts` and its Telegram wording, `lifecycle.ts`'s quarantine and expiry verdicts, and `js.ts`,
+  the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
   Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (the Client Portal client, over plain
   `fetch` — EXPERIMENTAL, proved against a stub gateway and never against a real one), `db/` (schema, migrations, queries),

@@ -1,0 +1,483 @@
+{
+  "module": "alarm",
+  "cases": [
+    {
+      "fn": "alarmTransition",
+      "name": "a first breach crosses and says so",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.42,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_7100: option_delta 0.420 crossed ≥ 0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "falling below fell rather than crossed",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "below",
+          "compare": "abs"
+        },
+        0.21,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_7100: option_delta 0.210 fell ≤ 0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "coming back is the other word again",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.12,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:53:20.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": false,
+        "notice": "✅ 1120_7100: option_delta 0.120 back below 0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "coming back above, for a falling rule",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "below",
+          "compare": "abs"
+        },
+        0.44,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:53:20.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": false,
+        "notice": "✅ 1120_7100: option_delta 0.440 back above 0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "inside the cooldown the flag is written and nothing is said",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.42,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T11:59:50.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": null
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "exactly at the cooldown is no longer inside it",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.42,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T11:45:00.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_7100: option_delta 0.420 crossed ≥ 0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a persisting breach re-reminds once the cadence has passed",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.42,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:59:59.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": null,
+        "notice": "⚠️ 1120_7100: option_delta 0.420 still ≥ 0.3 (reminder)"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "and says nothing before it has",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.42,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T11:00:01.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": null,
+        "notice": null
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a zero cadence never reminds",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.42,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-10-20T22:13:21.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 0
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": null,
+        "notice": null
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "an unbreached rule that was not triggered says nothing at all",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.12,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T11:59:50.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": null,
+        "notice": null
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "never alarmed counts as long ago",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.42,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": null,
+        "notice": "⚠️ 1120_7100: option_delta 0.420 still ≥ 0.3 (reminder)"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "the figure is three decimals, rounded as JavaScript rounds",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.3125,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_7100: option_delta 0.313 crossed ≥ 0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "an exact binary half in the figure rounds away from zero",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "below",
+          "compare": "abs"
+        },
+        0.0625,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_7100: option_delta 0.063 fell ≤ 0.3"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "exactly at the threshold is a breach",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.3,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_7100: option_delta 0.300 crossed ≥ 0.3"
+      }
+    }
+  ]
+}
