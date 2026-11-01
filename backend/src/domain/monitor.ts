@@ -104,7 +104,14 @@ export function thresholdFill(
   if (direction === "above") ratio = metric / threshold;
   else if (metric > 0) ratio = threshold / metric;
   else return null;
-  return Math.max(0, Math.min(100, pyRoundToInt(ratio * 100)));
+  const scaled = ratio * 100;
+  // A NaN reading is not a fill. `monitorValue` runs a quote field through `Number()`, which
+  // answers NaN for text, and the NaN then reached the bar's width as "NaN%" and the Python's
+  // `round()` as a ValueError. No figure is the honest answer, and it is the one both languages
+  // can give (review 2026-11-01). Infinity still clamps, as it always did.
+  if (Number.isNaN(scaled)) return null;
+  if (!Number.isFinite(scaled)) return scaled > 0 ? 100 : 0;
+  return Math.max(0, Math.min(100, pyRoundToInt(scaled)));
 }
 
 /** Why a threshold cannot be compared that way, or null — the FAULT, not the sentence.

@@ -92,6 +92,20 @@ def call(module: str, fn: str, args: list):
     f = getattr(importlib.import_module(f"optionality.{module}"), snake(fn))
     hints = typing.get_type_hints(f)
     params = list(inspect.signature(f).parameters.values())
+    # MORE arguments than parameters means the TypeScript takes an argument this port does not.
+    # `zip(strict=False)` dropped the extra in silence, so a parameter lost in the port — or gained
+    # on the canonical side and not mirrored — left every case passing on the Python default. The
+    # cases are the only thing holding the port, so the hole was in the guard itself (review
+    # 2026-11-01). Fewer is legal and deliberate: eight cases omit a trailing optional argument,
+    # which is the only way a DEFAULT is ever compared.
+    assert len(args) <= len(params), (
+        f"optionality.{module}.{snake(fn)} takes {len(params)} arguments; "
+        f"the case passes {len(args)} — the port is missing a parameter"
+    )
+    for extra in params[len(args) :]:
+        assert extra.default is not inspect.Parameter.empty, (
+            f"optionality.{module}.{snake(fn)} requires {extra.name}, which the case does not pass"
+        )
     converted = [TypeAdapter(hints[p.name]).validate_python(a) for p, a in zip(params, decode(args), strict=False)]
     try:
         return encode(f(*converted))
@@ -141,9 +155,7 @@ def test_states_the_same_constant(module, name, expected):
     """
     mod = importlib.import_module(f"optionality.{module}")
     assert hasattr(mod, name), f"optionality.{module} has no {name}"
-    assert same(encode(getattr(mod, name)), expected), (
-        f"got {getattr(mod, name)!r}, the TypeScript says {expected!r}"
-    )
+    assert same(encode(getattr(mod, name)), expected), f"got {getattr(mod, name)!r}, the TypeScript says {expected!r}"
 
 
 @pytest.mark.parametrize(("module", "case"), ALL)

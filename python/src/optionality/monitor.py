@@ -4,6 +4,7 @@ A combo's value is the signed sum of its legs under their signs — minus is sho
 sums: any unpriced leg leaves no value. IV is never summed. The 🔔 flips at the EXACT threshold.
 """
 
+import math
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -78,7 +79,10 @@ def monitor_value(monitor: Monitor, by_code: ByCode) -> float | None:
 
 def threshold_fill(value: float | None, threshold: float | None, direction: str, compare: str) -> int | None:
     """How far a value has travelled toward its threshold, 0-100, rounded half to even."""
-    if value is None or not threshold:
+    # `not threshold` excludes 0 as well as a missing one — nothing can be a fraction of zero — and
+    # NaN with it, because JavaScript's `!NaN` is true where Python's `not nan` is False: a NaN
+    # threshold answered a fill here and None there (review 2026-11-01).
+    if value is None or not threshold or math.isnan(threshold):
         return None
     metric = abs(value) if compare == "abs" else value
     if metric < 0 or threshold < 0:
@@ -89,7 +93,14 @@ def threshold_fill(value: float | None, threshold: float | None, direction: str,
         ratio = threshold / metric
     else:
         return None
-    return max(0, min(100, round(ratio * 100)))
+    scaled = ratio * 100
+    # a NaN reading is not a fill, and `round(nan)` raises where the TypeScript propagated it to
+    # the bar's width as "NaN%". Both answer "no figure" now; infinity still clamps.
+    if math.isnan(scaled):
+        return None
+    if math.isinf(scaled):
+        return 100 if scaled > 0 else 0
+    return max(0, min(100, round(scaled)))
 
 
 def threshold_fault(compare: str, threshold: float) -> ThresholdFault | None:
