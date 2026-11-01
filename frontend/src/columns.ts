@@ -2,6 +2,15 @@ import type { Entry } from "./api";
 import { cellValue } from "./cells";
 import { FIELD_COLUMN, shortDate } from "./format";
 
+/** What the columns ARE, and how many of them fit (ADR 0008).
+ *
+ *  Not where the viewer's answers are kept: which columns a table hides, which reading earns the
+ *  colour and the band it must clear were all read and written here, because two of the six
+ *  preferences happen to be about columns. They live in `prefs.ts` now, which imports this module
+ *  for `isPinned` and `DEFAULT_BAND` — one way, so the arithmetic below never reaches for a
+ *  cookie.
+ */
+
 export interface Column {
   key: string;
   label: string;
@@ -164,57 +173,7 @@ export function groupRows(entries: Entry[], grouping: Grouping): RowGroup[] {
   });
 }
 
-export function readGrouping(): Grouping {
-  const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_group="))?.split("=")[1];
-  return raw === "type" || raw === "expiry" ? raw : "none";
-}
-
-export function writeGrouping(grouping: Grouping): void {
-  document.cookie = `ui_group=${grouping};path=/;max-age=31536000;samesite=lax`;
-}
-
 export const LEFT = new Set(["contract", "combo", "alarm", "entry"]);
-
-/** The cookie stores what is HIDDEN, not what is kept, so a column added later shows up by
- *  default instead of staying invisible. "." separates because a comma makes the value
- *  quote-escaped and it stops round-tripping. Same names as /ui, so both agree. */
-export function readHidden(table: "single" | "combo"): Set<string> {
-  const raw = document.cookie
-    .split("; ")
-    .find((c) => c.startsWith(`ui_cols_${table}=`))
-    ?.split("=")[1];
-  const value = raw ? decodeURIComponent(raw).replace(/^"|"$/g, "") : "";
-  return new Set(value.split(".").filter((k) => k && !isPinned(table, k)));
-}
-
-/** The signal and its band are viewer preferences, so they live in cookies beside the hidden
- *  columns and the refresh interval — CLAUDE.md: behaviour knobs live in .env, viewer preferences
- *  live in the browser, and there is no DB config layer. */
-export function readSignal(): Signal {
-  const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_signal="))?.split("=")[1];
-  return raw === "pressure" ? "pressure" : "distance";
-}
-
-export function writeSignal(signal: Signal): void {
-  document.cookie = `ui_signal=${signal};path=/;max-age=31536000;samesite=lax`;
-}
-
-/** Out-of-range or unparseable falls back rather than throwing: a cookie is user-editable, and a
- *  band of NaN would flag every row or none with nothing on screen to explain it. */
-export function readBand(): number {
-  const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_band="))?.split("=")[1];
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 1 && n <= 100 ? n : DEFAULT_BAND;
-}
-
-export function writeBand(band: number): void {
-  document.cookie = `ui_band=${band};path=/;max-age=31536000;samesite=lax`;
-}
-
-export function writeHidden(table: "single" | "combo", hidden: Set<string>): void {
-  const value = [...hidden].sort().join(".");
-  document.cookie = `ui_cols_${table}=${value};path=/;max-age=31536000;samesite=lax`;
-}
 
 export function visible(all: Column[], hidden: Set<string>): Column[] {
   return all.filter((c) => !hidden.has(c.key));

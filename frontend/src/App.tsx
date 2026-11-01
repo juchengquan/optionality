@@ -10,10 +10,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddPanel, AddTrigger, type Adding } from "./AddPanel";
+import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
 import {
-  COMBO_COLUMNS, SINGLE_COLUMNS, readBand, readGrouping, readHidden, readSignal, writeBand,
-  writeGrouping, writeHidden, writeSignal,
-} from "./columns";
+  readBand, readGrouping, readHidden, readRefresh, readSignal, writeBand, writeGrouping,
+  writeHidden, writeRefresh, writeSignal,
+} from "./prefs";
 import { ColumnPicker } from "./ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { Holdings } from "./Holdings";
@@ -53,15 +54,6 @@ import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
  */
 export function beingOperated(el: Element | null): boolean {
   return Boolean(el?.closest('[data-poll="hold"]'));
-}
-
-function readRefresh(fallback: number): number {
-  const raw = document.cookie
-    .split("; ")
-    .find((c) => c.startsWith("ui_refresh="))
-    ?.split("=")[1];
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.max(5, Math.min(3600, n)) : fallback;
 }
 
 export function App() {
@@ -135,8 +127,9 @@ export function App() {
 
   useEffect(() => { void load(); }, [load]);
 
-  // the poll interval follows the same cookie /ui's selector writes, so switching between
-  // the two dashboards does not silently change how often either updates
+  // the viewer's choice if there is one, and the service's own sweep cadence if there is not —
+  // which is why this waits for /health rather than being read with the other preferences above
+  // (prefs.readRefresh)
   useEffect(() => {
     if (health) setRefresh(readRefresh(health.settings.sweep_seconds));
   }, [health]);
@@ -313,10 +306,7 @@ export function App() {
         loadHoldings={loadHoldings}
         refresh={refresh}
         sweepSeconds={health?.settings.sweep_seconds}
-        onRefresh={(n) => {
-          setRefresh(n);
-          document.cookie = `ui_refresh=${n};path=/;max-age=31536000;samesite=lax`;
-        }}
+        onRefresh={(n) => { setRefresh(n); writeRefresh(n); }}
       />
 
       <RowDetail

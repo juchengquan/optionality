@@ -44,7 +44,7 @@ function resolved(spec: string): string | null {
  *  do is name the TREE it photographs, and that has a claim of its own below.
  */
 const PURE = ["columns.ts", "format.ts", "cells.ts", "snapshot.ts", "useTableFit.ts",
-  "useDismissOnBack.ts"];
+  "useDismissOnBack.ts", "prefs.ts"];
 
 describe("the measuring and formatting path", () => {
   for (const file of PURE) {
@@ -71,5 +71,34 @@ describe("the measuring and formatting path", () => {
   it("no longer passes that function in as an argument to dodge the import", () => {
     // the parameter existed ONLY so `columns.ts` would not have to name `WatchlistTable.tsx`
     expect(readFileSync(`${SRC}/columns.ts`, "utf8")).not.toContain("cellText");
+  });
+});
+
+/** The second half of what `columns.ts` was: what the browser remembers.
+ *
+ *  Four of the six preferences were read and written in that module, between the column
+ *  definitions and the fitting arithmetic, for one reason — two of them happen to be ABOUT
+ *  columns. The other two (the signal and its band) were only there for company, and the
+ *  sixth, the poll cadence, sat inline in `App.tsx` and so had no test at all. Written out
+ *  five times, the attribute string was five chances to drop a `max-age`.
+ *
+ *  Asserted structurally because that is where it can be asserted: a seventh preference added
+ *  the old way would round-trip perfectly in its own test and still be the sixth copy.
+ */
+describe("the viewer's preferences", () => {
+  it("live in a module of their own", () => {
+    expect(readdirSync(SRC)).toContain("prefs.ts");
+  });
+
+  for (const file of ["columns.ts", "App.tsx"]) {
+    it(`are no longer spelled out in ${file}`, () => {
+      expect(readFileSync(`${SRC}/${file}`, "utf8")).not.toContain("document.cookie");
+    });
+  }
+
+  it("reach the cookie through one pair of functions", () => {
+    // the plumbing itself: one reader, one writer, and every preference on top of them
+    const text = readFileSync(`${SRC}/prefs.ts`, "utf8");
+    expect(text.match(/document\.cookie/g)).toHaveLength(2);
   });
 });
