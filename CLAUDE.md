@@ -47,6 +47,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
   exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
   holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port.
+  The harness refuses a case passing MORE arguments than the port takes — `zip(strict=False)` dropped
+  the extra in silence, so a parameter lost in the port left every case passing on a default.
   Exported CONSTANTS are stated in the same files and compared too; they were mirrored on trust until
   the coverage guard was found to filter on `typeof v === "function"`. **Generated under `TZ=UTC`**,
   as the suites read them: a default zone is the running machine's, so an unpinned corpus would say
