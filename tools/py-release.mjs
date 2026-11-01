@@ -27,9 +27,35 @@ export function calver(now = new Date()) {
  *  point is to refuse `0.1.0` — a version that is not a date means `py-cut` was never run. */
 export const DATED = /^20\d\d\.\d{1,2}\.\d{1,2}(\.\d+)?$/;
 
-export const versionIn = (toml) => /^version = "(.*)"$/m.exec(toml)?.[1] ?? null;
-export const withVersion = (toml, version) =>
-  toml.replace(/^version = ".*"$/m, `version = "${version}"`);
+/** The span of the `[project]` table, which is the only place this package's own version lives.
+ *
+ *  Scoped rather than line-anchored. TOML does not order its tables, so a `[tool.x]` section with
+ *  a `version` of its own can PRECEDE `[project]` — and both a bare and a line-anchored replace
+ *  take the first match, which would bump some tool's pin and ship the package still calling
+ *  itself 0.1.0. A mutation sweep found this: the first fixture put the decoy last, where every
+ *  version of the code passed. */
+function projectTable(toml) {
+  const head = /^\[project\][ \t]*$/m.exec(toml);
+  if (head === null) return null;
+  const from = head.index + head[0].length;
+  const next = /^\[/m.exec(toml.slice(from));
+  return { from, to: next === null ? toml.length : from + next.index };
+}
+
+export function versionIn(toml) {
+  const span = projectTable(toml);
+  if (span === null) return null;
+  return /^version = "(.*)"$/m.exec(toml.slice(span.from, span.to))?.[1] ?? null;
+}
+
+export function withVersion(toml, version) {
+  const span = projectTable(toml);
+  if (span === null) throw new Error("pyproject.toml has no [project] table");
+  const body = toml
+    .slice(span.from, span.to)
+    .replace(/^version = ".*"$/m, `version = "${version}"`);
+  return toml.slice(0, span.from) + body + toml.slice(span.to);
+}
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: ROOT, encoding: "utf8" }).trim();
 const git = (...args) => run("git", args);

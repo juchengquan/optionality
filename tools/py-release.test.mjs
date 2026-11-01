@@ -49,10 +49,42 @@ describe("rewriting pyproject.toml", () => {
     expect(next).toContain('requires-python = ">=3.12"');
   });
 
-  it("leaves a dependency's own pin alone", () => {
-    // `version = ` appears once at the top level; anchoring to the line start is what keeps a
-    // future [tool.x] section's own version out of it
-    const withDep = `${toml}\n[tool.something]\nother = "version = \\"9\\""\n`;
-    expect(withVersion(withDep, "2026.11.1")).toContain('other = "version = \\"9\\""');
+  it("has nothing to read where there is no [project] table", () => {
+    expect(versionIn('[tool.only]\nversion = "9"\n')).toBe(null);
+  });
+
+  it("reads the project's version past a decoy, not the first one in the file", () => {
+    // the read has to be scoped for the same reason the write does, and a sweep showed the
+    // no-[project] case above cannot prove it: that one returns early and never reaches the match
+    const decoyFirst = '[tool.something]\nversion = "9.9.9"\n\n[project]\nversion = "0.1.0"\n';
+    expect(versionIn(decoyFirst)).toBe("0.1.0");
+  });
+
+  it("finds the table by its own line, not by a comment that mentions it", () => {
+    // this repo's TOML is heavily commented, and an unanchored match would start the span inside
+    // the comment and end it at the real header — reading no version at all, which reads as
+    // "py-cut was never run" and refuses a release that was perfectly fine
+    const commented = '# the [project] table carries the version\n[project]\nversion = "2026.11.1"\n';
+    expect(versionIn(commented)).toBe("2026.11.1");
+    expect(withVersion(commented, "2026.12.4")).toContain('version = "2026.12.4"');
+  });
+
+  it("rewrites the project's own version, not the first thing that looks like one", () => {
+    // TOML does not order its tables, so a decoy can precede [project] — and an unanchored
+    // replace takes the FIRST match, which is how a release would silently bump a tool's pin and
+    // ship the package still calling itself 0.1.0. A mutation sweep found the old fixture put the
+    // decoy last, where either version of the code passed.
+    const decoyFirst = [
+      "[tool.something]",
+      'version = "9.9.9"',
+      "",
+      "[project]",
+      'name = "optionality"',
+      'version = "0.1.0"',
+    ].join("\n");
+    const next = withVersion(decoyFirst, "2026.11.1");
+    expect(next).toContain('version = "9.9.9"');
+    expect(next).toContain('version = "2026.11.1"');
+    expect(next).not.toContain('version = "0.1.0"');
   });
 });

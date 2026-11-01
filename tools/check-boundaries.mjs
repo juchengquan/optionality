@@ -34,8 +34,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
-const PACKAGES = ["backend", "frontend", "python"];
-const SHARED = ["testdata"];
+export const PACKAGES = ["backend", "frontend", "python"];
+export const SHARED = ["testdata"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".venv", "__pycache__", ".out"]);
 const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx|py)$/;
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/g;
@@ -65,24 +65,30 @@ function walk(dir) {
 
 const inside = (path, dir) => path === dir || path.startsWith(dir + sep);
 
-const crossings = [];
-for (const pkg of PACKAGES) {
-  const root = join(ROOT, pkg);
-  try { statSync(root); } catch { continue; }
-  for (const file of walk(root)) {
-    const text = readFileSync(file, "utf8");
+/** Every crossing under `root`, as lines. A function over a root rather than a script over this
+ *  repository, so the guard itself can be tested against a fixture tree — it never had a test, and
+ *  a mutation sweep found three ways to gut it with every suite still green, including removing
+ *  `.py` from the files it reads. "Add a crossing and watch it fail" is the right check; doing it
+ *  by hand is what let the hole last. */
+export function crossings(repo = ROOT, packages = PACKAGES, shared = SHARED) {
+  const found = [];
+  for (const pkg of packages) {
+    const root = join(repo, pkg);
+    try { statSync(root); } catch { continue; }
+    for (const file of walk(root)) {
+      const text = readFileSync(file, "utf8");
     /** An IMPORT may only climb out of its package into declared shared ground: it creates a
      *  source dependency, and the whole rule is that a dependency on another package goes through
      *  what that package publishes. */
     const importable = (target) =>
-      inside(target, root) || SHARED.some((s) => inside(target, join(ROOT, s)));
+        inside(target, root) || shared.some((s) => inside(target, join(repo, s)));
     /** A PATH is data access, and the offence is landing inside ANOTHER PACKAGE — reading its
      *  source tree as bytes, which `parents[2] / "backend" / "src"` would do just as effectively
      *  as an import. Deliberately laxer than the import rule in one way: a climb to the repository
      *  root itself is not another package's source, and tools legitimately resolve it to print
      *  repo-relative names. What it must not do is land in a sibling. */
     const readable = (target) =>
-      inside(target, root) || !PACKAGES.some((p) => inside(target, join(ROOT, p)));
+        inside(target, root) || !packages.some((p) => inside(target, join(repo, p)));
 
     for (const [, spec] of text.matchAll(SPECIFIER)) {
       // a relative import only. A bare `optionality.position` is the package importing itself
@@ -90,13 +96,13 @@ for (const pkg of PACKAGES) {
       if (!spec.startsWith(".")) continue;
       const target = resolve(dirname(file), spec);
       if (importable(target)) continue;
-      crossings.push(`${relative(ROOT, file)}: "${spec}" leaves ${pkg}/`);
+        found.push(`${relative(repo, file)}: "${spec}" leaves ${pkg}/`);
     }
 
     for (const [, dots, mod] of text.matchAll(PY_IMPORT)) {
       const target = resolve(dirname(file), "../".repeat(dots.length - 1), mod.split(".").join("/"));
       if (importable(target)) continue;
-      crossings.push(`${relative(ROOT, file)}: "from ${dots}${mod} import" leaves ${pkg}/`);
+        found.push(`${relative(repo, file)}: "from ${dots}${mod} import" leaves ${pkg}/`);
     }
 
     // and the filesystem reaches, resolved whole. `parents[0]` is the file's own directory, so N
@@ -111,16 +117,19 @@ for (const pkg of PACKAGES) {
     ];
     for (const [match, target] of reaches) {
       if (readable(target)) continue;
-      crossings.push(
-        `${relative(ROOT, file)}: ${match} reads ${relative(ROOT, target)}, another package's source`,
-      );
+        found.push(
+          `${relative(repo, file)}: ${match} reads ${relative(repo, target)}, another package's source`,
+        );
+    }
     }
   }
+  return found;
 }
 
-if (crossings.length > 0) {
-  console.error(`${crossings.length} reference(s) reach into another package's source:`);
-  for (const c of crossings) console.error(`  ${c}`);
+const found = crossings();
+if (found.length > 0) {
+  console.error(`${found.length} reference(s) reach into another package's source:`);
+  for (const c of found) console.error(`  ${c}`);
   console.error(`use what the package publishes (its package.json "exports"), or testdata/ for shared data`);
   process.exit(1);
 }
