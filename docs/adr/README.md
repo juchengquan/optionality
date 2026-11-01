@@ -19,9 +19,10 @@ still in force. Git holds the full history of each.
 | [11](0011-exit-schedules-from-a-decay-shape.md) | Exit schedules come from a decay shape | in force |
 | [12](0012-what-needs-you-is-polled-the-rest-is-asked-for.md) | What needs you is polled; the rest is asked for | in force |
 | [13](0013-side-is-long-or-short.md) | A Leg's Side is long or short | in force |
-| [14](0014-the-python-returns-as-a-library.md) | The Python returns as a library, checked against the TypeScript | in force; amended by 16 |
+| [14](0014-the-python-returns-as-a-library.md) | The Python returns as a library, checked against the TypeScript | in force; amended by 16, 17 |
 | [15](0015-market-data-comes-from-one-provider.md) | Market data comes from one Provider, chosen before the service starts | in force |
 | [16](0016-the-package-is-released-not-split.md) | The Python package is released from this repository, not split out of it | in force |
+| [17](0017-the-cases-cover-the-decisions.md) | The golden cases cover the decisions, not only the maths | accepted; not yet built |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained
 in force. A new decision takes the next number, and numbers are never reused.
