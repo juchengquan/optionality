@@ -85,11 +85,18 @@ class Agreement:
 
     `agrees` is True, False, or None for "could not tell" — and the object is TRUTHY unless it is
     a definite no. A notebook on a plane must not report drift that is not there.
+
+    `reason` splits the two ways of not being able to tell, which the first version of this said
+    identically. Checked against the live service on 2026-11-01, before this field was deployed, it
+    reported "no service to compare with" about a service that was up and answering — it was simply
+    older than the check. "Nothing answered" and "it would not say" lead to different next moves:
+    one is a network, the other is a deploy.
     """
 
     mine: str
     theirs: str | None
     agrees: bool | None
+    reason: str = "compared"
 
     def __bool__(self) -> bool:
         return self.agrees is not False
@@ -101,6 +108,11 @@ class Agreement:
             return (
                 f"the engine has moved on: it holds {self.theirs}, this port was cut against "
                 f"{self.mine} — reinstall from a newer tag"
+            )
+        if self.reason == "silent":
+            return (
+                f"the service did not say which cases it holds — it is older than this check; "
+                f"this port was cut against {self.mine}"
             )
         return f"no service to compare with; this port was cut against {self.mine}"
 
@@ -121,9 +133,9 @@ def agrees(base_url: str | None = None, token: str | None = None) -> Agreement:
     try:
         health = _get("/health", base_url, token)
     except ApiError:
-        return Agreement(GOLDEN_CASES, None, None)
+        return Agreement(GOLDEN_CASES, None, None, "unreachable")
     # a service older than ADR 0016 answers without the field; that is not a disagreement
     theirs = health.get("golden_cases") if isinstance(health, dict) else None
     if not isinstance(theirs, str) or not theirs:
-        return Agreement(GOLDEN_CASES, None, None)
+        return Agreement(GOLDEN_CASES, None, None, "silent")
     return Agreement(GOLDEN_CASES, theirs, theirs == GOLDEN_CASES)

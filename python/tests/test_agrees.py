@@ -76,6 +76,7 @@ def test_unknown_rather_than_an_error_when_nothing_answers():
     assert verdict.agrees is None
     assert verdict.theirs is None
     assert verdict.mine == GOLDEN_CASES
+    assert verdict.reason == "unreachable"
     assert "no service" in str(verdict)
     # and it is NOT falsey: "cannot tell" must not read as "disagrees", or a notebook offline
     # would report drift that is not there
@@ -83,11 +84,20 @@ def test_unknown_rather_than_an_error_when_nothing_answers():
 
 
 def test_unknown_when_the_service_is_too_old_to_carry_the_field(service):
-    # a service from before ADR 0016 answers /health without golden_cases; that is not a drift
+    """A service from before ADR 0016 answers /health without golden_cases. Not a drift — and not
+    the same thing as nothing answering, which is what the first version of this said about it.
+
+    Measured against the live service on 2026-11-01, before the field was deployed: it reported
+    "no service to compare with" about a service that was up. One of those is a network problem and
+    the other is a deploy, so the words have to differ.
+    """
     service.health = {"db": True}
     verdict = api.agrees(service.url)
     assert verdict.agrees is None
     assert verdict.theirs is None
+    assert verdict.reason == "silent"
+    assert "older than this check" in str(verdict)
+    assert "no service" not in str(verdict)
     assert verdict
 
 
