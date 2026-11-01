@@ -1,0 +1,132 @@
+/** The preferences the browser remembers, and the one cookie they all go through.
+ *
+ *  Six viewer preferences were written by hand in five places — four in `columns.ts` beside the
+ *  column definitions they have nothing to do with, and the refresh cadence inline in `App.tsx`,
+ *  which is why that one had no test at all. Each spelled out its own
+ *  `document.cookie.split("; ").find(...)` and its own attribute string, and the attributes are
+ *  the part that cannot be seen to be wrong: a missing `max-age` makes a session cookie, which
+ *  reads back correctly all day and is gone tomorrow. One helper, asserted once.
+ */
+import { afterEach, describe, expect, it } from "vitest";
+
+import { DEFAULT_BAND } from "../columns";
+import {
+  readBand, readGrouping, readHidden, readRefresh, readSignal, writeBand, writeGrouping,
+  writeHidden, writeRefresh, writeSignal,
+} from "../prefs";
+
+const NAMES = ["ui_cols_single", "ui_cols_combo", "ui_signal", "ui_band", "ui_group", "ui_refresh"];
+const clear = () => { for (const n of NAMES) document.cookie = `${n}=;path=/`; };
+afterEach(clear);
+
+/** What a writer actually SET, attributes and all. jsdom's `document.cookie` gives a reader back
+ *  only the name and value, so the attributes — the half that decides whether the preference
+ *  outlives the tab — are invisible to a round-trip. Shadowing the setter is the only way to see
+ *  them, and it is removed again straight after. */
+function written(fn: () => void): string[] {
+  const out: string[] = [];
+  const proto = Object.getOwnPropertyDescriptor(Document.prototype, "cookie")!;
+  Object.defineProperty(document, "cookie", {
+    configurable: true,
+    set(value: string) { out.push(value); proto.set!.call(document, value); },
+    get() { return proto.get!.call(document); },
+  });
+  try { fn(); } finally { delete (document as unknown as { cookie?: unknown }).cookie; }
+  return out;
+}
+
+describe("a preference survives being set", () => {
+  it("remembers which reading earns the colour", () => {
+    writeSignal("pressure");
+    expect(readSignal()).toBe("pressure");
+  });
+
+  it("remembers the band it has to clear", () => {
+    writeBand(72);
+    expect(readBand()).toBe(72);
+  });
+
+  it("remembers how the rows are divided", () => {
+    writeGrouping("expiry");
+    expect(readGrouping()).toBe("expiry");
+  });
+
+  it("remembers the hidden columns of each table separately", () => {
+    writeHidden("single", new Set(["gamma", "vega"]));
+    writeHidden("combo", new Set(["legs"]));
+    expect([...readHidden("single")].sort()).toEqual(["gamma", "vega"]);
+    expect([...readHidden("combo")]).toEqual(["legs"]);
+  });
+
+  it("remembers the poll cadence", () => {
+    writeRefresh(30);
+    expect(readRefresh(15)).toBe(30);
+  });
+});
+
+describe("every preference is written to outlive the tab", () => {
+  const writes: [string, () => void][] = [
+    ["the signal", () => writeSignal("pressure")],
+    ["the band", () => writeBand(72)],
+    ["the grouping", () => writeGrouping("type")],
+    ["the hidden columns", () => writeHidden("combo", new Set(["legs"]))],
+    ["the cadence", () => writeRefresh(30)],
+  ];
+
+  for (const [what, write] of writes) {
+    it(`${what} is persistent, path-wide and same-site`, () => {
+      const [set, ...rest] = written(write);
+      expect(rest).toEqual([]);
+      // a year, so it is still there next week; path=/ because the dashboard is served under a
+      // prefix and a cookie set on /opt/ would not be read back at /opt; lax because a
+      // preference has no business travelling on a cross-site request
+      expect(set).toContain("max-age=31536000");
+      expect(set).toContain("path=/");
+      expect(set).toContain("samesite=lax");
+    });
+  }
+});
+
+/** The cadence had no test of its own while it sat in `App.tsx`: it was private to that module,
+ *  and the only thing exercising it was whatever an integration test happened to drive. Its
+ *  fallback is the one preference whose default is not a constant — it is the service's own sweep
+ *  cadence, so a viewer who has never chosen polls as often as the figures actually change. */
+describe("the poll cadence", () => {
+  it("falls back to the service's own sweep when nothing was chosen", () => {
+    expect(readRefresh(15)).toBe(15);
+  });
+
+  it("falls back rather than throwing on a cookie that is not a number", () => {
+    // cookies are user-editable, and a cadence of NaN is an interval that never fires
+    document.cookie = "ui_refresh=often;path=/";
+    expect(readRefresh(15)).toBe(15);
+  });
+
+  it("will not poll faster than five seconds, whatever the cookie says", () => {
+    // every poll is a live Provider call (ADR 0010), so this bound is the service's protection
+    document.cookie = "ui_refresh=1;path=/";
+    expect(readRefresh(15)).toBe(5);
+  });
+
+  it("will not stretch beyond an hour either", () => {
+    document.cookie = "ui_refresh=99999;path=/";
+    expect(readRefresh(15)).toBe(3600);
+  });
+});
+
+describe("a preference that cannot be honoured", () => {
+  it("takes the default band rather than flagging every row or none", () => {
+    document.cookie = "ui_band=400;path=/";
+    expect(readBand()).toBe(DEFAULT_BAND);
+  });
+
+  it("reads an unknown grouping as no grouping", () => {
+    document.cookie = "ui_group=sideways;path=/";
+    expect(readGrouping()).toBe("none");
+  });
+
+  it("reads an unknown signal as the distance", () => {
+    document.cookie = "ui_signal=vibes;path=/";
+    expect(readSignal()).toBe("distance");
+  });
+});

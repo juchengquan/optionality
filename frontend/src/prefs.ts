@@ -1,0 +1,96 @@
+import { DEFAULT_BAND, isPinned, type Grouping, type Signal } from "./columns";
+
+/** What the browser remembers for this viewer, and nothing else.
+ *
+ *  Six preferences: which reading earns the second colour and the band it must clear, how the rows
+ *  are divided, which columns each table hides, and how often the screen polls. They are here
+ *  rather than in `columns.ts` because only two of them are about columns at all — the other four
+ *  sat in that module for company, between the column definitions and the fitting arithmetic, and
+ *  the cadence sat inline in `App.tsx`, which is why it was the one preference with no test.
+ *
+ *  Cookies by decision, not localStorage: CLAUDE.md draws the line at behaviour versus preference —
+ *  behaviour knobs live in `.env`, viewer preferences live in the browser, and there is no DB
+ *  config layer. Every one of them is small, safe to lose and safe to hand-edit, and every reader
+ *  below therefore validates rather than trusts.
+ */
+
+/** A preference is read and written in exactly one place each. The attributes are the reason:
+ *  spelled out at five call sites they were five chances to drop the `max-age` and quietly make a
+ *  session cookie, which reads back correctly all day and is gone tomorrow. */
+function readCookie(name: string): string {
+  const raw = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith(`${name}=`))
+    ?.split("=")[1];
+  // a value containing a comma comes back quoted, and the quotes stop it round-tripping
+  return raw ? decodeURIComponent(raw).replace(/^"|"$/g, "") : "";
+}
+
+/** A year, so a choice made once is still there next week; `path=/` because the dashboard is
+ *  served under a prefix and a cookie set on `/opt/` would not be read back beside it; `lax`
+ *  because a viewer preference has no business travelling on a cross-site request. */
+function writeCookie(name: string, value: string): void {
+  document.cookie = `${name}=${value};path=/;max-age=31536000;samesite=lax`;
+}
+
+/** The signal and its band. Out-of-range or unparseable falls back rather than throwing: a cookie
+ *  is user-editable, and a band of NaN would flag every row or none with nothing on screen to
+ *  explain it. */
+export function readSignal(): Signal {
+  return readCookie("ui_signal") === "pressure" ? "pressure" : "distance";
+}
+
+export function writeSignal(signal: Signal): void {
+  writeCookie("ui_signal", signal);
+}
+
+export function readBand(): number {
+  const n = Number(readCookie("ui_band"));
+  return Number.isFinite(n) && n >= 1 && n <= 100 ? n : DEFAULT_BAND;
+}
+
+export function writeBand(band: number): void {
+  writeCookie("ui_band", String(band));
+}
+
+export function readGrouping(): Grouping {
+  const raw = readCookie("ui_group");
+  return raw === "type" || raw === "expiry" ? raw : "none";
+}
+
+export function writeGrouping(grouping: Grouping): void {
+  writeCookie("ui_group", grouping);
+}
+
+/** The cookie stores what is HIDDEN, not what is kept, so a column added later shows up by
+ *  default instead of staying invisible. "." separates because a comma makes the value
+ *  quote-escaped and it stops round-tripping.
+ *
+ *  Per TABLE, and `isPinned` is asked per table too: `delta` is pinned on the single-leg table and
+ *  an ordinary column on a combo, and a union across both silently discarded `delta` from the
+ *  combo cookie — so the one column the owner asked to see there was the one that could not be
+ *  controlled. */
+export function readHidden(table: "single" | "combo"): Set<string> {
+  const value = readCookie(`ui_cols_${table}`);
+  return new Set(value.split(".").filter((k) => k && !isPinned(table, k)));
+}
+
+export function writeHidden(table: "single" | "combo", hidden: Set<string>): void {
+  writeCookie(`ui_cols_${table}`, [...hidden].sort().join("."));
+}
+
+/** How often the screen asks, in seconds.
+ *
+ *  The one preference whose default is not a constant: it is the service's own sweep cadence, so a
+ *  viewer who has never chosen polls about as often as the figures actually change. The bounds are
+ *  the service's protection rather than the viewer's — every poll is a live Provider call (ADR
+ *  0010), so a hand-edited `1` must not become one batch a second.
+ */
+export function readRefresh(fallback: number): number {
+  const n = Number(readCookie("ui_refresh"));
+  return Number.isFinite(n) && n > 0 ? Math.max(5, Math.min(3600, n)) : fallback;
+}
+
+export function writeRefresh(seconds: number): void {
+  writeCookie("ui_refresh", String(seconds));
+}
