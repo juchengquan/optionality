@@ -19,7 +19,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Commands
 
-- **`make check` before every commit** — everything, in one target: lint, typecheck, `check-api`,
+- **`make check` before every commit** — everything, in one target, and it passes in any timezone:
+  every suite that reads a clock is pinned to `TZ=UTC` (both vitest configs, the Python suite, and the
+  case generator), because the frontend's was not and the gate was green only at +08. The browser
+  suite is checked zone-independent instead — `env` would not reach its Chromium. Targets: lint, typecheck, `check-api`,
   `check-cases`, the Python suite, the API suite, both UI suites and `check-ui`. Running a subset is
   how a commit passes while something it touched is broken: `make test` alone is only the Python
   package (every golden case, reproduced exactly). `make lint` is ruff plus `check-boundaries`: no
