@@ -2,7 +2,8 @@
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui check-served-root resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
-	backup restore launchd-backup-install launchd-backup-uninstall backup-logs
+	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
+	test-tools py-cut py-tag
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
@@ -54,7 +55,7 @@ test:
 # EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
 # subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
 # the Python. check-ui comes last because it rebuilds the bundle.
-check: lint typecheck check-api check-cases test test-api test-ui check-ui
+check: lint typecheck check-api check-cases test test-tools test-api test-ui check-ui
 	@echo "all checks passed"
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
@@ -184,10 +185,25 @@ ibkr-fake-gateway:
 # The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
 # reproduce exactly. Generated, never edited; `test-api` fails too when they are stale.
 cases:
-	node backend/tools/cases.ts
+	node tools/cases.ts
 
 check-cases:
-	node backend/tools/cases.ts --check
+	node tools/cases.ts --check
+
+# The repo-wide tools' own arithmetic (ADR 0016) — the release version in particular, which is
+# where a version scheme goes wrong silently. Its own invocation because tools/ is not a package:
+# it is what reads and writes ACROSS the packages, so neither workspace's suite covers it.
+test-tools:
+	npx vitest run --root tools
+
+# Cutting a release of the Python package (ADR 0016). Two steps, because CLAUDE.md forbids pushing
+# to main: the version bump is a commit and goes through a PR like anything else, so only the tag
+# can be applied afterwards. The refusals live in the script, which is tested.
+py-cut:
+	node tools/py-release.mjs --cut
+
+py-tag:
+	node tools/py-release.mjs --tag
 
 # the TypeScript backend (ADR 0009). No build target: Node runs the source directly, so there
 # is nothing to compile and nothing to commit — the frontend's dist has no backend equivalent.

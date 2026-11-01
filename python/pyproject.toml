@@ -22,6 +22,15 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/optionality"]
 
+# The suite stays out of the sdist (ADR 0016). It cannot pass there: `tests/test_cases.py` reads
+# testdata/golden/, which sits outside this directory and so cannot be carried — `uv build` was
+# shipping a suite guaranteed to fail on `len(ALL) >= 100`. That guard was written for exactly this
+# and caught it. Carrying the fixtures instead would be the right answer only if this package ever
+# left the repository; while it is here, the suite's whole purpose is comparison against the
+# canonical TypeScript beside it.
+[tool.hatch.build.targets.sdist]
+exclude = ["tests", ".ruff_cache"]
+
 # the tools for this package's own suite and lint — `make test`, `make lint` and `make format` run them
 # here, in python/. Not installed by a notebook that depends on the package.
 [dependency-groups]

@@ -7,6 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { GOLDEN_CASES } from "./golden.ts";
 import { type Harness, body, harness } from "./testing.ts";
 
 let h: Harness;
@@ -29,6 +30,20 @@ describe("/health", () => {
     // other test in this file and put the wrong vendor on the dashboard the day a second one lands
     const data = await body(await start({ providerName: "ibkr" }).call("/health", { anonymous: true }));
     expect(data.provider.name).toBe("ibkr");
+  });
+
+  /** The one field a notebook reads rather than the dashboard (ADR 0016).
+   *
+   *  `python/`'s port is held to the TypeScript by the golden cases, but only at the moment it is
+   *  written. A notebook pins a tag and keeps it for months, so the staleness it cannot otherwise
+   *  see is "the engine has moved since my port was cut". This is how it finds out: the running
+   *  service states which cases it IS, and `optionality.api.agrees` compares.
+   */
+  it("carries the fingerprint of the golden cases, for a port to compare itself against", async () => {
+    const data = await body(await start().call("/health", { anonymous: true }));
+    // the generated constant, not a literal: a copy here would agree with a stale port forever
+    expect(data.golden_cases).toBe(GOLDEN_CASES);
+    expect(data.golden_cases).toMatch(/^[0-9a-f]{12}$/);
   });
 
   it("no longer reports a run pipeline, because there is none (phase 10)", async () => {

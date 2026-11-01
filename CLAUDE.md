@@ -42,7 +42,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - **Golden cases:** a change to anything `backend/src/domain/` exports changes what
   `testdata/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
   — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
-  exported domain function must have a case (ADR 0014).
+  exported domain function must have a case (ADR 0014). The generator is `tools/cases.ts`, not
+  `backend/`'s: it also writes the two FINGERPRINT stamps (`backend/src/golden.ts` and
+  `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
+  repo-wide codegen step rather than something the backend may do. Both stamps are generated and
+  committed; `make check-cases` fails when either is stale.
 - **`make ibkr-first-contact`** — the five questions about an IBKR gateway that only a gateway can
   answer (ADR 0015): entitlements, the real pre-flight cost, what a dead session looks like from
   inside the service, rate limits, and whether the two Providers agree on the same contract at the
@@ -91,6 +95,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   live service (`OPTIONALITY_API` for its URL). The last three are not golden-cased: they mirror no
   domain module.
   `tests/test_cases.py` runs every golden case.
+  **Installed by a pinned git ref** (ADR 0016), never from a path that tracks the working tree —
+  an editable install serves a notebook whatever half-ported state the tree is in:
+  `uv add "optionality @ git+https://github.com/juchengquan/optionality.git@py-<version>#subdirectory=python"`.
+  Versions are CalVer (`2026.11.1`, unpadded — PEP 440 normalises `09` to `9`), cut with
+  `make py-cut` on a branch and tagged with `make py-tag` on main after the bump merges.
+  `optionality.api.agrees()` asks a running service whether the port is still current; it never
+  runs on import, and answers "no service" rather than raising.
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 

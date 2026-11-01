@@ -103,7 +103,11 @@ Alternatives considered and rejected:
   date and the tag is unused — then tags and pushes.
 - **The package boundary gets enforced for Python**: `.py` in the boundary lint, and filesystem
   climbs as well as imports, since the Python's only crossing is `parents[2]` and nothing stops a
-  future one landing in `backend/src/`. `testdata/golden/` remains the single shared directory.
+  future one landing in `backend/src/`. The shared directory is `testdata/`, not `testdata/golden/`
+  as this decision first said: building the check found `testdata/zone-abbreviations.json` (#174)
+  had been outside the stated boundary since the day it was added, read by both suites. An import
+  may only climb into that shared ground; a PATH is refused when it lands inside another package,
+  which leaves a tool free to resolve the repository root for the names it prints.
 - **`tests/` is excluded from the sdist.** The suite's purpose is comparison against the canonical
   implementation in this repository; a standalone sdist has nothing to compare against.
 
