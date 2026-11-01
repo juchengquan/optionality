@@ -173,6 +173,15 @@
         "UTC"
       ],
       "expect": "2026-13-45 99:99:99"
+    },
+    {
+      "fn": "marketTimeToDisplay",
+      "name": "an already-converted value comes back untouched",
+      "args": [
+        "2026-08-10 08:15:00+08:00",
+        "Asia/Singapore"
+      ],
+      "expect": "2026-08-10 08:15:00+08:00"
     }
   ]
 }

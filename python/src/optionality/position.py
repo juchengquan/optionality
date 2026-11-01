@@ -194,8 +194,6 @@ def positions_holding(positions: list[Position], contracts: list[str]) -> Holdin
     # one leg come out equal to covering the holding whole (2026-10-20)
     watched = set(contracts)
     covered = all(
-        all(code in watched for code in position_leg_codes(position))
-        for position in positions
-        if position.id in found
+        all(code in watched for code in position_leg_codes(position)) for position in positions if position.id in found
     )
     return Holding(found=found, scope="all" if covered else "leg")

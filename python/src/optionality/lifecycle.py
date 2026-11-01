@@ -93,10 +93,7 @@ def expiry_verdict(monitor: ExpiringMonitor, today: str, retention_days: int) ->
             return ExpiryVerdict(action="keep", notice=None)
         return ExpiryVerdict(
             action="mute",
-            notice=(
-                f"ℹ️ monitor {monitor.code} expired ({expiry}) — muted; "
-                f"auto-removes in {retention_days} days"
-            ),
+            notice=(f"ℹ️ monitor {monitor.code} expired ({expiry}) — muted; auto-removes in {retention_days} days"),
         )
     return ExpiryVerdict(action="keep", notice=None)
 

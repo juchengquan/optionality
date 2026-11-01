@@ -10,8 +10,9 @@
  *  That belonged to moomoo (`opend/client.ts` has it now): a Provider knows its own failures in
  *  its own terms, and what the service needs is the answer, not the sentence (#168).
  */
-import type { Quote } from "./domain/quote.ts";
-import { displayTime, marketTimeToDisplay } from "./domain/timefmt.ts";
+import { verifyVerdict, type Batch, type Quote } from "./domain/quote.ts";
+
+export { displayRecords } from "./domain/quote.ts";
 
 /** One contract's live figures as a Provider returns them. The same shape the domain reads, so a
  *  record can go straight from a fetch into cost_to_close without being reshaped. */
@@ -25,11 +26,9 @@ export type QuoteRecord = Quote;
  *  contract reports it HERE rather than throwing: a throw is for a Provider that could not answer
  *  at all, which is an outage and must never read as a watchlist full of unknown contracts.
  */
-export interface QuoteBatch {
-  records: QuoteRecord[];
-  /** codes the Provider answered about by saying it does not know them */
-  unknown: string[];
-}
+/** The port's answer. `domain/quote.ts` owns the shape, because the two pure functions that read
+ *  it are cased and this module is not (ADR 0017). */
+export type QuoteBatch = Batch;
 
 /** One bounded batch call to a Provider. `opend/client.ts` has moomoo's. */
 export type QuoteFetcher = (codes: string[]) => Promise<QuoteBatch>;
@@ -49,38 +48,6 @@ export async function verifyContracts(
   } catch (err) {
     return `cannot verify contract: OpenD unreachable (${err instanceof Error ? err.message : String(err)})`;
   }
-  // both checks, though a code named unknown usually has no record either: a Provider that does
-  // both at once is contradicting itself, and a gate this strict takes the pessimistic reading
-  if (batch.unknown.length > 0) {
-    return `contract does not exist: ${batch.unknown.join(", ")} — check strike and expiry`;
-  }
-  const returned = new Set(batch.records.map((r) => r.code));
-  const missing = codes.filter((c) => !returned.has(c));
-  if (missing.length > 0) {
-    return `contract does not exist: ${missing.join(", ")} — check strike and expiry`;
-  }
-  return null;
-}
-
-/** Index records by code, with display-tz timestamps stamped on.
- *
- *  Copies rather than mutates: the sweeper's cached records get rendered on every dashboard poll,
- *  and marketTimeToDisplay is not idempotent — feeding its own output back in would read the
- *  offset as part of a new naive time.
- */
-export function displayRecords(
-  records: QuoteRecord[], displayTz: string, fetchedAt: Date,
-): Record<string, QuoteRecord> {
-  const stamped = displayTime(fetchedAt, displayTz);
-  const byCode: Record<string, QuoteRecord> = {};
-  for (const raw of records) {
-    const record = { ...raw };
-    if (record.update_time) {
-      record.update_time = marketTimeToDisplay(String(record.update_time), displayTz);
-    }
-    // the honest "data as-of"; update_time is only the last trade (CLAUDE.md)
-    record.fetched_at = stamped;
-    byCode[String(record.code)] = record;
-  }
-  return byCode;
+  // everything but the fetch and the catch is `domain/quote.verifyVerdict`, which is cased
+  return verifyVerdict(codes, batch);
 }
