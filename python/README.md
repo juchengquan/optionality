@@ -16,6 +16,10 @@ by_code = {r["code"]: r for r in records}
 [cost_to_close(p, by_code) for p in held]
 ```
 
+`alarm` and `lifecycle` answer what the next sweep would DO, without a sweep running — whether a
+reading alarms and in what words, whether a silent rule is about to be quarantined, what becomes of
+an expired one. The sentences are the ones the service sends, compared exactly (ADR 0017).
+
 `api` reads `http://127.0.0.1:31415` by default; set `OPTIONALITY_API=https://<host>/opt/api` to use
 the service from elsewhere on the tailnet.
 

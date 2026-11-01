@@ -1,0 +1,348 @@
+{
+  "module": "js",
+  "cases": [
+    {
+      "fn": "mathRound",
+      "name": "a half rounds up",
+      "args": [
+        12.5
+      ],
+      "expect": 13
+    },
+    {
+      "fn": "mathRound",
+      "name": "a negative half rounds toward zero, not away",
+      "args": [
+        -2.5
+      ],
+      "expect": -2
+    },
+    {
+      "fn": "mathRound",
+      "name": "minus a half is negative zero",
+      "args": [
+        -0.5
+      ],
+      "expect": {
+        "$num": "-0"
+      }
+    },
+    {
+      "fn": "mathRound",
+      "name": "the largest double below a half rounds down",
+      "args": [
+        0.49999999999999994
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "mathRound",
+      "name": "NaN stays NaN",
+      "args": [
+        {
+          "$num": "NaN"
+        }
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "mathRound",
+      "name": "Infinity stays Infinity",
+      "args": [
+        {
+          "$num": "Infinity"
+        }
+      ],
+      "expect": {
+        "$num": "Infinity"
+      }
+    },
+    {
+      "fn": "toFixed",
+      "name": "an exact binary half goes away from zero",
+      "args": [
+        0.03125,
+        4
+      ],
+      "expect": 0.0313
+    },
+    {
+      "fn": "toFixed",
+      "name": "a decimal half is below its own value in binary",
+      "args": [
+        1.0005,
+        3
+      ],
+      "expect": 1
+    },
+    {
+      "fn": "toFixed",
+      "name": "three decimals of an exact binary half",
+      "args": [
+        0.0625,
+        3
+      ],
+      "expect": 0.063
+    },
+    {
+      "fn": "toFixed",
+      "name": "a negative exact half",
+      "args": [
+        -0.03125,
+        4
+      ],
+      "expect": -0.0313
+    },
+    {
+      "fn": "toFixed",
+      "name": "no decimals at all",
+      "args": [
+        2.5,
+        0
+      ],
+      "expect": 3
+    },
+    {
+      "fn": "toFixed",
+      "name": "NaN survives",
+      "args": [
+        {
+          "$num": "NaN"
+        },
+        2
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "the empty string is zero, not an error",
+      "args": [
+        ""
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "number",
+      "name": "whitespace is trimmed",
+      "args": [
+        "  12.5  "
+      ],
+      "expect": 12.5
+    },
+    {
+      "fn": "number",
+      "name": "a tab and a newline are whitespace too",
+      "args": [
+        "\t-3\n"
+      ],
+      "expect": -3
+    },
+    {
+      "fn": "number",
+      "name": "null is zero",
+      "args": [
+        null
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "number",
+      "name": "a bool is one or zero",
+      "args": [
+        true
+      ],
+      "expect": 1
+    },
+    {
+      "fn": "number",
+      "name": "a hex literal",
+      "args": [
+        "0x10"
+      ],
+      "expect": 16
+    },
+    {
+      "fn": "number",
+      "name": "a binary literal",
+      "args": [
+        "0b101"
+      ],
+      "expect": 5
+    },
+    {
+      "fn": "number",
+      "name": "an octal literal",
+      "args": [
+        "0o17"
+      ],
+      "expect": 15
+    },
+    {
+      "fn": "number",
+      "name": "an exponent",
+      "args": [
+        "1.5e3"
+      ],
+      "expect": 1500
+    },
+    {
+      "fn": "number",
+      "name": "a leading plus",
+      "args": [
+        "+7"
+      ],
+      "expect": 7
+    },
+    {
+      "fn": "number",
+      "name": "the word Infinity",
+      "args": [
+        "Infinity"
+      ],
+      "expect": {
+        "$num": "Infinity"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "and negative Infinity",
+      "args": [
+        "-Infinity"
+      ],
+      "expect": {
+        "$num": "-Infinity"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "trailing rubbish is not a number",
+      "args": [
+        "12abc"
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "an empty array is zero",
+      "args": [
+        []
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "number",
+      "name": "a one-element array is that element",
+      "args": [
+        [
+          5
+        ]
+      ],
+      "expect": 5
+    },
+    {
+      "fn": "number",
+      "name": "a longer array is not a number",
+      "args": [
+        [
+          1,
+          2
+        ]
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "an object is not a number",
+      "args": [
+        {}
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "a signed hex literal is not a number",
+      "args": [
+        "-0x10"
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "truthy",
+      "name": "zero is falsy",
+      "args": [
+        0
+      ],
+      "expect": false
+    },
+    {
+      "fn": "truthy",
+      "name": "the string zero is not",
+      "args": [
+        "0"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "truthy",
+      "name": "the empty string is falsy",
+      "args": [
+        ""
+      ],
+      "expect": false
+    },
+    {
+      "fn": "truthy",
+      "name": "null is falsy",
+      "args": [
+        null
+      ],
+      "expect": false
+    },
+    {
+      "fn": "truthy",
+      "name": "NaN is falsy",
+      "args": [
+        {
+          "$num": "NaN"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "truthy",
+      "name": "an empty array is TRUTHY",
+      "args": [
+        []
+      ],
+      "expect": true
+    },
+    {
+      "fn": "truthy",
+      "name": "an empty object is truthy too",
+      "args": [
+        {}
+      ],
+      "expect": true
+    },
+    {
+      "fn": "truthy",
+      "name": "a negative number is truthy",
+      "args": [
+        -1
+      ],
+      "expect": true
+    }
+  ]
+}

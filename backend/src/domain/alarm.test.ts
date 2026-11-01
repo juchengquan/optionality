@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import { alarmPolicy, alarmTransition, type AlarmPolicy, type AlarmState } from "./alarm.ts";
-import type { Monitor } from "./domain/monitor.ts";
+import type { Monitor } from "./monitor.ts";
 
 const NOW = new Date("2026-08-10T03:35:32Z");
 const POLICY: AlarmPolicy = { cooldownSeconds: 120, repeatSeconds: 1800 };

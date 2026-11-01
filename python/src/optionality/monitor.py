@@ -8,8 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from optionality._js import number
 from optionality.contract import build_spx_code
+from optionality.js import number
 from optionality.quote import ByCode
 
 COMBO_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")

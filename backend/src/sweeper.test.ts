@@ -1115,6 +1115,11 @@ describe("a figure that never arrives", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toContain("option_delta");
     expect(sent[0]).toContain(String(limit));
+    // FORGOTTEN, not held at the limit, which is what `silenceVerdict` answers with a null count
+    // (ADR 0017): unmuting the rule has to give it its full run again. A sweep found this claim
+    // untested — holding the count instead read identically through every other assertion here,
+    // because `get(id) ?? 0` cannot tell a kept zero from an absent key.
+    expect(s.silentSweeps.has(id), "the run is forgotten once it has been acted on").toBe(false);
   });
 
   it("counts CONSECUTIVE sweeps, so a figure that comes back is not a quarantine", async () => {

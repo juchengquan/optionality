@@ -18,9 +18,13 @@ what makes these cases worth having, and an "expected to differ" exemption insid
 how a rounding divergence that matters would hide.
 
 Each file is `{"module": ..., "cases": [{"fn", "name", "args", "expect"}]}`. `fn` is the
-TypeScript name; the Python name is its snake_case. `args` are positional. Three tags extend
+TypeScript name; the Python name is its snake_case. `args` are positional. Four tags extend
 JSON:
 
 - `{"$date": "<ISO instant>"}` — a Date argument
-- `{"$set": [...]}` — a Set result, members sorted
+- `{"$set": [...]}` — a Set, members sorted. An argument as well as a result since ADR 0017
 - `{"$throws": true}` — the function raised; the message is not part of the contract
+- `{"$num": "NaN" | "Infinity" | "-Infinity" | "-0"}` — a number JSON has no spelling for. Added
+  with `domain/js.ts` (ADR 0017), whose `number` answers NaN by contract, and it is also what lets
+  `-0` be compared rather than exempted: `Math.round(-0.5)` is `-0` in JavaScript, and a port that
+  returns `0` is wrong in a way `JSON.stringify` would otherwise have hidden.

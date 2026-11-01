@@ -15,8 +15,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from optionality._js import number, truthy
 from optionality.contract import OptionType, build_spx_code
+from optionality.js import number, truthy
 from optionality.quote import ByCode
 
 type Side = Literal["short", "long"]

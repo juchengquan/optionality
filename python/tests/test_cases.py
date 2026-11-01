@@ -11,6 +11,7 @@ Arguments are converted through each function's own type hints, so a case's Posi
 import importlib
 import inspect
 import json
+import math
 import re
 import typing
 from datetime import datetime
@@ -26,10 +27,19 @@ def snake(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
+NON_FINITE = {"NaN": math.nan, "Infinity": math.inf, "-Infinity": -math.inf, "-0": -0.0}
+
+
 def decode(value):
     if isinstance(value, dict):
         if set(value) == {"$date"}:
             return datetime.fromisoformat(value["$date"])
+        if set(value) == {"$num"}:
+            return NON_FINITE[value["$num"]]
+        # a Set as an ARGUMENT, which only appeared once lifecycle.silenceReason was cased
+        # (ADR 0017): until then `$set` was written by results and never read by inputs
+        if set(value) == {"$set"}:
+            return {decode(v) for v in value["$set"]}
         return {k: decode(v) for k, v in value.items()}
     if isinstance(value, list):
         return [decode(v) for v in value]
@@ -39,6 +49,15 @@ def decode(value):
 def encode(value):
     if isinstance(value, BaseModel):
         return encode(value.model_dump(by_alias=True))
+    # the four numbers JSON cannot write, spelled as the TypeScript spells them. -0.0 is compared
+    # rather than exempted: Math.round(-0.5) is -0, and `0` would be wrong in a way JSON hides.
+    if isinstance(value, float) and not isinstance(value, bool):
+        if math.isnan(value):
+            return {"$num": "NaN"}
+        if math.isinf(value):
+            return {"$num": "Infinity" if value > 0 else "-Infinity"}
+        if value == 0.0 and math.copysign(1.0, value) < 0:
+            return {"$num": "-0"}
     if isinstance(value, (set, frozenset)):
         return {"$set": sorted(encode(v) for v in value)}
     if isinstance(value, dict):

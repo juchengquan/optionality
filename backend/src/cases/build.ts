@@ -6,12 +6,16 @@
  *  - `{"$date": "<ISO instant>"}` — a Date argument
  *  - `{"$set": [...]}` — a Set result, its members sorted
  *  - `{"$throws": true}` — the function threw; what it said is not part of the contract
+ *  - `{"$num": "NaN" | "Infinity" | "-Infinity" | "-0"}` — a number JSON cannot write (ADR 0017)
  *
  *  `testdata/golden/README.md` repeats this for whoever reads the files from Python.
  */
+import * as alarm from "../domain/alarm.ts";
 import * as contract from "../domain/contract.ts";
 import * as exit from "../domain/exit.ts";
 import * as expiry from "../domain/expiry.ts";
+import * as js from "../domain/js.ts";
+import * as lifecycle from "../domain/lifecycle.ts";
 import * as monitor from "../domain/monitor.ts";
 import * as position from "../domain/position.ts";
 import * as quote from "../domain/quote.ts";
@@ -27,15 +31,21 @@ import { INPUTS } from "./inputs.ts";
  *  off. Static imports rather than a dynamic walk, so the compiler still checks every name; the
  *  test is what makes the list complete. */
 export const MODULES: Record<string, Record<string, unknown>> = {
-  contract, exit, expiry, monitor, position, quote, vol, timefmt,
+  alarm, contract, exit, expiry, js, lifecycle, monitor, position, quote, vol, timefmt,
 };
 
 function encode(value: unknown): unknown {
   if (value instanceof Date) return { $date: value.toISOString() };
   if (value instanceof Set) return { $set: [...value].map(encode).sort() };
-  if (typeof value === "number" && !Number.isFinite(value)) {
-    throw new Error(`a case produced ${value}, which JSON cannot carry`);
-  }
+  // The four numbers JSON has no spelling for. Until ADR 0017 a non-finite result was an error
+  // here, which was right while every cased function was arithmetic over real figures — and wrong
+  // the moment `domain/js.ts` cased `Number()`, whose whole contract includes answering NaN.
+  //
+  // `-0` is in the list for the same reason, and it retires the one exception ADR 0017 wrote down:
+  // it reasoned that -0 could not be compared because JSON cannot carry it, and a tag carries it.
+  // `String(-0)` is "0", so it needs Object.is to be seen at all.
+  if (typeof value === "number" && !Number.isFinite(value)) return { $num: String(value) };
+  if (Object.is(value, -0)) return { $num: "-0" };
   if (Array.isArray(value)) return value.map(encode);
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, encode(v)]));

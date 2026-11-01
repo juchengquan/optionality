@@ -1,0 +1,510 @@
+{
+  "module": "lifecycle",
+  "cases": [
+    {
+      "fn": "silenceReason",
+      "name": "a leg with no quote at all",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000",
+            "US.SPXW261120C7150000",
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": "no quote for US.SPXW261120P6450000"
+    },
+    {
+      "fn": "silenceReason",
+      "name": "two legs missing, named in sorted order",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000",
+            "US.SPXW261120C7150000"
+          ]
+        }
+      ],
+      "expect": "no quote for US.SPXW261120P6450000, US.SPXW261120P6500000"
+    },
+    {
+      "fn": "silenceReason",
+      "name": "sorted, not in the order the legs were entered",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7150000",
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": "no quote for US.SPXW261120C7100000, US.SPXW261120P6450000"
+    },
+    {
+      "fn": "silenceReason",
+      "name": "every leg priced, so the field itself is missing",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000",
+            "US.SPXW261120C7150000",
+            "US.SPXW261120P6450000",
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": "no mid_price in the quote"
+    },
+    {
+      "fn": "silenceReason",
+      "name": "a single contract with no quote",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": []
+        }
+      ],
+      "expect": "no quote for US.SPXW261120C7100000"
+    },
+    {
+      "fn": "silenceVerdict",
+      "name": "a first silent sweep only counts",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": []
+        },
+        0,
+        3
+      ],
+      "expect": {
+        "count": 1,
+        "quarantine": false,
+        "notice": null
+      }
+    },
+    {
+      "fn": "silenceVerdict",
+      "name": "one short of the limit still only counts",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": []
+        },
+        1,
+        3
+      ],
+      "expect": {
+        "count": 2,
+        "quarantine": false,
+        "notice": null
+      }
+    },
+    {
+      "fn": "silenceVerdict",
+      "name": "reaching the limit quarantines and says so",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": []
+        },
+        2,
+        3
+      ],
+      "expect": {
+        "count": null,
+        "quarantine": true,
+        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: no quote for US.SPXW261120C7100000 for 3 consecutive sweeps"
+      }
+    },
+    {
+      "fn": "silenceVerdict",
+      "name": "a limit of one quarantines on the first sweep",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": []
+        },
+        0,
+        1
+      ],
+      "expect": {
+        "count": null,
+        "quarantine": true,
+        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: no quote for US.SPXW261120C7100000 for 1 consecutive sweeps"
+      }
+    },
+    {
+      "fn": "silenceVerdict",
+      "name": "a limit of zero never quarantines, however long the run",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": []
+        },
+        99,
+        0
+      ],
+      "expect": {
+        "count": 100,
+        "quarantine": false,
+        "notice": null
+      }
+    },
+    {
+      "fn": "silenceVerdict",
+      "name": "the count is forgotten rather than held at the limit",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": []
+        },
+        5,
+        3
+      ],
+      "expect": {
+        "count": null,
+        "quarantine": true,
+        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: no quote for US.SPXW261120C7100000 for 6 consecutive sweeps"
+      }
+    },
+    {
+      "fn": "expiryVerdict",
+      "name": "not expired yet, so nothing happens",
+      "args": [
+        {
+          "code": "1120_7100",
+          "strike_date": "2026-11-20",
+          "enabled": true
+        },
+        "2026-11-19",
+        7
+      ],
+      "expect": {
+        "action": "keep",
+        "notice": null
+      }
+    },
+    {
+      "fn": "expiryVerdict",
+      "name": "expiry day itself is not past",
+      "args": [
+        {
+          "code": "1120_7100",
+          "strike_date": "2026-11-20",
+          "enabled": true
+        },
+        "2026-11-20",
+        7
+      ],
+      "expect": {
+        "action": "keep",
+        "notice": null
+      }
+    },
+    {
+      "fn": "expiryVerdict",
+      "name": "the day after expiry mutes with a notice",
+      "args": [
+        {
+          "code": "1120_7100",
+          "strike_date": "2026-11-20",
+          "enabled": true
+        },
+        "2026-11-21",
+        7
+      ],
+      "expect": {
+        "action": "mute",
+        "notice": "ℹ️ monitor 1120_7100 expired (2026-11-20) — muted; auto-removes in 7 days"
+      }
+    },
+    {
+      "fn": "expiryVerdict",
+      "name": "already muted, so the mute is not announced twice",
+      "args": [
+        {
+          "code": "1120_7100",
+          "strike_date": "2026-11-20",
+          "enabled": false
+        },
+        "2026-11-21",
+        7
+      ],
+      "expect": {
+        "action": "keep",
+        "notice": null
+      }
+    },
+    {
+      "fn": "expiryVerdict",
+      "name": "past the retention window it is removed, quietly if already muted",
+      "args": [
+        {
+          "code": "1120_7100",
+          "strike_date": "2026-11-20",
+          "enabled": false
+        },
+        "2026-11-28",
+        7
+      ],
+      "expect": {
+        "action": "remove",
+        "notice": null
+      }
+    },
+    {
+      "fn": "expiryVerdict",
+      "name": "zero retention removes the day after, and says so",
+      "args": [
+        {
+          "code": "1120_7100",
+          "strike_date": "2026-11-20",
+          "enabled": true
+        },
+        "2026-11-21",
+        0
+      ],
+      "expect": {
+        "action": "remove",
+        "notice": "ℹ️ monitor 1120_7100 expired (2026-11-20) — removed"
+      }
+    },
+    {
+      "fn": "expiryVerdict",
+      "name": "the retention boundary itself is not past",
+      "args": [
+        {
+          "code": "1120_7100",
+          "strike_date": "2026-11-20",
+          "enabled": false
+        },
+        "2026-11-27",
+        7
+      ],
+      "expect": {
+        "action": "keep",
+        "notice": null
+      }
+    },
+    {
+      "fn": "addDays",
+      "name": "across a month end",
+      "args": [
+        "2026-11-28",
+        7
+      ],
+      "expect": "2026-12-05"
+    },
+    {
+      "fn": "addDays",
+      "name": "backwards across a month end",
+      "args": [
+        "2026-12-03",
+        -7
+      ],
+      "expect": "2026-11-26"
+    },
+    {
+      "fn": "addDays",
+      "name": "across a leap day",
+      "args": [
+        "2028-02-28",
+        2
+      ],
+      "expect": "2028-03-01"
+    }
+  ]
+}
