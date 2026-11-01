@@ -14,8 +14,14 @@ import { afterEach, describe, expect, it } from "vitest";
 const ROOT = new URL("..", import.meta.url).pathname;
 const STAMPS = ["backend/src/golden.ts", "python/src/optionality/_ported.py"];
 
+/** TZ=UTC, exactly as the Makefile runs it. Without it this test regenerated the corpus in the
+ *  MACHINE's zone and left it there — and the backend suite, which pins UTC, then read its own
+ *  shared ground as stale. `make check` runs test-tools before test-api, so the failure landed two
+ *  targets away from its cause. */
 const run = (...args) =>
-  execFileSync("node", ["tools/cases.ts", ...args], { cwd: ROOT, encoding: "utf8" });
+  execFileSync("node", ["tools/cases.ts", ...args], {
+    cwd: ROOT, encoding: "utf8", env: { ...process.env, TZ: "UTC" },
+  });
 const regenerate = () => run();
 
 afterEach(regenerate);

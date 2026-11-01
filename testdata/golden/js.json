@@ -1,5 +1,6 @@
 {
   "module": "js",
+  "constants": {},
   "cases": [
     {
       "fn": "mathRound",

@@ -107,12 +107,43 @@ def load():
             yield pytest.param(file["module"], case, id=f"{file['module']}.{case['fn']}: {case['name']}")
 
 
+def load_constants():
+    """Each module's exported VALUES, which the cases above cannot carry: a case is a call."""
+    for path in sorted(CASES.glob("*.json")):
+        file = json.loads(path.read_text())
+        for name, expected in file.get("constants", {}).items():
+            yield pytest.param(file["module"], name, expected, id=f"{file['module']}.{name}")
+
+
 ALL = list(load())
+CONSTANTS = list(load_constants())
 
 
 def test_the_cases_are_there():
     # a missing testdata/golden/ directory would otherwise be a suite that passes by collecting nothing
     assert len(ALL) >= 100
+
+
+def test_the_constants_are_there():
+    # the same guard `test_the_cases_are_there` is: a file shape that changed would otherwise make
+    # this suite pass by collecting nothing
+    assert len(CONSTANTS) >= 4
+
+
+@pytest.mark.parametrize(("module", "name", "expected"), CONSTANTS)
+def test_states_the_same_constant(module, name, expected):
+    """An exported value, compared like a computed one.
+
+    The TypeScript's coverage guard filters on `typeof v === "function"`, so these were mirrored on
+    trust: a name UPPER_SNAKE in both languages, with nothing checking the value. A tuple here
+    against an array there is fine — both encode to a list — and a frozenset against a Set is fine
+    for the same reason. What is not fine is a different zone, or a greek missing from a list.
+    """
+    mod = importlib.import_module(f"optionality.{module}")
+    assert hasattr(mod, name), f"optionality.{module} has no {name}"
+    assert same(encode(getattr(mod, name)), expected), (
+        f"got {getattr(mod, name)!r}, the TypeScript says {expected!r}"
+    )
 
 
 @pytest.mark.parametrize(("module", "case"), ALL)

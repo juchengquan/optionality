@@ -1,5 +1,6 @@
 {
   "module": "timefmt",
+  "constants": {},
   "cases": [
     {
       "fn": "displayTime",
@@ -11,6 +12,26 @@
         "Asia/Singapore"
       ],
       "expect": "2026-10-17 13:26:06+08:00"
+    },
+    {
+      "fn": "displayTime",
+      "name": "no zone given, so the machine's own",
+      "args": [
+        {
+          "$date": "2026-10-17T05:26:06.000Z"
+        }
+      ],
+      "expect": "2026-10-17 05:26:06+00:00"
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "no zone given, so the machine's own",
+      "args": [
+        {
+          "$date": "2026-10-17T05:26:06.000Z"
+        }
+      ],
+      "expect": "2026-10-17 05:26 UTC"
     },
     {
       "fn": "displayTime",

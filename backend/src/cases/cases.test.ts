@@ -57,6 +57,23 @@ describe("testdata/golden/", () => {
     expect(exported.filter((f) => !covered.has(f) && !NOT_PORTED.has(f))).toEqual([]);
   });
 
+  it("states every constant the domain exports, which the coverage test above cannot see", () => {
+    // `covers every function` filters on `typeof v === "function"`, so the four exported VALUES —
+    // MARKET_TZ, the two greek-field lists, NON_ADDITIVE_FIELDS — were mirrored on trust alone.
+    // Mirrored on trust is how quotes.fetch_resilient stayed three weeks behind the architecture.
+    const exported = Object.entries(MODULES).flatMap(([m, mod]) =>
+      Object.entries(mod).filter(([, v]) => typeof v !== "function").map(([k]) => `${m}.${k}`));
+    const stated = Object.entries(built).flatMap(([m, file]) =>
+      Object.keys(file.constants).map((k) => `${m}.${k}`));
+    expect(exported.filter((n) => !stated.includes(n))).toEqual([]);
+    // and the converse, which is the half a sweep found missing: a FUNCTION in here would be
+    // invisible in the file, because JSON.stringify drops a function-valued key and the bytes come
+    // out identical. The in-memory build is where it can be seen.
+    expect(stated.filter((n) => !exported.includes(n))).toEqual([]);
+    // and there IS something to compare, so a filter that quietly matched nothing would pass above
+    expect(stated.length).toBeGreaterThanOrEqual(4);
+  });
+
   it("lands on each JavaScript rounding rule's boundary", () => {
     // the reason comparison is exact: these are where JavaScript and Python disagree
     const expectOf = (m: string, name: string) => built[m]!.cases.find((c) => c.name === name)!.expect;

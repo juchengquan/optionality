@@ -1,5 +1,18 @@
 {
   "module": "monitor",
+  "constants": {
+    "COMBO_GREEK_FIELDS": [
+      "option_delta",
+      "option_gamma",
+      "option_theta",
+      "option_vega"
+    ],
+    "NON_ADDITIVE_FIELDS": {
+      "$set": [
+        "option_implied_volatility"
+      ]
+    }
+  },
   "cases": [
     {
       "fn": "monitorLegCodes",

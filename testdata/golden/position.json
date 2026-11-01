@@ -1,5 +1,13 @@
 {
   "module": "position",
+  "constants": {
+    "POSITION_GREEK_FIELDS": [
+      "option_delta",
+      "option_gamma",
+      "option_theta",
+      "option_vega"
+    ]
+  },
   "cases": [
     {
       "fn": "scopedLegs",

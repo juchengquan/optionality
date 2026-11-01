@@ -1,5 +1,6 @@
 {
   "module": "alarm",
+  "constants": {},
   "cases": [
     {
       "fn": "alarmTransition",

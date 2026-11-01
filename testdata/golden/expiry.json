@@ -1,5 +1,8 @@
 {
   "module": "expiry",
+  "constants": {
+    "MARKET_TZ": "America/New_York"
+  },
   "cases": [
     {
       "fn": "marketDate",

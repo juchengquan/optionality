@@ -1,5 +1,6 @@
 {
   "module": "exit",
+  "constants": {},
   "cases": [
     {
       "fn": "dteAtOpen",
@@ -76,6 +77,30 @@
       "expect": {
         "on_pace": 2.449489742783178,
         "pace_gap": -0.549489742783178,
+        "target": 1.5,
+        "stop": 6,
+        "target_dte": 11,
+        "manage_by_dte": 21,
+        "reached": null,
+        "manage_by_due": false
+      }
+    },
+    {
+      "fn": "exitLevels",
+      "name": "no cost to close yet, so the argument is left off",
+      "args": [
+        3,
+        45,
+        30,
+        {
+          "takeFraction": 0.5,
+          "stopMultiple": 2,
+          "manageByDte": 21
+        }
+      ],
+      "expect": {
+        "on_pace": 2.449489742783178,
+        "pace_gap": null,
         "target": 1.5,
         "stop": 6,
         "target_dte": 11,
