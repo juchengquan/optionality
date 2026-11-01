@@ -114,6 +114,28 @@ describe("the poll cadence", () => {
   });
 });
 
+/** The value as the browser hands it back, which is not always the value as it was written. */
+describe("reading a cookie somebody else wrote", () => {
+  it("strips the quotes a value picks up when it has to be quoted", () => {
+    // a comma forces quoting, which is why the hidden columns are separated by "." — and the
+    // quotes are what the owner pastes back in when they edit the cookie by hand
+    document.cookie = 'ui_cols_combo="legs.vega";path=/';
+    expect([...readHidden("combo")].sort()).toEqual(["legs", "vega"]);
+  });
+
+  it("decodes a percent-encoded value", () => {
+    document.cookie = "ui_group=%65xpiry;path=/";
+    expect(readGrouping()).toBe("expiry");
+  });
+
+  it("does not take the page down over a stray percent sign", () => {
+    // decodeURIComponent throws on this, and these readers run in useState initialisers — so the
+    // alternative to validating it is a blank dashboard from one character typed into devtools
+    document.cookie = "ui_band=50%;path=/";
+    expect(readBand()).toBe(DEFAULT_BAND);
+  });
+});
+
 describe("a preference that cannot be honoured", () => {
   it("takes the default band rather than flagging every row or none", () => {
     document.cookie = "ui_band=400;path=/";

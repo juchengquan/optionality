@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App, beingOperated } from "../App";
@@ -52,6 +52,34 @@ describe("changing the interval", () => {
     expect(quoteCalls, "it kept polling at 15s").toBe(1);
     await vi.advanceTimersByTimeAsync(45_000);
     expect(quoteCalls, "it never polled at 60s").toBe(2);
+  });
+
+  /** A cadence chosen on an earlier visit, which is the half this suite did not state.
+   *
+   *  The test above proves a choice made NOW takes effect; nothing proved the stored one was read
+   *  at all. A mutation sweep showed it: replacing `readRefresh(sweep_seconds)` with
+   *  `sweep_seconds` — ignoring the cookie outright — left all 318 tests green. The default is
+   *  deliberately the service's own sweep cadence, so the two are only distinguishable when they
+   *  disagree, which is what this sets up.
+   */
+  it("polls at the cadence remembered from an earlier visit, not the service's", async () => {
+    document.cookie = "ui_refresh=60;path=/";
+    vi.useFakeTimers();
+    mockApi();
+    render(<App />);
+    // `act` round the first flush, unlike the tests either side of this one: the cadence here is
+    // set by /health LANDING rather than by a click, and an update React was not told about is
+    // committed whenever it likes — measured, the 15s interval the page starts with survived long
+    // enough to fire once at exactly 15s before the 60s one replaced it. The press-driven tests
+    // need none of this because fireEvent acts for them.
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(quoteCalls).toBe(1);
+
+    // the service sweeps every 15s, so a page that ignored the cookie would have polled by now
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(quoteCalls, "it fell back to the service's 15s").toBe(1);
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(quoteCalls, "it never polled at the remembered 60s").toBe(2);
   });
 
   it("keeps polling while a sheet is merely open, so its figures do not freeze", async () => {

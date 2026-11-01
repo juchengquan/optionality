@@ -23,7 +23,15 @@ function readCookie(name: string): string {
     .find((c) => c.startsWith(`${name}=`))
     ?.split("=")[1];
   // a value containing a comma comes back quoted, and the quotes stop it round-tripping
-  return raw ? decodeURIComponent(raw).replace(/^"|"$/g, "") : "";
+  return raw ? decoded(raw).replace(/^"|"$/g, "") : "";
+}
+
+/** A cookie is hand-editable, and `decodeURIComponent` THROWS on a stray `%` rather than leaving
+ *  it alone. These readers run inside `useState` initialisers, so a throw here is not a preference
+ *  ignored — it is a blank dashboard, from a character typed into devtools. The undecoded text
+ *  then goes to the reader's own validation, which rejects it like any other nonsense. */
+function decoded(raw: string): string {
+  try { return decodeURIComponent(raw); } catch { return raw; }
 }
 
 /** A year, so a choice made once is still there next week; `path=/` because the dashboard is
