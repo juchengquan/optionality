@@ -1,5 +1,6 @@
 {
   "module": "lifecycle",
+  "constants": {},
   "cases": [
     {
       "fn": "silenceReason",

@@ -60,14 +60,39 @@ export interface Case {
   expect: unknown;
 }
 
+export interface CaseFile {
+  module: string;
+  /** The module's exported VALUES — what it states rather than what it computes.
+   *
+   *  Cased since ADR 0017's follow-up, because the coverage guard below filters on
+   *  `typeof v === "function"` and these four were therefore mirrored on trust: `MARKET_TZ`,
+   *  the two greek-field lists and `NON_ADDITIVE_FIELDS`. Mirrored on trust is how
+   *  `quotes.fetch_resilient` stayed three weeks behind the architecture, so trust is not enough.
+   *  Always written, even empty, so a module that gains its first constant shows a diff. */
+  constants: Record<string, unknown>;
+  cases: Case[];
+}
+
+/** The module's exported values, by name. Types are gone at runtime, so what is left is the
+ *  constants — and a function, which is what `cases` is for. */
+export function constantsOf(mod: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(mod)
+      .filter(([, v]) => typeof v !== "function")
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => [k, encode(v)]),
+  );
+}
+
 /** Every module's cases, as the files under testdata/golden/ hold them. */
-export function buildCases(): Record<string, { module: string; cases: Case[] }> {
-  const out: Record<string, { module: string; cases: Case[] }> = {};
+export function buildCases(): Record<string, CaseFile> {
+  const out: Record<string, CaseFile> = {};
   for (const [name, inputs] of Object.entries(INPUTS)) {
     const mod = MODULES[name];
     if (!mod) throw new Error(`no module ${name}`);
     out[name] = {
       module: name,
+      constants: constantsOf(mod),
       cases: inputs.map(({ fn, name: label, args }) => {
         const f = mod[fn];
         if (typeof f !== "function") throw new Error(`${name}.${fn} is not a function`);
@@ -86,4 +111,4 @@ export function buildCases(): Record<string, { module: string; cases: Case[] }> 
 }
 
 /** The exact text of one module's file, so a regeneration that changes nothing changes no byte. */
-export const render = (file: { module: string; cases: Case[] }) => `${JSON.stringify(file, null, 2)}\n`;
+export const render = (file: CaseFile) => `${JSON.stringify(file, null, 2)}\n`;

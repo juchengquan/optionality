@@ -49,8 +49,9 @@ format:
 	uv run --directory python ruff format .
 
 # the Python package's suite (ADR 0014): every golden case in testdata/golden/, and the OpenD client with fakes
+# TZ=UTC, as `cases` is: the corpus is generated under it, so it must be read under it
 test:
-	uv run --directory python pytest
+	TZ=UTC uv run --directory python pytest
 
 # EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
 # subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
@@ -184,11 +185,18 @@ ibkr-fake-gateway:
 
 # The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
 # reproduce exactly. Generated, never edited; `test-api` fails too when they are stale.
+#
+# TZ=UTC, for the same reason backend/vitest.config.ts pins it: a function with a default zone
+# reads the RUNNING machine's, so `displayTime(when)` wrote +08:00 here and would write +01:00 in
+# Berlin. The corpus is shared ground that a third implementation has to agree with (ADR 0017), so
+# it cannot depend on where it was generated. The verifier already ran under UTC and the generator
+# did not, which is how a case written by `make cases` could fail `make test-api` on the same
+# machine — found by adding the first case that omitted a zone.
 cases:
-	node tools/cases.ts
+	TZ=UTC node tools/cases.ts
 
 check-cases:
-	node tools/cases.ts --check
+	TZ=UTC node tools/cases.ts --check
 
 # The repo-wide tools' own arithmetic (ADR 0016) — the release version in particular, which is
 # where a version scheme goes wrong silently. Its own invocation because tools/ is not a package:

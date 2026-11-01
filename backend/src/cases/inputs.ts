@@ -151,6 +151,13 @@ export const INPUTS: Record<string, CaseInput[]> = {
   ],
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },
+    // the zone left off, which no case did until now. "" is not UTC: it means the RUNNING
+    // machine's zone, and both suites pin TZ for exactly that reason — the backend's vitest config
+    // sets TZ=UTC so a date test reads the same anywhere
+    { fn: "displayTime", name: "no zone given, so the machine's own",
+      args: [at("2026-10-17T05:26:06Z")] },
+    { fn: "displayTimeShort", name: "no zone given, so the machine's own",
+      args: [at("2026-10-17T05:26:06Z")] },
     { fn: "displayTime", name: "in New York, daylight time", args: [at("2026-10-17T05:26:06Z"), "America/New_York"] },
     { fn: "displayTime", name: "in New York, standard time", args: [at("2026-11-17T05:26:06Z"), "America/New_York"] },
     { fn: "displayTime", name: "in UTC", args: [at("2026-10-17T05:26:06Z"), "UTC"] },
@@ -468,6 +475,11 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "onPace", name: "later than it was opened is no figure", args: [3, 45, 46] },
     { fn: "onPace", name: "no entry", args: [null, 45, 22] },
     { fn: "exitLevels", name: "a credit, calm", args: [3, 45, 30, policy, 1.9] },
+    // the OPTIONAL argument left off, which no case did until now: a default is only compared
+    // where a case omits it, and `costToClose` defaults to null — the figure a holding has before
+    // its first sweep
+    { fn: "exitLevels", name: "no cost to close yet, so the argument is left off",
+      args: [3, 45, 30, policy] },
     { fn: "exitLevels", name: "a credit at its stop", args: [3, 45, 30, policy, 6] },
     { fn: "exitLevels", name: "a credit at its target", args: [3, 45, 30, policy, 1.5] },
     { fn: "exitLevels", name: "a debit has no target or stop", args: [-5, 45, 30, policy, 8] },
