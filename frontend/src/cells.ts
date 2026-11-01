@@ -14,7 +14,9 @@
  *  renders anything, so nothing here needs React — `__tests__/Modules.test.ts` holds that.
  */
 import type { Entry } from "./api";
-import { alarmText, DASH, fmt, fmtText, legSummary, shortContract, shortDate } from "./format";
+import {
+  alarmText, DASH, fmt, legSummary, shortContract, shortDate, shortStamp,
+} from "./format";
 
 /** Row plus column key to displayed text. */
 export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
@@ -47,7 +49,9 @@ export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
     case "mid": return fmt(snap.mid_price ?? null, "mid");
     case "bid": return fmt(snap.bid_price ?? null, "bid");
     case "ask": return fmt(snap.ask_price ?? null, "ask");
-    case "last_trade": return fmtText(snap.update_time);
+    // without the zone it repeats on every row (format.shortStamp). The DATE stays: a far
+    // strike can go days without a print, and a bare clock would read as this morning.
+    case "last_trade": return snap.update_time ? shortStamp(snap.update_time) : DASH;
     default: return DASH;
   }
 }
