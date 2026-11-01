@@ -349,6 +349,12 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "alarmTransition", name: "a decayed magnitude reads true under a below-rule",
       args: [{ ...single, threshold: 0.05, direction: "below" }, -0.03, "1120_P6500",
              state(false, null), alarms, NOW] },
+    // exactly zero is NOT mirrored. Both wordings are arithmetically true there — 0 ≤ 0.05 and
+    // 0 ≥ -0.05 — so nothing but a case can say which one is printed, and the unmirrored reading is
+    // the one that reads naturally. `-0 < 0` is false, so a negative zero lands here too.
+    { fn: "alarmTransition", name: "a reading of exactly zero is not mirrored",
+      args: [{ ...single, threshold: 0.05, direction: "below" }, 0, "1120_P6500",
+             state(false, null), alarms, NOW] },
     // signed is untouched: a negative threshold is legal there and the sign is the point
     { fn: "alarmTransition", name: "a signed rule is left exactly as it was",
       args: [{ ...single, threshold: -0.1, direction: "below", compare: "signed" }, -0.42,

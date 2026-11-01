@@ -618,6 +618,39 @@
     },
     {
       "fn": "alarmTransition",
+      "name": "a reading of exactly zero is not mirrored",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.05,
+          "direction": "below",
+          "compare": "abs"
+        },
+        0,
+        "1120_P6500",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_P6500: option_delta 0.000 fell ≤ 0.05"
+      }
+    },
+    {
+      "fn": "alarmTransition",
       "name": "a signed rule is left exactly as it was",
       "args": [
         {
