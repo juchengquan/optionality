@@ -92,11 +92,14 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
-  for module (snake_case the only translation), `_js.py` holds the JavaScript rounding the port must
-  reproduce, `opend.py` needs the `opend` extra, `quotes.py` mirrors `backend/src/quotes.ts` so a
-  notebook batch survives an unknown contract too, and `api.py` loads Positions and Monitors from the
-  live service (`OPTIONALITY_API` for its URL). The last three are not golden-cased: they mirror no
-  domain module.
+  for module (snake_case the only translation), `js.py` holds the JavaScript number rules the port
+  must reproduce (cased since ADR 0017, and named `js.py` not `_js.py` for that reason),
+  `opend.py` needs the `opend` extra AND owns the containment loop that drops a code moomoo names as
+  unknown — inside the provider, where `opend/client.ts` has it (ADR 0015, #168), not above the port;
+  `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
+  loads Positions and Monitors from the live service (`OPTIONALITY_API` for its URL). Only those
+  three are not golden-cased: they mirror no domain module. Everything else is, decisions included —
+  45 of 51 public functions.
   `tests/test_cases.py` runs every golden case.
   **Installed by a pinned git ref** (ADR 0016), never from a path that tracks the working tree —
   an editable install serves a notebook whatever half-ported state the tree is in:

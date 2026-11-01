@@ -2,6 +2,228 @@
   "module": "quote",
   "cases": [
     {
+      "fn": "displayRecords",
+      "name": "the last trade is converted and the fetch is stamped",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261120C7100000",
+            "mid_price": 5.1,
+            "update_time": "2026-11-19 09:47:23"
+          }
+        ],
+        "Asia/Singapore",
+        {
+          "$date": "2026-11-19T13:47:30.000Z"
+        }
+      ],
+      "expect": {
+        "US.SPXW261120C7100000": {
+          "code": "US.SPXW261120C7100000",
+          "mid_price": 5.1,
+          "update_time": "2026-11-19 22:47:23+08:00",
+          "fetched_at": "2026-11-19 21:47:30+08:00"
+        }
+      }
+    },
+    {
+      "fn": "displayRecords",
+      "name": "a record with no last trade is still stamped",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261120C7100000",
+            "mid_price": 5.1
+          }
+        ],
+        "Asia/Singapore",
+        {
+          "$date": "2026-11-19T13:47:30.000Z"
+        }
+      ],
+      "expect": {
+        "US.SPXW261120C7100000": {
+          "code": "US.SPXW261120C7100000",
+          "mid_price": 5.1,
+          "fetched_at": "2026-11-19 21:47:30+08:00"
+        }
+      }
+    },
+    {
+      "fn": "displayRecords",
+      "name": "several records, keyed by code",
+      "args": [
+        [
+          {
+            "code": "A",
+            "mid_price": 1
+          },
+          {
+            "code": "B",
+            "mid_price": 2
+          }
+        ],
+        "America/New_York",
+        {
+          "$date": "2026-11-19T13:47:30.000Z"
+        }
+      ],
+      "expect": {
+        "A": {
+          "code": "A",
+          "mid_price": 1,
+          "fetched_at": "2026-11-19 08:47:30-05:00"
+        },
+        "B": {
+          "code": "B",
+          "mid_price": 2,
+          "fetched_at": "2026-11-19 08:47:30-05:00"
+        }
+      }
+    },
+    {
+      "fn": "displayRecords",
+      "name": "no fetch time at all",
+      "args": [
+        [
+          {
+            "code": "A",
+            "mid_price": 1
+          }
+        ],
+        "Asia/Singapore",
+        null
+      ],
+      "expect": {
+        "A": {
+          "code": "A",
+          "mid_price": 1,
+          "fetched_at": null
+        }
+      }
+    },
+    {
+      "fn": "displayRecords",
+      "name": "nothing came back",
+      "args": [
+        [],
+        "Asia/Singapore",
+        {
+          "$date": "2026-11-19T13:47:30.000Z"
+        }
+      ],
+      "expect": {}
+    },
+    {
+      "fn": "verifyVerdict",
+      "name": "every code priced, so nothing is wrong",
+      "args": [
+        [
+          "A",
+          "B"
+        ],
+        {
+          "records": [
+            {
+              "code": "A"
+            },
+            {
+              "code": "B"
+            }
+          ],
+          "unknown": []
+        }
+      ],
+      "expect": null
+    },
+    {
+      "fn": "verifyVerdict",
+      "name": "a code the provider does not know",
+      "args": [
+        [
+          "A",
+          "B"
+        ],
+        {
+          "records": [
+            {
+              "code": "A"
+            }
+          ],
+          "unknown": [
+            "B"
+          ]
+        }
+      ],
+      "expect": "contract does not exist: B — check strike and expiry"
+    },
+    {
+      "fn": "verifyVerdict",
+      "name": "two unknown codes, named in the order asked",
+      "args": [
+        [
+          "A",
+          "B"
+        ],
+        {
+          "records": [],
+          "unknown": [
+            "A",
+            "B"
+          ]
+        }
+      ],
+      "expect": "contract does not exist: A, B — check strike and expiry"
+    },
+    {
+      "fn": "verifyVerdict",
+      "name": "silently missing counts as not existing",
+      "args": [
+        [
+          "A",
+          "B"
+        ],
+        {
+          "records": [
+            {
+              "code": "A"
+            }
+          ],
+          "unknown": []
+        }
+      ],
+      "expect": "contract does not exist: B — check strike and expiry"
+    },
+    {
+      "fn": "verifyVerdict",
+      "name": "unknown wins over missing when both apply",
+      "args": [
+        [
+          "A",
+          "B"
+        ],
+        {
+          "records": [],
+          "unknown": [
+            "B"
+          ]
+        }
+      ],
+      "expect": "contract does not exist: B — check strike and expiry"
+    },
+    {
+      "fn": "verifyVerdict",
+      "name": "nothing asked for is nothing wrong",
+      "args": [
+        [],
+        {
+          "records": [],
+          "unknown": []
+        }
+      ],
+      "expect": null
+    },
+    {
       "fn": "round4",
       "name": "four places",
       "args": [

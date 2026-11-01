@@ -177,6 +177,37 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "marketTimeToDisplay", name: "an impossible time comes back untouched", args: ["2026-13-45 99:99:99", "UTC"] },
   ],
   quote: [
+    // --- stamping a batch for display, and judging one at creation (ADR 0017) ---
+    // moomoo's update_time arrives naive US-Eastern and means LAST TRADE; fetched_at is freshness
+    { fn: "displayRecords", name: "the last trade is converted and the fetch is stamped",
+      args: [[{ code: "US.SPXW261120C7100000", mid_price: 5.1, update_time: "2026-11-19 09:47:23" }],
+             "Asia/Singapore", new Date("2026-11-19T13:47:30Z")] },
+    { fn: "displayRecords", name: "a record with no last trade is still stamped",
+      args: [[{ code: "US.SPXW261120C7100000", mid_price: 5.1 }], "Asia/Singapore",
+             new Date("2026-11-19T13:47:30Z")] },
+    { fn: "displayRecords", name: "several records, keyed by code",
+      args: [[{ code: "A", mid_price: 1 }, { code: "B", mid_price: 2 }], "America/New_York",
+             new Date("2026-11-19T13:47:30Z")] },
+    // the sweep has never fetched: a null instant must not become "now" or an invalid date
+    { fn: "displayRecords", name: "no fetch time at all",
+      args: [[{ code: "A", mid_price: 1 }], "Asia/Singapore", null] },
+    { fn: "displayRecords", name: "nothing came back", args: [[], "Asia/Singapore", new Date("2026-11-19T13:47:30Z")] },
+
+    { fn: "verifyVerdict", name: "every code priced, so nothing is wrong",
+      args: [["A", "B"], { records: [{ code: "A" }, { code: "B" }], unknown: [] }] },
+    { fn: "verifyVerdict", name: "a code the provider does not know",
+      args: [["A", "B"], { records: [{ code: "A" }], unknown: ["B"] }] },
+    { fn: "verifyVerdict", name: "two unknown codes, named in the order asked",
+      args: [["A", "B"], { records: [], unknown: ["A", "B"] }] },
+    // a code that is neither priced NOR named unknown: the provider contradicted itself, and a
+    // gate this strict takes the pessimistic reading
+    { fn: "verifyVerdict", name: "silently missing counts as not existing",
+      args: [["A", "B"], { records: [{ code: "A" }], unknown: [] }] },
+    { fn: "verifyVerdict", name: "unknown wins over missing when both apply",
+      args: [["A", "B"], { records: [], unknown: ["B"] }] },
+    { fn: "verifyVerdict", name: "nothing asked for is nothing wrong",
+      args: [[], { records: [], unknown: [] }] },
+
     { fn: "round4", name: "four places", args: [1.23456] },
     { fn: "round4", name: "a decimal half that is not one in binary", args: [1.00005] },
     { fn: "round4", name: "2.675", args: [2.675] },

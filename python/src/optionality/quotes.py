@@ -1,56 +1,30 @@
-"""Quote batches that survive an unknown contract. Mirrors backend/src/quotes.ts.
+"""The market-data port's contract, and the one thing above it that is not pure.
 
-moomoo refuses the WHOLE batch when any code in it is unknown, and names the culprit — without its
-market prefix. `fetch_resilient` drops what it names and asks again, so one bad contract cannot take
-the rest hostage. Any other failure (a dead gateway, a quota) is raised untouched: containment engages
-only on the case it can read.
+Mirrors backend/src/quotes.ts. A Provider is anything that answers `QuoteFetcher`: it returns the
+records it has AND the codes it does not know, and it raises only when it could not answer at all.
+A raise is an outage, and an outage must never read as a watchlist full of unknown contracts.
+
+`fetch_resilient` is gone (ADR 0017). It dropped a code moomoo named in its error prose and asked
+again — above the port, which is where the TypeScript USED to do it. #168 moved that into the
+provider on the reasoning that moomoo's grammar is moomoo's business, and ADR 0015 made the vendor
+one Provider among others; this module kept the old shape for three weeks because nothing cased it.
+`opend.OpenD.quotes` owns the loop now, as `opend/client.ts` does.
+
+The verdict itself is `quote.verify_verdict`, which is cased. What is left here is the fetch and the
+catch, which cannot be.
 """
 
-import re
 from collections.abc import Callable
-from typing import NamedTuple
 
-from optionality.quote import Quote
+from optionality.quote import Batch, verify_verdict
 
-type QuoteFetcher = Callable[[list[str]], list[Quote]]
-
-_UNKNOWN_CODE = re.compile(r"Unknown stock\.?\s+([A-Z0-9.]+)")
-
-
-class Batch(NamedTuple):
-    records: list[Quote]
-    bad: list[str]
-
-
-def fetch_resilient(codes: list[str], fetch: QuoteFetcher) -> Batch:
-    remaining = list(codes)
-    bad: list[str] = []
-    while remaining:
-        try:
-            return Batch(fetch(remaining), bad)
-        except Exception as err:
-            match = _UNKNOWN_CODE.search(str(err))
-            if not match:
-                raise
-            culprit = match.group(1).rstrip(".")
-            hits = [c for c in remaining if c == culprit or c.endswith(culprit)]
-            if not hits:
-                raise  # cannot map the culprit to our codes: a generic failure
-            remaining = [c for c in remaining if c not in hits]
-            bad.extend(hits)
-    return Batch([], bad)
+type QuoteFetcher = Callable[[list[str]], Batch]
 
 
 def verify_contracts(codes: list[str], fetch: QuoteFetcher) -> str | None:
     """Why these contracts cannot be trusted to exist, or None. Strict: it refuses while OpenD is down."""
     try:
-        records, bad = fetch_resilient(codes, fetch)
+        batch = fetch(codes)
     except Exception as err:
         return f"cannot verify contract: OpenD unreachable ({err})"
-    if bad:
-        return f"contract does not exist: {', '.join(bad)} — check strike and expiry"
-    returned = {r.get("code") for r in records}
-    missing = [c for c in codes if c not in returned]
-    if missing:
-        return f"contract does not exist: {', '.join(missing)} — check strike and expiry"
-    return None
+    return verify_verdict(codes, batch)
