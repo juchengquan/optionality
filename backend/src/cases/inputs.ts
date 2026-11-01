@@ -175,6 +175,11 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "marketTimeToDisplay", name: "the hour that happens twice", args: ["2026-11-01 01:30:00", "UTC"] },
     { fn: "marketTimeToDisplay", name: "not a time comes back untouched", args: ["N/A", "Asia/Singapore"] },
     { fn: "marketTimeToDisplay", name: "an impossible time comes back untouched", args: ["2026-13-45 99:99:99", "UTC"] },
+    // a value that already carries an offset is NOT a naive market time, so the pattern declines it
+    // and it comes back whole. That is what makes a second conversion a no-op, and it was worth
+    // casing because the comment on `displayRecords` claimed the opposite for months (ADR 0017).
+    { fn: "marketTimeToDisplay", name: "an already-converted value comes back untouched",
+      args: ["2026-08-10 08:15:00+08:00", "Asia/Singapore"] },
   ],
   quote: [
     // --- stamping a batch for display, and judging one at creation (ADR 0017) ---

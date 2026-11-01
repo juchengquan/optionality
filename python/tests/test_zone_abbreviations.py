@@ -24,9 +24,7 @@ import pytest
 
 from optionality.timefmt import display_time_short
 
-TABLE = json.loads(
-    (Path(__file__).resolve().parents[2] / "testdata" / "zone-abbreviations.json").read_text()
-)
+TABLE = json.loads((Path(__file__).resolve().parents[2] / "testdata" / "zone-abbreviations.json").read_text())
 ROWS = TABLE["rows"]
 
 
@@ -61,5 +59,11 @@ def test_london_parts_from_the_typescript_only_in_summer():
     winter, summer = (r for r in ROWS if r["zone"] == "Europe/London")
     assert winter["ts"] == winter["py"]
     assert summer["ts"] != summer["py"]
-    assert display_time_short(datetime.fromisoformat("2026-01-15T12:00:00+00:00"), "Europe/London") == "2026-01-15 12:00 GMT"
-    assert display_time_short(datetime.fromisoformat("2026-07-15T12:00:00+00:00"), "Europe/London") == "2026-07-15 13:00 BST"
+    assert (
+        display_time_short(datetime.fromisoformat("2026-01-15T12:00:00+00:00"), "Europe/London")
+        == "2026-01-15 12:00 GMT"
+    )
+    assert (
+        display_time_short(datetime.fromisoformat("2026-07-15T12:00:00+00:00"), "Europe/London")
+        == "2026-07-15 13:00 BST"
+    )

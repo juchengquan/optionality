@@ -73,9 +73,11 @@ describe("displayRecords", () => {
     expect(byCode[CODE]!.update_time).toBe("2026-08-10 08:15:00+08:00");
   });
 
-  it("copies rather than mutates, because conversion is not idempotent", () => {
-    // the sweeper's cached records get rendered on every dashboard poll; mutating them would
-    // convert an already-converted timestamp a second time
+  it("copies rather than mutates, because the records are shared", () => {
+    // the sweeper caches its last batch and renders it on every dashboard poll, so writing into
+    // these would plant one caller's stamp in state another owns. NOT because conversion is
+    // non-idempotent, which this said for months and which is false: marketTimeToDisplay requires
+    // a naive time and declines anything carrying an offset (ADR 0017, now cased in timefmt).
     const record = { code: CODE, update_time: "2026-08-09 20:15:00" };
     displayRecords([record], "Asia/Singapore", at);
     expect(record.update_time).toBe("2026-08-09 20:15:00");

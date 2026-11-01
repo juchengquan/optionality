@@ -33,9 +33,10 @@ def round4(value: float) -> float:
 def display_records(records: list[Quote], display_tz: str, fetched_at: datetime | None) -> ByCode:
     """Index a batch's records by code, with display-tz timestamps stamped on.
 
-    Copies rather than mutates: the service renders its cached records on every dashboard poll, and
-    `market_time_to_display` is not idempotent — feeding its own output back in would read the
-    offset as part of a new naive time.
+    Copies rather than mutates: the records are SHARED — the service caches its last batch and
+    renders it on every poll — so writing `fetched_at` into them would plant one caller's stamp in
+    state another owns. Not because conversion is non-idempotent: `market_time_to_display` requires
+    a NAIVE time and declines a value that already carries an offset, which is cased in timefmt.
 
     `fetched_at` is the honest "data as-of"; `update_time` is only the last trade, and it arrives
     naive US-Eastern.

@@ -8,8 +8,8 @@ from optionality import api
 from optionality.opend import OpenD
 from optionality.position import cost_to_close, position_leg_codes
 
-held = api.positions()                      # your Positions, from the live service
-with OpenD() as od:                         # live quotes from OpenD (the `opend` extra)
+held = api.positions()  # your Positions, from the live service
+with OpenD() as od:  # live quotes from OpenD (the `opend` extra)
     codes = [c for p in held for c in position_leg_codes(p)]
     records, _ = od.quotes(codes)
 by_code = {r["code"]: r for r in records}
@@ -36,7 +36,7 @@ The version says WHEN it was cut; `optionality._ported.GOLDEN_CASES` says WHAT i
 cell tells you whether it is still current:
 
 ```python
-print(api.agrees())   # "this port agrees with the service (7ed1a1af…)"
+print(api.agrees())  # "this port agrees with the service (7ed1a1af…)"
 ```
 
 It never runs on import and never raises: with no service reachable it says so and the maths still

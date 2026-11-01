@@ -33,9 +33,15 @@ export function round4(value: number): number {
 
 /** Index a batch's records by code, with display-tz timestamps stamped on.
  *
- *  Copies rather than mutates: the sweeper's cached records get rendered on every dashboard poll,
- *  and `marketTimeToDisplay` is not idempotent — feeding its own output back in would read the
- *  offset as part of a new naive time.
+ *  Copies rather than mutates: the records are SHARED — the sweeper caches its last batch and
+ *  renders it on every dashboard poll — so writing `fetched_at` into them would plant one caller's
+ *  stamp in state another owns.
+ *
+ *  It said `marketTimeToDisplay` was not idempotent, and that was wrong: its pattern requires a
+ *  NAIVE time, so a value already carrying an offset does not match and comes back whole — the
+ *  strict-or-decline discipline `shortContract` and `buildSpxCode` also follow. Measured in both
+ *  languages while testing the claim (ADR 0017), and now cased in timefmt. The copy stays; only
+ *  its reason was false.
  *
  *  Moved in from `quotes.ts` by ADR 0017: it is pure, four service paths use it, and the Python had
  *  never had it at all. `fetched_at` is the honest "data as-of"; `update_time` is only the last
