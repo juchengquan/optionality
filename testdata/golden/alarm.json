@@ -651,6 +651,72 @@
     },
     {
       "fn": "alarmTransition",
+      "name": "an integer threshold is written without a trailing zero",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "mid_price",
+          "threshold": 5,
+          "direction": "above",
+          "compare": "abs"
+        },
+        6.5,
+        "1120_IC",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_IC: mid_price 6.500 crossed ≥ 5"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "and a negated integer threshold likewise",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "mid_price",
+          "threshold": 5,
+          "direction": "above",
+          "compare": "abs"
+        },
+        -6.5,
+        "1120_IC",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_IC: mid_price -6.500 fell ≤ -5"
+      }
+    },
+    {
+      "fn": "alarmTransition",
       "name": "a signed rule is left exactly as it was",
       "args": [
         {

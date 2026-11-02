@@ -23,7 +23,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 
 from optionality._ported import GOLDEN_CASES
 from optionality.monitor import Monitor
@@ -69,14 +69,41 @@ def _get(path: str, base_url: str | None, token: str | None) -> Any:
         ) from None
 
 
+def _rows[T: BaseModel](model: type[T], body: Any, path: str) -> list[T]:
+    """Parse the rows, refusing one that is missing a key the model would silently DEFAULT.
+
+    The docstring above promises that "a response in a shape this package does not know (an old
+    field value, a missing field) is a validation error, not data", and for a required field
+    Pydantic delivers that. For a field with a default it did the opposite: `Monitor.legs` is
+    `| None = None`, faithfully, because the TypeScript declares it `legs?: MonitorLeg[] | null` —
+    so a renamed `legs` turned a combo into a single-leg rule whose "contract code" was the combo's
+    NAME, and a renamed `opened_at` made every exit level and vol attribution answer None for a
+    holding that had one (review 2026-11-01).
+
+    The models must stay faithful to the domain's types, which notebooks and the golden cases also
+    build by hand. So the strictness lives HERE, at the boundary, where the promise was made: the
+    API sends all of these on every row, and the check is derived from the model so a field added
+    later is guarded without anyone remembering to.
+    """
+    optional = {name for name, field in model.model_fields.items() if not field.is_required()}
+    if isinstance(body, list):
+        for row in body:
+            if not isinstance(row, dict):
+                continue
+            missing = sorted(optional - row.keys())
+            if missing:
+                raise ApiError(path, None, f"a row is missing {', '.join(missing)} — the service's shape has moved")
+    return TypeAdapter(list[model]).validate_python(body)
+
+
 def positions(base_url: str | None = None, token: str | None = None) -> list[Position]:
     """Every Position the service holds (`GET /positions`)."""
-    return TypeAdapter(list[Position]).validate_python(_get("/positions", base_url, token))
+    return _rows(Position, _get("/positions", base_url, token), "/positions")
 
 
 def monitors(base_url: str | None = None, token: str | None = None) -> list[Monitor]:
     """Every Monitor, enabled or not (`GET /monitors`)."""
-    return TypeAdapter(list[Monitor]).validate_python(_get("/monitors", base_url, token))
+    return _rows(Monitor, _get("/monitors", base_url, token), "/monitors")
 
 
 @dataclass(frozen=True)

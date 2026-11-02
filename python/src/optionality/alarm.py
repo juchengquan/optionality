@@ -16,7 +16,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
-from optionality.js import to_fixed
+from optionality.js import js_string, to_fixed
 from optionality.monitor import Monitor, is_breached
 
 
@@ -71,8 +71,15 @@ def _mirrored(monitor: Monitor, value: float) -> bool:
     return monitor.compare != "signed" and value < 0
 
 
-def _threshold(monitor: Monitor, value: float) -> float:
-    return -monitor.threshold if _mirrored(monitor, value) else monitor.threshold
+def _threshold(monitor: Monitor, value: float) -> str:
+    """The threshold as JAVASCRIPT would write it, which drops a trailing `.0`.
+
+    `Monitor.threshold` is a Python float, so `mid_price >= 5` printed "5.0" where the TypeScript
+    prints "5" — a divergence in the one string ADR 0017 exists to compare exactly, in an ordinary
+    rule. Every alarm case used 0.3, so the corpus could not see it (review 2026-11-01).
+    """
+    shown = -monitor.threshold if _mirrored(monitor, value) else monitor.threshold
+    return js_string(shown)
 
 
 def _below(monitor: Monitor, value: float) -> bool:

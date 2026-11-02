@@ -119,6 +119,55 @@
       }
     },
     {
+      "fn": "toFixed",
+      "name": "ten decimals of a very large value",
+      "args": [
+        1000000000000000000,
+        10
+      ],
+      "expect": 1000000000000000000
+    },
+    {
+      "fn": "toFixed",
+      "name": "eight decimals at the edge of the guard",
+      "args": [
+        100000000000000000000,
+        8
+      ],
+      "expect": 100000000000000000000
+    },
+    {
+      "fn": "toFixed",
+      "name": "above the guard it is returned whole",
+      "args": [
+        1e+21,
+        2
+      ],
+      "expect": 1e+21
+    },
+    {
+      "fn": "toFixed",
+      "name": "a digit count below zero is refused",
+      "args": [
+        1.5,
+        -1
+      ],
+      "expect": {
+        "$throws": true
+      }
+    },
+    {
+      "fn": "toFixed",
+      "name": "and one above a hundred",
+      "args": [
+        1.5,
+        101
+      ],
+      "expect": {
+        "$throws": true
+      }
+    },
+    {
       "fn": "number",
       "name": "the empty string is zero, not an error",
       "args": [
@@ -274,6 +323,83 @@
       "name": "a signed hex literal is not a number",
       "args": [
         "-0x10"
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "a nested array is its own join, so one element deep is that element",
+      "args": [
+        [
+          [
+            5
+          ]
+        ]
+      ],
+      "expect": 5
+    },
+    {
+      "fn": "number",
+      "name": "and an empty nested array is zero",
+      "args": [
+        [
+          []
+        ]
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "number",
+      "name": "a nested array of two is not a number",
+      "args": [
+        [
+          1,
+          [
+            2
+          ]
+        ]
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "an Arabic-Indic digit is not a number",
+      "args": [
+        "١٢٣"
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "a hex literal with a separator is not a number",
+      "args": [
+        "0x1_0"
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "a hex literal with an inner sign is not a number",
+      "args": [
+        "0x+10"
+      ],
+      "expect": {
+        "$num": "NaN"
+      }
+    },
+    {
+      "fn": "number",
+      "name": "a binary literal with a separator is not a number",
+      "args": [
+        "0b1_1"
       ],
       "expect": {
         "$num": "NaN"

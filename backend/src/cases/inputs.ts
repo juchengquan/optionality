@@ -355,6 +355,15 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "alarmTransition", name: "a reading of exactly zero is not mirrored",
       args: [{ ...single, threshold: 0.05, direction: "below" }, 0, "1120_P6500",
              state(false, null), alarms, NOW] },
+    // an INTEGER threshold, which `mid_price >= 5` is: JavaScript writes 5 and Python's float
+    // writes 5.0, a divergence in the one string ADR 0017 exists to compare exactly. Every case
+    // above used 0.3 (review 2026-11-01).
+    { fn: "alarmTransition", name: "an integer threshold is written without a trailing zero",
+      args: [{ ...single, field: "mid_price", threshold: 5 }, 6.5, "1120_IC",
+             state(false, null), alarms, NOW] },
+    { fn: "alarmTransition", name: "and a negated integer threshold likewise",
+      args: [{ ...single, field: "mid_price", threshold: 5 }, -6.5, "1120_IC",
+             state(false, null), alarms, NOW] },
     // signed is untouched: a negative threshold is legal there and the sign is the point
     { fn: "alarmTransition", name: "a signed rule is left exactly as it was",
       args: [{ ...single, threshold: -0.1, direction: "below", compare: "signed" }, -0.42,
@@ -382,6 +391,14 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "toFixed", name: "a negative exact half", args: [-0.03125, 4] },
     { fn: "toFixed", name: "no decimals at all", args: [2.5, 0] },
     { fn: "toFixed", name: "NaN survives", args: [NaN, 2] },
+    // ten decimals of a large double: `quantize` raised past the default context precision, which
+    // the >= 1e21 guard covered only while digits <= 7 — true of every call site in the package,
+    // so it was correct because its callers were disciplined (review 2026-11-01)
+    { fn: "toFixed", name: "ten decimals of a very large value", args: [1e18, 10] },
+    { fn: "toFixed", name: "eight decimals at the edge of the guard", args: [1e20, 8] },
+    { fn: "toFixed", name: "above the guard it is returned whole", args: [1e21, 2] },
+    { fn: "toFixed", name: "a digit count below zero is refused", args: [1.5, -1] },
+    { fn: "toFixed", name: "and one above a hundred", args: [1.5, 101] },
 
     // Number() on what a quote field can hold
     { fn: "number", name: "the empty string is zero, not an error", args: [""] },
@@ -402,6 +419,17 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "number", name: "a longer array is not a number", args: [[1, 2]] },
     { fn: "number", name: "an object is not a number", args: [{}] },
     { fn: "number", name: "a signed hex literal is not a number", args: ["-0x10"] },
+    // the four the port got wrong, each measured against real JavaScript (review 2026-11-01)
+    { fn: "number", name: "a nested array is its own join, so one element deep is that element",
+      args: [[[5]]] },
+    { fn: "number", name: "and an empty nested array is zero", args: [[[]]] },
+    { fn: "number", name: "a nested array of two is not a number", args: [[1, [2]]] },
+    // \d matches every Unicode decimal digit, and Python's float() accepts them
+    { fn: "number", name: "an Arabic-Indic digit is not a number", args: ["\u0661\u0662\u0663"] },
+    // int() tolerates separators, a sign and inner whitespace; StringNumericLiteral does not
+    { fn: "number", name: "a hex literal with a separator is not a number", args: ["0x1_0"] },
+    { fn: "number", name: "a hex literal with an inner sign is not a number", args: ["0x+10"] },
+    { fn: "number", name: "a binary literal with a separator is not a number", args: ["0b1_1"] },
 
     // truthiness
     { fn: "truthy", name: "zero is falsy", args: [0] },
@@ -475,6 +503,15 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "monitorValue", name: "a combo", args: [combo, quotes] },
     { fn: "monitorValue", name: "unpriced", args: [single, {}] },
     { fn: "thresholdFill", name: "halfway above", args: [0.15, 0.3, "above", "abs"] },
+    // a garbage quote field makes monitorValue NaN (js.number), and a NaN fill reached the bar's
+    // width as "NaN%" here and a ValueError there. No figure is the answer both can give.
+    { fn: "thresholdFill", name: "a NaN reading is no figure, not a fill",
+      args: [NaN, 0.3, "above", "abs"] },
+    { fn: "thresholdFill", name: "a NaN threshold is no figure either",
+      args: [1, NaN, "above", "abs"] },
+    // a denormal threshold divides to infinity, which still clamps as it always did
+    { fn: "thresholdFill", name: "a threshold too small to divide by clamps full",
+      args: [1, 5e-324, "above", "signed"] },
     { fn: "thresholdFill", name: "12.5 rounds to even", args: [0.125, 1, "above", "abs"] },
     { fn: "thresholdFill", name: "13.5 rounds to even", args: [0.135, 1, "above", "abs"] },
     { fn: "thresholdFill", name: "past the threshold is full", args: [0.5, 0.3, "above", "abs"] },

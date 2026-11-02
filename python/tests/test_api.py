@@ -180,3 +180,30 @@ def test_the_dashboard_s_address_says_it_is_not_the_api(service):
     service.routes["/positions"] = (200, "<!doctype html><html><body>dashboard</body></html>")
     with pytest.raises(api.ApiError, match=r"not JSON.*/opt/api"):
         api.positions(service.url)
+
+
+def test_refuses_a_row_whose_shape_has_moved(service):
+    """A field the API always sends, renamed: the model would default it in silence.
+
+    `Monitor.legs` is `| None = None` because the TypeScript declares it optional, so a renamed
+    `legs` turned a combo into a single-leg rule whose "contract code" was the combo's name. The
+    models stay faithful; the boundary refuses (review 2026-11-01).
+    """
+    moved = {k if k != "legs" else "combo_legs": v for k, v in COMBO.items()}
+    service.routes["/monitors"] = (200, [moved])
+    with pytest.raises(api.ApiError, match="missing legs"):
+        api.monitors(service.url)
+
+
+def test_refuses_a_holding_that_lost_its_opened_date(service):
+    # exit levels and vol attribution both answer None for a holding with no opened_at, which is
+    # the silent-null failure the memory note on opened_at records
+    moved = {k if k != "opened_at" else "openedAt": v for k, v in CONDOR.items()}
+    service.routes["/positions"] = (200, [moved])
+    with pytest.raises(api.ApiError, match="missing opened_at"):
+        api.positions(service.url)
+
+
+def test_still_takes_a_row_that_has_every_key(service):
+    assert [m.code for m in api.monitors(service.url)] == [SINGLE["code"], COMBO["code"]]
+    assert [p.name for p in api.positions(service.url)] == [CONDOR["name"]]

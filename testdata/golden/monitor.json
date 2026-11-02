@@ -439,6 +439,43 @@
     },
     {
       "fn": "thresholdFill",
+      "name": "a NaN reading is no figure, not a fill",
+      "args": [
+        {
+          "$num": "NaN"
+        },
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "a NaN threshold is no figure either",
+      "args": [
+        1,
+        {
+          "$num": "NaN"
+        },
+        "above",
+        "abs"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdFill",
+      "name": "a threshold too small to divide by clamps full",
+      "args": [
+        1,
+        5e-324,
+        "above",
+        "signed"
+      ],
+      "expect": 100
+    },
+    {
+      "fn": "thresholdFill",
       "name": "12.5 rounds to even",
       "args": [
         0.125,
