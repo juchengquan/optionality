@@ -120,8 +120,9 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
-- Every call to the **Provider** is a single bounded one: the sweep, `/spx/quote`, `/quotes`,
-  `/positions/values` and the creation probes. (`/positions/values` is polled by the dashboard's Holdings
+- Every call to the **Provider** is a single bounded one: the sweep, `/quotes`,
+  `/positions/values` and the creation probes. (`/spx/quote` was a fifth until #199 dropped it:
+  nothing called it, and the bot's `/snapshot` answers the same question in-process.) (`/positions/values` is polled by the dashboard's Holdings
   panel while it is open.) This read "one worker thread owns run execution, and these are the exceptions"
   until phase 10 retired the worker with the run pipeline it existed for (ADR 0014), and named OpenD until
   ADR 0015 made the vendor one Provider among others — `OPTIONALITY_PROVIDER` chooses, and the rule holds

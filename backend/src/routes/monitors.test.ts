@@ -37,11 +37,9 @@ const combo = (over: Record<string, unknown> = {}) => ({ ...COMBO, strike_date: 
 const post = (payload: unknown) => h.call("/monitors", json(payload));
 const patch = (id: string, payload: unknown) =>
   h.call(`/monitors/${id}`, { ...json(payload), method: "PATCH" });
-const put = (id: string, payload: unknown) =>
-  h.call(`/monitors/${id}`, { ...json(payload), method: "PUT" });
 
 describe("the round trip", () => {
-  it("creates, lists, replaces and deletes", async () => {
+  it("creates, lists, patches and deletes", async () => {
     h = harness();
     const created = await post(single());
     expect(created.status).toBe(201);
@@ -59,7 +57,7 @@ describe("the round trip", () => {
     expect(listed[0].last_value).toBeNull();
     expect(listed[0].triggered).toBe(false);
 
-    expect((await put(data.id, single({ threshold: 0.5 }))).status).toBe(200);
+    expect((await patch(data.id, { threshold: 0.5 })).status).toBe(200);
     expect((await body(await h.call("/monitors")))[0].threshold).toBe(0.5);
 
     expect((await h.call(`/monitors/${data.id}`, { method: "DELETE" })).status).toBe(204);
@@ -74,7 +72,6 @@ describe("the round trip", () => {
 
   it("is a 404 for a monitor that was never there", async () => {
     h = harness();
-    expect((await put("nope", single())).status).toBe(404);
     expect((await patch("nope", { threshold: 1 })).status).toBe(404);
     expect((await h.call("/monitors/nope", { method: "DELETE" })).status).toBe(404);
   });
@@ -123,7 +120,6 @@ describe("thresholds", () => {
 
     const id = (await body(await post(single()))).id;
     expect((await patch(id, { threshold: -1 })).status).toBe(422);
-    expect((await put(id, single({ threshold: 0 }))).status).toBe(422);
   });
 
   it("says WHICH rule the threshold broke, not merely that it broke one", async () => {
@@ -189,14 +185,27 @@ describe("combos", () => {
     expect((await post(combo({ name: "x", legs: COMBO.legs.slice(0, 1) }))).status).toBe(422);
   });
 
-  it("cannot be edited in place", async () => {
-    // the legs define it; replacing them silently would change what the alarm means
+  it("keeps its legs through an edit that tries to carry new ones", async () => {
+    // The legs define it; changing them would change what the alarm means. PUT refused that in
+    // prose — "combo monitors cannot be edited in place; delete and recreate" — and went with the
+    // route in #199. The protection is now structural: `MonitorPatch` has no `legs`, so zod strips
+    // the key and the stored legs cannot be reached from any door.
+    //
+    // Stated as what the API DOES rather than as a refusal, because that is the truth and the
+    // difference matters to anyone reading this file: the key is dropped silently, not rejected,
+    // so the rest of the patch still applies. Worth pinning either way — a schema that gained a
+    // passthrough, or a handler that started spreading `given` into `changes`, would edit the legs
+    // of a live combo with nothing to show for it.
     h = harness();
-    const id = (await body(await post(combo()))).id;
-    const resp = await put(id, single());
-    expect(resp.status).toBe(422);
-    expect((await body(resp)).detail)
-      .toBe("combo monitors cannot be edited in place; delete and recreate");
+    const created = await body(await post(combo()));
+    expect(created.legs).toHaveLength(2);
+    const resp = await patch(created.id, {
+      threshold: 12, legs: [{ sign: 1, option_type: "CALL", strike: 1 }],
+    });
+    expect(resp.status).toBe(200);
+    const after = (await body(await h.call("/monitors")))[0];
+    expect(after.threshold).toBe(12);          // the legal half went through
+    expect(after.legs).toEqual(created.legs);  // and the legs are exactly as created
   });
 
   it("names the field before the threshold when both are wrong", async () => {
@@ -412,7 +421,7 @@ describe("the links to positions", () => {
     expect(created.positions).toEqual([{ id: "p".repeat(32), name: "wing" }]);
   });
 
-  it("carries the links when a monitor is replaced or patched", async () => {
+  it("carries the links when a monitor is patched", async () => {
     // an edit does not change the links, which is exactly why the reply must still state them:
     // a client that re-renders a row from the PATCH response would otherwise lose the holding's
     // name and its leg badge until the next poll
@@ -424,8 +433,6 @@ describe("the links to positions", () => {
     // that comparison passes while every reply is wrong — the shape of a vacuous assertion
     const linked = [{ id: "p".repeat(32), name: "del-target" }];
     expect((await body(await patch(created.id, { threshold: 0.3 }))).positions).toEqual(linked);
-    expect((await body(await put(created.id, { ...payload, threshold: 0.4 }))).positions)
-      .toEqual(linked);
   });
 
   it("takes the links with it when the monitor goes, and leaves the position", async () => {
@@ -442,64 +449,37 @@ describe("the links to positions", () => {
     expect(h.db.prepare("select name from positions").get()).toMatchObject({ name: "del-target" });
   });
 
-  it("re-links a replaced monitor to whatever holds its NEW contract", async () => {
-    // PUT is the one edit that can move a monitor to a different contract, and the links did not
-    // follow it: the rule kept pointing at the holding of the strike it USED to watch, so it
-    // inherited that holding's entry and reported a P&L for a position it no longer touched.
-    // "Creating one links it to whatever Position already holds its contracts" has to hold for
-    // the edited row too, or the link means nothing after the first edit.
+  it("leaves the monitor and its links alone when the delete cannot finish", async () => {
+    // DELETE is now the only handler in this file wrapping two writes in `atomic`, and the
+    // route-level proof that it is one fact went with PUT in #199 — that handler's own rollback
+    // test was where it lived. `db/open.test.ts` proves `atomic` rolls back; this proves this
+    // route uses it, which is a different claim and the one that can rot.
+    //
+    // The links must go before the row or the foreign key refuses (#70). A half-applied delete in
+    // the other order is the worse half: a monitors row gone with its links behind it, or the
+    // links cleared while the rule stays — a rule that would then report no holding, no entry and
+    // no P&L for a position the trader still owns.
+    //
+    // The failure is injected in SQLite rather than by mocking, so what is proved is the handler's
+    // transaction and not a stand-in for it.
     h = harness();
-    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
-    seedPosition("b".repeat(32), "seventy", "2026-12-18", 7000);
-    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
-    const created = await body(await post(payload));
-    expect(created.positions).toEqual([{ id: "a".repeat(32), name: "sixty-five" }]);
-
-    const moved = await body(await put(created.id, { ...payload, strike: 7000 }));
-    expect(moved.positions).toEqual([{ id: "b".repeat(32), name: "seventy" }]);
+    seedPosition("p".repeat(32), "keep-me", "2026-12-18", 6500);
+    const created = await body(await post(single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 })));
     expect(linkCount(created.id)).toBe(1);
-  });
 
-  it("drops the links when a replaced monitor lands where nothing is held", async () => {
-    // the half that matters more: no holding means no entry and no P&L, which is honest. Keeping
-    // the old link here is what produced a figure for a contract the trader does not own.
-    h = harness();
-    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
-    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
-    const created = await body(await post(payload));
-    const moved = await body(await put(created.id, { ...payload, strike: 9999 }));
-    expect(moved.positions).toEqual([]);
-    expect(moved.scope).toBeNull();
+    h.db.exec(`create trigger no_delete before delete on monitors
+               begin select raise(abort, 'delete refused'); end`);
+    expect((await h.call(`/monitors/${created.id}`, { method: "DELETE" })).status).toBe(500);
+
+    // the row is still there AND still linked: the clear that ran first was rolled back with it
+    expect(h.db.prepare("select id from monitors where id = ?").get(created.id)).toBeDefined();
+    expect(linkCount(created.id)).toBe(1);
+
+    // and with the trigger gone the same delete goes through, which says the 500 was the
+    // trigger's doing and not a monitor left in a state that refuses every further write
+    h.db.exec("drop trigger no_delete");
+    expect((await h.call(`/monitors/${created.id}`, { method: "DELETE" })).status).toBe(204);
     expect(linkCount(created.id)).toBe(0);
-  });
-
-  it("leaves the links alone when a replacement does not move the contract", async () => {
-    // an edit to a threshold must not disturb the linkage, and must not need the probe either
-    h = harness();
-    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
-    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
-    const created = await body(await post(payload));
-    const same = await body(await put(created.id, { ...payload, threshold: 0.9 }));
-    expect(same.positions).toEqual([{ id: "a".repeat(32), name: "sixty-five" }]);
-    expect(same.scope).toBe("all");
-  });
-
-  it("keeps a link a second holding has since made ambiguous, when only the threshold moves", async () => {
-    // why the relinking is gated on the contract rather than run on every replacement: linking
-    // REFUSES an ambiguous contract, and rolling a spread leaves the old and the new sharing a
-    // strike for a day. Re-deciding the linkage on an edit that did not move the contract would
-    // drop a link that was unambiguous when it was made, taking the entry and the P&L with it —
-    // an edit to a threshold is not an occasion to reconsider what you own.
-    h = harness();
-    seedPosition("a".repeat(32), "old", "2026-12-18", 6500);
-    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
-    const created = await body(await post(payload));
-    expect(created.positions).toEqual([{ id: "a".repeat(32), name: "old" }]);
-
-    seedPosition("b".repeat(32), "rolled", "2026-12-18", 6500);
-    const same = await body(await put(created.id, { ...payload, threshold: 0.9 }));
-    expect(same.positions).toEqual([{ id: "a".repeat(32), name: "old" }]);
-    expect(linkCount(created.id)).toBe(1);
   });
 
   it("links nothing when no position holds the contract", async () => {
@@ -522,53 +502,6 @@ describe("the links to positions", () => {
     expect(created.scope).toBeNull();
   });
 
-  it("rolls the contract move back with the relink when linking fails", async () => {
-    // The two halves of a replacement that MOVES the contract — the new strike written to the row,
-    // and the links moved to follow it — are one decision, and `atomic` in the handler is the only
-    // thing that makes them one fact. Nothing asserted that until now: #172 fixed the links and
-    // recorded this gap in its own PR rather than closing it.
-    //
-    // What a half-applied move leaves behind is the exact bug #172 existed to kill, in reverse.
-    // The row would say 7000 while `monitor_positions` still pointed at the holding of 6500 — so
-    // the rule reports that holding's entry and a P&L for a contract it no longer watches, and
-    // this time with no edit in the log to explain it, because the request came back 500.
-    //
-    // The failure is injected in SQLite rather than by mocking the queries: a trigger that aborts
-    // the insert makes `linkToPositions` throw at the real boundary, so what is proved is the
-    // handler's transaction and not a stand-in for it.
-    h = harness();
-    seedPosition("a".repeat(32), "sixty-five", "2026-12-18", 6500);
-    seedPosition("b".repeat(32), "seventy", "2026-12-18", 7000);
-    const payload = single({ strike_date: "2026-12-18", strike: 6500, threshold: 0.2 });
-    const created = await body(await post(payload));
-    expect(created.positions).toEqual([{ id: "a".repeat(32), name: "sixty-five" }]);
-
-    h.db.exec(`create trigger no_links before insert on monitor_positions
-               begin select raise(abort, 'linking refused'); end`);
-    const moved = await put(created.id, { ...payload, strike: 7000 });
-    expect(moved.status).toBe(500);
-
-    // the row is untouched: the strike, the code built from it, and the threshold that rode along
-    const row = h.db.prepare("select code, strike, threshold, scope from monitors where id = ?")
-      .get(created.id) as { code: string; strike: number; threshold: number; scope: string };
-    expect(row.strike).toBe(6500);
-    expect(row.code).toBe(created.code);
-    expect(row.threshold).toBe(0.2);
-    // `scope` is nulled between the clear and the relink, so the rollback has to restore it too —
-    // "all" over a link that survived is the only reading that matches the database
-    expect(row.scope).toBe("all");
-
-    // and the link it already had is still there, rather than cleared by the half that ran first
-    expect(linkCount(created.id)).toBe(1);
-    expect(h.db.prepare("select position_id from monitor_positions where monitor_id = ?")
-      .get(created.id)).toMatchObject({ position_id: "a".repeat(32) });
-
-    // with the trigger gone the same edit goes through, which is what says the 500 was the
-    // trigger's doing and not a monitor left in a state that refuses every further edit
-    h.db.exec("drop trigger no_links");
-    const retried = await body(await put(created.id, { ...payload, strike: 7000 }));
-    expect(retried.positions).toEqual([{ id: "b".repeat(32), name: "seventy" }]);
-  });
 });
 
 describe("/quotes", () => {

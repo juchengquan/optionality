@@ -12,8 +12,9 @@ import { Hono } from "hono";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { documented } from "./openapi.ts";
+import { documented, mountDocs } from "./openapi.ts";
 import { type Harness, body, harness } from "./testing.ts";
+import { valid } from "./validate.ts";
 
 let h: Harness;
 const start = (...args: Parameters<typeof harness>) => (h = harness(...args));
@@ -89,10 +90,30 @@ describe("/openapi.json and /docs", () => {
     expect(JSON.stringify(bodyOf(s.paths["/monitors"]!.post!))).toContain('"minItems":2');
   });
 
-  it("documents query parameters from the same schema", async () => {
-    start();
-    const params = (await spec(h)).paths["/spx/quote"]!.get!.parameters!.map((p) => `${p.in} ${p.name}`);
-    expect(params.sort()).toEqual(["query option_type", "query strike", "query strike_date"]);
+  it("documents query parameters from the same schema, and gives them the 422", async () => {
+    // The subject is built HERE because no served route carries a query any more: /spx/quote was
+    // the last and went with #199. Pointing this at a route that no longer exists would have
+    // passed by vacuity — `s.paths[gone]` is undefined and the `!` would have thrown, which is at
+    // least loud, but a list-shaped version of the same test would simply have compared nothing.
+    //
+    // Two things are at stake and neither is a default. hono-openapi has to read the parameters
+    // off `valid("query", ...)`'s tag — the whole reason `valid` carries `uniqueSymbol` — and
+    // `build` has to add the 422 for a route that validates a query and has NO request body: it
+    // tests `requestBody !== undefined || parameters?.some(p => p.in === "query")`, and only the
+    // second half can reach such a route.
+    const Query = z.object({
+      strike_date: z.string(), option_type: z.enum(["CALL", "PUT"]), strike: z.string(),
+    });
+    const asked = documented("a route with a query", { 200: z.object({ ok: z.literal(true) }) });
+    const app = new Hono()
+      .get("/ask", asked, valid("query", Query), (c) => asked.reply(c, 200, { ok: true }));
+    mountDocs(app, "", new Set());
+
+    const s = await (await app.request("/openapi.json")).json() as Spec;
+    const op = s.paths["/ask"]!.get!;
+    expect(op.parameters!.map((p) => `${p.in} ${p.name}`).sort())
+      .toEqual(["query option_type", "query strike", "query strike_date"]);
+    expect(JSON.stringify(op.responses["422"])).toContain("detail");
   });
 
   it("says a rejected payload is a 422 with a detail, which is what the API answers", async () => {

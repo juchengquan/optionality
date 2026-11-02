@@ -136,21 +136,56 @@ describe("the bearer token", () => {
       .toBe(200);
   });
 
-  it("guards every route except /health", async () => {
+  it("serves exactly these doors, and no others", () => {
+    // The API's whole surface, stated. It is here because the two routes #199 removed — PUT
+    // /monitors/:id and GET /spx/quote — had no caller in the dashboard, the bot or the Python
+    // package, and nothing but prose said what the surface was meant to be. A route nothing calls
+    // is a route nothing exercises; this is what makes adding or removing one a decision rather
+    // than a diff nobody reads.
     start();
-    // every surviving route, not a sample of them: the run-pipeline paths this used to walk were
-    // removed, and a list that names paths which no longer exist passes by vacuity.
+    const served = h.app.routes
+      .filter((r) => r.method !== "ALL")
+      .map((r) => `${r.method} ${r.path}`);
+    expect([...new Set(served)].sort()).toEqual([
+      "DELETE /monitors/:id",
+      "DELETE /positions/:id",
+      "GET /docs",
+      "GET /health",
+      "GET /monitors",
+      "GET /openapi.json",
+      "GET /positions",
+      "GET /positions/:id/vol",
+      "GET /positions/values",
+      "GET /quotes",
+      "PATCH /monitors/:id",
+      "PATCH /positions/:id",
+      "POST /monitors",
+      "POST /monitors/:id/total-entry",
+      "POST /positions",
+    ]);
+  });
+
+  it("guards every route except /health and the docs", async () => {
+    start();
+    // Derived from the router rather than remembered. The hand-written list this replaces named
+    // /spx/quote, and when that route was removed the probe went on passing — the auth middleware
+    // runs BEFORE routing, so an anonymous call to a path the app no longer serves still answers
+    // 401. A list of paths is the one shape of this test that cannot tell "guarded" from "gone".
     //
-    // /quotes was missing from the first version of this list, which a code review caught — the
-    // dashboard's main poll and the one route here that triggers a live OpenD batch, so exactly
-    // the one worth guarding. Derived from app.ts's mounts rather than remembered: /health,
-    // /quotes, /monitors*, /positions*, /spx/quote.
-    for (const path of [
-      "/quotes", "/monitors", "/positions", "/positions/values", "/positions/x/vol", "/spx/quote",
-    ]) {
+    // /quotes was missing from the first version of that list, which a code review caught — the
+    // dashboard's main poll and the one route here that triggers a live Provider batch, so exactly
+    // the one worth guarding.
+    const open = ["/health", "/openapi.json", "/docs"];
+    const gets = [...new Set(h.app.routes
+      .filter((r) => r.method === "GET" && !open.includes(r.path))
+      .map((r) => r.path.replace(/:(\w+)/g, "x")))];
+    expect(gets.length).toBeGreaterThan(4);
+    for (const path of gets) {
       expect((await h.call(path, { anonymous: true })).status, path).toBe(401);
     }
-    expect((await h.call("/health", { anonymous: true })).status).toBe(200);
+    for (const path of open) {
+      expect((await h.call(path, { anonymous: true })).status, path).toBe(200);
+    }
   });
 });
 

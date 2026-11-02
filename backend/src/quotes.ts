@@ -1,8 +1,8 @@
 /** The market-data port, and what the service does with what comes back (ADR 0009, phase 5).
  *
- *  A Provider is anything that answers `QuoteFetcher` (ADR 0015): the sweep, `/spx/quote`,
- *  `/quotes` and the creation probes each make one bounded call through it, which are the
- *  documented exceptions the invariant names (CLAUDE.md). What goes here is logic rather than
+ *  A Provider is anything that answers `QuoteFetcher` (ADR 0015): the sweep, `/quotes`,
+ *  `/positions/values` and the creation probes each make one bounded call through it, which are
+ *  the documented exceptions the invariant names (CLAUDE.md). What goes here is logic rather than
  *  transport, so it can be tested without a Provider at all.
  *
  *  The port used to answer with records alone and THROW for a contract the Provider could not

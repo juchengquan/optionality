@@ -59,10 +59,6 @@ async function endpoints() {
         ],
       },
     }),
-    monitorReplaced: await client.monitors[":id"].$put({
-      param: id,
-      json: { strike_date: "2026-12-18", option_type: "CALL", strike: 6500, threshold: 0.6 },
-    }),
     monitorPatched: await client.monitors[":id"].$patch({ param: id, json: { threshold: 0.5 } }),
     totalEntry: await client.monitors[":id"]["total-entry"].$post({ param: id, json: { entry: 3.21 } }),
     monitorDeleted: await client.monitors[":id"].$delete({ param: id }),
@@ -82,14 +78,6 @@ async function endpoints() {
     // at the rule above — the one new route was the one route nothing type-checked, and renaming
     // `days` would have compiled on both sides and landed as a missing line in the sheet.
     vol: await (await client.positions[":id"].vol.$get({ param: id })).json(),
-
-    // --- one contract's quote ----------------------------------------------------------
-    spx: await (await client.spx.quote.$get({
-      query: { strike_date: "2026-12-18", option_type: "CALL", strike: "6500" },
-    })).json(),
-    spxResp: await client.spx.quote.$get({
-      query: { strike_date: "2026-12-18", option_type: "CALL", strike: "6500" },
-    }),
   };
 }
 
@@ -147,10 +135,6 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["values"]>[number]["pnl"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["contract_size"], number | null>>,
   Checked<Known<Ok<E["values"]>[number]["greeks"]>>,
-
-  // one contract ----------------------------------------------------------------------
-  Checked<Exactly<Ok<E["spx"]>["code"], string>>,
-  Checked<Known<Ok<E["spx"]>["quote"]>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.
@@ -163,7 +147,6 @@ export type HcChecks = [
 export type StatusChecks = [
   Checked<Exactly<E["monitorCreated"]["status"], 201 | 422>>,
   Checked<Exactly<E["comboCreated"]["status"], 201 | 422>>,
-  Checked<Exactly<E["monitorReplaced"]["status"], 200 | 422>>,
   Checked<Exactly<E["monitorPatched"]["status"], 200 | 422>>,
   Checked<Exactly<E["totalEntry"]["status"], 200 | 422>>,
   Checked<Exactly<E["monitorDeleted"]["status"], 204>>,
@@ -186,11 +169,14 @@ export type StatusChecks = [
   // papering over. The arm comes from the `valid()` middleware, so only VALIDATED routes declare
   // it. A route that rejects by `throw notFound(...)` or `throw httpError(...)` returns through
   // app.ts's onError, which `hc` never sees in the route's own type — measured: /positions/values,
-  // /positions/:id/vol and /quotes carry no {detail} arm at all, while POST /monitors, POST
-  // /positions and /spx/quote do. So this proves the shape for the routes that validate, and the
-  // narrowing on the thrown paths rests on app.ts's onError returning one shape, which its own
-  // test asserts.
+  // /positions/:id/vol and /quotes carry no {detail} arm at all, while POST /monitors and POST
+  // /positions do. So this proves the shape for the routes that validate, and the narrowing on the
+  // thrown paths rests on app.ts's onError returning one shape, which its own test asserts.
+  //
+  // /spx/quote was the third, and the only one that validated a QUERY rather than a body. It went
+  // with #199: nothing called it, and the bot's /snapshot answers the same question in-process.
+  // The query branch of `valid()` is now exercised by openapi.test.ts against a route built in the
+  // test, since no served route carries a query.
   Checked<ErrorBody extends Awaited<ReturnType<E["monitorCreated"]["json"]>> ? true : false>,
   Checked<ErrorBody extends Awaited<ReturnType<E["positionCreated"]["json"]>> ? true : false>,
-  Checked<ErrorBody extends Awaited<ReturnType<E["spxResp"]["json"]>> ? true : false>,
 ];

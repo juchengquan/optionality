@@ -293,8 +293,8 @@ describe("failing", () => {
   });
 
   it("returns an empty list, not an error, when the batch comes back empty", async () => {
-    // /spx/quote turns that into a 404 and the sweep into "no complete value"; both are decisions
-    // for the caller
+    // the sweep turns that into "no complete value", and enough consecutive ones into a
+    // quarantine; the decision is the caller's. /spx/quote made it a 404 until #199 dropped it
     const { client } = harness({ respond: () => ({ retType: 0, s2c: {} }) });
     expect(await client.snapshot(["US.X"])).toEqual([]);
   });
