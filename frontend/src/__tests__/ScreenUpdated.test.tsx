@@ -30,6 +30,24 @@ afterEach(() => { vi.useRealTimers(); });
 
 const line = () => screen.getByText(/screen updated/i).textContent ?? "";
 
+/** Drain microtasks until the first fetch has painted, under fake timers.
+ *
+ *  One `advanceTimersByTimeAsync(0)` is not enough, and that is the whole flake: measured over
+ *  repeated runs, the first paint needs ONE drain or TWO depending on how the fetch's two promises
+ *  (the response, then `json()`) interleave with React's commit. The test did exactly one, so it
+ *  failed about one run in three — `getByText` threw "unable to find element", which reads like a
+ *  component that never rendered rather than a wait that was one tick short.
+ *
+ *  Chased for a while as a timezone problem and then recorded as undiagnosed, because it never
+ *  reproduced in the full suite — file order changes the interleaving. Bounded rather than a
+ *  `while (true)`: a genuinely absent line must still fail the test, not hang the suite.
+ */
+const painted = async () => {
+  for (let i = 0; i < 20 && screen.queryByText(/screen updated/i) === null; i += 1) {
+    await vi.advanceTimersByTimeAsync(0);
+  }
+};
+
 describe("what the page says about its own freshness", () => {
   it("says when it last fetched, beside what the service says", async () => {
     mockApi();
@@ -45,7 +63,7 @@ describe("what the page says about its own freshness", () => {
     vi.setSystemTime(new Date("2026-10-20T00:10:00+08:00"));
     mockApi();
     render(<App />);
-    await vi.advanceTimersByTimeAsync(0);
+    await painted();
     const before = line();
 
     vi.setSystemTime(new Date("2026-10-20T00:11:07+08:00"));
