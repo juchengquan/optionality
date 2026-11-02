@@ -70,10 +70,19 @@ describe("the round trip", () => {
     expect((await post(single({ field: "mid_price", threshold: 30 }))).status).toBe(201);
   });
 
-  it("is a 404 for a monitor that was never there", async () => {
+  it("is a 404 for a monitor that was never there, and says which noun is missing", async () => {
+    // The status alone was asserted here, and on both doors: a mutation changing the PATCH
+    // handler's notFound("monitor") to notFound("position") survived, which is a 404 reading
+    // "position not found" about a monitor. Only /monitors/:id/total-entry stated the noun, so
+    // the two doors the dashboard actually uses were the two that did not.
     h = harness();
-    expect((await patch("nope", { threshold: 1 })).status).toBe(404);
-    expect((await h.call("/monitors/nope", { method: "DELETE" })).status).toBe(404);
+    for (const resp of [
+      await patch("nope", { threshold: 1 }),
+      await h.call("/monitors/nope", { method: "DELETE" }),
+    ]) {
+      expect(resp.status).toBe(404);
+      expect(await body(resp)).toEqual({ detail: "monitor not found" });
+    }
   });
 });
 
