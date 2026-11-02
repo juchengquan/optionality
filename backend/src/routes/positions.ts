@@ -136,9 +136,10 @@ export function positionRoutes(deps: Deps) {
      *
      *  One bounded live call for every leg of every position, deduped. `Holdings.tsx` polls this
      *  while the panel is open, so it is a live call on the dashboard's path like `/quotes` — and
-     *  CLAUDE.md's one-worker invariant names it alongside the sweep, `/spx/quote`, `/quotes` and
-     *  creation probes. It was a fifth exception in the code and a fourth in that sentence until
-     *  2026-10-17, when the list was corrected rather than the route. */
+     *  CLAUDE.md's Provider invariant names it alongside the sweep, `/quotes` and the creation
+     *  probes. It was a fifth exception in the code and a fourth in that sentence until
+     *  2026-10-17, when the list was corrected rather than the route; `/spx/quote` left the list
+     *  in #199, which took the route with it. */
     .get("/values", values, async (c) => {
       const now = deps.now();
       let valued;

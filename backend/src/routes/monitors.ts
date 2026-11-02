@@ -7,7 +7,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { buildSpxCode } from "../domain/contract.ts";
 import type { Deps } from "../deps.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, findMonitor, findMonitorByCodeField,
@@ -21,13 +20,11 @@ import type { MonitorRow } from "../db/rows.ts";
 import { fromSqliteBool, toSqliteBool } from "../db/values.ts";
 import { exitPolicy } from "../domain/exit.ts";
 import { httpError, notFound } from "../errors.ts";
-import { applyTotalEntry, linkToPositions, watchlistQuotes } from "../monitors.ts";
+import { applyTotalEntry, watchlistQuotes } from "../monitors.ts";
 import {
-  ComboMonitorIn, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_ENABLED, DEFAULT_SINGLE_FIELD,
-  MonitorCreateIn, MonitorIn, MonitorPatch, TotalEntryIn, isCombo, patchThresholdError,
-  thresholdError,
+  ComboMonitorIn, MonitorCreateIn, MonitorIn, MonitorPatch, TotalEntryIn, isCombo,
+  patchThresholdError, thresholdError,
 } from "../schemas/monitor.ts";
-import { verifyContracts } from "../quotes.ts";
 import { displayStored } from "../db/time.ts";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
@@ -57,7 +54,6 @@ const MonitorOut = z.object({
 
 const list = documented("List monitors", { 200: z.array(MonitorOut) });
 const create = documented("Create a monitor, single or combo", { 201: MonitorOut }, [409]);
-const replace = documented("Replace a single monitor", { 200: MonitorOut }, [404, 409]);
 const update = documented("Update a monitor", { 200: MonitorOut }, [404, 409]);
 const totalEntry = documented("Spread a total entry across the holding", { 200: z.object({ ok: z.literal(true) }) }, [404]);
 const remove = documented("Delete a monitor", { 204: null }, [404]);
@@ -96,14 +92,6 @@ export function monitorRoutes(deps: Deps) {
    *  its leg badge. One extra query per write, on the id that was just written.
    */
   const one = (row: MonitorRow) => out(row, positionsForMonitors(db, [row.id]));
-
-  /** Strict gate: everything in the monitors table has been verified to exist on moomoo. Rejects
-   *  while OpenD is down, which is deliberate — a monitor on a contract that does not exist would
-   *  quarantine itself on the first sweep, which is a worse way to find out. */
-  const requireExisting = async (codes: string[]) => {
-    const error = await verifyContracts(codes, deps.provider.fetchQuotes);
-    if (error) throw httpError(422, error);
-  };
 
   /** What create-monitor.ts needs, which is the database, one Provider and a clock. */
   const creating = { db, fetchQuotes: deps.provider.fetchQuotes, now: deps.now };
@@ -158,51 +146,6 @@ export function monitorRoutes(deps: Deps) {
           enabled: p.enabled,
         }));
       }
-    })
-
-    .put("/:id", replace, valid("json", MonitorIn), async (c) => {
-      const id = c.req.param("id");
-      const row = findMonitor(db, id);
-      if (!row) throw notFound("monitor");
-      if (row.legs !== null) {
-        throw httpError(422, "combo monitors cannot be edited in place; delete and recreate");
-      }
-      const p = c.req.valid("json");
-      const why = thresholdError(p.compare ?? DEFAULT_COMPARE, p.threshold);
-      if (why) throw httpError(422, why);
-      const code = buildSpxCode(p.strike_date, p.option_type, p.strike);
-      // only probe when the contract actually changed: an edit to a threshold should not fail
-      // because OpenD happens to be down
-      if (code !== row.code) await requireExisting([code]);
-      const field = p.field ?? DEFAULT_SINGLE_FIELD;
-      if (findMonitorByCodeField(db, code, field, id)) {
-        throw httpError(409, `monitor for (${code}, ${field}) already exists`);
-      }
-      const updated = await atomic(db, () => {
-        const saved = updateMonitorFields(db, id, {
-          code,
-          strike_date: p.strike_date,
-          option_type: p.option_type,
-          strike: p.strike,
-          field,
-          threshold: p.threshold,
-          direction: p.direction ?? DEFAULT_DIRECTION,
-          compare: p.compare ?? DEFAULT_COMPARE,
-          enabled: toSqliteBool(p.enabled ?? DEFAULT_ENABLED),
-        });
-        if (code === row.code) return saved;
-        // This is the one edit that can MOVE a monitor to another contract, and the links have to
-        // follow it. They did not: the rule went on pointing at the holding of the strike it used
-        // to watch, so it inherited that holding's entry and showed a P&L for a position it no
-        // longer touched. Cleared before relinking, and `scope` with them — `linkToPositions`
-        // leaves it alone when nothing holds the new contract, which would keep a stale "all"
-        // over an empty list.
-        clearMonitorLinks(db, id);
-        updateMonitorFields(db, id, { scope: null });
-        linkToPositions(db, id, [code]);
-        return findMonitor(db, id)!;
-      });
-      return replace.reply(c, 200, one(updated));
     })
 
     .patch("/:id", update, valid("json", MonitorPatch), (c) => {
@@ -279,7 +222,7 @@ export function monitorRoutes(deps: Deps) {
  *
  *  A loose object: the fields named here are the ones the dashboard and the bot read, and they are
  *  typed because the service KNOWS they are numbers — it maps them itself (opend/snapshot.ts). The rest
- *  of what moomoo returns passes through untouched for `/spx/quote` and for a human reading JSON.
+ *  of what moomoo returns passes through untouched, for a human reading JSON.
  *
  *  Declared at all because of what phase 8 found: the frontend used to declare `mid_price?: number`
  *  while the service promised nothing of the kind, so the hand-written interface was a claim rather
