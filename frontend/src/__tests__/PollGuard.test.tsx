@@ -28,7 +28,7 @@ function mockApi() {
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        url.endsWith("/quotes") ? [wing] : url.endsWith("/monitors") ? [] : health),
+        url.endsWith("/quotes") ? [wing] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health),
     } as Response)));
 }
 

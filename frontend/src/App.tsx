@@ -3,9 +3,10 @@ import { ImageDown, RefreshCw, Settings2 } from "lucide-react";
 
 import "./app.css";
 import {
-  createWatch, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes,
-  recordHolding, patchMonitor, patchPosition, setTotalEntry,
-  type Entry, type Health, type Holding, type Monitor,
+  addReference, createWatch, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors,
+  fetchQuotes, fetchReferences, recordHolding, patchMonitor, patchPosition, removeReference,
+  setTotalEntry,
+  type Entry, type Health, type Holding, type Monitor, type Reference,
 } from "./api";
 import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/toast";
@@ -22,6 +23,7 @@ import { RowDetail, type DetailTarget } from "./RowDetail";
 import { clockTime } from "./format";
 import { Freshness } from "./Freshness";
 import { SnapshotView } from "./SnapshotView";
+import { ReferenceStrip } from "./ReferenceStrip";
 import { TopLine } from "./TopLine";
 import { Settings } from "./Settings";
 import { useSnapshot } from "./useSnapshot";
@@ -62,6 +64,9 @@ export function App() {
   // the same rows, for handlers that must not be rebuilt on every poll
   const rules = useRef<Monitor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
+  // the backdrop, polled with the watchlist: its figures are the market right now, and one a
+  // sweep old would be read as current (ADR 0018)
+  const [references, setReferences] = useState<Reference[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
   const [reading, setReading] = useState(() => readSignal());
@@ -106,15 +111,22 @@ export function App() {
 
   const load = useCallback(async () => {
     try {
-      const [q, m, h] = await Promise.all([
+      const [q, m, h, refs] = await Promise.all([
         fetchQuotes(),
         fetchMonitors(),
         fetchHealth(),
+        // its OWN catch, inside the same poll. A backdrop must never be able to blank the page,
+        // and `Promise.all` rejects as a whole — so a refusal here would take the watchlist's
+        // figures down with it, which is the containment this feature is built around (ADR 0018).
+        // An empty list rather than the last one: the strip then goes away instead of showing
+        // figures it cannot vouch for.
+        fetchReferences().catch(() => [] as Reference[]),
       ]);
       setQuotes(q);
       setMonitors(m);
       rules.current = m;
       setHealth(h);
+      setReferences(refs);
       setPolledAt(clockTime(new Date()));
       setError(null);
     } catch (e: unknown) {
@@ -271,6 +283,12 @@ export function App() {
           Service panel is where the complete picture lives. */}
       <TopLine quotes={quotes} health={health} />
 
+      {/* BELOW the top line, deliberately. That line appears rather than reports — "a line that
+          is almost always the same becomes furniture and stops being read, which fails on the one
+          day it matters" — and this strip is that furniture by design, so it must not take the
+          position that has to stay conspicuous (ADR 0018). */}
+      <ReferenceStrip references={references} />
+
       <WatchlistTable title="Single-leg" entries={singles} columns={singleFit.columns} containerRef={singleFit.ref} isCombo={false}
                       reading={reading} band={band} horizon={health?.settings.manage_by_dte ?? 21}
                       grouping={grouping}
@@ -303,6 +321,9 @@ export function App() {
         onGrouping={(g) => { setGrouping(g); writeGrouping(g); }}
         holdings={holdings}
         holdingsError={holdingsError}
+        references={references}
+        onAddReference={(body) => act(() => addReference(body))}
+        onRemoveReference={(id) => void act(() => removeReference(id))}
         loadHoldings={loadHoldings}
         refresh={refresh}
         sweepSeconds={health?.settings.sweep_seconds}

@@ -42,7 +42,7 @@ const health = {
 
 function mockApi(quotes: unknown[], monitors: unknown[] = [], healthBody: unknown = health) {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
-    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/monitors") ? monitors : healthBody;
+    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? monitors : healthBody;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }

@@ -38,7 +38,7 @@ async function open(which: "add combo" | "add monitor") {
     const u = String(url);
     return Promise.resolve({
       ok: true,
-      json: () => Promise.resolve(u.endsWith("/quotes") || u.endsWith("/monitors") ? [] : health),
+      json: () => Promise.resolve(u.endsWith("/quotes") || u.endsWith("/references") ? [] : u.endsWith("/monitors") ? [] : health),
     });
   }) as unknown as typeof fetch;
   render(<App />);

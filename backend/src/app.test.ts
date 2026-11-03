@@ -149,6 +149,7 @@ describe("the bearer token", () => {
     expect([...new Set(served)].sort()).toEqual([
       "DELETE /monitors/:id",
       "DELETE /positions/:id",
+      "DELETE /references/:id",
       "GET /docs",
       "GET /health",
       "GET /monitors",
@@ -157,11 +158,13 @@ describe("the bearer token", () => {
       "GET /positions/:id/vol",
       "GET /positions/values",
       "GET /quotes",
+      "GET /references",
       "PATCH /monitors/:id",
       "PATCH /positions/:id",
       "POST /monitors",
       "POST /monitors/:id/total-entry",
       "POST /positions",
+      "POST /references",
     ]);
   });
 

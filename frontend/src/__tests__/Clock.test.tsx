@@ -39,7 +39,7 @@ describe("the screen's own clock", () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve(
-          url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health),
+          url.endsWith("/quotes") ? [] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health),
       } as Response)));
     render(<App />);
 

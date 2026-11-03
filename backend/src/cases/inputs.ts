@@ -27,6 +27,18 @@ const EXP = "2026-11-20";
 const code = (type: "CALL" | "PUT", strike: number) => buildSpxCode(EXP, type, strike);
 const LP = code("PUT", 6450), SP = code("PUT", 6500), SC = code("CALL", 7100), LC = code("CALL", 7150);
 
+/** US.SPY as the live gateway gave it on 2026-11-02, trimmed to the fields a Reference reads.
+ *
+ *  Kept whole-ish because the measurement is the point: the last trade and the previous close are
+ *  the same number, which is what a stale last LOOKS like, and the mid is three points away from
+ *  both (ADR 0018).
+ */
+const spy = {
+  code: "US.SPY", name: "SPDR S&P 500 ETF Trust",
+  bid_price: 758.7, ask_price: 758.76, mid_price: 758.73,
+  last_price: 755.72, prev_close_price: 755.72,
+};
+
 /** an iron condor: long and short puts, short and long calls */
 const condor: Position & { id: string } = {
   id: "p1", name: "1120_IC", strike_date: EXP, contracts: 2, entry: 3.0, strategy: "iron condor",
@@ -228,6 +240,55 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // exactly half in binary, the only place toFixed (ties up) and Python's round (ties even) part
     { fn: "round4", name: "an exact binary half rounds up", args: [0.03125] },
     { fn: "round4", name: "an exact binary half, negative, rounds away from zero", args: [-0.03125] },
+
+    // --- a probe that THREW, which is not the same refusal as one that answered (ADR 0018) ---
+    { fn: "unverifiableVerdict", name: "a dropped connection speaks in errno",
+      args: ["snapshot API failed: connect ECONNREFUSED 127.0.0.1:11111"] },
+    // the gateway is UP and has declined the security; the old wording called this an outage
+    { fn: "unverifiableVerdict", name: "a Provider that answered and declined the security",
+      args: ["snapshot API failed: US stock indices are not supported"] },
+    { fn: "unverifiableVerdict", name: "a Provider that said nothing at all", args: [""] },
+  ],
+  reference: [
+    // --- which field is true, measured against the live gateway on 2026-11-02 (ADR 0018) ---
+    // SPY's last trade was a session old while its own book was current: 755.72 against 758.73
+    { fn: "referenceFigure", name: "the mid leads, because the last trade can be a session old",
+      args: [spy, null] },
+    { fn: "referenceFigure", name: "scaled, so SPY stands in for SPX beside the strikes",
+      args: [spy, 10] },
+    { fn: "referenceFigure", name: "no two-sided quote falls back to the last trade",
+      args: [{ ...spy, mid_price: undefined }, 10] },
+    // an empty book quotes 0/0 and `(0 + 0) / 2` is a mid; times 10 it is still 0, and 0 prints
+    // as a price
+    { fn: "referenceFigure", name: "a zero mid is not a price, so the last trade is read",
+      args: [{ ...spy, bid_price: 0, ask_price: 0, mid_price: 0 }, 10] },
+    { fn: "referenceFigure", name: "neither field arrived, so there is no figure",
+      args: [{ code: "US.SPY", name: "SPDR S&P 500 ETF Trust" }, 10] },
+    { fn: "referenceFigure", name: "no quote at all — a Reference the batch could not price",
+      args: [null, 10] },
+    // moomoo is a wire format with no published schema, so a field can arrive as a string
+    { fn: "referenceFigure", name: "a figure that is not a number", args: [{ mid_price: "758.73" }, null] },
+    { fn: "referenceFigure", name: "an infinite figure", args: [{ mid_price: Infinity }, null] },
+    { fn: "referenceFigure", name: "a negative figure is not a price", args: [{ mid_price: -1, last_price: 2 }, null] },
+    { fn: "referenceFigure", name: "float noise never reaches the page", args: [{ mid_price: 20.15 }, 3] },
+    { fn: "referenceFigure", name: "a fractional scale, for a proxy that quotes high",
+      args: [{ mid_price: 7587.3 }, 0.1] },
+    { fn: "referenceFigure", name: "the change is a fraction of the close, which no scale moves",
+      args: [{ mid_price: 758.73, prev_close_price: 755.72 }, 10] },
+    { fn: "referenceFigure", name: "the same change unscaled, to prove the scale cancels",
+      args: [{ mid_price: 758.73, prev_close_price: 755.72 }, null] },
+    { fn: "referenceFigure", name: "a day down", args: [{ mid_price: 750, prev_close_price: 755.72 }, 10] },
+    { fn: "referenceFigure", name: "no close is no change, not a change from nothing",
+      args: [{ mid_price: 758.73 }, null] },
+    { fn: "referenceFigure", name: "a zero close would be divided by", args: [{ mid_price: 758.73, prev_close_price: 0 }, null] },
+    // the change is measured from the field the figure came from: a mid against the close beside a
+    // last-trade figure is a pair of numbers that cannot both be true
+    { fn: "referenceFigure", name: "the fallback's change is the last trade against the close",
+      args: [{ last_price: 750, prev_close_price: 755.72 }, null] },
+    // the only shape where the two fields disagree about which is true: a mid that is PRESENT and
+    // is not a price. A change computed from it reads -100% beside a figure that moved a point.
+    { fn: "referenceFigure", name: "a present-but-zero mid is ignored on both sides at once",
+      args: [{ mid_price: 0, last_price: 750, prev_close_price: 755.72 }, 10] },
   ],
   position: [
     { fn: "scopedLegs", name: "the calls of a condor", args: [condor, "calls"] },

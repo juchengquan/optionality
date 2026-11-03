@@ -52,6 +52,19 @@ def display_records(records: list[Quote], display_tz: str, fetched_at: datetime 
     return by_code
 
 
+def unverifiable_verdict(message: str) -> str:
+    """Why a probe that THREW cannot vouch for these contracts.
+
+    `verify_verdict`'s sibling, for the path where the Provider did not answer about them at all. It
+    said "OpenD unreachable", which asserts an outage — and a Provider that answered and DECLINED
+    throws here too: moomoo refuses every US stock index as a class, with a sentence and no culprit,
+    so the containment loop re-throws it (ADR 0018). So it asserts neither, and prints the Provider's
+    own sentence — which is where the difference between "could not be reached" and "answered and
+    declined" actually reads.
+    """
+    return f"cannot verify contract: the Provider did not confirm it — {message}"
+
+
 def verify_verdict(codes: list[str], batch: Batch) -> str | None:
     """Why these contracts cannot be trusted to exist, or None.
 

@@ -31,6 +31,7 @@ export const COLUMNS = {
     "legs_iv", "legs_vega",
   ],
   monitor_positions: ["monitor_id", "position_id"],
+  reference_securities: ["id", "code", "label", "scale", "created_at"],
   /** bookkeeping: COLUMNS covers every table the schema creates, and a table left out of it is a
    *  table nothing checks (db/migrate.ts) */
   schema_migrations: ["name", "applied_at"],
@@ -52,6 +53,7 @@ export const NULLABLE = {
   positions: ["strategy", "entry", "opened_at", "manage_notified_at"],
   position_samples: ["legs_iv", "legs_vega"],
   monitor_positions: [],
+  reference_securities: ["label", "scale"],
   schema_migrations: [],
 } as const satisfies Record<TableName, readonly string[]>;
 
@@ -100,6 +102,25 @@ export interface PositionRow {
   manage_notified_at: string | null;
 }
 
+/** A Reference: a Security kept on the page to read the market by (ADR 0018).
+ *
+ *  It never alarms, need not be held, and no rule reads one — so there is nothing here about a
+ *  threshold, an enabled flag or a disabled reason. A Reference is never auto-disabled, never
+ *  notified and never deleted: its absence is not an event, and quarantine does not transfer,
+ *  because that is defined as a Monitor the service disabled because it cannot be EVALUATED and a
+ *  Reference evaluates nothing.
+ */
+export interface ReferenceRow {
+  id: string;
+  /** a raw code, given rather than built: `buildSpxCode` cannot write `US.SPY` */
+  code: string;
+  /** what to call it, or null for "the code is its own name" */
+  label: string | null;
+  /** what to multiply its figure by, or null for ×1 */
+  scale: number | null;
+  created_at: string;
+}
+
 export interface SchemaMigrationRow {
   name: string;
   applied_at: string;
@@ -144,6 +165,9 @@ type _MonitorPositions = Checked<
 type _PositionSamples = Checked<
   Exact<keyof PositionSampleRow, (typeof COLUMNS.position_samples)[number]>
 >;
+type _References = Checked<
+  Exact<keyof ReferenceRow, (typeof COLUMNS.reference_securities)[number]>
+>;
 type _SchemaMigrations = Checked<
   Exact<keyof SchemaMigrationRow, (typeof COLUMNS.schema_migrations)[number]>
 >;
@@ -162,6 +186,9 @@ type _MonitorPositionsNull = Checked<
 type _PositionSamplesNull = Checked<
   Exact<NullableKeys<PositionSampleRow> & string, (typeof NULLABLE.position_samples)[number]>
 >;
+type _ReferencesNull = Checked<
+  Exact<NullableKeys<ReferenceRow> & string, (typeof NULLABLE.reference_securities)[number]>
+>;
 type _SchemaMigrationsNull = Checked<
   Exact<NullableKeys<SchemaMigrationRow> & string, (typeof NULLABLE.schema_migrations)[number]>
 >;
@@ -174,6 +201,7 @@ type _SchemaMigrationsNull = Checked<
  *  and `npm run typecheck` names the column that is missing and from which side.
  */
 export type SchemaChecks = [
-  _Monitors, _Positions, _MonitorPositions, _PositionSamples, _SchemaMigrations,
-  _MonitorsNull, _PositionsNull, _MonitorPositionsNull, _PositionSamplesNull, _SchemaMigrationsNull,
+  _Monitors, _Positions, _MonitorPositions, _PositionSamples, _References, _SchemaMigrations,
+  _MonitorsNull, _PositionsNull, _MonitorPositionsNull, _PositionSamplesNull, _ReferencesNull,
+  _SchemaMigrationsNull,
 ];

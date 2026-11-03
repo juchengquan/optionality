@@ -30,7 +30,7 @@ async function show() {
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        String(url).endsWith("/quotes") ? [leg] : String(url).endsWith("/monitors") ? [] : health),
+        String(url).endsWith("/quotes") ? [leg] : String(url).endsWith("/references") ? [] : String(url).endsWith("/monitors") ? [] : health),
     })) as unknown as typeof fetch;
   render(<App />);
   await new Promise((r) => setTimeout(r, 200));

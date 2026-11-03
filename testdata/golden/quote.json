@@ -279,6 +279,30 @@
         -0.03125
       ],
       "expect": -0.0313
+    },
+    {
+      "fn": "unverifiableVerdict",
+      "name": "a dropped connection speaks in errno",
+      "args": [
+        "snapshot API failed: connect ECONNREFUSED 127.0.0.1:11111"
+      ],
+      "expect": "cannot verify contract: the Provider did not confirm it — snapshot API failed: connect ECONNREFUSED 127.0.0.1:11111"
+    },
+    {
+      "fn": "unverifiableVerdict",
+      "name": "a Provider that answered and declined the security",
+      "args": [
+        "snapshot API failed: US stock indices are not supported"
+      ],
+      "expect": "cannot verify contract: the Provider did not confirm it — snapshot API failed: US stock indices are not supported"
+    },
+    {
+      "fn": "unverifiableVerdict",
+      "name": "a Provider that said nothing at all",
+      "args": [
+        ""
+      ],
+      "expect": "cannot verify contract: the Provider did not confirm it — "
     }
   ]
 }

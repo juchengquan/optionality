@@ -381,13 +381,18 @@ describe("the creation gate", () => {
     expect(await body(await h.call("/monitors"))).toEqual([]);
   });
 
-  it("refuses while OpenD is down, rather than accepting a contract it cannot check", async () => {
+  it("refuses when the probe threw, rather than accepting a contract it cannot check", async () => {
     // strict by design: a monitor on a contract that does not exist would quarantine itself on the
-    // first sweep, which is a worse way to find out
+    // first sweep, which is a worse way to find out.
+    //
+    // The wording carries the Provider's own sentence and no longer claims an outage: a Provider
+    // that ANSWERED and declined the security throws here too (ADR 0018).
     h = harness({ fetchQuotes: () => Promise.reject(new Error("Client connection failed!")) });
     const resp = await post(single({ strike: 8100, threshold: 0.5 }));
     expect(resp.status).toBe(422);
-    expect((await body(resp)).detail).toMatch(/unreachable/);
+    expect((await body(resp)).detail).toBe(
+      "cannot verify contract: the Provider did not confirm it — Client connection failed!",
+    );
   });
 });
 
