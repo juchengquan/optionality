@@ -60,6 +60,17 @@ describe("keeping a Security on the page", () => {
     expect((await body(resp)).detail).toMatch(/already kept on the page/);
   });
 
+  it("refuses a duplicate without spending a Provider call", async () => {
+    // the order is the point, as it is in `create-monitor.ts`: everything free comes before
+    // anything that costs a bounded call, and the database already knows the answer
+    let calls = 0;
+    h = harness({ fetchQuotes: (codes) => { calls += 1; return quoting({ "US.SPY": SPY })(codes); } });
+    await created({ code: "US.SPY" });
+    const spent = calls;
+    expect((await post({ code: "US.SPY" })).status).toBe(409);
+    expect(calls, "the duplicate reached the Provider").toBe(spent);
+  });
+
   it("probes the Provider strictly, as monitor creation does", async () => {
     start();
     const resp = await post({ code: "US.NOPE" });

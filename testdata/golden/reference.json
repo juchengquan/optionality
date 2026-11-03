@@ -286,6 +286,23 @@
         "field": "last_price",
         "change": -0.007568940877573741
       }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "a present-but-zero mid is ignored on both sides at once",
+      "args": [
+        {
+          "mid_price": 0,
+          "last_price": 750,
+          "prev_close_price": 755.72
+        },
+        10
+      ],
+      "expect": {
+        "figure": 7500,
+        "field": "last_price",
+        "change": -0.007568940877573741
+      }
     }
   ]
 }

@@ -285,6 +285,10 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // last-trade figure is a pair of numbers that cannot both be true
     { fn: "referenceFigure", name: "the fallback's change is the last trade against the close",
       args: [{ last_price: 750, prev_close_price: 755.72 }, null] },
+    // the only shape where the two fields disagree about which is true: a mid that is PRESENT and
+    // is not a price. A change computed from it reads -100% beside a figure that moved a point.
+    { fn: "referenceFigure", name: "a present-but-zero mid is ignored on both sides at once",
+      args: [{ mid_price: 0, last_price: 750, prev_close_price: 755.72 }, 10] },
   ],
   position: [
     { fn: "scopedLegs", name: "the calls of a condor", args: [condor, "calls"] },

@@ -112,4 +112,16 @@ describe("the change against the previous close", () => {
     expect(r.field).toBe("last_price");
     expect(r.change).toBe((750 - 755.72) / 755.72);
   });
+
+  it("ignores a mid that is PRESENT but not a price, on both sides at once", () => {
+    // the only shape where the two fields disagree about which is true: an empty book quotes 0/0,
+    // so `mid_price` is there and is not a price. A change computed from it reads -100% — the
+    // whole market gone — beside a figure that moved by a point. Found by mutating the reading
+    // and the change apart: every other case has at most one of the two fields, so nothing else
+    // could tell them apart.
+    const r = referenceFigure({ mid_price: 0, last_price: 750, prev_close_price: 755.72 }, 10);
+    expect(r.field).toBe("last_price");
+    expect(r.figure).toBe(7500);
+    expect(r.change).toBe((750 - 755.72) / 755.72);
+  });
 });
