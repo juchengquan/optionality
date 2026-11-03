@@ -381,11 +381,15 @@ describe("the creation gate", () => {
     expect(await body(await h.call("/positions"))).toEqual([]);
   });
 
-  it("refuses while OpenD is unreachable", async () => {
+  it("refuses when the probe threw", async () => {
     start(() => Promise.reject(new Error("Client connection failed!")));
     const resp = await post(condor());
     expect(resp.status).toBe(422);
-    expect((await body(resp)).detail).toMatch(/unreachable/);
+    // the Provider's own sentence, which is what says whether it could not be reached or answered
+    // and declined the security (ADR 0018)
+    expect((await body(resp)).detail).toBe(
+      "cannot verify contract: the Provider did not confirm it — Client connection failed!",
+    );
   });
 });
 

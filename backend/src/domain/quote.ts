@@ -63,6 +63,23 @@ export function displayRecords(
   return byCode;
 }
 
+/** Why a probe that THREW cannot vouch for these contracts.
+ *
+ *  `verifyVerdict`'s sibling, for the path where the Provider did not answer about them at all.
+ *  It said "cannot verify contract: OpenD unreachable", which asserts an outage — and a Provider
+ *  that answered and DECLINED throws here too: moomoo refuses every US stock index as a class,
+ *  with a sentence and no culprit, so the containment loop in `opend/client.ts` re-throws it
+ *  (ADR 0018). Adding `US..SPX` therefore reported a gateway failure that had not happened, and
+ *  sent the owner to look at a gateway that was up.
+ *
+ *  So it asserts neither, and prints the Provider's own sentence — which is where the difference
+ *  between "could not be reached" and "answered and declined" actually reads: a dropped socket
+ *  says so in errno, and a refusal says so in words.
+ */
+export function unverifiableVerdict(message: string): string {
+  return `cannot verify contract: the Provider did not confirm it — ${message}`;
+}
+
 /** Why these contracts cannot be trusted to exist, or null.
  *
  *  The decision half of `quotes.verifyContracts`, which is otherwise a fetch and a catch. Strict on

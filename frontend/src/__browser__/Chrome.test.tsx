@@ -28,7 +28,7 @@ async function show() {
         // /positions answers with an array, as the API does: the Service panel reads holdings, and
         // handing it the health object instead fails inside the component
         String(url).endsWith("/quotes") ? [leg]
-          : String(url).endsWith("/monitors") ? []
+          : String(url).endsWith("/references") ? [] : String(url).endsWith("/monitors") ? []
             : String(url).includes("/positions") ? []
               : health),
     })) as unknown as typeof fetch;

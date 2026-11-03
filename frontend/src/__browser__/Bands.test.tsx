@@ -28,7 +28,7 @@ async function bandColour(fill: number, triggered: boolean): Promise<string> {
       ok: true,
       json: () => Promise.resolve(
         String(url).endsWith("/quotes") ? [{ ...base, fill, triggered }]
-        : String(url).endsWith("/monitors") ? [] : health),
+        : String(url).endsWith("/references") ? [] : String(url).endsWith("/monitors") ? [] : health),
     })) as unknown as typeof fetch;
   render(<App />);
   await new Promise((r) => setTimeout(r, 180));

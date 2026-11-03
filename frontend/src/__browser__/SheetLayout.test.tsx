@@ -26,7 +26,7 @@ function mockApi() {
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        String(url).endsWith("/quotes") ? [combo] : String(url).endsWith("/monitors") ? [] : health),
+        String(url).endsWith("/quotes") ? [combo] : String(url).endsWith("/references") ? [] : String(url).endsWith("/monitors") ? [] : health),
     })) as unknown as typeof fetch;
 }
 

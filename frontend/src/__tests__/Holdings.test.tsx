@@ -56,7 +56,7 @@ function mockApi(holdings: unknown[]) {
     calls.push(url);
     const body = url.includes("/positions/values") ? holdings
       : url.endsWith("/vol") ? { vol: null, from: null, to: null, days: null }
-      : url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
+      : url.endsWith("/quotes") ? [] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }
@@ -120,7 +120,7 @@ describe("fetching only when asked", () => {
       if (url.includes("/positions/values")) {
         return Promise.resolve({ ok: false, status: 502, json: () => Promise.resolve({}) } as Response);
       }
-      const body = url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
+      const body = url.endsWith("/quotes") ? [] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
       return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
     }));
     await userEvent.click(screen.getByRole("button", { name: /refresh now/i }));
@@ -282,7 +282,7 @@ describe("the row #113 pointed at", () => {
       calls.push(url);
       const body = url.includes("/positions/values") ? holdings
         : url.endsWith("/vol") ? { vol: null, from: null, to: null, days: null }
-        : url.endsWith("/quotes") ? rows : url.endsWith("/monitors") ? [] : health;
+        : url.endsWith("/quotes") ? rows : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
       return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
     }));
   }
@@ -424,7 +424,7 @@ describe("when a write is refused", () => {
       calls.push(url);
       const body = url.includes("/positions/values") ? holdings
         : url.endsWith("/vol") ? { vol: null, from: null, to: null, days: null }
-        : url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
+        : url.endsWith("/quotes") ? [] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
       return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
     }));
   }

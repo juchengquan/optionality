@@ -47,7 +47,7 @@ function mockApi(
       ok: true,
       json: () => Promise.resolve(
         url.endsWith("/quotes") ? quotes
-          : url.endsWith("/monitors") ? []
+          : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? []
             : url.includes("/positions") ? holdings
               : h),
     } as Response)));

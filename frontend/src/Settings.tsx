@@ -5,9 +5,10 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 
-import { type Entry, type Health, type Holding } from "./api";
+import { type Entry, type Health, type Holding, type Reference } from "./api";
 import { type Grouping, type Signal } from "./columns";
 import { needs } from "./TopLine";
+import { References } from "./References";
 import { NativeSelect } from "@/components/ui/native-select";
 
 import { useDismissOnBack } from "./useDismissOnBack";
@@ -32,6 +33,7 @@ export const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 export function Settings({
   open, onClose, refresh, onRefresh, sweepSeconds, quotes, health, reading, band, onReading, onBand,
   grouping, onGrouping, holdings, holdingsError, loadHoldings,
+  references, onAddReference, onRemoveReference,
 }: {
   open: boolean;
   onClose: () => void;
@@ -53,6 +55,11 @@ export function Settings({
   onGrouping: (grouping: Grouping) => void;
   onRefresh: (seconds: number) => void;
   sweepSeconds?: number;
+  /** the page's own rows, polled with the watchlist — this panel is where one is kept or
+   *  dropped, and where the reason a figure is missing is stated in full (ADR 0018) */
+  references: Reference[];
+  onAddReference: (body: { code: string; label?: string; scale?: number }) => Promise<boolean>;
+  onRemoveReference: (id: string) => void;
 }) {
   useDismissOnBack(open, onClose);
 
@@ -113,6 +120,8 @@ export function Settings({
               ? <p className="meta">{`last sweep ${health.monitor.last_sweep_at}`}</p>
               : null}
           </section>
+
+          <References references={references} onAdd={onAddReference} onRemove={onRemoveReference} />
 
           <Field>
             <FieldLabel htmlFor="s-signal">flag on</FieldLabel>

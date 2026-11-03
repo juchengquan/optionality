@@ -10,7 +10,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { COLUMNS } from "./rows.ts";
-import type { MonitorRow, PositionRow, PositionSampleRow } from "./rows.ts";
+import type { MonitorRow, PositionRow, PositionSampleRow, ReferenceRow } from "./rows.ts";
 
 /** Whether the database answers at all — /health reports rather than raising. */
 export function databaseResponds(db: DatabaseSync): boolean {
@@ -281,4 +281,42 @@ export function findMonitorsByIdentifier(
 export function findComboByName(db: DatabaseSync, name: string): MonitorRow | undefined {
   return db.prepare("select * from monitors where code = ? and legs is not null").get(name) as
     unknown as MonitorRow | undefined;
+}
+
+/** Every Reference, oldest first (ADR 0018).
+ *
+ *  By `created_at` rather than by code or label: the strip reads left to right and the order the
+ *  owner added them in is the only order they themselves chose. `code` breaks a tie, because two
+ *  rows written in the same millisecond would otherwise have no defined order at all — and the
+ *  strip would reshuffle between polls, which reads as a change.
+ */
+export function listReferences(db: DatabaseSync): ReferenceRow[] {
+  return db.prepare("select * from reference_securities order by created_at, code")
+    .all() as unknown as ReferenceRow[];
+}
+
+export function findReference(db: DatabaseSync, id: string): ReferenceRow | undefined {
+  return db.prepare("select * from reference_securities where id = ?")
+    .get(id) as unknown as ReferenceRow | undefined;
+}
+
+/** The code is unique: two References on one Security would be two figures that cannot differ. */
+export function findReferenceByCode(db: DatabaseSync, code: string): ReferenceRow | undefined {
+  return db.prepare("select * from reference_securities where code = ?")
+    .get(code) as unknown as ReferenceRow | undefined;
+}
+
+export function insertReference(db: DatabaseSync, row: ReferenceRow): ReferenceRow {
+  const columns = COLUMNS.reference_securities;
+  db.prepare(
+    `insert into reference_securities (${columns.map((c) => `"${c}"`).join(", ")})
+     values (${columns.map(() => "?").join(", ")})`,
+  ).run(...columns.map((c) => row[c] as never));
+  return findReference(db, row.id)!;
+}
+
+/** Remove a Reference. The only way one ever goes: nothing in the service deletes one as a side
+ *  effect, and a Reference with no figure is a dash rather than an event (ADR 0018). */
+export function deleteReferenceRow(db: DatabaseSync, id: string): void {
+  db.prepare("delete from reference_securities where id = ?").run(id);
 }

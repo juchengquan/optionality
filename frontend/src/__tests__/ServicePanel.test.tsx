@@ -46,7 +46,7 @@ function mockApi(holdings: unknown[]) {
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(holdings) } as Response);
     }
-    const body = url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
+    const body = url.endsWith("/quotes") ? [] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }
@@ -82,7 +82,7 @@ describe("what needs you, including what no rule watches", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       calls.push(url);
       const body = url.includes("/positions/values") ? rows
-        : url.endsWith("/quotes") ? [] : url.endsWith("/monitors") ? [] : health;
+        : url.endsWith("/quotes") ? [] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
       return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
     }));
     render(<App />);

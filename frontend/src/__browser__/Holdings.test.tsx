@@ -44,7 +44,7 @@ async function openHoldings() {
       ok: true,
       json: () => Promise.resolve(
         u.includes("/positions/values") ? [spread]
-          : u.endsWith("/quotes") ? [] : u.endsWith("/monitors") ? [] : health),
+          : u.endsWith("/quotes") ? [] : u.endsWith("/references") ? [] : u.endsWith("/monitors") ? [] : health),
     });
   }) as typeof window.fetch;
   render(<App />);

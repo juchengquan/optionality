@@ -97,7 +97,9 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
   Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (the Client Portal client, over plain
   `fetch` — EXPERIMENTAL, proved against a stub gateway and never against a real one), `db/` (schema, migrations, queries),
-  `cases/` (the golden cases' inputs and builder).
+  `cases/` (the golden cases' inputs and builder), `references.ts` (the Reference path: one bounded
+  call of its own, and the only degrade in the service that retries one code at a time — bounded by
+  the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
@@ -120,10 +122,15 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
-- Every call to the **Provider** is a single bounded one: the sweep, `/quotes`,
-  `/positions/values` and the creation probes. (`/spx/quote` was a fifth until #199 dropped it:
+- Every call to the **Provider** is a single bounded one: the sweep, `/quotes`, `/references`,
+  `/positions/values` and the creation probes. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (`/positions/values` is polled by the dashboard's Holdings
-  panel while it is open.) This read "one worker thread owns run execution, and these are the exceptions"
+  panel while it is open.) `/references` is polled WITH `/quotes` — two calls per poll per open
+  tab — and is a call of its own rather than part of that batch for containment, not for cost:
+  moomoo rejects a whole batch for one bad code and the containment loop drops only a code it
+  NAMES, so a class refusal (`US..SPX`, which is the first thing a reasonable person types) would
+  blank every row the owner acts on. It is also the one route that cannot fail: a Provider that is
+  wholly down leaves each Reference a dash with its own sentence (ADR 0018). This read "one worker thread owns run execution, and these are the exceptions"
   until phase 10 retired the worker with the run pipeline it existed for (ADR 0014), and named OpenD until
   ADR 0015 made the vendor one Provider among others — `OPTIONALITY_PROVIDER` chooses, and the rule holds
   for whichever answers.

@@ -28,7 +28,7 @@ const health = {
 
 function mockApi(quotes: unknown[] = [leg]) {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
-    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/monitors") ? [] : health;
+    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }
@@ -210,7 +210,7 @@ describe("the imminent band", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       const body = url.endsWith("/quotes")
         ? [{ ...leg, fill, triggered }]
-        : url.endsWith("/monitors") ? [] : health;
+        : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
       return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
     }));
     const { container } = render(<App />);
