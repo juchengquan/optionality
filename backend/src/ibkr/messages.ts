@@ -4,6 +4,10 @@
  *  service cannot trade" is true by absence rather than by discipline. IB Gateway's own Read-Only
  *  API switch is the second, independent lock.
  *
+ *  `secType` is a field rather than a constant since ADR 0019: an index is `IND` and resolves on
+ *  the exchange that calculates it, which is how SPX and VIX are reached at all — moomoo refuses
+ *  every index as a class.
+ *
  *  ## Why the layouts are the official Python client's, field for field
  *
  *  Every encoding below mirrors `ibapi` 9.81's, and that choice is EMPIRICAL rather than
@@ -38,9 +42,15 @@ export const MARKET_DATA_FROZEN = 2;
  *  `contract.ts`'s `parseSpxCode` is what turns a service code into this. */
 export interface TwsContract {
   symbol: string;
+  /** `OPT` for an option, `IND` for an index. Nothing else: this client reads market data for the
+   *  Securities the service watches and keeps on the page, and an ETF needs an entitlement this
+   *  account does not have (measured 2026-11-08: SPY answers `10089`, requires a subscription). */
+  secType: "OPT" | "IND";
   lastTradeDateOrContractMonth: string;
   strike: number;
-  right: "C" | "P";
+  /** empty for an index, which has no side */
+  right: "C" | "P" | "";
+  /** empty for an index, which has no trading class */
   tradingClass: string;
   exchange: string;
   currency: string;
@@ -64,7 +74,7 @@ function decimal(value: number): string {
 function contractFields(c: TwsContract): (string | number)[] {
   return [
     0,                                  // conId: 0 means "I am describing it rather than naming it"
-    c.symbol, "OPT", c.lastTradeDateOrContractMonth, decimal(c.strike), c.right, c.multiplier,
+    c.symbol, c.secType, c.lastTradeDateOrContractMonth, decimal(c.strike), c.right, c.multiplier,
     c.exchange, "",                     // primaryExchange, which SMART routing does not need
     c.currency, "",                     // localSymbol, which is what we are asking the gateway FOR
     c.tradingClass,

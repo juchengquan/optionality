@@ -103,9 +103,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
   Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (IB Gateway's own socket protocol:
-  framing, the handshake with its protocol floor of 156, and the five messages a read-only quote
-  fetch sends — there is no order message and none is importable, so the service cannot trade by
-  absence rather than by discipline), `db/` (schema, migrations, queries),
+  framing, the handshake with its protocol floor of 156, the five messages a read-only quote fetch
+  sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
+  importable, so the service cannot trade by absence rather than by discipline. Reached as a
+  REFERENCE source whether or not it is the Provider, because a Reference alarms on nothing;
+  `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, queries),
   `cases/` (the golden cases' inputs and builder), `references.ts` (the Reference path: one bounded
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
@@ -131,8 +133,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
-- Every call to the **Provider** is a single bounded one: the sweep, `/quotes`, `/references`,
-  `/positions/values` and the creation probes. (`/spx/quote` was a sixth until #199 dropped it:
+- Every call for **market data** is a single bounded one: the sweep, `/quotes`, `/references`,
+  `/positions/values` and the creation probes. Widened from "every call to the Provider" by ADR
+  0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
+  service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
+  call to one — a loophole that change itself created. `/references` makes one bounded call per
+  SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (`/positions/values` is polled by the dashboard's Holdings
   panel while it is open.) `/references` is polled WITH `/quotes` — two calls per poll per open
   tab — and is a call of its own rather than part of that batch for containment, not for cost:

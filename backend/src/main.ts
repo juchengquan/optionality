@@ -16,6 +16,7 @@ import type { Deps } from "./deps.ts";
 import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
+import { ibkrSource } from "./ibkr/provider.ts";
 import { makeProvider } from "./provider.ts";
 import { Scheduler } from "./scheduler.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
@@ -42,12 +43,18 @@ const sweeper = new MonitorSweeper({
   db, settings, fetchQuotes: provider.fetchQuotes, send,
 });
 
+/** Vendors a Reference may name beyond the Provider (ADR 0019). Empty unless IBKR_HOST is set,
+ *  and built whether or not IBKR is the Provider — a Reference alarms on nothing, which is why it
+ *  is the one figure allowed a source the rest of the service does not use. */
+const references = ibkrSource(settings);
+
 const deps: Deps = {
   settings,
   db,
   now: () => new Date(),
   sweeper,
   provider,
+  referenceSources: references.sources,
 };
 
 const port = Number(process.env.PORT ?? 31417);
@@ -139,6 +146,8 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     scheduler.stop();
     server.close();
     provider.close();
+    // the Reference source is a second connection to hang up, and only exists when configured
+    references.close();
     db.close();
     process.exit(0);
   });
