@@ -21,12 +21,16 @@
          console to confirm there is an upstream session, so it can tell the two apart. The script
          is the part that knows something; this agent is just a clock.
 
-         A minute's granularity against the 2h42m it replaces. -->
+         A minute's granularity against the 2h42m it replaces.
+
+         It runs the COMMITTED copy, `deploy/opend.sh`, not ~/openD.sh — so the version-controlled
+         one is the one that actually runs, and drift shows up as behaviour rather than only as a
+         failing checksum. ~/openD.sh stays as the copy that works with no repository cloned. -->
     <key>Label</key>
     <string>com.optionality.opend</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__HOME__/openD.sh</string>
+        <string>__REPO__/deploy/opend.sh</string>
         <!-- idempotent and quiet when all is well: starts a dead OpenD, restarts a husk whose API
              port is shut, and only REPORTS one that is up without a confirmed session — because
              that may need a human at the login window, and a restart a minute against an expired
@@ -35,11 +39,21 @@
     </array>
     <key>WorkingDirectory</key>
     <string>__HOME__</string>
+    <!-- SCRIPT_DIR in the script resolves OPEND_PATH, and it must still find ~/_workspace/OpenD
+         when the script itself lives in the repo — so the working directory stays home. -->
     <key>EnvironmentVariables</key>
     <dict>
         <!-- launchd starts with a bare PATH, and `ensure` reaches for python3, nc and pgrep -->
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <!-- stamped from .env at install time, which is why the committed script carries no
+             account and this generated file (outside the repo) does -->
+        <key>OPEND_LOGIN_ACCOUNT</key>
+        <string>__OPEND_ACCOUNT__</string>
+        <!-- the script derives OPEND_PATH from its own location by default; the committed copy
+             lives in the repo, so it is told where OpenD actually is -->
+        <key>OPEND_PATH</key>
+        <string>__HOME__/_workspace/OpenD</string>
     </dict>
     <!-- at login, and then every minute -->
     <key>RunAtLoad</key>

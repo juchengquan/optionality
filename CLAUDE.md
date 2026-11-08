@@ -209,8 +209,18 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   system while the dashboard shows dashes. `ensure` starts a dead OpenD, restarts a husk whose API
   port is shut, and only REPORTS one that is up without a confirmed session, because that may need
   a human at the login window and a restart a minute against an expired credential is a watchdog
-  flapping a provider. `~/openD.sh` is the owner's and lives outside this repository; the agent
-  points at it. `make opend-logs` follows it.
+  flapping a provider.
+  **Two copies of that script exist on purpose.** `deploy/opend.sh` is committed and is the one
+  the agent runs — so the version-controlled copy is the one whose behaviour you see. `~/openD.sh`
+  is the owner's and must keep working with NO repository cloned, which is why it is a copy rather
+  than a symlink. `make check-opend` fails when they differ and is part of `make check`, the same
+  arrangement `check-ui` uses for the committed bundle; `make opend-sync` copies the committed one
+  over the other, keeping its account line. The ONE difference by design is that account:
+  `deploy/opend.sh` has none, `~/openD.sh` keeps a literal default, and
+  `make launchd-opend-install` stamps `OPEND_LOGIN_ACCOUNT` from `.env` into the generated agent —
+  which lives outside the repo, so the account is only ever where git does not look. That target
+  refuses to install when it is unset, because an agent that restarts a failing login every 60
+  seconds is a measured failure mode rather than a hypothetical. `make opend-logs` follows it.
   - `com.optionality.backup` (`make launchd-backup-install`) takes a checked, gzipped one at 06:00
     into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` is a
     folder in iCloud Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/optionality-backups`),

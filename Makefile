@@ -3,7 +3,7 @@
 	serve build-ui check-ui check-served-root resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
-	launchd-opend-install launchd-opend-uninstall opend-logs \
+	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
 	test-tools py-cut py-tag
 
 API_LABEL = com.optionality.api
@@ -60,7 +60,7 @@ test:
 # EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
 # subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
 # the Python. check-ui comes last because it rebuilds the bundle.
-check: lint typecheck check-api check-cases test test-tools test-api test-ui check-ui
+check: lint typecheck check-api check-cases test test-tools test-api test-ui check-ui check-opend
 	@echo "all checks passed"
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
@@ -281,15 +281,53 @@ launchd-backup-uninstall:
 # failure that matters is an OpenD that is up with its websocket port shut. The script's `ensure`
 # tells those apart. It calls ~/openD.sh, which is NOT in this repository: it is the owner's and
 # predates this agent, and pointing at it beats moving it.
+# The account comes from .env and is stamped into the GENERATED plist, which lives outside this
+# repository — so it is on disk only where git does not look. `-f2-` keeps everything after the
+# first `=`: `-f2` truncates at a second one, which is the careless extraction that wrote the
+# literal string `$$ {OPEND_LOGIN_ACCOUNT:-...}` into a config file and sent OpenD into a
+# restart loop on 2026-11-08.
+OPEND_ACCOUNT = $(shell grep -E '^OPEND_LOGIN_ACCOUNT=' .env 2>/dev/null | head -1 | cut -d= -f2-)
+
 launchd-opend-install:
-	@test -x $(HOME)/openD.sh || { echo "$(HOME)/openD.sh not found or not executable"; exit 1; }
+	@test -x deploy/opend.sh || { echo "deploy/opend.sh missing or not executable"; exit 1; }
+	@test -n "$(OPEND_ACCOUNT)" || { echo "OPEND_LOGIN_ACCOUNT is not set in .env — refusing to install an agent that would restart a failing login every 60s"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
 	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL) 2>/dev/null
-	sed -e 's|__HOME__|$(HOME)|g' \
+	sed -e 's|__HOME__|$(HOME)|g' -e 's|__REPO__|$(CURDIR)|g' \
+		-e 's|__OPEND_ACCOUNT__|$(OPEND_ACCOUNT)|g' \
 		deploy/optionality-opend.launchd.plist.template > $(OPEND_PLIST)
+	chmod 600 $(OPEND_PLIST)
 	plutil -lint $(OPEND_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(OPEND_PLIST)
 	@echo "watching OpenD every 60s; logs: $(HOME)/Library/Logs/optionality-opend.log"
+
+# Two copies of the control script exist on purpose: this one is committed, and ~/openD.sh must
+# keep working with no repository cloned. Two copies of anything drift, and the only question is
+# whether you find out — so this is the same arrangement `check-ui` uses for the committed bundle.
+# The account line is normalised away because it is the one difference BY DESIGN.
+check-opend:
+	@a=$$(mktemp); b=$$(mktemp); \
+	if [ ! -f $(HOME)/openD.sh ]; then \
+		rm -f "$$a" "$$b"; \
+		echo "~/openD.sh absent — nothing to compare (this check is for the owner's machine)"; \
+	else \
+		sed -E 's|^LOGIN_ACCOUNT=.*|LOGIN_ACCOUNT=X|' $(HOME)/openD.sh > "$$a"; \
+		sed -E 's|^LOGIN_ACCOUNT=.*|LOGIN_ACCOUNT=X|' deploy/opend.sh > "$$b"; \
+		if diff -u "$$a" "$$b" > /dev/null; then \
+			rm -f "$$a" "$$b"; echo "~/openD.sh matches deploy/opend.sh"; \
+		else \
+			echo "~/openD.sh and deploy/opend.sh have DRIFTED — 'make opend-sync', or reconcile by hand:"; \
+			diff -u "$$a" "$$b" || true; rm -f "$$a" "$$b"; exit 1; \
+		fi; \
+	fi
+
+opend-sync:
+	@test -f $(HOME)/openD.sh || { echo "~/openD.sh absent; copy deploy/opend.sh there and set its account"; exit 1; }
+	@acct=$$(grep -E '^LOGIN_ACCOUNT=' $(HOME)/openD.sh); \
+		awk -v a="$$acct" '/^LOGIN_ACCOUNT=/ { print a; next } { print }' deploy/opend.sh > $(HOME)/openD.sh.new && \
+		chmod 755 $(HOME)/openD.sh.new && zsh -n $(HOME)/openD.sh.new && \
+		mv $(HOME)/openD.sh.new $(HOME)/openD.sh && \
+		echo "~/openD.sh synced from deploy/opend.sh, account kept"
 
 launchd-opend-uninstall:
 	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL)
