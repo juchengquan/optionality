@@ -160,6 +160,14 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   dashboard's bell may therefore lead or lag what has been sent. `MonitorSweeper.cachedQuotes` is the cached
   alternative and no route calls it.
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
+- A provider is reported two ways, because they measure different things. `DEGRADED_AFTER_FAILURES`
+  counts CONSECUTIVE failed sweeps — how long a failure lasted — and `FLAPPING_AFTER_FAILURES`
+  counts them inside `FLAPPING_WINDOW_SECONDS` whatever happened between — how often one happens.
+  The second exists because the first is blind to a provider that keeps dropping and recovering:
+  on 2026-11-08 a watchdog killed OpenD 27s after every start for an hour, every success reset the
+  consecutive counter, and the service said nothing while `/quotes` 502ed in the gaps. Only one of
+  the two speaks per sweep — two notices about one unavailable provider is the noise that teaches
+  somebody to stop reading the channel (`domain/degraded.ts`, `domain/flapping.ts`).
 - Alarms: the 🔔 flips truthfully at the EXACT threshold — no value hysteresis. `ALARM_COOLDOWN_SECONDS`
   throttles state-change messages; `ALARM_REPEAT_SECONDS` re-reminds persisting breaches. `compare: abs|signed`
   (signed → negative thresholds legal, exactly 0 never).
