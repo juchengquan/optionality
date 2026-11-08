@@ -135,6 +135,16 @@ describe("asking", () => {
     expect(answer.conId).toBe(FAKE_CONID);
   });
 
+  it("delivers a price the gateway does not have as null, through the socket", async () => {
+    // the decoder's own test covers the sentinel; this proves it survives the whole path, which
+    // is where a number would quietly become -1.00 on a dashboard
+    const { socket, seen } = await connected({ noPrices: true });
+    socket.send(reqMktData(7, SPXW, true));
+    await waitFor(() => seen.some((m) => m.kind === "greeks"));
+    const prices = seen.filter((m) => m.kind === "price").map((m) => m.kind === "price" && m.price);
+    expect(prices).toEqual([null, null]);
+  });
+
   it("refuses to send when there is no session", () => {
     const socket = new TwsSocket({ host: "127.0.0.1", port: 1, clientId: 31419 });
     expect(() => socket.send(reqMktData(1, SPXW, true))).toThrow(/not connected/);

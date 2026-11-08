@@ -47,6 +47,9 @@ export interface FakeOptions {
   serverVersion?: number;
   /** Answer market data with no figures at all — "subscribed, nothing yet". */
   noFigures?: boolean;
+  /** Answer bid and ask with -1, which is what the real gateway sends for a price it does not
+   *  have: live mode on a shut market, and SKEW outside its calculation window. */
+  noPrices?: boolean;
 }
 
 /** Listening, with the port it actually got (0 asks the OS for a free one). */
@@ -106,8 +109,9 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
           const reqId = Number(f[2]);
           socket.write(frame(toFields([58, 1, reqId, 2]))); // dataType: frozen, as asked
           if (options.noFigures) continue;
-          socket.write(frame(toFields([1, 6, reqId, 1, "3.5", 0, 0])));   // bid
-          socket.write(frame(toFields([1, 6, reqId, 2, "4.1", 0, 0])));   // ask
+          const [bid, ask] = options.noPrices ? ["-1", "-1"] : ["3.5", "4.1"];
+          socket.write(frame(toFields([1, 6, reqId, 1, bid, 0, 0])));   // bid
+          socket.write(frame(toFields([1, 6, reqId, 2, ask, 0, 0])));   // ask
           socket.write(frame(toFields([
             21, reqId, 13, 0, FAKE_GREEKS.impliedVol, FAKE_GREEKS.delta, FAKE_GREEKS.optPrice,
             0, FAKE_GREEKS.gamma, FAKE_GREEKS.vega, FAKE_GREEKS.theta, FAKE_GREEKS.undPriceWire,

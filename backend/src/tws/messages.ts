@@ -113,7 +113,7 @@ export type Incoming =
   | { kind: "serverTime"; orderId: number }
   | { kind: "contract"; reqId: number; conId: number; localSymbol: string }
   | { kind: "contractEnd"; reqId: number }
-  | { kind: "price"; reqId: number; tickType: number; price: number }
+  | { kind: "price"; reqId: number; tickType: number; price: number | null }
   | { kind: "greeks"; reqId: number; tickType: number; figures: Greeks }
   | { kind: "snapshotEnd"; reqId: number }
   | { kind: "dataType"; reqId: number; type: number }
@@ -132,6 +132,26 @@ export interface Greeks {
 
 function num(fields: string[], at: number): number {
   return Number(fields[at]);
+}
+
+/** A price, or null where the gateway means it has none.
+ *
+ *  -1 is the gateway's "no value" on a price tick, and this is a deliberate DIVERGENCE from the
+ *  official Python client, which passes it through untouched. That client is general-purpose and
+ *  serves combo contracts, where a negative price is a real credit; this one asks only about
+ *  options and indices — `contractFields` hardcodes secType OPT — and neither can cost minus one.
+ *
+ *  Measured rather than read: SKEW is calculated only 15:00–19:00 Chicago and answered -1.0
+ *  outside that window on 2026-11-08, and live mode on a shut market says the same for bid and
+ *  ask. Typing it as a number would put `-1.00` on the dashboard beside figures that are real.
+ *
+ *  Zero is kept. An empty book quotes 0, and whether 0 may be shown is ADR 0018's positivity
+ *  guard to decide for a Reference, not this decoder's to pre-empt.
+ */
+function price(fields: string[], at: number): number | null {
+  const value = Number(fields[at]);
+  if (!Number.isFinite(value) || value === -1) return null;
+  return value;
 }
 
 /** A figure that may not have been computed. The sentinels are NUMBERS — -2 for a greek, -1 for
@@ -164,7 +184,7 @@ export function readMessage(payload: string): Incoming {
       return { kind: "contractEnd", reqId: num(f, 2) };
 
     case IN.TICK_PRICE:
-      return { kind: "price", reqId: num(f, 2), tickType: num(f, 3), price: num(f, 4) };
+      return { kind: "price", reqId: num(f, 2), tickType: num(f, 3), price: price(f, 4) };
 
     case IN.TICK_OPTION_COMPUTATION:
       // no version field at or above protocol 156, and a tickAttrib where it used to be. That
