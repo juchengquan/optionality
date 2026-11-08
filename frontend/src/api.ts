@@ -15,6 +15,7 @@
 import { hc } from "hono/client";
 
 import type { AppType } from "backend";
+import type { Source } from "backend/schemas";
 
 /** Where the API lives, relative to wherever this bundle was deployed.
  *
@@ -101,7 +102,7 @@ export const fetchReferences = () =>
 /** Keep a Security on the page. The code is RAW — `US.SPY`, not an expiry and a strike — because a
  *  Reference is a Security rather than a Contract, and the service probes it live before it agrees
  *  to remember it. */
-export const addReference = (body: { code: string; label?: string; source: "moomoo" | "ibkr" | "yahoo" }) =>
+export const addReference = (body: { code: string; label?: string; source: Source }) =>
   sent(client.references.$post({ json: body }), "/references");
 
 /** Stop keeping one. The only way a Reference ever goes: nothing in the service removes one, and a

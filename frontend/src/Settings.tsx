@@ -5,6 +5,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 
+import type { Source } from "backend/schemas";
+
 import { type Entry, type Health, type Holding, type Reference } from "./api";
 import { type Grouping, type Signal } from "./columns";
 import { needs } from "./TopLine";
@@ -58,7 +60,7 @@ export function Settings({
   /** the page's own rows, polled with the watchlist — this panel is where one is kept or
    *  dropped, and where the reason a figure is missing is stated in full (ADR 0018) */
   references: Reference[];
-  onAddReference: (body: { code: string; label?: string; source: "moomoo" | "ibkr" | "yahoo" })
+  onAddReference: (body: { code: string; label?: string; source: Source })
     => Promise<boolean>;
   onRemoveReference: (id: string) => void;
 }) {
