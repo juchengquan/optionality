@@ -55,6 +55,19 @@
         <key>OPEND_PATH</key>
         <string>__HOME__/_workspace/OpenD</string>
     </dict>
+    <!-- WITHOUT THIS, THE WATCHDOG KILLS WHAT IT STARTS.
+         `opend.sh start` launches OpenD in the background and returns, and when a launchd job's
+         own process exits launchd tears down the rest of its process group — taking OpenD with
+         it. nohup protects against SIGHUP, not against that. The result was a clean OpenD exit
+         about 27 seconds after every tick and a restart on the next one: 39 starts in an hour,
+         each one looking successful in the log.
+
+         It passed three "kill it and watch it recover" demonstrations because each check came
+         seconds after the restart, before the teardown. The lesson is in the test, not the key:
+         a process-supervision change is verified by watching it STAY up, not by watching it come
+         up. -->
+    <key>AbandonProcessGroup</key>
+    <true/>
     <!-- at login, and then every minute -->
     <key>RunAtLoad</key>
     <true/>
