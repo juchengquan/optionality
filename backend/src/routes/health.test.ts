@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  */
 vi.mock("../golden.ts", () => ({ GOLDEN_CASES: "feedfacecafe" }));
 
-const { body, harness } = await import("../testing.ts");
+const { body, harness } = await import("../../testing/harness.ts");
 
 let h: ReturnType<typeof harness> | undefined;
 afterEach(() => h?.close());

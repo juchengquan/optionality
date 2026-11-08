@@ -173,6 +173,30 @@ tr.group:first-child td { padding-top: 4px; border-top: none; }
 .topline.bad { border-color: var(--destructive); border-left-color: var(--destructive);
                background: color-mix(in oklch, var(--destructive) 10%, var(--background)); }
 
+/* The Reference strip (ADR 0018): the market, read beside the strikes.
+   Quieter than the top line and never coloured by urgency — it is furniture by design, and the
+   one position that has to stay conspicuous is the line above it. Wraps rather than scrolls: at
+   390px three References take two rows, and nothing here may push the page sideways. */
+.references { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin-bottom: 1rem;
+              font-size: 0.875rem; color: var(--muted-foreground); }
+/* The ITEM may break, and at 320px it has to. Measured in Chromium rather than read off the CSS
+   (__browser__/References.test.tsx), twice:
+
+     "Nasdaq 100 (via QQQ ×25) 14,962.50 -1.23% last"             325px  (ADR 0018)
+     "Nasdaq 100 (yahoo, 15m late, last known) 14,962.50 -1.23%"  419px  (ADR 0019)
+
+   ADR 0019 dropped the scale's arithmetic and added a vendor and up to two freshness marks, which
+   is a net 94px LONGER — so the 320px case was re-measured rather than inherited. What must NOT
+   break is a figure or a percentage, so the nowrap is on the parts rather than on the whole. */
+.reference-name, .reference-figure, .reference-change { white-space: nowrap; }
+.reference-name { color: var(--foreground); }
+/* tabular, so a figure that ticks does not move the ones beside it */
+.reference-figure { font-variant-numeric: tabular-nums; color: var(--foreground);
+                    font-weight: 600; }
+.reference-change { font-variant-numeric: tabular-nums; margin-left: 0.35rem; }
+/* said only when the figure is a last trade, which is the weaker claim */
+.reference-field { margin-left: 0.35rem; font-size: 0.8125rem; opacity: 0.8; }
+
 .health { color: var(--muted-foreground); font-size: 0.875rem; margin-bottom: 1.2rem; }
 /* the status strip and the refresh selector sit on one line at a desk and wrap on a
    phone, rather than deciding the page is wider than the screen */

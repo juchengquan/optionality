@@ -10,7 +10,7 @@
  *  That belonged to moomoo (`opend/client.ts` has it now): a Provider knows its own failures in
  *  its own terms, and what the service needs is the answer, not the sentence (#168).
  */
-import { verifyVerdict, type Batch, type Quote } from "./domain/quote.ts";
+import { unverifiableVerdict, verifyVerdict, type Batch, type Quote } from "./domain/quote.ts";
 
 export { displayRecords } from "./domain/quote.ts";
 
@@ -25,9 +25,10 @@ export type QuoteRecord = Quote;
  *  is a rule that will never fire again and is quarantined for it. A Provider that cannot price a
  *  contract reports it HERE rather than throwing: a throw is for a Provider that could not answer
  *  at all, which is an outage and must never read as a watchlist full of unknown contracts.
+ *
+ *  `domain/quote.ts` owns the shape, because the two pure functions that read it are cased and
+ *  this module is not (ADR 0017).
  */
-/** The port's answer. `domain/quote.ts` owns the shape, because the two pure functions that read
- *  it are cased and this module is not (ADR 0017). */
 export type QuoteBatch = Batch;
 
 /** One bounded batch call to a Provider. `opend/client.ts` has moomoo's. */
@@ -35,9 +36,13 @@ export type QuoteFetcher = (codes: string[]) => Promise<QuoteBatch>;
 
 /** An error message unless every code is a verified, existing contract.
  *
- *  Strict on purpose: creation is gated by a live probe, and it rejects while OpenD is down
+ *  Strict on purpose: creation is gated by a live probe, and it rejects while the Provider is down
  *  (CLAUDE.md). A monitor created against a contract that does not exist would quarantine itself on
  *  the first sweep, which is a worse way to find out.
+ *
+ *  Both verdicts are `domain/quote.ts` and cased: a throw and an answer are two different refusals,
+ *  and the thrown one used to claim an outage about a Provider that had answered perfectly well and
+ *  declined the security (ADR 0018).
  */
 export async function verifyContracts(
   codes: string[], fetch: QuoteFetcher,
@@ -46,7 +51,7 @@ export async function verifyContracts(
   try {
     batch = await fetch(codes);
   } catch (err) {
-    return `cannot verify contract: OpenD unreachable (${err instanceof Error ? err.message : String(err)})`;
+    return unverifiableVerdict(err instanceof Error ? err.message : String(err));
   }
   // everything but the fetch and the catch is `domain/quote.verifyVerdict`, which is cased
   return verifyVerdict(codes, batch);

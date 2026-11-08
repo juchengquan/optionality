@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildSpxCode } from "../domain/contract.ts";
 import {
   type FakeProvider, type Harness, body, harness, json, pricedFetcher,
-} from "../testing.ts";
+} from "../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
@@ -381,11 +381,15 @@ describe("the creation gate", () => {
     expect(await body(await h.call("/positions"))).toEqual([]);
   });
 
-  it("refuses while OpenD is unreachable", async () => {
+  it("refuses when the probe threw", async () => {
     start(() => Promise.reject(new Error("Client connection failed!")));
     const resp = await post(condor());
     expect(resp.status).toBe(422);
-    expect((await body(resp)).detail).toMatch(/unreachable/);
+    // the Provider's own sentence, which is what says whether it could not be reached or answered
+    // and declined the security (ADR 0018)
+    expect((await body(resp)).detail).toBe(
+      "cannot verify contract: the Provider did not confirm it — Client connection failed!",
+    );
   });
 });
 
@@ -425,7 +429,9 @@ describe("/positions/values", () => {
     expect(calls).toBe(0);
   });
 
-  it("answers 502 rather than 500 when the OpenD call fails", async () => {
+  it("answers 502 rather than 500 when the Provider call fails, and names it", async () => {
+    // one sentence for both market-data routes, from the Provider's own name: this read "OpenD
+    // call failed" in two places whatever was actually answering (`errors.providerFailed`)
     let first = true;
     start(async (codes) => {
       if (first) { first = false; return pricedFetcher(codes); }
@@ -434,7 +440,9 @@ describe("/positions/values", () => {
     await post(condor());
     const resp = await h.call("/positions/values");
     expect(resp.status).toBe(502);
-    expect((await body(resp)).detail).toMatch(/OpenD call failed/);
+    const detail = (await body(resp)).detail as string;
+    expect(detail).toBe("moomoo call failed: quota exceeded");
+    expect(detail).not.toMatch(/OpenD/);
   });
 });
 

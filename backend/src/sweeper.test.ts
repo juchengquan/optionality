@@ -10,7 +10,7 @@ import { toSqlDatetime } from "./db/time.ts";
 import { toSqliteJson } from "./db/values.ts";
 import { settingsFor, type Settings } from "./env.ts";
 import type { QuoteRecord } from "./quotes.ts";
-import { type FakeProvider, fakeFetcher } from "./testing.ts";
+import { type FakeProvider, fakeFetcher } from "../testing/harness.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 
 const CODE = "US.SPXW261218C6500000";
@@ -425,6 +425,133 @@ describe("the watchdog", () => {
     expect(sent.some((t) => t.includes("recovered"))).toBe(true);
     expect(s.consecutiveFailures()).toBe(0);
     expect(s.lastSweepOk()).toBe(true);
+  });
+
+  it("keeps saying so while it is still broken, and says how long", async () => {
+    // The gap this closes, measured: on 2026-11-08 OpenD exited and 646 sweeps failed over
+    // 2h42m, and the owner got ONE message, in the first minute. The notice was right; the
+    // silence after it meant the engine knew something the owner no longer did.
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("Client connection failed!"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    const limit = settingsFor(BASE).degradedAfterFailures;
+    const started = now;
+
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+    expect(sent.filter((t) => t.includes("degraded"))).toHaveLength(1);
+    expect(sent[0]).toContain("⚠️ monitoring degraded:");
+
+    // half an hour of failing sweeps: the reminder is due by the CLOCK, so time has to move
+    now = new Date(started.getTime() + 1_799_000);
+    await s.sweep();
+    expect(sent.filter((t) => t.includes("degraded"))).toHaveLength(1);
+
+    now = new Date(started.getTime() + 1_801_000);
+    await s.sweep();
+    const reminders = sent.filter((t) => t.includes("still degraded"));
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]).toContain("over 30m");
+
+    // and not again until the next interval
+    now = new Date(started.getTime() + 1_900_000);
+    await s.sweep();
+    expect(sent.filter((t) => t.includes("still degraded"))).toHaveLength(1);
+
+    failing = false;
+    now = new Date(started.getTime() + 9_720_000);
+    await s.sweep();
+    expect(sent.find((t) => t.includes("recovered"))).toBe("✅ monitoring recovered after 2h42m");
+    now = started;
+  });
+
+  it("starts a new outage cleanly rather than reporting the last one's age", async () => {
+    // the stamps are cleared on recovery, so a second outage an hour later does not claim to
+    // have been broken since the first one
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("down"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    const limit = settingsFor(BASE).degradedAfterFailures;
+    const started = now;
+
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+    failing = false;
+    await s.sweep();
+
+    failing = true;
+    now = new Date(started.getTime() + 3_600_000);
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+    now = new Date(started.getTime() + 3_600_000 + 1_801_000);
+    await s.sweep();
+    const reminders = sent.filter((t) => t.includes("still degraded"));
+    expect(reminders).toHaveLength(1);
+    // 30m into the SECOND outage, not 1h30m since the first
+    expect(reminders[0]).toContain("over 30m");
+    now = started;
+  });
+
+  it("notices a provider that keeps dropping and recovering, which the run cannot", async () => {
+    // The outage of 2026-11-08 that the service missed entirely: a launchd agent was killing
+    // OpenD 27s after every start and restarting it a minute later, so the sweep failed roughly
+    // a third of the time for an hour. Every success reset the consecutive counter below its
+    // threshold, so "monitoring degraded" never fired — while a five-minute total outage would
+    // have fired in the first minute. The owner found it by looking at the dashboard.
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("Client connection failed!"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    const started = now;
+
+    // fail, succeed, fail, succeed… five failures inside the window, never two in a row
+    for (let i = 0; i < 10; i += 1) {
+      now = new Date(started.getTime() + i * 90_000);
+      failing = i % 2 === 0;
+      await s.sweep();
+    }
+
+    // the run never reached the threshold, so the sustained notice stayed silent — correctly
+    expect(sent.filter((t) => t.includes("monitoring degraded"))).toEqual([]);
+    expect(s.consecutiveFailures()).toBe(0);
+    // and the RATE spoke instead
+    const said = sent.filter((t) => t.includes("unreliable"));
+    expect(said).toHaveLength(1);
+    expect(said[0]).toContain("failed sweeps in the last 15m");
+    now = started;
+  });
+
+  it("does not call a single blip unreliable", async () => {
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("down"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    await s.sweep();
+    failing = false;
+    await s.sweep();
+    expect(sent.filter((t) => t.includes("unreliable"))).toEqual([]);
+  });
+
+  it("says one thing or the other about a sustained outage, never both", async () => {
+    // a long enough outage trips the run AND fills the window, and two notices about one
+    // unavailable provider is the noise that teaches someone to stop reading the channel
+    monitor();
+    const s = sweeper(() => Promise.reject(new Error("Client connection failed!")));
+    const started = now;
+    for (let i = 0; i < 10; i += 1) {
+      now = new Date(started.getTime() + i * 30_000);
+      await s.sweep();
+    }
+    expect(sent.filter((t) => t.includes("monitoring degraded"))).toHaveLength(1);
+    expect(sent.filter((t) => t.includes("unreliable"))).toEqual([]);
+    now = started;
   });
 
   it("does not announce a recovery it was never degraded from", async () => {

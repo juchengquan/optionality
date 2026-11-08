@@ -8,7 +8,7 @@ import { costToClose, legReadings, positionsHolding } from "./domain/position.ts
 import {
   findPositionSample, linkMonitorToPositions, listPositions, orphanMonitors,
   recordPositionSample, setMonitorScope, stampManageNotified,
-} from "./db/queries.ts";
+} from "./db/queries/index.ts";
 import type { PositionRow } from "./db/rows.ts";
 import { toSqlDatetime } from "./db/time.ts";
 import { toSqliteJson } from "./db/values.ts";
@@ -51,7 +51,7 @@ export interface PositionSweepDeps {
   notify: (text: string) => Promise<boolean>;
 }
 
-  /** One notice per Position when it reaches the manage-by DTE (ADR 0011).
+/** One notice per Position when it reaches the manage-by DTE (ADR 0011).
  *
  *  A notice about a POSITION, not an Alarm about a Monitor: no threshold is involved, the
  *  cooldowns do not apply, and `manage_notified_at` is what makes it once rather than once a

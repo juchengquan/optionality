@@ -30,9 +30,23 @@ describe("verifyContracts", () => {
     expect(await verifyContracts([POISON], poisonable)).toMatch(/does not exist/);
   });
 
-  it("refuses while OpenD is unreachable rather than accepting blind", async () => {
+  it("refuses when the probe threw, rather than accepting blind", async () => {
     const down = () => Promise.reject(new Error("Client connection failed!"));
-    expect(await verifyContracts([CODE], down)).toMatch(/unreachable/);
+    expect(await verifyContracts([CODE], down))
+      .toBe("cannot verify contract: the Provider did not confirm it — Client connection failed!");
+  });
+
+  it("does not call a Provider that answered and declined an outage (ADR 0018)", async () => {
+    // moomoo refuses every US stock index as a CLASS, naming no culprit — so the containment loop
+    // re-throws and this is the path `US..SPX` takes. The gateway is up; saying "unreachable"
+    // sends the owner to look at the wrong thing, and the Provider's own sentence is what says
+    // which of the two it was.
+    const declined = () => Promise.reject(
+      new Error("snapshot API failed: US stock indices are not supported"),
+    );
+    const why = (await verifyContracts(["US..SPX"], declined))!;
+    expect(why).toContain("US stock indices are not supported");
+    expect(why).not.toMatch(/unreachable|down|outage/);
   });
 
   it("takes the pessimistic reading when the Provider contradicts itself", async () => {

@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot and a React dashboard.
-**Two launchd agents** on the owner's always-on machine, behind one tailnet hostname (ADR 0006):
+**Two launchd agents** serve it, and a third watches what it depends on, on the owner's
+always-on machine, behind one tailnet hostname (ADR 0006):
 the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
 Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
 
@@ -57,13 +58,20 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
   repo-wide codegen step rather than something the backend may do. Both stamps are generated and
   committed; `make check-cases` fails when either is stale.
-- **`make ibkr-first-contact`** — the five questions about an IBKR gateway that only a gateway can
-  answer (ADR 0015): entitlements, the real pre-flight cost, what a dead session looks like from
-  inside the service, rate limits, and whether the two Providers agree on the same contract at the
-  same instant. NOT part of `make check` — it reaches a real gateway, which no test may do. Safe
-  while the live service runs: read-only on the database, no Telegram, no bot. Its READINGS are
-  pure functions with tests (`backend/src/ibkr/first-contact.test.ts`); `make ibkr-fake-gateway`
-  serves a stub so the runner itself can be exercised, and answers no real market data.
+- **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
+  `ibkr/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
+  from the official Python client with `sendMsg` intercepted at protocol 157, and what the gateway
+  replies is what the real gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-08.
+  One definition, in `src/ibkr/fake.ts`, shared with the suite so the two cannot drift. A run
+  against it proves the CLIENT and is never evidence about a provider, an account's entitlements,
+  a dead session or an open market.
+  This name is REUSED rather than new: `ibkr-fake-gateway` served the Client Portal stub until
+  #205 deleted that transport and the whole of the old `ibkr/` with it, and the socket stub then
+  took both the directory name and the target name (named for the gateway it speaks to, as
+  `opend/` is). The retired `ibkr-first-contact` has no replacement — the first-contact harness
+  needs a socket-shaped runner nobody has written. The ideas worth lifting are in #205's history:
+  `hasFigures`'s distinction between a figure that has not arrived and a Contract that does not
+  exist, and the five questions only a real gateway can answer.
 - `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
   with the sweep at an hour and the Telegram variables blanked, because the live service is always up
   here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
@@ -94,12 +102,38 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
   `alarm.ts` and its Telegram wording, `lifecycle.ts`'s quarantine and expiry verdicts, and `js.ts`,
   the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
-  and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
-  Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (the Client Portal client, over plain
-  `fetch` — EXPERIMENTAL, proved against a stub gateway and never against a real one), `db/` (schema, migrations, queries),
-  `cases/` (the golden cases' inputs and builder).
+  and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (the long-poll
+  Telegram TRANSPORT in `bot.ts` — the poll, the owner check, the reply — and the commands
+  themselves in `bot/commands/`, a TABLE rather than a switch: a command is
+  `(context, words) => reply text`, it never touches the Telegram API, and `index.test.ts` holds
+  the table to `format.ts`'s `BOT_COMMANDS`, the "/" menu that announces it), `opend/` (the moomoo websocket client), `ibkr/` (IB Gateway's own socket protocol:
+  framing, the handshake with its protocol floor of 156, the five messages a read-only quote fetch
+  sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
+  importable, so the service cannot trade by absence rather than by discipline. Reached as a
+  REFERENCE source whether or not it is the Provider, because a Reference alarms on nothing;
+  `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, and `queries/` —
+  one module per TABLE, re-exported by `queries/index.ts` so every caller keeps one import path;
+  `queries/sql.ts` holds what all of them were repeating, and its `insertRow` names
+  `COLUMNS[table]` rather than the value's own keys on purpose: a row with a column MISSING then
+  fails to bind instead of storing the database's defaults in silence),
+  **`vendors.ts`** (the one seam every market-data vendor is reached through: a DESCRIPTOR per
+  vendor — `opend/vendor.ts`, `ibkr/vendor.ts`, `yahoo/vendor.ts` — and adding one is a file
+  beside its client plus a line in `VENDORS`. `PROVIDERS` is derived from the descriptors that
+  say `canBeProvider`, never listed twice; a Reference-only vendor like Yahoo prices no option,
+  so naming it as the Provider is fatal at boot and it owes no `reachable`. `openVendors` opens
+  each vendor ONCE and hands the Provider back among the sources under its own name, which is
+  what makes ADR 0019's "one client either way" structural rather than remembered — IB Gateway
+  allows one connection per client id and the second displaces the first in silence. It replaced
+  three shapes merged by hand in `main.ts` and again in `routes/references.ts`),
+  `cases/` (the golden cases' inputs and builder), `references.ts` (the Reference path: one bounded
+  call of its own, and the only degrade in the service that retries one code at a time — bounded by
+  the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
-- `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.
+- `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions).
+- `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
+  package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
+  service. Both are tested against a FIXTURE TREE rather than against this repository, which is
+  what a sweep of `check-boundaries` taught: three ways to gut it left every suite green.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
   for module (snake_case the only translation), `js.py` holds the JavaScript number rules the port
   must reproduce (cased since ADR 0017, and named `js.py` not `_js.py` for that reason),
@@ -120,10 +154,19 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
-- Every call to the **Provider** is a single bounded one: the sweep, `/quotes`,
-  `/positions/values` and the creation probes. (`/spx/quote` was a fifth until #199 dropped it:
+- Every call for **market data** is a single bounded one: the sweep, `/quotes`, `/references`,
+  `/positions/values` and the creation probes. Widened from "every call to the Provider" by ADR
+  0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
+  service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
+  call to one — a loophole that change itself created. `/references` makes one bounded call per
+  SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (`/positions/values` is polled by the dashboard's Holdings
-  panel while it is open.) This read "one worker thread owns run execution, and these are the exceptions"
+  panel while it is open.) `/references` is polled WITH `/quotes` — two calls per poll per open
+  tab — and is a call of its own rather than part of that batch for containment, not for cost:
+  moomoo rejects a whole batch for one bad code and the containment loop drops only a code it
+  NAMES, so a class refusal (`US..SPX`, which is the first thing a reasonable person types) would
+  blank every row the owner acts on. It is also the one route that cannot fail: a Provider that is
+  wholly down leaves each Reference a dash with its own sentence (ADR 0018). This read "one worker thread owns run execution, and these are the exceptions"
   until phase 10 retired the worker with the run pipeline it existed for (ADR 0014), and named OpenD until
   ADR 0015 made the vendor one Provider among others — `OPTIONALITY_PROVIDER` chooses, and the rule holds
   for whichever answers.
@@ -137,6 +180,14 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   dashboard's bell may therefore lead or lag what has been sent. `MonitorSweeper.cachedQuotes` is the cached
   alternative and no route calls it.
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
+- A provider is reported two ways, because they measure different things. `DEGRADED_AFTER_FAILURES`
+  counts CONSECUTIVE failed sweeps — how long a failure lasted — and `FLAPPING_AFTER_FAILURES`
+  counts them inside `FLAPPING_WINDOW_SECONDS` whatever happened between — how often one happens.
+  The second exists because the first is blind to a provider that keeps dropping and recovering:
+  on 2026-11-08 a watchdog killed OpenD 27s after every start for an hour, every success reset the
+  consecutive counter, and the service said nothing while `/quotes` 502ed in the gaps. Only one of
+  the two speaks per sweep — two notices about one unavailable provider is the noise that teaches
+  somebody to stop reading the channel (`domain/degraded.ts`, `domain/flapping.ts`).
 - Alarms: the 🔔 flips truthfully at the EXACT threshold — no value hysteresis. `ALARM_COOLDOWN_SECONDS`
   throttles state-change messages; `ALARM_REPEAT_SECONDS` re-reminds persisting breaches. `compare: abs|signed`
   (signed → negative thresholds legal, exactly 0 never).
@@ -160,8 +211,14 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Testing conventions
 
-- `backend/src/testing.ts`'s `harness` injects an echo quote fetcher by default — tests must NEVER reach the
-  real moomoo SDK (it blocks indefinitely on dead ports; a missing fake looks like a hung suite).
+- **`backend/testing/harness.ts`** (NOT under `src/`, which is the service) — its `harness` injects an
+  echo quote fetcher by default, so tests must NEVER reach the real moomoo SDK (it blocks
+  indefinitely on dead ports; a missing fake looks like a hung suite). Everything in it is correct
+  in a test and a lie in production — a Provider that prices every code asked for, a sweeper that
+  has never swept, a bearer token of `"tok"` — and it sat in `src/` beside the modules it fakes,
+  loaded by `check-loads` along with them, until #221. **`make check-test-support`** (part of
+  `make lint`) refuses any non-test file that imports a `testing/` directory, in any package,
+  because a directory's meaning that nothing checks is a convention.
 - Bot tests drive `TelegramBot.handleUpdate` directly with a fake API; sweep tests call
   `MonitorSweeper.sweep()` with fake fetchers and senders. Dates in tests are derived from the harness's
   fixed clock (`NOW`, `daysFromNow`), never the real one.
@@ -177,6 +234,33 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   dangerous.
   - `make deploy` takes one before every restart and migration, in `data/`, and keeps the last 3
     plus any renamed `optionality-ts.db.bak-pre-<what>-<stamp>` — rename one to keep it for good.
+- **`com.optionality.opend`** (`make launchd-opend-install`) watches OpenD, which everything else
+  depends on and nothing was watching: it exited cleanly after 23 days up on 2026-11-08 and the
+  sweep failed 646 times over 2h42m. A TIMER every 60s calling `~/openD.sh ensure`, not KeepAlive,
+  for two reasons: that script backgrounds OpenD and returns, so KeepAlive would see the job end
+  and restart it for ever; and KeepAlive can only see whether a process EXISTS, where the failure
+  that matters is an OpenD up with its websocket port shut — which looks healthy to the operating
+  system while the dashboard shows dashes. `ensure` starts a dead OpenD, restarts a husk whose API
+  port is shut, and only REPORTS one that is up without a confirmed session, because that may need
+  a human at the login window and a restart a minute against an expired credential is a watchdog
+  flapping a provider.
+  **`AbandonProcessGroup` is not optional here.** `opend.sh start` backgrounds OpenD and returns,
+  and launchd tears down the rest of a job's process group when the job's own process exits —
+  taking OpenD with it. Without that key the watchdog killed what it started, 27 seconds after
+  every tick: 39 starts in an hour, each one looking successful in its log, and `/quotes` 502ing
+  in the gaps. It survived three kill-and-recover demonstrations because every check came seconds
+  after the restart. A process-supervision change is verified by watching it STAY up.
+  **Two copies of that script exist on purpose.** `deploy/macos/opend.sh` is committed and is the one
+  the agent runs — so the version-controlled copy is the one whose behaviour you see. `~/openD.sh`
+  is the owner's and must keep working with NO repository cloned, which is why it is a copy rather
+  than a symlink. `make check-opend` fails when they differ and is part of `make check`, the same
+  arrangement `check-ui` uses for the committed bundle; `make opend-sync` copies the committed one
+  over the other, keeping its account line. The ONE difference by design is that account:
+  `deploy/macos/opend.sh` has none, `~/openD.sh` keeps a literal default, and
+  `make launchd-opend-install` stamps `OPEND_LOGIN_ACCOUNT` from `.env` into the generated agent —
+  which lives outside the repo, so the account is only ever where git does not look. That target
+  refuses to install when it is unset, because an agent that restarts a failing login every 60
+  seconds is a measured failure mode rather than a hypothetical. `make opend-logs` follows it.
   - `com.optionality.backup` (`make launchd-backup-install`) takes a checked, gzipped one at 06:00
     into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` is a
     folder in iCloud Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/optionality-backups`),

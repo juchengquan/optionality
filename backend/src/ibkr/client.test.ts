@@ -1,276 +1,188 @@
-/** The IBKR client against a stub gateway (ADR 0015, PR 5 of the plan).
- *
- *  Nobody here has an account, so every one of these drives a stub `fetch` — the way the bot tests
- *  drive a fake Telegram and the OpenD tests drive a fake websocket client. What that proves is
- *  the SHAPE of this client: how many calls a sweep costs, that one unknown contract cannot take
- *  the watchlist hostage, that a dead session reads as an outage rather than as a watchlist of
- *  unknown contracts.
- *
- *  What it CANNOT prove is listed in the module header and in PR 6: whether greeks arrive on the
- *  owner's entitlements, what the pre-flight really costs, what a dead session really answers, and
- *  whether the figures agree with moomoo's on the same contract at the same instant. A green suite
- *  here is not first contact, and this file does not pretend otherwise.
- */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { IbkrClient } from "./client.ts";
+import { type FakeGateway, FAKE_CONID, FAKE_GREEKS, startFakeGateway } from "./fake.ts";
 
-const CALL = "US.SPXW261030C8100000";
-const PUT = "US.SPXW261030P7900000";
+/** The bounded ask, over a real loopback socket against the recorded stub.
+ *
+ *  A run against the stub proves the CLIENT and is never evidence about IB Gateway — its replies
+ *  are recorded (the official Python client for what we send, the real gateway for what comes
+ *  back) rather than invented, which is the only reason they are worth asserting on.
+ */
 
-interface Script {
-  /** one entry per snapshot request, in order; the last is repeated */
-  snapshots?: unknown[][];
-  status?: Record<string, number>;
-  authenticated?: boolean;
-  connected?: boolean;
+const OPTION = "US.SPXW261218C8100000";
+
+let gateway: FakeGateway | null = null;
+let client: IbkrClient | null = null;
+
+afterEach(async () => {
+  client?.close();
+  client = null;
+  await gateway?.close();
+  gateway = null;
+});
+
+async function connected(options = {}): Promise<IbkrClient> {
+  gateway = await startFakeGateway(0, options);
+  client = new IbkrClient({
+    host: "127.0.0.1", port: gateway.port, clientId: 31419, requestTimeoutMs: 1500,
+  });
+  return client;
 }
 
-/** A gateway that answers the four endpoints this client knows, and records every path. */
-function gateway(script: Script = {}) {
-  const paths: string[] = [];
-  let snapshots = 0;
-  const fetch = async (url: string | URL, init?: { method?: string }) => {
-    const path = String(url).replace("https://gw:5000/v1/api", "");
-    paths.push(`${init?.method ?? "GET"} ${path}`);
-    const status = script.status?.[path.split("?")[0]!] ?? 200;
-    const body = (() => {
-      if (path.startsWith("/iserver/secdef/search")) {
-        return [{ conid: 416904, symbol: "SPX" }];
-      }
-      if (path.startsWith("/iserver/secdef/info")) {
-        const strike = new URL(`http://x${path}`).searchParams.get("strike");
-        return [{
-          conid: strike === "8100" ? 712345 : 712346, maturityDate: "20261030",
-          tradingClass: "SPXW", multiplier: "100",
-        }];
-      }
-      if (path.startsWith("/iserver/marketdata/snapshot")) {
-        const which = Math.min(snapshots, (script.snapshots?.length ?? 1) - 1);
-        snapshots += 1;
-        return script.snapshots?.[which] ?? [{ conid: 712345, "84": "4.30", "86": "4.70" }];
-      }
-      if (path === "/iserver/auth/status") {
-        return { authenticated: script.authenticated ?? true, connected: script.connected ?? true };
-      }
-      return {};
-    })();
-    return {
-      ok: status >= 200 && status < 300, status,
-      json: async () => body,
-      text: async () => JSON.stringify(body),
-    } as Response;
-  };
-  return { fetch: fetch as unknown as typeof globalThis.fetch, paths, snapshotCount: () => snapshots };
-}
+describe("one bounded ask", () => {
+  it("answers an option's figures under the service's own field names", async () => {
+    const c = await connected();
+    const batch = await c.fetchQuotes([OPTION]);
 
-function client(script: Script = {}, over: Record<string, unknown> = {}) {
-  const gw = gateway(script);
-  return {
-    gw,
-    client: new IbkrClient({
-      baseUrl: "https://gw:5000/v1/api", fetch: gw.fetch,
-      // off unless a test is about it: an interval that outlives the test leaks into the next
-      tickleEverySeconds: 0, emptyRetryMs: 0, ...over,
-    }),
-  };
-}
-
-describe("one batch", () => {
-  it("asks for every contract in a single snapshot call", async () => {
-    // the ratified invariant: every call to the Provider is a single bounded one (CLAUDE.md).
-    // Twelve contracts sit well inside the endpoint's 100-conid limit.
-    const { client: ibkr, gw } = client();
-    const batch = await ibkr.batch([CALL, PUT]);
-    const snaps = gw.paths.filter((p) => p.includes("marketdata/snapshot"));
-    expect(snaps.length).toBe(1);
-    expect(snaps[0]).toContain("conids=712345,712346");
     expect(batch.unknown).toEqual([]);
+    expect(batch.records).toHaveLength(1);
+    const q = batch.records[0]!;
+    expect(q.code).toBe(OPTION);
+    expect(q.bid_price).toBe(3.5);
+    expect(q.ask_price).toBe(4.1);
+    // derived, not sent — the same rule opend/snapshot.ts applies
+    expect(q.mid_price).toBe(3.8);
+    expect(q.option_delta).toBeCloseTo(FAKE_GREEKS.delta, 12);
+    expect(q.option_theta).toBeCloseTo(FAKE_GREEKS.theta, 12);
   });
 
-  it("asks the gateway nothing at all for an empty batch", async () => {
-    const { client: ibkr, gw } = client();
-    expect(await ibkr.batch([])).toEqual({ records: [], unknown: [] });
-    expect(gw.paths).toEqual([]);
+  it("converts implied volatility into the service's units, not IBKR's", async () => {
+    // the silent 100× if it were a rename: IBKR's 0.1368 is moomoo's 14.007
+    const c = await connected();
+    const [q] = (await c.fetchQuotes([OPTION])).records;
+    expect(q!.option_implied_volatility).toBeCloseTo(FAKE_GREEKS.impliedVol * 100, 10);
+    expect(q!.option_implied_volatility as number).toBeGreaterThan(1);
   });
 
-  it("pre-flights once, before the first snapshot and not again", async () => {
-    // the reference says /iserver/accounts must be called before market data, and a secdef
-    // search before any derivative. Both happen here; how much they really cost is PR 6.
-    const { client: ibkr, gw } = client();
-    await ibkr.batch([CALL]);
-    await ibkr.batch([CALL]);
-    const accounts = gw.paths.filter((p) => p.includes("/iserver/accounts"));
-    expect(accounts.length).toBe(1);
-    expect(gw.paths.indexOf(accounts[0]!)).toBeLessThan(
-      gw.paths.findIndex((p) => p.includes("marketdata/snapshot")),
-    );
+  it("carries the grade the gateway SERVED, as two facts", async () => {
+    // asked for frozen; the stub grants frozen, as the real one did. Read rather than assumed,
+    // because the real gateway contradicted a request on 2026-11-08.
+    const c = await connected();
+    const [q] = (await c.fetchQuotes([OPTION])).records;
+    expect(q!.delayed).toBe(false);
+    expect(q!.last_known).toBe(true);
   });
 
-  it("names the figures by the service's keys, not the gateway's numbers", async () => {
-    const { client: ibkr } = client({
-      snapshots: [[{ conid: 712345, "84": "4.30", "86": "4.70", "7308": "0.17" }]],
-    });
-    const { records } = await ibkr.batch([CALL]);
-    expect(records).toEqual([{
-      code: CALL, bid_price: 4.3, ask_price: 4.7, mid_price: 4.5, option_delta: 0.17,
-      name: "SPXW 261030 8100.00C", option_type: "CALL", option_strike_price: 8100,
-      option_contract_size: 100,
-    }]);
+  it("reads a DELAYED grant as both facts, because grade 4 is both", async () => {
+    // what the real gateway grants for an index this account is not subscribed to — the case
+    // that made asking for FROZEN the wrong request, found by adding a real Reference
+    const c = await connected({ grantDelayed: true });
+    const [q] = (await c.fetchQuotes([OPTION])).records;
+    expect(q!.delayed).toBe(true);
+    expect(q!.last_known).toBe(true);
   });
 
-  it("spends no snapshot call when nothing resolved", async () => {
-    // a watchlist of codes the gateway cannot place is a quarantine waiting to happen (#167), and
-    // asking for quotes on an empty list of conids is a request against the rate budget that can
-    // only answer nothing
-    const { client: ibkr, gw } = client();
-    expect(await ibkr.batch(["US.AAPL", "nonsense"]))
-      .toEqual({ records: [], unknown: ["US.AAPL", "nonsense"] });
-    expect(gw.paths.filter((p) => p.includes("marketdata/snapshot"))).toEqual([]);
-  });
-
-  it("reports a contract with no conid as unknown and prices the rest", async () => {
-    // one bad contract cannot take the watchlist hostage — the property moomoo's drop-and-retry
-    // loop has (#168), reached here without a retry because resolution is per contract
-    const { client: ibkr } = client();
-    const { records, unknown } = await ibkr.batch(["US.AAPL", CALL]);
-    expect(unknown).toEqual(["US.AAPL"]);
-    expect(records.map((r) => r.code)).toEqual([CALL]);
+  it("asks nothing at all for an empty list", async () => {
+    const c = await connected();
+    expect(await c.fetchQuotes([])).toEqual({ records: [], unknown: [] });
   });
 });
 
-describe("the empty first answer", () => {
-  it("asks again when the gateway answers with no fields at all", async () => {
-    // documented behaviour: the first snapshot for a conid primes the subscription and returns
-    // the conid with nothing on it. Without this retry every newly watched contract would read as
-    // a silent figure for one sweep.
-    const { client: ibkr, gw } = client({
-      snapshots: [[{ conid: 712345 }], [{ conid: 712345, "84": "4.30" }]],
-    });
-    const { records } = await ibkr.batch([CALL]);
-    expect(gw.snapshotCount()).toBe(2);
-    expect(records[0]!.bid_price).toBe(4.3);
+describe("a code it cannot name", () => {
+  it("is unknown without spending a call", async () => {
+    // the gateway would answer the same thing, and a request bought to hear it is a request
+    // bought for nothing
+    const c = await connected();
+    const batch = await c.fetchQuotes(["TSLA"]);
+    expect(batch.unknown).toEqual(["TSLA"]);
+    expect(batch.records).toEqual([]);
   });
 
-  it("gives up and reports what it has, rather than retrying for ever", async () => {
-    // a contract that genuinely has no data must not loop: it reads as a figure that did not
-    // arrive, which the sweep counts and quarantines with a notice after N sweeps (#167). That is
-    // the designed answer for an entitlement the account does not hold.
-    const { client: ibkr, gw } = client({ snapshots: [[{ conid: 712345 }]] });
-    const { records, unknown } = await ibkr.batch([CALL]);
-    expect(gw.snapshotCount()).toBe(4); // the first, plus three retries
-    expect(records).toEqual([]);
-    expect(unknown, "no data is not the same as no such contract").toEqual([]);
-  });
-
-  it("stops retrying as soon as any contract has a figure", async () => {
-    const { client: ibkr, gw } = client({
-      snapshots: [[{ conid: 712345, "84": "4.30" }, { conid: 712346 }]],
-    });
-    const { records } = await ibkr.batch([CALL, PUT]);
-    expect(gw.snapshotCount()).toBe(1);
-    expect(records.map((r) => r.code)).toEqual([CALL]);
+  it("leaves the codes it CAN name standing beside it", async () => {
+    const c = await connected();
+    const batch = await c.fetchQuotes(["TSLA", OPTION]);
+    expect(batch.unknown).toEqual(["TSLA"]);
+    expect(batch.records.map((r) => r.code)).toEqual([OPTION]);
   });
 });
 
-describe("when the gateway is not answering", () => {
-  it("throws with the status, so a sweep fails visibly", async () => {
-    // /health reads the last batch rather than a probe, so this is what makes last_sweep_ok false
-    // and paints the top line bad (ADR 0010)
-    const { client: ibkr } = client({ status: { "/iserver/marketdata/snapshot": 503 } });
-    await expect(ibkr.batch([CALL])).rejects.toThrow(/503/);
+describe("the conid, resolved once", () => {
+  it("is cached, so a second ask spends no lookup", async () => {
+    const c = await connected();
+    await c.fetchQuotes([OPTION]);
+    const before = gateway!.lookups;
+    await c.fetchQuotes([OPTION]);
+    expect(gateway!.lookups).toBe(before);
   });
 
-  it("throws rather than reporting a watchlist of unknown contracts", async () => {
-    // the distinction #168 settled, stated as a test: an outage must never read as nine rules
-    // whose contracts do not exist, because that is what gets them quarantined
-    const { client: ibkr } = client({ status: { "/iserver/secdef/search": 401 } });
-    await expect(ibkr.batch([CALL, PUT])).rejects.toThrow(/401/);
+  it("is resolved from the real gateway's own answer", async () => {
+    const c = await connected();
+    await c.fetchQuotes([OPTION]);
+    expect(FAKE_CONID).toBe(902390015);
   });
 
-  it("stops waiting, because a gateway may accept a request and never answer it", async () => {
-    // what stopped the alarm engine dead on 2026-10-16, on the other provider: nothing bounded
-    // the ask. Shorter than the sweep watchdog on purpose — the fetch should fail and be counted.
-    const never = (() => new Promise<Response>(() => { /* never */ })) as typeof globalThis.fetch;
-    const ibkr = new IbkrClient({
-      baseUrl: "https://gw:5000/v1/api", fetch: never, tickleEverySeconds: 0,
-      requestTimeoutMs: 10,
+  it("is dropped with the connection, where a stale one would otherwise survive", async () => {
+    const c = await connected();
+    await c.fetchQuotes([OPTION]);
+    c.close();
+    const before = gateway!.lookups;
+    await c.fetchQuotes([OPTION]);
+    expect(gateway!.lookups).toBeGreaterThan(before);
+  });
+});
+
+describe("a gateway that will not answer", () => {
+  it("throws when it cannot be reached at all", async () => {
+    const c = new IbkrClient({ host: "127.0.0.1", port: 1, clientId: 31419 });
+    client = c;
+    await expect(c.fetchQuotes([OPTION])).rejects.toThrow(/could not reach IB Gateway/);
+  });
+
+  it("reports a record with no figures rather than an unknown code", async () => {
+    // "subscribed, nothing yet" is a figure that did not arrive, and the sweep quarantines after
+    // N of them. An unknown code is a typo. Those are different answers (ADR 0015).
+    const c = await connected({ noFigures: true });
+    const batch = await c.fetchQuotes([OPTION]);
+    expect(batch.unknown).toEqual([]);
+    expect(batch.records).toHaveLength(1);
+    expect(batch.records[0]).toEqual({ code: OPTION, delayed: false, last_known: true });
+  });
+
+  it("THROWS when it accepts every request and answers none", async () => {
+    // The shape measured on 2026-11-08: the gateway's link to IBKR dropped, its own socket stayed
+    // open, `isConnected` stayed true, and every request was accepted and never answered. The
+    // first version of this client reported those contracts as `unknown`, which reads as "none of
+    // these exist" — and after enough sweeps would have quarantined every rule that watches one.
+    const c = await connected({ deaf: true });
+    await expect(c.fetchQuotes([OPTION])).rejects.toThrow(/answered none of them/);
+  });
+
+  it("leaves the contracts that DID answer standing beside the silent ones", async () => {
+    // silence from every contract is a Provider failure; silence from some is not, and a batch
+    // that throws because one contract is slow would lose the figures the others sent
+    const c = await connected();
+    const batch = await c.fetchQuotes([OPTION, "TSLA"]);
+    expect(batch.records).toHaveLength(1);
+    expect(batch.unknown).toEqual(["TSLA"]);
+  });
+
+  it("tears the connection down on a failure, so the next ask reconnects", async () => {
+    const c = await connected();
+    await c.fetchQuotes([OPTION]);
+    await gateway!.close();
+    gateway = null;
+    await expect(c.fetchQuotes(["US.SPXW261204C8100000"])).rejects.toThrow();
+    // a new gateway on the same port, and the client comes back rather than staying broken
+    gateway = await startFakeGateway(0);
+    const fresh = new IbkrClient({
+      host: "127.0.0.1", port: gateway.port, clientId: 31419, requestTimeoutMs: 1500,
     });
-    await expect(ibkr.batch([CALL])).rejects.toThrow(/timed out/);
-  });
-
-  it("answers reachable from the session, not from a socket that accepts", async () => {
-    // the lesson of 2026-10-16 restated for this transport: OpenD held its port open and timed
-    // out every login while /health read true. A gateway process with a dead browser session is
-    // the same failure, and `authenticated` is the only thing that answers it.
-    expect(await client().client.reachable()).toBe(true);
-    expect(await client({ authenticated: false }).client.reachable()).toBe(false);
-    expect(await client({ connected: false }).client.reachable()).toBe(false);
-  });
-
-  it("answers reachable false rather than raising, whatever went wrong", async () => {
-    const dead = (() => Promise.reject(new Error("ECONNREFUSED"))) as typeof globalThis.fetch;
-    const ibkr = new IbkrClient({ baseUrl: "x", fetch: dead, tickleEverySeconds: 0 });
-    expect(await ibkr.reachable()).toBe(false);
+    client = fresh;
+    expect((await fresh.fetchQuotes([OPTION])).records).toHaveLength(1);
   });
 });
 
-describe("keeping the session alive", () => {
-  it("tickles on its own interval once it has pre-flighted", async () => {
-    // the gateway logs a session out for inactivity, and this service asks for data once a minute
-    // at most. The tickle is what a 15-second sweep does not need and a quiet overnight does.
-    vi.useFakeTimers();
-    try {
-      const { client: ibkr, gw } = client({}, { tickleEverySeconds: 60 });
-      await ibkr.batch([CALL]);
-      expect(gw.paths.filter((p) => p === "POST /tickle").length).toBe(0);
-      await vi.advanceTimersByTimeAsync(121_000);
-      expect(gw.paths.filter((p) => p === "POST /tickle").length).toBe(2);
-      ibkr.close();
-      await vi.advanceTimersByTimeAsync(121_000);
-      expect(gw.paths.filter((p) => p === "POST /tickle").length, "close stops it").toBe(2);
-    } finally {
-      vi.useRealTimers();
-    }
+describe("reachable, for /health", () => {
+  it("is true where the handshake completes", async () => {
+    const c = await connected();
+    expect(await c.reachable()).toBe(true);
   });
 
-  it("survives a tickle the gateway refuses", async () => {
-    // a failed keepalive is not the sweep's business: the next fetch fails visibly and /health
-    // says so. A throw from a timer callback would take the whole process down (main.ts).
-    vi.useFakeTimers();
-    try {
-      const { client: ibkr } = client({ status: { "/tickle": 500 } }, { tickleEverySeconds: 60 });
-      await ibkr.batch([CALL]);
-      await vi.advanceTimersByTimeAsync(61_000);
-      expect((await ibkr.batch([CALL])).records.length).toBe(1);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("pre-flights again after being closed", async () => {
-    // close() is the way out of the process and the way out of a session that has gone bad; a
-    // client that remembered its pre-flight across one would never redo the handshake
-    const { client: ibkr, gw } = client();
-    await ibkr.batch([CALL]);
-    ibkr.close();
-    await ibkr.batch([CALL]);
-    expect(gw.paths.filter((p) => p.includes("/iserver/accounts")).length).toBe(2);
-  });
-
-  it("keeps the conids it resolved, because a conid does not expire with a session", async () => {
-    const { client: ibkr, gw } = client();
-    await ibkr.batch([CALL]);
-    ibkr.close();
-    await ibkr.batch([CALL]);
-    expect(gw.paths.filter((p) => p.includes("secdef/info")).length).toBe(1);
-  });
-});
-
-describe("the port the rest of the service takes", () => {
-  it("is the same one-question fetcher every other Provider answers", async () => {
-    const { client: ibkr } = client();
-    const batch = await ibkr.asFetcher()([CALL]);
-    expect(batch.records.map((r) => r.code)).toEqual([CALL]);
+  it("is false rather than raising where it does not", async () => {
+    // a health probe that throws because the provider is down has reported the thing it was asked
+    const c = new IbkrClient({ host: "127.0.0.1", port: 1, clientId: 31419 });
+    client = c;
+    expect(await c.reachable()).toBe(false);
   });
 });

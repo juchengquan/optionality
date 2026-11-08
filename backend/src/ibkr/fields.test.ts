@@ -1,108 +1,119 @@
-/** What the gateway's strings mean, and what the service reads instead (ADR 0015).
- *
- *  Every number IBKR sends arrives as a string, sometimes with a letter in front of it or a
- *  suffix behind it. This is the one place in the IBKR client where a wrong reading is SILENT:
- *  `"C4.50"` parsed as NaN makes a monitor stop alarming, exactly as a missing `option_delta`
- *  does for moomoo (opend/snapshot.ts says the same thing about its own mapping).
- */
 import { describe, expect, it } from "vitest";
 
-import { SNAPSHOT_FIELDS, contractName, toRecord } from "./fields.ts";
-import { parseSpxCode } from "../domain/contract.ts";
+import { GREEK_TICKS, PRICE_TICKS, grade, greekFields, hasFigures, withMid } from "./fields.ts";
 
-const CODE = "US.SPXW261030C8100000";
-const spec = { code: CODE, conid: 712345, multiplier: 100, contract: parseSpxCode(CODE)! };
+/** The translation from IB Gateway's numbers to the service's names.
+ *
+ *  Two of these are not renames and both were measured on 2026-11-08 against the live gateway:
+ *  implied volatility changes units, and the four data grades are two independent facts.
+ */
 
-describe("reading one snapshot row", () => {
-  it("names the figures the service reads, by the ids it asked for", () => {
-    const record = toRecord(spec, {
-      conid: 712345, "31": "4.50", "84": "4.30", "86": "4.70", "7308": "0.17",
-      "7309": "0.0012", "7310": "-0.85", "7311": "1.42", "7633": "18.5",
+describe("implied volatility, which changes units", () => {
+  it("multiplies IBKR's fraction into the service's percent", () => {
+    // measured, same contract, same minute: moomoo said 14.007 and IBKR said 0.1368. A rule set
+    // at 14 would never fire on IBKR; one set at 0.14 would fire constantly on moomoo.
+    const got = greekFields({
+      impliedVol: 0.13679778548286392, delta: null, gamma: null, vega: null, theta: null,
     });
-    expect(record).toMatchObject({
-      code: CODE, last_price: 4.5, bid_price: 4.3, ask_price: 4.7,
-      option_delta: 0.17, option_gamma: 0.0012, option_theta: -0.85, option_vega: 1.42,
-      option_implied_volatility: 18.5,
+    // closeTo rather than toEqual: `0.13679778548286392 * 100` is not the decimal literal, and
+    // the claim is the MAGNITUDE — a percent rather than a fraction — not the last bit of it
+    expect(got.option_implied_volatility).toBeCloseTo(13.6797785, 7);
+    expect(got.option_implied_volatility).toBeGreaterThan(1);
+  });
+
+  it("leaves the greeks themselves alone, which are already dimensionless", () => {
+    const got = greekFields({
+      impliedVol: null, delta: 0.02806614063578037, gamma: 0.00018826189971762677,
+      vega: 1.8321828845155324, theta: -0.28028107934963487,
+    });
+    expect(got).toEqual({
+      option_delta: 0.02806614063578037,
+      option_gamma: 0.00018826189971762677,
+      option_vega: 1.8321828845155324,
+      option_theta: -0.28028107934963487,
     });
   });
 
-  it("keeps the number when the gateway marks it a close rather than a trade", () => {
-    // IBKR prefixes a price with C while the market is shut and H when the contract is halted.
-    // The prefix is a freshness marker, not part of the figure — and `fetched_at` is this
-    // service's answer about freshness anyway (CLAUDE.md).
-    const record = toRecord(spec, { conid: 712345, "31": "C4.50", "84": "H4.30" });
-    expect(record.last_price).toBe(4.5);
-    expect(record.bid_price).toBe(4.3);
-  });
-
-  it("reads a figure the gateway has thousands-separated", () => {
-    expect(toRecord(spec, { conid: 712345, "31": "1,234.50" }).last_price).toBe(1234.5);
-  });
-
-  it("reads a volume the gateway has abbreviated", () => {
-    // field 87 is a DISPLAY string: the gateway sends "1.2K" where every other field sends digits
-    expect(toRecord(spec, { conid: 712345, "87": "1.2K" }).volume).toBe(1200);
-    expect(toRecord(spec, { conid: 712345, "87": "3M" }).volume).toBe(3_000_000);
-    expect(toRecord(spec, { conid: 712345, "87": "41" }).volume).toBe(41);
-  });
-
-  it("drops a field it cannot read rather than reporting NaN", () => {
-    // the domain treats an ABSENT figure as "no complete value — do not alarm", and treats NaN as
-    // a number. A greek that did not arrive must read as absent.
-    const record = toRecord(spec, { conid: 712345, "7308": "", "7309": "n/a", "31": "4.50" });
-    expect("option_delta" in record).toBe(false);
-    expect("option_gamma" in record).toBe(false);
-    expect(record.last_price).toBe(4.5);
-  });
-
-  it("derives the mid only when both sides arrived", () => {
-    // the same rule as moomoo's: a mid from one side is a number that looks like a price and is
-    // not one. Four of the owner's monitors watch mid_price, and no provider sends it.
-    expect(toRecord(spec, { conid: 712345, "84": "4.30", "86": "4.70" }).mid_price).toBe(4.5);
-    expect("mid_price" in toRecord(spec, { conid: 712345, "84": "4.30" })).toBe(false);
-  });
-
-  it("carries the multiplier the snapshot does not, because the contract has it", () => {
-    // every P&L figure in the service is points x contract_size. moomoo sends it per quote;
-    // IBKR has it on the security definition, so the conid cache carries it here.
-    expect(toRecord(spec, { conid: 712345 }).option_contract_size).toBe(100);
-  });
-
-  it("says what it knows from the code itself, rather than asking", () => {
-    const record = toRecord(spec, { conid: 712345 });
-    expect(record.option_type).toBe("CALL");
-    expect(record.option_strike_price).toBe(8100);
-    expect(record.name).toBe("SPXW 261030 8100.00C");
-  });
-
-  it("leaves update_time absent, because no snapshot field has been shown to mean it", () => {
-    // moomoo's update_time is a naive US-Eastern LAST TRADE time. Nothing in the Client Portal
-    // reference has been confirmed to mean that, so the column reads "—" on IBKR rather than
-    // reading something else's timestamp as a trade (PR 6, question 2).
-    expect("update_time" in toRecord(spec, { conid: 712345, "_updated": 1761000000000 }))
-      .toBe(false);
-  });
-
-  it("reads every field it asks for, and derives exactly what it claims to", () => {
-    // the requested list and the mapping cannot disagree — `fields=` is built FROM the mapping —
-    // so what is pinned here is the other half: that a row full of figures becomes those figures
-    // and the five things the code and the definition already knew, and nothing else.
-    const asked = SNAPSHOT_FIELDS.split(",");
-    const row: Record<string, unknown> = { conid: 712345 };
-    for (const id of asked) row[id] = "1";
-    const record = toRecord(spec, row);
-    // one key per asked field, plus code, name, option_type, option_strike_price,
-    // option_contract_size and the derived mid_price
-    expect(Object.keys(record).length).toBe(asked.length + 6);
+  it("omits a greek that was not computed rather than writing null", () => {
+    // a null delta and an absent one are the same thing to the dashboard, but a WRITTEN null
+    // would satisfy `hasFigures` and claim the contract answered
+    expect(greekFields({ impliedVol: null, delta: null, gamma: null, vega: null, theta: null }))
+      .toEqual({});
   });
 });
 
-describe("the name a code implies", () => {
-  it("spells a contract the way the rest of the service already shows it", () => {
-    // deliberately moomoo's spelling: `name` is a display label on the dashboard and in every
-    // alarm message, and a row that renames itself because the deployment changed provider would
-    // read as a different contract.
-    expect(contractName(parseSpxCode("US.SPXW261030P8100000")!)).toBe("SPXW 261030 8100.00P");
-    expect(contractName(parseSpxCode("US.SPXW270115C6950000")!)).toBe("SPXW 270115 6950.00C");
+describe("the four grades, as two facts", () => {
+  it("reads each one", () => {
+    expect(grade(1)).toEqual({ delayed: false, last_known: false });
+    expect(grade(2)).toEqual({ delayed: false, last_known: true });
+    expect(grade(3)).toEqual({ delayed: true, last_known: false });
+    expect(grade(4)).toEqual({ delayed: true, last_known: true });
+  });
+
+  it("keeps grade 4 as BOTH, rather than collapsing it", () => {
+    // the gateway drew this distinction per contract in one response on 2026-11-08 — SPX granted
+    // DELAYED while VIX granted DELAYED_FROZEN — so throwing one away is deciding we know better
+    expect(grade(4)).not.toEqual(grade(3));
+    expect(grade(4)).not.toEqual(grade(2));
+  });
+
+  it("says nothing about a grade nobody documented", () => {
+    // null renders as nothing, which is what the strip shows for a source that did not say. False
+    // would read as "live and updating", which is a claim.
+    expect(grade(0)).toBe(null);
+    expect(grade(7)).toBe(null);
+  });
+});
+
+describe("the mid, which is derived rather than sent", () => {
+  it("is the midpoint where both sides arrived", () => {
+    expect(withMid({ bid_price: 3.5, ask_price: 4.1 }).mid_price).toBe(3.8);
+  });
+
+  it("is absent where only one side did", () => {
+    // a mid from one side is a number with no meaning, and `domain/reference.ts` PREFERS the mid
+    expect(withMid({ bid_price: 3.5 }).mid_price).toBe(undefined);
+    expect(withMid({ ask_price: 4.1 }).mid_price).toBe(undefined);
+  });
+
+  it("is zero for an empty book, and left for the domain to judge", () => {
+    // 0/0 is an empty book, and whether 0 may be SHOWN is ADR 0018's positivity guard to decide
+    // for a Reference — not this mapping's to suppress
+    expect(withMid({ bid_price: 0, ask_price: 0 }).mid_price).toBe(0);
+  });
+});
+
+describe("whether anything arrived", () => {
+  it("is false for a record carrying only its identity", () => {
+    // "subscribed, nothing yet" — a figure that did not arrive, NOT a contract that does not
+    // exist. The service keeps those apart (ADR 0015)
+    expect(hasFigures({ code: "SPX", name: "S&P 500" })).toBe(false);
+  });
+
+  it("is false for identity plus a grade, which is not a figure", () => {
+    // the gateway answers the grade for every request, including ones that then price nothing —
+    // counting it as a figure would make every silent contract look answered
+    expect(hasFigures({ code: "SPX", delayed: true, last_known: true })).toBe(false);
+  });
+
+  it("is true for one figure, however little", () => {
+    expect(hasFigures({ code: "SPX", prev_close_price: 7353.73 })).toBe(true);
+  });
+});
+
+describe("the tick ids", () => {
+  it("maps the delayed ids to the same fields as the live ones", () => {
+    // which TIER answered is reported once per request by the gateway, not inferred from the
+    // ids — it contradicted a request once, granting live when asked for delayed
+    expect(PRICE_TICKS[66]).toBe(PRICE_TICKS[1]);
+    expect(PRICE_TICKS[67]).toBe(PRICE_TICKS[2]);
+    expect(PRICE_TICKS[68]).toBe(PRICE_TICKS[4]);
+    expect(PRICE_TICKS[75]).toBe(PRICE_TICKS[9]);
+  });
+
+  it("reads the model computation and nothing else", () => {
+    // a bid- or ask-implied computation is a different claim from the model's, and the service
+    // has one field per greek
+    expect([...GREEK_TICKS].sort()).toEqual([13, 53]);
   });
 });

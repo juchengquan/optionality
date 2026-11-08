@@ -12,14 +12,25 @@ export interface Settings {
    *  boot (ADR 0015). provider.ts knows the names and refuses the rest. */
   provider: string;
   opendHost: string;
+  /** Where IB Gateway's API socket is, for a Reference that names `ibkr` (ADR 0019).
+   *
+   *  Read whether or not IBKR is the Provider: a Reference may be served by a vendor the rest of
+   *  the service does not use, because nothing alarms on it. Blank host turns the source off.
+   *
+   *  The PORT is not a set-once value — IB Gateway listens on 4001 for a live login and 4002 for
+   *  paper, so switching account type moves the socket (measured 2026-11-08).
+   */
+  ibkrHost: string;
+  ibkrPort: number;
+  /** IB Gateway allows ONE connection per client id, and a second user of the same number
+   *  displaces the first in silence. The ids are the owning process's port so a refusal names
+   *  the culprit: 31415 the service, 31417 `make serve`, 31419 a harness. */
+  ibkrClientId: number;
   /** OpenD's WEBSOCKET port. The npm client speaks nothing else — the SDK's TCP protocol has no
    *  JavaScript implementation (ADR 0009, phase 6). */
   moomooWsPort: number;
   /** OpenD's websocket key, in plaintext; the library hashes it. Gitignored, like the bot token. */
   moomooWsKey: string;
-  /** the IBKR Client Portal gateway's API root. Read only when `provider` is ibkr, and the
-   *  gateway runs on the owner's own machine — the service never reaches a vendor's host. */
-  ibkrGatewayUrl: string;
   apiToken: string;
   monitorIntervalSeconds: number;
   /** min gap between a monitor's telegram messages (flap protection) */
@@ -30,6 +41,18 @@ export interface Settings {
   uiRefreshSeconds: number;
   /** consecutive sweep failures before the degraded telegram alert */
   degradedAfterFailures: number;
+  /** re-reminds while the sweep is still failing, so one missed notice is not the end of it.
+   *  0 turns the reminder off, as it does for `alarmRepeatSeconds` (domain/degraded.ts). */
+  degradedRepeatSeconds: number;
+  /** How far back to look for a provider that keeps dropping and recovering, and how many failed
+   *  sweeps inside that window before the owner hears about it. 0 failures turns it off.
+   *
+   *  Separate from `degradedAfterFailures` because they measure different things: that one is the
+   *  LENGTH of a failure, this one is how OFTEN. A provider failing a third of the time for an
+   *  hour never trips a consecutive count — measured on 2026-11-08, when exactly that went
+   *  unnoticed by the service (domain/flapping.ts). */
+  flappingWindowSeconds: number;
+  flappingAfterFailures: number;
   /** consecutive sweeps a monitor's figure may fail to arrive before it is quarantined; 0 never
    *  quarantines and only warns, which is what the engine did before (#167) */
   quarantineAfterSilentSweeps: number;
@@ -58,18 +81,20 @@ export const DEFAULTS: Settings = {
   dbPath: "data/optionality-ts.db",
   provider: "moomoo",
   opendHost: "127.0.0.1",
+  ibkrHost: "",
+  ibkrPort: 4001,
+  ibkrClientId: 31415,
   moomooWsPort: 33333,
   moomooWsKey: "",
-  // the gateway's own default, over TLS with a self-signed certificate: Node's fetch refuses that
-  // until NODE_EXTRA_CA_CERTS names the gateway's certificate, which is the correct resolution and
-  // not disabling verification (ibkr/client.ts)
-  ibkrGatewayUrl: "https://127.0.0.1:5000/v1/api",
   apiToken: "",
   monitorIntervalSeconds: 60,
   alarmCooldownSeconds: 120,
   alarmRepeatSeconds: 1800,
   uiRefreshSeconds: 30,
   degradedAfterFailures: 5,
+  degradedRepeatSeconds: 1800,
+  flappingWindowSeconds: 900,
+  flappingAfterFailures: 5,
   // ten sweeps, so a gap of a few seconds is never a quarantine while a figure that is simply not
   // served stops being waited for within minutes at any sweep interval
   quarantineAfterSilentSweeps: 10,
@@ -89,15 +114,20 @@ const FROM_ENV = {
   dbPath: "OPTIONALITY_DB_PATH",
   provider: "OPTIONALITY_PROVIDER",
   opendHost: "OPEND_HOST",
+  ibkrHost: "IBKR_HOST",
+  ibkrPort: "IBKR_PORT",
+  ibkrClientId: "IBKR_CLIENT_ID",
   moomooWsPort: "MOOMOO_WS_PORT",
   moomooWsKey: "MOOMOO_WS_KEY",
-  ibkrGatewayUrl: "IBKR_GATEWAY_URL",
   apiToken: "API_TOKEN",
   monitorIntervalSeconds: "MONITOR_INTERVAL_SECONDS",
   alarmCooldownSeconds: "ALARM_COOLDOWN_SECONDS",
   alarmRepeatSeconds: "ALARM_REPEAT_SECONDS",
   uiRefreshSeconds: "UI_REFRESH_SECONDS",
   degradedAfterFailures: "DEGRADED_AFTER_FAILURES",
+  degradedRepeatSeconds: "DEGRADED_REPEAT_SECONDS",
+  flappingWindowSeconds: "FLAPPING_WINDOW_SECONDS",
+  flappingAfterFailures: "FLAPPING_AFTER_FAILURES",
   quarantineAfterSilentSweeps: "QUARANTINE_AFTER_SILENT_SWEEPS",
   expiredRetentionDays: "EXPIRED_RETENTION_DAYS",
   exitTakeFraction: "EXIT_TAKE_FRACTION",
@@ -129,8 +159,15 @@ const AT_LEAST_ONE: readonly (keyof Settings)[] = [
 ];
 
 /** Every count is non-negative; some must be positive. Fatal, as a mistyped setting already is in
- *  this file — the service should stop rather than run on a number that cannot mean anything. */
-export function checkSettings(settings: Settings): Settings {
+ *  this file — the service should stop rather than run on a number that cannot mean anything.
+ *
+ *  Both doors onto Settings go through this. For a long time only `settingsFor` did — the one the
+ *  TESTS use — so the suite proved a guard the live process did not have: `settingsFromEnv` read
+ *  the environment, `main.ts` served, and `DEGRADED_AFTER_FAILURES=0` was accepted by exactly the
+ *  path that matters. A check that only the tests reach is worse than no check, because it reads
+ *  as one.
+ */
+function checkSettings(settings: Settings): Settings {
   for (const [key, value] of Object.entries(settings)) {
     if (typeof value !== "number" || Number.isNaN(value)) continue;
     const variable = FROM_ENV[key as keyof Settings] ?? key;
@@ -165,7 +202,8 @@ export function settingsFromEnv(env: Record<string, string | undefined> = proces
       (out[key] as string) = raw;
     }
   }
-  return out;
+  // the same guard `settingsFor` applies, on the door the SERVICE comes through
+  return checkSettings(out);
 }
 
 /** Settings for a test, defaults everywhere the test does not care. */

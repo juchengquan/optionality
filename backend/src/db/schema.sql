@@ -71,3 +71,15 @@ CREATE TABLE position_samples (
 	FOREIGN KEY(position_id) REFERENCES positions (id)
 );
 
+-- The Securities kept on the page to read the market by (ADR 0018). Migration 0006 creates this
+-- same shape; see its header for why `scale` and `label` are nullable, and why the table is not
+-- called `references` (REFERENCES is a SQLite keyword).
+CREATE TABLE reference_securities (
+	id VARCHAR(32) NOT NULL,
+	code VARCHAR(50) NOT NULL,
+	label VARCHAR(50),
+	source VARCHAR(16) NOT NULL,
+	created_at DATETIME NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_reference_code UNIQUE (code)
+);

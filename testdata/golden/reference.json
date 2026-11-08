@@ -1,0 +1,241 @@
+{
+  "module": "reference",
+  "constants": {},
+  "cases": [
+    {
+      "fn": "referenceFigure",
+      "name": "the mid leads, because the last trade can be a session old",
+      "args": [
+        {
+          "code": "US.SPY",
+          "name": "SPDR S&P 500 ETF Trust",
+          "bid_price": 758.7,
+          "ask_price": 758.76,
+          "mid_price": 758.73,
+          "last_price": 755.72,
+          "prev_close_price": 755.72
+        }
+      ],
+      "expect": {
+        "figure": 758.73,
+        "field": "mid_price",
+        "change": 0.003982956650611325
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "no two-sided quote falls back to the last trade",
+      "args": [
+        {
+          "code": "US.SPY",
+          "name": "SPDR S&P 500 ETF Trust",
+          "bid_price": 758.7,
+          "ask_price": 758.76,
+          "last_price": 755.72,
+          "prev_close_price": 755.72
+        }
+      ],
+      "expect": {
+        "figure": 755.72,
+        "field": "last_price",
+        "change": 0
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "a zero mid is not a price, so the last trade is read",
+      "args": [
+        {
+          "code": "US.SPY",
+          "name": "SPDR S&P 500 ETF Trust",
+          "bid_price": 0,
+          "ask_price": 0,
+          "mid_price": 0,
+          "last_price": 755.72,
+          "prev_close_price": 755.72
+        }
+      ],
+      "expect": {
+        "figure": 755.72,
+        "field": "last_price",
+        "change": 0
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "neither field arrived, so there is no figure",
+      "args": [
+        {
+          "code": "US.SPY",
+          "name": "SPDR S&P 500 ETF Trust"
+        }
+      ],
+      "expect": {
+        "figure": null,
+        "field": null,
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "no quote at all — a Reference the batch could not price",
+      "args": [
+        null
+      ],
+      "expect": {
+        "figure": null,
+        "field": null,
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "a figure that is not a number",
+      "args": [
+        {
+          "mid_price": "758.73"
+        }
+      ],
+      "expect": {
+        "figure": null,
+        "field": null,
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "an infinite figure",
+      "args": [
+        {
+          "mid_price": {
+            "$num": "Infinity"
+          }
+        }
+      ],
+      "expect": {
+        "figure": null,
+        "field": null,
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "a negative figure is not a price",
+      "args": [
+        {
+          "mid_price": -1,
+          "last_price": 2
+        }
+      ],
+      "expect": {
+        "figure": 2,
+        "field": "last_price",
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "float noise never reaches the page",
+      "args": [
+        {
+          "mid_price": 20.15
+        }
+      ],
+      "expect": {
+        "figure": 20.15,
+        "field": "mid_price",
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "the change is a fraction of the close",
+      "args": [
+        {
+          "mid_price": 758.73,
+          "prev_close_price": 755.72
+        }
+      ],
+      "expect": {
+        "figure": 758.73,
+        "field": "mid_price",
+        "change": 0.003982956650611325
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "a day down",
+      "args": [
+        {
+          "mid_price": 750,
+          "prev_close_price": 755.72
+        }
+      ],
+      "expect": {
+        "figure": 750,
+        "field": "mid_price",
+        "change": -0.007568940877573741
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "no close is no change, not a change from nothing",
+      "args": [
+        {
+          "mid_price": 758.73
+        }
+      ],
+      "expect": {
+        "figure": 758.73,
+        "field": "mid_price",
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "a zero close would be divided by",
+      "args": [
+        {
+          "mid_price": 758.73,
+          "prev_close_price": 0
+        }
+      ],
+      "expect": {
+        "figure": 758.73,
+        "field": "mid_price",
+        "change": null
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "the fallback's change is the last trade against the close",
+      "args": [
+        {
+          "last_price": 750,
+          "prev_close_price": 755.72
+        }
+      ],
+      "expect": {
+        "figure": 750,
+        "field": "last_price",
+        "change": -0.007568940877573741
+      }
+    },
+    {
+      "fn": "referenceFigure",
+      "name": "a present-but-zero mid is ignored on both sides at once",
+      "args": [
+        {
+          "mid_price": 0,
+          "last_price": 750,
+          "prev_close_price": 755.72
+        }
+      ],
+      "expect": {
+        "figure": 750,
+        "field": "last_price",
+        "change": -0.007568940877573741
+      }
+    }
+  ]
+}

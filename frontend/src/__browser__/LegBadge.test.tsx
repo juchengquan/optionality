@@ -48,7 +48,7 @@ function mockApi(rows: unknown[]) {
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        String(url).endsWith("/quotes") ? rows : String(url).endsWith("/monitors") ? [] : health),
+        String(url).endsWith("/quotes") ? rows : String(url).endsWith("/references") ? [] : String(url).endsWith("/monitors") ? [] : health),
     })) as unknown as typeof fetch;
 }
 

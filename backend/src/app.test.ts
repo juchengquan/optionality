@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GOLDEN_CASES } from "./golden.ts";
-import { type Harness, body, harness } from "./testing.ts";
+import { type Harness, body, harness } from "../testing/harness.ts";
 
 let h: Harness;
 const start = (...args: Parameters<typeof harness>) => (h = harness(...args));
@@ -149,6 +149,7 @@ describe("the bearer token", () => {
     expect([...new Set(served)].sort()).toEqual([
       "DELETE /monitors/:id",
       "DELETE /positions/:id",
+      "DELETE /references/:id",
       "GET /docs",
       "GET /health",
       "GET /monitors",
@@ -157,11 +158,13 @@ describe("the bearer token", () => {
       "GET /positions/:id/vol",
       "GET /positions/values",
       "GET /quotes",
+      "GET /references",
       "PATCH /monitors/:id",
       "PATCH /positions/:id",
       "POST /monitors",
       "POST /monitors/:id/total-entry",
       "POST /positions",
+      "POST /references",
     ]);
   });
 

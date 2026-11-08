@@ -65,7 +65,7 @@ function mockApi(watchlist: unknown[] = rows) {
       json: () => Promise.resolve(
         String(url).endsWith("/quotes") ? watchlist
           : String(url).includes("/positions/values") ? held
-            : String(url).endsWith("/monitors") ? [] : health),
+            : String(url).endsWith("/references") ? [] : String(url).endsWith("/monitors") ? [] : health),
     })) as unknown as typeof fetch;
 }
 
@@ -191,7 +191,7 @@ describe("saving the page as an image", () => {
           String(url).endsWith("/quotes") ? [rows[0]]
             // this case is about the image's WIDTH, so it holds nothing: the point is the floor
             : String(url).endsWith("/positions/values") ? []
-              : String(url).endsWith("/monitors") ? [] : health),
+              : String(url).endsWith("/references") ? [] : String(url).endsWith("/monitors") ? [] : health),
       })) as unknown as typeof fetch;
     document.cookie = `ui_cols_combo=${COMBO_COLUMNS.slice(3).map((c) => c.key).join(".")};path=/`;
     render(<App />);

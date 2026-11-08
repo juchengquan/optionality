@@ -39,7 +39,7 @@ function mockApi(rows: unknown[], vol: unknown = NO_VOL) {
       ok: true,
       json: () => Promise.resolve(
         url.endsWith("/vol") ? vol
-          : url.endsWith("/quotes") ? rows : url.endsWith("/monitors") ? [] : health),
+          : url.endsWith("/quotes") ? rows : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health),
     } as Response)));
 }
 

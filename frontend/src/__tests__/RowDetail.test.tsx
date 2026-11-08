@@ -45,7 +45,7 @@ function mockApi(quotes: unknown[] = [leg]) {
       calls.push({ method, body: init?.body ? JSON.parse(init.body as string) : undefined });
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) } as Response);
     }
-    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/monitors") ? [] : health;
+    const body = url.endsWith("/quotes") ? quotes : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }

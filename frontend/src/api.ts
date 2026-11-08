@@ -83,6 +83,32 @@ export const fetchVol = (id: string) =>
   read<Vol>(client.positions[":id"].vol.$get({ param: { id } }), `/positions/${id}/vol`);
 export const fetchMonitors = () => read<Monitor[]>(client.monitors.$get(), "/monitors");
 
+/** The Securities kept on the page to read the market by (ADR 0018).
+ *
+ *  POLLED, with `/quotes`, because its figures are the market right now and a backdrop a sweep old
+ *  would be read as current. That is a second bounded Provider call per poll per open tab, which
+ *  ADR 0010 is explicit is not free — and the reason it is a call of its own rather than part of
+ *  the watchlist's batch is containment: one Reference the Provider refuses would otherwise blank
+ *  every row the owner acts on.
+ *
+ *  It cannot fail. The route declares no failure status: a Provider that is wholly down leaves
+ *  every Reference a dash with its own sentence beside it, and the page still draws.
+ */
+export type Reference = Exclude<Infer<typeof client.references.$get>, { detail: string }>[number];
+export const fetchReferences = () =>
+  read<Reference[]>(client.references.$get(), "/references");
+
+/** Keep a Security on the page. The code is RAW — `US.SPY`, not an expiry and a strike — because a
+ *  Reference is a Security rather than a Contract, and the service probes it live before it agrees
+ *  to remember it. */
+export const addReference = (body: { code: string; label?: string; source: "moomoo" | "ibkr" | "yahoo" }) =>
+  sent(client.references.$post({ json: body }), "/references");
+
+/** Stop keeping one. The only way a Reference ever goes: nothing in the service removes one, and a
+ *  Reference with no figure is a dash rather than an event. */
+export const removeReference = (id: string) =>
+  sent(client.references[":id"].$delete({ param: { id } }), `/references/${id}`);
+
 /** What is actually HELD, with its live figures and its exit schedule.
  *
  *  FETCHED ON DEMAND, never on the poll. This route makes its own bounded OpenD batch — one

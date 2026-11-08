@@ -26,24 +26,34 @@ export interface SweeperPort {
   lastFetchOk(): boolean | null;
 }
 
-/** A Provider: one configured source of market data, chosen before boot (ADR 0015).
+/** An open vendor: one market-data vendor this build can reach (ADR 0015, widened by 0019).
  *
- *  `provider.ts` builds whichever one `.env` names. `name` and `reachable` exist for `/health`,
- *  which until now reported `opend: true` — the vendor's name on the API contract, and a sentence
- *  on the dashboard that would have been a lie the moment anything else was behind it.
+ *  Every vendor answers this much, whether it is the Provider or only serves a Reference —
+ *  `vendors.ts` opens them all the same way, and one shutdown loop hangs them all up. What a
+ *  Reference-only vendor does NOT have to answer is `reachable`: that question is asked of the
+ *  Provider alone (see below), and a vendor with no gateway to probe would have to invent one.
  */
-export interface ProviderClient {
-  /** What this Provider is called, as `/health` reports it and the dashboard prints it. */
+export interface VendorClient {
+  /** What this vendor is called, as a Reference's `source` names it and `/health` prints it. */
   readonly name: string;
-  /** The one question a Provider answers (quotes.ts). */
+  /** The one question every vendor answers (quotes.ts). */
   readonly fetchQuotes: QuoteFetcher;
+  /** Hang up, so the next call reconnects. Called on the way out of the process. */
+  close(): void;
+}
+
+/** The Provider: the one vendor the alarms read from, chosen before boot (ADR 0015).
+ *
+ *  `vendors.ts` builds whichever one `.env` names. `name` and `reachable` exist for `/health`,
+ *  which until ADR 0015 reported `opend: true` — the vendor's name on the API contract, and a
+ *  sentence on the dashboard that would have been a lie the moment anything else was behind it.
+ */
+export interface ProviderClient extends VendorClient {
   /** Whether the gateway is there AT ALL, in whatever terms this Provider has — a TCP connect for
-   *  moomoo's OpenD, something else for a Provider that speaks HTTP.
+   *  moomoo's OpenD, a handshake for IB Gateway's socket.
    *
    *  Consulted only while nothing has been fetched yet: an answered request outranks a probe, and
    *  a socket that accepts is not a gateway that answers (ADR 0010, and 2026-10-16, when OpenD
    *  held the port open and timed out every login). */
   reachable(): Promise<boolean>;
-  /** Hang up, so the next call reconnects. Called on the way out of the process. */
-  close(): void;
 }

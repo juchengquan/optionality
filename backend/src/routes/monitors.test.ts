@@ -11,12 +11,12 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../testing.ts";
+import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
 
-// relative to the HARNESS's clock, not the real one — see NOW in testing.ts
+// relative to the HARNESS's clock, not the real one — see NOW in testing/harness.ts
 const daysAhead = daysFromNow;
 const future = () => daysAhead(30);
 
@@ -381,13 +381,18 @@ describe("the creation gate", () => {
     expect(await body(await h.call("/monitors"))).toEqual([]);
   });
 
-  it("refuses while OpenD is down, rather than accepting a contract it cannot check", async () => {
+  it("refuses when the probe threw, rather than accepting a contract it cannot check", async () => {
     // strict by design: a monitor on a contract that does not exist would quarantine itself on the
-    // first sweep, which is a worse way to find out
+    // first sweep, which is a worse way to find out.
+    //
+    // The wording carries the Provider's own sentence and no longer claims an outage: a Provider
+    // that ANSWERED and declined the security throws here too (ADR 0018).
     h = harness({ fetchQuotes: () => Promise.reject(new Error("Client connection failed!")) });
     const resp = await post(single({ strike: 8100, threshold: 0.5 }));
     expect(resp.status).toBe(422);
-    expect((await body(resp)).detail).toMatch(/unreachable/);
+    expect((await body(resp)).detail).toBe(
+      "cannot verify contract: the Provider did not confirm it — Client connection failed!",
+    );
   });
 });
 
@@ -536,12 +541,24 @@ describe("/quotes", () => {
     expect(quotes[0].dte).toBe(30);
   });
 
-  it("answers 502 rather than 500 when the OpenD call fails", async () => {
+  it("answers 502 rather than 500 when the Provider call fails", async () => {
     h = harness({ fetchQuotes: echoThenFail() });
     await post(single());
     const resp = await h.call("/quotes");
     expect(resp.status).toBe(502);
-    expect((await body(resp)).detail).toMatch(/OpenD call failed/);
+    expect((await body(resp)).detail).toMatch(/moomoo call failed/);
+  });
+
+  it("names the Provider that failed, whichever one this deployment reads", async () => {
+    // the dashboard prints this `detail` verbatim, and it said "OpenD call failed" whatever was
+    // answering — the same leak ADR 0018 corrected in `verifyContracts` and the sweeper's
+    // degraded default corrected again. A sentence naming one vendor is wrong the moment
+    // OPTIONALITY_PROVIDER names another.
+    h = harness({ providerName: "ibkr", fetchQuotes: echoThenFail() });
+    await post(single());
+    const detail = (await body(await h.call("/quotes"))).detail as string;
+    expect(detail).toMatch(/^ibkr call failed/);
+    expect(detail, "never the vendor it is not").not.toMatch(/OpenD/);
   });
 
   it("excludes a disabled monitor", async () => {

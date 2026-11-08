@@ -47,7 +47,7 @@ function mockApi(served = rows) {
     Promise.resolve({
       ok: true,
       json: () => Promise.resolve(
-        url.endsWith("/quotes") ? served : url.endsWith("/monitors") ? [] : health),
+        url.endsWith("/quotes") ? served : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health),
     } as Response)));
 }
 

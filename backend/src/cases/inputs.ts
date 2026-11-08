@@ -27,6 +27,18 @@ const EXP = "2026-11-20";
 const code = (type: "CALL" | "PUT", strike: number) => buildSpxCode(EXP, type, strike);
 const LP = code("PUT", 6450), SP = code("PUT", 6500), SC = code("CALL", 7100), LC = code("CALL", 7150);
 
+/** US.SPY as the live gateway gave it on 2026-11-02, trimmed to the fields a Reference reads.
+ *
+ *  Kept whole-ish because the measurement is the point: the last trade and the previous close are
+ *  the same number, which is what a stale last LOOKS like, and the mid is three points away from
+ *  both (ADR 0018).
+ */
+const spy = {
+  code: "US.SPY", name: "SPDR S&P 500 ETF Trust",
+  bid_price: 758.7, ask_price: 758.76, mid_price: 758.73,
+  last_price: 755.72, prev_close_price: 755.72,
+};
+
 /** an iron condor: long and short puts, short and long calls */
 const condor: Position & { id: string } = {
   id: "p1", name: "1120_IC", strike_date: EXP, contracts: 2, entry: 3.0, strategy: "iron condor",
@@ -88,6 +100,23 @@ const policy: ExitPolicy = { takeFraction: 0.5, stopMultiple: 2, manageByDte: 21
  *  different case every day.
  */
 const NOW = new Date("2026-11-01T12:00:00Z");
+
+/** Fixtures for domain/degraded.ts. Named with the prefix because `state` and `ago` are already
+ *  taken by the alarm cases below and mean something else there. */
+const degradedAgo = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
+const degradedState = (failures: number, since: Date | null, lastNoticeAt: Date | null) =>
+  ({ failures, since, lastNoticeAt });
+const degradedPolicy_ = { afterFailures: 5, repeatSeconds: 1800 };
+
+/** Fixtures for domain/flapping.ts, which takes TIMESTAMPS rather than a count. */
+const flapAgo = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
+const flapState = (secondsAgo: number[]) =>
+  ({ failures: secondsAgo.map(flapAgo), lastNoticeAt: null, announced: false });
+const flapPolicy = { windowSeconds: 900, afterFailures: 5, repeatSeconds: 1800 };
+const flapNoRepeat = { windowSeconds: 900, afterFailures: 5, repeatSeconds: 0 };
+const flapOff = { windowSeconds: 900, afterFailures: 0, repeatSeconds: 1800 };
+const flapWide = { windowSeconds: 5400, afterFailures: 2, repeatSeconds: 1800 };
+const degradedNoRepeat = { afterFailures: 5, repeatSeconds: 0 };
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
 const state = (triggered: boolean, lastAlarmAt: Date | null): AlarmState => ({ triggered, lastAlarmAt });
 /** the service's own defaults: throttle a state change for 15 minutes, re-remind after an hour */
@@ -228,6 +257,50 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // exactly half in binary, the only place toFixed (ties up) and Python's round (ties even) part
     { fn: "round4", name: "an exact binary half rounds up", args: [0.03125] },
     { fn: "round4", name: "an exact binary half, negative, rounds away from zero", args: [-0.03125] },
+
+    // --- a probe that THREW, which is not the same refusal as one that answered (ADR 0018) ---
+    { fn: "unverifiableVerdict", name: "a dropped connection speaks in errno",
+      args: ["snapshot API failed: connect ECONNREFUSED 127.0.0.1:11111"] },
+    // the gateway is UP and has declined the security; the old wording called this an outage
+    { fn: "unverifiableVerdict", name: "a Provider that answered and declined the security",
+      args: ["snapshot API failed: US stock indices are not supported"] },
+    { fn: "unverifiableVerdict", name: "a Provider that said nothing at all", args: [""] },
+  ],
+  reference: [
+    // --- which field is true, measured against the live gateway on 2026-11-02 (ADR 0018) ---
+    // The scale's three cases went with the column (ADR 0019): a scaled stand-in is a simulation
+    // rather than a reading, and `round4` is still exercised by the float-noise case below.
+    // SPY's last trade was a session old while its own book was current: 755.72 against 758.73
+    { fn: "referenceFigure", name: "the mid leads, because the last trade can be a session old",
+      args: [spy] },
+    { fn: "referenceFigure", name: "no two-sided quote falls back to the last trade",
+      args: [{ ...spy, mid_price: undefined }] },
+    // an empty book quotes 0/0 and `(0 + 0) / 2` is a mid, and 0 prints as a price
+    { fn: "referenceFigure", name: "a zero mid is not a price, so the last trade is read",
+      args: [{ ...spy, bid_price: 0, ask_price: 0, mid_price: 0 }] },
+    { fn: "referenceFigure", name: "neither field arrived, so there is no figure",
+      args: [{ code: "US.SPY", name: "SPDR S&P 500 ETF Trust" }] },
+    { fn: "referenceFigure", name: "no quote at all — a Reference the batch could not price",
+      args: [null] },
+    // moomoo is a wire format with no published schema, so a field can arrive as a string
+    { fn: "referenceFigure", name: "a figure that is not a number", args: [{ mid_price: "758.73" }] },
+    { fn: "referenceFigure", name: "an infinite figure", args: [{ mid_price: Infinity }] },
+    { fn: "referenceFigure", name: "a negative figure is not a price", args: [{ mid_price: -1, last_price: 2 }] },
+    { fn: "referenceFigure", name: "float noise never reaches the page", args: [{ mid_price: 20.15 }] },
+    { fn: "referenceFigure", name: "the change is a fraction of the close",
+      args: [{ mid_price: 758.73, prev_close_price: 755.72 }] },
+    { fn: "referenceFigure", name: "a day down", args: [{ mid_price: 750, prev_close_price: 755.72 }] },
+    { fn: "referenceFigure", name: "no close is no change, not a change from nothing",
+      args: [{ mid_price: 758.73 }] },
+    { fn: "referenceFigure", name: "a zero close would be divided by", args: [{ mid_price: 758.73, prev_close_price: 0 }] },
+    // the change is measured from the field the figure came from: a mid against the close beside a
+    // last-trade figure is a pair of numbers that cannot both be true
+    { fn: "referenceFigure", name: "the fallback's change is the last trade against the close",
+      args: [{ last_price: 750, prev_close_price: 755.72 }] },
+    // the only shape where the two fields disagree about which is true: a mid that is PRESENT and
+    // is not a price. A change computed from it reads -100% beside a figure that moved a point.
+    { fn: "referenceFigure", name: "a present-but-zero mid is ignored on both sides at once",
+      args: [{ mid_price: 0, last_price: 750, prev_close_price: 755.72 }] },
   ],
   position: [
     { fn: "scopedLegs", name: "the calls of a condor", args: [condor, "calls"] },
@@ -289,6 +362,83 @@ export const INPUTS: Record<string, CaseInput[]> = {
       fn: "positionsHolding", name: "more named than is held",
       args: [[callSpread], [SC, LC, code("CALL", 7200)]],
     },
+  ],
+  flapping: [
+    // A provider that keeps dropping and recovering, which no consecutive count can see. Written
+    // after an hour of exactly that went unnoticed on 2026-11-08 (domain/flapping.ts).
+    { fn: "flappingVerdict", name: "nothing has failed",
+      args: [flapState([]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "below the threshold, however spread out",
+      args: [flapState([60, 200, 400, 800]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "at the threshold, which is where it speaks",
+      args: [flapState([60, 200, 400, 600, 800]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "older than the window, so not news",
+      args: [flapState([901, 1200, 2000, 3000, 4000]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "exactly at the window's edge counts",
+      args: [flapState([900, 100, 200, 300, 400]), flapPolicy, NOW] },
+    // the measured shape: a failure roughly every 90 seconds while the agent churned
+    { fn: "flappingVerdict", name: "the outage it was written for",
+      args: [flapState([90, 180, 270, 360, 450, 540, 630, 720, 810, 900]), flapPolicy, NOW] },
+    // and it never speaks over the sustained notice
+    { fn: "flappingVerdict", name: "quiet while a sustained outage is already announced",
+      args: [{ ...flapState([60, 120, 180, 240, 300]), announced: true }, flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "repeats once the cadence has passed",
+      args: [{ ...flapState([60, 120, 180, 240, 300, 360]), lastNoticeAt: flapAgo(1801) },
+        flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "and says nothing before it has",
+      args: [{ ...flapState([60, 120, 180, 240, 300, 360]), lastNoticeAt: flapAgo(1799) },
+        flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "a zero cadence never reminds",
+      args: [{ ...flapState([60, 120, 180, 240, 300, 360]), lastNoticeAt: flapAgo(99999) },
+        flapNoRepeat, NOW] },
+    { fn: "flappingVerdict", name: "a zero threshold is off",
+      args: [flapState([10, 20, 30, 40, 50, 60]), flapOff, NOW] },
+    { fn: "flappingVerdict", name: "a window said in hours and minutes",
+      args: [flapState([10, 20]), flapWide, NOW] },
+  ],
+  degraded: [
+    // What the owner is told when the service cannot see the market, and how often. The reminder
+    // exists because on 2026-11-08 OpenD exited, 646 sweeps failed over 2h42m, and the only
+    // message arrived in the first minute (domain/degraded.ts).
+    // below, at, and past the threshold
+    { fn: "degradedVerdict", name: "under the threshold says nothing",
+      args: [degradedState(4, null, null), degradedPolicy_, "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "exactly at the threshold speaks",
+      args: [degradedState(5, null, null), degradedPolicy_, "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "the reason is the caller's, naming no vendor",
+      args: [degradedState(5, null, null), degradedPolicy_, "a sweep stuck for 90s", NOW] },
+
+    // the reminder, measured from the last notice rather than the first failure
+    { fn: "degradedVerdict", name: "repeats once the cadence has passed, with how long",
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(1801)), degradedPolicy_,
+        "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "and says nothing before it has",
+      args: [degradedState(400, degradedAgo(9720), degradedAgo(1799)), degradedPolicy_,
+        "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "a zero cadence never reminds",
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(99999)), degradedNoRepeat,
+        "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "past the threshold with nothing sent says the FIRST wording",
+      args: [degradedState(646, degradedAgo(9720), null), degradedPolicy_,
+        "the Provider did not answer", NOW] },
+
+    // how long it has been broken
+    { fn: "degradedVerdict", name: "minutes under an hour",
+      args: [degradedState(50, degradedAgo(420), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "hours and minutes above one",
+      args: [degradedState(50, degradedAgo(11100), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "under a minute is said in words",
+      args: [degradedState(50, degradedAgo(30), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "an unknown start omits the duration",
+      args: [degradedState(646, null, degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+
+    // and coming back
+    { fn: "recoveredNotice", name: "says how long it was out",
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(60)), degradedPolicy_, NOW] },
+    { fn: "recoveredNotice", name: "stays quiet when nothing was ever announced",
+      args: [degradedState(4, degradedAgo(60), null), degradedPolicy_, NOW] },
+    { fn: "recoveredNotice", name: "an unknown start omits the duration",
+      args: [degradedState(646, null, degradedAgo(60)), degradedPolicy_, NOW] },
   ],
   alarm: [
     // the four transitions, each with the sentence it sends

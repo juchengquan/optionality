@@ -10,7 +10,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { costToClose, positionLegCodes, positionPnl, type Position } from "./domain/position.ts";
 import { dteAtOpen, exitLevels, exitPolicy, type ExitLevels } from "./domain/exit.ts";
 import { daysToExpiry } from "./domain/expiry.ts";
-import { listPositions } from "./db/queries.ts";
+import { listPositions } from "./db/queries/index.ts";
 import type { PositionRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
 import { toPosition } from "./hydrate.ts";
@@ -30,7 +30,7 @@ export interface HoldingValue {
 }
 
 /** The exit schedule for one holding, or null where it was never declared Opened. */
-export function scheduleOf(
+function scheduleOf(
   row: PositionRow, cost: number | null, now: Date, settings: Settings,
 ): (ExitLevels & { dte_at_open: number }) | null {
   if (row.opened_at === null) return null;

@@ -85,7 +85,7 @@ function mockApi() {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: "p1" }) } as Response);
     }
     const body = url.endsWith("/quotes") ? [combo]
-      : url.endsWith("/monitors") ? [rule] : url.includes("/positions") ? [] : health;
+      : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [rule] : url.includes("/positions") ? [] : health;
     return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
   }));
 }

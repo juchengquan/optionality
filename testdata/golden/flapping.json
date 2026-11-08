@@ -1,0 +1,467 @@
+{
+  "module": "flapping",
+  "constants": {},
+  "cases": [
+    {
+      "fn": "flappingVerdict",
+      "name": "nothing has failed",
+      "args": [
+        {
+          "failures": [],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "below the threshold, however spread out",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:56:40.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:53:20.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:46:40.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "at the threshold, which is where it speaks",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:56:40.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:53:20.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:50:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:46:40.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring unreliable: 5 failed sweeps in the last 15m, with successes in between — a provider that keeps dropping and recovering"
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "older than the window, so not news",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:44:59.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:40:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:26:40.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:10:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T10:53:20.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "exactly at the window's edge counts",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:45:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:58:20.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:56:40.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:55:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:53:20.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring unreliable: 5 failed sweeps in the last 15m, with successes in between — a provider that keeps dropping and recovering"
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "the outage it was written for",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:58:30.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:57:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:55:30.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:54:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:52:30.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:51:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:49:30.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:48:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:46:30.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:45:00.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring unreliable: 10 failed sweeps in the last 15m, with successes in between — a provider that keeps dropping and recovering"
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "quiet while a sustained outage is already announced",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:58:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:57:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:56:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:55:00.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": true
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "repeats once the cadence has passed",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:58:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:57:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:56:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:55:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:54:00.000Z"
+            }
+          ],
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:29:59.000Z"
+          },
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring unreliable: 6 failed sweeps in the last 15m, with successes in between — a provider that keeps dropping and recovering"
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "and says nothing before it has",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:58:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:57:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:56:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:55:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:54:00.000Z"
+            }
+          ],
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:30:01.000Z"
+          },
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "a zero cadence never reminds",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:58:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:57:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:56:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:55:00.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:54:00.000Z"
+            }
+          ],
+          "lastNoticeAt": {
+            "$date": "2026-10-31T08:13:21.000Z"
+          },
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 5,
+          "repeatSeconds": 0
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "a zero threshold is off",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:50.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:59:40.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:59:30.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:59:20.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:59:10.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:59:00.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 900,
+          "afterFailures": 0,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "flappingVerdict",
+      "name": "a window said in hours and minutes",
+      "args": [
+        {
+          "failures": [
+            {
+              "$date": "2026-11-01T11:59:50.000Z"
+            },
+            {
+              "$date": "2026-11-01T11:59:40.000Z"
+            }
+          ],
+          "lastNoticeAt": null,
+          "announced": false
+        },
+        {
+          "windowSeconds": 5400,
+          "afterFailures": 2,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring unreliable: 2 failed sweeps in the last 1h30m, with successes in between — a provider that keeps dropping and recovering"
+      }
+    }
+  ]
+}

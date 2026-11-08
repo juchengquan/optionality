@@ -1,14 +1,18 @@
-.PHONY: check lint check-boundaries check-make-targets cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
+.PHONY: check lint check-boundaries check-test-support check-make-targets cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui check-served-root resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
+	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
 	test-tools py-cut py-tag
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
 UI_LABEL = com.optionality.ui
 UI_PLIST = $(HOME)/Library/LaunchAgents/$(UI_LABEL).plist
+OPEND_LABEL = com.optionality.opend
+OPEND_PLIST = $(HOME)/Library/LaunchAgents/$(OPEND_LABEL).plist
+
 BACKUP_LABEL = com.optionality.backup
 BACKUP_PLIST = $(HOME)/Library/LaunchAgents/$(BACKUP_LABEL).plist
 NODE_BIN = $(shell command -v node)
@@ -27,11 +31,16 @@ UI_BASE ?= /opt/
 
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
-lint: check-boundaries check-make-targets check-served-root
+lint: check-boundaries check-test-support check-make-targets check-served-root
 	uv run --directory python ruff check .
 
 check-boundaries:
 	node tools/check-boundaries.mjs
+
+# `src/` is the service and `testing/` is the harness that fakes it. Nothing the service runs may
+# import the harness — it prices every code it is asked for. See tools/check-test-support.mjs.
+check-test-support:
+	node tools/check-test-support.mjs
 
 # frontend/dist is the live document root, not just a committed artefact: a target that deletes it
 # takes the dashboard down. See tools/check-served-root.mjs.
@@ -56,7 +65,7 @@ test:
 # EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
 # subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
 # the Python. check-ui comes last because it rebuilds the bundle.
-check: lint typecheck check-api check-cases test test-tools test-api test-ui check-ui
+check: lint typecheck check-api check-cases test test-tools test-api test-ui check-ui check-opend
 	@echo "all checks passed"
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
@@ -171,17 +180,12 @@ deploy:
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
 
-# First contact with an IBKR gateway (ADR 0015, PR 6). NOT part of `make check`: it reaches a real
-# gateway, which no test may do. Safe while the live service runs — it opens the database read-only,
-# writes nothing and sends nothing — but it does spend market-data calls on both providers. The
-# readings it reports are pure functions, tested in backend/src/ibkr/first-contact.test.ts.
-ibkr-first-contact:
-	node --env-file=.env backend/tools/ibkr-first-contact.ts $(ARGS)
-
-# A stub gateway for the harness above, so its wiring can be exercised before an account exists.
-# It answers NO real market data; a report from a run against it proves the harness, nothing else.
+# A stub IB Gateway speaking the SOCKET protocol, for driving the TWS client by hand. Its replies
+# are recorded from the official Python client and from the real gateway (2026-11-08, protocol
+# 157), not invented — a stub written from the same reading as the decoder agrees with it, and
+# agrees wrongly if the reading was wrong. Proves the client, never the provider.
 ibkr-fake-gateway:
-	node backend/tools/ibkr-fake-gateway.ts
+	node backend/tools/ibkr-fake-gateway.ts $(ARGS)
 
 # The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
 # reproduce exactly. Generated, never edited; `test-api` fails too when they are stale.
@@ -231,7 +235,7 @@ launchd-api-install:
 	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
 	sed -e 's|__NODE__|$(NODE_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
-		deploy/optionality-api.launchd.plist.template > $(API_PLIST)
+		deploy/macos/optionality-api.launchd.plist.template > $(API_PLIST)
 	plutil -lint $(API_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
 
@@ -267,13 +271,75 @@ launchd-backup-install:
 	-launchctl bootout gui/$$(id -u)/$(BACKUP_LABEL) 2>/dev/null
 	sed -e 's|__NODE__|$(NODE_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
 		-e "s|__BACKUP_DIR__|$$(cd "$(BACKUP_DIR)" && pwd)|g" \
-		deploy/optionality-backup.launchd.plist.template > $(BACKUP_PLIST)
+		deploy/macos/optionality-backup.launchd.plist.template > $(BACKUP_PLIST)
 	plutil -lint $(BACKUP_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(BACKUP_PLIST)
 
 launchd-backup-uninstall:
 	-launchctl bootout gui/$$(id -u)/$(BACKUP_LABEL)
 	rm -f $(BACKUP_PLIST)
+
+# Watches OpenD, the one process everything else depends on and the only one nothing was watching
+# — it exited unattended on 2026-11-08 and the sweep failed 646 times over 2h42m. A TIMER rather
+# than KeepAlive: `~/openD.sh` backgrounds OpenD and returns, so KeepAlive would see the script
+# finish and restart it for ever; and KeepAlive can only see whether a process exists, where the
+# failure that matters is an OpenD that is up with its websocket port shut. The script's `ensure`
+# tells those apart. It calls ~/openD.sh, which is NOT in this repository: it is the owner's and
+# predates this agent, and pointing at it beats moving it.
+# The account comes from .env and is stamped into the GENERATED plist, which lives outside this
+# repository — so it is on disk only where git does not look. `-f2-` keeps everything after the
+# first `=`: `-f2` truncates at a second one, which is the careless extraction that wrote the
+# literal string `$$ {OPEND_LOGIN_ACCOUNT:-...}` into a config file and sent OpenD into a
+# restart loop on 2026-11-08.
+OPEND_ACCOUNT = $(shell grep -E '^OPEND_LOGIN_ACCOUNT=' .env 2>/dev/null | head -1 | cut -d= -f2-)
+
+launchd-opend-install:
+	@test -x deploy/macos/opend.sh || { echo "deploy/macos/opend.sh missing or not executable"; exit 1; }
+	@test -n "$(OPEND_ACCOUNT)" || { echo "OPEND_LOGIN_ACCOUNT is not set in .env — refusing to install an agent that would restart a failing login every 60s"; exit 1; }
+	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
+	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL) 2>/dev/null
+	sed -e 's|__HOME__|$(HOME)|g' -e 's|__REPO__|$(CURDIR)|g' \
+		-e 's|__OPEND_ACCOUNT__|$(OPEND_ACCOUNT)|g' \
+		deploy/macos/optionality-opend.launchd.plist.template > $(OPEND_PLIST)
+	chmod 600 $(OPEND_PLIST)
+	plutil -lint $(OPEND_PLIST)
+	launchctl bootstrap gui/$$(id -u) $(OPEND_PLIST)
+	@echo "watching OpenD every 60s; logs: $(HOME)/Library/Logs/optionality-opend.log"
+
+# Two copies of the control script exist on purpose: this one is committed, and ~/openD.sh must
+# keep working with no repository cloned. Two copies of anything drift, and the only question is
+# whether you find out — so this is the same arrangement `check-ui` uses for the committed bundle.
+# The account line is normalised away because it is the one difference BY DESIGN.
+check-opend:
+	@a=$$(mktemp); b=$$(mktemp); \
+	if [ ! -f $(HOME)/openD.sh ]; then \
+		rm -f "$$a" "$$b"; \
+		echo "~/openD.sh absent — nothing to compare (this check is for the owner's machine)"; \
+	else \
+		sed -E 's|^LOGIN_ACCOUNT=.*|LOGIN_ACCOUNT=X|' $(HOME)/openD.sh > "$$a"; \
+		sed -E 's|^LOGIN_ACCOUNT=.*|LOGIN_ACCOUNT=X|' deploy/macos/opend.sh > "$$b"; \
+		if diff -u "$$a" "$$b" > /dev/null; then \
+			rm -f "$$a" "$$b"; echo "~/openD.sh matches deploy/macos/opend.sh"; \
+		else \
+			echo "~/openD.sh and deploy/macos/opend.sh have DRIFTED — 'make opend-sync', or reconcile by hand:"; \
+			diff -u "$$a" "$$b" || true; rm -f "$$a" "$$b"; exit 1; \
+		fi; \
+	fi
+
+opend-sync:
+	@test -f $(HOME)/openD.sh || { echo "~/openD.sh absent; copy deploy/macos/opend.sh there and set its account"; exit 1; }
+	@acct=$$(grep -E '^LOGIN_ACCOUNT=' $(HOME)/openD.sh); \
+		awk -v a="$$acct" '/^LOGIN_ACCOUNT=/ { print a; next } { print }' deploy/macos/opend.sh > $(HOME)/openD.sh.new && \
+		chmod 755 $(HOME)/openD.sh.new && zsh -n $(HOME)/openD.sh.new && \
+		mv $(HOME)/openD.sh.new $(HOME)/openD.sh && \
+		echo "~/openD.sh synced from deploy/macos/opend.sh, account kept"
+
+launchd-opend-uninstall:
+	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL)
+	rm -f $(OPEND_PLIST)
+
+opend-logs:
+	tail -f $(HOME)/Library/Logs/optionality-opend.log
 
 backup-logs:
 	tail -f $(HOME)/Library/Logs/optionality-backup.log
@@ -283,7 +349,7 @@ launchd-ui-install:
 	@test -n "$(CADDY_BIN)" || { echo "caddy not found — brew install caddy"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
 	sed -e 's|__CADDY__|$(CADDY_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
-		deploy/optionality-ui.launchd.plist.template > $(UI_PLIST)
+		deploy/macos/optionality-ui.launchd.plist.template > $(UI_PLIST)
 	plutil -lint $(UI_PLIST)
 	OPTIONALITY_UI_ROOT=$(CURDIR)/frontend/dist $(CADDY_BIN) validate --config deploy/Caddyfile
 	launchctl bootstrap gui/$$(id -u) $(UI_PLIST)

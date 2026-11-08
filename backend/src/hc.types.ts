@@ -63,6 +63,13 @@ async function endpoints() {
     totalEntry: await client.monitors[":id"]["total-entry"].$post({ param: id, json: { entry: 3.21 } }),
     monitorDeleted: await client.monitors[":id"].$delete({ param: id }),
 
+    // --- references ---------------------------------------------------------------------
+    references: await (await client.references.$get()).json(),
+    referenceCreated: await client.references.$post({
+      json: { code: "US.SPY", label: "SPY", source: "moomoo" },
+    }),
+    referenceDeleted: await client.references[":id"].$delete({ param: id }),
+
     // --- positions ---------------------------------------------------------------------
     positions: await (await client.positions.$get()).json(),
     values: await (await client.positions.values.$get()).json(),
@@ -124,6 +131,23 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["monitors"]>[number]["positions"], { id: string; name: string }[]>>,
   Checked<Exactly<Ok<E["monitors"]>[number]["disabled_reason"], string | null>>,
 
+  // references -----------------------------------------------------------------------
+  Checked<Known<Ok<E["references"]>>>,
+  // every one of these is nullable, and the dashboard draws a dash for each null rather than
+  // hiding the row: a Reference with no figure is still a Reference (ADR 0018)
+  Checked<Exactly<Ok<E["references"]>[number]["figure"], number | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["field"], string | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["change"], number | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["label"], string | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["source"], string>>,
+  Checked<Exactly<Ok<E["references"]>[number]["name"], string | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["error"], string | null>>,
+  // the vendor's own claim about freshness. Nullable because null is not false: moomoo reports
+  // no grade at all, and the strip must not render that as "live" (ADR 0019)
+  Checked<Exactly<Ok<E["references"]>[number]["delayed"], boolean | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["last_known"], boolean | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["delayed_by_minutes"], number | null>>,
+
   // positions -------------------------------------------------------------------------
   Checked<Known<Ok<E["positions"]>>>,
   Checked<Exactly<Ok<E["positions"]>[number]["contracts"], number>>,
@@ -153,6 +177,8 @@ export type StatusChecks = [
   Checked<Exactly<E["positionCreated"]["status"], 201 | 422>>,
   Checked<Exactly<E["positionPatched"]["status"], 200 | 422>>,
   Checked<Exactly<E["positionDeleted"]["status"], 204>>,
+  Checked<Exactly<E["referenceCreated"]["status"], 201 | 422>>,
+  Checked<Exactly<E["referenceDeleted"]["status"], 204>>,
 
   // {detail} is IN the union wherever a route VALIDATES its input, so the dashboard cannot read
   // rows without saying what it does when the request was refused. That is the bug class that used
@@ -179,4 +205,5 @@ export type StatusChecks = [
   // test, since no served route carries a query.
   Checked<ErrorBody extends Awaited<ReturnType<E["monitorCreated"]["json"]>> ? true : false>,
   Checked<ErrorBody extends Awaited<ReturnType<E["positionCreated"]["json"]>> ? true : false>,
+  Checked<ErrorBody extends Awaited<ReturnType<E["referenceCreated"]["json"]>> ? true : false>,
 ];

@@ -24,6 +24,8 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { alarmPolicy, alarmTransition } from "./domain/alarm.ts";
+import { degradedPolicy, degradedVerdict, recoveredNotice } from "./domain/degraded.ts";
+import { flappingPolicy, flappingVerdict } from "./domain/flapping.ts";
 import { expiryVerdict, silenceVerdict } from "./domain/lifecycle.ts";
 import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
 import { exitPolicy } from "./domain/exit.ts";
@@ -32,7 +34,7 @@ import { atomic } from "./db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
   positionsForMonitors, updateMonitorFields,
-} from "./db/queries.ts";
+} from "./db/queries/index.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
 import { toSqliteBool, } from "./db/values.ts";
@@ -80,6 +82,24 @@ function lastAlarmAt(monitor: MonitorRow): Date | null {
 
 export class MonitorSweeper {
   consecutiveFailuresCount = 0;
+  /** When the current run of failures began, and when the owner was last told about it.
+   *
+   *  In memory with the count, for the reason given below it: the claim is about a RUN, and a
+   *  restart genuinely breaks the run. The cost is that a service restarted mid-outage reports
+   *  the failures without the duration, which `degraded.ts` prints as nothing rather than as a
+   *  guess.
+   */
+  degradedSince: Date | null = null;
+  lastDegradedNoticeAt: Date | null = null;
+  /** When each recent sweep failed, for the RATE rather than the run.
+   *
+   *  A consecutive count measures how LONG a failure lasted and cannot see a provider that keeps
+   *  dropping and recovering — which went unnoticed for an hour on 2026-11-08. Pruned to the
+   *  window on every append, so this cannot grow: at a 15s sweep and a 15m window it holds at
+   *  most 60 entries.
+   */
+  readonly recentFailures: Date[] = [];
+  lastFlappingNoticeAt: Date | null = null;
   /** Consecutive sweeps a monitor's figure has failed to arrive for, by monitor id.
    *
    *  In memory, like `consecutiveFailuresCount` and for the same reason: the claim is about a RUN
@@ -401,8 +421,6 @@ export class MonitorSweeper {
     return active;
   }
 
-  /** Disable — never delete — monitors whose contracts the Provider does not recognise. Its twin
-   *  is the silence count in `evaluate`: the same answer to the other half of "cannot evaluate". */
   /** A row the engine cannot hydrate: disabled with a notice, kept for inspection.
    *
    *  The same treatment an unknown contract gets, and for the same reason — a rule the engine
@@ -426,6 +444,8 @@ export class MonitorSweeper {
     for (const text of notices) await this.notify(text);
   }
 
+  /** Disable — never delete — monitors whose contracts the Provider does not recognise. Its twin
+   *  is the silence count in `evaluate`: the same answer to the other half of "cannot evaluate". */
   private async quarantineUnknown(
     active: MonitorRow[], bad: Set<string>,
   ): Promise<MonitorRow[]> {
@@ -559,23 +579,74 @@ export class MonitorSweeper {
     await this.recordFailure(`a sweep stuck for ${age}s`);
   }
 
-  private async recordFailure(reason = "OpenD unreachable?"): Promise<void> {
+  /** The default names no vendor on purpose: the Provider is whichever one this deployment is
+   *  configured with, and this said "OpenD unreachable?" whatever was answering. Same bug ADR
+   *  0018 fixed in `verifyContracts`, which was not the only place it had been written. */
+  private async recordFailure(reason = "the Provider did not answer"): Promise<void> {
+    const now = this.now();
     this.sweepOk = false;
     this.consecutiveFailuresCount += 1;
-    // edge-triggered: once, at the threshold, not once per failure
-    if (this.consecutiveFailuresCount === this.deps.settings.degradedAfterFailures) {
-      await this.notify(
-        `⚠️ monitoring degraded: ${this.consecutiveFailuresCount} consecutive sweep failures `
-        + `(${reason})`,
-      );
+    this.degradedSince ??= now;
+
+    // the rate, beside the run: pruned here so the list cannot grow
+    const { flappingWindowSeconds } = this.deps.settings;
+    this.recentFailures.push(now);
+    while (this.recentFailures.length > 0
+      && (now.getTime() - this.recentFailures[0]!.getTime()) / 1000 > flappingWindowSeconds) {
+      this.recentFailures.shift();
+    }
+
+    const announced = this.lastDegradedNoticeAt !== null;
+    const { notice } = degradedVerdict(
+      {
+        failures: this.consecutiveFailuresCount,
+        since: this.degradedSince,
+        lastNoticeAt: this.lastDegradedNoticeAt,
+      },
+      degradedPolicy(this.deps.settings), reason, now,
+    );
+    // the stamp moves only when something was actually said, which is what makes the interval
+    // measure silence rather than sweeps
+    if (notice !== null) {
+      this.lastDegradedNoticeAt = now;
+      await this.notify(notice);
+      return;
+    }
+
+    // and only where the sustained notice said nothing: two notices about one unavailable
+    // provider is noise, and `announced` is read BEFORE the line above so a sweep cannot both
+    // announce an outage and call it unreliable
+    const flapping = flappingVerdict(
+      {
+        failures: this.recentFailures,
+        lastNoticeAt: this.lastFlappingNoticeAt,
+        announced,
+      },
+      flappingPolicy(this.deps.settings), now,
+    );
+    if (flapping.notice !== null) {
+      this.lastFlappingNoticeAt = now;
+      await this.notify(flapping.notice);
     }
   }
 
   private async recordSuccess(): Promise<void> {
-    if (this.consecutiveFailuresCount >= this.deps.settings.degradedAfterFailures) {
-      await this.notify("✅ monitoring recovered");
-    }
+    const notice = recoveredNotice(
+      {
+        failures: this.consecutiveFailuresCount,
+        since: this.degradedSince,
+        lastNoticeAt: this.lastDegradedNoticeAt,
+      },
+      degradedPolicy(this.deps.settings), this.now(),
+    );
     this.consecutiveFailuresCount = 0;
+    this.degradedSince = null;
+    this.lastDegradedNoticeAt = null;
     this.sweepOk = true;
+    // `recentFailures` is NOT cleared, which is the whole point: a success is exactly what a
+    // flapping provider produces between failures, and clearing on one would make this blind to
+    // the thing it was written for. Entries age out of the window instead.
+    // after the counters are cleared: a failed send must not leave the service looking degraded
+    if (notice !== null) await this.notify(notice);
   }
 }

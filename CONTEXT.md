@@ -10,6 +10,15 @@ An options structure you actually hold — its legs, how many contracts, and wha
 or paid to open it. The thing a trader thinks in.
 _Avoid_: holding, trade, structure
 
+**Security**:
+Anything a Provider can quote, named by a code. A Contract is one kind; an ETF, a stock and an
+index are others. The code is the system's own for a Contract, built from the expiry, the type and
+the strike — and GIVEN for everything else, because nothing here can spell `US.SPY` from facts of
+its own. The parent exists because a Reference may be any of these: without it, admitting `US.SPY`
+would have falsified Contract's claim that a code is built from those three facts, and widening
+Contract was not available because Leg is defined on top of it.
+_Avoid_: instrument, symbol, ticker, asset
+
 **Contract**:
 One tradeable option: an expiry, a type and a strike. It exists whether or not you hold it — a
 Monitor can watch one you have never owned, and a Quote describes one. Its code — the string that
@@ -62,7 +71,9 @@ _Avoid_: created, added, entry date (that last one invites confusion with Entry,
 
 **On-pace**:
 What a Position's Cost to close would be at a given DTE if nothing but time had passed. A
-REFERENCE, never a rule: it says whether a trade is working, and no alarm is ever raised from it.
+guide, never a rule: it says whether a trade is working, and no alarm is ever raised from it.
+(It said "a REFERENCE, never a rule" until Reference became a term of its own — On-pace is not
+one, and the sentence had started to read as a type claim.)
 _Avoid_: expected value, fair value, theoretical price, target
 
 **Holding**:
@@ -135,6 +146,17 @@ ACCOUNT it speaks for rather than about the Provider: two accounts reaching the 
 differ on whether greeks arrive at all. It never trades, which is why it is not a broker here even
 when the company behind it is one.
 _Avoid_: broker, vendor, feed, API, data source, integration
+
+**Reference**:
+A Security kept on the page to read the market by. It never alarms, it need not be held, and
+nothing is derived from it — no Monitor reads one, no Sweep fetches one, and a Position cannot be
+made of one. Where the Security the figure is wanted FOR cannot be quoted, a Reference stands in
+for it and shows the arithmetic: SPX is read through SPY ×10, labelled `SPX (via SPY ×10)`, and
+never printed as the index itself — SPY×10 has tracking error, it has dividends, and the two trade
+different sessions. A figure that did not arrive is a dash, which is why Quarantine does not reach
+here: that is a Monitor the service disabled because it cannot be EVALUATED, and a Reference
+evaluates nothing.
+_Avoid_: watchlist (that is the Monitors), index, underlying, benchmark, ticker
 
 **Quarantine**:
 A Monitor the service has disabled itself because it cannot be evaluated — its Contract is unknown

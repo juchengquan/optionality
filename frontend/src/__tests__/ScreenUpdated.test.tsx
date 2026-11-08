@@ -23,7 +23,7 @@ function mockApi() {
       ok: true,
       json: () => Promise.resolve(
         url.endsWith("/quotes") ? []
-          : url.endsWith("/monitors") ? [] : url.includes("/positions") ? [] : health),
+          : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : url.includes("/positions") ? [] : health),
     } as Response)));
 }
 afterEach(() => { vi.useRealTimers(); });

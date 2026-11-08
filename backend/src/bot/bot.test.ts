@@ -18,7 +18,7 @@ import { createDatabase } from "../db/open.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { settingsFor, type Settings } from "../env.ts";
 import type { QuoteRecord } from "../quotes.ts";
-import { type FakeProvider, fakeFetcher } from "../testing.ts";
+import { type FakeProvider, fakeFetcher } from "../../testing/harness.ts";
 import { TelegramBot } from "./bot.ts";
 
 /** Fixed, so a date-relative expectation cannot drift into a different market day overnight. */
@@ -98,6 +98,18 @@ describe("who may command it", () => {
   it("takes a command addressed to it by name, as a group chat sends them", async () => {
     await bot().handleUpdate(update("/monitors@optionality_bot"));
     expect(last()).toContain("empty");
+  });
+
+  it("takes a capitalised command, which is what a phone keyboard sends", async () => {
+    // dispatch has lower-cased the name since it was written and nothing asked it to: a mutation
+    // sweep removing the `toLowerCase()` left all 82 tests passing. On iOS the first letter of a
+    // message is autocapitalised, so `/Monitors` is what actually arrives — and without this it
+    // answers the help text, which reads as the bot not knowing its own command.
+    const b = bot();
+    await b.handleUpdate(update("/Monitors"));
+    expect(last()).toContain("empty");
+    await b.handleUpdate(update("/HEALTH"));
+    expect(last()).toContain("Service is up");
   });
 });
 
