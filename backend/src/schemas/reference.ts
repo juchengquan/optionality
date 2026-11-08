@@ -24,7 +24,6 @@ const Code = z.string().trim().min(1).transform((c) => c.toUpperCase());
  *  has no case for rather than booting without market data.
  */
 export const SOURCES = ["moomoo", "ibkr", "yahoo"] as const;
-export type Source = (typeof SOURCES)[number];
 
 export const ReferenceIn = z.object({
   code: Code,

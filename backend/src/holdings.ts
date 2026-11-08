@@ -30,7 +30,7 @@ export interface HoldingValue {
 }
 
 /** The exit schedule for one holding, or null where it was never declared Opened. */
-export function scheduleOf(
+function scheduleOf(
   row: PositionRow, cost: number | null, now: Date, settings: Settings,
 ): (ExitLevels & { dte_at_open: number }) | null {
   if (row.opened_at === null) return null;

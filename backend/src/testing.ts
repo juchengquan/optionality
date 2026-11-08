@@ -18,7 +18,7 @@ import { type Settings, settingsFor } from "./env.ts";
 import type { Deps } from "./deps.ts";
 import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "./quotes.ts";
 
-export const TOKEN = "tok";
+const TOKEN = "tok";
 
 /** The harness's clock, fixed. Exported because a test that invents a date from the REAL clock while
  *  the app reads this one is a test that breaks at midnight: `dte` counts from New York's calendar
@@ -30,10 +30,10 @@ export const NOW = new Date("2026-10-02T05:26:06.299Z");
 /** A date `n` days from the harness's clock, as YYYY-MM-DD. */
 export const daysFromNow = (n: number) =>
   new Date(NOW.getTime() + n * 86_400_000).toISOString().slice(0, 10);
-export const AUTH = { Authorization: `Bearer ${TOKEN}` };
+const AUTH = { Authorization: `Bearer ${TOKEN}` };
 
 /** A sweeper that has never swept, which is what a freshly started service looks like. */
-export class FakeSweeper {
+class FakeSweeper {
   sweepAt: Date | null = null;
   fetchAt: Date | null = null;
   /** null, as a service that has not asked yet: /health then falls back to the port probe */
@@ -85,7 +85,7 @@ export function fakeFetcher(fetch: FakeProvider): QuoteFetcher {
 /** The permissive default: every requested contract "exists". The same fixture the Python uses, and
  *  for the same reason — a test must never reach the real moomoo SDK, which blocks indefinitely on a
  *  dead port, so a missing fake looks like a hung suite rather than a failure (CLAUDE.md). */
-export const echoFetcher: QuoteFetcher = (codes) =>
+const echoFetcher: QuoteFetcher = (codes) =>
   Promise.resolve(priced(codes.map((code) => ({ code }))));
 
 /** A fetcher that returns the given figures per code, and nothing for a code it does not know. */

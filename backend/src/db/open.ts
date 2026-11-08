@@ -25,13 +25,6 @@ export function openDatabase(path: string): DatabaseSync {
   return db;
 }
 
-/** Open a database without the ability to write to it, for reading the Python's file. */
-export function openReadOnly(path: string): DatabaseSync {
-  const db = new DatabaseSync(path, { readOnly: true });
-  db.exec("PRAGMA foreign_keys=ON");
-  return db;
-}
-
 /** Create the tables. Safe to call on a database that already has them only if it is empty. */
 export function applySchema(db: DatabaseSync): void {
   db.exec(readFileSync(SCHEMA, "utf8"));

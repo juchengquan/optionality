@@ -19,7 +19,7 @@ import {
 import type { MonitorRow } from "../db/rows.ts";
 import { fromSqliteBool, toSqliteBool } from "../db/values.ts";
 import { exitPolicy } from "../domain/exit.ts";
-import { httpError, notFound } from "../errors.ts";
+import { httpError, notFound, providerFailed } from "../errors.ts";
 import { applyTotalEntry, watchlistQuotes } from "../monitors.ts";
 import {
   ComboMonitorIn, MonitorCreateIn, MonitorIn, MonitorPatch, TotalEntryIn, isCombo,
@@ -221,8 +221,9 @@ export function monitorRoutes(deps: Deps) {
 /** The contract's live figures, as a watchlist row carries them.
  *
  *  A loose object: the fields named here are the ones the dashboard and the bot read, and they are
- *  typed because the service KNOWS they are numbers — it maps them itself (opend/snapshot.ts). The rest
- *  of what moomoo returns passes through untouched, for a human reading JSON.
+ *  typed because the service KNOWS they are numbers — each Provider maps its own vendor's figures
+ *  onto these names (`opend/snapshot.ts`, `ibkr/fields.ts`). Whatever else the Provider returns
+ *  passes through untouched, for a human reading JSON.
  *
  *  Declared at all because of what phase 8 found: the frontend used to declare `mid_price?: number`
  *  while the service promised nothing of the kind, so the hand-written interface was a claim rather
@@ -309,7 +310,7 @@ export function quoteRoutes(deps: Deps) {
         }),
       );
     } catch (err) {
-      throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);
+      throw providerFailed(deps.provider.name, err);
     }
   });
 }

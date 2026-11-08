@@ -429,7 +429,9 @@ describe("/positions/values", () => {
     expect(calls).toBe(0);
   });
 
-  it("answers 502 rather than 500 when the OpenD call fails", async () => {
+  it("answers 502 rather than 500 when the Provider call fails, and names it", async () => {
+    // one sentence for both market-data routes, from the Provider's own name: this read "OpenD
+    // call failed" in two places whatever was actually answering (`errors.providerFailed`)
     let first = true;
     start(async (codes) => {
       if (first) { first = false; return pricedFetcher(codes); }
@@ -438,7 +440,9 @@ describe("/positions/values", () => {
     await post(condor());
     const resp = await h.call("/positions/values");
     expect(resp.status).toBe(502);
-    expect((await body(resp)).detail).toMatch(/OpenD call failed/);
+    const detail = (await body(resp)).detail as string;
+    expect(detail).toBe("moomoo call failed: quota exceeded");
+    expect(detail).not.toMatch(/OpenD/);
   });
 });
 

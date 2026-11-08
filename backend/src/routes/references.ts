@@ -22,7 +22,7 @@ import { newId } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
 import { documented } from "../openapi.ts";
-import { type Sources, referenceReadings } from "../references.ts";
+import { type Sources, noClient, referenceReadings } from "../references.ts";
 import { verifyContracts } from "../quotes.ts";
 import { ReferenceIn } from "../schemas/reference.ts";
 import { valid } from "../validate.ts";
@@ -97,7 +97,9 @@ export function referenceRoutes(deps: Deps) {
       // the probe goes to the NAMED vendor, not to the Provider: a code IBKR knows and moomoo
       // refuses is exactly why a Reference may name its own source (ADR 0019)
       const fetch = sources[source];
-      if (!fetch) throw httpError(422, `no ${source} client in this build`);
+      // the same sentence `references.ts` puts on the strip for a configured source this build
+      // cannot reach, from one definition rather than two that can drift apart
+      if (!fetch) throw httpError(422, noClient(source));
       const why = await verifyContracts([code], fetch);
       if (why) throw httpError(422, why);
       const row: ReferenceRow = {

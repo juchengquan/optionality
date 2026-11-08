@@ -86,8 +86,6 @@ export const DEFAULTS: Settings = {
   ibkrClientId: 31415,
   moomooWsPort: 33333,
   moomooWsKey: "",
-  // the gateway's own default, over TLS with a self-signed certificate: Node's fetch refuses that
-  // until NODE_EXTRA_CA_CERTS names the gateway's certificate, which is the correct resolution and
   apiToken: "",
   monitorIntervalSeconds: 60,
   alarmCooldownSeconds: 120,
@@ -161,8 +159,15 @@ const AT_LEAST_ONE: readonly (keyof Settings)[] = [
 ];
 
 /** Every count is non-negative; some must be positive. Fatal, as a mistyped setting already is in
- *  this file — the service should stop rather than run on a number that cannot mean anything. */
-export function checkSettings(settings: Settings): Settings {
+ *  this file — the service should stop rather than run on a number that cannot mean anything.
+ *
+ *  Both doors onto Settings go through this. For a long time only `settingsFor` did — the one the
+ *  TESTS use — so the suite proved a guard the live process did not have: `settingsFromEnv` read
+ *  the environment, `main.ts` served, and `DEGRADED_AFTER_FAILURES=0` was accepted by exactly the
+ *  path that matters. A check that only the tests reach is worse than no check, because it reads
+ *  as one.
+ */
+function checkSettings(settings: Settings): Settings {
   for (const [key, value] of Object.entries(settings)) {
     if (typeof value !== "number" || Number.isNaN(value)) continue;
     const variable = FROM_ENV[key as keyof Settings] ?? key;
@@ -197,7 +202,8 @@ export function settingsFromEnv(env: Record<string, string | undefined> = proces
       (out[key] as string) = raw;
     }
   }
-  return out;
+  // the same guard `settingsFor` applies, on the door the SERVICE comes through
+  return checkSettings(out);
 }
 
 /** Settings for a test, defaults everywhere the test does not care. */

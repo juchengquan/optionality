@@ -21,11 +21,17 @@ import type { ProviderClient } from "./ports.ts";
 /** Every Provider this build can be pointed at. The switch below must have a case for each, and
  *  `/health` reports whichever one answered.
  *
- *  `ibkr` was here, over the Client Portal Web API, and is gone with that transport (#205): the
- *  gateway it needed was last built in April 2023 and refuses this account's session. IBKR
- *  returns once `ibkr/` can answer `QuoteFetcher` over the socket protocol IB Gateway actually
- *  speaks. Until then the name is unknown rather than broken, because a Provider that boots and
- *  then cannot fetch is worse than one the service refuses to start on.
+ *  `ibkr` was here, over the Client Portal Web API, and went with that transport (#205): the
+ *  gateway it needed was last built in April 2023 and refuses this account's session.
+ *
+ *  It is NOT here because the socket client cannot answer — `IbkrClient` satisfies
+ *  `ProviderClient` in full today (name, fetchQuotes, reachable, close), and ADR 0019 wires it as
+ *  a Reference source, which is a figure nothing alarms on. Making it selectable HERE is a
+ *  different decision: the alarms would read from it, which turns on the account's options
+ *  entitlement, its delta latency and its one-connection-per-client-id rule. That is what the
+ *  live market test gates, and until it has been made the name stays unknown rather than
+ *  half-true — a Provider that boots and then cannot fetch is worse than one the service refuses
+ *  to start on.
  */
 export const PROVIDERS = ["moomoo"] as const;
 
