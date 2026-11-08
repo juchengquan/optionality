@@ -3,12 +3,16 @@
 	serve build-ui check-ui check-served-root resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
+	launchd-opend-install launchd-opend-uninstall opend-logs \
 	test-tools py-cut py-tag
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
 UI_LABEL = com.optionality.ui
 UI_PLIST = $(HOME)/Library/LaunchAgents/$(UI_LABEL).plist
+OPEND_LABEL = com.optionality.opend
+OPEND_PLIST = $(HOME)/Library/LaunchAgents/$(OPEND_LABEL).plist
+
 BACKUP_LABEL = com.optionality.backup
 BACKUP_PLIST = $(HOME)/Library/LaunchAgents/$(BACKUP_LABEL).plist
 NODE_BIN = $(shell command -v node)
@@ -269,6 +273,30 @@ launchd-backup-install:
 launchd-backup-uninstall:
 	-launchctl bootout gui/$$(id -u)/$(BACKUP_LABEL)
 	rm -f $(BACKUP_PLIST)
+
+# Watches OpenD, the one process everything else depends on and the only one nothing was watching
+# — it exited unattended on 2026-11-08 and the sweep failed 646 times over 2h42m. A TIMER rather
+# than KeepAlive: `~/openD.sh` backgrounds OpenD and returns, so KeepAlive would see the script
+# finish and restart it for ever; and KeepAlive can only see whether a process exists, where the
+# failure that matters is an OpenD that is up with its websocket port shut. The script's `ensure`
+# tells those apart. It calls ~/openD.sh, which is NOT in this repository: it is the owner's and
+# predates this agent, and pointing at it beats moving it.
+launchd-opend-install:
+	@test -x $(HOME)/openD.sh || { echo "$(HOME)/openD.sh not found or not executable"; exit 1; }
+	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
+	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL) 2>/dev/null
+	sed -e 's|__HOME__|$(HOME)|g' \
+		deploy/optionality-opend.launchd.plist.template > $(OPEND_PLIST)
+	plutil -lint $(OPEND_PLIST)
+	launchctl bootstrap gui/$$(id -u) $(OPEND_PLIST)
+	@echo "watching OpenD every 60s; logs: $(HOME)/Library/Logs/optionality-opend.log"
+
+launchd-opend-uninstall:
+	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL)
+	rm -f $(OPEND_PLIST)
+
+opend-logs:
+	tail -f $(HOME)/Library/Logs/optionality-opend.log
 
 backup-logs:
 	tail -f $(HOME)/Library/Logs/optionality-backup.log

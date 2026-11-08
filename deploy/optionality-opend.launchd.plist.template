@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The one process everything else depends on, and the only one nothing was watching.
+
+         On 2026-11-08 OpenD exited cleanly after 23 days up, nothing restarted it, and the sweep
+         failed 646 times over 2h42m. The market was shut, so it cost nothing — which was luck
+         rather than design. Both optionality agents are managed by launchd and the thing they
+         both depend on was a hand-started desktop app.
+
+         A TIMER rather than KeepAlive, which is the whole design decision here. KeepAlive watches
+         the process it launched, and `openD.sh` starts OpenD in the background and returns — so
+         launchd would see the script finish a second later, conclude the job ended, and run it
+         again. Immediately. For ever.
+
+         More importantly, KeepAlive can only see whether a process EXISTS. An OpenD sitting at a
+         login prompt with its websocket port shut looks perfectly healthy to the operating
+         system, and that is the failure that matters: the service would show dashes while launchd
+         reported everything fine. `openD.sh ensure` waits for the API port and pings the telnet
+         console to confirm there is an upstream session, so it can tell the two apart. The script
+         is the part that knows something; this agent is just a clock.
+
+         A minute's granularity against the 2h42m it replaces. -->
+    <key>Label</key>
+    <string>com.optionality.opend</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/openD.sh</string>
+        <!-- idempotent and quiet when all is well: starts a dead OpenD, restarts a husk whose API
+             port is shut, and only REPORTS one that is up without a confirmed session — because
+             that may need a human at the login window, and a restart a minute against an expired
+             credential is a watchdog flapping a provider. -->
+        <string>ensure</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__HOME__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- launchd starts with a bare PATH, and `ensure` reaches for python3, nc and pgrep -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <!-- at login, and then every minute -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/optionality-opend.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/optionality-opend.log</string>
+</dict>
+</plist>
