@@ -16,9 +16,7 @@ import type { Deps } from "./deps.ts";
 import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
-import { ibkrSource } from "./ibkr/provider.ts";
-import { makeProvider } from "./provider.ts";
-import { yahooSource } from "./yahoo/provider.ts";
+import { openVendors } from "./vendors.ts";
 import { Scheduler } from "./scheduler.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
@@ -35,22 +33,20 @@ const applied = migrate(db);
 if (applied.length > 0) console.info(`applied ${applied.length} migration(s): ${applied.join(", ")}`);
 const send = telegramSender(settings.telegramBotToken, settings.telegramChatId);
 
-/** Chosen here and nowhere else: everything below takes the port, and only `/health` and the
- *  shutdown below need the Provider itself (ADR 0015). An unknown name is fatal — see provider.ts. */
-const provider = makeProvider(settings);
+/** Every vendor this build can reach, opened once (ADR 0019): the Provider the alarms read from,
+ *  and every vendor a Reference may name — the Provider among them, under its own name, so its
+ *  Reference rows come from the same client. An unknown or unconfigured Provider is fatal here;
+ *  a Reference vendor that is simply not configured is absent, and a row naming it says so.
+ *
+ *  Everything below takes the port rather than this: only `/health` and the shutdown need the
+ *  Provider itself. */
+const vendors = openVendors(settings);
+const provider = vendors.provider;
 
 const scheduler = new Scheduler();
 const sweeper = new MonitorSweeper({
   db, settings, fetchQuotes: provider.fetchQuotes, send,
 });
-
-/** Vendors a Reference may name beyond the Provider (ADR 0019). Empty unless IBKR_HOST is set,
- *  and built whether or not IBKR is the Provider — a Reference alarms on nothing, which is why it
- *  is the one figure allowed a source the rest of the service does not use. */
-const ibkr = ibkrSource(settings);
-/** Yahoo needs no configuration — no host, no key, no login — so it is always available and
- *  costs nothing until a Reference names it. Deleting the row is the off switch. */
-const references = { sources: { ...ibkr.sources, ...yahooSource() }, close: ibkr.close };
 
 const deps: Deps = {
   settings,
@@ -58,7 +54,7 @@ const deps: Deps = {
   now: () => new Date(),
   sweeper,
   provider,
-  referenceSources: references.sources,
+  sources: vendors.sources,
 };
 
 const port = Number(process.env.PORT ?? 31417);
@@ -96,6 +92,8 @@ if (botWanted) {
 console.log(
   `optionality backend on 127.0.0.1:${port} — `
   + `reading ${provider.name}, sweeping every ${settings.monitorIntervalSeconds}s, `
+  // every vendor that opened, so the log says which Reference sources this build actually has
+  + `references from ${Object.keys(vendors.sources).sort().join(", ")}, `
   + `bot ${botWanted ? "polling" : "not started (set OPTIONALITY_BOT=1)"}`,
 );
 
@@ -149,9 +147,9 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     bot.stop();
     scheduler.stop();
     server.close();
-    provider.close();
-    // the Reference source is a second connection to hang up, and only exists when configured
-    references.close();
+    // one loop over everything that opened, the Provider included: a vendor cannot be forgotten
+    // here by growing a connection later, which the hand-written pair of calls allowed
+    vendors.close();
     db.close();
     process.exit(0);
   });

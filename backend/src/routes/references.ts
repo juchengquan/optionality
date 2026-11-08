@@ -22,7 +22,7 @@ import { newId } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
 import { documented } from "../openapi.ts";
-import { type Sources, noClient, referenceReadings } from "../references.ts";
+import { noClient, referenceReadings } from "../references.ts";
 import { verifyContracts } from "../quotes.ts";
 import { ReferenceIn } from "../schemas/reference.ts";
 import { valid } from "../validate.ts";
@@ -70,14 +70,11 @@ export function referenceRoutes(deps: Deps) {
     id: row.id, code: row.code, label: row.label, source: row.source, created_at: row.created_at,
   });
 
-  /** The vendors this build can reach, by name: the Provider under its own name, plus whatever
-   *  else is configured. A source is reachable when a client for it EXISTS — asserting otherwise
-   *  would hand a Reference a fetcher belonging to another vendor, which is the mutation that
-   *  survived until `referenceSources` made the difference observable. */
-  const sources: Sources = {
-    [deps.provider.name]: deps.provider.fetchQuotes,
-    ...deps.referenceSources,
-  };
+  /** The vendors this build can reach, by name — assembled once by `vendors.openVendors`, the
+   *  Provider among them. A source is reachable when a client for it EXISTS: handing a Reference
+   *  a fetcher belonging to another vendor is the mutation that survived until the registry made
+   *  the difference observable. */
+  const { sources } = deps;
 
   return new Hono()
     .get("/", list, async (c) => list.reply(c, 200, await referenceReadings(db, sources)))

@@ -118,9 +118,10 @@ export interface HarnessOptions {
   providerName?: string;
   /** the bounded OpenD call. Defaults to the permissive echo. */
   fetchQuotes?: FakeProvider;
-  /** Vendors a Reference may name beyond the Provider (ADR 0019), so a test can prove that the
-   *  creation probe goes to the NAMED one rather than to whatever the Provider happens to be. */
-  referenceSources?: Deps["referenceSources"];
+  /** Vendors a Reference may name BEYOND the Provider (ADR 0019), so a test can prove that the
+   *  creation probe goes to the NAMED one rather than to whatever the Provider happens to be.
+   *  The Provider is added under its own name either way, as the registry does. */
+  referenceSources?: Deps["sources"];
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -137,18 +138,22 @@ export function harness(options: HarnessOptions = {}): Harness {
   const sweeper = new FakeSweeper();
 
   const state = { now: NOW };
+  const provider = {
+    name: options.providerName ?? "moomoo",
+    fetchQuotes: options.fetchQuotes ? fakeFetcher(options.fetchQuotes) : echoFetcher,
+    reachable: () => Promise.resolve(options.opend ?? false),
+    close: () => { /* nothing to hang up */ },
+  };
   const deps: Deps = {
     settings,
     db,
     now: () => state.now,
     sweeper,
-    provider: {
-      name: options.providerName ?? "moomoo",
-      fetchQuotes: options.fetchQuotes ? fakeFetcher(options.fetchQuotes) : echoFetcher,
-      reachable: () => Promise.resolve(options.opend ?? false),
-      close: () => { /* nothing to hang up */ },
-    },
-    referenceSources: options.referenceSources,
+    provider,
+    // what `openVendors` assembles in the service: every reachable vendor by name, the Provider
+    // among them under its own. A test that names extra ones is testing that a Reference's source
+    // decides which vendor is asked.
+    sources: { [provider.name]: provider.fetchQuotes, ...options.referenceSources },
   };
 
   const app = createApp(deps);
