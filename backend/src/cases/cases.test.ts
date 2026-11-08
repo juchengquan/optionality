@@ -17,6 +17,7 @@ const CASES = join(import.meta.dirname, "../../../testdata/golden");
 const NOT_PORTED = new Set([
   "exit.exitPolicy", // reads the service's Settings; the package takes the three knobs directly
   "alarm.alarmPolicy", // the same: Settings in, two knobs out (ADR 0017)
+  "degraded.degradedPolicy", // and the same again, for the degraded notice
 ]);
 
 describe("testdata/golden/", () => {

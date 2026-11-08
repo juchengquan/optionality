@@ -27,6 +27,9 @@ export interface Settings {
   uiRefreshSeconds: number;
   /** consecutive sweep failures before the degraded telegram alert */
   degradedAfterFailures: number;
+  /** re-reminds while the sweep is still failing, so one missed notice is not the end of it.
+   *  0 turns the reminder off, as it does for `alarmRepeatSeconds` (domain/degraded.ts). */
+  degradedRepeatSeconds: number;
   /** consecutive sweeps a monitor's figure may fail to arrive before it is quarantined; 0 never
    *  quarantines and only warns, which is what the engine did before (#167) */
   quarantineAfterSilentSweeps: number;
@@ -65,6 +68,7 @@ export const DEFAULTS: Settings = {
   alarmRepeatSeconds: 1800,
   uiRefreshSeconds: 30,
   degradedAfterFailures: 5,
+  degradedRepeatSeconds: 1800,
   // ten sweeps, so a gap of a few seconds is never a quarantine while a figure that is simply not
   // served stops being waited for within minutes at any sweep interval
   quarantineAfterSilentSweeps: 10,
@@ -92,6 +96,7 @@ const FROM_ENV = {
   alarmRepeatSeconds: "ALARM_REPEAT_SECONDS",
   uiRefreshSeconds: "UI_REFRESH_SECONDS",
   degradedAfterFailures: "DEGRADED_AFTER_FAILURES",
+  degradedRepeatSeconds: "DEGRADED_REPEAT_SECONDS",
   quarantineAfterSilentSweeps: "QUARANTINE_AFTER_SILENT_SWEEPS",
   expiredRetentionDays: "EXPIRED_RETENTION_DAYS",
   exitTakeFraction: "EXIT_TAKE_FRACTION",

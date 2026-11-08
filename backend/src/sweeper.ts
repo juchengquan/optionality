@@ -24,6 +24,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { alarmPolicy, alarmTransition } from "./domain/alarm.ts";
+import { degradedPolicy, degradedVerdict, recoveredNotice } from "./domain/degraded.ts";
 import { expiryVerdict, silenceVerdict } from "./domain/lifecycle.ts";
 import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
 import { exitPolicy } from "./domain/exit.ts";
@@ -80,6 +81,15 @@ function lastAlarmAt(monitor: MonitorRow): Date | null {
 
 export class MonitorSweeper {
   consecutiveFailuresCount = 0;
+  /** When the current run of failures began, and when the owner was last told about it.
+   *
+   *  In memory with the count, for the reason given below it: the claim is about a RUN, and a
+   *  restart genuinely breaks the run. The cost is that a service restarted mid-outage reports
+   *  the failures without the duration, which `degraded.ts` prints as nothing rather than as a
+   *  guess.
+   */
+  degradedSince: Date | null = null;
+  lastDegradedNoticeAt: Date | null = null;
   /** Consecutive sweeps a monitor's figure has failed to arrive for, by monitor id.
    *
    *  In memory, like `consecutiveFailuresCount` and for the same reason: the claim is about a RUN
@@ -559,23 +569,45 @@ export class MonitorSweeper {
     await this.recordFailure(`a sweep stuck for ${age}s`);
   }
 
-  private async recordFailure(reason = "OpenD unreachable?"): Promise<void> {
+  /** The default names no vendor on purpose: the Provider is whichever one this deployment is
+   *  configured with, and this said "OpenD unreachable?" whatever was answering. Same bug ADR
+   *  0018 fixed in `verifyContracts`, which was not the only place it had been written. */
+  private async recordFailure(reason = "the Provider did not answer"): Promise<void> {
+    const now = this.now();
     this.sweepOk = false;
     this.consecutiveFailuresCount += 1;
-    // edge-triggered: once, at the threshold, not once per failure
-    if (this.consecutiveFailuresCount === this.deps.settings.degradedAfterFailures) {
-      await this.notify(
-        `⚠️ monitoring degraded: ${this.consecutiveFailuresCount} consecutive sweep failures `
-        + `(${reason})`,
-      );
+    this.degradedSince ??= now;
+
+    const { notice } = degradedVerdict(
+      {
+        failures: this.consecutiveFailuresCount,
+        since: this.degradedSince,
+        lastNoticeAt: this.lastDegradedNoticeAt,
+      },
+      degradedPolicy(this.deps.settings), reason, now,
+    );
+    // the stamp moves only when something was actually said, which is what makes the interval
+    // measure silence rather than sweeps
+    if (notice !== null) {
+      this.lastDegradedNoticeAt = now;
+      await this.notify(notice);
     }
   }
 
   private async recordSuccess(): Promise<void> {
-    if (this.consecutiveFailuresCount >= this.deps.settings.degradedAfterFailures) {
-      await this.notify("✅ monitoring recovered");
-    }
+    const notice = recoveredNotice(
+      {
+        failures: this.consecutiveFailuresCount,
+        since: this.degradedSince,
+        lastNoticeAt: this.lastDegradedNoticeAt,
+      },
+      degradedPolicy(this.deps.settings), this.now(),
+    );
     this.consecutiveFailuresCount = 0;
+    this.degradedSince = null;
+    this.lastDegradedNoticeAt = null;
     this.sweepOk = true;
+    // after the counters are cleared: a failed send must not leave the service looking degraded
+    if (notice !== null) await this.notify(notice);
   }
 }
