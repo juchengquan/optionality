@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MARKET_DATA_FROZEN, type TwsContract, cancelMktData, readMessage, reqContractDetails,
+  MARKET_DATA_DELAYED_FROZEN, type TwsContract, cancelMktData, readMessage,
+  reqContractDetails,
   reqMarketDataType, reqMktData,
 } from "./messages.ts";
 import { readFields } from "./wire.ts";
@@ -64,8 +65,13 @@ describe("asking for figures", () => {
     expect(data).toEqual(lookup);
   });
 
-  it("asks for frozen data, so a shut market still answers", () => {
-    expect(readFields(reqMarketDataType(MARKET_DATA_FROZEN))).toEqual(["59", "1", "2"]);
+  it("asks for delayed-frozen, which is the only grade an unsubscribed index answers", () => {
+    // FROZEN (2) was the obvious choice and delivered NOTHING for an index this account is not
+    // subscribed to: measured 2026-11-08, grade 2 gave `354 not subscribed` and grade 4 gave
+    // 7374.85 for the same index in the same session. It does not give up live data where there
+    // IS an entitlement — a request for the delayed grade on a subscribed option was granted
+    // grade 1 the same day.
+    expect(readFields(reqMarketDataType(MARKET_DATA_DELAYED_FROZEN))).toEqual(["59", "1", "4"]);
   });
 
   it("cancels by request id", () => {

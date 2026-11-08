@@ -37,7 +37,8 @@
 import { contractFor } from "./contract.ts";
 import { GREEK_TICKS, PRICE_TICKS, grade, greekFields, hasFigures, withMid } from "./fields.ts";
 import {
-  MARKET_DATA_FROZEN, type Incoming, cancelMktData, reqContractDetails, reqMarketDataType,
+  MARKET_DATA_DELAYED_FROZEN, type Incoming, cancelMktData, reqContractDetails,
+  reqMarketDataType,
   reqMktData,
 } from "./messages.ts";
 import { TwsSocket, type TwsSocketConfig } from "./socket.ts";
@@ -112,7 +113,7 @@ export class IbkrClient {
     const socket = new TwsSocket(this.config);
     await socket.connect((message) => this.route(message));
     this.socket = socket;
-    socket.send(reqMarketDataType(MARKET_DATA_FROZEN));
+    socket.send(reqMarketDataType(MARKET_DATA_DELAYED_FROZEN));
     return socket;
   }
 

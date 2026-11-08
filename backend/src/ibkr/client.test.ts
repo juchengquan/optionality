@@ -64,6 +64,15 @@ describe("one bounded ask", () => {
     expect(q!.last_known).toBe(true);
   });
 
+  it("reads a DELAYED grant as both facts, because grade 4 is both", async () => {
+    // what the real gateway grants for an index this account is not subscribed to — the case
+    // that made asking for FROZEN the wrong request, found by adding a real Reference
+    const c = await connected({ grantDelayed: true });
+    const [q] = (await c.fetchQuotes([OPTION])).records;
+    expect(q!.delayed).toBe(true);
+    expect(q!.last_known).toBe(true);
+  });
+
   it("asks nothing at all for an empty list", async () => {
     const c = await connected();
     expect(await c.fetchQuotes([])).toEqual({ records: [], unknown: [] });
