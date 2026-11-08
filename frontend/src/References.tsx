@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { SOURCES, type Source } from "backend/schemas/sources";
+
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -21,13 +23,13 @@ export function References({
 }: {
   references: Reference[];
   /** answers whether it landed, so the boxes are cleared only on a Reference that now exists */
-  onAdd: (body: { code: string; label?: string; source: "moomoo" | "ibkr" | "yahoo" }) =>
+  onAdd: (body: { code: string; label?: string; source: Source }) =>
     Promise<boolean>;
   onRemove: (id: string) => void;
 }) {
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
-  const [source, setSource] = useState<"moomoo" | "ibkr" | "yahoo">("moomoo");
+  const [source, setSource] = useState<Source>(SOURCES[0]);
 
   return (
     <section data-testid="references">
@@ -99,9 +101,10 @@ export function References({
             value={source}
             onChange={(e) => setSource(e.target.value as typeof source)}
           >
-            <option value="moomoo">moomoo</option>
-            <option value="ibkr">ibkr</option>
-            <option value="yahoo">yahoo</option>
+            {/* the schema's own list, so a vendor added beside its client reaches this box with
+                nobody editing this file — these were three hand-written tags, and the union they
+                spelled was written out in four more places */}
+            {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
           </NativeSelect>
           <FieldDescription>
             Which vendor answers for this code. Named outright and not "the Provider", so the strip

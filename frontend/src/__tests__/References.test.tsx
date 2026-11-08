@@ -2,6 +2,8 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SOURCES } from "backend/schemas";
+
 import { App } from "../App";
 
 const health = {
@@ -145,6 +147,25 @@ describe("keeping one", () => {
     await settled();
     await settled();
     expect(JSON.parse(String(posted[0]!.init.body))).toEqual({ code: "US.QQQ", source: "moomoo" });
+  });
+
+  it("offers exactly the vendors the backend knows about", async () => {
+    // The list is the schema's, not the component's: `SOURCES` is what the route validates
+    // against and what `VENDORS` is held to, so a vendor added beside its client must reach this
+    // box with nobody editing a form — and one removed must leave it. Hand-written <option> tags
+    // were four frontend edits per vendor and the reason this is checked rather than trusted.
+    mockApi([]);
+    render(<App />);
+    await settled();
+    await settled();
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    await settled();
+    const sheet = screen.getByRole("dialog");
+    const select = within(sheet).getByLabelText("from") as HTMLSelectElement;
+    const offered = Array.from(select.options).map((o) => o.value);
+    expect(offered).toEqual([...SOURCES]);
+    // and the labels are the names themselves, so a vendor cannot arrive nameless
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([...SOURCES]);
   });
 
   it("states the reason a kept Reference has no figure, which the strip only hints at", async () => {
