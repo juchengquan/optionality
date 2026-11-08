@@ -1,7 +1,7 @@
 /** No Makefile recipe deletes the directory the live dashboard is served from.
  *
  *  `frontend/dist` is not only a committed build artefact: it is the UI agent's document root.
- *  deploy/optionality-ui.launchd.plist.template sets OPTIONALITY_UI_ROOT to <repo>/frontend/dist
+ *  deploy/macos/optionality-ui.launchd.plist.template sets OPTIONALITY_UI_ROOT to <repo>/frontend/dist
  *  and deploy/Caddyfile's `root * {$OPTIONALITY_UI_ROOT}` reads it from disk per request, so a
  *  target that removes it takes the dashboard down for as long as the rm is in effect — and
  *  leaves it down if what was meant to rebuild it fails.
@@ -26,7 +26,7 @@ const makefile = readFileSync(resolve(ROOT, "Makefile"), "utf8");
 
 /** The served root, read from the plist template rather than written down twice: if the agent is
  *  ever pointed somewhere else, this follows it instead of guarding a path nothing serves. */
-const plist = readFileSync(resolve(ROOT, "deploy/optionality-ui.launchd.plist.template"), "utf8");
+const plist = readFileSync(resolve(ROOT, "deploy/macos/optionality-ui.launchd.plist.template"), "utf8");
 const root = plist.match(/<key>OPTIONALITY_UI_ROOT<\/key>\s*<string>__REPO__\/([^<]+)<\/string>/)?.[1];
 if (!root) {
   console.error("check-served-root: could not read OPTIONALITY_UI_ROOT from the plist template");

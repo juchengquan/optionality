@@ -230,7 +230,7 @@ launchd-api-install:
 	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
 	sed -e 's|__NODE__|$(NODE_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
-		deploy/optionality-api.launchd.plist.template > $(API_PLIST)
+		deploy/macos/optionality-api.launchd.plist.template > $(API_PLIST)
 	plutil -lint $(API_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
 
@@ -266,7 +266,7 @@ launchd-backup-install:
 	-launchctl bootout gui/$$(id -u)/$(BACKUP_LABEL) 2>/dev/null
 	sed -e 's|__NODE__|$(NODE_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
 		-e "s|__BACKUP_DIR__|$$(cd "$(BACKUP_DIR)" && pwd)|g" \
-		deploy/optionality-backup.launchd.plist.template > $(BACKUP_PLIST)
+		deploy/macos/optionality-backup.launchd.plist.template > $(BACKUP_PLIST)
 	plutil -lint $(BACKUP_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(BACKUP_PLIST)
 
@@ -289,13 +289,13 @@ launchd-backup-uninstall:
 OPEND_ACCOUNT = $(shell grep -E '^OPEND_LOGIN_ACCOUNT=' .env 2>/dev/null | head -1 | cut -d= -f2-)
 
 launchd-opend-install:
-	@test -x deploy/opend.sh || { echo "deploy/opend.sh missing or not executable"; exit 1; }
+	@test -x deploy/macos/opend.sh || { echo "deploy/macos/opend.sh missing or not executable"; exit 1; }
 	@test -n "$(OPEND_ACCOUNT)" || { echo "OPEND_LOGIN_ACCOUNT is not set in .env — refusing to install an agent that would restart a failing login every 60s"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
 	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL) 2>/dev/null
 	sed -e 's|__HOME__|$(HOME)|g' -e 's|__REPO__|$(CURDIR)|g' \
 		-e 's|__OPEND_ACCOUNT__|$(OPEND_ACCOUNT)|g' \
-		deploy/optionality-opend.launchd.plist.template > $(OPEND_PLIST)
+		deploy/macos/optionality-opend.launchd.plist.template > $(OPEND_PLIST)
 	chmod 600 $(OPEND_PLIST)
 	plutil -lint $(OPEND_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(OPEND_PLIST)
@@ -312,22 +312,22 @@ check-opend:
 		echo "~/openD.sh absent — nothing to compare (this check is for the owner's machine)"; \
 	else \
 		sed -E 's|^LOGIN_ACCOUNT=.*|LOGIN_ACCOUNT=X|' $(HOME)/openD.sh > "$$a"; \
-		sed -E 's|^LOGIN_ACCOUNT=.*|LOGIN_ACCOUNT=X|' deploy/opend.sh > "$$b"; \
+		sed -E 's|^LOGIN_ACCOUNT=.*|LOGIN_ACCOUNT=X|' deploy/macos/opend.sh > "$$b"; \
 		if diff -u "$$a" "$$b" > /dev/null; then \
-			rm -f "$$a" "$$b"; echo "~/openD.sh matches deploy/opend.sh"; \
+			rm -f "$$a" "$$b"; echo "~/openD.sh matches deploy/macos/opend.sh"; \
 		else \
-			echo "~/openD.sh and deploy/opend.sh have DRIFTED — 'make opend-sync', or reconcile by hand:"; \
+			echo "~/openD.sh and deploy/macos/opend.sh have DRIFTED — 'make opend-sync', or reconcile by hand:"; \
 			diff -u "$$a" "$$b" || true; rm -f "$$a" "$$b"; exit 1; \
 		fi; \
 	fi
 
 opend-sync:
-	@test -f $(HOME)/openD.sh || { echo "~/openD.sh absent; copy deploy/opend.sh there and set its account"; exit 1; }
+	@test -f $(HOME)/openD.sh || { echo "~/openD.sh absent; copy deploy/macos/opend.sh there and set its account"; exit 1; }
 	@acct=$$(grep -E '^LOGIN_ACCOUNT=' $(HOME)/openD.sh); \
-		awk -v a="$$acct" '/^LOGIN_ACCOUNT=/ { print a; next } { print }' deploy/opend.sh > $(HOME)/openD.sh.new && \
+		awk -v a="$$acct" '/^LOGIN_ACCOUNT=/ { print a; next } { print }' deploy/macos/opend.sh > $(HOME)/openD.sh.new && \
 		chmod 755 $(HOME)/openD.sh.new && zsh -n $(HOME)/openD.sh.new && \
 		mv $(HOME)/openD.sh.new $(HOME)/openD.sh && \
-		echo "~/openD.sh synced from deploy/opend.sh, account kept"
+		echo "~/openD.sh synced from deploy/macos/opend.sh, account kept"
 
 launchd-opend-uninstall:
 	-launchctl bootout gui/$$(id -u)/$(OPEND_LABEL)
@@ -344,7 +344,7 @@ launchd-ui-install:
 	@test -n "$(CADDY_BIN)" || { echo "caddy not found — brew install caddy"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
 	sed -e 's|__CADDY__|$(CADDY_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
-		deploy/optionality-ui.launchd.plist.template > $(UI_PLIST)
+		deploy/macos/optionality-ui.launchd.plist.template > $(UI_PLIST)
 	plutil -lint $(UI_PLIST)
 	OPTIONALITY_UI_ROOT=$(CURDIR)/frontend/dist $(CADDY_BIN) validate --config deploy/Caddyfile
 	launchctl bootstrap gui/$$(id -u) $(UI_PLIST)

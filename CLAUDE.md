@@ -210,13 +210,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   port is shut, and only REPORTS one that is up without a confirmed session, because that may need
   a human at the login window and a restart a minute against an expired credential is a watchdog
   flapping a provider.
-  **Two copies of that script exist on purpose.** `deploy/opend.sh` is committed and is the one
+  **Two copies of that script exist on purpose.** `deploy/macos/opend.sh` is committed and is the one
   the agent runs — so the version-controlled copy is the one whose behaviour you see. `~/openD.sh`
   is the owner's and must keep working with NO repository cloned, which is why it is a copy rather
   than a symlink. `make check-opend` fails when they differ and is part of `make check`, the same
   arrangement `check-ui` uses for the committed bundle; `make opend-sync` copies the committed one
   over the other, keeping its account line. The ONE difference by design is that account:
-  `deploy/opend.sh` has none, `~/openD.sh` keeps a literal default, and
+  `deploy/macos/opend.sh` has none, `~/openD.sh` keeps a literal default, and
   `make launchd-opend-install` stamps `OPEND_LOGIN_ACCOUNT` from `.env` into the generated agent —
   which lives outside the repo, so the account is only ever where git does not look. That target
   refuses to install when it is unset, because an agent that restarts a failing login every 60

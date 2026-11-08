@@ -23,14 +23,14 @@
 
          A minute's granularity against the 2h42m it replaces.
 
-         It runs the COMMITTED copy, `deploy/opend.sh`, not ~/openD.sh — so the version-controlled
+         It runs the COMMITTED copy, `deploy/macos/opend.sh`, not ~/openD.sh — so the version-controlled
          one is the one that actually runs, and drift shows up as behaviour rather than only as a
          failing checksum. ~/openD.sh stays as the copy that works with no repository cloned. -->
     <key>Label</key>
     <string>com.optionality.opend</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__REPO__/deploy/opend.sh</string>
+        <string>__REPO__/deploy/macos/opend.sh</string>
         <!-- idempotent and quiet when all is well: starts a dead OpenD, restarts a husk whose API
              port is shut, and only REPORTS one that is up without a confirmed session — because
              that may need a human at the login window, and a restart a minute against an expired
