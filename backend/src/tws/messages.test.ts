@@ -98,9 +98,13 @@ describe("reading the contract answer", () => {
 });
 
 describe("reading the greeks", () => {
-  // the figures the gateway really sent on 2026-11-08, at protocol 157
+  // The figures the gateway really sent on 2026-11-08 at protocol 157 — ALL of them now. The
+  // first draft of this fixture carried an invented optPrice (4.05) and undPrice (6702.5) under
+  // a comment claiming they were measured; the probe that produced the greeks had never printed
+  // those two fields. Running our own client against the gateway produced the real pair, and the
+  // underlying price turns out to be absent entirely.
   const real = msg(21, 100, 13, 0, 0.13679778548286392, 0.02806614063578037,
-    4.05, 0, 0.00018826189971762677, 1.8321828845155324, -0.28028107934963487, 6702.5);
+    3.624407920679289, 0, 0.00018826189971762677, 1.8321828845155324, -0.28028107934963487, -1);
 
   it("reads delta and the rest off a real message", () => {
     const got = readMessage(real);
@@ -113,7 +117,10 @@ describe("reading the greeks", () => {
     expect(got.figures.gamma).toBeCloseTo(0.000188262, 9);
     expect(got.figures.vega).toBeCloseTo(1.8321829, 7);
     expect(got.figures.theta).toBeCloseTo(-0.2802811, 7);
-    expect(got.figures.undPrice).toBeCloseTo(6702.5, 1);
+    expect(got.figures.optPrice).toBeCloseTo(3.6244079, 7);
+    // the gateway prices the OPTION and declines the index, which is a real shape rather than a
+    // degenerate one: greeks arrive computed while the underlying does not
+    expect(got.figures.undPrice).toBe(null);
   });
 
   it("turns a not-computed sentinel into no figure, not into minus two", () => {
