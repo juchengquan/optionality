@@ -25,9 +25,10 @@ export type QuoteRecord = Quote;
  *  is a rule that will never fire again and is quarantined for it. A Provider that cannot price a
  *  contract reports it HERE rather than throwing: a throw is for a Provider that could not answer
  *  at all, which is an outage and must never read as a watchlist full of unknown contracts.
+ *
+ *  `domain/quote.ts` owns the shape, because the two pure functions that read it are cased and
+ *  this module is not (ADR 0017).
  */
-/** The port's answer. `domain/quote.ts` owns the shape, because the two pure functions that read
- *  it are cased and this module is not (ADR 0017). */
 export type QuoteBatch = Batch;
 
 /** One bounded batch call to a Provider. `opend/client.ts` has moomoo's. */

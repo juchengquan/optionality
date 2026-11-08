@@ -59,3 +59,52 @@ describe("numbers", () => {
     expect(s.exitManageByDte).toBe(DEFAULTS.exitManageByDte);
   });
 });
+
+/** The guard that was only ever on the test path.
+ *
+ *  `checkSettings` has refused these values since it was written, and `settingsFor` — which is
+ *  how every TEST builds Settings — called it. `settingsFromEnv`, which is how the SERVICE
+ *  builds them, never did: `main.ts` reads the environment and serves. So the live process
+ *  accepted exactly the values this file documents as fatal, and the suite could not tell,
+ *  because the suite went through the other door.
+ *
+ *  Measured on 2026-11-08: `settingsFromEnv` returned `degradedAfterFailures: 0`,
+ *  `uiRefreshSeconds: 0` and `monitorIntervalSeconds: 0` without complaint, while
+ *  `settingsFor({ degradedAfterFailures: 0 })` threw. These tests go through the SERVICE's door.
+ */
+describe("the knobs a service must not start on", () => {
+  it("refuses a count that cannot mean anything", () => {
+    expect(() => settingsFromEnv({ ALARM_COOLDOWN_SECONDS: "-1" }))
+      .toThrow(/ALARM_COOLDOWN_SECONDS cannot be negative/);
+  });
+
+  it("refuses DEGRADED_AFTER_FAILURES=0, which announced recovery for ever", () => {
+    // 0 made `consecutiveFailures >= threshold` true on a HEALTHY sweep: "✅ monitoring
+    // recovered" every minute, while the degraded alert it arms never fired at all (env.ts)
+    expect(() => settingsFromEnv({ DEGRADED_AFTER_FAILURES: "0" }))
+      .toThrow(/DEGRADED_AFTER_FAILURES must be at least 1/);
+  });
+
+  it("refuses MONITOR_INTERVAL_SECONDS=0, which stalls the engine permanently", () => {
+    // setInterval(…, 0) with a stall threshold of 0: /health reads stalled for ever and every
+    // tick records a failed sweep
+    expect(() => settingsFromEnv({ MONITOR_INTERVAL_SECONDS: "0" }))
+      .toThrow(/MONITOR_INTERVAL_SECONDS must be at least 1/);
+    expect(() => settingsFromEnv({ UI_REFRESH_SECONDS: "0" }))
+      .toThrow(/UI_REFRESH_SECONDS must be at least 1/);
+  });
+
+  it("still allows 0 where 0 genuinely means off", () => {
+    // the three AT_LEAST_ONE deliberately leaves out, which is why that list is explicit
+    expect(settingsFromEnv({ ALARM_REPEAT_SECONDS: "0" }).alarmRepeatSeconds).toBe(0);
+    expect(settingsFromEnv({ QUARANTINE_AFTER_SILENT_SWEEPS: "0" }).quarantineAfterSilentSweeps)
+      .toBe(0);
+    expect(settingsFromEnv({ EXPIRED_RETENTION_DAYS: "0" }).expiredRetentionDays).toBe(0);
+    // and the two flapping knobs, where 0 failures is the off switch (domain/flapping.ts)
+    expect(settingsFromEnv({ FLAPPING_AFTER_FAILURES: "0" }).flappingAfterFailures).toBe(0);
+  });
+
+  it("checks the defaults themselves, so a bad default cannot ship", () => {
+    expect(() => settingsFromEnv({})).not.toThrow();
+  });
+});

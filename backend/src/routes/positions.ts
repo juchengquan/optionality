@@ -19,7 +19,7 @@ import { holdingValues } from "../holdings.ts";
 import type { PositionRow } from "../db/rows.ts";
 import { newId, toSqliteJson } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
-import { httpError, notFound } from "../errors.ts";
+import { httpError, notFound, providerFailed } from "../errors.ts";
 import { volAttribution, type VolSample } from "../domain/vol.ts";
 import { toPosition } from "../hydrate.ts";
 import { adoptOrphanMonitors } from "../positions.ts";
@@ -146,7 +146,7 @@ export function positionRoutes(deps: Deps) {
       try {
         valued = await holdingValues(db, deps.provider.fetchQuotes, now, deps.settings, tz);
       } catch (err) {
-        throw httpError(502, `OpenD call failed: ${err instanceof Error ? err.message : String(err)}`);
+        throw providerFailed(deps.provider.name, err);
       }
       // `values` is the route descriptor; the holdings are `held`
       const { byCode, values: held } = valued;

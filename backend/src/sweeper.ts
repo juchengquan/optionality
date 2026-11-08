@@ -421,8 +421,6 @@ export class MonitorSweeper {
     return active;
   }
 
-  /** Disable — never delete — monitors whose contracts the Provider does not recognise. Its twin
-   *  is the silence count in `evaluate`: the same answer to the other half of "cannot evaluate". */
   /** A row the engine cannot hydrate: disabled with a notice, kept for inspection.
    *
    *  The same treatment an unknown contract gets, and for the same reason — a rule the engine
@@ -446,6 +444,8 @@ export class MonitorSweeper {
     for (const text of notices) await this.notify(text);
   }
 
+  /** Disable — never delete — monitors whose contracts the Provider does not recognise. Its twin
+   *  is the silence count in `evaluate`: the same answer to the other half of "cannot evaluate". */
   private async quarantineUnknown(
     active: MonitorRow[], bad: Set<string>,
   ): Promise<MonitorRow[]> {

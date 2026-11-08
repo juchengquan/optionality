@@ -72,8 +72,17 @@ function flag(quote: Quote | null, key: string): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
-const UNKNOWN = "the Provider does not know this code";
-const SILENT = "the Provider returned no quote for it";
+/** Why a Reference has no figure, in the words of the vendor it actually asked.
+ *
+ *  These said "the Provider" until 2026-11-08, which ADR 0019 had already made untrue: a
+ *  Reference may name a vendor the rest of the service does not use, so a Yahoo symbol Yahoo does
+ *  not carry reported a Provider that was never asked. It is the third time this service has
+ *  blamed one vendor for another's answer — ADR 0018 corrected `verifyContracts`, and the
+ *  sweeper's degraded default was corrected for the same reason — and the fix is the same each
+ *  time: the sentence takes the name from whoever was asked.
+ */
+const unknownCode = (source: string) => `${source} does not know this code`;
+const noQuote = (source: string) => `${source} returned no quote for it`;
 
 /** The vendors this build can actually reach, by name.
  *
@@ -84,7 +93,9 @@ const SILENT = "the Provider returned no quote for it";
  */
 export type Sources = Readonly<Record<string, QuoteFetcher>>;
 
-const noClient = (source: string) => `no ${source} client in this build`;
+/** A source this build cannot reach at all. Exported because `routes/references.ts` refuses a
+ *  creation with the same sentence, and two copies of one wording drift. */
+export const noClient = (source: string) => `no ${source} client in this build`;
 const NO_PRICE = "the quote carries no price";
 
 /** One bounded batch, and on a THROW one call per Reference.
@@ -97,12 +108,13 @@ const NO_PRICE = "the quote carries no price";
  *  A batch that ANSWERED is never retried, however much of it is unknown: an unknown code is an
  *  answer, and asking again would spend a call to be told the same thing.
  */
-async function fetchAll(codes: string[], fetch: QuoteFetcher): Promise<Fetched> {
+async function fetchAll(codes: string[], fetch: QuoteFetcher, source: string): Promise<Fetched> {
   const quotes: Record<string, Quote> = {};
   const faults: Record<string, string> = {};
   const take = (records: Quote[], unknown: string[]) => {
     for (const record of records) quotes[String(record.code)] = record;
-    for (const code of unknown) faults[code] = UNKNOWN;
+    // the vendor that was asked, which is what the strip shows beside the dash
+    for (const code of unknown) faults[code] = unknownCode(source);
   };
   try {
     const batch = await fetch(codes);
@@ -156,14 +168,14 @@ export async function referenceReadings(
       for (const code of codes) faults[code] = noClient(source);
       return;
     }
-    const got = await fetchAll(codes, fetch);
+    const got = await fetchAll(codes, fetch, source);
     Object.assign(quotes, got.quotes);
     Object.assign(faults, got.faults);
   }));
   return rows.map((row) => {
     const quote = quotes[row.code] ?? null;
     const reading = referenceFigure(quote);
-    const fault = faults[row.code] ?? (quote ? null : SILENT);
+    const fault = faults[row.code] ?? (quote ? null : noQuote(row.source));
     return {
       id: row.id,
       code: row.code,

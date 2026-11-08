@@ -541,12 +541,24 @@ describe("/quotes", () => {
     expect(quotes[0].dte).toBe(30);
   });
 
-  it("answers 502 rather than 500 when the OpenD call fails", async () => {
+  it("answers 502 rather than 500 when the Provider call fails", async () => {
     h = harness({ fetchQuotes: echoThenFail() });
     await post(single());
     const resp = await h.call("/quotes");
     expect(resp.status).toBe(502);
-    expect((await body(resp)).detail).toMatch(/OpenD call failed/);
+    expect((await body(resp)).detail).toMatch(/moomoo call failed/);
+  });
+
+  it("names the Provider that failed, whichever one this deployment reads", async () => {
+    // the dashboard prints this `detail` verbatim, and it said "OpenD call failed" whatever was
+    // answering — the same leak ADR 0018 corrected in `verifyContracts` and the sweeper's
+    // degraded default corrected again. A sentence naming one vendor is wrong the moment
+    // OPTIONALITY_PROVIDER names another.
+    h = harness({ providerName: "ibkr", fetchQuotes: echoThenFail() });
+    await post(single());
+    const detail = (await body(await h.call("/quotes"))).detail as string;
+    expect(detail).toMatch(/^ibkr call failed/);
+    expect(detail, "never the vendor it is not").not.toMatch(/OpenD/);
   });
 
   it("excludes a disabled monitor", async () => {

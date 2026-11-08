@@ -29,7 +29,8 @@ export interface Deps {
    *  one-Provider rule does not reach it. The Provider is always available as a source under its
    *  own name; this is what else is reachable, and `references.ts` merges the two.
    *
-   *  Empty today. ADR 0019's track C puts IBKR here whether or not it is the Provider.
+   *  `main.ts` puts Yahoo here always and IB Gateway whenever `IBKR_HOST` is set — the latter
+   *  whether or not IBKR is the Provider (ADR 0019, track C).
    */
   referenceSources?: Sources;
 }

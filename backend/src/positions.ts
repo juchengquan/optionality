@@ -51,7 +51,7 @@ export interface PositionSweepDeps {
   notify: (text: string) => Promise<boolean>;
 }
 
-  /** One notice per Position when it reaches the manage-by DTE (ADR 0011).
+/** One notice per Position when it reaches the manage-by DTE (ADR 0011).
  *
  *  A notice about a POSITION, not an Alarm about a Monitor: no threshold is involved, the
  *  cooldowns do not apply, and `manage_notified_at` is what makes it once rather than once a

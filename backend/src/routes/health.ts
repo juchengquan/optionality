@@ -19,7 +19,7 @@ import { GOLDEN_CASES } from "../golden.ts";
 import { documented } from "../openapi.ts";
 import { displayTime } from "../domain/timefmt.ts";
 
-export const HealthResponse = z.object({
+const HealthResponse = z.object({
   db: z.boolean(),
   /** Which Provider this deployment reads, and whether it is answering. It was `opend: boolean`
    *  until #169 — the vendor's name on the API contract, which the dashboard then printed

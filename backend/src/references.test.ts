@@ -199,6 +199,32 @@ describe("more than one source", () => {
     expect(rows[0]!.error).toBe("no ibkr client in this build");
   });
 
+  it("names the VENDOR that refused the code, not \"the Provider\"", async () => {
+    // ADR 0019 let a Reference name its own source, and this sentence was written before it: a
+    // Yahoo row whose symbol Yahoo does not carry said "the Provider does not know this code"
+    // about a vendor the Provider had never been asked about. Measured on 2026-11-08. It is the
+    // third appearance of this bug class — ADR 0018 fixed it in `verifyContracts` and the
+    // sweeper's degraded default fixed it again — and each time the fault was the same: a
+    // sentence that names one vendor while the service reads several.
+    const h = harness();
+    add(h.db, { id: "r1".padEnd(32, "0"), code: "NOTATICKER", source: "yahoo" });
+    const rows = await referenceReadings(h.db, { yahoo: pricing({}).fetch });
+    expect(rows[0]!.error).toBe("yahoo does not know this code");
+    expect(rows[0]!.error, "never the word Provider").not.toMatch(/Provider/);
+    h.close();
+  });
+
+  it("names the vendor for a SILENT omission too, which is the other half", async () => {
+    // a batch that answered, with this code neither priced nor named unknown — a different
+    // answer from both, and it named "the Provider" as well
+    const h = harness();
+    add(h.db, { id: "r1".padEnd(32, "0"), code: "^GSPC", source: "yahoo" });
+    const silent: QuoteFetcher = () => Promise.resolve({ records: [], unknown: [] });
+    const rows = await referenceReadings(h.db, { yahoo: silent });
+    expect(rows[0]!.error).toBe("yahoo returned no quote for it");
+    h.close();
+  });
+
   it("spends no call on a vendor that has no Reference", async () => {
     const h = harness();
     add(h.db, { code: "US.SPY", source: "moomoo" });
