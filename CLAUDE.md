@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot and a React dashboard.
-**Two launchd agents** on the owner's always-on machine, behind one tailnet hostname (ADR 0006):
+**Two launchd agents** serve it, and a third watches what it depends on, on the owner's
+always-on machine, behind one tailnet hostname (ADR 0006):
 the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
 Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
 
@@ -199,6 +200,27 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   dangerous.
   - `make deploy` takes one before every restart and migration, in `data/`, and keeps the last 3
     plus any renamed `optionality-ts.db.bak-pre-<what>-<stamp>` — rename one to keep it for good.
+- **`com.optionality.opend`** (`make launchd-opend-install`) watches OpenD, which everything else
+  depends on and nothing was watching: it exited cleanly after 23 days up on 2026-11-08 and the
+  sweep failed 646 times over 2h42m. A TIMER every 60s calling `~/openD.sh ensure`, not KeepAlive,
+  for two reasons: that script backgrounds OpenD and returns, so KeepAlive would see the job end
+  and restart it for ever; and KeepAlive can only see whether a process EXISTS, where the failure
+  that matters is an OpenD up with its websocket port shut — which looks healthy to the operating
+  system while the dashboard shows dashes. `ensure` starts a dead OpenD, restarts a husk whose API
+  port is shut, and only REPORTS one that is up without a confirmed session, because that may need
+  a human at the login window and a restart a minute against an expired credential is a watchdog
+  flapping a provider.
+  **Two copies of that script exist on purpose.** `deploy/macos/opend.sh` is committed and is the one
+  the agent runs — so the version-controlled copy is the one whose behaviour you see. `~/openD.sh`
+  is the owner's and must keep working with NO repository cloned, which is why it is a copy rather
+  than a symlink. `make check-opend` fails when they differ and is part of `make check`, the same
+  arrangement `check-ui` uses for the committed bundle; `make opend-sync` copies the committed one
+  over the other, keeping its account line. The ONE difference by design is that account:
+  `deploy/macos/opend.sh` has none, `~/openD.sh` keeps a literal default, and
+  `make launchd-opend-install` stamps `OPEND_LOGIN_ACCOUNT` from `.env` into the generated agent —
+  which lives outside the repo, so the account is only ever where git does not look. That target
+  refuses to install when it is unset, because an agent that restarts a failing login every 60
+  seconds is a measured failure mode rather than a hypothetical. `make opend-logs` follows it.
   - `com.optionality.backup` (`make launchd-backup-install`) takes a checked, gzipped one at 06:00
     into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` is a
     folder in iCloud Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/optionality-backups`),
