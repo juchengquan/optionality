@@ -11,12 +11,12 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../testing.ts";
+import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
 
-// relative to the HARNESS's clock, not the real one — see NOW in testing.ts
+// relative to the HARNESS's clock, not the real one — see NOW in testing/harness.ts
 const daysAhead = daysFromNow;
 const future = () => daysAhead(30);
 

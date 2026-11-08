@@ -12,7 +12,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { insertReference } from "./db/queries/index.ts";
 import { referenceReadings } from "./references.ts";
 import type { QuoteBatch, QuoteFetcher } from "./quotes.ts";
-import { harness } from "./testing.ts";
+import { harness } from "../testing/harness.ts";
 
 /** US.SPY as the live gateway gave it on 2026-11-02. */
 const SPY = {
