@@ -18,37 +18,18 @@ describe("choosing a Provider", () => {
     expect(typeof provider.fetchQuotes).toBe("function");
   });
 
-  it("builds ibkr without reaching for the gateway", () => {
-    // constructing must be inert for the same reason moomoo's is: this is a test suite, and a
-    // Provider that opened a connection on construction could not be named in one at all
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => { /* its own test */ });
-    try {
-      const provider = makeProvider(settingsFor({ provider: "ibkr" }));
-      expect(provider.name).toBe("ibkr");
-      expect(typeof provider.fetchQuotes).toBe("function");
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it("says ibkr is experimental on the way up", () => {
-    // #170 ships a client that has never met a gateway: every field id and endpoint comes from
-    // the reference and is proved against a stub. The boot log is where the owner would find that
-    // out; a comment in the source is not.
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => { /* quiet */ });
-    try {
-      makeProvider(settingsFor({ provider: "ibkr" }));
-      expect(warn.mock.calls.flat().join(" ")).toMatch(/EXPERIMENTAL/);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
   it("refuses a name it does not know, naming the ones it does", () => {
     // fatal on purpose, as a mistyped MONITOR_INTERVAL_SECONDS is: a service that starts with no
     // Provider has no market data, no alarms, and a dashboard full of dashes
     expect(() => makeProvider(settingsFor({ provider: "ibkr-maybe" })))
       .toThrow(/unknown provider 'ibkr-maybe'.*moomoo/);
+  });
+
+  it("refuses ibkr, which named a transport this build no longer carries", () => {
+    // not an oversight: the Client Portal client went with its gateway (#205), and a Provider
+    // that boots and then cannot fetch is worse than a name the service refuses to start on
+    expect(() => makeProvider(settingsFor({ provider: "ibkr" })))
+      .toThrow(/unknown provider 'ibkr'.*moomoo/);
   });
 
   it("refuses a name set to nothing rather than falling back", () => {

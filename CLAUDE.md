@@ -57,13 +57,15 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
   repo-wide codegen step rather than something the backend may do. Both stamps are generated and
   committed; `make check-cases` fails when either is stale.
-- **`make ibkr-first-contact`** — the five questions about an IBKR gateway that only a gateway can
-  answer (ADR 0015): entitlements, the real pre-flight cost, what a dead session looks like from
-  inside the service, rate limits, and whether the two Providers agree on the same contract at the
-  same instant. NOT part of `make check` — it reaches a real gateway, which no test may do. Safe
-  while the live service runs: read-only on the database, no Telegram, no bot. Its READINGS are
-  pure functions with tests (`backend/src/ibkr/first-contact.test.ts`); `make ibkr-fake-gateway`
-  serves a stub so the runner itself can be exercised, and answers no real market data.
+- **`make tws-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
+  `tws/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
+  from the official Python client with `sendMsg` intercepted at protocol 157, and what the gateway
+  replies is what the real gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-08.
+  One definition, in `src/tws/fake.ts`, shared with the suite so the two cannot drift. A run
+  against it proves the CLIENT and is never evidence about a provider, an account's entitlements,
+  a dead session or an open market. The retired `ibkr-first-contact` and `ibkr-fake-gateway`
+  targets were the Client Portal pair and went with that transport (#205); nothing replaces the
+  first-contact harness until `tws/` can carry it.
 - `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
   with the sweep at an hour and the Telegram variables blanked, because the live service is always up
   here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
@@ -95,8 +97,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `alarm.ts` and its Telegram wording, `lifecycle.ts`'s quarantine and expiry verdicts, and `js.ts`,
   the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
-  Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (the Client Portal client, over plain
-  `fetch` — EXPERIMENTAL, proved against a stub gateway and never against a real one), `db/` (schema, migrations, queries),
+  Telegram bot), `opend/` (the moomoo websocket client), `tws/` (IB Gateway's own socket protocol:
+  framing, the handshake with its protocol floor of 156, and the five messages a read-only quote
+  fetch sends — there is no order message and none is importable, so the service cannot trade by
+  absence rather than by discipline), `ibkr/` (what survived the Client Portal client when it was
+  dropped in #205: the tick-field mapping, the conid cache and the first-contact readings, all
+  pure and all currently UNREACHED — they are material for the socket provider, and either get a
+  socket-shaped runner or get deleted), `db/` (schema, migrations, queries),
   `cases/` (the golden cases' inputs and builder), `references.ts` (the Reference path: one bounded
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
