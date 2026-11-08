@@ -109,6 +109,15 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   importable, so the service cannot trade by absence rather than by discipline. Reached as a
   REFERENCE source whether or not it is the Provider, because a Reference alarms on nothing;
   `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, queries),
+  **`vendors.ts`** (the one seam every market-data vendor is reached through: a DESCRIPTOR per
+  vendor — `opend/vendor.ts`, `ibkr/vendor.ts`, `yahoo/vendor.ts` — and adding one is a file
+  beside its client plus a line in `VENDORS`. `PROVIDERS` is derived from the descriptors that
+  say `canBeProvider`, never listed twice; a Reference-only vendor like Yahoo prices no option,
+  so naming it as the Provider is fatal at boot and it owes no `reachable`. `openVendors` opens
+  each vendor ONCE and hands the Provider back among the sources under its own name, which is
+  what makes ADR 0019's "one client either way" structural rather than remembered — IB Gateway
+  allows one connection per client id and the second displaces the first in silence. It replaced
+  three shapes merged by hand in `main.ts` and again in `routes/references.ts`),
   `cases/` (the golden cases' inputs and builder), `references.ts` (the Reference path: one bounded
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).

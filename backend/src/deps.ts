@@ -22,15 +22,15 @@ export interface Deps {
    *  A test must never reach the real SDK, which blocks indefinitely on a dead port so that a
    *  missing fake looks like a hung suite — `harness` supplies a fake Provider. */
   provider: ProviderClient;
-  /** Vendors a Reference may name beyond the Provider, by name (ADR 0019).
+  /** Every vendor this build can reach, by name — the Provider among them (ADR 0019).
    *
-   *  Separate from `provider` because a Reference is the one figure allowed a source the rest of
-   *  the service does not use: nothing alarms on it and nothing derives from it, so the
-   *  one-Provider rule does not reach it. The Provider is always available as a source under its
-   *  own name; this is what else is reachable, and `references.ts` merges the two.
+   *  A Reference is the one figure allowed a source the rest of the service does not use: nothing
+   *  alarms on it and nothing is derived from it, so the one-Provider rule does not reach it.
+   *  `vendors.openVendors` assembles this, which is also what guarantees the Provider's own
+   *  Reference rows are served by the same client the alarms read from.
    *
-   *  `main.ts` puts Yahoo here always and IB Gateway whenever `IBKR_HOST` is set — the latter
-   *  whether or not IBKR is the Provider (ADR 0019, track C).
+   *  Includes the Provider rather than being merged with it here. That merge used to happen in
+   *  `routes/references.ts` AND in `main.ts`, in two different shapes.
    */
-  referenceSources?: Sources;
+  sources: Sources;
 }
