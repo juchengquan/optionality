@@ -124,11 +124,21 @@ So the plumbing lands now with SPY shown as SPY, and nothing goes dark.
 `fetch` is refused with `429 Too Many Requests` from both hosts and every endpoint, and so is the
 cookie-then-crumb exchange. `yahoo-finance2` succeeds from the same Node process at the same
 minute. The library does something the hand-rolled flow does not, and reverse-engineering it would
-produce code that works until Yahoo changes something unannounced. The cost of not hand-rolling is
-**111 transitive packages**, including an MCP SDK and an HTTP server, in a process holding a
-Telegram token and a positions database. Taken deliberately, contained behind one file as the
-moomoo SDK is, and recorded here as the weakest link in the service: the only component with no
-contract behind it.
+produce code that works until Yahoo changes something unannounced.
+
+The cost of not hand-rolling was argued here as **111 transitive packages**, including an MCP SDK
+and an HTTP server, and that figure was wrong — it was measured by installing the library into an
+EMPTY directory, which counts the whole tree rather than what it adds to this one. Installed for
+real, this repository went from 596 packages to **607: eleven added**, none of them an MCP SDK or
+an HTTP server. Those two were already in the tree before this change. The corrected figure is in
+the record because the inflated one was part of the argument for rejecting Yahoo, and the owner
+chose it anyway.
+
+Eleven is still eleven, and two of them are worth naming: `tough-cookie-file-store`, which is how
+the library persists the cookie it needs, and `fetch-mock-cache`, a test helper shipped as a
+production dependency. Taken deliberately, pinned to an exact version, contained behind one file
+as the moomoo SDK is, and recorded here as the weakest link in the service: the only component
+with no contract behind it.
 
 Two wrong conclusions were reached on the way to that one and are recorded so the next reader does
 not repeat them: that Yahoo's `429` was an authentication requirement (it is not — the crumb
@@ -172,7 +182,7 @@ from `Nasdaq 100 (via QQQ ×25) 14,962.50 -1.23% last` to something with a sourc
 ## Consequences
 
 **The weakest link in the service is now a scraper's client library.** Every other data path has a
-vendor contract behind it. This one has 111 packages and a block being worked around. It is pinned,
+vendor contract behind it. This one has eleven added packages and a block being worked around. It is pinned,
 contained behind one file, and expected to break; when it does, a Reference shows a dash with its
 reason and nothing else in the service notices. That is the whole reason this is only allowed for a
 figure nothing derives from.

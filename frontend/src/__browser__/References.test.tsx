@@ -24,18 +24,25 @@ const leg = {
 };
 
 /** Three, which is what the owner asked about — and the widest shape each can take: a label, a
- *  label, a vendor, a four-digit figure and a signed percentage. */
+ *  label, a vendor, up to two freshness marks, a four-digit figure and a signed percentage —
+ *  which is longer than ADR 0018 ever measured, so the 320px case is re-measured here rather
+ *  than inherited. */
 const REFERENCES = [
   {
-    id: "r1", code: "US.SPY", label: "SPX", source: "moomoo", name: "SPDR S&P 500 ETF Trust",
+    id: "r1", code: "SPX", label: "SPX", source: "ibkr", name: "S&P 500",
+    // the longest line the strip can now draw: a vendor AND both freshness flags
+    delayed: true, last_known: true, delayed_by_minutes: null,
     figure: 7587.3, field: "mid_price", change: 0.003982956650611325, error: null,
   },
   {
-    id: "r2", code: "US.QQQ", label: "Nasdaq 100", source: "moomoo", name: "Invesco QQQ Trust",
+    id: "r2", code: "^NDX", label: "Nasdaq 100", source: "yahoo", name: "NASDAQ-100",
+    // and the other long shape: stated minutes rather than a bare tier
+    delayed: true, last_known: true, delayed_by_minutes: 15,
     figure: 14962.5, field: "last_price", change: -0.0123, error: null,
   },
   {
     id: "r3", code: "US.VIXY", label: null, source: "moomoo", name: "ProShares VIX Short-Term",
+    delayed: null, last_known: null, delayed_by_minutes: null,
     figure: 42.18, field: "mid_price", change: 0.0415, error: null,
   },
 ];

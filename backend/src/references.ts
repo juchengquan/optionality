@@ -43,6 +43,17 @@ export interface ReferenceEntry {
   /** why there is no figure, or null. A dash on the page and nothing more: never a notice, never
    *  a quarantine, never a deletion. */
   error: string | null;
+  /** Whether the figure came from the vendor's DELAYED tier — a fact about the subscription, not
+   *  about today. Null where the vendor said nothing: moomoo reports no grade at all, and false
+   *  would read as "it told us this is live" (ADR 0019). */
+  delayed: boolean | null;
+  /** Whether the vendor is serving the most recent value it holds rather than an updating one.
+   *  Null for the same reason. */
+  last_known: boolean | null;
+  /** How late, in minutes, where the vendor STATES it. Yahoo reports `exchangeDataDelayedBy`;
+   *  IBKR reports a tier and no duration, so the strip says "15m late" for one and "delayed" for
+   *  the other — each what its vendor actually said. */
+  delayed_by_minutes: number | null;
 }
 
 /** What one attempt at the whole list came back with, by code. */
@@ -52,6 +63,13 @@ interface Fetched {
    *  to three different places: a code the Provider does not know is a typo, a refusal is the
    *  Provider's own sentence, and a silent omission is neither. */
   faults: Record<string, string>;
+}
+
+/** A vendor's own claim about freshness, or null where it made none. Null and false are
+ *  different: false means the vendor said the figure is live. */
+function flag(quote: Quote | null, key: string): boolean | null {
+  const value = quote?.[key];
+  return typeof value === "boolean" ? value : null;
 }
 
 const UNKNOWN = "the Provider does not know this code";
@@ -153,6 +171,12 @@ export async function referenceReadings(
       source: row.source,
       name: quote && typeof quote.name === "string" ? quote.name : null,
       ...reading,
+      // read off the quote rather than decided here: the vendor says which tier it served, and a
+      // configured guess would be a label saying what was hoped for (ADR 0019)
+      delayed: flag(quote, "delayed"),
+      last_known: flag(quote, "last_known"),
+      delayed_by_minutes: typeof quote?.delayed_by_minutes === "number"
+        ? quote.delayed_by_minutes : null,
       // a quote that arrived with no price is its own answer, and a different one from no quote:
       // 0/0 is an empty book, which is the Security not being quoted yet rather than unknown
       error: fault ?? (reading.figure === null ? NO_PRICE : null),

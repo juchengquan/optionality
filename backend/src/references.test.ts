@@ -97,8 +97,56 @@ describe("one bounded call of its own", () => {
       field: "mid_price",
       change: (758.73 - 755.72) / 755.72,
       error: null,
+      // moomoo reports no grade at all, so all three are null rather than false: false would
+      // read as "the vendor told us this is live" (ADR 0019)
+      delayed: null,
+      last_known: null,
+      delayed_by_minutes: null,
     }]);
     h.close();
+  });
+});
+
+describe("what the vendor said about freshness", () => {
+  it("carries a vendor's own claim through to the page", async () => {
+    const h = harness();
+    add(h.db, { code: "SPX", source: "ibkr" });
+    const fetch = pricing({
+      SPX: { code: "SPX", name: "S&P 500", last_price: 7376.86, delayed: true, last_known: true },
+    }).fetch;
+    const [row] = await referenceReadings(h.db, { ibkr: fetch });
+    expect(row!.delayed).toBe(true);
+    expect(row!.last_known).toBe(true);
+  });
+
+  it("carries minutes only where the vendor stated them", async () => {
+    // Yahoo reports exchangeDataDelayedBy; IBKR reports a tier and no duration
+    const h = harness();
+    add(h.db, { code: "^VIX", source: "yahoo" });
+    const fetch = pricing({
+      "^VIX": { code: "^VIX", last_price: 25.64, delayed: true, delayed_by_minutes: 15 },
+    }).fetch;
+    const [row] = await referenceReadings(h.db, { yahoo: fetch });
+    expect(row!.delayed_by_minutes).toBe(15);
+  });
+
+  it("says null where the vendor said nothing, never false", async () => {
+    // moomoo reports no grade. False would be a claim the vendor never made.
+    const h = harness();
+    add(h.db, { code: "US.SPY", source: "moomoo" });
+    const [row] = await referenceReadings(h.db, { moomoo: pricing({ "US.SPY": SPY }).fetch });
+    expect(row!.delayed).toBe(null);
+    expect(row!.last_known).toBe(null);
+    expect(row!.delayed_by_minutes).toBe(null);
+  });
+
+  it("ignores a vendor's claim that is not a boolean", async () => {
+    // a wire format with no published schema can send anything, and "yes" is not a claim
+    const h = harness();
+    add(h.db, { code: "SPX", source: "ibkr" });
+    const fetch = pricing({ SPX: { code: "SPX", last_price: 1, delayed: "yes" } }).fetch;
+    const [row] = await referenceReadings(h.db, { ibkr: fetch });
+    expect(row!.delayed).toBe(null);
   });
 });
 

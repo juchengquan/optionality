@@ -19,7 +19,7 @@ function shortCode(code: string): string {
   return code.replace(/^US\./, "");
 }
 
-/** What the Reference is called, with the vendor that answered for it.
+/** What the Reference is called, the vendor that answered, and how fresh the vendor says it is.
  *
  *  `SPX (ibkr)`, not `SPX`. A Reference may be fetched from a vendor other than the Provider, and
  *  the whole reason that is allowed is that it says where the figure came from (ADR 0019): a
@@ -34,7 +34,32 @@ function shortCode(code: string): string {
  */
 export function referenceTitle(reference: Reference): string {
   const name = reference.label || shortCode(reference.code);
-  return `${name} (${reference.source})`;
+  const said = freshness(reference);
+  return `${name} (${[reference.source, ...said].join(", ")})`;
+}
+
+/** What the vendor said about how fresh the figure is — nothing where it said nothing.
+ *
+ *  Two independent facts rather than one scale (ADR 0019): `delayed` is about the subscription and
+ *  will not change during the day; `last_known` is about right now. Either can be true without the
+ *  other, and grade 4 of IBKR's four is both.
+ *
+ *  Null is NOT false. moomoo reports no grade at all, so a bare `(moomoo)` means "it never said"
+ *  while `(ibkr)` means "it told us this is live" — the two look identical and are not, which is
+ *  why the Service panel records which vendors report freshness and which do not.
+ *
+ *  The minutes appear only where the vendor states them: Yahoo reports `exchangeDataDelayedBy`,
+ *  IBKR reports a tier and no duration, so `15m late` and `delayed` are each what their vendor
+ *  actually said rather than what we assumed.
+ */
+function freshness(reference: Reference): string[] {
+  const said: string[] = [];
+  if (reference.delayed === true) {
+    const minutes = reference.delayed_by_minutes;
+    said.push(minutes === null ? "delayed" : `${minutes}m late`);
+  }
+  if (reference.last_known === true) said.push("last known");
+  return said;
 }
 
 /** Thousands separated and two places: these are index-sized numbers, and 7587.3 beside a strike

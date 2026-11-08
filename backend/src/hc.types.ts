@@ -142,6 +142,11 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["references"]>[number]["source"], string>>,
   Checked<Exactly<Ok<E["references"]>[number]["name"], string | null>>,
   Checked<Exactly<Ok<E["references"]>[number]["error"], string | null>>,
+  // the vendor's own claim about freshness. Nullable because null is not false: moomoo reports
+  // no grade at all, and the strip must not render that as "live" (ADR 0019)
+  Checked<Exactly<Ok<E["references"]>[number]["delayed"], boolean | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["last_known"], boolean | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["delayed_by_minutes"], number | null>>,
 
   // positions -------------------------------------------------------------------------
   Checked<Known<Ok<E["positions"]>>>,
