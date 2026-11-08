@@ -36,7 +36,7 @@ The version says WHEN it was cut; `optionality._ported.GOLDEN_CASES` says WHAT i
 cell tells you whether it is still current:
 
 ```python
-print(api.agrees())  # "this port agrees with the service (7ed1a1af…)"
+print(api.agrees())  # "this port agrees with the service (a8fb465d1460)"
 ```
 
 It never runs on import and never raises: with no service reachable it says so and the maths still

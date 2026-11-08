@@ -23,11 +23,16 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - **`make check` before every commit** — everything, in one target, and it passes in any timezone:
   every suite that reads a clock is pinned to `TZ=UTC` (both vitest configs, the Python suite, and the
   case generator), because the frontend's was not and the gate was green only at +08. The browser
-  suite is checked zone-independent instead — `env` would not reach its Chromium. Targets: lint, typecheck, `check-api`,
-  `check-cases`, the Python suite, the API suite, both UI suites and `check-ui`. Running a subset is
-  how a commit passes while something it touched is broken: `make test` alone is only the Python
-  package (every golden case, reproduced exactly). `make lint` is ruff plus `check-boundaries`: no
-  package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
+  suite is checked zone-independent instead — `env` would not reach its Chromium. Targets, in the
+  order they run: lint, typecheck, `check-api`, `check-cases`, the Python suite, `test-tools` (the repo-wide
+  `tools/`, which neither workspace's suite covers), the API suite, both UI suites, `check-ui` and
+  `check-opend`. This list went stale twice without a gate noticing, and it is worth knowing why:
+  `check-make-targets` checks that every backticked invocation names a rule that EXISTS, never that a
+  documented SET is complete, so a target added to the `check` rule is nobody's job to write down
+  here. Running a subset is how a commit passes while something it touched is broken: `make test`
+  alone is only the Python package (every golden case, reproduced exactly). `make lint` is ruff plus
+  four scripts — `check-boundaries`, `check-test-support`, `check-make-targets`, `check-served-root`. The first:
+  no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python only.
 - **The TypeScript has no formatter, by decision** (2026-10-17). Prettier and Biome were measured
   against this code with its own settings: both rewrote about 120 of 143 files, nearly all of it
@@ -44,8 +49,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached main
   unable to load at all).
 - **Golden cases:** a change to anything `backend/src/domain/` exports changes what
-  `testdata/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
-  — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
+  `testdata/golden/*.json` should say. `make cases` regenerates them, and WHICH gate stops you depends on
+  the kind of change: a CHANGED function or constant renders different bytes, so `make check-cases` and
+  `make test-api` both fail until you regenerate. An ADDITION renders no bytes — a new exported
+  function with no case, or a whole new `domain/` module, produces nothing to compare — so
+  `make check-cases` stays green and only `make test-api` catches it, through `cases.test.ts`'s
+  coverage guards. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
   exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
   holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port.
   The harness refuses a case passing MORE arguments than the port takes — `zip(strict=False)` dropped
@@ -142,7 +151,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
   loads Positions and Monitors from the live service (`OPTIONALITY_API` for its URL). Only those
   three are not golden-cased: they mirror no domain module. Everything else is, decisions included —
-  45 of 51 public functions.
+  52 of the package's 58 public functions, which is exactly the 52 of the TypeScript domain's 56
+  exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
+  package takes their knobs directly instead. Six uncased rather than five, because `js.js_string`
+  mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
+  spell the conversion out.
   `tests/test_cases.py` runs every golden case.
   **Installed by a pinned git ref** (ADR 0016), never from a path that tracks the working tree —
   an editable install serves a notebook whatever half-ported state the tree is in:

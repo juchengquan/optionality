@@ -4,7 +4,7 @@
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
 	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
-	test-tools py-cut py-tag
+	test-tools py-cut py-tag ibkr-fake-gateway
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
@@ -211,8 +211,12 @@ test-tools:
 # Cutting a release of the Python package (ADR 0016). Two steps, because CLAUDE.md forbids pushing
 # to main: the version bump is a commit and goes through a PR like anything else, so only the tag
 # can be applied afterwards. The refusals live in the script, which is tested.
+#
+# TZ=UTC because the version IS a date and a notebook pins it: `calver()` reads the machine's zone,
+# so a cut near midnight names a different day in Singapore than in Berlin. Its own suite passes
+# explicit dates, so it can never notice — the only place the zone can be fixed is here.
 py-cut:
-	node tools/py-release.mjs --cut
+	TZ=UTC node tools/py-release.mjs --cut
 
 py-tag:
 	node tools/py-release.mjs --tag
