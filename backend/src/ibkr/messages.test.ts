@@ -13,7 +13,8 @@ const msg = (...fields: (string | number)[]) => fields.map((f) => `${f}${NUL}`).
  *  conId 902390015. Using the real one means a layout mistake shows up as a wrong number here
  *  rather than only against a live gateway. */
 const SPXW: TwsContract = {
-  symbol: "SPX", lastTradeDateOrContractMonth: "20261218", strike: 8100, right: "C",
+  symbol: "SPX", secType: "OPT" as const, lastTradeDateOrContractMonth: "20261218",
+  strike: 8100, right: "C" as const,
   tradingClass: "SPXW", exchange: "SMART", currency: "USD", multiplier: "100",
 };
 

@@ -13,7 +13,8 @@ import { TwsSocket } from "./socket.ts";
  */
 
 const SPXW = {
-  symbol: "SPX", lastTradeDateOrContractMonth: "20261218", strike: 8100, right: "C" as const,
+  symbol: "SPX", secType: "OPT" as const, lastTradeDateOrContractMonth: "20261218",
+  strike: 8100, right: "C" as const,
   tradingClass: "SPXW", exchange: "SMART", currency: "USD", multiplier: "100",
 };
 

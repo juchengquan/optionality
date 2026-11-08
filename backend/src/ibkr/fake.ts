@@ -50,17 +50,27 @@ export interface FakeOptions {
   /** Answer bid and ask with -1, which is what the real gateway sends for a price it does not
    *  have: live mode on a shut market, and SKEW outside its calculation window. */
   noPrices?: boolean;
+  /** Complete the handshake, accept every request, and answer NOTHING — the shape measured on
+   *  2026-11-08 when the gateway's link to IBKR dropped while its own socket stayed open. The
+   *  dangerous one: reporting those contracts as unknown would quarantine every rule. */
+  deaf?: boolean;
 }
 
 /** Listening, with the port it actually got (0 asks the OS for a free one). */
 export interface FakeGateway {
   server: Server;
   port: number;
+  /** How many contract lookups it has answered, so a test can prove the conid cache saves one. */
+  lookups: number;
   close: () => Promise<void>;
 }
 
 export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<FakeGateway> {
+  const counts = { lookups: 0 };
+  const open = new Set<import("node:net").Socket>();
   const server = createServer((socket) => {
+    open.add(socket);
+    socket.on("close", () => open.delete(socket));
     let buffer: Buffer = Buffer.alloc(0);
     let greeted = false;
 
@@ -95,7 +105,10 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
           continue;
         }
 
+        if (options.deaf) continue;                       // accepted, and never answered
+
         if (id === 9) {                                   // reqContractDetails
+          counts.lookups += 1;
           const reqId = Number(f[2]);
           socket.write(frame(toFields([
             10, 8, reqId, "SPX", "OPT", "20261218", "8100.0", "C", "SMART", "USD",
@@ -129,8 +142,15 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
       const address = server.address();
       const got = typeof address === "object" && address ? address.port : port;
       resolve({
-        server, port: got,
-        close: () => new Promise<void>((done) => { server.close(() => done()); }),
+        server,
+        port: got,
+        get lookups() { return counts.lookups; },
+        close: () => new Promise<void>((done) => {
+          // destroyed, not just closed: `server.close()` waits for open connections to end, so a
+          // client still holding one makes it hang for ever — which it did, as a 10s hook timeout
+          for (const socket of open) socket.destroy();
+          server.close(() => done());
+        }),
       });
     });
   });

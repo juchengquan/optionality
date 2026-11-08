@@ -12,6 +12,20 @@ export interface Settings {
    *  boot (ADR 0015). provider.ts knows the names and refuses the rest. */
   provider: string;
   opendHost: string;
+  /** Where IB Gateway's API socket is, for a Reference that names `ibkr` (ADR 0019).
+   *
+   *  Read whether or not IBKR is the Provider: a Reference may be served by a vendor the rest of
+   *  the service does not use, because nothing alarms on it. Blank host turns the source off.
+   *
+   *  The PORT is not a set-once value — IB Gateway listens on 4001 for a live login and 4002 for
+   *  paper, so switching account type moves the socket (measured 2026-11-08).
+   */
+  ibkrHost: string;
+  ibkrPort: number;
+  /** IB Gateway allows ONE connection per client id, and a second user of the same number
+   *  displaces the first in silence. The ids are the owning process's port so a refusal names
+   *  the culprit: 31415 the service, 31417 `make serve`, 31419 a harness. */
+  ibkrClientId: number;
   /** OpenD's WEBSOCKET port. The npm client speaks nothing else — the SDK's TCP protocol has no
    *  JavaScript implementation (ADR 0009, phase 6). */
   moomooWsPort: number;
@@ -58,6 +72,9 @@ export const DEFAULTS: Settings = {
   dbPath: "data/optionality-ts.db",
   provider: "moomoo",
   opendHost: "127.0.0.1",
+  ibkrHost: "",
+  ibkrPort: 4001,
+  ibkrClientId: 31415,
   moomooWsPort: 33333,
   moomooWsKey: "",
   // the gateway's own default, over TLS with a self-signed certificate: Node's fetch refuses that
@@ -88,6 +105,9 @@ const FROM_ENV = {
   dbPath: "OPTIONALITY_DB_PATH",
   provider: "OPTIONALITY_PROVIDER",
   opendHost: "OPEND_HOST",
+  ibkrHost: "IBKR_HOST",
+  ibkrPort: "IBKR_PORT",
+  ibkrClientId: "IBKR_CLIENT_ID",
   moomooWsPort: "MOOMOO_WS_PORT",
   moomooWsKey: "MOOMOO_WS_KEY",
   apiToken: "API_TOKEN",
