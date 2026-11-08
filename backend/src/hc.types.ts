@@ -66,7 +66,7 @@ async function endpoints() {
     // --- references ---------------------------------------------------------------------
     references: await (await client.references.$get()).json(),
     referenceCreated: await client.references.$post({
-      json: { code: "US.SPY", label: "SPX", scale: 10 },
+      json: { code: "US.SPY", label: "SPY", source: "moomoo" },
     }),
     referenceDeleted: await client.references[":id"].$delete({ param: id }),
 
@@ -139,7 +139,7 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["references"]>[number]["field"], string | null>>,
   Checked<Exactly<Ok<E["references"]>[number]["change"], number | null>>,
   Checked<Exactly<Ok<E["references"]>[number]["label"], string | null>>,
-  Checked<Exactly<Ok<E["references"]>[number]["scale"], number | null>>,
+  Checked<Exactly<Ok<E["references"]>[number]["source"], string>>,
   Checked<Exactly<Ok<E["references"]>[number]["name"], string | null>>,
   Checked<Exactly<Ok<E["references"]>[number]["error"], string | null>>,
 

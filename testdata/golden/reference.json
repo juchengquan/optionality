@@ -14,32 +14,10 @@
           "mid_price": 758.73,
           "last_price": 755.72,
           "prev_close_price": 755.72
-        },
-        null
+        }
       ],
       "expect": {
         "figure": 758.73,
-        "field": "mid_price",
-        "change": 0.003982956650611325
-      }
-    },
-    {
-      "fn": "referenceFigure",
-      "name": "scaled, so SPY stands in for SPX beside the strikes",
-      "args": [
-        {
-          "code": "US.SPY",
-          "name": "SPDR S&P 500 ETF Trust",
-          "bid_price": 758.7,
-          "ask_price": 758.76,
-          "mid_price": 758.73,
-          "last_price": 755.72,
-          "prev_close_price": 755.72
-        },
-        10
-      ],
-      "expect": {
-        "figure": 7587.3,
         "field": "mid_price",
         "change": 0.003982956650611325
       }
@@ -55,11 +33,10 @@
           "ask_price": 758.76,
           "last_price": 755.72,
           "prev_close_price": 755.72
-        },
-        10
+        }
       ],
       "expect": {
-        "figure": 7557.2,
+        "figure": 755.72,
         "field": "last_price",
         "change": 0
       }
@@ -76,11 +53,10 @@
           "mid_price": 0,
           "last_price": 755.72,
           "prev_close_price": 755.72
-        },
-        10
+        }
       ],
       "expect": {
-        "figure": 7557.2,
+        "figure": 755.72,
         "field": "last_price",
         "change": 0
       }
@@ -92,8 +68,7 @@
         {
           "code": "US.SPY",
           "name": "SPDR S&P 500 ETF Trust"
-        },
-        10
+        }
       ],
       "expect": {
         "figure": null,
@@ -105,8 +80,7 @@
       "fn": "referenceFigure",
       "name": "no quote at all — a Reference the batch could not price",
       "args": [
-        null,
-        10
+        null
       ],
       "expect": {
         "figure": null,
@@ -120,8 +94,7 @@
       "args": [
         {
           "mid_price": "758.73"
-        },
-        null
+        }
       ],
       "expect": {
         "figure": null,
@@ -137,8 +110,7 @@
           "mid_price": {
             "$num": "Infinity"
           }
-        },
-        null
+        }
       ],
       "expect": {
         "figure": null,
@@ -153,8 +125,7 @@
         {
           "mid_price": -1,
           "last_price": 2
-        },
-        null
+        }
       ],
       "expect": {
         "figure": 2,
@@ -168,55 +139,22 @@
       "args": [
         {
           "mid_price": 20.15
-        },
-        3
+        }
       ],
       "expect": {
-        "figure": 60.45,
+        "figure": 20.15,
         "field": "mid_price",
         "change": null
       }
     },
     {
       "fn": "referenceFigure",
-      "name": "a fractional scale, for a proxy that quotes high",
-      "args": [
-        {
-          "mid_price": 7587.3
-        },
-        0.1
-      ],
-      "expect": {
-        "figure": 758.73,
-        "field": "mid_price",
-        "change": null
-      }
-    },
-    {
-      "fn": "referenceFigure",
-      "name": "the change is a fraction of the close, which no scale moves",
+      "name": "the change is a fraction of the close",
       "args": [
         {
           "mid_price": 758.73,
           "prev_close_price": 755.72
-        },
-        10
-      ],
-      "expect": {
-        "figure": 7587.3,
-        "field": "mid_price",
-        "change": 0.003982956650611325
-      }
-    },
-    {
-      "fn": "referenceFigure",
-      "name": "the same change unscaled, to prove the scale cancels",
-      "args": [
-        {
-          "mid_price": 758.73,
-          "prev_close_price": 755.72
-        },
-        null
+        }
       ],
       "expect": {
         "figure": 758.73,
@@ -231,11 +169,10 @@
         {
           "mid_price": 750,
           "prev_close_price": 755.72
-        },
-        10
+        }
       ],
       "expect": {
-        "figure": 7500,
+        "figure": 750,
         "field": "mid_price",
         "change": -0.007568940877573741
       }
@@ -246,8 +183,7 @@
       "args": [
         {
           "mid_price": 758.73
-        },
-        null
+        }
       ],
       "expect": {
         "figure": 758.73,
@@ -262,8 +198,7 @@
         {
           "mid_price": 758.73,
           "prev_close_price": 0
-        },
-        null
+        }
       ],
       "expect": {
         "figure": 758.73,
@@ -278,8 +213,7 @@
         {
           "last_price": 750,
           "prev_close_price": 755.72
-        },
-        null
+        }
       ],
       "expect": {
         "figure": 750,
@@ -295,11 +229,10 @@
           "mid_price": 0,
           "last_price": 750,
           "prev_close_price": 755.72
-        },
-        10
+        }
       ],
       "expect": {
-        "figure": 7500,
+        "figure": 750,
         "field": "last_price",
         "change": -0.007568940877573741
       }

@@ -101,7 +101,7 @@ export const fetchReferences = () =>
 /** Keep a Security on the page. The code is RAW — `US.SPY`, not an expiry and a strike — because a
  *  Reference is a Security rather than a Contract, and the service probes it live before it agrees
  *  to remember it. */
-export const addReference = (body: { code: string; label?: string; scale?: number }) =>
+export const addReference = (body: { code: string; label?: string; source: "moomoo" | "ibkr" | "yahoo" }) =>
   sent(client.references.$post({ json: body }), "/references");
 
 /** Stop keeping one. The only way a Reference ever goes: nothing in the service removes one, and a

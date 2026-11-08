@@ -118,6 +118,9 @@ export interface HarnessOptions {
   providerName?: string;
   /** the bounded OpenD call. Defaults to the permissive echo. */
   fetchQuotes?: FakeProvider;
+  /** Vendors a Reference may name beyond the Provider (ADR 0019), so a test can prove that the
+   *  creation probe goes to the NAMED one rather than to whatever the Provider happens to be. */
+  referenceSources?: Deps["referenceSources"];
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -145,6 +148,7 @@ export function harness(options: HarnessOptions = {}): Harness {
       reachable: () => Promise.resolve(options.opend ?? false),
       close: () => { /* nothing to hang up */ },
     },
+    referenceSources: options.referenceSources,
   };
 
   const app = createApp(deps);

@@ -1,4 +1,4 @@
-/** What the API accepts for a Reference (ADR 0018).
+/** What the API accepts for a Reference (ADR 0018, amended by 0019).
  *
  *  A RAW code, not an expiry/type/strike: `buildSpxCode` writes `US.SPXW` + six digits + C/P +
  *  strike×1000 and cannot spell `US.SPY` at all, and a Reference is a Security rather than a
@@ -15,20 +15,25 @@ import { z } from "zod";
  *  is the same Security and must not become a second row the live probe then refuses. */
 const Code = z.string().trim().min(1).transform((c) => c.toUpperCase());
 
-/** What to multiply the figure by. SPY quotes at 758.73 against strikes of 6950, so SPX is read
- *  through SPY ×10 — and the strip shows that arithmetic rather than charging a mental ×10 at
- *  every glance.
+/** Every vendor a Reference can name. The VENDOR outright, never "the Provider": a row meaning
+ *  "wherever the service is pointed" would silently show a different company's figure for the
+ *  same ticker the day OPTIONALITY_PROVIDER changes, under the same unchanged label (ADR 0019).
  *
- *  Positive and finite. Zero would make every figure 0, which prints as a price; a negative one
- *  would invert the market. Both are refused at the door rather than left for the domain, which
- *  takes the scale as given. */
-const Scale = z.number().positive().finite();
+ *  Listed here means KNOWN, not available. Whether this build can actually reach one is a
+ *  separate question the route answers, the same way `makeProvider` refuses a Provider name it
+ *  has no case for rather than booting without market data.
+ */
+export const SOURCES = ["moomoo", "ibkr", "yahoo"] as const;
+export type Source = (typeof SOURCES)[number];
 
 export const ReferenceIn = z.object({
   code: Code,
-  /** what to call it, or absent for "the code is its own name". The label is the only place that
-   *  says SPX at all, and it never claims to BE the index: SPY×10 has tracking error, it has
-   *  dividends, and the two trade different sessions. */
+  /** what to call it, or absent for "the code is its own name". More useful since the scale went:
+   *  `^GSPC`, `US..SPX` and `SPX` are three vendors' names for one index, and none of them is
+   *  what the owner calls it. */
   label: z.string().trim().min(1).optional(),
-  scale: Scale.optional(),
+  /** required, because a Reference whose vendor is unknown cannot be fetched at all. `scale` was
+   *  here until ADR 0019: it existed for SPY×10 standing in for SPX, and a scaled stand-in is a
+   *  simulation rather than a reading. */
+  source: z.enum(SOURCES),
 });

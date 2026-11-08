@@ -31,9 +31,9 @@ export interface ReferenceEntry {
   code: string;
   /** what to call it, or null for "the code is its own name" */
   label: string | null;
-  /** what its figure is multiplied by, or null for ×1. Published, because the strip shows the
-   *  ARITHMETIC — `SPX (via SPY ×10) → 7587` — and never claims to be the index. */
-  scale: number | null;
+  /** the vendor that answered, which the strip SHOWS: a figure from outside the Provider is
+   *  allowed precisely because it says where it came from (ADR 0019). */
+  source: string;
   /** the Security's own name, as the Provider gives it; null where no quote arrived */
   name: string | null;
   figure: number | null;
@@ -56,6 +56,17 @@ interface Fetched {
 
 const UNKNOWN = "the Provider does not know this code";
 const SILENT = "the Provider returned no quote for it";
+
+/** The vendors this build can actually reach, by name.
+ *
+ *  Not every name `SOURCES` knows: a source is reachable when a client for it exists, and a
+ *  Reference naming one that does not gets a dash with that sentence rather than a blank. The
+ *  registry is assembled by the caller, which is how a Reference can be served by a vendor that
+ *  is NOT the Provider (ADR 0019) without this module knowing what a Provider is.
+ */
+export type Sources = Readonly<Record<string, QuoteFetcher>>;
+
+const noClient = (source: string) => `no ${source} client in this build`;
 const NO_PRICE = "the quote carries no price";
 
 /** One bounded batch, and on a THROW one call per Reference.
@@ -100,23 +111,46 @@ async function fetchAll(codes: string[], fetch: QuoteFetcher): Promise<Fetched> 
  *  `watchlistQuotes` is.
  */
 export async function referenceReadings(
-  db: DatabaseSync, fetch: QuoteFetcher,
+  db: DatabaseSync, sources: Sources,
 ): Promise<ReferenceEntry[]> {
   const rows = listReferences(db);
   // no call at all for an empty list: the dashboard polls this every 15 seconds per open tab, and
-  // a Provider call that can buy nothing is one ADR 0010 says is not free
+  // a call that can buy nothing is one ADR 0010 says is not free
   if (rows.length === 0) return [];
 
-  const { quotes, faults } = await fetchAll(rows.map((r) => r.code), fetch);
+  // ONE bounded call per source in use, not per Reference — three figures from one vendor are one
+  // call (ADR 0019). Grouped and run together rather than in series: the dashboard waits on this,
+  // and a logged-out gateway's timeout should not be added to a healthy vendor's latency.
+  const bySource = new Map<string, string[]>();
+  for (const row of rows) {
+    const codes = bySource.get(row.source) ?? [];
+    codes.push(row.code);
+    bySource.set(row.source, codes);
+  }
+
+  const quotes: Record<string, Quote> = {};
+  const faults: Record<string, string> = {};
+  await Promise.all([...bySource].map(async ([source, codes]) => {
+    const fetch = sources[source];
+    if (!fetch) {
+      // containment between sources: a vendor with no client takes its own rows down and nobody
+      // else's. The same argument that gave References a call of their own, one level up.
+      for (const code of codes) faults[code] = noClient(source);
+      return;
+    }
+    const got = await fetchAll(codes, fetch);
+    Object.assign(quotes, got.quotes);
+    Object.assign(faults, got.faults);
+  }));
   return rows.map((row) => {
     const quote = quotes[row.code] ?? null;
-    const reading = referenceFigure(quote, row.scale);
+    const reading = referenceFigure(quote);
     const fault = faults[row.code] ?? (quote ? null : SILENT);
     return {
       id: row.id,
       code: row.code,
       label: row.label,
-      scale: row.scale,
+      source: row.source,
       name: quote && typeof quote.name === "string" ? quote.name : null,
       ...reading,
       // a quote that arrived with no price is its own answer, and a different one from no quote:

@@ -8,6 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { Settings } from "./env.ts";
 import type { ProviderClient, SweeperPort } from "./ports.ts";
+import type { Sources } from "./references.ts";
 
 export interface Deps {
   settings: Settings;
@@ -21,4 +22,14 @@ export interface Deps {
    *  A test must never reach the real SDK, which blocks indefinitely on a dead port so that a
    *  missing fake looks like a hung suite — `harness` supplies a fake Provider. */
   provider: ProviderClient;
+  /** Vendors a Reference may name beyond the Provider, by name (ADR 0019).
+   *
+   *  Separate from `provider` because a Reference is the one figure allowed a source the rest of
+   *  the service does not use: nothing alarms on it and nothing derives from it, so the
+   *  one-Provider rule does not reach it. The Provider is always available as a source under its
+   *  own name; this is what else is reachable, and `references.ts` merges the two.
+   *
+   *  Empty today. ADR 0019's track C puts IBKR here whether or not it is the Provider.
+   */
+  referenceSources?: Sources;
 }

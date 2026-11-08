@@ -19,19 +19,22 @@ function shortCode(code: string): string {
   return code.replace(/^US\./, "");
 }
 
-/** What the Reference is called, with its arithmetic shown.
+/** What the Reference is called, with the vendor that answered for it.
  *
- *  `SPX (via SPY ×10)`, never `SPX`. SPY×10 is NOT SPX: there is tracking error, there are
- *  dividends, and the two trade different sessions. The label is the only place SPX is said at
- *  all, so the figure beside it must never read as the index itself — and the `via` is what keeps
- *  the claim honest while still saving the mental ×10 at every glance.
+ *  `SPX (ibkr)`, not `SPX`. A Reference may be fetched from a vendor other than the Provider, and
+ *  the whole reason that is allowed is that it says where the figure came from (ADR 0019): a
+ *  number on this strip is acted on by a person whether or not any code depends on it.
  *
- *  An unlabelled Reference is just its code, which is already the truth about itself.
+ *  The arithmetic that used to be here — `SPX (via SPY ×10)` — went with the scale. It existed
+ *  because moomoo refuses every index as a class; the index turned out to be obtainable, and a
+ *  scaled stand-in is a simulation rather than a reading.
+ *
+ *  An unlabelled Reference is its code, which is already the truth about itself — with the vendor
+ *  still named, because that is the part no code can tell you.
  */
 export function referenceTitle(reference: Reference): string {
-  const via = shortCode(reference.code);
-  if (!reference.label) return via;
-  return `${reference.label} (via ${via}${reference.scale === null ? "" : ` ×${reference.scale}`})`;
+  const name = reference.label || shortCode(reference.code);
+  return `${name} (${reference.source})`;
 }
 
 /** Thousands separated and two places: these are index-sized numbers, and 7587.3 beside a strike

@@ -25,7 +25,7 @@ const QQQ = { code: "US.QQQ", name: "Invesco QQQ Trust", mid_price: 598.5, prev_
 function add(db: DatabaseSync, over: Partial<Parameters<typeof insertReference>[1]> = {}) {
   const id = String(over.id ?? "r1".padEnd(32, "0"));
   insertReference(db, {
-    id, code: "US.SPY", label: "SPX", scale: 10, created_at: "2026-11-02 00:00:00.000000",
+    id, code: "US.SPY", label: "SPY", source: "moomoo", created_at: "2026-11-02 00:00:00.000000",
     ...over,
   });
   return id;
@@ -49,14 +49,14 @@ describe("one bounded call of its own", () => {
     const h = harness();
     add(h.db);
     add(h.db, {
-      id: "r2".padEnd(32, "0"), code: "US.QQQ", label: null, scale: null,
+      id: "r2".padEnd(32, "0"), code: "US.QQQ", label: null, source: "moomoo",
       created_at: "2026-11-02 00:00:01.000000",
     });
     const { fetch, calls } = pricing({ "US.SPY": SPY, "US.QQQ": QQQ });
 
-    const rows = await referenceReadings(h.db, fetch);
+    const rows = await referenceReadings(h.db, { moomoo: fetch });
     expect(calls).toEqual([["US.SPY", "US.QQQ"]]);
-    expect(rows.map((r) => r.figure)).toEqual([7587.3, 598.5]);
+    expect(rows.map((r) => r.figure)).toEqual([758.73, 598.5]);
     h.close();
   });
 
@@ -66,9 +66,9 @@ describe("one bounded call of its own", () => {
     // reshuffle on a poll — which reads as a change
     const h = harness();
     add(h.db, { id: "r1".padEnd(32, "0"), code: "US.SPY" });
-    add(h.db, { id: "r2".padEnd(32, "0"), code: "US.QQQ", label: null, scale: null });
+    add(h.db, { id: "r2".padEnd(32, "0"), code: "US.QQQ", label: null, source: "moomoo" });
     const { fetch } = pricing({ "US.SPY": SPY, "US.QQQ": QQQ });
-    expect((await referenceReadings(h.db, fetch)).map((r) => r.code))
+    expect((await referenceReadings(h.db, { moomoo: fetch })).map((r) => r.code))
       .toEqual(["US.QQQ", "US.SPY"]);
     h.close();
   });
@@ -76,24 +76,24 @@ describe("one bounded call of its own", () => {
   it("asks for nothing at all when there are no References", async () => {
     const h = harness();
     const { fetch, calls } = pricing({});
-    expect(await referenceReadings(h.db, fetch)).toEqual([]);
+    expect(await referenceReadings(h.db, { moomoo: fetch })).toEqual([]);
     // the dashboard polls this every 15 seconds per open tab, and a call for an empty list would
     // be a Provider call that buys nothing (ADR 0010)
     expect(calls).toEqual([]);
     h.close();
   });
 
-  it("carries the label, the scale and the Security's own name through", async () => {
+  it("carries the label, the source and the Security's own name through", async () => {
     const h = harness();
     add(h.db);
     const { fetch } = pricing({ "US.SPY": SPY });
-    expect(await referenceReadings(h.db, fetch)).toEqual([{
+    expect(await referenceReadings(h.db, { moomoo: fetch })).toEqual([{
       id: "r1".padEnd(32, "0"),
       code: "US.SPY",
-      label: "SPX",
-      scale: 10,
+      label: "SPY",
+      source: "moomoo",
       name: "SPDR S&P 500 ETF Trust",
-      figure: 7587.3,
+      figure: 758.73,
       field: "mid_price",
       change: (758.73 - 755.72) / 755.72,
       error: null,
@@ -102,17 +102,76 @@ describe("one bounded call of its own", () => {
   });
 });
 
+describe("more than one source", () => {
+  it("asks each vendor once — one call per SOURCE, not per Reference", async () => {
+    const h = harness();
+    // distinct stamps, because rows order by created_at and then by CODE — sharing a stamp would
+    // sort these as SPX, US.QQQ, US.SPY and make the assertions below about alphabet, not order
+    add(h.db, { id: "r1".padEnd(32, "0"), code: "US.SPY", source: "moomoo", created_at: "2026-11-08 00:00:01.000000" });
+    add(h.db, { id: "r2".padEnd(32, "0"), code: "US.QQQ", source: "moomoo", created_at: "2026-11-08 00:00:02.000000" });
+    add(h.db, { id: "r3".padEnd(32, "0"), code: "SPX", source: "ibkr", created_at: "2026-11-08 00:00:03.000000" });
+    const moo = pricing({ "US.SPY": SPY, "US.QQQ": QQQ });
+    const ibkr = pricing({ SPX: { code: "SPX", name: "S&P 500", mid_price: 7376.86 } });
+
+    const rows = await referenceReadings(h.db, { moomoo: moo.fetch, ibkr: ibkr.fetch });
+
+    expect(moo.calls).toEqual([["US.SPY", "US.QQQ"]]);
+    expect(ibkr.calls).toEqual([["SPX"]]);
+    expect(rows.map((r) => r.figure)).toEqual([758.73, 598.5, 7376.86]);
+    expect(rows.map((r) => r.source)).toEqual(["moomoo", "moomoo", "ibkr"]);
+  });
+
+  it("leaves one vendor's figures standing when the other is dead", async () => {
+    // the whole point of grouping by source. IB Gateway logs out every Sunday by design, and a
+    // moomoo-sourced figure must not dash alongside it — the argument that gave References a
+    // call of their own, one level up (ADR 0019)
+    const h = harness();
+    add(h.db, { id: "r1".padEnd(32, "0"), code: "US.SPY", source: "moomoo", created_at: "2026-11-08 00:00:01.000000" });
+    add(h.db, { id: "r2".padEnd(32, "0"), code: "SPX", source: "ibkr", created_at: "2026-11-08 00:00:02.000000" });
+    const moo = pricing({ "US.SPY": SPY });
+
+    const rows = await referenceReadings(h.db, {
+      moomoo: moo.fetch,
+      ibkr: () => Promise.reject(new Error("Couldn't connect to TWS")),
+    });
+
+    expect(rows[0]!.figure).toBe(758.73);
+    expect(rows[0]!.error).toBe(null);
+    expect(rows[1]!.figure).toBe(null);
+    expect(rows[1]!.error).toMatch(/Couldn't connect to TWS/);
+  });
+
+  it("says which vendor is missing rather than blaming the code", async () => {
+    // a name SOURCES knows and this build cannot reach. "does not know this code" would send the
+    // owner looking at the code, which is the one thing that is fine.
+    const h = harness();
+    add(h.db, { id: "r1".padEnd(32, "0"), code: "SPX", source: "ibkr" });
+    const rows = await referenceReadings(h.db, { moomoo: pricing({}).fetch });
+    expect(rows[0]!.figure).toBe(null);
+    expect(rows[0]!.error).toBe("no ibkr client in this build");
+  });
+
+  it("spends no call on a vendor that has no Reference", async () => {
+    const h = harness();
+    add(h.db, { code: "US.SPY", source: "moomoo" });
+    const moo = pricing({ "US.SPY": SPY });
+    const ibkr = pricing({});
+    await referenceReadings(h.db, { moomoo: moo.fetch, ibkr: ibkr.fetch });
+    expect(ibkr.calls).toEqual([]);
+  });
+});
+
 describe("a Reference the Provider will not price", () => {
   it("shows a dash and says so, and the others still read", async () => {
     const h = harness();
-    add(h.db, { id: "r1".padEnd(32, "0"), code: "US.NOPE", label: null, scale: null });
+    add(h.db, { id: "r1".padEnd(32, "0"), code: "US.NOPE", label: null, source: "moomoo" });
     add(h.db, { id: "r2".padEnd(32, "0"), code: "US.SPY" });
     const { fetch } = pricing({ "US.SPY": SPY });
 
-    const rows = await referenceReadings(h.db, fetch);
+    const rows = await referenceReadings(h.db, { moomoo: fetch });
     expect(rows[0]).toMatchObject({ code: "US.NOPE", figure: null, field: null });
     expect(rows[0]!.error).toMatch(/does not know/);
-    expect(rows[1]!.figure).toBe(7587.3);
+    expect(rows[1]!.figure).toBe(758.73);
     h.close();
   });
 
@@ -121,7 +180,7 @@ describe("a Reference the Provider will not price", () => {
     const id = add(h.db, { code: "US.NOPE" });
     const before = h.db.prepare("select * from reference_securities where id = ?").get(id);
     const { fetch } = pricing({});
-    await referenceReadings(h.db, fetch);
+    await referenceReadings(h.db, { moomoo: fetch });
     // the row is exactly as it was: quarantine is defined as a Monitor the service disabled
     // because it cannot be EVALUATED, and a Reference evaluates nothing. Nor is anything sent —
     // this path has no sender to speak through, which is the structural half of the same rule
@@ -133,10 +192,10 @@ describe("a Reference the Provider will not price", () => {
 
   it("says a quote that came back with no price is a missing price, not a missing quote", async () => {
     const h = harness();
-    add(h.db, { code: "US.SPY", label: null, scale: null });
+    add(h.db, { code: "US.SPY", label: null, source: "moomoo" });
     // priced, named, and with an empty book: `(0 + 0) / 2` is a mid and 0 is not a price
     const { fetch } = pricing({ "US.SPY": { code: "US.SPY", name: "SPDR", mid_price: 0 } });
-    const rows = await referenceReadings(h.db, fetch);
+    const rows = await referenceReadings(h.db, { moomoo: fetch });
     expect(rows[0]).toMatchObject({ figure: null, name: "SPDR" });
     expect(rows[0]!.error).toMatch(/no price/);
     h.close();
@@ -164,11 +223,11 @@ describe("a fetch that THREW", () => {
 
   it("retries one code at a time, so the culprit alone goes dark", async () => {
     const h = harness();
-    add(h.db, { id: "r1".padEnd(32, "0"), code: "US..SPX", label: null, scale: null });
+    add(h.db, { id: "r1".padEnd(32, "0"), code: "US..SPX", label: null, source: "moomoo" });
     add(h.db, { id: "r2".padEnd(32, "0"), code: "US.SPY" });
     const { fetch, calls } = refusing("US..SPX", { "US.SPY": SPY });  // exact, so SPY is priced
 
-    const rows = await referenceReadings(h.db, fetch);
+    const rows = await referenceReadings(h.db, { moomoo: fetch });
     // the batch, then one call per Reference — bounded by the number of References, which is what
     // the sweep cannot afford and this path can
     expect(calls).toEqual([["US..SPX", "US.SPY"], ["US..SPX"], ["US.SPY"]]);
@@ -176,7 +235,7 @@ describe("a fetch that THREW", () => {
     // the Provider's own sentence, because it is what says whether the gateway is down or whether
     // it answered and declined the security
     expect(rows[0]!.error).toContain("US stock indices are not supported");
-    expect(rows[1]!.figure).toBe(7587.3);
+    expect(rows[1]!.figure).toBe(758.73);
     h.close();
   });
 
@@ -185,7 +244,7 @@ describe("a fetch that THREW", () => {
     add(h.db, { id: "r1".padEnd(32, "0"), code: "US..SPX", label: null });
     add(h.db, { id: "r2".padEnd(32, "0"), code: "US..VIX", label: null });
     const { fetch, calls } = refusing("US.", {});
-    const rows = await referenceReadings(h.db, fetch);
+    const rows = await referenceReadings(h.db, { moomoo: fetch });
     expect(calls).toHaveLength(3);
     expect(rows.every((r) => r.error !== null)).toBe(true);
     h.close();
@@ -195,7 +254,7 @@ describe("a fetch that THREW", () => {
     const h = harness();
     add(h.db, { code: "US.NOPE", label: null });
     const { fetch, calls } = pricing({});
-    await referenceReadings(h.db, fetch);
+    await referenceReadings(h.db, { moomoo: fetch });
     expect(calls).toEqual([["US.NOPE"]]);
     h.close();
   });

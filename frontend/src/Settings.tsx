@@ -58,7 +58,8 @@ export function Settings({
   /** the page's own rows, polled with the watchlist — this panel is where one is kept or
    *  dropped, and where the reason a figure is missing is stated in full (ADR 0018) */
   references: Reference[];
-  onAddReference: (body: { code: string; label?: string; scale?: number }) => Promise<boolean>;
+  onAddReference: (body: { code: string; label?: string; source: "moomoo" | "ibkr" | "yahoo" })
+    => Promise<boolean>;
   onRemoveReference: (id: string) => void;
 }) {
   useDismissOnBack(open, onClose);

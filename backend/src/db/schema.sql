@@ -78,7 +78,7 @@ CREATE TABLE reference_securities (
 	id VARCHAR(32) NOT NULL,
 	code VARCHAR(50) NOT NULL,
 	label VARCHAR(50),
-	scale FLOAT,
+	source VARCHAR(16) NOT NULL,
 	created_at DATETIME NOT NULL,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_reference_code UNIQUE (code)

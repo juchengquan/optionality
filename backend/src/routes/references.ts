@@ -1,6 +1,6 @@
-/** `/references` — the Securities kept on the page to read the market by (ADR 0018).
+/** `/references` — the Securities kept on the page to read the market by (ADR 0018, 0019).
  *
- *  Three doors and no more. There is no PATCH: a Reference is a code, a label and a scale, and
+ *  Three doors and no more. There is no PATCH: a Reference is a code, a label and a source, and
  *  changing any of them is a different Reference — the figure would be about something else. There
  *  is no "disable": a Reference never alarms, so there is nothing to mute, and it is never
  *  auto-disabled, notified or deleted. Removing one stays the owner's decision, which is what
@@ -22,7 +22,7 @@ import { newId } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
 import { documented } from "../openapi.ts";
-import { referenceReadings } from "../references.ts";
+import { type Sources, referenceReadings } from "../references.ts";
 import { verifyContracts } from "../quotes.ts";
 import { ReferenceIn } from "../schemas/reference.ts";
 import { valid } from "../validate.ts";
@@ -33,7 +33,8 @@ const ReferenceOut = z.object({
   id: z.string(),
   code: z.string(),
   label: z.string().nullable(),
-  scale: z.number().nullable(),
+  /** the vendor that answers for this code, which the strip shows (ADR 0019) */
+  source: z.string(),
   created_at: z.string(),
 });
 
@@ -46,7 +47,7 @@ const ReadingOut = ReferenceOut.omit({ created_at: true }).extend({
   /** "mid_price" or "last_price": which number this is, so it can be checked against a broker
    *  screen. The mid leads because a last trade can be a session old (domain/reference.ts). */
   field: z.string().nullable(),
-  /** the day's move as a FRACTION of the previous close, scale-free */
+  /** the day's move as a FRACTION of the previous close */
   change: z.number().nullable(),
   /** why there is no figure, or null. A dash on the page and nothing more. */
   error: z.string().nullable(),
@@ -60,14 +61,23 @@ export function referenceRoutes(deps: Deps) {
   const { db } = deps;
 
   const out = (row: ReferenceRow) => ({
-    id: row.id, code: row.code, label: row.label, scale: row.scale, created_at: row.created_at,
+    id: row.id, code: row.code, label: row.label, source: row.source, created_at: row.created_at,
   });
 
+  /** The vendors this build can reach, by name: the Provider under its own name, plus whatever
+   *  else is configured. A source is reachable when a client for it EXISTS — asserting otherwise
+   *  would hand a Reference a fetcher belonging to another vendor, which is the mutation that
+   *  survived until `referenceSources` made the difference observable. */
+  const sources: Sources = {
+    [deps.provider.name]: deps.provider.fetchQuotes,
+    ...deps.referenceSources,
+  };
+
   return new Hono()
-    .get("/", list, async (c) => list.reply(c, 200, await referenceReadings(db, deps.provider.fetchQuotes)))
+    .get("/", list, async (c) => list.reply(c, 200, await referenceReadings(db, sources)))
 
     .post("/", create, valid("json", ReferenceIn), async (c) => {
-      const { code, label, scale } = c.req.valid("json");
+      const { code, label, source } = c.req.valid("json");
       // the database before the Provider, as `create-monitor.ts` does and for the same reason:
       // everything free comes before anything that costs a bounded call
       if (findReferenceByCode(db, code)) {
@@ -78,13 +88,17 @@ export function referenceRoutes(deps: Deps) {
       // Both of its refusals are a 422 — "does not exist" and "the Provider did not confirm it",
       // which since ADR 0018 no longer claims an outage about a Provider that declined the
       // security. That is exactly what `US..SPX` gets, and it is why SPX is kept via SPY.
-      const why = await verifyContracts([code], deps.provider.fetchQuotes);
+      // the probe goes to the NAMED vendor, not to the Provider: a code IBKR knows and moomoo
+      // refuses is exactly why a Reference may name its own source (ADR 0019)
+      const fetch = sources[source];
+      if (!fetch) throw httpError(422, `no ${source} client in this build`);
+      const why = await verifyContracts([code], fetch);
       if (why) throw httpError(422, why);
       const row: ReferenceRow = {
         id: newId(),
         code,
         label: label ?? null,
-        scale: scale ?? null,
+        source,
         created_at: toSqlDatetime(deps.now()),
       };
       return create.reply(c, 201, out(insertReference(db, row)));
