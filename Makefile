@@ -183,6 +183,13 @@ ibkr-first-contact:
 ibkr-fake-gateway:
 	node backend/tools/ibkr-fake-gateway.ts
 
+# A stub IB Gateway speaking the SOCKET protocol, for driving the TWS client by hand. Its replies
+# are recorded from the official Python client and from the real gateway (2026-11-08, protocol
+# 157), not invented — a stub written from the same reading as the decoder agrees with it, and
+# agrees wrongly if the reading was wrong. Proves the client, never the provider.
+tws-fake-gateway:
+	node backend/tools/tws-fake-gateway.ts $(ARGS)
+
 # The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
 # reproduce exactly. Generated, never edited; `test-api` fails too when they are stale.
 #
