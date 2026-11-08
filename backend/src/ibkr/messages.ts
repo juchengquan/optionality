@@ -33,10 +33,25 @@ const IN = {
   MARKET_DATA_TYPE: 58,
 } as const;
 
-/** How the market data a request gets is graded. FROZEN is what this service asks for: it serves
- *  the last available figures when the market is shut, which is what makes a sweep out of hours
- *  succeed rather than report an outage every fifteen seconds for seventeen hours. */
-export const MARKET_DATA_FROZEN = 2;
+/** How the market data a request gets is graded, and which grade this service asks for.
+ *
+ *  DELAYED_FROZEN, not FROZEN, and the difference is not subtle: for an instrument the account is
+ *  not subscribed to, asking for FROZEN delivers NOTHING. Measured twice on 2026-11-08, same
+ *  index, same session:
+ *
+ *      reqMarketDataType(2)  SPX → `354 not subscribed`, no figures at all
+ *      reqMarketDataType(4)  SPX → last 7374.85
+ *
+ *  Found by adding a real Reference and watching it read a dash while Yahoo's read 7376.86 beside
+ *  it. FROZEN was the obvious choice and the wrong one — it means "the last live-entitled figure",
+ *  so it has nothing to serve where there is no entitlement.
+ *
+ *  Asking for the delayed grade does NOT give up live data where it is entitled: measured the same
+ *  day, a request for grade 3 on a subscribed option was granted grade 1. The gateway falls back
+ *  rather than downgrades, and it reports which grade it actually served — which is why the
+ *  freshness marks on the strip come from its answer rather than from this constant.
+ */
+export const MARKET_DATA_DELAYED_FROZEN = 4;
 
 /** One option, named the way IB Gateway names them rather than the way the service does.
  *  `contract.ts`'s `parseSpxCode` is what turns a service code into this. */

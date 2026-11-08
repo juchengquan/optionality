@@ -45,6 +45,9 @@ export interface FakeOptions {
   silent?: boolean;
   /** Claim a protocol below the floor, so the client's refusal can be tested. */
   serverVersion?: number;
+  /** Grant the DELAYED tier rather than frozen — what the real gateway does for an index this
+   *  account is not subscribed to, which is the case that made FROZEN the wrong request. */
+  grantDelayed?: boolean;
   /** Answer market data with no figures at all — "subscribed, nothing yet". */
   noFigures?: boolean;
   /** Answer bid and ask with -1, which is what the real gateway sends for a price it does not
@@ -120,7 +123,8 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
 
         if (id === 1) {                                   // reqMktData
           const reqId = Number(f[2]);
-          socket.write(frame(toFields([58, 1, reqId, 2]))); // dataType: frozen, as asked
+          // the grade it SERVED, which is not always the one asked for
+          socket.write(frame(toFields([58, 1, reqId, options.grantDelayed ? 4 : 2])));
           if (options.noFigures) continue;
           const [bid, ask] = options.noPrices ? ["-1", "-1"] : ["3.5", "4.1"];
           socket.write(frame(toFields([1, 6, reqId, 1, bid, 0, 0])));   // bid
