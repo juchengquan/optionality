@@ -8,7 +8,7 @@ import { costToClose, legReadings, positionsHolding } from "./domain/position.ts
 import {
   findPositionSample, linkMonitorToPositions, listPositions, orphanMonitors,
   recordPositionSample, setMonitorScope, stampManageNotified,
-} from "./db/queries.ts";
+} from "./db/queries/index.ts";
 import type { PositionRow } from "./db/rows.ts";
 import { toSqlDatetime } from "./db/time.ts";
 import { toSqliteJson } from "./db/values.ts";

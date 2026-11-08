@@ -11,7 +11,7 @@ import type { Deps } from "../deps.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, findMonitor, findMonitorByCodeField,
   listMonitors, positionsForMonitors, updateMonitorFields,
-} from "../db/queries.ts";
+} from "../db/queries/index.ts";
 import { atomic } from "../db/open.ts";
 import {
   type CreateFault, createComboMonitor, createSingleMonitor, isFault,

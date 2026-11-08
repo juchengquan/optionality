@@ -20,7 +20,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { listReferences } from "./db/queries.ts";
+import { listReferences } from "./db/queries/index.ts";
 import { referenceFigure } from "./domain/reference.ts";
 import type { Quote } from "./domain/quote.ts";
 import type { QuoteFetcher } from "./quotes.ts";

@@ -108,7 +108,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
   importable, so the service cannot trade by absence rather than by discipline. Reached as a
   REFERENCE source whether or not it is the Provider, because a Reference alarms on nothing;
-  `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, queries),
+  `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, and `queries/` —
+  one module per TABLE, re-exported by `queries/index.ts` so every caller keeps one import path;
+  `queries/sql.ts` holds what all of them were repeating, and its `insertRow` names
+  `COLUMNS[table]` rather than the value's own keys on purpose: a row with a column MISSING then
+  fails to bind instead of storing the database's defaults in silence),
   **`vendors.ts`** (the one seam every market-data vendor is reached through: a DESCRIPTOR per
   vendor — `opend/vendor.ts`, `ibkr/vendor.ts`, `yahoo/vendor.ts` — and adding one is a file
   beside its client plus a line in `VENDORS`. `PROVIDERS` is derived from the descriptors that

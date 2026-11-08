@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DatabaseSync } from "node:sqlite";
 
-import { insertReference } from "./db/queries.ts";
+import { insertReference } from "./db/queries/index.ts";
 import { referenceReadings } from "./references.ts";
 import type { QuoteBatch, QuoteFetcher } from "./quotes.ts";
 import { harness } from "./testing.ts";

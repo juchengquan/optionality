@@ -16,7 +16,7 @@ import { z } from "zod";
 import type { Deps } from "../deps.ts";
 import {
   deleteReferenceRow, findReference, findReferenceByCode, insertReference,
-} from "../db/queries.ts";
+} from "../db/queries/index.ts";
 import type { ReferenceRow } from "../db/rows.ts";
 import { newId } from "../db/values.ts";
 import { toSqlDatetime } from "../db/time.ts";
