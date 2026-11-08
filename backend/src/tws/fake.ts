@@ -22,11 +22,20 @@ import { frame, readFields, readFrames, toFields } from "./wire.ts";
 /** The contract the probes asked about, and the conId the real gateway returned for it. */
 export const FAKE_CONID = 902390015;
 
-/** The greeks the real gateway sent for SPXW 20261218 C 8100, frozen, on 2026-11-08. */
+/** The greeks the real gateway sent for SPXW 20261218 C 8100, frozen, on 2026-11-08.
+ *
+ *  Corrected after running our own client against the gateway: `optPrice` and `undPrice` were
+ *  INVENTED in the first draft (4.05 and 6702.5) under a comment claiming they were measured.
+ *  The real reading carries an option price of 3.6244 and NO underlying price at all — which is
+ *  consistent with the 10090 the gateway returns about the SPX index itself, and is worth having
+ *  in the fixture rather than a plausible number: a null here is a real shape the client meets.
+ */
 export const FAKE_GREEKS = {
   impliedVol: 0.13679778548286392, delta: 0.02806614063578037,
   gamma: 0.00018826189971762677, vega: 1.8321828845155324, theta: -0.28028107934963487,
-  undPrice: 6702.5, optPrice: 4.05,
+  optPrice: 3.624407920679289,
+  /** -1 on the wire, which `notComputed` turns into null. The index is not priced here. */
+  undPriceWire: -1,
 } as const;
 
 export interface FakeOptions {
@@ -101,7 +110,7 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
           socket.write(frame(toFields([1, 6, reqId, 2, "4.1", 0, 0])));   // ask
           socket.write(frame(toFields([
             21, reqId, 13, 0, FAKE_GREEKS.impliedVol, FAKE_GREEKS.delta, FAKE_GREEKS.optPrice,
-            0, FAKE_GREEKS.gamma, FAKE_GREEKS.vega, FAKE_GREEKS.theta, FAKE_GREEKS.undPrice,
+            0, FAKE_GREEKS.gamma, FAKE_GREEKS.vega, FAKE_GREEKS.theta, FAKE_GREEKS.undPriceWire,
           ])));
           continue;
         }
