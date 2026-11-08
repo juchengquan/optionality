@@ -10,7 +10,7 @@ import { toSqlDatetime } from "./db/time.ts";
 import { toSqliteJson } from "./db/values.ts";
 import { settingsFor, type Settings } from "./env.ts";
 import type { QuoteRecord } from "./quotes.ts";
-import { type FakeProvider, fakeFetcher } from "./testing.ts";
+import { type FakeProvider, fakeFetcher } from "../testing/harness.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 
 const CODE = "US.SPXW261218C6500000";

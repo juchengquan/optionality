@@ -5,18 +5,25 @@
  *  port and a missing fake looks like a hung suite (CLAUDE.md). The sweeper and the OpenD probe are
  *  faked below for the same reason.
  *
- *  Not a *.test.ts file: the route suites all import it, and phases 6 and 7 will too.
+ *  Not a *.test.ts file: every route, sweeper and bot suite imports it.
+ *
+ *  OUTSIDE `src/`, which is what makes that directory mean "the service". It lived at
+ *  `src/testing.ts` — beside the modules it fakes, and loaded by `check-loads.ts` along with
+ *  them, as though the service might run it. Everything here is correct in a test and a lie in
+ *  production: a Provider that prices every code it is asked for, a sweeper that has never swept,
+ *  a bearer token of "tok". `tools/check-test-support.mjs` is what keeps the separation real,
+ *  because a directory's meaning that nothing checks is a convention.
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
-import { createApp } from "./app.ts";
-import { createDatabase } from "./db/open.ts";
-import { type Settings, settingsFor } from "./env.ts";
-import type { Deps } from "./deps.ts";
-import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "./quotes.ts";
+import { createApp } from "../src/app.ts";
+import { createDatabase } from "../src/db/open.ts";
+import { type Settings, settingsFor } from "../src/env.ts";
+import type { Deps } from "../src/deps.ts";
+import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "../src/quotes.ts";
 
 const TOKEN = "tok";
 

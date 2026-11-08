@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type Harness, body, harness, json, quoting } from "../testing.ts";
+import { type Harness, body, harness, json, quoting } from "../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());

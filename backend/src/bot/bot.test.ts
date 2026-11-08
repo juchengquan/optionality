@@ -18,7 +18,7 @@ import { createDatabase } from "../db/open.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { settingsFor, type Settings } from "../env.ts";
 import type { QuoteRecord } from "../quotes.ts";
-import { type FakeProvider, fakeFetcher } from "../testing.ts";
+import { type FakeProvider, fakeFetcher } from "../../testing/harness.ts";
 import { TelegramBot } from "./bot.ts";
 
 /** Fixed, so a date-relative expectation cannot drift into a different market day overnight. */

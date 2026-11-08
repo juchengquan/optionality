@@ -129,7 +129,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
-- `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the package-boundary lint.
+- `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions).
+- `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
+  package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
+  service. Both are tested against a FIXTURE TREE rather than against this repository, which is
+  what a sweep of `check-boundaries` taught: three ways to gut it left every suite green.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
   for module (snake_case the only translation), `js.py` holds the JavaScript number rules the port
   must reproduce (cased since ADR 0017, and named `js.py` not `_js.py` for that reason),
@@ -207,8 +211,14 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Testing conventions
 
-- `backend/src/testing.ts`'s `harness` injects an echo quote fetcher by default — tests must NEVER reach the
-  real moomoo SDK (it blocks indefinitely on dead ports; a missing fake looks like a hung suite).
+- **`backend/testing/harness.ts`** (NOT under `src/`, which is the service) — its `harness` injects an
+  echo quote fetcher by default, so tests must NEVER reach the real moomoo SDK (it blocks
+  indefinitely on dead ports; a missing fake looks like a hung suite). Everything in it is correct
+  in a test and a lie in production — a Provider that prices every code asked for, a sweeper that
+  has never swept, a bearer token of `"tok"` — and it sat in `src/` beside the modules it fakes,
+  loaded by `check-loads` along with them, until #221. **`make check-test-support`** (part of
+  `make lint`) refuses any non-test file that imports a `testing/` directory, in any package,
+  because a directory's meaning that nothing checks is a convention.
 - Bot tests drive `TelegramBot.handleUpdate` directly with a fake API; sweep tests call
   `MonitorSweeper.sweep()` with fake fetchers and senders. Dates in tests are derived from the harness's
   fixed clock (`NOW`, `daysFromNow`), never the real one.
