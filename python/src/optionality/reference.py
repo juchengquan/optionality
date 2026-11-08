@@ -26,12 +26,12 @@ class ReferenceReading(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True)
-    #: the figure, scaled and rounded, or None where neither field arrived
+    #: the figure, rounded, or None where neither field arrived
     figure: float | None
     #: "mid_price" | "last_price", or None when there is no figure
     field: str | None
     #: the move against the previous close, as a FRACTION of it, or None. Scale-free by
-    #: construction — both sides are the unscaled reading — and left unrounded, where the figure is
+    #: construction — both sides come from the same field — and left unrounded, where the figure is
     #: rounded to four places: a ratio is about 0.004 and four places would throw away the digits
     #: that make it readable as a percent.
     change: float | None
@@ -47,8 +47,7 @@ def _price(value: object) -> float | None:
     """A quoted price, or None for anything that is not one.
 
     POSITIVE, not merely finite. An empty book quotes 0 on both sides and `(0 + 0) / 2` is a mid, so
-    a Security nobody is quoting yet arrives with `mid_price: 0` — which times a scale of 10 is still
-    0, and 0 prints as a price. A genuinely worthless far wing therefore reads as a dash rather than
+    a Security nobody is quoting yet arrives with `mid_price: 0`, and 0 prints as a price. A genuinely worthless far wing therefore reads as a dash rather than
     as zero, which is the cheaper of the two mistakes: a dash is not a claim.
 
     `bool` is excluded explicitly, where the TypeScript gets it from `typeof`: moomoo sends booleans
@@ -61,11 +60,8 @@ def _price(value: object) -> float | None:
     return float(value)
 
 
-def reference_figure(quote: Quote | None, scale: float | None) -> ReferenceReading:
+def reference_figure(quote: Quote | None) -> ReferenceReading:
     """One Reference's reading, or nothing at all.
-
-    `scale` is nullable and None means ×1, as the column is: most References need none, and a stored
-    1 would invite the strip to print "×1".
     """
     if not quote:
         return NOTHING
@@ -75,7 +71,7 @@ def reference_figure(quote: Quote | None, scale: float | None) -> ReferenceReadi
             continue
         previous = _price(quote.get("prev_close_price"))
         return ReferenceReading(
-            figure=round4(raw * (1 if scale is None else scale)),
+            figure=round4(raw),
             field=field,
             # the same field on both sides of the subtraction: a figure taken from the book and a
             # change measured from the last trade would be a pair of numbers that cannot both be true

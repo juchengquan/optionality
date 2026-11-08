@@ -259,44 +259,39 @@ export const INPUTS: Record<string, CaseInput[]> = {
   ],
   reference: [
     // --- which field is true, measured against the live gateway on 2026-11-02 (ADR 0018) ---
+    // The scale's three cases went with the column (ADR 0019): a scaled stand-in is a simulation
+    // rather than a reading, and `round4` is still exercised by the float-noise case below.
     // SPY's last trade was a session old while its own book was current: 755.72 against 758.73
     { fn: "referenceFigure", name: "the mid leads, because the last trade can be a session old",
-      args: [spy, null] },
-    { fn: "referenceFigure", name: "scaled, so SPY stands in for SPX beside the strikes",
-      args: [spy, 10] },
+      args: [spy] },
     { fn: "referenceFigure", name: "no two-sided quote falls back to the last trade",
-      args: [{ ...spy, mid_price: undefined }, 10] },
-    // an empty book quotes 0/0 and `(0 + 0) / 2` is a mid; times 10 it is still 0, and 0 prints
-    // as a price
+      args: [{ ...spy, mid_price: undefined }] },
+    // an empty book quotes 0/0 and `(0 + 0) / 2` is a mid, and 0 prints as a price
     { fn: "referenceFigure", name: "a zero mid is not a price, so the last trade is read",
-      args: [{ ...spy, bid_price: 0, ask_price: 0, mid_price: 0 }, 10] },
+      args: [{ ...spy, bid_price: 0, ask_price: 0, mid_price: 0 }] },
     { fn: "referenceFigure", name: "neither field arrived, so there is no figure",
-      args: [{ code: "US.SPY", name: "SPDR S&P 500 ETF Trust" }, 10] },
+      args: [{ code: "US.SPY", name: "SPDR S&P 500 ETF Trust" }] },
     { fn: "referenceFigure", name: "no quote at all — a Reference the batch could not price",
-      args: [null, 10] },
+      args: [null] },
     // moomoo is a wire format with no published schema, so a field can arrive as a string
-    { fn: "referenceFigure", name: "a figure that is not a number", args: [{ mid_price: "758.73" }, null] },
-    { fn: "referenceFigure", name: "an infinite figure", args: [{ mid_price: Infinity }, null] },
-    { fn: "referenceFigure", name: "a negative figure is not a price", args: [{ mid_price: -1, last_price: 2 }, null] },
-    { fn: "referenceFigure", name: "float noise never reaches the page", args: [{ mid_price: 20.15 }, 3] },
-    { fn: "referenceFigure", name: "a fractional scale, for a proxy that quotes high",
-      args: [{ mid_price: 7587.3 }, 0.1] },
-    { fn: "referenceFigure", name: "the change is a fraction of the close, which no scale moves",
-      args: [{ mid_price: 758.73, prev_close_price: 755.72 }, 10] },
-    { fn: "referenceFigure", name: "the same change unscaled, to prove the scale cancels",
-      args: [{ mid_price: 758.73, prev_close_price: 755.72 }, null] },
-    { fn: "referenceFigure", name: "a day down", args: [{ mid_price: 750, prev_close_price: 755.72 }, 10] },
+    { fn: "referenceFigure", name: "a figure that is not a number", args: [{ mid_price: "758.73" }] },
+    { fn: "referenceFigure", name: "an infinite figure", args: [{ mid_price: Infinity }] },
+    { fn: "referenceFigure", name: "a negative figure is not a price", args: [{ mid_price: -1, last_price: 2 }] },
+    { fn: "referenceFigure", name: "float noise never reaches the page", args: [{ mid_price: 20.15 }] },
+    { fn: "referenceFigure", name: "the change is a fraction of the close",
+      args: [{ mid_price: 758.73, prev_close_price: 755.72 }] },
+    { fn: "referenceFigure", name: "a day down", args: [{ mid_price: 750, prev_close_price: 755.72 }] },
     { fn: "referenceFigure", name: "no close is no change, not a change from nothing",
-      args: [{ mid_price: 758.73 }, null] },
-    { fn: "referenceFigure", name: "a zero close would be divided by", args: [{ mid_price: 758.73, prev_close_price: 0 }, null] },
+      args: [{ mid_price: 758.73 }] },
+    { fn: "referenceFigure", name: "a zero close would be divided by", args: [{ mid_price: 758.73, prev_close_price: 0 }] },
     // the change is measured from the field the figure came from: a mid against the close beside a
     // last-trade figure is a pair of numbers that cannot both be true
     { fn: "referenceFigure", name: "the fallback's change is the last trade against the close",
-      args: [{ last_price: 750, prev_close_price: 755.72 }, null] },
+      args: [{ last_price: 750, prev_close_price: 755.72 }] },
     // the only shape where the two fields disagree about which is true: a mid that is PRESENT and
     // is not a price. A change computed from it reads -100% beside a figure that moved a point.
     { fn: "referenceFigure", name: "a present-but-zero mid is ignored on both sides at once",
-      args: [{ mid_price: 0, last_price: 750, prev_close_price: 755.72 }, 10] },
+      args: [{ mid_price: 0, last_price: 750, prev_close_price: 755.72 }] },
   ],
   position: [
     { fn: "scopedLegs", name: "the calls of a condor", args: [condor, "calls"] },

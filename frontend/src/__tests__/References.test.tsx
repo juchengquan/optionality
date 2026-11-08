@@ -11,7 +11,7 @@ const health = {
 };
 
 const SPX = {
-  id: "r1", code: "US.SPY", label: "SPX", scale: 10, name: "SPDR S&P 500 ETF Trust",
+  id: "r1", code: "US.SPY", label: "SPX", source: "moomoo", name: "SPDR S&P 500 ETF Trust",
   figure: 7587.3, field: "mid_price", change: 0.003982956650611325, error: null,
 };
 
@@ -56,7 +56,7 @@ describe("the strip on the page", () => {
     render(<App />);
     await settled();
     await settled();
-    expect(screen.getByText("SPX (via SPY ×10)")).toBeTruthy();
+    expect(screen.getByText("SPX (moomoo)")).toBeTruthy();
     expect(screen.getByText("7,587.30")).toBeTruthy();
   });
 
@@ -109,7 +109,7 @@ describe("the strip on the page", () => {
 });
 
 describe("keeping one", () => {
-  it("posts the code, the label and the scale", async () => {
+  it("posts the code, the label and the source", async () => {
     mockApi([]);
     render(<App />);
     await settled();
@@ -119,7 +119,7 @@ describe("keeping one", () => {
     const sheet = screen.getByRole("dialog");
     fireEvent.change(within(sheet).getByLabelText("code"), { target: { value: "US.SPY" } });
     fireEvent.change(within(sheet).getByLabelText("call it"), { target: { value: "SPX" } });
-    fireEvent.change(within(sheet).getByLabelText("scale"), { target: { value: "10" } });
+    fireEvent.change(within(sheet).getByLabelText("from"), { target: { value: "ibkr" } });
     fireEvent.click(within(sheet).getByRole("button", { name: "keep it" }));
     await settled();
     await settled();
@@ -127,12 +127,12 @@ describe("keeping one", () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]!.url).toMatch(/\/references$/);
     expect(JSON.parse(String(posted[0]!.init.body)))
-      .toEqual({ code: "US.SPY", label: "SPX", scale: 10 });
+      .toEqual({ code: "US.SPY", label: "SPX", source: "ibkr" });
   });
 
-  it("sends no label and no scale where the boxes were left alone", async () => {
-    // absent, not null or zero: the service reads a missing scale as ×1 and a missing label as
-    // "the code is its own name"
+  it("sends no label where that box was left alone, and the default source", async () => {
+    // the label is absent rather than null or empty — the service reads a missing one as "the
+    // code is its own name". The source is never absent: it is required, and defaults to moomoo
     mockApi([]);
     render(<App />);
     await settled();
@@ -144,12 +144,12 @@ describe("keeping one", () => {
     fireEvent.click(within(sheet).getByRole("button", { name: "keep it" }));
     await settled();
     await settled();
-    expect(JSON.parse(String(posted[0]!.init.body))).toEqual({ code: "US.QQQ" });
+    expect(JSON.parse(String(posted[0]!.init.body))).toEqual({ code: "US.QQQ", source: "moomoo" });
   });
 
   it("states the reason a kept Reference has no figure, which the strip only hints at", async () => {
     mockApi([{
-      ...SPX, code: "US..SPX", scale: null, figure: null, field: null, change: null, name: null,
+      ...SPX, code: "US..SPX", source: "moomoo", figure: null, field: null, change: null, name: null,
       error: "snapshot API failed: US stock indices are not supported",
     }]);
     render(<App />);
@@ -174,7 +174,7 @@ describe("keeping one", () => {
     // the confirmation, because nothing here is removed by a misclick
     const dialogs = screen.getAllByRole("alertdialog");
     const confirm = within(dialogs[dialogs.length - 1]!);
-    expect(confirm.getByText(/Delete SPX \(via SPY ×10\)\?/)).toBeTruthy();
+    expect(confirm.getByText(/Delete SPX \(moomoo\)\?/)).toBeTruthy();
     fireEvent.click(confirm.getByRole("button", { name: /delete|remove/i }));
     await settled();
     await settled();

@@ -6,25 +6,33 @@ import type { Reference } from "../api";
 import { ReferenceStrip, referenceTitle } from "../ReferenceStrip";
 
 const spx = (over: Partial<Reference> = {}): Reference => ({
-  id: "r1", code: "US.SPY", label: "SPX", scale: 10,
+  id: "r1", code: "US.SPY", label: "SPX", source: "moomoo",
   name: "SPDR S&P 500 ETF Trust", figure: 7587.3, field: "mid_price",
   change: 0.003982956650611325, error: null, ...over,
 } as Reference);
 
 describe("what it is called", () => {
-  it("shows the arithmetic, and never claims to be the index", () => {
-    // SPY×10 is not SPX: tracking error, dividends, and two different sessions. The label is the
-    // only place SPX is said at all, so the `via` is what keeps it honest.
-    expect(referenceTitle(spx())).toBe("SPX (via SPY ×10)");
+  it("names the vendor that answered, which is why an outside source is allowed at all", () => {
+    // a figure on this strip is acted on by a person whether or not any code depends on it, so
+    // the one thing it must never hide is where it came from (ADR 0019)
+    expect(referenceTitle(spx())).toBe("SPX (moomoo)");
   });
 
-  it("names the proxy even where there is no scale to show", () => {
-    expect(referenceTitle(spx({ label: "Nasdaq", code: "US.QQQ", scale: null })))
-      .toBe("Nasdaq (via QQQ)");
+  it("names a vendor that is not the Provider, which is the whole point", () => {
+    expect(referenceTitle(spx({ label: "SPX", code: "SPX", source: "ibkr" })))
+      .toBe("SPX (ibkr)");
   });
 
-  it("is just the code where the code is already the truth about itself", () => {
-    expect(referenceTitle(spx({ label: null, scale: null, code: "US.QQQ" }))).toBe("QQQ");
+  it("falls back to the code where there is no label, still naming the vendor", () => {
+    // the code is already the truth about itself; the vendor is the part no code can tell you
+    expect(referenceTitle(spx({ label: null, source: "moomoo", code: "US.QQQ" })))
+      .toBe("QQQ (moomoo)");
+  });
+
+  it("shows no arithmetic, because there is none left", () => {
+    // `SPX (via SPY ×10)` until ADR 0019 dropped the scale: a scaled stand-in is a simulation
+    // rather than a reading
+    expect(referenceTitle(spx())).not.toMatch(/via|×/);
   });
 });
 
@@ -70,7 +78,7 @@ describe("a Reference with no figure", () => {
       error: "snapshot API failed: US stock indices are not supported",
     })]} />);
     // the row stays: removing it is the owner's decision, and its absence is not an event
-    expect(screen.getByText("SPX (via SPY ×10)")).toBeTruthy();
+    expect(screen.getByText("SPX (moomoo)")).toBeTruthy();
     expect(screen.getByText("—")).toBeTruthy();
   });
 

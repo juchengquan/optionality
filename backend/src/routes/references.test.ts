@@ -31,30 +31,30 @@ const created = async (payload: unknown): Promise<string> => {
 };
 
 describe("keeping a Security on the page", () => {
-  it("takes a raw code, a label and a scale", async () => {
+  it("takes a raw code, a label and a source", async () => {
     start();
-    const resp = await post({ code: "US.SPY", label: "SPX", scale: 10 });
+    const resp = await post({ code: "US.SPY", label: "SPX", source: "moomoo" });
     expect(resp.status).toBe(201);
-    expect(await body(resp)).toMatchObject({ code: "US.SPY", label: "SPX", scale: 10 });
+    expect(await body(resp)).toMatchObject({ code: "US.SPY", label: "SPX", source: "moomoo" });
   });
 
-  it("takes a code on its own, where neither a name nor a scale would add anything", async () => {
+  it("takes a code with no label, where the code is its own name", async () => {
     start();
-    expect(await body(await post({ code: "US.SPY" })))
-      .toMatchObject({ code: "US.SPY", label: null, scale: null });
+    expect(await body(await post({ code: "US.SPY", source: "moomoo" })))
+      .toMatchObject({ code: "US.SPY", label: null, source: "moomoo" });
   });
 
   it("upper-cases and trims the code, so one Security cannot become two rows", async () => {
     start();
-    expect(await body(await post({ code: "  us.spy " }))).toMatchObject({ code: "US.SPY" });
+    expect(await body(await post({ code: "  us.spy ", source: "moomoo" }))).toMatchObject({ code: "US.SPY", source: "moomoo" });
     // and the duplicate check then sees it, which is the half that matters
-    expect((await post({ code: "US.SPY" })).status).toBe(409);
+    expect((await post({ code: "US.SPY", source: "moomoo" })).status).toBe(409);
   });
 
   it("refuses a second Reference on the same Security", async () => {
     start();
-    await created({ code: "US.SPY" });
-    const resp = await post({ code: "US.SPY", label: "SPX" });
+    await created({ code: "US.SPY", source: "moomoo" });
+    const resp = await post({ code: "US.SPY", label: "SPY", source: "moomoo" });
     expect(resp.status).toBe(409);
     // two References on one Security would be two figures that cannot differ
     expect((await body(resp)).detail).toMatch(/already kept on the page/);
@@ -65,15 +65,15 @@ describe("keeping a Security on the page", () => {
     // anything that costs a bounded call, and the database already knows the answer
     let calls = 0;
     h = harness({ fetchQuotes: (codes) => { calls += 1; return quoting({ "US.SPY": SPY })(codes); } });
-    await created({ code: "US.SPY" });
+    await created({ code: "US.SPY", source: "moomoo" });
     const spent = calls;
-    expect((await post({ code: "US.SPY" })).status).toBe(409);
+    expect((await post({ code: "US.SPY", source: "moomoo" })).status).toBe(409);
     expect(calls, "the duplicate reached the Provider").toBe(spent);
   });
 
   it("probes the Provider strictly, as monitor creation does", async () => {
     start();
-    const resp = await post({ code: "US.NOPE" });
+    const resp = await post({ code: "US.NOPE", source: "moomoo" });
     expect(resp.status).toBe(422);
     expect((await body(resp)).detail).toMatch(/does not exist/);
     // and nothing was written: a permanent dash is better found at creation than on the page
@@ -88,38 +88,90 @@ describe("keeping a Security on the page", () => {
     h = harness({
       fetchQuotes: () => Promise.reject(new Error("snapshot API failed: US stock indices are not supported")),
     });
-    const resp = await post({ code: "US..SPX", label: "SPX" });
+    const resp = await post({ code: "US..SPX", label: "SPX", source: "moomoo" });
     expect(resp.status).toBe(422);
     const detail = (await body(resp)).detail as string;
     expect(detail).toContain("US stock indices are not supported");
     expect(detail).not.toMatch(/unreachable/);
   });
 
-  it("refuses a scale that would make every figure zero", async () => {
+  it("refuses a source it has never heard of", async () => {
+    // the schema's enum, not the registry: a name outside SOURCES is a typo rather than an
+    // unconfigured vendor, and the two deserve different sentences
     start();
-    expect((await post({ code: "US.SPY", scale: 0 })).status).toBe(422);
+    expect((await post({ code: "US.SPY", source: "bloomberg" })).status).toBe(422);
   });
 
-  it("refuses a scale that would invert the market", async () => {
+  it("probes the NAMED vendor, not the Provider", async () => {
+    // the claim ADR 0019 rests on, and it was unprovable until the registry became injectable:
+    // with only the Provider in it, `sources[source]` and `deps.provider.fetchQuotes` are the
+    // same function, so a mutation swapping them changed nothing and no test failed.
+    const asked: string[][] = [];
+    h = harness({
+      // the Provider knows nothing, so a probe sent there would refuse the code
+      fetchQuotes: () => Promise.resolve({ records: [], unknown: ["SPX"] }),
+      referenceSources: {
+        ibkr: (codes) => {
+          asked.push([...codes]);
+          return Promise.resolve({ records: [{ code: "SPX", name: "S&P 500" }], unknown: [] });
+        },
+      },
+    });
+    const resp = await h.call("/references", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "SPX", source: "ibkr" }),
+    });
+
+    expect(resp.status).toBe(201);
+    expect(asked).toEqual([["SPX"]]);
+  });
+
+  it("refuses a code the named vendor does not know, even where the Provider would price it", async () => {
+    // the other direction: the Provider must not rescue a code its vendor cannot quote
+    h = harness({
+      fetchQuotes: () => Promise.resolve({ records: [{ code: "SPX" }], unknown: [] }),
+      referenceSources: { ibkr: () => Promise.resolve({ records: [], unknown: ["SPX"] }) },
+    });
+    const resp = await h.call("/references", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "SPX", source: "ibkr" }),
+    });
+    expect(resp.status).toBe(422);
+  });
+
+  it("refuses a source with no client in this build, saying which", async () => {
+    // `ibkr` is a name SOURCES knows and this build cannot reach, so the refusal names the
+    // vendor rather than claiming the code does not exist (ADR 0019)
     start();
-    expect((await post({ code: "US.SPY", scale: -10 })).status).toBe(422);
+    const resp = await post({ code: "SPX", source: "ibkr" });
+    expect(resp.status).toBe(422);
+    expect(((await body(resp)) as unknown as { detail: string }).detail)
+      .toMatch(/no ibkr client in this build/);
+  });
+
+  it("refuses a Reference with no source at all", async () => {
+    // required, because a Reference whose vendor is unknown cannot be fetched
+    start();
+    expect((await post({ code: "US.SPY" })).status).toBe(422);
   });
 
   it("refuses an empty code", async () => {
     start();
-    expect((await post({ code: "   " })).status).toBe(422);
+    expect((await post({ code: "   ", source: "moomoo" })).status).toBe(422);
   });
 });
 
 describe("reading them", () => {
   it("answers the figure, the field it came from and the day's move", async () => {
     start();
-    await created({ code: "US.SPY", label: "SPX", scale: 10 });
+    await created({ code: "US.SPY", label: "SPY", source: "moomoo" });
     const rows = await body(await h.call("/references")) as unknown as Record<string, unknown>[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      code: "US.SPY", label: "SPX", scale: 10,
-      name: "SPDR S&P 500 ETF Trust", figure: 7587.3, field: "mid_price", error: null,
+      code: "US.SPY", label: "SPY", source: "moomoo",
+      name: "SPDR S&P 500 ETF Trust", figure: 758.73, field: "mid_price", error: null,
     });
   });
 
@@ -128,8 +180,8 @@ describe("reading them", () => {
     // that can 502 is a backdrop that can take the watchlist's screen with it
     h = harness({ fetchQuotes: () => Promise.reject(new Error("Client connection failed!")) });
     h.db.prepare(
-      `insert into reference_securities (id, code, label, scale, created_at)
-       values (?, 'US.SPY', 'SPX', 10, '2026-11-02 00:00:00.000000')`,
+      `insert into reference_securities (id, code, label, source, created_at)
+       values (?, 'US.SPY', 'SPY', 'moomoo', '2026-11-02 00:00:00.000000')`,
     ).run("r".repeat(32));
     const resp = await h.call("/references");
     expect(resp.status).toBe(200);
@@ -147,7 +199,7 @@ describe("reading them", () => {
 describe("removing one", () => {
   it("removes it, and says so with no body", async () => {
     start();
-    const id = await created({ code: "US.SPY" });
+    const id = await created({ code: "US.SPY", source: "moomoo" });
     expect((await h.call(`/references/${id}`, { method: "DELETE" })).status).toBe(204);
     expect(await body(await h.call("/references"))).toEqual([]);
   });
@@ -161,13 +213,13 @@ describe("removing one", () => {
 
   it("is the only way one ever goes — reading them never writes", async () => {
     start();
-    await created({ code: "US.SPY", label: "SPX", scale: 10 });
+    await created({ code: "US.SPY", label: "SPY", source: "moomoo" });
     const before = h.db.prepare("select * from reference_securities").all();
     // a code the Provider cannot price, read twice: a Monitor would be quarantined for this and a
     // Reference is not, because quarantine is about a rule that cannot be EVALUATED
     h.db.prepare(
-      `insert into reference_securities (id, code, label, scale, created_at)
-       values (?, 'US.NOPE', null, null, '2026-11-02 00:00:01.000000')`,
+      `insert into reference_securities (id, code, label, source, created_at)
+       values (?, 'US.NOPE', null, 'moomoo', '2026-11-02 00:00:01.000000')`,
     ).run("n".repeat(32));
     await h.call("/references");
     await h.call("/references");

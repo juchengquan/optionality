@@ -3,12 +3,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 
 import type { Reference } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
 import { referenceTitle } from "./ReferenceStrip";
 
-/** Which Securities are kept on the page, and the door for adding one (ADR 0018).
+/** Which Securities are kept on the page, and the door for adding one (ADR 0018, 0019).
  *
  *  In the Service panel rather than on the page, for the same reason the column pickers are not:
  *  this is set once and read never. The STRIP is what gets read, and it carries a figure and a
@@ -20,12 +21,13 @@ export function References({
 }: {
   references: Reference[];
   /** answers whether it landed, so the boxes are cleared only on a Reference that now exists */
-  onAdd: (body: { code: string; label?: string; scale?: number }) => Promise<boolean>;
+  onAdd: (body: { code: string; label?: string; source: "moomoo" | "ibkr" | "yahoo" }) =>
+    Promise<boolean>;
   onRemove: (id: string) => void;
 }) {
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
-  const [scale, setScale] = useState("");
+  const [source, setSource] = useState<"moomoo" | "ibkr" | "yahoo">("moomoo");
 
   return (
     <section data-testid="references">
@@ -61,17 +63,16 @@ export function References({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const scaled = Number(scale);
           void onAdd({
             code,
             ...(label ? { label } : {}),
-            // an empty box is no scale, which the service stores as null and reads as ×1
-            ...(scale && Number.isFinite(scaled) ? { scale: scaled } : {}),
+            source,
           }).then((landed) => {
             if (!landed) return;
             setCode("");
             setLabel("");
-            setScale("");
+            // the source is NOT cleared: adding two References from one vendor is the common
+            // case, and resetting it would make the second one a mistake waiting to happen
           });
         }}
       >
@@ -91,14 +92,22 @@ export function References({
                  onChange={(e) => setLabel(e.target.value)} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="r-scale">×</FieldLabel>
-          <Input id="r-scale" aria-label="scale" type="number" step="any" min="0"
-                 value={scale} placeholder="10" onChange={(e) => setScale(e.target.value)} />
+          <FieldLabel htmlFor="r-source">from</FieldLabel>
+          <NativeSelect
+            id="r-source"
+            aria-label="from"
+            value={source}
+            onChange={(e) => setSource(e.target.value as typeof source)}
+          >
+            <option value="moomoo">moomoo</option>
+            <option value="ibkr">ibkr</option>
+            <option value="yahoo">yahoo</option>
+          </NativeSelect>
           <FieldDescription>
-            SPY quotes at 758 against strikes of 6950, so SPX is read through SPY ×10 — and the
-            strip shows that arithmetic rather than charging a mental ×10 at every glance. It never
-            claims to BE the index: SPY×10 has tracking error, it has dividends, and the two trade
-            different sessions. Blank is ×1.
+            Which vendor answers for this code. Named outright and not "the Provider", so the strip
+            can say where the figure came from — the only reason a Reference is allowed a source
+            the rest of the service does not use. A vendor this build cannot reach is refused here
+            with that reason, rather than becoming a permanent dash.
           </FieldDescription>
         </Field>
         <Button type="submit" size="sm" variant="secondary">keep it</Button>

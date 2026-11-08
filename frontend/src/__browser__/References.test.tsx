@@ -7,7 +7,7 @@ import { App } from "../App";
 /** The Reference strip, in a real browser at a phone's width (ADR 0018).
  *
  *  A green suite can hide an unusable UI: the figures are index-sized and each one carries a
- *  label, a scale and a percentage, so three of them is more text than a 390px screen has room
+ *  label, a vendor and a percentage, so three of them is more text than a 390px screen has room
  *  for on one line. This is the measurement, not a reading of the CSS — the strip must WRAP, and
  *  nothing on this page may push the document sideways.
  */
@@ -24,18 +24,18 @@ const leg = {
 };
 
 /** Three, which is what the owner asked about — and the widest shape each can take: a label, a
- *  proxy, a scale, a four-digit figure and a signed percentage. */
+ *  label, a vendor, a four-digit figure and a signed percentage. */
 const REFERENCES = [
   {
-    id: "r1", code: "US.SPY", label: "SPX", scale: 10, name: "SPDR S&P 500 ETF Trust",
+    id: "r1", code: "US.SPY", label: "SPX", source: "moomoo", name: "SPDR S&P 500 ETF Trust",
     figure: 7587.3, field: "mid_price", change: 0.003982956650611325, error: null,
   },
   {
-    id: "r2", code: "US.QQQ", label: "Nasdaq 100", scale: 25, name: "Invesco QQQ Trust",
+    id: "r2", code: "US.QQQ", label: "Nasdaq 100", source: "moomoo", name: "Invesco QQQ Trust",
     figure: 14962.5, field: "last_price", change: -0.0123, error: null,
   },
   {
-    id: "r3", code: "US.VIXY", label: null, scale: null, name: "ProShares VIX Short-Term",
+    id: "r3", code: "US.VIXY", label: null, source: "moomoo", name: "ProShares VIX Short-Term",
     figure: 42.18, field: "mid_price", change: 0.0415, error: null,
   },
 ];

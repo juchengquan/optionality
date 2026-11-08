@@ -31,7 +31,7 @@ export const COLUMNS = {
     "legs_iv", "legs_vega",
   ],
   monitor_positions: ["monitor_id", "position_id"],
-  reference_securities: ["id", "code", "label", "scale", "created_at"],
+  reference_securities: ["id", "code", "label", "source", "created_at"],
   /** bookkeeping: COLUMNS covers every table the schema creates, and a table left out of it is a
    *  table nothing checks (db/migrate.ts) */
   schema_migrations: ["name", "applied_at"],
@@ -53,7 +53,7 @@ export const NULLABLE = {
   positions: ["strategy", "entry", "opened_at", "manage_notified_at"],
   position_samples: ["legs_iv", "legs_vega"],
   monitor_positions: [],
-  reference_securities: ["label", "scale"],
+  reference_securities: ["label"],
   schema_migrations: [],
 } as const satisfies Record<TableName, readonly string[]>;
 
@@ -114,10 +114,12 @@ export interface ReferenceRow {
   id: string;
   /** a raw code, given rather than built: `buildSpxCode` cannot write `US.SPY` */
   code: string;
-  /** what to call it, or null for "the code is its own name" */
+  /** what to call it, or null for "the code is its own name". Kept where `scale` went, and more
+   *  useful than before: `^GSPC`, `US..SPX` and `SPX` are three vendors' names for one index. */
   label: string | null;
-  /** what to multiply its figure by, or null for ×1 */
-  scale: number | null;
+  /** the vendor that answers for this code — never "the Provider", which would change meaning
+   *  the day OPTIONALITY_PROVIDER does, under the same unchanged label (ADR 0019) */
+  source: string;
   created_at: string;
 }
 
