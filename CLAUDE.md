@@ -57,18 +57,20 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
   repo-wide codegen step rather than something the backend may do. Both stamps are generated and
   committed; `make check-cases` fails when either is stale.
-- **`make tws-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
-  `tws/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
+- **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
+  `ibkr/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
   from the official Python client with `sendMsg` intercepted at protocol 157, and what the gateway
   replies is what the real gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-08.
-  One definition, in `src/tws/fake.ts`, shared with the suite so the two cannot drift. A run
+  One definition, in `src/ibkr/fake.ts`, shared with the suite so the two cannot drift. A run
   against it proves the CLIENT and is never evidence about a provider, an account's entitlements,
-  a dead session or an open market. The retired `ibkr-first-contact` and `ibkr-fake-gateway`
-  targets were the Client Portal pair, and went with that transport and the whole of `ibkr/`
-  (#205) — the field mapping, the conid cache and the first-contact readings included, rather
-  than kept unreached. The ideas worth having are in that commit's history: `hasFigures`'s
-  distinction between a figure that has not arrived and a Contract that does not exist, and the
-  five questions only a real gateway can answer. Phase 3 lifts them deliberately or not at all.
+  a dead session or an open market.
+  This name is REUSED rather than new: `ibkr-fake-gateway` served the Client Portal stub until
+  #205 deleted that transport and the whole of the old `ibkr/` with it, and the socket stub then
+  took both the directory name and the target name (named for the gateway it speaks to, as
+  `opend/` is). The retired `ibkr-first-contact` has no replacement — the first-contact harness
+  needs a socket-shaped runner nobody has written. The ideas worth lifting are in #205's history:
+  `hasFigures`'s distinction between a figure that has not arrived and a Contract that does not
+  exist, and the five questions only a real gateway can answer.
 - `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
   with the sweep at an hour and the Telegram variables blanked, because the live service is always up
   here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
@@ -100,7 +102,7 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `alarm.ts` and its Telegram wording, `lifecycle.ts`'s quarantine and expiry verdicts, and `js.ts`,
   the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
-  Telegram bot), `opend/` (the moomoo websocket client), `tws/` (IB Gateway's own socket protocol:
+  Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (IB Gateway's own socket protocol:
   framing, the handshake with its protocol floor of 156, and the five messages a read-only quote
   fetch sends — there is no order message and none is importable, so the service cannot trade by
   absence rather than by discipline), `db/` (schema, migrations, queries),

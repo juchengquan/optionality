@@ -1,7 +1,7 @@
 /** A stub IB Gateway on a port, for driving the socket client by hand.
  *
- *      make tws-fake-gateway
- *      make tws-fake-gateway ARGS="--port 4099 --no-figures"
+ *      make ibkr-fake-gateway
+ *      make ibkr-fake-gateway ARGS="--port 4099 --no-figures"
  *
  *  It answers NO real market data: every reply is a byte sequence recorded from the official
  *  Python client (what we send) and from the real gateway on this machine (what comes back), on
@@ -9,9 +9,9 @@
  *  evidence about IB Gateway, an account's entitlements, or a live market — the same warning
  *  `ibkr-fake-gateway.ts` carries, for the same reason.
  *
- *  The replies live in `src/tws/fake.ts` so that the suite and this tool cannot drift apart.
+ *  The replies live in `src/ibkr/fake.ts` so that the suite and this tool cannot drift apart.
  */
-import { startFakeGateway } from "../src/tws/fake.ts";
+import { startFakeGateway } from "../src/ibkr/fake.ts";
 
 const args = process.argv.slice(2);
 function option(name: string): string | undefined {
