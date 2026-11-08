@@ -34,7 +34,7 @@ import { atomic } from "./db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
   positionsForMonitors, updateMonitorFields,
-} from "./db/queries.ts";
+} from "./db/queries/index.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
 import { toSqliteBool, } from "./db/values.ts";

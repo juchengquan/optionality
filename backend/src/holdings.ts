@@ -10,7 +10,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { costToClose, positionLegCodes, positionPnl, type Position } from "./domain/position.ts";
 import { dteAtOpen, exitLevels, exitPolicy, type ExitLevels } from "./domain/exit.ts";
 import { daysToExpiry } from "./domain/expiry.ts";
-import { listPositions } from "./db/queries.ts";
+import { listPositions } from "./db/queries/index.ts";
 import type { PositionRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
 import { toPosition } from "./hydrate.ts";

@@ -17,12 +17,11 @@ import {
   type CreateFault, createComboMonitor, createSingleMonitor, isFault,
 } from "../create-monitor.ts";
 import {
-  findComboByName, findMonitorByCodeField, findMonitorsByIdentifier, listMonitors,
-  updateMonitorFields,
-} from "../db/queries.ts";
+  clearMonitorLinks, deleteMonitorRow, findComboByName, findMonitorByCodeField,
+  findMonitorsByIdentifier, listMonitors, updateMonitorFields,
+} from "../db/queries/index.ts";
 import { atomic } from "../db/open.ts";
 import type { MonitorRow } from "../db/rows.ts";
-import { clearMonitorLinks, deleteMonitorRow } from "../db/queries.ts";
 import { fromSqliteBool } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import { toMonitor } from "../hydrate.ts";

@@ -29,7 +29,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { findMonitor, findMonitorByCodeField, insertMonitor } from "./db/queries.ts";
+import { findMonitor, findMonitorByCodeField, insertMonitor } from "./db/queries/index.ts";
 import { atomic } from "./db/open.ts";
 import type { MonitorRow } from "./db/rows.ts";
 import { newId, toSqliteBool, toSqliteJson } from "./db/values.ts";

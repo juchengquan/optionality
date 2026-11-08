@@ -10,7 +10,7 @@ import { atomic } from "./db/open.ts";
 import {
   enabledMonitors, linkMonitorToPositions, listPositions, positionsForMonitor,
   positionsForMonitors, setPositionEntry, solelyWatchedPositions, updateMonitorFields,
-} from "./db/queries.ts";
+} from "./db/queries/index.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
 import { displayRecords, type QuoteFetcher } from "./quotes.ts";
 import type { ExitPolicy } from "./domain/exit.ts";

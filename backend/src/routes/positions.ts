@@ -13,7 +13,7 @@ import {
   clearPositionLinks, clearPositionSamples, clearScopeOfOrphans, deletePositionRow, findPosition,
   findPositionByName, insertPosition,
   listPositionSamples, listPositions, updatePositionFields,
-} from "../db/queries.ts";
+} from "../db/queries/index.ts";
 import { atomic } from "../db/open.ts";
 import { holdingValues } from "../holdings.ts";
 import type { PositionRow } from "../db/rows.ts";

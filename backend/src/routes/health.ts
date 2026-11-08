@@ -14,7 +14,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import type { Deps } from "../deps.ts";
-import { databaseResponds } from "../db/queries.ts";
+import { databaseResponds } from "../db/queries/index.ts";
 import { GOLDEN_CASES } from "../golden.ts";
 import { documented } from "../openapi.ts";
 import { displayTime } from "../domain/timefmt.ts";
