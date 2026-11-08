@@ -23,7 +23,7 @@ import type { ProviderClient } from "./ports.ts";
  *
  *  `ibkr` was here, over the Client Portal Web API, and is gone with that transport (#205): the
  *  gateway it needed was last built in April 2023 and refuses this account's session. IBKR
- *  returns once `tws/` can answer `QuoteFetcher` over the socket protocol IB Gateway actually
+ *  returns once `ibkr/` can answer `QuoteFetcher` over the socket protocol IB Gateway actually
  *  speaks. Until then the name is unknown rather than broken, because a Provider that boots and
  *  then cannot fetch is worse than one the service refuses to start on.
  */
