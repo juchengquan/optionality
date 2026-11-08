@@ -210,6 +210,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   port is shut, and only REPORTS one that is up without a confirmed session, because that may need
   a human at the login window and a restart a minute against an expired credential is a watchdog
   flapping a provider.
+  **`AbandonProcessGroup` is not optional here.** `opend.sh start` backgrounds OpenD and returns,
+  and launchd tears down the rest of a job's process group when the job's own process exits —
+  taking OpenD with it. Without that key the watchdog killed what it started, 27 seconds after
+  every tick: 39 starts in an hour, each one looking successful in its log, and `/quotes` 502ing
+  in the gaps. It survived three kill-and-recover demonstrations because every check came seconds
+  after the restart. A process-supervision change is verified by watching it STAY up.
   **Two copies of that script exist on purpose.** `deploy/macos/opend.sh` is committed and is the one
   the agent runs — so the version-controlled copy is the one whose behaviour you see. `~/openD.sh`
   is the owner's and must keep working with NO repository cloned, which is why it is a copy rather
