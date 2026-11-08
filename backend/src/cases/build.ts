@@ -5,7 +5,9 @@
  *
  *  - `{"$date": "<ISO instant>"}` — a Date argument
  *  - `{"$set": [...]}` — a Set result, its members sorted
- *  - `{"$throws": true}` — the function threw; what it said is not part of the contract
+ *  - `{"$throws": "<message>"}` — the function threw, and said this. The message is part of the
+ *    contract: encoded as `true`, six cases asserted only "something went wrong", which a port
+ *    passes by raising from a typo, a coercion failure or an unrelated branch
  *  - `{"$num": "NaN" | "Infinity" | "-Infinity" | "-0"}` — a number JSON cannot write (ADR 0017)
  *
  *  `testdata/golden/README.md` repeats this for whoever reads the files from Python.
@@ -105,7 +107,7 @@ export function buildCases(): Record<string, CaseFile> {
           expect = encode((f as (...a: unknown[]) => unknown)(...args));
         } catch (err) {
           if (err instanceof Error && err.message.includes("which JSON cannot carry")) throw err;
-          expect = { $throws: true };
+          expect = { $throws: err instanceof Error ? err.message : String(err) };
         }
         return { fn, name: label, args: encode(args) as unknown[], expect };
       }),

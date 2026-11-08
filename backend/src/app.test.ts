@@ -178,13 +178,23 @@ describe("the bearer token", () => {
     // /quotes was missing from the first version of that list, which a code review caught — the
     // dashboard's main poll and the one route here that triggers a live Provider batch, so exactly
     // the one worth guarding.
+    //
+    // Every METHOD, not only GET: the filter here read `r.method === "GET"` until this was widened,
+    // which left the three DELETEs, both PATCHes and the four POSTs — every write the API has —
+    // probed by nothing at all. The auth middleware could have been weakened on all of them with
+    // the suite green. Each write is probed with its own verb and no body, because auth runs
+    // before routing and before validation: a 401 is the answer whatever the body would have been.
     const open = ["/health", "/openapi.json", "/docs"];
-    const gets = [...new Set(h.app.routes
-      .filter((r) => r.method === "GET" && !open.includes(r.path))
-      .map((r) => r.path.replace(/:(\w+)/g, "x")))];
-    expect(gets.length).toBeGreaterThan(4);
-    for (const path of gets) {
-      expect((await h.call(path, { anonymous: true })).status, path).toBe(401);
+    const doors = [...new Map(h.app.routes
+      .filter((r) => r.method !== "ALL" && !open.includes(r.path))
+      .map((r) => {
+        const path = r.path.replace(/:(\w+)/g, "x");
+        return [`${r.method} ${path}`, { method: r.method, path }] as const;
+      })).entries()];
+    // the real number of doors, which the route list above enumerates one by one
+    expect(doors.length).toBe(15);
+    for (const [door, { method, path }] of doors) {
+      expect((await h.call(path, { anonymous: true, method })).status, door).toBe(401);
     }
     for (const path of open) {
       expect((await h.call(path, { anonymous: true })).status, path).toBe(200);

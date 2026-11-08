@@ -33,8 +33,10 @@ describe("numbers", () => {
     // interval should stop the service, not quietly sweep every 60 seconds
     expect(() => settingsFromEnv({ MONITOR_INTERVAL_SECONDS: "1.5" }))
       .toThrow(/MONITOR_INTERVAL_SECONDS/);
-    expect(() => settingsFromEnv({ EXPIRED_RETENTION_DAYS: "7.5" })).toThrow();
-    expect(() => settingsFromEnv({ EXIT_MANAGE_BY_DTE: "21.5" }), "a DTE is a whole day").toThrow();
+    expect(() => settingsFromEnv({ EXPIRED_RETENTION_DAYS: "7.5" }))
+      .toThrow(/EXPIRED_RETENTION_DAYS is not an integer/);
+    expect(() => settingsFromEnv({ EXIT_MANAGE_BY_DTE: "21.5" }), "a DTE is a whole day")
+      .toThrow(/EXIT_MANAGE_BY_DTE is not an integer/);
   });
 
   it("accepts a fractional FRACTION, which the integer rule would have killed at boot", () => {
@@ -50,7 +52,10 @@ describe("numbers", () => {
 
   it("rejects what is not a number at all, fractional or not", () => {
     expect(() => settingsFromEnv({ EXIT_TAKE_FRACTION: "half" })).toThrow(/EXIT_TAKE_FRACTION/);
-    expect(() => settingsFromEnv({ EXIT_STOP_MULTIPLE: "" })).toThrow();
+    // a variable set to nothing is its own message: an empty string is not "not a number", it is
+    // a knob somebody meant to set and left blank
+    expect(() => settingsFromEnv({ EXIT_STOP_MULTIPLE: "" }))
+      .toThrow(/EXIT_STOP_MULTIPLE is set to nothing/);
   });
 
   it("leaves a knob alone when the variable is absent", () => {
