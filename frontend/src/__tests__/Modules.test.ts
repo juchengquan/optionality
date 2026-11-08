@@ -56,10 +56,6 @@ describe("the measuring and formatting path", () => {
     });
   }
 
-  it("has a row-to-text module of its own, which is what makes that possible", () => {
-    expect(readdirSync(SRC)).toContain("cells.ts");
-  });
-
   it("keeps the camera off the tree it points at", () => {
     // the hook takes a REF. Importing SnapshotView would make the flow and the picture one
     // module, and the picture is a second tree precisely so it can differ from the screen.
@@ -68,9 +64,15 @@ describe("the measuring and formatting path", () => {
     expect(named).not.toContain("App");
   });
 
-  it("no longer passes that function in as an argument to dodge the import", () => {
-    // the parameter existed ONLY so `columns.ts` would not have to name `WatchlistTable.tsx`
-    expect(readFileSync(`${SRC}/columns.ts`, "utf8")).not.toContain("cellText");
+  it("reaches its row-to-text helpers by importing them, not by being handed them", () => {
+    // The parameter existed ONLY so `columns.ts` would not have to name `WatchlistTable.tsx`, and
+    // it is gone twice over now: a column's text sits on the column, and what is left of the
+    // row-reading is imported from `cells.ts` directly.
+    //
+    // This read `not.toContain("cellText")`, which could not fail — the function had been called
+    // `cellValue` for two releases, and the only occurrence of "cellText" in the repository was
+    // this assertion, so reintroducing the dodge under the real name would have passed.
+    expect(imports("columns.ts")).toContain("cells");
   });
 });
 
@@ -86,10 +88,9 @@ describe("the measuring and formatting path", () => {
  *  the old way would round-trip perfectly in its own test and still be the sixth copy.
  */
 describe("the viewer's preferences", () => {
-  it("live in a module of their own", () => {
-    expect(readdirSync(SRC)).toContain("prefs.ts");
-  });
-
+  // "live in a module of their own" was a `readdirSync(SRC)).toContain("prefs.ts")` and has gone,
+  // as the same check for `cells.ts` did: every other claim below reads that file, so a module that
+  // vanished would fail them — and fail collection in the PURE loop above — before this noticed.
   for (const file of ["columns.ts", "App.tsx"]) {
     it(`are no longer spelled out in ${file}`, () => {
       expect(readFileSync(`${SRC}/${file}`, "utf8")).not.toContain("document.cookie");

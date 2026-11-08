@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import type { Entry } from "../api";
-import { cellValue } from "../cells";
 import { SINGLE_COLUMNS, widthsFromContent } from "../columns";
 import { DASH, shortStamp } from "../format";
 
@@ -61,13 +60,16 @@ const row = (update_time: string | null) => ({
 }) as unknown as Entry;
 
 describe("the cell the table draws", () => {
+  // the column's own text, off its descriptor: there is no key-to-text switch to ask any more
+  const lastTrade = SINGLE_COLUMNS.find((c) => c.key === "last_trade")!;
+
   it("shows the stamp without its zone", () => {
-    expect(cellValue(row("2026-10-31 04:16:24+08:00"), "last_trade", false))
+    expect(lastTrade.text(row("2026-10-31 04:16:24+08:00"), false))
       .toBe("2026-10-31 04:16:24");
   });
 
   it("still says nothing rather than something, where there has been no trade", () => {
-    expect(cellValue(row(null), "last_trade", false)).toBe(DASH);
+    expect(lastTrade.text(row(null), false)).toBe(DASH);
   });
 });
 

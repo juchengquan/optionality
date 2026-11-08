@@ -1,6 +1,6 @@
 import type { Entry, Health, Holding } from "./api";
 import {
-  COMBO_COLUMNS, SINGLE_COLUMNS, visible, type Grouping, type Signal,
+  COMBO_COLUMNS, SINGLE_COLUMNS, shownColumns, type Grouping, type Signal,
 } from "./columns";
 import { Freshness } from "./Freshness";
 import { HoldingList, HoldingReadout } from "./Holdings";
@@ -55,14 +55,14 @@ export function SnapshotView({
       <TopLine quotes={[...singles, ...combos]} health={health} />
       {singles.length > 0 ? (
         <WatchlistTable
-          title="Single-leg" entries={singles} columns={visible(SINGLE_COLUMNS, hiddenSingle)}
+          title="Single-leg" entries={singles} columns={shownColumns(SINGLE_COLUMNS, hiddenSingle)}
           isCombo={false} reading={reading} band={band} horizon={horizon} grouping={grouping}
           onOpen={nothing}
         />
       ) : null}
       {combos.length > 0 ? (
         <WatchlistTable
-          title="Combos" entries={combos} columns={visible(COMBO_COLUMNS, hiddenCombo)}
+          title="Combos" entries={combos} columns={shownColumns(COMBO_COLUMNS, hiddenCombo)}
           isCombo={true} reading={reading} band={band} horizon={horizon} grouping={grouping}
           onOpen={nothing}
         />

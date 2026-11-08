@@ -13,11 +13,49 @@ import { readHidden } from "../prefs";
  *  where things sit — so they outlive where the numbers come from.
  */
 
-const keys = (cs: { key: string }[]) => cs.map((c) => c.key);
+const keys = (cs: readonly { key: string }[]) => cs.map((c) => c.key);
 const NONE = new Set<string>();
 /** the same estimator columnsFor falls back to, so the order invariant below is checked
  *  against the widths the rule itself uses */
 const widthOf = (key: string) => columnWidth(key);
+
+/** A column is ONE descriptor, and this is the half of that the compiler cannot state.
+ *
+ *  Label, width, alignment and text all live on the descriptor now, so leaving any of them out is
+ *  a type error. The drawing order and the order columns SURVIVE narrowing stay two lists, because
+ *  they are genuinely two facts — the widest column goes last in the priority order and sits
+ *  wherever the table wants it. Two lists need one claim tying them together, and this is it:
+ *  adding a column without placing it in the priority order used to mean it was simply never
+ *  drawn, and the only test that noticed said so by printing two unequal lists of column keys.
+ */
+describe("a column is one descriptor", () => {
+  for (const table of ["single", "combo"] as const) {
+    const columns = table === "single" ? SINGLE_COLUMNS : COMBO_COLUMNS;
+
+    it(`${table}: the priority order names every column of this table, and only those`, () => {
+      // the pinned ones are in it too, and are meant to be: the loop skips them because they are
+      // spent before the budget opens, but a list that named only the droppable ones would stop
+      // saying where the figure every rule is built on sits (`single` opens delta, mid)
+      //
+      // Sorted, because the ORDER is the other list's business. All this says is that the two
+      // lists name the same columns.
+      expect([...PRIORITY[table]].sort()).toEqual(columns.map((c) => c.key).sort());
+    });
+
+    it(`${table}: every column it shares with the other table is described the same way`, () => {
+      // `columnWidth` and the LEFT-alignment are asked by key rather than by table, so a shared
+      // column described twice over would answer whichever list was read last
+      const other = table === "single" ? COMBO_COLUMNS : SINGLE_COLUMNS;
+      for (const c of columns) {
+        const twin = other.find((o) => o.key === c.key);
+        if (!twin) continue;
+        expect({ estimate: twin.estimate, align: twin.align ?? null },
+          `${c.key} differs between the tables`)
+          .toEqual({ estimate: c.estimate, align: c.align ?? null });
+      }
+    });
+  }
+});
 
 describe("what fits", () => {
   it("keeps the pinned columns even when nothing fits at all", () => {

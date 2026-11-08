@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { DEFAULT_BAND } from "../columns";
 import { shortContract } from "../format";
 
 /** A MID-watched leg rule. It used to watch delta, but delta is pinned now (every
@@ -102,12 +103,17 @@ describe("the fill and bell fallback chain", () => {
     expect(cell.textContent).toContain("🔔");
   });
 
-  it("never offers to hide the columns that identify or operate a row", async () => {
+  it("never offers to hide the column that identifies a row", async () => {
+    // The guard this now proves is `offerable`'s, which skips the always-columns — the picker used
+    // to filter them out a second time for itself, so this assertion proved neither of the two.
+    // The second assertion here named "actions", a column that has not existed since the detail
+    // sheet took the controls, and so could not have failed.
     render(<App />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Single-leg columns" })).toBeTruthy());
     const picker = await openPicker();
     expect(within(picker).queryByRole("checkbox", { name: "contract" })).toBeNull();
-    expect(within(picker).queryByRole("checkbox", { name: "actions" })).toBeNull();
+    // delta is pinned on this table too, and is the case the union bug got wrong
+    expect(within(picker).queryByRole("checkbox", { name: "delta" })).toBeNull();
   });
 });
 
@@ -220,6 +226,15 @@ describe("the imminent band", () => {
 
   it("marks a row that is nearly at its threshold", async () => {
     expect((await fillCell(95))?.className).toContain("imminent");
+  });
+
+  it("marks a row sitting exactly ON the band", async () => {
+    // the alarm invariant, applied to the colour: the 🔔 flips at the EXACT threshold with no
+    // hysteresis, and this band is a fact about the alarm rather than a judgement about the
+    // trade — so the boundary belongs to "imminent". Nothing asserted it: the jsdom cases read
+    // 95/85/100/null and the browser's 60/95/100, all of them clear of the default 90, so
+    // `>= band` could be mutated to `> band` with every one of 360 tests still green.
+    expect((await fillCell(DEFAULT_BAND))?.className).toContain("imminent");
   });
 
   it("leaves a row with room to spare alone", async () => {

@@ -2,10 +2,9 @@ import { Fragment } from "react";
 
 import type { Entry, HoldingValues } from "./api";
 import {
-  LEFT, groupRows, identityBadges, imminentReading, signalColumns,
+  groupRows, identityBadges, imminentReading, signalColumns,
   type Column, type Grouping, type Signal,
 } from "./columns";
-import { cellValue } from "./cells";
 import { shortContract } from "./format";
 
 /** Somewhere the name may fold when the column is capped on a narrow screen.
@@ -42,7 +41,7 @@ export function WatchlistTable({
 }: {
   title: string;
   entries: Entry[];
-  columns: Column[];
+  columns: readonly Column[];
   isCombo: boolean;
   /** what the second colour is earned against, and the band it clears. The BAR is untouched by
    *  both: it is always the distance travelled toward the threshold. Named `reading` because
@@ -92,7 +91,7 @@ export function WatchlistTable({
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={LEFT.has(c.key) ? "left" : undefined}>{c.label}</th>
+              <th key={c.key} className={c.align}>{c.label}</th>
             ))}
           </tr>
         </thead>
@@ -124,7 +123,7 @@ export function WatchlistTable({
                   const classes = [
                     hl ? "hl" : "",
                     imminent ? "imminent" : "",
-                    LEFT.has(c.key) ? "left" : "",
+                    c.align ?? "",
                   ].filter(Boolean);
                   // --fill carries how far the value has travelled toward its threshold,
                   // so urgency is seen rather than computed, without spending a column
@@ -160,12 +159,12 @@ export function WatchlistTable({
                         // them, which read as there being no way to edit a combo's threshold.
                         <>
                           <span className="editable" title="edit the threshold">
-                            {cellValue(entry, c.key, isCombo)}
+                            {c.text(entry, isCombo)}
                           </span>
                           {entry.triggered && signal.bell === "alarm" ? " 🔔" : null}
                         </>
                       ) : (
-                        cellValue(entry, c.key, isCombo)
+                        c.text(entry, isCombo)
                       )}
                     </td>
                   );

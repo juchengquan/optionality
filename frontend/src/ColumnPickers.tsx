@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-import { isPinned, type Column } from "./columns";
+import type { Column } from "./columns";
 
 /** One table's column choices, shown beside that table's heading.
  *
@@ -21,7 +21,11 @@ export function ColumnPicker({
 }: {
   table: "single" | "combo";
   label: string;
-  all: Column[];
+  /** exactly the columns ticking would draw, which is what `offerable` answers — and that skips
+   *  the always-columns, so a pinned one cannot arrive here. This filtered them out a second time
+   *  for itself, which meant neither guard was the one being checked (Columns.test.tsx now holds
+   *  the surviving one). */
+  all: readonly Column[];
   hidden: Set<string>;
   onToggle: (table: "single" | "combo", key: string, shown: boolean) => void;
   onReset: (table: "single" | "combo") => void;
@@ -39,17 +43,15 @@ export function ColumnPicker({
           measured fit, so a reload can reflow this very list under the pointer (App.beingOperated) */}
       <PopoverContent data-poll="hold">
         <div role="group" aria-label={`${label} columns`} className="flex flex-col gap-2">
-          {all
-            .filter((c) => !isPinned(table, c.key))
-            .map((c) => (
-              <label className="flex items-center gap-2 cursor-pointer" key={c.key}>
-                <Checkbox
-                  checked={!hidden.has(c.key)}
-                  onCheckedChange={(shown) => onToggle(table, c.key, shown)}
-                />
-                {c.label}
-              </label>
-            ))}
+          {all.map((c) => (
+            <label className="flex items-center gap-2 cursor-pointer" key={c.key}>
+              <Checkbox
+                checked={!hidden.has(c.key)}
+                onCheckedChange={(shown) => onToggle(table, c.key, shown)}
+              />
+              {c.label}
+            </label>
+          ))}
           <Button variant="ghost" size="sm" onClick={() => onReset(table)}>
             show all
           </Button>
