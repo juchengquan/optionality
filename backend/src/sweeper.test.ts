@@ -94,6 +94,24 @@ const quoting = (field: string, values: Record<string, number>): FakeProvider =>
     codes.filter((c) => c in values).map((c) => ({ code: c, name: c, [field]: values[c] })),
   );
 
+/** The live sweep cadence (`MONITOR_INTERVAL_SECONDS` in .env), in seconds.
+ *
+ *  Tests about a window of TIME sweep at this, rather than jumping the clock once: a window is
+ *  ~120 sweeps wide at the live cadence, and the two that matter below are only ever crossed
+ *  correctly if nothing a sweep does to the alarm stamp depends on there having been few of them. */
+const CADENCE = 15;
+
+/** One sweep, a cadence later. The clock MOVES between sweeps, as the scheduler makes it. */
+const tick = async (s: MonitorSweeper) => {
+  now = new Date(now.getTime() + CADENCE * 1000);
+  await s.sweep();
+};
+
+/** Sweep at the live cadence for `seconds` of wall clock — the sweeps a window actually holds. */
+const sweepFor = async (s: MonitorSweeper, seconds: number) => {
+  for (let elapsed = 0; elapsed < seconds; elapsed += CADENCE) await tick(s);
+};
+
 const row = (id: string) =>
   db.prepare("select * from monitors where id = ?").get(id) as
     { triggered: number; last_value: number | null; last_checked_at: string | null;
@@ -135,9 +153,15 @@ describe("a breach", () => {
     expect(sent[1]).toContain("back below");
     expect(row(id)!.triggered).toBe(0);
 
-    values[CODE] = 0.61;
-    await s.sweep(); // re-armed at the threshold: fires again
+    // the threshold EXACTLY, which is what this case is named for: the bell flips truthfully AT it,
+    // with no value hysteresis (CLAUDE.md). The body used 0.61 and 0.59 and never went near 0.60,
+    // so the name outran it — and the engine's headline invariant was held only one layer up, in
+    // `domain/monitor.test.ts` and the golden corpus.
+    values[CODE] = 0.6;
+    await s.sweep(); // re-armed, and 0.60 >= 0.60: fires again
     expect(sent).toHaveLength(3);
+    expect(row(id)!.triggered).toBe(1);
+    expect(row(id)!.last_value).toBe(0.6);
   });
 
   it("works downward too, for a profit target", async () => {
@@ -186,47 +210,64 @@ describe("how often it speaks", () => {
   it("keeps the bell truthful while the cooldown holds the message", async () => {
     const id = monitor({ threshold: 0.6 });
     const values = { [CODE]: 0.61 };
-    const s = sweeper(quoting("option_delta", values), { alarmCooldownSeconds: 120 });
+    const s = sweeper(quoting("option_delta", values),
+      { alarmCooldownSeconds: 120, monitorIntervalSeconds: CADENCE });
 
     await s.sweep();
     expect(sent).toHaveLength(1);
 
     values[CODE] = 0.59;
-    await s.sweep(); // bell clears, recovery suppressed by the cooldown
+    await tick(s); // bell clears, recovery suppressed by the cooldown
     expect(row(id)!.triggered).toBe(0); // the display stays truthful
     expect(sent).toHaveLength(1);
 
     values[CODE] = 0.61;
-    await s.sweep(); // re-breach inside the cooldown: bell on, still silent
+    await tick(s); // re-breach inside the cooldown: bell on, still silent
     expect(row(id)!.triggered).toBe(1);
     expect(sent).toHaveLength(1);
 
-    now = new Date(now.getTime() + 300_000); // the cooldown expires
+    // and the cooldown is counted from the last MESSAGE, not from the last sweep. The sweeps in
+    // between are what makes that visible: they say nothing, so they must not move the stamp
+    // either. This jumped the clock once from a pair of sweeps taken at one instant, and a stamp
+    // re-written on every evaluated sweep looked identical — at the live cadence that stamp is
+    // refreshed every 15s and a cooldown never expires at all (mutation sweep, 2026-11-09).
+    await sweepFor(s, 75); // steady above the threshold: nothing to say
+    expect(sent).toHaveLength(1);
+
     values[CODE] = 0.55;
-    await s.sweep();
+    await tick(s); // 120s since the alarm, to the second: the cooldown is up
     expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain("back below");
   });
 
   it("re-reminds while a breach persists, on a fixed cadence", async () => {
+    // AT THE LIVE CADENCE, and that is the point of the test rather than a detail of it. A
+    // half-hour window holds about 120 sweeps, and the reminder is due only because none of them
+    // touched `last_alarm_at` — the stamp is the record of having SPOKEN. Done as two sweeps at
+    // one instant and a single 31-minute jump, this passed with the stamp hoisted out of its
+    // `if (decision.notice !== null)`, which at 15s re-stamps ~120 times inside the window and
+    // means a persisting breach is never reminded about again (mutation sweep, 2026-11-09).
     monitor({ threshold: 0.6 });
     const values = { [CODE]: 0.7 };
-    const s = sweeper(quoting("option_delta", values), { alarmRepeatSeconds: 1800 });
+    const s = sweeper(quoting("option_delta", values),
+      { alarmRepeatSeconds: 1800, monitorIntervalSeconds: CADENCE });
 
     await s.sweep();
-    await s.sweep(); // inside the repeat window: silent
+    expect(sent).toHaveLength(1); // the edge alarm
+
+    await sweepFor(s, 1500); // 100 sweeps, all inside the repeat window: silent
     expect(sent).toHaveLength(1);
 
-    now = new Date(now.getTime() + 1_860_000); // 31 minutes
-    await s.sweep();
+    await sweepFor(s, 360); // the window is up somewhere in here
     expect(sent).toHaveLength(2);
     expect(sent[1]).toContain("still");
     expect(sent[1]).toContain("reminder");
 
-    await s.sweep(); // the reminder reset the window
+    await sweepFor(s, 1500); // the reminder reset the window, and these do not
     expect(sent).toHaveLength(2);
 
     values[CODE] = 0.5;
-    await s.sweep();
+    await tick(s);
     expect(sent).toHaveLength(3);
     expect(sent[2]).toContain("back below");
   });
@@ -320,7 +361,8 @@ describe("the expiry lifecycle", () => {
   it("mutes an expired monitor with a notice, and stops fetching it", async () => {
     const id = monitor({ strike_date: past() });
     const calls: string[][] = [];
-    await sweeper((codes) => { calls.push(codes); return Promise.resolve([]); }).sweep();
+    const s = sweeper((codes) => { calls.push(codes); return Promise.resolve([]); });
+    await s.sweep();
 
     expect(calls).toEqual([]); // nothing active -> no API call at all
     const m = row(id)!;
@@ -328,6 +370,32 @@ describe("the expiry lifecycle", () => {
     // a vanished contract and a monitor you muted on purpose are otherwise identical rows
     expect(m.disabled_reason).toBe("expired");
     expect(sent.some((t) => t.includes("expired") && t.includes("muted"))).toBe(true);
+    // and a sweep with nothing to fetch is a sweep that SUCCEEDED. Everything expiring on one
+    // Friday is this sweep, so without the success an empty watchlist never clears the
+    // consecutive-failure count, never sends the recovered notice, and leaves /health reading
+    // "starting" for ever — none of which anything asserted (mutation sweep, 2026-11-09).
+    expect(s.lastSweepOk()).toBe(true);
+    expect(s.alarmState()).toEqual({ label: "active", bad: false });
+  });
+
+  it("is still watching on the expiry day itself, and still fetches it", async () => {
+    // WHICH date the sweep reckons expiry against. `expiryVerdict`'s own boundary is golden-cased,
+    // but nothing pinned the `today` the sweep hands it: every other fixture here is a day past or
+    // a month out, so a one-day drift in `utcDate` muted a monitor on its own expiry day — the day
+    // its figures matter most — with all 86 of these still green (mutation sweep, 2026-11-09).
+    const id = monitor({ strike_date: daysFromNow(0) });
+    const calls: string[][] = [];
+    const s = sweeper((codes) => {
+      calls.push(codes);
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    await s.sweep();
+
+    expect(calls).toEqual([[CODE]]);
+    const m = row(id)!;
+    expect(m.enabled).toBe(1);
+    expect(m.disabled_reason).toBeNull();
+    expect(sent).toEqual([]); // nothing expired, so nothing to say
   });
 
   it("says it once, not on every sweep inside the grace period", async () => {
@@ -609,6 +677,21 @@ describe("a sweep that never came back", () => {
     expect(s.alarmState()).toEqual({ label: "active", bad: false });
   });
 
+  it("calls a FIRST sweep that never came back stalled, not starting", () => {
+    // the two halves of /health must not contradict each other. With the "starting" branch above
+    // the staleness check, a service whose very first sweep hangs reads `alarms: "starting",
+    // bad: false` for ever while `last_sweep_ok` is already false — which is the 2026-10-16
+    // failure mode wearing a reassuring label. The case below sets `sweepOk` first and so cannot
+    // see the ordering at all (mutation sweep, 2026-11-09).
+    const s = sweeper(() => Promise.resolve([]));
+    s.sweepAt = new Date(now.getTime() - interval * STALE_AFTER_SWEEPS * 1000 - 1000);
+    expect(s.sweepOk).toBeNull();                       // it has not come back even once
+    expect(s.lastSweepOk()).toBe(false);
+    const state = s.alarmState();
+    expect(state.bad).toBe(true);
+    expect(state.label).toMatch(/no sweep for \d+s/);
+  });
+
   it("is starting, not stalled, before the first sweep", () => {
     // launchd restarts after every merge, and a service that has not swept yet must not cry stall
     const s = sweeper(() => Promise.resolve([]));
@@ -641,6 +724,23 @@ describe("a sweep that never came back", () => {
     failing = false;
     await s.sweep();
     expect(s.lastFetchOk()).toBe(true);
+  });
+
+  it("re-stamps the freshness of every batch, which is the only thing it is read for", async () => {
+    // `fetched_at` is freshness (CLAUDE.md), and a freshness stamp written once and then kept is
+    // worse than no stamp at all: /health goes on reporting the first batch's instant while the
+    // market moves. Every other case here sweeps exactly once before reading it, so
+    // `this.fetchAt ??= this.now()` passed the lot (mutation sweep, 2026-11-09).
+    monitor();
+    const s = sweeper(quoting("option_delta", { [CODE]: 0.1 }),
+      { monitorIntervalSeconds: CADENCE });
+    await s.sweep();
+    const first = s.lastFetchAt();
+    expect(first).toEqual(now);
+
+    await tick(s);
+    expect(s.lastFetchAt()).toEqual(now);
+    expect(s.lastFetchAt()!.getTime()).toBeGreaterThan(first!.getTime());
   });
 });
 
@@ -1508,32 +1608,9 @@ describe("a rule muted while the sweep is out", () => {
   });
 });
 
-/** A knob set to 0 in .env.
- *
- *  `env.ts` rejects empty and non-integer values but had no range check, and 0 is a plausible thing
- *  to type because two neighbouring knobs document 0 as "off" (ALARM_REPEAT_SECONDS,
- *  QUARANTINE_AFTER_SILENT_SWEEPS). For these two it is not off, it is broken: a degraded threshold
- *  of 0 made `0 >= 0` true on a HEALTHY sweep and sent "recovered" every minute for ever, while
- *  disabling the degraded alert it was meant to arm (review 2026-11-01).
+/** The knobs' range checks were asserted here too, against `settingsFor` — the HARNESS's settings
+ *  rather than the service's. `env.test.ts`'s "the knobs a service must not start on" covers the
+ *  same three refusals and the same zeros-that-mean-off through `settingsFromEnv`, the real door,
+ *  and names the message each one must carry; this file's copy restated it one layer further in,
+ *  where the subject is not the alarm engine at all.
  */
-describe("a knob that cannot be zero", () => {
-  it("refuses a degraded threshold of zero rather than flooding the chat", () => {
-    expect(() => settingsFor({ ...BASE, degradedAfterFailures: 0 })).toThrow(/DEGRADED_AFTER_FAILURES/);
-  });
-
-  it("refuses a sweep interval of zero, which would thrash the scheduler", () => {
-    // setInterval(..., 0) plus a stall threshold of 0: permanently stalled, failing every tick
-    expect(() => settingsFor({ ...BASE, monitorIntervalSeconds: 0 })).toThrow(/MONITOR_INTERVAL_SECONDS/);
-  });
-
-  it("still allows the knobs that document zero as off", () => {
-    expect(() => settingsFor({ ...BASE, alarmRepeatSeconds: 0 })).not.toThrow();
-    expect(() => settingsFor({ ...BASE, quarantineAfterSilentSweeps: 0 })).not.toThrow();
-    expect(() => settingsFor({ ...BASE, expiredRetentionDays: 0 })).not.toThrow();
-  });
-
-  it("refuses a negative count anywhere", () => {
-    expect(() => settingsFor({ ...BASE, alarmRepeatSeconds: -1 })).toThrow();
-    expect(() => settingsFor({ ...BASE, quarantineAfterSilentSweeps: -1 })).toThrow();
-  });
-});
