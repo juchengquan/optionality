@@ -149,6 +149,25 @@ describe("reading everything else", () => {
       .toEqual({ kind: "price", reqId: 100, tickType: 1, price: 3.5 });
   });
 
+  it("reads -1 as no price, because nothing here can cost minus one", () => {
+    // Measured: SKEW is only calculated 15:00-19:00 Chicago, and outside that window the real
+    // gateway answered the last-price tick with -1.0 on 2026-11-08. Live mode on a shut market
+    // says the same for bid and ask. The official Python client passes -1 through untouched —
+    // it serves combo contracts too, where a negative price is a real credit — and this client
+    // never asks for a combo (`messages.ts` hardcodes secType OPT, and indices are the only
+    // other thing it names), so for us -1 is unambiguously "no value" and typing it as a number
+    // would put -1.00 on the dashboard beside figures that are real.
+    expect(readMessage(msg(1, 6, 100, 4, -1, 0, 0)))
+      .toEqual({ kind: "price", reqId: 100, tickType: 4, price: null });
+  });
+
+  it("keeps a price of zero, which is a figure and not a sentinel", () => {
+    // an empty book quotes 0, and ADR 0018's positivity guard is what decides whether 0 may be
+    // shown — that is the Reference's judgement to make, not this decoder's to pre-empt
+    expect(readMessage(msg(1, 6, 100, 1, 0, 0, 0)))
+      .toEqual({ kind: "price", reqId: 100, tickType: 1, price: 0 });
+  });
+
   it("reads an error with its code, which is how a refusal is told from an outage", () => {
     expect(readMessage(msg(4, 2, 100, 10090, "Part of requested market data is not subscribed")))
       .toEqual({
