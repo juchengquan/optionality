@@ -66,7 +66,7 @@ export interface MonitorForEntry extends Monitor {
   scope: string | null;
 }
 
-export interface EntryInputs {
+interface EntryInputs {
   monitors: MonitorForEntry[];
   byCode: Record<string, QuoteRecord>;
   /** codes OpenD rejected as unknown */
@@ -207,7 +207,3 @@ export function codesFor(
   }
   return [...codes].sort();
 }
-
-/** Re-exported so the sweeper in phase 6 takes its breach rule from the same place the dashboard
- *  takes its fill from. */
-export { isBreached };

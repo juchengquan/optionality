@@ -225,12 +225,11 @@ const UNKNOWN_CODE = /Unknown stock\.?\s+([A-Z0-9.]+)/;
  *  thing that worked only against tests (#175).
  *
  *  `retMsg` is preferred over the whole object because it is the sentence a human needs and the
- *  one the regex reads. `errCode` is appended only when the message does not already carry it,
- *  the same rule the IBKR client's `describeFetchError` follows for an errno. Anything else — no
- *  message, an empty one, a shape nobody has seen — falls through to the whole object, which is
- *  never empty and never loses what arrived. A `retType`-only branch was written and then deleted:
- *  a sweep showed that `{"retType":-1}` already says it, so the branch only duplicated the
- *  fallback.
+ *  one the regex reads. `errCode` is appended only when the message does not already carry it.
+ *  Anything else — no message, an empty one, a shape nobody has seen — falls through to the whole
+ *  object, which is never empty and never loses what arrived. A `retType`-only branch was written
+ *  and then deleted: a sweep showed that `{"retType":-1}` already says it, so the branch only
+ *  duplicated the fallback.
  */
 function describe(value: unknown): string {
   if (value instanceof Error) return value.message;

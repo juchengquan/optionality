@@ -46,14 +46,6 @@ describe("/health", () => {
     expect(data.golden_cases).toMatch(/^[0-9a-f]{12}$/);
   });
 
-  it("no longer reports a run pipeline, because there is none (phase 10)", async () => {
-    // queue_depth could only ever be 0 and last_run only ever the 2026-08-10 run once the worker
-    // could not be given work; a field that cannot change is not a report
-    const data = await body(await start().call("/health", { anonymous: true }));
-    expect("queue_depth" in data).toBe(false);
-    expect("last_run" in data).toBe(false);
-  });
-
   it("reports the last fetch for the Provider, not a port that merely accepts", async () => {
     // 2026-10-16: OpenD held the socket open and would not log in. The probe said true, every
     // OpenD-backed route returned 502, and the dashboard showed a green light for a gateway the
@@ -72,14 +64,6 @@ describe("/health", () => {
     expect(h2.sweeper.fetchOk).toBeNull();
     const data = await body(await h2.call("/health", { anonymous: true }));
     expect(data.provider.ok).toBe(true);
-  });
-
-  it("no longer carries a contract version, because the compiler has replaced it", async () => {
-    // the dashboard used to compare one against its own to decide whether it had been built against
-    // the API it was talking to. Since phase 8 it takes its TYPES from the API, so a shape that has
-    // moved is a compile error rather than a banner nobody may be looking at.
-    const data = await body(await start().call("/health", { anonymous: true }));
-    expect("contract_version" in data).toBe(false);
   });
 
   it("reports the knobs a client cannot guess", async () => {

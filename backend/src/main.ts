@@ -145,7 +145,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     shuttingDown = true;
     console.log(`${signal}: stopping`);
     bot.stop();
-    scheduler.stop();
+    scheduler.stopSweep();
     server.close();
     // one loop over everything that opened, the Provider included: a vendor cannot be forgotten
     // here by growing a connection later, which the hand-written pair of calls allowed

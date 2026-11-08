@@ -5,8 +5,11 @@
  *  value and its 🔔 still come from the same instant — `buildEntries` reads the watched figure once
  *  and derives both the fill bar and the bell from it with `isBreached`, this engine's own
  *  predicate — but that instant is the poll's, not the sweep's, so the dashboard's bell may lead or
- *  lag what has been sent. `cachedRecords` (and `cachedQuotes`, built on it) still hold the sweep's
- *  own view of its last batch; NO ROUTE CALLS EITHER, and the comments there say why they are kept.
+ *  lag what has been sent. This engine therefore keeps NO cached view of its last batch: a
+ *  `cachedRecords`/`cachedQuotes` pair was built as the dashboard's path, the dashboard was wired
+ *  to the live `/quotes` instead, and after three weeks of no route calling either they were
+ *  deleted — which is what dropped `watchlist.ts`, `monitors.ts`, `domain/exit.ts` and
+ *  `domain/timefmt.ts` out of the alarm engine's imports altogether.
  *
  *  WHETHER a reading alarms is `alarm.ts` and not this file: the threshold rule, the cooldown that
  *  throttles flapping and the cadence a persisting breach re-reminds on are one decision, and it
@@ -28,12 +31,11 @@ import { degradedPolicy, degradedVerdict, recoveredNotice } from "./domain/degra
 import { flappingPolicy, flappingVerdict } from "./domain/flapping.ts";
 import { expiryVerdict, silenceVerdict } from "./domain/lifecycle.ts";
 import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
-import { exitPolicy } from "./domain/exit.ts";
 import { positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
 import {
-  clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
-  positionsForMonitors, updateMonitorFields,
+  clearMonitorLinks, deleteMonitorRow, findMonitor, listMonitors, listPositions,
+  updateMonitorFields,
 } from "./db/queries/index.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
@@ -41,13 +43,10 @@ import { toSqliteBool, } from "./db/values.ts";
 import type { Settings } from "./env.ts";
 import type { DisabledReason } from "./schemas/monitor.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
-import { displayRecords, type QuoteFetcher, type QuoteRecord } from "./quotes.ts";
-import { displayTime } from "./domain/timefmt.ts";
-import { buildEntries, type WatchlistEntry } from "./watchlist.ts";
-import { forEntry } from "./monitors.ts";
+import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
 
-/** Sending a message to the owner's phone. The real Telegram client arrives in phase 7. */
-export type NotifySender = (text: string) => Promise<void> | void;
+/** Sending a message to the owner's phone. */
+type NotifySender = (text: string) => Promise<void> | void;
 
 export interface SweeperDeps {
   db: DatabaseSync;
@@ -112,10 +111,6 @@ export class MonitorSweeper {
   sweepAt: Date | null = null;
   /** null until the first sweep: "starting" is a different thing from "working" */
   sweepOk: boolean | null = null;
-  /** the last successful batch, kept so the dashboard renders the same instant the alarm engine
-   *  evaluated rather than fetching a second, slightly different one */
-  lastRecords: QuoteRecord[] = [];
-  lastBadCodes: string[] = [];
   fetchAt: Date | null = null;
   /** What the last batch actually did: null before any was asked for. A port probe cannot answer
    *  this — OpenD can hold the socket open and refuse to log in (2026-10-16). */
@@ -182,45 +177,6 @@ export class MonitorSweeper {
     if (this.sweepOk) return { label: "active", bad: false };
     const n = this.consecutiveFailuresCount;
     return { label: `STALLED (${n} failed sweep${n === 1 ? "" : "s"})`, bad: true };
-  }
-
-  /** The last sweep's quotes indexed by code, display-stamped.
-   *
-   *  Positions read from here too, so everything on the dashboard — a monitor's value, a position's
-   *  cost to close — comes from one instant. */
-  cachedRecords(): { byCode: Record<string, QuoteRecord>; fetched: string | null } {
-    if (this.fetchAt === null) return { byCode: {}, fetched: null };
-    return {
-      byCode: displayRecords(this.lastRecords, this.deps.settings.displayTz, this.fetchAt),
-      fetched: displayTime(this.fetchAt, this.deps.settings.displayTz),
-    };
-  }
-
-  /** Watchlist entries built from the LAST SWEEP's records — no OpenD call.
-   *
-   *  NO ROUTE CALLS THIS. It was built as the dashboard's path and the dashboard was wired to the
-   *  live `/quotes` instead, which is the reading ADR 0010 ratified — so this is the sweep's own
-   *  view of its last batch, kept because the sweep's state is observable through nothing else and
-   *  because it is the alternative if that decision is ever revisited. Six tests exercised it
-   *  while asserting the invariant the shipped dashboard was breaking.
-   *
-   *  A monitor created since the last sweep has no record here and renders as "—" until the next
-   *  one. */
-  cachedQuotes(includeCombos = true): { entries: WatchlistEntry[]; fetched: string | null } {
-    const { db } = this.deps;
-    const monitors = enabledMonitors(db, includeCombos).map(forEntry);
-    const { byCode, fetched } = this.cachedRecords();
-    const ownedRows = positionsForMonitors(db, monitors.map((m) => m.id));
-    const owned = Object.fromEntries(
-      Object.entries(ownedRows).map(([id, ps]) => [id, ps.map(toPosition)]),
-    );
-    return {
-      entries: buildEntries({
-        monitors, byCode, bad: new Set(this.lastBadCodes), owned, now: this.now(),
-        policy: exitPolicy(this.deps.settings),
-      }),
-      fetched,
-    };
   }
 
   // --- the sweep ---------------------------------------------------------------------------
@@ -340,8 +296,6 @@ export class MonitorSweeper {
       await this.recordFailure();
       return;
     }
-    this.lastRecords = records;
-    this.lastBadCodes = badCodes;
     this.fetchAt = this.now();
 
     let surviving = active;

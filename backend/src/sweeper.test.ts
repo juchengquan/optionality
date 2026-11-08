@@ -744,87 +744,6 @@ describe("a sweep that never came back", () => {
   });
 });
 
-/** The sweep's own cached view. Named "what the dashboard renders" until ADR 0010, which is the
- *  trouble: the dashboard polls the LIVE /quotes and never came through here, so these passed
- *  while the shipped dashboard broke the very invariant two of them assert. */
-describe("the sweep's cached view", () => {
-  it("has nothing cached before the first sweep", () => {
-    const s = sweeper(() => Promise.resolve([]));
-    expect(s.cachedRecords()).toEqual({ byCode: {}, fetched: null });
-    expect(s.cachedQuotes().fetched).toBeNull();
-  });
-
-  it("serves the sweep's own records, bell and value from one instant", async () => {
-    monitor();
-    const s = sweeper(quoting("option_delta", { [CODE]: 0.7 }));
-    await s.sweep();
-
-    const { byCode, fetched } = s.cachedRecords();
-    expect(byCode[CODE]!.option_delta).toBe(0.7);
-    expect(byCode[CODE]!.fetched_at).toBe("2026-10-01 13:00:00+08:00");
-    expect(fetched).toBe("2026-10-01 13:00:00+08:00");
-
-    const { entries } = s.cachedQuotes();
-    expect(entries).toHaveLength(1);
-    expect(entries[0]!.quote!.option_delta).toBe(0.7);
-    expect(entries[0]!.triggered).toBe(true);
-  });
-
-  it("costs no OpenD call of its own, unlike the live path the dashboard uses", async () => {
-    monitor();
-    let calls = 0;
-    const s = sweeper((codes) => {
-      calls += 1;
-      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
-    });
-    await s.sweep();
-    expect(calls).toBe(1);
-    s.cachedQuotes();
-    s.cachedRecords();
-    expect(calls).toBe(1);
-  });
-
-  it("shows a monitor created since the last sweep with no record", async () => {
-    monitor();
-    const s = sweeper(quoting("option_delta", { [CODE]: 0.7 }));
-    await s.sweep();
-    const other = "US.SPXW261218P6000000";
-    monitor({ code: other, option_type: "PUT", strike: 6000 });
-    const { entries } = s.cachedQuotes();
-    expect(entries.find((e) => e.code === other)!.quote).toBeNull();
-  });
-
-  /** Prices everything but the poison and names it as unknown — what a Provider answers now that
-   *  its own error prose stays inside its client (#168). */
-  const poisoned: FakeProvider = (codes) => Promise.resolve({
-    records: codes.filter((c) => c !== POISON).map((c) => ({ code: c, name: c, option_delta: 0.7 })),
-    unknown: codes.filter((c) => c === POISON),
-  });
-
-  it("drops a quarantined monitor from the watchlist", async () => {
-    monitor({ code: POISON, strike: 99999 });
-    monitor({ threshold: 0.6 });
-    const s = sweeper(poisoned);
-    await s.sweep();
-    // the monitor was quarantined in the same sweep, so it is no longer enabled
-    expect(s.cachedQuotes().entries.map((e) => e.code)).toEqual([CODE]);
-  });
-
-  it("still says why the row is blank if the owner re-enables a quarantined monitor", async () => {
-    // the only way the kept bad-code list becomes visible: quarantine disables the monitor in the
-    // same sweep, so it leaves the watchlist. Re-enable it and the row comes back with no snapshot —
-    // "unknown contract" is what distinguishes that from a monitor created since the last sweep.
-    const poison = monitor({ code: POISON, strike: 99999 });
-    const s = sweeper(poisoned);
-    await s.sweep();
-    db.prepare("update monitors set enabled = 1, disabled_reason = null where id = ?").run(poison);
-
-    const entry = s.cachedQuotes().entries.find((e) => e.code === POISON)!;
-    expect(entry.quote).toBeNull();
-    expect(entry.error).toBe("unknown contract");
-  });
-});
-
 describe("positions in the batch", () => {
   it("fetches a held position's legs even when nothing alarms on them", async () => {
     // the dashboard values a position from this same fetch, and a held position must not read as
@@ -856,13 +775,17 @@ describe("positions in the batch", () => {
       { side: "short", option_type: "CALL", strike: 8050 },
     ]));
     // no monitors at all: the position's legs are fetched and nothing alarms
-    const s = sweeper((codes) => Promise.resolve(
-      codes.map((c) => ({ code: c, name: c, option_delta: 0.99 } as QuoteRecord)),
-    ));
+    const asked: string[][] = [];
+    const s = sweeper((codes) => {
+      asked.push(codes);
+      return Promise.resolve(
+        codes.map((c) => ({ code: c, name: c, option_delta: 0.99 } as QuoteRecord)),
+      );
+    });
     await s.sweep();
     expect(sent).toEqual([]);
     expect(s.lastSweepOk()).toBe(true);
-    expect(s.cachedRecords().byCode[buildSpxCode(future(), "CALL", 8050)]).toBeTruthy();
+    expect(asked[0]).toEqual([buildSpxCode(future(), "CALL", 8050)]);
   });
 });
 
