@@ -427,6 +427,74 @@ describe("the watchdog", () => {
     expect(s.lastSweepOk()).toBe(true);
   });
 
+  it("keeps saying so while it is still broken, and says how long", async () => {
+    // The gap this closes, measured: on 2026-11-08 OpenD exited and 646 sweeps failed over
+    // 2h42m, and the owner got ONE message, in the first minute. The notice was right; the
+    // silence after it meant the engine knew something the owner no longer did.
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("Client connection failed!"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    const limit = settingsFor(BASE).degradedAfterFailures;
+    const started = now;
+
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+    expect(sent.filter((t) => t.includes("degraded"))).toHaveLength(1);
+    expect(sent[0]).toContain("⚠️ monitoring degraded:");
+
+    // half an hour of failing sweeps: the reminder is due by the CLOCK, so time has to move
+    now = new Date(started.getTime() + 1_799_000);
+    await s.sweep();
+    expect(sent.filter((t) => t.includes("degraded"))).toHaveLength(1);
+
+    now = new Date(started.getTime() + 1_801_000);
+    await s.sweep();
+    const reminders = sent.filter((t) => t.includes("still degraded"));
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]).toContain("over 30m");
+
+    // and not again until the next interval
+    now = new Date(started.getTime() + 1_900_000);
+    await s.sweep();
+    expect(sent.filter((t) => t.includes("still degraded"))).toHaveLength(1);
+
+    failing = false;
+    now = new Date(started.getTime() + 9_720_000);
+    await s.sweep();
+    expect(sent.find((t) => t.includes("recovered"))).toBe("✅ monitoring recovered after 2h42m");
+    now = started;
+  });
+
+  it("starts a new outage cleanly rather than reporting the last one's age", async () => {
+    // the stamps are cleared on recovery, so a second outage an hour later does not claim to
+    // have been broken since the first one
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("down"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    });
+    const limit = settingsFor(BASE).degradedAfterFailures;
+    const started = now;
+
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+    failing = false;
+    await s.sweep();
+
+    failing = true;
+    now = new Date(started.getTime() + 3_600_000);
+    for (let i = 0; i < limit; i += 1) await s.sweep();
+    now = new Date(started.getTime() + 3_600_000 + 1_801_000);
+    await s.sweep();
+    const reminders = sent.filter((t) => t.includes("still degraded"));
+    expect(reminders).toHaveLength(1);
+    // 30m into the SECOND outage, not 1h30m since the first
+    expect(reminders[0]).toContain("over 30m");
+    now = started;
+  });
+
   it("does not announce a recovery it was never degraded from", async () => {
     monitor();
     let failing = true;

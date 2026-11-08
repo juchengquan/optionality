@@ -1,0 +1,341 @@
+{
+  "module": "degraded",
+  "constants": {},
+  "cases": [
+    {
+      "fn": "degradedVerdict",
+      "name": "under the threshold says nothing",
+      "args": [
+        {
+          "failures": 4,
+          "since": null,
+          "lastNoticeAt": null
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "the Provider did not answer",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "exactly at the threshold speaks",
+      "args": [
+        {
+          "failures": 5,
+          "since": null,
+          "lastNoticeAt": null
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "the Provider did not answer",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring degraded: 5 consecutive sweep failures (the Provider did not answer)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "the reason is the caller's, naming no vendor",
+      "args": [
+        {
+          "failures": 5,
+          "since": null,
+          "lastNoticeAt": null
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "a sweep stuck for 90s",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring degraded: 5 consecutive sweep failures (a sweep stuck for 90s)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "repeats once the cadence has passed, with how long",
+      "args": [
+        {
+          "failures": 646,
+          "since": {
+            "$date": "2026-11-01T09:18:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:29:59.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "the Provider did not answer",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring still degraded: 646 consecutive sweep failures over 2h42m (the Provider did not answer)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "and says nothing before it has",
+      "args": [
+        {
+          "failures": 400,
+          "since": {
+            "$date": "2026-11-01T09:18:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:30:01.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "the Provider did not answer",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "a zero cadence never reminds",
+      "args": [
+        {
+          "failures": 646,
+          "since": {
+            "$date": "2026-11-01T09:18:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-10-31T08:13:21.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 0
+        },
+        "the Provider did not answer",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "past the threshold with nothing sent says the FIRST wording",
+      "args": [
+        {
+          "failures": 646,
+          "since": {
+            "$date": "2026-11-01T09:18:00.000Z"
+          },
+          "lastNoticeAt": null
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "the Provider did not answer",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring degraded: 646 consecutive sweep failures (the Provider did not answer)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "minutes under an hour",
+      "args": [
+        {
+          "failures": 50,
+          "since": {
+            "$date": "2026-11-01T11:53:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:29:59.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "x",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring still degraded: 50 consecutive sweep failures over 7m (x)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "hours and minutes above one",
+      "args": [
+        {
+          "failures": 50,
+          "since": {
+            "$date": "2026-11-01T08:55:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:29:59.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "x",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring still degraded: 50 consecutive sweep failures over 3h5m (x)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "under a minute is said in words",
+      "args": [
+        {
+          "failures": 50,
+          "since": {
+            "$date": "2026-11-01T11:59:30.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:29:59.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "x",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring still degraded: 50 consecutive sweep failures over under a minute (x)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "an unknown start omits the duration",
+      "args": [
+        {
+          "failures": 646,
+          "since": null,
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:29:59.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "x",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring still degraded: 646 consecutive sweep failures (x)"
+      }
+    },
+    {
+      "fn": "recoveredNotice",
+      "name": "says how long it was out",
+      "args": [
+        {
+          "failures": 646,
+          "since": {
+            "$date": "2026-11-01T09:18:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:59:00.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": "✅ monitoring recovered after 2h42m"
+    },
+    {
+      "fn": "recoveredNotice",
+      "name": "stays quiet when nothing was ever announced",
+      "args": [
+        {
+          "failures": 4,
+          "since": {
+            "$date": "2026-11-01T11:59:00.000Z"
+          },
+          "lastNoticeAt": null
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": null
+    },
+    {
+      "fn": "recoveredNotice",
+      "name": "an unknown start omits the duration",
+      "args": [
+        {
+          "failures": 646,
+          "since": null,
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:59:00.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": "✅ monitoring recovered"
+    }
+  ]
+}

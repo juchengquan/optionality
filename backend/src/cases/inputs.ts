@@ -100,6 +100,14 @@ const policy: ExitPolicy = { takeFraction: 0.5, stopMultiple: 2, manageByDte: 21
  *  different case every day.
  */
 const NOW = new Date("2026-11-01T12:00:00Z");
+
+/** Fixtures for domain/degraded.ts. Named with the prefix because `state` and `ago` are already
+ *  taken by the alarm cases below and mean something else there. */
+const degradedAgo = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
+const degradedState = (failures: number, since: Date | null, lastNoticeAt: Date | null) =>
+  ({ failures, since, lastNoticeAt });
+const degradedPolicy_ = { afterFailures: 5, repeatSeconds: 1800 };
+const degradedNoRepeat = { afterFailures: 5, repeatSeconds: 0 };
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
 const state = (triggered: boolean, lastAlarmAt: Date | null): AlarmState => ({ triggered, lastAlarmAt });
 /** the service's own defaults: throttle a state change for 15 minutes, re-remind after an hour */
@@ -350,6 +358,50 @@ export const INPUTS: Record<string, CaseInput[]> = {
       fn: "positionsHolding", name: "more named than is held",
       args: [[callSpread], [SC, LC, code("CALL", 7200)]],
     },
+  ],
+  degraded: [
+    // What the owner is told when the service cannot see the market, and how often. The reminder
+    // exists because on 2026-11-08 OpenD exited, 646 sweeps failed over 2h42m, and the only
+    // message arrived in the first minute (domain/degraded.ts).
+    // below, at, and past the threshold
+    { fn: "degradedVerdict", name: "under the threshold says nothing",
+      args: [degradedState(4, null, null), degradedPolicy_, "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "exactly at the threshold speaks",
+      args: [degradedState(5, null, null), degradedPolicy_, "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "the reason is the caller's, naming no vendor",
+      args: [degradedState(5, null, null), degradedPolicy_, "a sweep stuck for 90s", NOW] },
+
+    // the reminder, measured from the last notice rather than the first failure
+    { fn: "degradedVerdict", name: "repeats once the cadence has passed, with how long",
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(1801)), degradedPolicy_,
+        "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "and says nothing before it has",
+      args: [degradedState(400, degradedAgo(9720), degradedAgo(1799)), degradedPolicy_,
+        "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "a zero cadence never reminds",
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(99999)), degradedNoRepeat,
+        "the Provider did not answer", NOW] },
+    { fn: "degradedVerdict", name: "past the threshold with nothing sent says the FIRST wording",
+      args: [degradedState(646, degradedAgo(9720), null), degradedPolicy_,
+        "the Provider did not answer", NOW] },
+
+    // how long it has been broken
+    { fn: "degradedVerdict", name: "minutes under an hour",
+      args: [degradedState(50, degradedAgo(420), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "hours and minutes above one",
+      args: [degradedState(50, degradedAgo(11100), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "under a minute is said in words",
+      args: [degradedState(50, degradedAgo(30), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "an unknown start omits the duration",
+      args: [degradedState(646, null, degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+
+    // and coming back
+    { fn: "recoveredNotice", name: "says how long it was out",
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(60)), degradedPolicy_, NOW] },
+    { fn: "recoveredNotice", name: "stays quiet when nothing was ever announced",
+      args: [degradedState(4, degradedAgo(60), null), degradedPolicy_, NOW] },
+    { fn: "recoveredNotice", name: "an unknown start omits the duration",
+      args: [degradedState(646, null, degradedAgo(60)), degradedPolicy_, NOW] },
   ],
   alarm: [
     // the four transitions, each with the sentence it sends
