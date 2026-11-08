@@ -51,6 +51,12 @@ const ReadingOut = ReferenceOut.omit({ created_at: true }).extend({
   change: z.number().nullable(),
   /** why there is no figure, or null. A dash on the page and nothing more. */
   error: z.string().nullable(),
+  /** the vendor's own claim about freshness, or null where it made none — moomoo reports no
+   *  grade, and false would read as "it told us this is live" (ADR 0019) */
+  delayed: z.boolean().nullable(),
+  last_known: z.boolean().nullable(),
+  /** minutes, where the vendor states them: Yahoo does, IBKR does not */
+  delayed_by_minutes: z.number().nullable(),
 });
 
 const list = documented("Live figures for every Reference", { 200: z.array(ReadingOut) });

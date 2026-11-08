@@ -109,6 +109,13 @@ export function References({
             the rest of the service does not use. A vendor this build cannot reach is refused here
             with that reason, rather than becoming a permanent dash.
           </FieldDescription>
+          <FieldDescription>
+            Only some vendors say how fresh a figure is. <strong>ibkr</strong> reports which data
+            tier served it, and <strong>yahoo</strong> reports how many minutes late it is — so
+            the strip can mark those. <strong>moomoo</strong> reports nothing of the kind, so a
+            moomoo figure carries no freshness mark, and the absence of one there means "it never
+            said" rather than "it is live".
+          </FieldDescription>
         </Field>
         <Button type="submit" size="sm" variant="secondary">keep it</Button>
       </form>

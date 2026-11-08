@@ -18,6 +18,7 @@ import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
 import { ibkrSource } from "./ibkr/provider.ts";
 import { makeProvider } from "./provider.ts";
+import { yahooSource } from "./yahoo/provider.ts";
 import { Scheduler } from "./scheduler.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS } from "./sweeper.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
@@ -46,7 +47,10 @@ const sweeper = new MonitorSweeper({
 /** Vendors a Reference may name beyond the Provider (ADR 0019). Empty unless IBKR_HOST is set,
  *  and built whether or not IBKR is the Provider — a Reference alarms on nothing, which is why it
  *  is the one figure allowed a source the rest of the service does not use. */
-const references = ibkrSource(settings);
+const ibkr = ibkrSource(settings);
+/** Yahoo needs no configuration — no host, no key, no login — so it is always available and
+ *  costs nothing until a Reference names it. Deleting the row is the off switch. */
+const references = { sources: { ...ibkr.sources, ...yahooSource() }, close: ibkr.close };
 
 const deps: Deps = {
   settings,

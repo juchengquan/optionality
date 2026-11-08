@@ -8,7 +8,10 @@ import { ReferenceStrip, referenceTitle } from "../ReferenceStrip";
 const spx = (over: Partial<Reference> = {}): Reference => ({
   id: "r1", code: "US.SPY", label: "SPX", source: "moomoo",
   name: "SPDR S&P 500 ETF Trust", figure: 7587.3, field: "mid_price",
-  change: 0.003982956650611325, error: null, ...over,
+  change: 0.003982956650611325, error: null,
+  // moomoo reports no grade at all, which is the default a fixture should carry: null, not false
+  delayed: null, last_known: null, delayed_by_minutes: null,
+  ...over,
 } as Reference);
 
 describe("what it is called", () => {
@@ -33,6 +36,46 @@ describe("what it is called", () => {
     // `SPX (via SPY ×10)` until ADR 0019 dropped the scale: a scaled stand-in is a simulation
     // rather than a reading
     expect(referenceTitle(spx())).not.toMatch(/via|×/);
+  });
+});
+
+describe("how fresh the vendor says it is", () => {
+  it("says nothing where the vendor said nothing", () => {
+    // moomoo reports no grade. A bare `(moomoo)` therefore means "it never said" — which is why
+    // the Service panel records which vendors report freshness (ADR 0019)
+    expect(referenceTitle(spx())).toBe("SPX (moomoo)");
+  });
+
+  it("says nothing where the vendor said it is live and updating", () => {
+    // false is a CLAIM, and the claim is reassuring, so it earns no words on the strip
+    expect(referenceTitle(spx({ source: "ibkr", delayed: false, last_known: false })))
+      .toBe("SPX (ibkr)");
+  });
+
+  it("names the tier where the vendor reports one and no duration", () => {
+    // IBKR reports a tier and no minutes, so "delayed" is what it actually said
+    expect(referenceTitle(spx({ source: "ibkr", delayed: true, last_known: false })))
+      .toBe("SPX (ibkr, delayed)");
+  });
+
+  it("states the minutes where the vendor states them", () => {
+    // Yahoo reports exchangeDataDelayedBy: 15
+    expect(referenceTitle(spx({
+      source: "yahoo", code: "^VIX", label: "VIX", delayed: true, delayed_by_minutes: 15,
+      last_known: false,
+    }))).toBe("VIX (yahoo, 15m late)");
+  });
+
+  it("says both where both are true, because grade 4 is both", () => {
+    // the combination IBKR draws per contract, and the one that has nowhere to go if the four
+    // grades are collapsed into three states
+    expect(referenceTitle(spx({ source: "ibkr", delayed: true, last_known: true })))
+      .toBe("SPX (ibkr, delayed, last known)");
+  });
+
+  it("says last known on its own, for a live-entitled figure out of session", () => {
+    expect(referenceTitle(spx({ source: "ibkr", delayed: false, last_known: true })))
+      .toBe("SPX (ibkr, last known)");
   });
 });
 
