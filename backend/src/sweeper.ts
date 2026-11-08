@@ -25,6 +25,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { alarmPolicy, alarmTransition } from "./domain/alarm.ts";
 import { degradedPolicy, degradedVerdict, recoveredNotice } from "./domain/degraded.ts";
+import { flappingPolicy, flappingVerdict } from "./domain/flapping.ts";
 import { expiryVerdict, silenceVerdict } from "./domain/lifecycle.ts";
 import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
 import { exitPolicy } from "./domain/exit.ts";
@@ -90,6 +91,15 @@ export class MonitorSweeper {
    */
   degradedSince: Date | null = null;
   lastDegradedNoticeAt: Date | null = null;
+  /** When each recent sweep failed, for the RATE rather than the run.
+   *
+   *  A consecutive count measures how LONG a failure lasted and cannot see a provider that keeps
+   *  dropping and recovering — which went unnoticed for an hour on 2026-11-08. Pruned to the
+   *  window on every append, so this cannot grow: at a 15s sweep and a 15m window it holds at
+   *  most 60 entries.
+   */
+  readonly recentFailures: Date[] = [];
+  lastFlappingNoticeAt: Date | null = null;
   /** Consecutive sweeps a monitor's figure has failed to arrive for, by monitor id.
    *
    *  In memory, like `consecutiveFailuresCount` and for the same reason: the claim is about a RUN
@@ -578,6 +588,15 @@ export class MonitorSweeper {
     this.consecutiveFailuresCount += 1;
     this.degradedSince ??= now;
 
+    // the rate, beside the run: pruned here so the list cannot grow
+    const { flappingWindowSeconds } = this.deps.settings;
+    this.recentFailures.push(now);
+    while (this.recentFailures.length > 0
+      && (now.getTime() - this.recentFailures[0]!.getTime()) / 1000 > flappingWindowSeconds) {
+      this.recentFailures.shift();
+    }
+
+    const announced = this.lastDegradedNoticeAt !== null;
     const { notice } = degradedVerdict(
       {
         failures: this.consecutiveFailuresCount,
@@ -591,6 +610,23 @@ export class MonitorSweeper {
     if (notice !== null) {
       this.lastDegradedNoticeAt = now;
       await this.notify(notice);
+      return;
+    }
+
+    // and only where the sustained notice said nothing: two notices about one unavailable
+    // provider is noise, and `announced` is read BEFORE the line above so a sweep cannot both
+    // announce an outage and call it unreliable
+    const flapping = flappingVerdict(
+      {
+        failures: this.recentFailures,
+        lastNoticeAt: this.lastFlappingNoticeAt,
+        announced,
+      },
+      flappingPolicy(this.deps.settings), now,
+    );
+    if (flapping.notice !== null) {
+      this.lastFlappingNoticeAt = now;
+      await this.notify(flapping.notice);
     }
   }
 
@@ -607,6 +643,9 @@ export class MonitorSweeper {
     this.degradedSince = null;
     this.lastDegradedNoticeAt = null;
     this.sweepOk = true;
+    // `recentFailures` is NOT cleared, which is the whole point: a success is exactly what a
+    // flapping provider produces between failures, and clearing on one would make this blind to
+    // the thing it was written for. Entries age out of the window instead.
     // after the counters are cleared: a failed send must not leave the service looking degraded
     if (notice !== null) await this.notify(notice);
   }

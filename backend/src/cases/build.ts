@@ -15,6 +15,7 @@ import * as contract from "../domain/contract.ts";
 import * as degraded from "../domain/degraded.ts";
 import * as exit from "../domain/exit.ts";
 import * as expiry from "../domain/expiry.ts";
+import * as flapping from "../domain/flapping.ts";
 import * as js from "../domain/js.ts";
 import * as lifecycle from "../domain/lifecycle.ts";
 import * as monitor from "../domain/monitor.ts";
@@ -33,8 +34,8 @@ import { INPUTS } from "./inputs.ts";
  *  off. Static imports rather than a dynamic walk, so the compiler still checks every name; the
  *  test is what makes the list complete. */
 export const MODULES: Record<string, Record<string, unknown>> = {
-  alarm, contract, degraded, exit, expiry, js, lifecycle, monitor, position, quote,
-  reference, vol, timefmt,
+  alarm, contract, degraded, exit, expiry, flapping, js, lifecycle, monitor, position,
+  quote, reference, vol, timefmt,
 };
 
 function encode(value: unknown): unknown {

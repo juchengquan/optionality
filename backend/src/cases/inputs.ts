@@ -107,6 +107,15 @@ const degradedAgo = (seconds: number) => new Date(NOW.getTime() - seconds * 1000
 const degradedState = (failures: number, since: Date | null, lastNoticeAt: Date | null) =>
   ({ failures, since, lastNoticeAt });
 const degradedPolicy_ = { afterFailures: 5, repeatSeconds: 1800 };
+
+/** Fixtures for domain/flapping.ts, which takes TIMESTAMPS rather than a count. */
+const flapAgo = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
+const flapState = (secondsAgo: number[]) =>
+  ({ failures: secondsAgo.map(flapAgo), lastNoticeAt: null, announced: false });
+const flapPolicy = { windowSeconds: 900, afterFailures: 5, repeatSeconds: 1800 };
+const flapNoRepeat = { windowSeconds: 900, afterFailures: 5, repeatSeconds: 0 };
+const flapOff = { windowSeconds: 900, afterFailures: 0, repeatSeconds: 1800 };
+const flapWide = { windowSeconds: 5400, afterFailures: 2, repeatSeconds: 1800 };
 const degradedNoRepeat = { afterFailures: 5, repeatSeconds: 0 };
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
 const state = (triggered: boolean, lastAlarmAt: Date | null): AlarmState => ({ triggered, lastAlarmAt });
@@ -353,6 +362,39 @@ export const INPUTS: Record<string, CaseInput[]> = {
       fn: "positionsHolding", name: "more named than is held",
       args: [[callSpread], [SC, LC, code("CALL", 7200)]],
     },
+  ],
+  flapping: [
+    // A provider that keeps dropping and recovering, which no consecutive count can see. Written
+    // after an hour of exactly that went unnoticed on 2026-11-08 (domain/flapping.ts).
+    { fn: "flappingVerdict", name: "nothing has failed",
+      args: [flapState([]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "below the threshold, however spread out",
+      args: [flapState([60, 200, 400, 800]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "at the threshold, which is where it speaks",
+      args: [flapState([60, 200, 400, 600, 800]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "older than the window, so not news",
+      args: [flapState([901, 1200, 2000, 3000, 4000]), flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "exactly at the window's edge counts",
+      args: [flapState([900, 100, 200, 300, 400]), flapPolicy, NOW] },
+    // the measured shape: a failure roughly every 90 seconds while the agent churned
+    { fn: "flappingVerdict", name: "the outage it was written for",
+      args: [flapState([90, 180, 270, 360, 450, 540, 630, 720, 810, 900]), flapPolicy, NOW] },
+    // and it never speaks over the sustained notice
+    { fn: "flappingVerdict", name: "quiet while a sustained outage is already announced",
+      args: [{ ...flapState([60, 120, 180, 240, 300]), announced: true }, flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "repeats once the cadence has passed",
+      args: [{ ...flapState([60, 120, 180, 240, 300, 360]), lastNoticeAt: flapAgo(1801) },
+        flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "and says nothing before it has",
+      args: [{ ...flapState([60, 120, 180, 240, 300, 360]), lastNoticeAt: flapAgo(1799) },
+        flapPolicy, NOW] },
+    { fn: "flappingVerdict", name: "a zero cadence never reminds",
+      args: [{ ...flapState([60, 120, 180, 240, 300, 360]), lastNoticeAt: flapAgo(99999) },
+        flapNoRepeat, NOW] },
+    { fn: "flappingVerdict", name: "a zero threshold is off",
+      args: [flapState([10, 20, 30, 40, 50, 60]), flapOff, NOW] },
+    { fn: "flappingVerdict", name: "a window said in hours and minutes",
+      args: [flapState([10, 20]), flapWide, NOW] },
   ],
   degraded: [
     // What the owner is told when the service cannot see the market, and how often. The reminder

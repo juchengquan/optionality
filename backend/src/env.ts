@@ -44,6 +44,15 @@ export interface Settings {
   /** re-reminds while the sweep is still failing, so one missed notice is not the end of it.
    *  0 turns the reminder off, as it does for `alarmRepeatSeconds` (domain/degraded.ts). */
   degradedRepeatSeconds: number;
+  /** How far back to look for a provider that keeps dropping and recovering, and how many failed
+   *  sweeps inside that window before the owner hears about it. 0 failures turns it off.
+   *
+   *  Separate from `degradedAfterFailures` because they measure different things: that one is the
+   *  LENGTH of a failure, this one is how OFTEN. A provider failing a third of the time for an
+   *  hour never trips a consecutive count — measured on 2026-11-08, when exactly that went
+   *  unnoticed by the service (domain/flapping.ts). */
+  flappingWindowSeconds: number;
+  flappingAfterFailures: number;
   /** consecutive sweeps a monitor's figure may fail to arrive before it is quarantined; 0 never
    *  quarantines and only warns, which is what the engine did before (#167) */
   quarantineAfterSilentSweeps: number;
@@ -86,6 +95,8 @@ export const DEFAULTS: Settings = {
   uiRefreshSeconds: 30,
   degradedAfterFailures: 5,
   degradedRepeatSeconds: 1800,
+  flappingWindowSeconds: 900,
+  flappingAfterFailures: 5,
   // ten sweeps, so a gap of a few seconds is never a quarantine while a figure that is simply not
   // served stops being waited for within minutes at any sweep interval
   quarantineAfterSilentSweeps: 10,
@@ -117,6 +128,8 @@ const FROM_ENV = {
   uiRefreshSeconds: "UI_REFRESH_SECONDS",
   degradedAfterFailures: "DEGRADED_AFTER_FAILURES",
   degradedRepeatSeconds: "DEGRADED_REPEAT_SECONDS",
+  flappingWindowSeconds: "FLAPPING_WINDOW_SECONDS",
+  flappingAfterFailures: "FLAPPING_AFTER_FAILURES",
   quarantineAfterSilentSweeps: "QUARANTINE_AFTER_SILENT_SWEEPS",
   expiredRetentionDays: "EXPIRED_RETENTION_DAYS",
   exitTakeFraction: "EXIT_TAKE_FRACTION",
