@@ -102,8 +102,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
   `alarm.ts` and its Telegram wording, `lifecycle.ts`'s quarantine and expiry verdicts, and `js.ts`,
   the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
-  and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (long-poll
-  Telegram bot), `opend/` (the moomoo websocket client), `ibkr/` (IB Gateway's own socket protocol:
+  and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (the long-poll
+  Telegram TRANSPORT in `bot.ts` — the poll, the owner check, the reply — and the commands
+  themselves in `bot/commands/`, a TABLE rather than a switch: a command is
+  `(context, words) => reply text`, it never touches the Telegram API, and `index.test.ts` holds
+  the table to `format.ts`'s `BOT_COMMANDS`, the "/" menu that announces it), `opend/` (the moomoo websocket client), `ibkr/` (IB Gateway's own socket protocol:
   framing, the handshake with its protocol floor of 156, the five messages a read-only quote fetch
   sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
   importable, so the service cannot trade by absence rather than by discipline. Reached as a

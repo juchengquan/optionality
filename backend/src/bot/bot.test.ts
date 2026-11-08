@@ -99,6 +99,18 @@ describe("who may command it", () => {
     await bot().handleUpdate(update("/monitors@optionality_bot"));
     expect(last()).toContain("empty");
   });
+
+  it("takes a capitalised command, which is what a phone keyboard sends", async () => {
+    // dispatch has lower-cased the name since it was written and nothing asked it to: a mutation
+    // sweep removing the `toLowerCase()` left all 82 tests passing. On iOS the first letter of a
+    // message is autocapitalised, so `/Monitors` is what actually arrives — and without this it
+    // answers the help text, which reads as the bot not knowing its own command.
+    const b = bot();
+    await b.handleUpdate(update("/Monitors"));
+    expect(last()).toContain("empty");
+    await b.handleUpdate(update("/HEALTH"));
+    expect(last()).toContain("Service is up");
+  });
 });
 
 describe("/watch", () => {

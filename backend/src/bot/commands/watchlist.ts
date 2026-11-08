@@ -1,0 +1,122 @@
+/** Reading the watchlist: the stored rules, the three live tables, and one combo's legs.
+ *
+ *  The three live tables — /quotes, /greeks, /vol — differ only in their columns and fail the same
+ *  way, which is why they are one function and three column mappers. They are three commands
+ *  rather than one wide one because a Telegram table is ~40 monospace characters and four columns
+ *  at most: a new question gets a new command, never a fifth column (CLAUDE.md).
+ */
+import { EMPTY_WATCHLIST, type BotContext, type Command, failed } from "./context.ts";
+import { monitorLegCodes } from "../../domain/monitor.ts";
+import { round4 } from "../../domain/quote.ts";
+import { shortSpxCode } from "../../domain/contract.ts";
+import { exitPolicy } from "../../domain/exit.ts";
+import { findComboByName, listMonitors } from "../../db/queries/index.ts";
+import { fromSqliteBool } from "../../db/values.ts";
+import { toMonitor } from "../../hydrate.ts";
+import { watchlistQuotes } from "../../monitors.ts";
+import type { QuoteRecord } from "../../quotes.ts";
+import { FIELD_SHORT, fmtValue, hasFormat, pyNumber, table } from "../format.ts";
+
+/** A figure that may not have arrived, rendered the way its own field wants. */
+function cell(value: unknown, render: (n: number) => string): string {
+  return value === undefined || value === null ? "—" : render(Number(value));
+}
+
+export const monitors: Command = (ctx) => {
+  const rows = listMonitors(ctx.db);
+  if (rows.length === 0) return EMPTY_WATCHLIST;
+  return table(["contract", "field", "last", "thr", "state"], rows.map((m) => {
+    let state = fromSqliteBool(m.triggered) ? "🔔" : "armed";
+    if (!fromSqliteBool(m.enabled)) state = "off";
+    // three places for a field with a format of its own, four for everything else — a mid of
+    // 26.4000 reads as spurious precision, and a delta of 0.0456 loses the figure that matters
+    const last = m.last_value === null ? "—"
+      : hasFormat(m.field) ? fmtValue(m.field, m.last_value)
+      : m.last_value.toFixed(4);
+    const thr = `${m.direction === "below" ? "≤" : "≥"}${pyNumber(m.threshold)}`;
+    return [shortSpxCode(m.code), FIELD_SHORT[m.field] ?? m.field, last, thr, state];
+  }));
+};
+
+/** One live table: one bounded call, and the columns this command asked for. */
+async function quoteTable(
+  ctx: BotContext, label: string, headers: string[], cells: (snap: QuoteRecord) => string[],
+): Promise<string> {
+  let quotes;
+  try {
+    quotes = await watchlistQuotes(ctx.db, ctx.settings.displayTz, ctx.fetchQuotes,
+      { now: ctx.now(), policy: exitPolicy(ctx.settings) });
+  } catch (err) {
+    return failed(label, err);
+  }
+  if (quotes.length === 0) return EMPTY_WATCHLIST;
+  return table(headers, quotes.map((q) => [
+    shortSpxCode(q.code) + (q.triggered ? " 🔔" : ""),
+    ...cells(q.quote ?? {}),
+  ]));
+}
+
+export const quotes: Command = (ctx) =>
+  quoteTable(ctx, "Quotes", ["contract", "mid", "bid/ask"], (snap) => {
+    const bid = snap.bid_price;
+    const ask = snap.ask_price;
+    const bidAsk = bid !== undefined && bid !== null && ask !== undefined && ask !== null
+      ? `${pyNumber(Number(bid))}/${pyNumber(Number(ask))}`
+      : "—";
+    return [cell(snap.mid_price, pyNumber), bidAsk];
+  });
+
+export const greeks: Command = (ctx) =>
+  quoteTable(ctx, "Greeks", ["contract", "delta", "gamma", "theta"], (snap) => [
+    cell(snap.option_delta, (n) => fmtValue("option_delta", n)),
+    // SPX gammas are ~1e-4, so five decimals; three would render every gamma as 0.000
+    cell(snap.option_gamma, (n) => n.toFixed(5)),
+    cell(snap.option_theta, (n) => n.toFixed(2)),
+  ]);
+
+export const vol: Command = (ctx) =>
+  quoteTable(ctx, "Vol", ["contract", "IV", "vega"], (snap) => [
+    cell(snap.option_implied_volatility, (n) => fmtValue("option_implied_volatility", n)),
+    cell(snap.option_vega, (n) => n.toFixed(2)),
+  ]);
+
+/** One combo, leg by leg, with the signed total it is watched on.
+ *
+ *  NO partial sums: any missing leg makes the total "incomplete" rather than a number computed
+ *  from part of a structure (CLAUDE.md).
+ */
+export const combo: Command = async (ctx, args) => {
+  if (args.length === 0) return "Usage: /combo <name>";
+  const found = findComboByName(ctx.db, args[0]!);
+  if (!found) return `No combo named '${args[0]}'.`;
+  const monitor = toMonitor(found);
+  const codes = monitorLegCodes(monitor);
+  let records: QuoteRecord[];
+  try {
+    ({ records } = await ctx.fetchQuotes([...new Set(codes)].sort()));
+  } catch (err) {
+    return failed("Combo", err);
+  }
+  const byCode = Object.fromEntries(records.map((r) => [String(r.code), r]));
+
+  const rows: string[][] = [];
+  let total = 0;
+  let complete = true;
+  for (const [index, leg] of (monitor.legs ?? []).entries()) {
+    const code = codes[index]!;
+    const value = byCode[code]?.[monitor.field];
+    const sign = leg.sign > 0 ? "+" : "-";
+    if (value === undefined || value === null) {
+      rows.push([sign, shortSpxCode(code), "—"]);
+      complete = false;
+    } else {
+      total += leg.sign * Number(value);
+      rows.push([sign, shortSpxCode(code), fmtValue(monitor.field, Number(value))]);
+    }
+  }
+  // 4dp on the total, as the Python rounds it: a signed sum of three-decimal mids otherwise shows
+  // float noise in a figure read as a price
+  const totalCell = complete ? fmtValue(monitor.field, round4(total)) : "incomplete";
+  rows.push(["", "total", totalCell]);
+  return table(["", "leg", FIELD_SHORT[monitor.field] ?? monitor.field], rows);
+};
