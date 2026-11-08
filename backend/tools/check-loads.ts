@@ -17,11 +17,21 @@ import { join, relative } from "node:path";
 // "backend/src" back on, which read as a tool reaching out of its package when ADR 0016 taught
 // check-boundaries to resolve paths — and it was never anything but indirection: the one directory
 // this walks is its own. The root is still wanted for the names it PRINTS, which are repo-relative.
-const SRC = new URL("../src", import.meta.url).pathname;
+/** The service, and the harness the tests build it with.
+ *
+ *  `testing/` was inside `src/` until #221, so it was loaded along with the modules it fakes and
+ *  got this check for free. Moving it out of `src/` is what makes `src/` mean "the service" — and
+ *  it quietly took the harness out of the one gate that exists because two classes reached main
+ *  unable to load at all. It is 222 lines that every route test depends on, so a load failure
+ *  there is a whole suite that cannot start.
+ */
+const DIRS = ["../src", "../testing"].map((d) => new URL(d, import.meta.url).pathname);
 const ROOT = new URL("../..", import.meta.url).pathname;
 
-/** main.ts is the entry point: loading it starts the service on purpose. It is checked by running
- *  the service, not by importing it. */
+/** main.ts is the entry point: loading it starts the service on purpose, so it cannot be checked
+ *  by importing it. It is checked by BOOTING it instead, in `src/main.test.ts`, which spawns it
+ *  with a setting it must refuse and reads the message — the only thing that loads the process at
+ *  all. */
 const SKIP = new Set(["backend/src/main.ts"]);
 
 function walk(dir: string): string[] {
@@ -49,7 +59,7 @@ function load(path: string): Promise<{ path: string; ok: boolean; note?: string 
   });
 }
 
-const files = walk(SRC).filter((f) => !SKIP.has(relative(ROOT, f)));
+const files = DIRS.flatMap(walk).filter((f) => !SKIP.has(relative(ROOT, f)));
 const results = await Promise.all(files.map(load));
 const broken = results.filter((r) => !r.ok);
 for (const r of broken) console.log(`  CANNOT LOAD ${relative(ROOT, r.path)}\n    ${r.note}`);

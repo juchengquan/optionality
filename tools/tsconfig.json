@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "_comment": "The repo-wide tools, which no workspace tsconfig covers: `backend/tsconfig.json`'s \"tools\" means backend/tools, and there is no tsconfig at the root. So `tools/cases.ts` — the golden-case generator, and the writer of BOTH fingerprint stamps — was typechecked by nothing. `make check-cases` runs it, so a crash was caught; a type error that produced a wrong VALUE was not. Node runs these directly, as it does the service (ADR 0009), hence allowImportingTsExtensions. The .mjs scripts beside it are plain JavaScript by choice and are checked by their own tests.",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["*.ts"]
+}

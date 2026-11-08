@@ -10,7 +10,7 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "test:browser": "npm run test:browser --workspace frontend",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tools/tsconfig.json",
     "build": "npm run build --workspace frontend"
   },
   "devDependencies": {
