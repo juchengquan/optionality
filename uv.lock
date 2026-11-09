@@ -696,6 +696,7 @@ yahoo = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "optionality", extra = ["ibkr"] },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -712,6 +713,7 @@ provides-extras = ["opend", "yahoo", "ibkr", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "optionality", extras = ["ibkr"] },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff" },
 ]
@@ -729,7 +731,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "optionality", extra = ["ibkr"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -745,7 +746,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "optionality", extras = ["ibkr"], editable = "python" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4" },
     { name = "ruff" },
