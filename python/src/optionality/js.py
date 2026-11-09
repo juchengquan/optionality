@@ -126,15 +126,36 @@ def js_string(value: float) -> str:
 
     Python's `str(5.0)` is "5.0" and JavaScript's `String(5)` is "5". That shows up wherever a
     figure is interpolated into a sentence both languages must agree on — the alarm notice's
-    threshold, and a contract code's strike.
+    threshold, and a contract code's strike — and in the stored JSON the backend writes, which
+    must be JSON.stringify's to the byte.
+
+    ECMAScript's Number::toString, step for step. The DIGITS are the shortest that read back as the
+    same double, which is what both languages choose and what `repr` gives; only the layout differs.
+    It used to be `repr` with an integer branch, which was wrong twice (tests/test_js_string.py):
+    `repr` turns to an exponent below 1e-4 and pads it (`1e-05`; JavaScript: `0.00001`, `1e-7`),
+    and `str(int(x))` printed an integer past 2**53 as its exact binary value
+    (`1152921504606846976`; JavaScript: `1152921504606847000`).
     """
     if math.isnan(value):
         return "NaN"
+    if value == 0:
+        return "0"  # -0 included: String(-0) is "0"
     if math.isinf(value):
         return "Infinity" if value > 0 else "-Infinity"
-    if value == int(value) and abs(value) < 1e21:
-        return str(int(value))
-    return repr(value)
+    if value < 0:
+        return "-" + js_string(-value)
+    shortest = Decimal(repr(value)).normalize().as_tuple()
+    digits = "".join(map(str, shortest.digits))
+    k = len(digits)
+    n = shortest.exponent + k  # the value is 0.<digits> × 10**n
+    if k <= n <= 21:
+        return digits + "0" * (n - k)
+    if 0 < n <= 21:
+        return f"{digits[:n]}.{digits[n:]}"
+    if -6 < n <= 0:
+        return f"0.{'0' * -n}{digits}"
+    mantissa = digits if k == 1 else f"{digits[0]}.{digits[1:]}"
+    return f"{mantissa}e{'+' if n > 0 else '-'}{abs(n - 1)}"
 
 
 def _stringify(value: object) -> str:

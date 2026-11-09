@@ -12,8 +12,11 @@ Minting an id belongs here for the same reason: it is a value shaped for a store
 
 import json
 import math
+import re
 import uuid
 from typing import Any
+
+from optionality.js import js_string
 
 
 def new_id() -> str:
@@ -33,32 +36,67 @@ def from_sqlite_bool(value: int) -> bool:
 
 
 def to_sqlite_json(value: Any) -> str:
-    """JSON on its way into the database.
+    """JSON on its way into the database, exactly as `JSON.stringify` writes it.
 
-    Python's own bytes, `[{"sign": -1, "strike": 8050.0}]` — spaces after the separators, and
-    8050.0 — which is what the service before the cutover wrote and every row copied from it holds.
-    The TypeScript writes `[{"sign":-1,"strike":8050}]`. The values are the same, each side parses
-    the other's text, and nothing reads these bytes except a JSON parser, so the difference is
-    accepted, not overlooked: matching JSON.stringify would mean writing a serialiser to imitate
-    another language's formatting. The scenarios compare these columns as values for this reason.
+    Byte for byte, and not merely the same value: both backends write the ONE database file (ADR
+    0021, Decision 3), and the sweep tells a changed sample by comparing this TEXT
+    (`engine/positions.ts`: `stored.legs_iv === legsIv`), so a second spelling of one value reads
+    as a change and rewrites the row. Python's own `json.dumps` writes
+    `[{"sign": -1, "strike": 8050.0}]` where JSON.stringify writes `[{"sign":-1,"strike":8050}]`,
+    and the door scenarios, which compare these columns as values, would never notice the file
+    filling with both.
 
-    The VALUE is JSON.stringify's, though, where the two disagree about one: a number that is not
-    finite is written `null`, as JavaScript writes it, and not as the bare `NaN` Python would — which
-    is not JSON, so the TypeScript's JSON.parse would refuse the whole row. And -0 is written 0.
+    So: no spaces; every number as `String(n)` writes it, through `optionality.js.js_string`, and a
+    number that is not finite as `null` (Python would write the bare token `NaN`, which is not JSON,
+    and JSON.parse would refuse the whole row); strings as JSON.stringify quotes them, non-ASCII kept
+    and a lone surrogate escaped; an object's keys in the order a JavaScript object keeps them, which
+    is insertion order except that array-index keys come first, ascending. What JSON cannot hold —
+    a datetime, a model, a key that is not a string — raises, as `json.dumps` would: the caller
+    converts it first, knowing what it should become.
     """
-    return json.dumps(_as_javascript_writes(value))
+    return _stringify(value)
 
 
-def _as_javascript_writes(value: Any) -> Any:
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            return None
-        return 0.0 if value == 0 else value
-    if isinstance(value, dict):
-        return {k: _as_javascript_writes(v) for k, v in value.items()}
+def _stringify(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        number = float(value)  # a JavaScript number is a double, an integer past 2**53 included
+        return js_string(number) if math.isfinite(number) else "null"
+    if isinstance(value, str):
+        return _quote(value)
     if isinstance(value, (list, tuple)):
-        return [_as_javascript_writes(v) for v in value]
-    return value
+        return "[" + ",".join(_stringify(v) for v in value) + "]"
+    if isinstance(value, dict):
+        for key in value:
+            if not isinstance(key, str):
+                raise TypeError(f"a JSON key must be a string, not {type(key).__name__}: {key!r}")
+        indices = sorted((k for k in value if _is_index(k)), key=int)
+        ordered = indices + [k for k in value if not _is_index(k)]
+        return "{" + ",".join(f"{_quote(k)}:{_stringify(value[k])}" for k in ordered) + "}"
+    raise TypeError(f"not JSON: {type(value).__name__}")
+
+
+# a canonical array index: 0 to 2**32 - 2, written with no sign and no leading zero
+_INDEX = re.compile(r"0|[1-9][0-9]*", re.ASCII)
+
+
+def _is_index(key: str) -> bool:
+    return _INDEX.fullmatch(key) is not None and int(key) < 2**32 - 1
+
+
+# a surrogate code point in a Python str is always a lone one: a pair is one code point already
+_LONE_SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def _quote(text: str) -> str:
+    """A string as JSON.stringify quotes it. `json.dumps` escapes the same characters the same way
+    once it is told to keep non-ASCII (`"`, `\\`, the controls below 0x20, `\\b\\f\\n\\r\\t` short
+    and the rest as lowercase `\\u00xx`), and differs only on a lone surrogate, which it writes raw."""
+    quoted = json.dumps(text, ensure_ascii=False)
+    return _LONE_SURROGATE.sub(lambda m: f"\\u{ord(m[0]):04x}", quoted)
 
 
 def _refuse(token: str) -> None:

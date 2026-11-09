@@ -50,13 +50,16 @@ Python differs, and why** says how, so a reader of a TypeScript change can find 
 
 - **Numbers.** `Math.round`, `toFixed`, `Number(x)`, `String(n)` and the truthiness of a value whose
   type is not known (a quote field, parsed JSON) go through `optionality.js` — `math_round`,
-  `to_fixed`, `number`, `js_string`, `truthy` — never Python's own. The truthiness of something the
+  `to_fixed`, `number`, `js_string`, `truthy` — never Python's own. Python's `str` and `repr` of a
+  float are not JavaScript's (`8050.0`, `1e-05`); `js_string` is. The truthiness of something the
   TypeScript types as a `string` or a `boolean` is Python's: the two agree there.
 - **Text.** A regex the TypeScript anchors with `^…$` is compiled with `re.ASCII` and used with
   `fullmatch`: JavaScript's `\d` is ASCII and its `$` is the end of the text, where Python's take any
-  Unicode digit and a final newline. `JSON.stringify` of something a person reads — an error, a log
-  line — is `json.dumps(x, separators=(",", ":"), ensure_ascii=False)`. A stored JSON column is the
-  exception, compared as a value; `db/values.py` says why.
+  Unicode digit and a final newline. `JSON.stringify` of anything STORED is
+  `db/values.to_sqlite_json`, byte for byte: both backends write one file, and the sweep tells a
+  changed sample by comparing its JSON as text. Of something a person only reads — an error, a log
+  line — `json.dumps(x, separators=(",", ":"), ensure_ascii=False)` will do, and differs from it only
+  on floats, array-index keys and lone surrogates.
 - **Instants.** A `Date` is an AWARE `datetime`, and a naive one is refused where an instant is
   taken. `new Date()` as a default is a `None` that means now. Storage keeps milliseconds, as a `Date`
   does (`db/time.py`).

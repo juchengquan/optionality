@@ -61,7 +61,9 @@ def _ok(payload: Any) -> bool:
 
 
 def _stringify(payload: Any) -> str:
-    """`JSON.stringify`'s spelling, so the line a refusal logs is the TypeScript's to the byte."""
+    """`JSON.stringify`'s separators, so the line a refusal logs reads as the TypeScript's. Telegram
+    answers with strings, integers and booleans, which the two spell alike; stored JSON, where every
+    byte counts and floats occur, is `db/values.to_sqlite_json`."""
     return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
 
