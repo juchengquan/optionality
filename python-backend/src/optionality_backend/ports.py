@@ -16,6 +16,10 @@ not their signatures.
 runs on one asyncio loop (ADR 0021, Decision 6), so a fetch must be awaitable: a blocking SDK call
 inside it runs in a worker thread with a timeout, and every other call is a coroutine already. Same
 name, same shape, `async`. Import it from here in the backend, never from `optionality.quotes`.
+
+`verify_contracts`, the creation probe, is here for the same reason: the TypeScript imports it from its
+library's `quotes.ts`, and the Python library's takes the synchronous fetcher. It is the library's two
+cased verdicts, `unverifiable_verdict` and `verify_verdict`, around one awaited fetch.
 """
 
 from collections.abc import Awaitable, Callable
@@ -23,7 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
-from optionality.quote import Batch
+from optionality.quote import Batch, unverifiable_verdict, verify_verdict
 
 #: One bounded batch call to a Provider (the library's `quotes.ts`), awaited.
 type QuoteFetcher = Callable[[list[str]], Awaitable[Batch]]
@@ -109,3 +113,23 @@ class ProviderClient(VendorClient, Protocol):
         socket that accepts is not a gateway that answers (ADR 0010, and 2026-10-16, when OpenD held
         the port open and timed out every login)."""
         ...
+
+
+async def verify_contracts(codes: list[str], fetch: QuoteFetcher) -> str | None:
+    """An error message unless every code is a verified, existing contract. The library's
+    `quotes.verifyContracts`, awaited.
+
+    Strict on purpose: creation is gated by a live probe, and it rejects while the Provider is down
+    (CLAUDE.md). A monitor created against a contract that does not exist would quarantine itself on the
+    first sweep, which is a worse way to find out.
+
+    Both verdicts are the library's and cased: a raise and an answer are two different refusals, and the
+    raised one used to claim an outage about a Provider that had answered perfectly well and declined the
+    security (ADR 0018).
+    """
+    try:
+        batch = await fetch(codes)
+    except Exception as err:  # noqa: BLE001 — refused on ANY failure, with what went wrong: strictness
+        return unverifiable_verdict(str(err))
+    # everything but the fetch and the catch is `optionality.quote.verify_verdict`, which is cased
+    return verify_verdict(codes, batch)
