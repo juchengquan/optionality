@@ -9,9 +9,9 @@
  *  evidence about IB Gateway, an account's entitlements, or a live market — the same warning
  *  `ibkr-fake-gateway.ts` carries, for the same reason.
  *
- *  The replies live in `src/ibkr/fake.ts` so that the suite and this tool cannot drift apart.
+ *  The replies live in `src/vendors/ibkr/fake.ts` so that the suite and this tool cannot drift apart.
  */
-import { startFakeGateway } from "../src/ibkr/fake.ts";
+import { startFakeGateway } from "../src/vendors/ibkr/fake.ts";
 
 const args = process.argv.slice(2);
 function option(name: string): string | undefined {

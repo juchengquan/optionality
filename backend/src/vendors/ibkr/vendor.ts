@@ -16,8 +16,8 @@
  *  saying "no ibkr client in this build", and naming it as the Provider is fatal at boot.
  */
 import { IbkrClient } from "./client.ts";
-import type { Settings } from "../env.ts";
-import type { ProviderVendor } from "../vendors.ts";
+import type { Settings } from "../../env.ts";
+import type { ProviderVendor } from "../index.ts";
 
 export const ibkrVendor: ProviderVendor = {
   name: "ibkr",

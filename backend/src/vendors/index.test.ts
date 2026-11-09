@@ -12,8 +12,8 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { settingsFor } from "./env.ts";
-import { PROVIDERS, VENDORS, makeProvider, openVendors } from "./vendors.ts";
+import { settingsFor } from "../env.ts";
+import { PROVIDERS, VENDORS, makeProvider, openVendors } from "./index.ts";
 
 /** Keeps `opend/client.ts`'s lazy import from logging while a Provider is merely constructed. */
 function quietly<T>(fn: () => T): T {
@@ -38,7 +38,7 @@ describe("the registry", () => {
     // `schemas/reference.ts` lists the vendors a Reference may NAME, and this lists the ones a
     // build can reach. A name in one and not the other is a Reference that validates and can
     // never be served, or a vendor nothing may ask for.
-    const { SOURCES } = await import("./schemas/reference.ts");
+    const { SOURCES } = await import("../schemas/reference.ts");
     expect([...SOURCES].sort()).toEqual(VENDORS.map((v) => v.name).sort());
   });
 

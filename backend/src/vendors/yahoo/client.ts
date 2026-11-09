@@ -25,8 +25,8 @@
  *  there is no setting, because a setting would be a second thing to remember.
  */
 import { type YahooQuote, toRecord } from "./fields.ts";
-import type { Quote } from "../domain/quote.ts";
-import type { QuoteBatch } from "../quotes.ts";
+import type { Quote } from "../../domain/quote.ts";
+import type { QuoteBatch } from "../../quotes.ts";
 
 /** The library's one call this client makes, injectable so the suite never reaches Yahoo.
  *

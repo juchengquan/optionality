@@ -31,12 +31,12 @@
  *  than on its code, so it is observed and never declared — a silent figure is found by the sweep
  *  and quarantined (ADR 0015, #167).
  */
-import type { Settings } from "./env.ts";
+import type { Settings } from "../env.ts";
 import { ibkrVendor } from "./ibkr/vendor.ts";
 import { moomooVendor } from "./opend/vendor.ts";
-import type { ProviderClient, VendorClient } from "./ports.ts";
-import type { QuoteFetcher } from "./quotes.ts";
-import type { Sources } from "./references.ts";
+import type { ProviderClient, VendorClient } from "../ports.ts";
+import type { QuoteFetcher } from "../quotes.ts";
+import type { Sources } from "../references.ts";
 import { yahooVendor } from "./yahoo/vendor.ts";
 
 interface Described {

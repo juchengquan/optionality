@@ -21,7 +21,7 @@
  *  for `^VIX`, on the same request. IBKR reports a tier and no duration, so only this source can
  *  say how late a figure is, and only this source does (ADR 0019).
  */
-import type { Quote } from "../domain/quote.ts";
+import type { Quote } from "../../domain/quote.ts";
 
 /** One row of Yahoo's answer, narrowed to the fields this mapping reads. */
 export interface YahooQuote {

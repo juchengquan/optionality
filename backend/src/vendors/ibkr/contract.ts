@@ -20,7 +20,7 @@
  *  looked up and anything unlisted is refused HERE rather than sent to be guessed at: a wrong
  *  exchange and an unknown symbol come back as the same error, and the first is ours to prevent.
  */
-import { parseSpxCode } from "../domain/contract.ts";
+import { parseSpxCode } from "../../domain/contract.ts";
 import type { TwsContract } from "./messages.ts";
 
 /** Which exchange calculates each index, measured against the gateway on 2026-11-08.

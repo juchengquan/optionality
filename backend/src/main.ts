@@ -16,7 +16,7 @@ import type { Deps } from "./deps.ts";
 import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
-import { openVendors } from "./vendors.ts";
+import { openVendors } from "./vendors/index.ts";
 import { Scheduler } from "./scheduler.ts";
 import { STALE_AFTER_SWEEPS } from "./health.ts";
 import { MonitorSweeper } from "./sweeper.ts";

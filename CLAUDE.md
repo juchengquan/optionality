@@ -31,7 +31,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   documented SET is complete, so a target added to the `check` rule is nobody's job to write down
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
   alone is only the Python package (every golden case, reproduced exactly). `make lint` is ruff plus
-  four scripts — `check-boundaries`, `check-test-support`, `check-make-targets`, `check-served-root`. The first:
+  five scripts — `check-boundaries`, `check-test-support`, `check-seams`,
+  `check-make-targets`, `check-served-root`. The first:
   no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python only.
 - **The TypeScript has no formatter, by decision** (2026-10-17). Prettier and Biome were measured
@@ -71,7 +72,9 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `ibkr/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
   from the official Python client with `sendMsg` intercepted at protocol 157, and what the gateway
   replies is what the real gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-08.
-  One definition, in `src/ibkr/fake.ts`, shared with the suite so the two cannot drift. A run
+  One definition, in `src/vendors/ibkr/fake.ts`, shared with the suite so the two cannot
+  drift — and the one file besides `vendors/index.ts` that `check-seams` lets anything outside
+  the seam import, because it is the fake GATEWAY and not a client. A run
   against it proves the CLIENT and is never evidence about a provider, an account's entitlements,
   a dead session or an open market.
   This name is REUSED rather than new: `ibkr-fake-gateway` served the Client Portal stub until
@@ -123,7 +126,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   Telegram TRANSPORT in `bot.ts` — the poll, the owner check, the reply — and the commands
   themselves in `bot/commands/`, a TABLE rather than a switch: a command is
   `(context, words) => reply text`, it never touches the Telegram API, and `index.test.ts` holds
-  the table to `format.ts`'s `BOT_COMMANDS`, the "/" menu that announces it), `opend/` (the moomoo websocket client), `ibkr/` (IB Gateway's own socket protocol:
+  the table to `format.ts`'s `BOT_COMMANDS`, the "/" menu that announces it),
+  **`vendors/`** (every market-data vendor, and the ONE DOOR they are reached through:
+  `vendors/index.ts`'s `openVendors`, with `opend/`, `ibkr/` and `yahoo/` inside it. The
+  interior is private and `make check-seams` says so — the three directories were already
+  reached from three lines in one file and from nowhere else, measured, but that was a fact
+  about today rather than a rule, and the cheapest way to fix a dashed row is to import the
+  client that has the figure. `opend/` is the moomoo websocket client; `ibkr/` is IB Gateway's own socket protocol:
   framing, the handshake with its protocol floor of 156, the five messages a read-only quote fetch
   sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
   importable, so the service cannot trade by absence rather than by discipline. Reached as a
@@ -133,9 +142,9 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `queries/sql.ts` holds what all of them were repeating, and its `insertRow` names
   `COLUMNS[table]` rather than the value's own keys on purpose: a row with a column MISSING then
   fails to bind instead of storing the database's defaults in silence),
-  **`vendors.ts`** (the one seam every market-data vendor is reached through: a DESCRIPTOR per
-  vendor — `opend/vendor.ts`, `ibkr/vendor.ts`, `yahoo/vendor.ts` — and adding one is a file
-  beside its client plus a line in `VENDORS`. `PROVIDERS` is derived from the descriptors that
+  `vendors/index.ts` (a DESCRIPTOR per
+  vendor — `vendors/opend/vendor.ts` and its two siblings — and adding one is a FOLDER inside
+  `vendors/` plus a line in `VENDORS`. `PROVIDERS` is derived from the descriptors that
   say `canBeProvider`, never listed twice; a Reference-only vendor like Yahoo prices no option,
   so naming it as the Provider is fatal at boot and it owes no `reachable`. `openVendors` opens
   each vendor ONCE and hands the Provider back among the sources under its own name, which is
@@ -152,7 +161,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   that is where the batch they read happened to be.
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
-  service. Both are tested against a FIXTURE TREE rather than against this repository, which is
+  service; `tools/check-seams.mjs` — the same rule INSIDE a package, for a directory whose whole
+  point is one door (`src/vendors/`). Its `SEAMS` table carries each seam's doors, a `never` that
+  says what may not become one, and the reason, printed on failure. The `never` exists because a
+  sweep found that adding `ibkr/client.ts` to the door list passed every test the guard had: an
+  exemption list that can be opened from the inside is not a guard. All three are tested against a
+  FIXTURE TREE rather than against this repository, which is
   what a sweep of `check-boundaries` taught: three ways to gut it left every suite green.
 - `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
   for module (snake_case the only translation), `js.py` holds the JavaScript number rules the port

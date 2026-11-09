@@ -12,8 +12,8 @@
  */
 import { OpendClient } from "./client.ts";
 import { probeOpend } from "./probe.ts";
-import type { Settings } from "../env.ts";
-import type { ProviderVendor } from "../vendors.ts";
+import type { Settings } from "../../env.ts";
+import type { ProviderVendor } from "../index.ts";
 
 export const moomooVendor: ProviderVendor = {
   name: "moomoo",

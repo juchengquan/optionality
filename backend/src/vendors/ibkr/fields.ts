@@ -14,7 +14,7 @@
  *  `opend/snapshot.ts` applies, because `domain/reference.ts` prefers the mid and a mid derived
  *  from one side would be a number with no meaning.
  */
-import type { Quote } from "../domain/quote.ts";
+import type { Quote } from "../../domain/quote.ts";
 
 /** Price ticks, live and delayed, to the service's field names.
  *

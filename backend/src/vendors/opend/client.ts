@@ -15,7 +15,7 @@
  */
 import type { MoomooClient, Security, Snapshot } from "./types.ts";
 import { toRecords } from "./snapshot.ts";
-import type { QuoteBatch, QuoteFetcher } from "../quotes.ts";
+import type { QuoteBatch, QuoteFetcher } from "../../quotes.ts";
 
 /** Market 11 is the US. See snapshot.ts — the service deals in no other. */
 const US_MARKET = 11;
