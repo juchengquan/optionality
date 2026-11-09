@@ -15,7 +15,7 @@ import { shortContract } from "./format";
  *  demand — the dashboard polls ONE batch per poll and ADR 0010 says that is not free. The split is
  *  by urgency, not by content: what needs you now is here, the same facts complete are there.
  */
-export interface Needed {
+interface Needed {
   /** worst first, and a fault leads: it means the figures the rest of this is drawn from are
    *  stale, so it qualifies everything after it rather than queueing behind it */
   kind: "fault" | "stop" | "alarm" | "target" | "manage";

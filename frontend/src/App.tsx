@@ -25,7 +25,7 @@ import { Freshness } from "./Freshness";
 import { SnapshotView } from "./SnapshotView";
 import { ReferenceStrip } from "./ReferenceStrip";
 import { TopLine } from "./TopLine";
-import { Settings } from "./Settings";
+import { ServicePanel } from "./ServicePanel";
 import { useSnapshot } from "./useSnapshot";
 import { useTableFit } from "./useTableFit";
 import { WatchlistTable, type RowHandlers } from "./WatchlistTable";
@@ -308,7 +308,7 @@ export function App() {
 
       <AddPanel which={adding} onClose={() => setAdding(null)}
                 onCreate={(body) => act(() => createWatch(body))} />
-      <Settings
+      <ServicePanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         quotes={quotes}

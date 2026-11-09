@@ -1,57 +1,48 @@
-/** What a row SAYS in each column, as text, for everything that is not the drawing of it.
+/** What a row SAYS, as text — the readers each column's own `text` is built from.
  *
- *  Three callers, and only one of them paints: the table draws these cells, the detail sheet
- *  lists every column whether or not the table has room for it (ADR 0008), and the column
- *  fitting asks how wide each column needs to be. Two of those would drift from the third if
- *  there were two of this function, and the widest columns on the page — a contract's name, a
- *  combo's legs — are exactly the ones a second copy would get wrong.
+ *  There used to be one `cellValue(entry, key, isCombo)` here, a `switch` over column keys with
+ *  three callers: the table draws these cells, the detail sheet lists every column whether or not
+ *  the table has room for it (ADR 0008), and the column fitting asks how wide each column needs to
+ *  be. One function so that the three could not drift — but the arm was a FOURTH place a column key
+ *  had to be written down, and the `default` arm it needed answered a key nobody had written with a
+ *  dash, for ever, in the detail sheet. A column's text sits on the column now (`columns.ts`), so
+ *  the three callers reach it through the descriptor they already hold and the switch is gone.
  *
- *  It lived in `WatchlistTable.tsx` and was imported from there, which put a component module on
- *  the measuring path: `useTableFit` runs on every poll, for both tables, and again on every
- *  resize, and it reached one `switch` statement through a React tree's worth of module.
- *  `columns.ts` dodged that by taking the function as an ARGUMENT instead, so the workaround was
- *  visible in `widthsFromContent`'s signature and every caller had to carry it. Nothing here
- *  renders anything, so nothing here needs React — `__tests__/Modules.test.ts` holds that.
+ *  What stays here is why this module exists at all. It lived in `WatchlistTable.tsx` and was
+ *  imported from there, which put a component module on the measuring path: `useTableFit` runs on
+ *  every poll, for both tables, and again on every resize, and it reached one `switch` through a
+ *  React tree's worth of module. `columns.ts` dodged that by taking the function as an ARGUMENT
+ *  instead, so the workaround was visible in `widthsFromContent`'s signature and every caller had
+ *  to carry it. Nothing here renders anything, so nothing here needs React — and `columns.ts`,
+ *  which now holds the text, needs none either. `__tests__/Modules.test.ts` holds both.
  */
 import type { Entry } from "./api";
-import {
-  alarmText, DASH, fmt, legSummary, shortContract, shortDate, shortStamp,
-} from "./format";
+import { fmt } from "./format";
 
-/** Row plus column key to displayed text. */
-export function cellValue(entry: Entry, key: string, isCombo: boolean): string {
-  const snap = entry.quote ?? {};
-  const greeks = entry.combo_greeks ?? {};
-  const greek = (name: string, col: string) =>
-    isCombo ? fmt(greeks[name] ?? null, col) : fmt(snap[name as keyof typeof snap] as number | null, col);
+/** One greek: the combo's signed sum, or a single leg's own quote.
+ *
+ *  Which one it is is the whole reason every `text` takes `isCombo`. A combo's greeks are signed
+ *  sums under the user's leg signs and never come from a quote, and IV is never summed at all —
+ *  so there is no column where reading the wrong source would merely be imprecise.
+ */
+export function greekText(entry: Entry, isCombo: boolean, name: string, column: string): string {
+  if (isCombo) return fmt(entry.combo_greeks?.[name] ?? null, column);
+  const quote = entry.quote ?? {};
+  return fmt(quote[name as keyof typeof quote] as number | null, column);
+}
 
-  switch (key) {
-    // the identity columns are DRAWN by the JSX below, badge and bell and all — but they
-    // still have to answer here, because the fitting measurement asks this function how
-    // wide every column needs to be and these are the widest on the page
-    case "contract": return shortContract(entry.quote?.name ?? entry.code);
-    case "combo": return entry.code;
-    case "dte": return String(entry.dte);
-    case "legs": return entry.legs ? legSummary(entry.legs) : DASH;
-    case "expiry": return shortDate(entry.strike_date);
-    case "alarm": return alarmText(entry.field, entry.direction, entry.threshold, entry.compare);
-    case "value": return fmt(entry.cost_to_close ?? entry.combo_value ?? null, "mid");
-    // blank rather than a dash-or-zero where there is no declared holding: a 0.00 here would
-    // read as "exactly on pace", which is the opposite of "no schedule"
-    case "on_pace": return entry.schedule?.on_pace == null ? "" : fmt(entry.schedule.on_pace, "mid");
-    case "entry": return entry.scope === "all" ? fmt(entry.entry, "mid") : "";
-    case "pnl": return entry.scope === "all" ? fmt(entry.pnl, "mid") : "";
-    case "delta": return greek("option_delta", "delta");
-    case "gamma": return greek("option_gamma", "gamma");
-    case "theta": return greek("option_theta", "theta");
-    case "vega": return greek("option_vega", "vega");
-    case "iv": return fmt(snap.option_implied_volatility ?? null, "iv");
-    case "mid": return fmt(snap.mid_price ?? null, "mid");
-    case "bid": return fmt(snap.bid_price ?? null, "bid");
-    case "ask": return fmt(snap.ask_price ?? null, "ask");
-    // without the zone it repeats on every row (format.shortStamp). The DATE stays: a far
-    // strike can go days without a print, and a bare clock would read as this morning.
-    case "last_trade": return snap.update_time ? shortStamp(snap.update_time) : DASH;
-    default: return DASH;
-  }
+/** One figure from the contract's own quote — the single-leg table's prices and its IV. */
+export function quoteText(entry: Entry, name: string, column: string): string {
+  const quote = entry.quote ?? {};
+  return fmt((quote[name as keyof typeof quote] as number | null) ?? null, column);
+}
+
+/** A figure that belongs to a HOLDING, blank where the rule covers none.
+ *
+ *  Blank rather than a dash: a rule watching part of someone else's structure has no entry and no
+ *  P&L of its own — that figure would be a fraction of their credit (ADR 0003) — and a dash would
+ *  read as "the figure has not arrived".
+ */
+export function heldText(entry: Entry, value: number | null | undefined): string {
+  return entry.scope === "all" ? fmt(value ?? null, "mid") : "";
 }

@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { App } from "../App";
 
 /** A group divider is one cell spanning every column, which makes it the one piece of the table
- *  the column measuring (ADR 0008) never sees: `cellValue` is asked how wide each COLUMN needs to
- *  be, and this cell belongs to all of them. At phone width, where two columns are drawn and the
+ *  the column measuring (ADR 0008) never sees: each COLUMN is asked for its own text and how wide
+ *  that needs to be, and this cell belongs to all of them. At phone width, where two columns are drawn and the
  *  budget is tight, a label wider than their sum would push the table out on its own — the kind of
  *  thing a green jsdom suite reports nothing about.
  */

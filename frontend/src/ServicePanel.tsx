@@ -16,23 +16,29 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { useDismissOnBack } from "./useDismissOnBack";
 
 /** unchanged when this moved out of App.tsx — the options are the owner's, not mine */
-export const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
+const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 
-/** Viewer preferences, which is currently one preference.
+/** Where things stand, in full — and the four preferences that belong beside it.
  *
- *  It sat on the page until now, in the line that reports freshness. That line is worth reading
- *  every time you look at the screen; how often the screen polls is a thing you set once. So the
- *  cadence moved in here and the freshness stayed out there.
+ *  Named for its own heading. It was `Settings` in the source and "Service" on screen, with its
+ *  test file already called `ServicePanel.test.tsx`, so the codebase said two things about one
+ *  panel; what it actually holds is the service's status, the needs the page is too terse to list,
+ *  the Reference list (ADR 0018) and then the preferences.
  *
- *  Deliberately NOT in here: the service's own status. If the Provider is down or the alarm engine has
- *  stalled, every figure on the page is suspect and the bell may be silent — that is exactly when
- *  it must not be a click away. It stays on the page, and shows only when it has something to say.
+ *  The cadence came in here first. It sat on the page, in the line that reports freshness: that
+ *  line is worth reading every time you look at the screen, while how often the screen polls is a
+ *  thing you set once.
  *
- *  Also not in here: the column pickers. Each one belongs beside the table it governs (ADR 0008),
- *  and collecting them into a settings panel would need sub-headings to explain which table each
+ *  What is still on the PAGE rather than in here is the summary of the status — `TopLine`. If the
+ *  Provider is down or the alarm engine has stalled, every figure on the page is suspect and the
+ *  bell may be silent, which is exactly when it must not be a click away. The split is by urgency,
+ *  not by content: what needs you now is out there, the same facts complete are in here.
+ *
+ *  Deliberately NOT in here: the column pickers. Each one belongs beside the table it governs (ADR
+ *  0008), and collecting them into a panel would need sub-headings to explain which table each
  *  section meant, which is the sign that the grouping is wrong.
  */
-export function Settings({
+export function ServicePanel({
   open, onClose, refresh, onRefresh, sweepSeconds, quotes, health, reading, band, onReading, onBand,
   grouping, onGrouping, holdings, holdingsError, loadHoldings,
   references, onAddReference, onRemoveReference,

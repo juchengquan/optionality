@@ -43,12 +43,11 @@ type MonitorsResponse = Exclude<Infer<typeof client.monitors.$get>, { detail: st
 export type Entry = QuotesResponse[number];
 export type Monitor = MonitorsResponse[number];
 export type Health = Exclude<Infer<typeof client.health.$get>, { detail: string }>;
-/** The live figures for one contract. CONTEXT.md calls this a Quote; moomoo's "snapshot"
- *  stays in the service's opend/ layer, which is where their wire format belongs. */
-export type Quote = NonNullable<Entry["quote"]>;
 export type Leg = NonNullable<Entry["legs"]>[number];
-// PositionRef is not re-exported: nothing imported it. The old interface declared a `name` the
-// components never read — they take `entry.positions` whole and use `.id`. Five types replace six.
+// Neither PositionRef nor Quote is re-exported: nothing imported either. The old PositionRef
+// interface declared a `name` the components never read — they take `entry.positions` whole and use
+// `.id`. `Quote` named one row's live figures, `NonNullable<Entry["quote"]>`, and was not referenced
+// even inside this file; the figures are read off `entry.quote` where they are read at all.
 
 /** A reply the service refused. The shape is `{detail}` on every failure path, and the service explains
  *  itself properly — a duplicate, a dead contract, an unsplittable total — so its words are surfaced
@@ -285,10 +284,11 @@ export function positionPatchBody(values: HoldingValues): Record<string, unknown
   return Object.keys(body).length === 0 ? null : body;
 }
 
-/** The Position a rule would record, from the rule itself. Exported so that recording a holding
- *  afterwards goes through the very same derivation as recording it at creation — the sides, the
- *  name and the entry's sign are decided in exactly one place. */
-export function holdingBody(
+/** The Position a rule would record, from the rule itself. One derivation, used by both the
+ *  create path and the record-it-afterwards path below — the sides, the name and the entry's sign
+ *  are decided in exactly one place. Both callers are in this file, which is what makes that
+ *  true, so it is not exported. */
+function holdingBody(
   rule: Record<string, unknown>, values: HoldingValues,
 ): Record<string, unknown> {
   return {
