@@ -4,7 +4,7 @@ backend/src/create-monitor.ts has no test of its own: its two doors' suites rely
 what they rely on — `entrypoints/http/routes/monitors.test.ts` (ported beside this) on the order of
 the five steps, on the probe seeing a combo's legs in one call, on a muted rule, on the scope the link
 writes being the scope the reply carries, and on the probe's own sentence when it throws; and
-`entrypoints/bot/bot.test.ts` (not ported yet) on `/watch` not asking the Provider about a rule it
+`entrypoints/bot/bot.test.ts` (ported beside this too) on `/watch` not asking the Provider about a rule it
 already has, and on the threshold coming back as values for the bot to word in its own longer way.
 """
 

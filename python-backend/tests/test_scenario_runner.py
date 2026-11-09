@@ -403,12 +403,32 @@ def test_the_seam_runs_a_tick_of_the_real_engine_on_the_world():
         w.close()
 
 
-def test_a_door_the_backend_does_not_have_yet_raises_rather_than_doing_nothing():
-    w = open_world(world())
+def test_the_seam_answers_an_update_with_the_real_bot_through_the_world_s_telegram():
+    # phase 4: `handle_update` is the bot's own handler on the world's database, answering through its
+    # fake Telegram API — the owner check reads the world's `.env`, and an empty watchlist asks the
+    # Provider nothing
+    w = open_world(world(settings={"API_TOKEN": "tok", "TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "42"}))
     service = backend.build(w)
     try:
-        with pytest.raises(NotPorted, match="phase 4"):
-            service.handle_update({"update_id": 1})
+        service.handle_update({"update_id": 1, "message": {"chat": {"id": 42}, "text": "/quotes"}})
+        service.handle_update({"update_id": 2, "message": {"chat": {"id": 666}, "text": "/quotes"}})
+        assert w.replies == [{"chat_id": "42", "text": "Watchlist is empty. Add one with /watch."}]
+        assert w.calls == {}
+    finally:
+        service.close()
+        w.close()
+
+
+def test_a_command_the_backend_does_not_have_yet_raises_rather_than_doing_nothing():
+    # the door is built, but the bot is partly ported: what `commands/service.py` answers is absent
+    # until `holdings.py` lands, and an update needing it must fail rather than pass a scenario that
+    # expects silence (see the seam's doc: "an unported door RAISES")
+    w = open_world(world(settings={"API_TOKEN": "tok", "TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "42"}))
+    service = backend.build(w)
+    try:
+        with pytest.raises(LookupError, match="commands/service.py"):
+            service.handle_update({"update_id": 1, "message": {"chat": {"id": 42}, "text": "/help"}})
+        assert w.replies == []
     finally:
         service.close()
         w.close()
@@ -454,14 +474,19 @@ def test_a_listed_scenario_that_fails_is_skipped_and_says_why():
     assert outcome == "skip" and why.startswith("on the backlog: at $.reply:")
 
 
+def not_ported(w, update):
+    """A backend whose door is not there yet — every door of the real one is, since the bot landed."""
+    raise NotPorted("the bot is not ported yet")
+
+
 def test_a_listed_scenario_that_is_not_ported_is_skipped_and_says_so():
-    outcome, why = backlog.judge("bot/tiny.json", TINY, listed=True)
-    assert outcome == "skip" and "not ported" in why
+    outcome, why = judge(listed=True, on_update=not_ported)
+    assert outcome == "skip" and why == "on the backlog: not ported — the bot is not ported yet"
 
 
 def test_an_unlisted_scenario_must_pass():
     assert judge(listed=False, on_update=passes) == ("pass", "")
-    outcome, why = backlog.judge("bot/tiny.json", TINY, listed=False)
+    outcome, why = judge(listed=False, on_update=not_ported)
     assert outcome == "fail"
     assert why.startswith("bot/tiny.json is not on the backlog, so the Python must pass it")
     assert "not ported" in why
