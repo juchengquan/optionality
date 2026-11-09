@@ -1,0 +1,91 @@
+{
+  "name": "POST /references keeps a Security once its own source confirms it",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {
+      "yahoo": {
+        "down": null,
+        "rejects": {},
+        "unknown": [],
+        "quotes": {
+          "^VIX": {
+            "name": "CBOE Volatility Index",
+            "last_price": 16.82,
+            "prev_close_price": 17.4,
+            "delayed": true,
+            "last_known": false,
+            "delayed_by_minutes": 15
+          }
+        }
+      }
+    },
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/references",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "code": "^vix",
+      "label": "VIX",
+      "source": "yahoo"
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 201,
+      "body": {
+        "id": "00000000000000000000000000000001",
+        "code": "^VIX",
+        "label": "VIX",
+        "source": "yahoo",
+        "created_at": "2026-11-09 15:00:00.000000"
+      }
+    },
+    "rows": {
+      "reference_securities": {
+        "added": [
+          {
+            "id": "00000000000000000000000000000001",
+            "code": "^VIX",
+            "label": "VIX",
+            "source": "yahoo",
+            "created_at": "2026-11-09 15:00:00.000000"
+          }
+        ]
+      }
+    },
+    "calls": {
+      "yahoo": [
+        [
+          "^VIX"
+        ]
+      ]
+    }
+  }
+}

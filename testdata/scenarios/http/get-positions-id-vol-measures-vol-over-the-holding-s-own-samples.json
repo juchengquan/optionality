@@ -1,0 +1,141 @@
+{
+  "name": "GET /positions/{id}/vol measures vol over the holding's own samples",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-11-06",
+          "manage_notified_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-06",
+          "dte": 42,
+          "cost_to_close": 3.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4.25,
+            "US.SPXW261218P6400000": 4.25,
+            "US.SPXW261218P6350000": 4.25
+          }
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-07",
+          "dte": 41,
+          "cost_to_close": 3.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.75,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.5,
+            "US.SPXW261218P6350000": 20.25
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4.25,
+            "US.SPXW261218P6400000": 4.25,
+            "US.SPXW261218P6350000": 4.25
+          }
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-08",
+          "dte": 40,
+          "cost_to_close": 3.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 15,
+            "US.SPXW261218C7350000": 14.25,
+            "US.SPXW261218P6400000": 19,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4.25,
+            "US.SPXW261218P6400000": 4.25,
+            "US.SPXW261218P6350000": 4.25
+          }
+        }
+      ],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/positions/pos-1/vol",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "vol": 0,
+        "from": "2026-11-06",
+        "to": "2026-11-08",
+        "days": 2
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

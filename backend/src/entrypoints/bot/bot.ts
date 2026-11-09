@@ -30,6 +30,8 @@ export interface BotDeps {
   fetchQuotes: QuoteFetcher;
   sweeper?: SweeperPort;
   now?: () => Date;
+  /** the id a created rule gets; a uuid unless a door scenario states it (ADR 0021) */
+  newId?: () => string;
 }
 
 interface Update {
@@ -145,6 +147,7 @@ export class TelegramBot {
       fetchQuotes: this.deps.fetchQuotes,
       sweeper: this.deps.sweeper,
       now: () => this.now(),
+      newId: this.deps.newId,
     };
   }
 }

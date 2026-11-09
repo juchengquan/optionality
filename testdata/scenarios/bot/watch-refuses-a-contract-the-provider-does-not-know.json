@@ -1,0 +1,57 @@
+{
+  "name": "/watch refuses a contract the Provider does not know",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [
+        "US.SPXW261218C7500000"
+      ],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "update": {
+    "update_id": 1,
+    "message": {
+      "chat": {
+        "id": 42
+      },
+      "text": "/watch 2026-12-18 CALL 7500 0.3"
+    }
+  },
+  "expect": {
+    "reply": {
+      "chat_id": "42",
+      "text": "contract does not exist: US.SPXW261218C7500000 — check strike and expiry",
+      "parse_mode": null
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7500000"
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "name": "GET /references retries one code at a time when a source refuses the batch",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {
+        "US..SPX": "unknown stock US..SPX"
+      },
+      "unknown": [],
+      "quotes": {
+        "US.SPY": {
+          "name": "SPDR S&P 500 ETF",
+          "mid_price": 689.45,
+          "last_price": 689.4,
+          "prev_close_price": 685.2
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": [
+        {
+          "id": "ref-1",
+          "code": "US.SPY",
+          "label": null,
+          "source": "moomoo",
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "ref-2",
+          "code": "US..SPX",
+          "label": null,
+          "source": "moomoo",
+          "created_at": "2026-11-02 14:31:00.000000"
+        }
+      ]
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/references",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": [
+        {
+          "id": "ref-1",
+          "code": "US.SPY",
+          "label": null,
+          "source": "moomoo",
+          "name": "SPDR S&P 500 ETF",
+          "figure": 689.45,
+          "field": "mid_price",
+          "change": 0.0062025685931114995,
+          "error": null,
+          "delayed": null,
+          "last_known": null,
+          "delayed_by_minutes": null
+        },
+        {
+          "id": "ref-2",
+          "code": "US..SPX",
+          "label": null,
+          "source": "moomoo",
+          "name": null,
+          "figure": null,
+          "field": null,
+          "change": null,
+          "error": "unknown stock US..SPX",
+          "delayed": null,
+          "last_known": null,
+          "delayed_by_minutes": null
+        }
+      ]
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPY",
+          "US..SPX"
+        ],
+        [
+          "US.SPY"
+        ],
+        [
+          "US..SPX"
+        ]
+      ]
+    }
+  }
+}

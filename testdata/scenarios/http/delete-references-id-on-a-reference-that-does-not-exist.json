@@ -1,0 +1,71 @@
+{
+  "name": "DELETE /references/{id} on a Reference that does not exist",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": [
+        {
+          "id": "ref-1",
+          "code": "US.SPY",
+          "label": "SPX via SPY",
+          "source": "moomoo",
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "ref-2",
+          "code": "^VIX",
+          "label": null,
+          "source": "yahoo",
+          "created_at": "2026-11-02 14:31:00.000000"
+        },
+        {
+          "id": "ref-3",
+          "code": "VIX",
+          "label": null,
+          "source": "ibkr",
+          "created_at": "2026-11-02 14:32:00.000000"
+        }
+      ]
+    }
+  },
+  "request": {
+    "method": "DELETE",
+    "path": "/references/ref-9",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 404,
+      "body": {
+        "detail": "reference not found"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

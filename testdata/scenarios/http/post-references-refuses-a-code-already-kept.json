@@ -1,0 +1,81 @@
+{
+  "name": "POST /references refuses a code already kept",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPY": {
+          "name": "SPDR S&P 500 ETF",
+          "mid_price": 689.45,
+          "last_price": 689.4,
+          "prev_close_price": 685.2
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": [
+        {
+          "id": "ref-1",
+          "code": "US.SPY",
+          "label": "SPX via SPY",
+          "source": "moomoo",
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "ref-2",
+          "code": "^VIX",
+          "label": null,
+          "source": "yahoo",
+          "created_at": "2026-11-02 14:31:00.000000"
+        },
+        {
+          "id": "ref-3",
+          "code": "VIX",
+          "label": null,
+          "source": "ibkr",
+          "created_at": "2026-11-02 14:32:00.000000"
+        }
+      ]
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/references",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "code": "US.SPY",
+      "source": "moomoo"
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 409,
+      "body": {
+        "detail": "US.SPY is already kept on the page"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

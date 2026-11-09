@@ -1,0 +1,291 @@
+/** The sweep door's scenarios, as inputs: a world and ONE tick at its clock (ADR 0021).
+ *
+ *  Each names the outcomes it shows, from `outcomes.ts`, and `coverage.test.ts` checks the claim
+ *  against what the tick actually did. Worlds are kept to what the outcome needs, so a file reads
+ *  as one event rather than as a busy morning; where the engine's MEMORY matters — a run of failed
+ *  sweeps, a figure silent for several — the earlier sweeps say so, and write nothing.
+ */
+import { buildSpxCode } from "optionality/domain/contract";
+import type { World } from "../format.ts";
+import {
+  BOOK, C7300, C7350, EXPIRED, P6350, P6400, at, combo, except, link, monitor, position, quote,
+  sample, stored, world,
+} from "./fixtures.ts";
+
+export interface SweepInput {
+  name: string;
+  outcomes: string[];
+  world: World;
+}
+
+/** OpenD with its websocket port shut, as the sweep sees it. */
+const DOWN = "connect ECONNREFUSED 127.0.0.1:33333";
+
+/** The short call's delta, and nothing else about it. */
+const delta = (value: number) => ({ [C7300]: quote("SPXW 261218 7300C", 2.75, value) });
+
+/** A rule already ringing, last told about `secondsAgo` before the clock. */
+const ringing = (secondsAgo: number) => monitor({
+  id: "mon-1", triggered: 1, last_value: 0.33,
+  last_checked_at: stored(at(-15)), last_alarm_at: stored(at(-secondsAgo)),
+});
+
+/** A November condor, inside the manage-by window: 18 days left on the clock. */
+const NOV = "2026-11-27";
+const nov = (type: "CALL" | "PUT", strike: number) => buildSpxCode(NOV, type, strike);
+const november = position({
+  id: "pos-nov", name: "nov-condor", strike_date: NOV, opened_at: "2026-10-20",
+});
+const NOVEMBER_QUOTES = {
+  [nov("CALL", 7300)]: quote("SPXW 261127 7300C", 1.25, 0.12),
+  [nov("CALL", 7350)]: quote("SPXW 261127 7350C", 0.75, 0.08),
+  [nov("PUT", 6400)]: quote("SPXW 261127 6400P", 2, -0.11),
+  [nov("PUT", 6350)]: quote("SPXW 261127 6350P", 1.25, -0.08),
+};
+
+/** Earlier sweeps a cadence apart, the last of them `before` seconds ahead of the clock. */
+const earlier = (downs: (string | null)[], cadence = 15, before = cadence) =>
+  downs.map((down, i) => ({ at: at(-(before + (downs.length - 1 - i) * cadence)), down }));
+
+/** The day's sample exactly as this book's quotes would write it — so a tick finds nothing to
+ *  change. Kept in step with BOOK by the "sample-recorded" scenario, which writes the same row. */
+const todays = sample({
+  position_id: "pos-1", observed_on: "2026-11-09", dte: 39, cost_to_close: 3.25,
+  legs_iv: { [C7300]: 14.5, [C7350]: 14.5, [P6400]: 19.25, [P6350]: 20 },
+  legs_vega: { [C7300]: 4.25, [C7350]: 4.25, [P6400]: 4.25, [P6350]: 4.25 },
+});
+
+export const SWEEP: readonly SweepInput[] = [
+  // --- one rule, one reading ----------------------------------------------------------------
+  {
+    name: "a breach crosses its threshold and says so",
+    outcomes: ["alarm-fires"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })] }, provider: { quotes: delta(0.34) },
+    }),
+  },
+  {
+    // abs compares magnitudes, so a put's negative delta fires against a positive threshold
+    name: "a put's negative delta breaches an absolute threshold",
+    outcomes: ["alarm-fires"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1", option_type: "PUT", strike: 6400, threshold: 0.2 })] },
+      provider: { quotes: { [P6400]: quote("SPXW 261218 6400P", 4.5, -0.22) } },
+    }),
+  },
+  {
+    name: "a breach that ends says so",
+    outcomes: ["alarm-clears"],
+    world: world({ tables: { monitors: [ringing(600)] }, provider: { quotes: delta(0.27) } }),
+  },
+  {
+    name: "inside the cooldown the bell flips and the message waits",
+    outcomes: ["alarm-cooldown-holds-the-message"],
+    world: world({ tables: { monitors: [ringing(60)] }, provider: { quotes: delta(0.27) } }),
+  },
+  {
+    name: "a breach that persists is repeated on its cadence",
+    outcomes: ["alarm-reminds"],
+    world: world({ tables: { monitors: [ringing(1800)] }, provider: { quotes: delta(0.36) } }),
+  },
+  {
+    name: "a breach that persists inside its cadence only records the reading",
+    outcomes: ["alarm-steady"],
+    world: world({ tables: { monitors: [ringing(600)] }, provider: { quotes: delta(0.36) } }),
+  },
+  {
+    // nothing configured counts as delivered: the bell rings in the database and on no phone
+    name: "with Telegram not configured a breach is recorded and nobody is told",
+    outcomes: ["telegram-not-configured"],
+    world: world({
+      settings: { TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "" },
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { quotes: delta(0.34) },
+    }),
+  },
+
+  // --- combos -------------------------------------------------------------------------------
+  {
+    name: "a combo is the signed sum of its legs from one call",
+    outcomes: ["combo-is-a-signed-sum"],
+    world: world({ tables: { monitors: [combo({ id: "mon-2" })] }, provider: { quotes: BOOK } }),
+  },
+  {
+    name: "a combo with a leg unpriced is not evaluated at all",
+    outcomes: ["combo-skipped-for-a-missing-leg", "silence-counted"],
+    world: world({
+      tables: { monitors: [combo({ id: "mon-2" })] }, provider: { quotes: except(BOOK, C7350) },
+    }),
+  },
+
+  // --- rules it cannot evaluate -------------------------------------------------------------
+  {
+    // priced, but the watched figure is not in the quote: counted, not yet quarantined
+    name: "a figure that does not arrive is counted and nothing is said",
+    outcomes: ["silence-counted"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75 } } },
+    }),
+  },
+  {
+    name: "a figure that never arrives is quarantined at the limit",
+    outcomes: ["quarantined-for-a-figure-that-never-arrives"],
+    world: world({
+      settings: { QUARANTINE_AFTER_SILENT_SWEEPS: "3" },
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75 } } },
+      sweeps: earlier([null, null]),
+    }),
+  },
+  {
+    // and the rest of the sweep still alarms
+    name: "a contract the Provider does not know is quarantined and never deleted",
+    outcomes: ["quarantined-for-an-unknown-contract", "alarm-fires"],
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-1" }),
+          monitor({ id: "mon-3", strike: 7350, threshold: 0.1 }),
+        ],
+      },
+      provider: { quotes: except(BOOK, C7300), unknown: [C7300] },
+    }),
+  },
+  {
+    // a combo's codes are built from its strike date, so a date the service refuses is a row it
+    // cannot read at all; the healthy rule beside it is still swept
+    name: "a row the engine cannot read is quarantined and the rest is swept",
+    outcomes: ["quarantined-for-an-unreadable-row"],
+    world: world({
+      tables: {
+        monitors: [monitor({ id: "mon-1" }), combo({ id: "mon-2", strike_date: "not-a-date" })],
+      },
+      provider: { quotes: delta(0.25) },
+    }),
+  },
+
+  // --- expiry -------------------------------------------------------------------------------
+  {
+    name: "an expired rule is muted with a notice and no longer fetched",
+    outcomes: ["expired-and-muted"],
+    world: world({ tables: { monitors: [monitor({ id: "mon-1", strike_date: EXPIRED })] } }),
+  },
+  {
+    // past its grace period while still enabled: the service was down when it expired
+    name: "a rule expired past its grace period is removed with a notice",
+    outcomes: ["expired-and-removed"],
+    world: world({ tables: { monitors: [monitor({ id: "mon-1", strike_date: "2026-10-30" })] } }),
+  },
+  {
+    // the links go first, or the foreign key refuses; the holding stays
+    name: "a muted rule past its grace period is removed quietly with its links",
+    outcomes: ["expired-and-removed-quietly"],
+    world: world({
+      tables: {
+        positions: [position({
+          id: "pos-oct", name: "oct-condor", strike_date: "2026-10-30", opened_at: null,
+        })],
+        monitors: [monitor({
+          id: "mon-1", strike_date: "2026-10-30", enabled: 0, disabled_reason: "expired",
+          scope: "leg",
+        })],
+        monitor_positions: [link("mon-1", "pos-oct")],
+      },
+    }),
+  },
+
+  // --- the Provider, over several sweeps ----------------------------------------------------
+  {
+    name: "one failed sweep is counted and nothing is said",
+    outcomes: ["provider-down-counted"],
+    world: world({ tables: { monitors: [monitor({ id: "mon-1" })] }, provider: { down: DOWN } }),
+  },
+  {
+    name: "the fifth consecutive failure says monitoring is degraded",
+    outcomes: ["degraded-notice"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { down: DOWN },
+      sweeps: earlier([DOWN, DOWN, DOWN, DOWN]),
+    }),
+  },
+  {
+    name: "an outage still going after the repeat interval is said again with its length",
+    outcomes: ["still-degraded-reminder"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { down: DOWN },
+      // the fifth of these announced it, exactly one repeat interval before the clock
+      sweeps: earlier([DOWN, DOWN, DOWN, DOWN, DOWN], 15, 1800),
+    }),
+  },
+  {
+    name: "the first sweep to work after an announced outage says it recovered",
+    outcomes: ["recovered-notice"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { quotes: delta(0.25) },
+      sweeps: earlier([DOWN, DOWN, DOWN, DOWN, DOWN]),
+    }),
+  },
+  {
+    // failures that never run five in a row, five times in fifteen minutes
+    name: "a Provider that keeps dropping and recovering is called unreliable",
+    outcomes: ["flapping-notice"],
+    world: world({
+      tables: { positions: [position({ id: "pos-1" })] },
+      provider: { down: DOWN },
+      sweeps: earlier([DOWN, null, DOWN, null, DOWN, null, DOWN, null], 60),
+    }),
+  },
+
+  // --- holdings -----------------------------------------------------------------------------
+  {
+    // a holding joins the batch whether or not a rule watches it
+    name: "the day's sample is recorded for a holding nothing watches",
+    outcomes: ["sample-recorded"],
+    world: world({ tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: BOOK } }),
+  },
+  {
+    name: "the day's sample is rewritten when the mark moves",
+    outcomes: ["sample-rewritten-when-it-moves"],
+    world: world({
+      tables: {
+        positions: [position({ id: "pos-1" })], position_samples: [{ ...todays, cost_to_close: 3.5 }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    name: "the day's sample is not rewritten when nothing moved",
+    outcomes: ["sample-not-rewritten-when-unchanged"],
+    world: world({
+      tables: { positions: [position({ id: "pos-1" })], position_samples: [todays] },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    name: "no sample is recorded while a leg is unpriced",
+    outcomes: ["sample-skipped-for-an-unpriced-leg"],
+    world: world({
+      tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: except(BOOK, P6350) },
+    }),
+  },
+  {
+    name: "a holding inside its manage-by window is announced once with its pace",
+    outcomes: ["manage-by-notice", "sample-recorded"],
+    world: world({ tables: { positions: [november] }, provider: { quotes: NOVEMBER_QUOTES } }),
+  },
+  {
+    // undelivered, so not stamped: owed to the next sweep rather than lost for ever
+    name: "a manage-by notice Telegram did not take is owed rather than stamped",
+    outcomes: ["manage-by-notice-undelivered-is-owed"],
+    world: world({ telegram: "down", tables: { positions: [november] } }),
+  },
+  {
+    name: "an empty book is swept without asking the Provider anything",
+    outcomes: ["nothing-to-sweep"],
+    world: world(),
+  },
+];

@@ -1,0 +1,144 @@
+{
+  "name": "/combo names nothing it cannot find",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": "leg",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 1,
+          "last_value": 0.312,
+          "last_checked_at": "2026-11-09 14:59:45.000000",
+          "last_alarm_at": "2026-11-09 14:40:00.000000",
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-2",
+          "code": "dec-calls",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "scope": "calls",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": -1,
+          "last_checked_at": "2026-11-09 14:59:45.000000",
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-1",
+          "position_id": "pos-1"
+        },
+        {
+          "monitor_id": "mon-2",
+          "position_id": "pos-1"
+        }
+      ],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "update": {
+    "update_id": 1,
+    "message": {
+      "chat": {
+        "id": 42
+      },
+      "text": "/combo dec-puts"
+    }
+  },
+  "expect": {
+    "reply": {
+      "chat_id": "42",
+      "text": "No combo named 'dec-puts'.",
+      "parse_mode": null
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

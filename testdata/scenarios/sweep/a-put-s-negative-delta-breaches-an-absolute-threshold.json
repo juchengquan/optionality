@@ -1,0 +1,104 @@
+{
+  "name": "a put's negative delta breaches an absolute threshold",
+  "outcomes": [
+    "alarm-fires"
+  ],
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218P6400000": {
+          "name": "SPXW 261218 6400P",
+          "mid_price": 4.5,
+          "bid_price": 4.45,
+          "ask_price": 4.55,
+          "last_price": 4.5,
+          "option_delta": -0.22,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218P6400000",
+          "strike_date": "2026-12-18",
+          "option_type": "PUT",
+          "strike": 6400,
+          "field": "option_delta",
+          "threshold": 0.2,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "expect": {
+    "messages": [
+      "⚠️ SPXW 261218 6400P: option_delta -0.220 fell ≤ -0.2"
+    ],
+    "rows": {
+      "monitors": {
+        "changed": [
+          {
+            "key": {
+              "id": "mon-1"
+            },
+            "from": {
+              "triggered": 0,
+              "last_value": null,
+              "last_checked_at": null,
+              "last_alarm_at": null
+            },
+            "to": {
+              "triggered": 1,
+              "last_value": -0.22,
+              "last_checked_at": "2026-11-09 15:00:00.000000",
+              "last_alarm_at": "2026-11-09 15:00:00.000000"
+            }
+          }
+        ]
+      }
+    },
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}

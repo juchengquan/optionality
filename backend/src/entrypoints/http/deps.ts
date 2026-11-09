@@ -15,6 +15,10 @@ export interface Deps {
   db: DatabaseSync;
   /** Injectable so that a test can state the time rather than wait for it. */
   now(): Date;
+  /** The id a write mints, injectable for the same reason as `now`: a door scenario (ADR 0021)
+   *  records the rows a request wrote, and a random id there could only be scrubbed after the
+   *  fact. Absent, as it is in `main.ts`, a write mints a uuid (`db/values.newId`). */
+  newId?(): string;
   sweeper: SweeperPort;
   /** Where market data comes from: its name and state for `/health`, and the one bounded call the
    *  creation probes and the live routes make (ADR 0015).

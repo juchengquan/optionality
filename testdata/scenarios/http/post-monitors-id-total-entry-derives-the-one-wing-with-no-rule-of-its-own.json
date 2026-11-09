@@ -1,0 +1,200 @@
+{
+  "name": "POST /monitors/{id}/total-entry derives the one wing with no rule of its own",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-calls",
+          "name": "dec-call-spread",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 2.5,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null
+        },
+        {
+          "id": "pos-puts",
+          "name": "dec-put-spread",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": null,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-calls",
+          "code": "dec-calls",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "scope": "all",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-condor",
+          "code": "dec-condor",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "scope": "all",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-calls",
+          "position_id": "pos-calls"
+        },
+        {
+          "monitor_id": "mon-condor",
+          "position_id": "pos-calls"
+        },
+        {
+          "monitor_id": "mon-condor",
+          "position_id": "pos-puts"
+        }
+      ],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/monitors/mon-condor/total-entry",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "entry": 6.4
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "ok": true
+      }
+    },
+    "rows": {
+      "positions": {
+        "changed": [
+          {
+            "key": {
+              "id": "pos-puts"
+            },
+            "from": {
+              "entry": null
+            },
+            "to": {
+              "entry": 3.9
+            }
+          }
+        ]
+      }
+    },
+    "calls": {}
+  }
+}
