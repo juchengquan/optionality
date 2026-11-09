@@ -82,10 +82,6 @@ export const BACKLOG = [
   "schemas/position.ts",
   "schemas/reference.ts",
   "schemas/sources.ts",
-  "vendors/ibkr/vendor.ts",
-  "vendors/index.ts",
-  "vendors/opend/vendor.ts",
-  "vendors/yahoo/vendor.ts",
   "watchlist.ts",
 ];
 
