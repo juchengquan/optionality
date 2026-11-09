@@ -1,0 +1,34 @@
+{
+  "conversation": "never-answers",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [
+    "US.SPXW261218C8100000",
+    "US.SPXW261218C8200000"
+  ],
+  "expect": {
+    "records": [
+      {
+        "code": "US.SPXW261218C8100000",
+        "delayed": false,
+        "last_known": false,
+        "bid_price": 4.1,
+        "ask_price": 4.5,
+        "prev_close_price": 3.65,
+        "option_delta": 0.03210521375811607,
+        "option_gamma": 0.00021436871413159725,
+        "option_vega": 1.9762596873379437,
+        "option_theta": -0.32748349484896266,
+        "option_implied_volatility": 13.795658209227243,
+        "mid_price": 4.3
+      }
+    ],
+    "unknown": []
+  }
+}

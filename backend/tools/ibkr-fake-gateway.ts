@@ -1,18 +1,18 @@
 /** A stub IB Gateway on a port, for driving the socket client by hand.
  *
  *      make ibkr-fake-gateway
- *      make ibkr-fake-gateway ARGS="--port 4099 --no-figures"
+ *      make ibkr-fake-gateway ARGS="--port 4099 --conversation link-down"
  *
- *  It answers NO real market data: every reply is a byte sequence recorded from the official
- *  Python client (what we send) and from the real gateway on this machine (what comes back), on
- *  2026-11-08 at protocol 157. A session against this proves the CLIENT works and is never
- *  evidence about IB Gateway, an account's entitlements, or a live market — the same warning
- *  `ibkr-fake-gateway.ts` carries, for the same reason.
+ *  It answers NO real market data: it replays one conversation from
+ *  `testdata/vendors/ibkr-gateway/`, each of which says whether it was recorded from the real
+ *  gateway on this machine or constructed, and why. A session against this proves the CLIENT
+ *  works and is never evidence about IB Gateway, an account's entitlements, or a live market.
  *
- *  The replies live in the library's `typescript/src/vendors/ibkr/fake.ts`, reached by its
- *  published name, so that the library's suite and this tool cannot drift apart.
+ *  The replaying is the library's `typescript/src/vendors/ibkr/fake.ts`, reached by its
+ *  published name, so that the library's suite and this tool cannot drift apart — and the files
+ *  are the ones a Python stub replays to `ib_async` (ADR 0021), so neither can the two languages.
  */
-import { startFakeGateway } from "optionality/vendors/ibkr/fake";
+import { DEFAULT_CONVERSATION, startFakeGateway } from "optionality/vendors/ibkr/fake";
 
 const args = process.argv.slice(2);
 function option(name: string): string | undefined {
@@ -21,15 +21,12 @@ function option(name: string): string | undefined {
 }
 
 const port = Number(option("port") ?? 4099);
-const options = {
-  noFigures: args.includes("--no-figures"),
-  silent: args.includes("--silent"),
-  refuseSession: args.includes("--refuse") ? "client id is already in use" : undefined,
-  serverVersion: option("server-version") ? Number(option("server-version")) : undefined,
-};
+const conversation = option("conversation") ?? DEFAULT_CONVERSATION;
+const serverVersion = option("server-version") ? Number(option("server-version")) : undefined;
 
-const gateway = await startFakeGateway(port, options);
-const shape = Object.entries(options).filter(([, v]) => v !== undefined && v !== false)
-  .map(([k, v]) => `${k}=${v}`).join(" ");
+const gateway = await startFakeGateway(port, { conversation, serverVersion });
+const { provenance, summary, ask } = gateway.conversation;
 console.log(`fake IB Gateway on 127.0.0.1:${gateway.port} — answers NO real market data`);
-if (shape) console.log(`  pretending: ${shape}`);
+console.log(`  replaying: ${conversation} (${provenance.kind}) — ${summary}`);
+console.log(`  recorded for: ${ask.join(", ")}`);
+if (serverVersion !== undefined) console.log(`  pretending: serverVersion=${serverVersion}`);

@@ -1,0 +1,16 @@
+{
+  "conversation": "session-never-starts",
+  "summary": "The greeting arrives and startApi is never answered: no managedAccounts, no nextValidId.",
+  "provenance": {
+    "kind": "constructed",
+    "observed": "Not from IB Gateway. A provider that accepts a connection and then says nothing is the 2026-10-16 incident's shape, which was moomoo's OpenD.",
+    "why": "No gateway here can be made to behave this way on demand.",
+    "built": "normal-with-greeks' greeting (recorded 2026-11-09), and nothing after it."
+  },
+  "ask": ["US.SPXW261218C8100000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": []
+  },
+  "exchanges": []
+}

@@ -207,15 +207,18 @@ deploy:
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
 
-# A stub IB Gateway speaking the SOCKET protocol, for driving the TWS client by hand. Its replies
-# are recorded from the official Python client and from the real gateway (2026-11-08, protocol
-# 157), not invented — a stub written from the same reading as the decoder agrees with it, and
-# agrees wrongly if the reading was wrong. Proves the client, never the provider.
+# A stub IB Gateway speaking the SOCKET protocol, for driving the TWS client by hand. It replays a
+# conversation from testdata/vendors/ibkr-gateway/ (ARGS="--conversation <name>"), each recorded
+# from the real gateway or constructed and labelled so, never invented in the stub — a stub
+# written from the same reading as the decoder agrees with it, and agrees wrongly if the reading
+# was wrong. Proves the client, never the provider.
 ibkr-fake-gateway:
 	node backend/tools/ibkr-fake-gateway.ts $(ARGS)
 
 # The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
-# reproduce exactly. Generated, never edited; `test-lib` fails too when they are stale.
+# reproduce exactly. Generated, never edited; `test-lib` fails too when they are stale. The same
+# pass writes the vendor corpus and what the IB Gateway client makes of each recorded conversation
+# (testdata/vendors/ibkr-gateway/expected/, ADR 0021), replayed over loopback in about a second.
 #
 # TZ=UTC, for the same reason typescript/vitest.config.ts pins it: a function with a default zone
 # reads the RUNNING machine's, so `displayTime(when)` wrote +08:00 here and would write +01:00 in

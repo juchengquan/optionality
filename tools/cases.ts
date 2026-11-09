@@ -10,12 +10,13 @@
  *  would have been that package reaching into another's source tree — the one thing
  *  check-boundaries exists to refuse. Its peers here do the same: they all read or write across
  *  every package. */
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import { buildCases, buildFrom, render } from "../typescript/src/cases/build.ts";
 import { VENDOR_INPUTS, VENDOR_MODULES } from "../typescript/src/cases/vendors.ts";
 import { goldenHash, pythonStamp, tsStamp } from "../typescript/src/cases/stamp.ts";
+import { GATEWAY_CASES, expectations } from "../typescript/src/vendors/ibkr/replay.ts";
 
 const REPO = new URL("..", import.meta.url).pathname;
 const check = process.argv.includes("--check");
@@ -62,6 +63,27 @@ for (const [name, file] of Object.entries(buildFrom(VENDOR_INPUTS, VENDOR_MODULE
   if (check) {
     if (!existsSync(path) || readFileSync(path, "utf8") !== text) stale.push(`vendors/${name}.json`);
   } else writeFileSync(path, text);
+}
+
+// what the IB Gateway client makes of each recorded conversation (ADR 0021, Decision 7), outside
+// the fingerprint for the vendor corpus' reason. The recordings are INPUTS and are read from this
+// repository whatever `--root` says, as `inputs.ts` is; only `expected/` is written. A file there
+// with no recording is reported rather than deleted: the generator writes, it does not prune.
+const GATEWAY_OUT = join(ROOT, GATEWAY_CASES, "expected");
+mkdirSync(GATEWAY_OUT, { recursive: true });
+const gateway = await expectations();
+for (const [name, text] of Object.entries(gateway)) {
+  const path = join(GATEWAY_OUT, `${name}.json`);
+  if (check) {
+    if (!existsSync(path) || readFileSync(path, "utf8") !== text) {
+      stale.push(`vendors/ibkr-gateway/expected/${name}.json`);
+    }
+  } else writeFileSync(path, text);
+}
+for (const file of readdirSync(GATEWAY_OUT).filter((f) => f.endsWith(".json"))) {
+  if (file.replace(/\.json$/, "") in gateway) continue;
+  if (check) stale.push(`vendors/ibkr-gateway/expected/${file} (no recording)`);
+  else console.warn(`${GATEWAY_CASES}/expected/${file} has no recording — delete it`);
 }
 
 const hash = goldenHash(rendered);

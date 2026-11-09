@@ -1,0 +1,40 @@
+{
+  "conversation": "feed-held-elsewhere",
+  "summary": "The account's market data held by another session: the same silence as an unentitled account, behind a session that starts normally.",
+  "provenance": {
+    "kind": "constructed",
+    "observed": "2026-11-09, with the account's market data held by another login: the gateway accepted every request and answered none (ADR 0021's design session).",
+    "why": "This file is not that session's bytes. Holding the feed from a second session on purpose would need the owner's live login, which is not this tool's to use.",
+    "built": "normal-with-greeks' handshake, farm notices included (recorded 2026-11-09), and its lookup with no reply, as ADR 0021 describes the observation: every request accepted, nothing back."
+  },
+  "ask": ["US.SPXW261218C8100000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["15", "1", "DU0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:hfarm"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+      ["4", "2", "-1", "2107", "HMDS data farm connection is inactive but should be available upon demand.apachmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [],
+      "atMs": []
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "conversation": "unknown-contract",
+  "summary": "The control, then a strike SPXW does not list (8101): the lookup is refused with 200, and no market data is asked for it.",
+  "provenance": {
+    "kind": "recorded",
+    "at": "2026-11-09T11:21:24Z",
+    "gateway": "IB Gateway 10.52 (build 10521) on the owner's machine, port 4002, logged in to a paper account, with the Read-Only API switch on",
+    "protocol": 157,
+    "how": "Asked with the library's own encoders (handshake.ts, messages.ts) on client id 9201, the same messages in the same order as IbkrClient: the greeting, startApi, reqMarketDataType(4), then per code reqContractDetails, reqMktData as a snapshot and cancelMktData, with no market data asked for a code whose lookup found nothing. Every frame was logged in both directions before anything decoded it. One difference from IbkrClient, on purpose: each market-data request was listened to until the gateway's snapshot end (57) rather than for IbkrClient's 250ms of quiet, so the replies are the gateway's whole answer rather than what one client's window caught.",
+    "market": "Monday 2026-11-09, around 06:15 New York. SPXW options were trading in Cboe's global trading hours, so the gateway served the LIVE grade (1) although DELAYED_FROZEN (4) was asked; the cash index was not being calculated.",
+    "altered": [
+      "handshake.onStartApi[0]: the managed account, replaced by DU0000000, which has its shape (DU and seven characters) and is not it. The number is the owner's and this file is committed."
+    ],
+    "timing": "atMs is each reply's arrival, in milliseconds after its request was sent. A replay ignores it; it is kept because it is evidence (see notes)."
+  },
+  "ask": ["US.SPXW261218C8100000", "US.SPXW261218C8101000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:21:23 SGT"],
+    "onStartApi": [
+      ["15", "1", "DU0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:hfarm"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+      ["4", "2", "-1", "2107", "HMDS data farm connection is inactive but should be available upon demand.apachmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [
+        ["10", "8", "$reqId", "SPX", "OPT", "20261218 15:00 US/Central", "8100", "C", "SMART", "USD", "SPXW  261218C08100000", "SPXW", "SPXW", "902390015", "0.05", "1", "100", "ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,DIS,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NGCOMB,NONALGO,OCA,OPENCLOSE,PEGMIDVOL,PEGMKTVOL,PEGPRMVOL,PEGSRFVOL,POSTONLY,PRICECHK,REL,RELPCTOFS,RELSTK,RTH,SCALE,SCALERST,SIZECHK,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF", "SMART,CBOE,IBUSOPT", "1", "416904", "S&P 500 Stock Index", "", "202612", "Indices", "Broad Range Equity Index", "*", "US/Central", "20261108:1915-20261109:0825;20261109:0830-20261109:1600;20261109:1915-20261110:0825;20261110:0830-20261110:1600;20261110:1915-20261111:0825;20261111:0830-20261111:1600;20261111:1915-20261112:0825;20261112:0830-20261112:1600;20261112:1915-20261113:0825;20261113:0830-20261113:1600", "20261109:0830-20261109:1515;20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "", "", "0", "2", "SPX", "IND", "110,110,110", "20261218", ""],
+        ["52", "1", "$reqId"]
+      ],
+      "atMs": [86, 86]
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["1", "11", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", "1", "0", ""],
+      "replies": [
+        ["81", "$reqId", "0.05", "c70003", "3"],
+        ["58", "1", "$reqId", "1"],
+        ["1", "6", "$reqId", "1", "4.20", "129", "0"],
+        ["1", "6", "$reqId", "2", "4.60", "54", "0"],
+        ["2", "6", "$reqId", "8", "0"],
+        ["1", "6", "$reqId", "9", "3.65", "0", "0"],
+        ["46", "6", "$reqId", "32", "C"],
+        ["46", "6", "$reqId", "33", "C"],
+        ["21", "$reqId", "13", "0", "0.13635320870155307", "0.03284209377294264", "4.2134216408451834", "13.815378082166315", "2.2067750166468217E-4", "2.016363996552286", "-0.3307472642579796", "7429.21875"],
+        ["21", "$reqId", "10", "0", "0.13581063860717796", "0.032325648733535405", "4.199999809265137", "13.815378082166315", "2.1869355492923494E-4", "1.7637371436555236", "-0.33187727451275095", "7430.6689453125"],
+        ["21", "$reqId", "11", "0", "0.13798691298085872", "0.03454646372134879", "4.599999904632568", "13.815378082166315", "2.2734785796578842E-4", "1.862914190983986", "-0.3560187119711053", "7430.6689453125"],
+        ["21", "$reqId", "12", "0", "-1", "-2", "-1", "13.815378082166315", "-2", "-2", "-2", "7430.56884765625"],
+        ["57", "1", "$reqId"]
+      ],
+      "atMs": [46, 269, 269, 270, 490, 490, 712, 712, 1008, 1997, 1997, 11108, 11108],
+      "onCancel": [
+        ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
+      ]
+    },
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8101.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8101.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [
+        ["4", "2", "$reqId", "200", "No security definition has been found for the request"]
+      ],
+      "atMs": [180]
+    }
+  ]
+}

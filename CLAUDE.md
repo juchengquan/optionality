@@ -112,6 +112,17 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
   repo-wide codegen step rather than something the library may do. Both stamps are generated and
   committed; `make check-cases` fails when either is stale.
+  **A THIRD corpus**, `testdata/vendors/ibkr-gateway/`, holds the two IB Gateway clients of ADR
+  0021 (Decision 7) — this one, hand-written, and the Python backend's, on `ib_async` — to "the
+  same recording in, the same quote batch out". Its `*.json` are RECORDINGS: what the gateway
+  sends, message by message, every field the exact text the wire carried, each file saying in
+  `provenance` whether it was captured (when, which gateway, how, and every byte altered since)
+  or constructed (why, and from what). They are inputs; `make cases` never writes them, and
+  `recordings.test.ts` refuses one that says neither, or that carries an account number other than
+  the placeholder. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
+  replayed through the fake by `ibkr/replay.ts`, every reply at once. `make check-cases` and
+  `cases/gateway.test.ts` fail when one is stale, missing, or has no recording; outside the
+  fingerprint for the vendor corpus' reason. Its README is written for the Python stub's author.
 - **Door scenarios** (ADR 0021, phase 1c): `testdata/scenarios/{http,bot,sweep}/` — a stated world
   (rows, `.env` lines, what each vendor answers, the clock), ONE request, Telegram update or sweep
   tick, and exactly what the service did: the response or reply, the rows it changed, the messages
@@ -125,13 +136,20 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `disabled_reason`s it writes. Ids and the clock are INJECTED (`Deps.newId`, `BotDeps.newId`), not
   scrubbed. `testdata/scenarios/README.md` is the format, for a runner in another language.
 - **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
-  `ibkr/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
-  from the official Python client with `sendMsg` intercepted at protocol 157, and what the gateway
-  replies is what the real gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-08.
+  `ibkr/` client by hand (`ARGS="--conversation link-down"` picks what it replays). It says nothing
+  of its own: it replays one conversation from `testdata/vendors/ibkr-gateway/` (above), the same
+  files a Python stub will replay to `ib_async`. `normal-with-greeks`, the default, is what the real
+  gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-09, byte for byte. The stub's
+  inline replies of 2026-11-08 were retired with that move, because three things in them no
+  capture shows: a contract reply cut to the fifteen fields this client reads (`ib_async` reads
+  all thirty-nine and ran off the end), nextValidId sent before managedAccounts, and a gateway
+  clock in a format the gateway does not use. Their figures survive in
+  `testdata/vendors/ibkr-fields.json`.
   One definition, in the library's `typescript/src/vendors/ibkr/fake.ts` (`optionality/vendors/ibkr/fake`
   to the backend's `tools/ibkr-fake-gateway.ts`), shared with the library's suite so the two cannot
-  drift — and, with `vendors/fields.ts`, one of the two doors of the library's vendor seam that
-  `check-seams` lets anything import, because it is the fake GATEWAY and not a client. A run
+  drift — and, with `vendors/fields.ts` and `ibkr/replay.ts`, one of the three doors of the
+  library's vendor seam that `check-seams` lets anything import: it is the fake GATEWAY and not a
+  client, and `replay.ts` runs a client only against a stub it starts itself. A run
   against it proves the CLIENT and is never evidence about a provider, an account's entitlements,
   a dead session or an open market.
   This name is REUSED rather than new: `ibkr-fake-gateway` served the Client Portal stub until
@@ -184,9 +202,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but
   the two `fields.ts` modules, because a door that reached a client would typecheck the moomoo
   SDK's declarations into the case generator, which calls neither. `ibkr/fake.ts` is the fake
-  gateway (`make ibkr-fake-gateway`). The interior is a seam: only the backend's `vendors/` may
-  import a client — `check-seams` names it the one `insider`, and resolves the backend's imports BY
-  NAME through `exports` to the file they land on), `cases/` (the golden cases' inputs and
+  gateway (`make ibkr-fake-gateway`), replaying `ibkr/recordings.ts`'s files, and `ibkr/replay.ts`
+  turns each into its expected batch for `make cases` — a door that takes no host and no port.
+  The interior is a seam: only the backend's `vendors/` may import a client — `check-seams`
+  names it the one `insider`, and resolves the backend's imports BY NAME through `exports` to the
+  file they land on), `cases/` (the golden cases' inputs and
   builder) and `golden.ts` (the stamp `/health` carries). `package.json`'s `exports` name what is
   public — `./domain/*`, `./quotes`, `./golden`, `./vendors/fields`, each vendor's client, OpenD's
   probe and the fake gateway — and Node refuses the rest, so `wire.ts`, `socket.ts` and their
@@ -267,11 +287,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
   that is where the batch they read happened to be.
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
-  generated test data, both written by `make cases`). `tools/check-boundaries.mjs` — the
-  package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
-  service; `tools/check-seams.mjs` — the same rule INSIDE a package, for a directory whose whole
-  point is one door (`backend/src/vendors/`, `typescript/src/vendors/`, `src/engine/` and
-  `src/entrypoints/`). Its `SEAMS` table carries each seam's doors, a `never` that
+  generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
+  Gateway conversations (inputs) beside the batches `make cases` generates from them.
+  `tools/check-boundaries.mjs` — the package-boundary lint; `tools/check-test-support.mjs` — the
+  one that keeps the harness out of the service; `tools/check-seams.mjs` — the same rule INSIDE a
+  package, for a directory whose whole point is one door (`backend/src/vendors/`,
+  `typescript/src/vendors/`, `src/engine/` and `src/entrypoints/`). Its `SEAMS` table carries
+  each seam's doors, a `never` that
   says what may not become one, and the reason, printed on failure. A seam reached from ANOTHER
   package declares its `package`, so a name like `optionality/vendors/ibkr/client` is resolved
   through `exports` and caught like a path; its `insiders` must themselves be seams, so the
@@ -291,11 +313,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   service does not already watch, and a notebook wanting an arbitrary code wants a Provider.
   `yahoo.py` is the
   second PORT beside `opend.py`, and `ibkr.py` a third — though `ibkr.py` is the MAPPING only, with
-  no client yet: that half can only be verified against `make ibkr-fake-gateway`, and driving a Node
-  stub from pytest would make `make test` depend on the TypeScript tree, which it does not today.
-  The stub now answers `managedAccounts` because `ib_async` will not report a connection until the
+  no client yet. Driving the Node stub from pytest would make `make test` depend on the TypeScript
+  tree, which it does not today; the client's half is to be held instead by a Python stub replaying
+  `testdata/vendors/ibkr-gateway/` to `ib_async` (ADR 0021, phase 4), against the batches there.
+  The stub answers `managedAccounts` because `ib_async` will not report a connection until the
   accounts list is populated — recorded in SHAPE (one nine-character "DU" paper account) with the
-  identifier replaced, since `fake.ts` is committed. `yahoo.py` is the
+  identifier replaced, since the recordings are committed. `yahoo.py` is the
   second PORT beside `opend.py`, answering the same `QuoteFetcher` through yfinance — library for
   library with `yahoo/client.ts`, which uses `yahoo-finance2` because a bare fetch is refused with
   429, and both surface Yahoo's own field names so the mapping is the same mapping. Only `quotes.py`

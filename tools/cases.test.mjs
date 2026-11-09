@@ -23,6 +23,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 const ROOT = new URL("..", import.meta.url).pathname;
 const STAMPS = ["typescript/src/golden.ts", "python/src/optionality/_ported.py"];
 const A_CASE_FILE = "testdata/golden/alarm.json";
+/** One of the IB Gateway expectations (ADR 0021, Decision 7): generated in the same pass, into
+ *  its own directory, from recordings the generator READS from this repository. */
+const AN_EXPECTATION = "testdata/vendors/ibkr-gateway/expected/link-down.json";
 
 let tree;
 
@@ -50,6 +53,21 @@ describe("make check-cases", () => {
     expect(() => run("--check")).toThrow(/stale golden cases: alarm\.json/);
   });
 
+  it("fails when an IB Gateway expectation is stale, and when one has no recording", () => {
+    // the replayed batches are a third corpus with a third loop in the generator, and a loop that
+    // wrote but never compared would leave `--check` green over any edit to a recording
+    regenerate();
+    const path = join(tree, AN_EXPECTATION);
+    writeFileSync(path, inTree(AN_EXPECTATION).replace("answered none", "answered one"));
+    expect(() => run("--check"))
+      .toThrow(/stale golden cases:.*ibkr-gateway\/expected\/link-down\.json/);
+    regenerate();
+    const orphan = "testdata/vendors/ibkr-gateway/expected/nobody-recorded-this.json";
+    writeFileSync(join(tree, orphan), "{}\n");
+    expect(() => run("--check")).toThrow(/nobody-recorded-this\.json \(no recording\)/);
+    // four runs of the generator, each replaying every conversation over a loopback socket
+  }, 30_000);
+
   for (const stamp of STAMPS) {
     it(`fails when ${stamp} does not match the cases`, () => {
       regenerate();
@@ -73,13 +91,14 @@ describe("make check-cases", () => {
     // The reason `--root` exists. Running the generator is the only honest way to test it, and a
     // test that repairs the corpus defeats the check it is testing — so this asserts the
     // separation itself rather than trusting the option.
-    const committed = [A_CASE_FILE, ...STAMPS];
+    const committed = [A_CASE_FILE, AN_EXPECTATION, ...STAMPS];
     const digest = (path) => createHash("sha256").update(readFileSync(join(ROOT, path))).digest("hex");
     const before = committed.map(digest);
     regenerate();
     expect(committed.map(digest), "the generator wrote into this repository").toEqual(before);
     // and it really did write, so the comparison above is not vacuous
     expect(inTree(A_CASE_FILE).length).toBeGreaterThan(0);
+    expect(inTree(AN_EXPECTATION)).toContain('"$throws"');
     for (const stamp of STAMPS) expect(inTree(stamp)).toMatch(/[0-9a-f]{12}/);
   });
 });

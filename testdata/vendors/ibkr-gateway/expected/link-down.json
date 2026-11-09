@@ -1,0 +1,17 @@
+{
+  "conversation": "link-down",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [
+    "US.SPXW261218C8100000"
+  ],
+  "expect": {
+    "$throws": "IB Gateway accepted 1 request(s) and answered none of them — its link to IBKR may be down while its own socket is still open"
+  }
+}

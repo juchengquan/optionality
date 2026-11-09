@@ -1,0 +1,18 @@
+{
+  "conversation": "client-id-in-use",
+  "summary": "startApi refused with 326 against request id -1, the way a client id already in use is refused.",
+  "provenance": {
+    "kind": "constructed",
+    "observed": "Not on this gateway.",
+    "why": "Opening a second connection on a client id already in use is not a read-only market-data request, so it was not asked of the gateway here. CLAUDE.md also records that IB Gateway lets a second connection on one id DISPLACE the first in silence, so whether this gateway sends 326 at all is unverified.",
+    "built": "normal-with-greeks' greeting (recorded 2026-11-09), then IBKR's documented 326 and its documented text, against request id -1, where a fault that belongs to no request is reported. The text is IBKR's wording, not captured."
+  },
+  "ask": ["US.SPXW261218C8100000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["4", "2", "-1", "326", "Unable to connect as the client id is already in use. Retry with a unique client id."]
+    ]
+  },
+  "exchanges": []
+}
