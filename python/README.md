@@ -69,7 +69,7 @@ A pinned ref, never a path into a working tree (ADR 0016) — an editable instal
 notebook whatever half-ported state that tree happens to be in:
 
 ```
-uv add "optionality @ git+https://github.com/juchengquan/optionality.git@py-2026.11.9#subdirectory=python"
+uv add "optionality @ git+https://github.com/juchengquan/optionality.git@py-2026.11.9.1#subdirectory=python"
 ```
 
 The version says WHEN it was cut; `optionality._ported.GOLDEN_CASES` says WHAT it agrees with. One

@@ -1,6 +1,6 @@
 [project]
 name = "optionality"
-version = "2026.11.9"
+version = "2026.11.9.1"
 description = "SPX options maths and moomoo access, ported from the optionality service's TypeScript and held to it by golden cases."
 readme = "README.md"
 license = "MIT"
