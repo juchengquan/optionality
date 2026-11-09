@@ -217,17 +217,25 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   loads Positions, Monitors and References from the live service (`OPTIONALITY_API` for its
   URL) — but NOT quotes: `GET /quotes` takes no parameters, so it cannot price a contract the
   service does not already watch, and a notebook wanting an arbitrary code wants a Provider.
-  Only those
-  three are not golden-cased: they mirror no domain module. Everything else is, decisions included —
-  52 of the package's 58 public functions, which is exactly the 52 of the TypeScript domain's 56
+  `yahoo.py` is the
+  second PORT beside `opend.py`, answering the same `QuoteFetcher` through yfinance — library for
+  library with `yahoo/client.ts`, which uses `yahoo-finance2` because a bare fetch is refused with
+  429, and both surface Yahoo's own field names so the mapping is the same mapping. Only `quotes.py`
+  and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
+  cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
+  fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
+  52 of the package's 63 public functions, which is exactly the 52 of the TypeScript domain's 56
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
-  package takes their knobs directly instead. Six uncased rather than five, because `js.js_string`
+  package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
+  `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and
+  `js.js_string`
   mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
   spell the conversion out.
   **`src/optionality/research/`** is the package's other half, and the only subdirectory: chains,
   historical bars, anything the service never fetches, so it mirrors no TypeScript, no golden case
   holds it and NOTHING CHECKS WHETHER IT IS RIGHT — its own `__init__.py` says so plainly rather
-  than dressing it up. `research/yahoo.py` needs the `research` extra (yfinance, reached inside the
+  than dressing it up. `research/yahoo.py` needs the `yahoo` extra (yfinance, SHARED with the Yahoo port — one
+  library, one extra; the port/research line is an import rule and not an install one), reached inside the
   function as `opend.py` reaches the SDK), separate from `opend` because the two buy different
   things and one extra would hide which a notebook asked for. The line is held structurally, not
   remembered: `test_standalone.py` refuses an import of `optionality.research` from any pure module

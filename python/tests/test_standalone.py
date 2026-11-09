@@ -52,15 +52,16 @@ failing the moment it is treated as pure.
 import ast
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "optionality"
 
-#: the three that mirror no domain module and reach the outside (CLAUDE.md): the SDK, the one
-#: fetch-and-catch, and the reader of the live service
-IMPURE = {"opend", "quotes", "api"}
+#: the modules that mirror no domain module and reach the outside (CLAUDE.md): the two vendor
+#: providers, the one fetch-and-catch, and the reader of the live service
+IMPURE = {"opend", "yahoo", "quotes", "api"}
 #: generated, and the package docstring
 NOT_A_MODULE = {"_ported", "__init__"}
 #: the two impure modules that are not PORTS: the `QuoteFetcher` contract itself, and the reader of
@@ -286,3 +287,27 @@ def test_the_maths_imports_and_computes_with_no_sdk_and_no_service(
         f"the package does not stand alone:\n{done.stdout}\n{done.stderr}"
     )
     assert done.stdout.strip().endswith("OK"), done.stdout
+
+
+def test_the_all_extra_covers_every_other_one() -> None:
+    """`all` exists so a notebook can stop thinking about extras — which only works while it is
+    complete.
+
+    Here rather than in a packaging test of its own because it is the same question as the rest of
+    this file: what does a notebook actually get when it installs this. And it is the same failure
+    shape as `hc.types.ts`'s coverage, which was true for sixteen endpoints and held by nobody — a
+    new extra added and forgotten in `all` would leave `optionality[all]` quietly incomplete, and
+    the only symptom is an ImportError in somebody's first cell.
+
+    Derived from the table rather than listed: the point is that nothing has to be remembered.
+    """
+    pyproject = tomllib.loads((PACKAGE.parents[1] / "pyproject.toml").read_text())
+    extras = pyproject["project"]["optional-dependencies"]
+    assert "all" in extras, "the `all` extra is gone"
+    others = sorted(set(extras) - {"all"})
+    assert others, "there are no other extras, so `all` is checking nothing"
+    covered = " ".join(extras["all"])
+    missing = [name for name in others if f"[{name}]" not in covered and name not in covered]
+    assert missing == [], (
+        f"`all` does not pull {', '.join(missing)} — a notebook asking for everything would not get it"
+    )
