@@ -681,6 +681,11 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "comboFieldError", name: "mid is", args: ["mid_price"] },
     { fn: "comboFieldSum", name: "a condor's mids", args: [combo, quotes, "mid_price"] },
     { fn: "comboFieldSum", name: "no partial sums", args: [combo, missingShortPut, "mid_price"] },
+    // a row that predates the rule, where every leg reports an IV: the condor's signs cancel to 0,
+    // which is a figure, and the guard answers no figure at all. The library's port had no guard and
+    // answered 0 for this, held by no case until the backend's watchlist port asked (2026-11-09)
+    { fn: "comboFieldSum", name: "never an implied volatility, whatever the legs report",
+      args: [combo, quotes, "option_implied_volatility"] },
     { fn: "monitorValue", name: "a single contract", args: [single, quotes] },
     { fn: "monitorValue", name: "a combo", args: [combo, quotes] },
     { fn: "monitorValue", name: "unpriced", args: [single, {}] },

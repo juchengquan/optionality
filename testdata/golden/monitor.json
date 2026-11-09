@@ -259,6 +259,93 @@
       "expect": null
     },
     {
+      "fn": "comboFieldSum",
+      "name": "never an implied volatility, whatever the legs report",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "mid_price": 1.5,
+            "option_delta": -0.08,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6500000": {
+            "mid_price": 3,
+            "option_delta": -0.15,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.1,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7100000": {
+            "mid_price": 5,
+            "option_delta": 0.18,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 3.4,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120C7150000": {
+            "mid_price": 2,
+            "option_delta": 0.1,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          },
+          "US.SPXW261120P6000000": {
+            "mid_price": 8,
+            "option_delta": -0.02,
+            "option_gamma": 0.001,
+            "option_theta": -0.4,
+            "option_vega": 2.5,
+            "option_implied_volatility": 18.5,
+            "option_contract_size": 100
+          }
+        },
+        "option_implied_volatility"
+      ],
+      "expect": null
+    },
+    {
       "fn": "monitorValue",
       "name": "a single contract",
       "args": [

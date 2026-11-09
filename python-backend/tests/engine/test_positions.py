@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from harness import FakeFetch, fake_fetcher
+from harness import FakeProvider, fake_fetcher
 from optionality.contract import build_spx_code
 from sweep import SINGLE_CODE as CODE
 from sweep import SWEEP_SETTINGS, insert_monitor, quoting
@@ -64,7 +64,7 @@ class Book:
     def monitor(self, **over: Any) -> str:
         return insert_monitor(self.db, **{"strike_date": self.future(), **over})
 
-    def sweeper(self, fetch: FakeFetch, send: NotifySender | None = None, **over: Any) -> MonitorSweeper:
+    def sweeper(self, fetch: FakeProvider, send: NotifySender | None = None, **over: Any) -> MonitorSweeper:
         """`send` is overridden only where the test is about a send that FAILS, which a collecting
         fake cannot do."""
         return MonitorSweeper(
@@ -99,7 +99,7 @@ class Book:
         found = self.db.execute(sql, params).fetchone()
         return None if found is None else found[0]
 
-    def spread(self, sold: float, bought: float) -> FakeFetch:
+    def spread(self, sold: float, bought: float) -> FakeProvider:
         def fetch(codes: list[str]) -> list[dict[str, Any]]:
             return [{"code": c, "name": c, "mid_price": sold if c == self.sold() else bought} for c in codes]
 
@@ -356,7 +356,7 @@ class TestHowOftenTheSamplerActuallyWrites:
     file carried a 3.1MB write-ahead log against a 110KB database because of it."""
 
     @staticmethod
-    def quiet(b: Book, mid: float, iv: float, vega: float = 1.0) -> FakeFetch:
+    def quiet(b: Book, mid: float, iv: float, vega: float = 1.0) -> FakeProvider:
         def fetch(codes: list[str]) -> list[dict[str, Any]]:
             return [
                 {

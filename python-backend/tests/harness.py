@@ -14,21 +14,24 @@ connection refuses any other thread. FastAPI's `TestClient` runs the app on a lo
 own, and the first query fails there with sqlite3's "objects created in a thread can only be used in
 that same thread" — measured, and the reason this is not built on it.
 
-**Partly ported**: what the routes and the sweep ported so far need. `poisonable` and
-`pricedFetcher` arrive with the routes whose tests use them. `json` is `json_body`: under its own
-name it would shadow the standard library's module in every test that imports both.
+**Partly ported**: what the routes and the sweep ported so far need. `pricedFetcher` arrives with the
+routes whose tests use it. `json` is `json_body`: under its own name it would shadow the standard
+library's module in every test that imports both.
 
-The TypeScript's `FakeProvider` — what a test's fake answers with — is `FakeFetch` here, because
-`FakeProvider` below is the Provider CLIENT a harness app is built on, and Python has one namespace
-for the two. It answers at once rather than with a promise: `fake_fetcher` makes it the awaitable
-port, and a fake that raises is a Provider that rejected the batch.
+`FakeProvider` is what it is in the TypeScript: what a test's fake answers with, a function of the
+codes asked for. The Provider CLIENT a harness app is built on is `HarnessProvider`, the TypeScript's
+anonymous `provider` object given a name. A fake may answer at once or be awaited — a Python lambda
+cannot be `async`, and most of the sweep's fakes are lambdas — and `fake_fetcher` awaits only an
+answer that is awaitable, as a callback typed `Promise<T> | T` is (README); either way a fake that
+raises is a Provider that rejected the batch.
 """
 
+import inspect
 import json
 import shutil
 import sqlite3
 import tempfile
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -98,14 +101,16 @@ def priced(records: list[Quote]) -> Batch:
 #: Nearly every test prices everything it is asked for, and writing `Batch(records, [])` forty times
 #: says nothing. The tests that are ABOUT a code the Provider cannot price answer with the batch
 #: itself, and read as the exception they are (#168).
-type FakeFetch = Callable[[list[str]], list[Quote] | Batch]
+type FakeProvider = Callable[[list[str]], Awaitable[list[Quote] | Batch] | list[Quote] | Batch]
 
 
-def fake_fetcher(fetch: FakeFetch) -> QuoteFetcher:
+def fake_fetcher(fetch: FakeProvider) -> QuoteFetcher:
     """A fake Provider as the port wants it. `Batch` is a tuple, so a list is records alone."""
 
     async def fetch_quotes(codes: list[str]) -> Batch:
         answer = fetch(codes)
+        if inspect.isawaitable(answer):
+            answer = await answer
         return priced(answer) if isinstance(answer, list) else answer
 
     return fetch_quotes
@@ -119,14 +124,27 @@ async def echo_fetcher(codes: list[str]) -> Batch:
 def quoting(by_code: dict[str, Quote]) -> QuoteFetcher:
     """A fetcher that returns the given figures per code, and nothing for a code it does not know."""
 
-    async def fetch(codes: list[str]) -> Batch:
+    async def fetch_quotes(codes: list[str]) -> Batch:
         return priced([{"code": c, **by_code[c]} for c in codes if c in by_code])
 
-    return fetch
+    return fetch_quotes
+
+
+def poisonable(fragment: str) -> QuoteFetcher:
+    """A Provider that cannot price a code containing `fragment`, and says so.
+
+    The port carries the answer: a fake Provider reports what it could not price, and moomoo's prose
+    is tested where it is spoken, in the OpenD client's suite (#168)."""
+
+    async def fetch_quotes(codes: list[str]) -> Batch:
+        unknown = [c for c in codes if fragment in c]
+        return Batch(records=[{"code": c} for c in codes if c not in unknown], unknown=unknown)
+
+    return fetch_quotes
 
 
 @dataclass
-class FakeProvider:
+class HarnessProvider:
     name: str
     fetch_quotes: QuoteFetcher
     answers: bool
@@ -181,7 +199,7 @@ def harness(
     settings: dict[str, Any] | None = None,
     opend: bool = False,
     provider_name: str = "moomoo",
-    fetch_quotes: QuoteFetcher | None = None,
+    fetch_quotes: FakeProvider | None = None,
     reference_sources: dict[str, QuoteFetcher] | None = None,
 ) -> Harness:
     folder = Path(tempfile.mkdtemp(prefix="optionality-http-"))
@@ -197,7 +215,9 @@ def harness(
         }
     )
     sweeper = FakeSweeper()
-    provider = FakeProvider(name=provider_name, fetch_quotes=fetch_quotes or echo_fetcher, answers=opend)
+    provider = HarnessProvider(
+        name=provider_name, fetch_quotes=fake_fetcher(fetch_quotes) if fetch_quotes else echo_fetcher, answers=opend
+    )
     clock = {"now": NOW}
     deps = Deps(
         settings=s,

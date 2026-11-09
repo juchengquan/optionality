@@ -17,7 +17,7 @@ Not a test module, so pytest collects nothing here.
 import sqlite3
 from typing import Any, TypedDict, cast
 
-from harness import FakeFetch
+from harness import FakeProvider
 
 from optionality_backend.db.queries.sql import row
 from optionality_backend.db.values import to_sqlite_json
@@ -101,7 +101,7 @@ def insert_combo(db: sqlite3.Connection, **over: Any) -> str:
     )
 
 
-def quoting(field: str, values: dict[str, float]) -> FakeFetch:
+def quoting(field: str, values: dict[str, float]) -> FakeProvider:
     """A fetcher returning one field per code, read from a mutable table so a test can move the
     market. A code absent from the table is simply not answered for — which is what "subscribed,
     nothing yet" looks like to the sweep, and is NOT the same as `unknown`."""

@@ -55,6 +55,8 @@ def combo_field_error(field: str) -> str | None:
 
 
 def combo_field_sum(monitor: Monitor, by_code: ByCode, field: str) -> float | None:
+    if combo_field_error(field):
+        return None  # guard for legacy rows: never fabricate a summed IV
     legs = monitor.legs or ()
     codes = monitor_leg_codes(monitor)
     if len(legs) != len(codes):

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
-from harness import FakeFetch, fake_fetcher
+from harness import FakeProvider, fake_fetcher
 from optionality.contract import build_spx_code
 from optionality.quote import Batch
 from sweep import SINGLE_CODE as CODE
@@ -74,7 +74,7 @@ class Sweeps:
     def combo(self, **over: Any) -> str:
         return insert_combo(self.db, **{"strike_date": self.future(), **over})
 
-    def sweeper(self, fetch: FakeFetch, send: NotifySender | None = None, **over: Any) -> MonitorSweeper:
+    def sweeper(self, fetch: FakeProvider, send: NotifySender | None = None, **over: Any) -> MonitorSweeper:
         """`send` is overridden only where the test is about a send that FAILS, which a collecting
         fake cannot do."""
         return MonitorSweeper(
@@ -113,7 +113,7 @@ def t(tmp_path: Path):
     world.db.close()
 
 
-def failing_while(down: Callable[[], bool], message: str = "Client connection failed!") -> FakeFetch:
+def failing_while(down: Callable[[], bool], message: str = "Client connection failed!") -> FakeProvider:
     """A Provider that rejects the batch while `down()` says so, and otherwise prices every code."""
 
     def fetch(codes: list[str]) -> list[dict[str, Any]]:
@@ -437,7 +437,7 @@ class TestTheExpiryLifecycle:
 
 class TestAnUnknownContract:
     @staticmethod
-    def poisonable(good_value: float = 0.7) -> FakeFetch:
+    def poisonable(good_value: float = 0.7) -> FakeProvider:
         """Reports the poison as unknown rather than rejecting the batch: the drop-and-retry that read
         moomoo's sentence is inside the moomoo client, and the sweep is handed the answer (#168)."""
 
