@@ -13,7 +13,7 @@
     ],
     "timing": "atMs is each reply's arrival, in milliseconds after its request was sent. A replay ignores it; it is kept because it is evidence (see notes).",
     "notes": [
-      "The empty field is not -1 and not a number. messages.ts reads it with Number(), which makes it 0, so the expected batch carries prev_close_price 0 for SPX. That is what the TypeScript does today, recorded rather than endorsed."
+      "The empty field is not -1 and not a number. messages.ts first read it with Number(), which made it 0, so the first expected batch carried prev_close_price 0 for SPX: recorded, never endorsed. It now reads an empty field as no figure, as it reads -1, so the expected batch carries SPX's grade and no price, which is 'subscribed, nothing yet'."
     ]
   },
   "ask": ["US.SPXW261218C8100000", "SPX"],

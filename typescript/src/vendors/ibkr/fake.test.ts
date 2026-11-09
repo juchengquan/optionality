@@ -95,6 +95,24 @@ describe("replaying a recording", () => {
       .toEqual({ kind: "error", reqId: 7, code: 300, message: "Can't find EId with tickerId:7" });
   });
 
+  it("answers several exchanges for one request in turn, the last every time after", async () => {
+    // how a file says "answered once, then silent": link-down-between-asks holds two market-data
+    // exchanges for one contract, the recorded answer and then none, and one lookup
+    const { socket, seen } = await connected("link-down-between-asks");
+    socket.send(reqMktData(1, SPXW, true));
+    await waitFor(() => seen.some((m) => m.kind === "snapshotEnd" && m.reqId === 1));
+    socket.send(reqMktData(2, SPXW, true));
+    socket.send(reqMktData(3, SPXW, true));
+    // a lone exchange still answers every request that names it, as every other file relies on
+    socket.send(reqContractDetails(4, SPXW));
+    socket.send(reqContractDetails(5, SPXW));
+    await waitFor(() => seen.some((m) => m.kind === "contractEnd" && m.reqId === 5));
+    expect(seen.filter((m) => m.kind === "contractEnd").map((m) => "reqId" in m && m.reqId))
+      .toEqual([4, 5]);
+    // the stub answers in the order it is asked, so anything for 2 or 3 would be here by now
+    expect(seen.filter((m) => "reqId" in m && (m.reqId === 2 || m.reqId === 3))).toEqual([]);
+  });
+
   it("replays a conversation given as data, not only by name", async () => {
     const recorded = loadConversation("normal-with-greeks");
     gateway = await startFakeGateway(0, {

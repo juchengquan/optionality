@@ -23,9 +23,12 @@
  *  The greeting, then the recording's session messages when startApi arrives. A contract lookup
  *  or a market-data request is answered with the exchange whose contract it names, with its own
  *  id put where the recording says `$reqId`; a request no exchange names is never answered, as a
- *  gateway that does not answer is the only honest reply to a question nobody recorded. A cancel
- *  gets what the gateway said to that cancel, and reqMarketDataType gets nothing, as from the
- *  real one.
+ *  gateway that does not answer is the only honest reply to a question nobody recorded. Where a
+ *  recording holds several exchanges for one request and contract, they answer in turn and the
+ *  last answers every request after it, counted over the stub's life rather than per connection:
+ *  a link that drops between two asks is a change in the gateway, and reconnecting does not undo
+ *  it. A cancel gets what the gateway said to that cancel, and reqMarketDataType gets nothing, as
+ *  from the real one.
  *
  *  It still cannot speak for an account's entitlements, a dead session, or a market that is open.
  */
@@ -85,6 +88,8 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
     ? options.conversation : loadConversation(options.conversation ?? DEFAULT_CONVERSATION);
   const counts = { lookups: 0 };
   const open = new Set<Socket>();
+  /** how many requests each request-and-contract has had, keyed by the first exchange naming it */
+  const turns = new Map<Exchange, number>();
 
   const server = createServer((socket) => {
     open.add(socket);
@@ -126,9 +131,12 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
         if (f[0] === REQ_CONTRACT_DATA || f[0] === REQ_MKT_DATA) {
           if (f[0] === REQ_CONTRACT_DATA) counts.lookups += 1;
           const request = f[0] === REQ_CONTRACT_DATA ? "reqContractDetails" : "reqMktData";
-          const exchange = conversation.exchanges
-            .find((e) => e.request === request && names(e, f));
-          if (!exchange) continue;                      // nobody recorded an answer to this
+          const recorded = conversation.exchanges
+            .filter((e) => e.request === request && names(e, f));
+          if (recorded.length === 0) continue;         // nobody recorded an answer to this
+          const turn = turns.get(recorded[0]!) ?? 0;
+          turns.set(recorded[0]!, turn + 1);
+          const exchange = recorded[Math.min(turn, recorded.length - 1)]!;
           if (request === "reqMktData") answered.set(reqId, exchange);
           send(exchange.replies, reqId);
           continue;

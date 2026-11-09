@@ -78,6 +78,15 @@ describe("one bounded ask", () => {
     expect(q!.last_known).toBe(false);
   });
 
+  it("reports an index's empty close as no figure, never as a close of zero", async () => {
+    // SPX before the cash session, recorded 2026-11-09: granted, graded, and its one price tick
+    // carries an empty field. A close of 0 on the strip would be a reading nobody sent.
+    const c = await connected({ conversation: "index-before-the-open" });
+    const batch = await c.fetchQuotes([OPTION, "SPX"]);
+    expect(batch.records.find((r) => r.code === "SPX"))
+      .toEqual({ code: "SPX", delayed: false, last_known: false });
+  });
+
   it("asks nothing at all for an empty list", async () => {
     const c = await connected();
     expect(await c.fetchQuotes([])).toEqual({ records: [], unknown: [] });
@@ -160,6 +169,19 @@ describe("a gateway that will not answer", () => {
       await expect(c.fetchQuotes([OPTION])).rejects.toThrow(/answered none of them/);
     });
   }
+
+  it("THROWS when the link drops behind a warm conid cache, never an empty batch", async () => {
+    // The service holds its session for days, so this is where it meets the 2026-11-08 silence:
+    // on a later ask, behind a conid it already has, with no lookup asked to go unanswered. The
+    // first version of the rule counted a cached conid as an answer, and returned an EMPTY batch
+    // here; as the Provider, that is every watched figure missing, quarantined one rule at a time.
+    const c = await connected({ conversation: "link-down-between-asks" });
+    expect((await c.fetchQuotes([OPTION])).records.map((r) => r.code)).toEqual([OPTION]);
+    const lookups = gateway!.lookups;
+    await expect(c.fetchQuotes([OPTION])).rejects.toThrow(/answered none of them/);
+    // and the silence really was met behind the cache, not at a lookup
+    expect(gateway!.lookups).toBe(lookups);
+  });
 
   it("leaves the contracts that DID answer standing beside the silent ones", async () => {
     // silence from every contract is a Provider failure; silence from some is not, and a batch

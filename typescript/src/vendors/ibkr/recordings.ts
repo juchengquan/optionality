@@ -39,7 +39,12 @@ export const CONTRACT_KEYS = [
 ] as const;
 export type ContractKey = (typeof CONTRACT_KEYS)[number];
 
-/** One request and everything the gateway sent because of it. */
+/** One request and everything the gateway sent because of it.
+ *
+ *  Several exchanges for the same request and contract answer in TURN, the last one every request
+ *  after it (`fake.ts`). That is how a file says "answered once, silent after", which is what a
+ *  link dropping between two asks looks like; a file holding one per request is unchanged by it.
+ */
 export interface Exchange {
   request: "reqContractDetails" | "reqMktData";
   contract: Record<ContractKey, string>;
@@ -75,6 +80,11 @@ export interface Conversation {
   provenance: Recorded | Constructed;
   /** the service codes the client is asked to price, in this order */
   ask: string[];
+  /** Asks made after `ask` by the SAME client, in order, so the connection and whatever the client
+   *  cached on earlier asks carry over. Absent for the usual conversation of one ask. It exists
+   *  because a fresh connection cannot show a silence met behind a warm conid cache, and that is
+   *  where the service meets one: it holds its session open for days. */
+  later?: string[][];
   handshake: {
     /** the gateway's answer to the version range: its protocol version, then its clock */
     greeting: Message;
@@ -139,6 +149,11 @@ export function parseConversation(name: string, value: unknown): Conversation {
 
   const ask = Array.isArray(c.ask) && c.ask.every((code) => typeof code === "string")
     ? c.ask as string[] : fail("ask must be a list of codes");
+  const codes = (v: unknown) => Array.isArray(v) && v.length > 0
+    && v.every((code) => typeof code === "string");
+  const later = c.later === undefined || (Array.isArray(c.later) && c.later.every(codes))
+    ? c.later as string[][] | undefined
+    : fail("later must be a list of asks, each a list of codes");
   const h = object(c.handshake, "handshake");
   const greeting = message(h.greeting, "handshake.greeting");
   if (!Number.isInteger(Number(greeting[0]))) fail("handshake.greeting[0] must be a version");
@@ -175,6 +190,7 @@ export function parseConversation(name: string, value: unknown): Conversation {
     summary: text(c.summary, "summary"),
     provenance: p as unknown as Recorded | Constructed,
     ask,
+    ...(later === undefined ? {} : { later }),
     handshake: { greeting, onStartApi: messages(h.onStartApi, "handshake.onStartApi") },
     exchanges,
   };
