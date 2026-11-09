@@ -56,7 +56,14 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `make test-api` both fail until you regenerate. An ADDITION renders no bytes — a new exported
   function with no case, or a whole new `domain/` module, produces nothing to compare — so
   `make check-cases` stays green and only `make test-api` catches it, through `cases.test.ts`'s
-  coverage guards. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
+  coverage guards. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`.
+  **A SECOND corpus**, `testdata/vendors/`, records what each vendor's `fields.ts` computes — pure,
+  canonical logic that the guard above cannot reach, because it holds its module list to the
+  `domain/` DIRECTORY and these are not in it. Same shape, same `make cases`, same staleness check,
+  its own coverage guard (`cases/vendors.test.ts`), inputs in `cases/vendors.ts`. Deliberately NOT
+  part of the `GOLDEN_CASES` fingerprint: that answers "does this port reproduce the DOMAIN", and
+  the Python package has no vendor ports yet — folding these in would make `py-2026.11.9`, tagged
+  and answering "agrees" today, report disagreement over code it does not contain. Every
   exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
   holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port.
   The harness refuses a case passing MORE arguments than the port takes — `zip(strict=False)` dropped
@@ -165,7 +172,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `COLUMNS[table]` rather than the value's own keys on purpose: a row with a column MISSING then
   fails to bind instead of storing the database's defaults in silence),
   `vendors/index.ts` (a DESCRIPTOR per
-  vendor — `vendors/opend/vendor.ts` and its two siblings — and adding one is a FOLDER inside
+  vendor — `vendors/opend/vendor.ts` and its two siblings. `vendors/fields.ts` is a SECOND door,
+  re-exporting every vendor's pure field mapping so `testdata/vendors/` can record one truth for
+  two languages; it imports nothing but the two `fields.ts` modules, because re-exporting them
+  from `index.ts` instead typechecks the whole vendor graph — and the moomoo SDK's declarations —
+  into the case generator, which calls neither. Adding a vendor is a FOLDER inside
   `vendors/` plus a line in `VENDORS`. `PROVIDERS` is derived from the descriptors that
   say `canBeProvider`, never listed twice; a Reference-only vendor like Yahoo prices no option,
   so naming it as the Provider is fatal at boot and it owes no `reachable`. `openVendors` opens
@@ -187,7 +198,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
   the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
   that is where the batch they read happened to be.
-- `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
+- `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
+  generated test data, both written by `make cases`). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
   service; `tools/check-seams.mjs` — the same rule INSIDE a package, for a directory whose whole
   point is one door (`src/vendors/`, `src/engine/` and `src/entrypoints/`). Its `SEAMS` table carries each seam's doors, a `never` that
@@ -202,7 +214,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `opend.py` needs the `opend` extra AND owns the containment loop that drops a code moomoo names as
   unknown — inside the provider, where `opend/client.ts` has it (ADR 0015, #168), not above the port;
   `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
-  loads Positions and Monitors from the live service (`OPTIONALITY_API` for its URL). Only those
+  loads Positions, Monitors and References from the live service (`OPTIONALITY_API` for its
+  URL) — but NOT quotes: `GET /quotes` takes no parameters, so it cannot price a contract the
+  service does not already watch, and a notebook wanting an arbitrary code wants a Provider.
+  Only those
   three are not golden-cased: they mirror no domain module. Everything else is, decisions included —
   52 of the package's 58 public functions, which is exactly the 52 of the TypeScript domain's 56
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the

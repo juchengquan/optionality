@@ -1,4 +1,4 @@
-"""Loading Positions and Monitors from the live service, against a local HTTP server.
+"""Loading Positions, Monitors and References from the live service, against a local HTTP server.
 
 The server answers with the service's real response shapes (every field `GET /positions` and
 `GET /monitors` send), but synthetic contents — a notebook's watchlist does not belong in a
@@ -12,6 +12,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+from pydantic import ValidationError
 
 from optionality import api
 from optionality.position import Position, cost_to_close
@@ -70,6 +71,28 @@ COMBO = {
 }
 
 
+#: Two References as the LIVE service answered on 2026-11-09 — one per vendor, which is the pair
+#: that matters: Yahoo states its freshness and IBKR states only that it is delayed, so a model
+#: that treated `delayed_by_minutes` as always present would pass on one row and fail on the other
+#: (ADR 0019).
+GSPC = {
+    "id": "d" * 32, "code": "^GSPC", "label": "SPX", "source": "yahoo",
+    "name": "S&P 500", "figure": 7376.86, "field": "last_price",
+    "change": 0.0031453425676493574, "error": None,
+    "delayed": False, "last_known": True, "delayed_by_minutes": None,
+}
+SPX_IBKR = {
+    "id": "e" * 32, "code": "SPX", "label": "SPX", "source": "ibkr",
+    "name": None, "figure": 7374.85, "field": "last_price",
+    "change": 0.002872011890564489, "error": None,
+    "delayed": True, "last_known": False, "delayed_by_minutes": None,
+}
+#: a vendor that is wholly down: rows still come back, each with its own reason (ADR 0018)
+DASHED = {**GSPC, "id": "f" * 32, "figure": None, "field": None, "change": None,
+          "name": None, "error": "yahoo unreachable", "delayed": None,
+          "last_known": None, "delayed_by_minutes": None}
+
+
 class Service:
     """A stand-in service: what it answers, and what it was asked."""
 
@@ -77,6 +100,7 @@ class Service:
         self.routes: dict[str, tuple[int, object]] = {
             "/positions": (200, [CONDOR]),
             "/monitors": (200, [SINGLE, COMBO]),
+            "/references": (200, [GSPC, SPX_IBKR]),
         }
         self.requests: list[tuple[str, str | None]] = []
 
@@ -207,3 +231,38 @@ def test_refuses_a_holding_that_lost_its_opened_date(service):
 def test_still_takes_a_row_that_has_every_key(service):
     assert [m.code for m in api.monitors(service.url)] == [SINGLE["code"], COMBO["code"]]
     assert [p.name for p in api.positions(service.url)] == [CONDOR["name"]]
+
+def test_references_come_back_with_both_vendors_freshness_claims(service):
+    rows = api.references(service.url)
+    assert [r.source for r in rows] == ["yahoo", "ibkr"]
+    assert [r.figure for r in rows] == [7376.86, 7374.85]
+    # the pair that matters: Yahoo says it is live, IBKR says it is delayed, and NEITHER states
+    # minutes here. `delayed` of None would mean the vendor made no claim at all (moomoo).
+    assert [r.delayed for r in rows] == [False, True]
+    assert [r.delayed_by_minutes for r in rows] == [None, None]
+    assert rows[0].name == "S&P 500" and rows[1].name is None
+
+
+def test_a_reference_with_no_figure_is_a_row_and_not_an_exception(service):
+    """ADR 0018: /references is the one route that cannot fail. A vendor that is wholly down
+    leaves each Reference a dash with its own sentence, so a notebook reads the reason."""
+    service.routes["/references"] = (200, [DASHED])
+    (row,) = api.references(service.url)
+    assert row.figure is None
+    assert row.field is None
+    assert row.error == "yahoo unreachable"
+
+
+def test_a_reference_row_missing_a_field_fails_loudly(service):
+    # every field of ReadingOut is `.nullable()` and not `.optional()`, so all twelve arrive on
+    # every row. A missing one is a shape that has moved, not a default to invent.
+    service.routes["/references"] = (200, [{k: v for k, v in GSPC.items() if k != "figure"}])
+    with pytest.raises(Exception) as err:
+        api.references(service.url)
+    assert "figure" in str(err.value)
+
+
+def test_a_reference_is_frozen_like_the_rest_of_the_package(service):
+    (row, _) = api.references(service.url)
+    with pytest.raises(ValidationError):
+        row.figure = 1.0

@@ -20,6 +20,19 @@ by_code = {r["code"]: r for r in records}
 reading alarms and in what words, whether a silent rule is about to be quarantined, what becomes of
 an expired one. The sentences are the ones the service sends, compared exactly (ADR 0017).
 
+`api.references()` gives every Reference with its live figure, including the vendor's own freshness
+claim — Yahoo states minutes, IBKR states only that it is delayed, moomoo states nothing (ADR
+0019). It is the one route that cannot fail: a vendor that is wholly down leaves each row a figure
+of `None` with its own `error`, so you read the reason rather than catch an exception (ADR 0018).
+
+There is deliberately no `api.quotes()`. `GET /quotes` takes no parameters — it is "live quotes for
+the whole watchlist" — so it cannot price a contract the service does not already watch, which is
+the bounded-call invariant working as intended. For an arbitrary code you want a Provider:
+`optionality.opend` today.
+
+`api` reads `http://127.0.0.1:31415` by default; set `OPTIONALITY_API=https://<host>/opt/api` to use
+the service from elsewhere on the tailnet.
+
 ## Two halves, and the line between them
 
 Everything above `research/` is a port: it mirrors a `backend/src/domain/` module or a vendor client
@@ -38,9 +51,6 @@ from optionality.research.yahoo import daily_bars, expirations, option_chain  # 
 The line is structural: `tests/test_standalone.py` refuses an import of `optionality.research` from
 any pure module and from any port, so the cased half can never come to depend on the uncased one.
 The other direction is free, and is what the subpackage is for.
-
-`api` reads `http://127.0.0.1:31415` by default; set `OPTIONALITY_API=https://<host>/opt/api` to use
-the service from elsewhere on the tailnet.
 
 ## Installing
 

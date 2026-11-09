@@ -92,9 +92,28 @@ export function constantsOf(mod: Record<string, unknown>): Record<string, unknow
 
 /** Every module's cases, as the files under testdata/golden/ hold them. */
 export function buildCases(): Record<string, CaseFile> {
+  return buildFrom(INPUTS, MODULES);
+}
+
+/** The same build, over any inputs and modules.
+ *
+ *  Parameterised for the VENDOR corpus (`cases/vendors.ts`), which records the pure field mapping
+ *  in each vendor's `fields.ts` — logic that is canonical and currently cased by nothing, because
+ *  `cases.test.ts` holds the module list to the `domain/` DIRECTORY and these are not in it.
+ *
+ *  The vendor corpus is written to `testdata/vendors/` and is deliberately NOT part of
+ *  `goldenHash`: `GOLDEN_CASES` answers "does this port reproduce the service's domain", and the
+ *  Python package has no vendor ports yet. Folding these in would make every released package —
+ *  `py-2026.11.9` included — report disagreement over code it does not contain, so `agrees()`
+ *  would be wrong rather than informative. When the ports land, that is the moment to revisit it.
+ */
+export function buildFrom(
+  allInputs: Record<string, readonly { fn: string; name: string; args: unknown[] }[]>,
+  modules: Record<string, Record<string, unknown>>,
+): Record<string, CaseFile> {
   const out: Record<string, CaseFile> = {};
-  for (const [name, inputs] of Object.entries(INPUTS)) {
-    const mod = MODULES[name];
+  for (const [name, inputs] of Object.entries(allInputs)) {
+    const mod = modules[name];
     if (!mod) throw new Error(`no module ${name}`);
     out[name] = {
       module: name,
