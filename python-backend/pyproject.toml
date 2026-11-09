@@ -22,11 +22,15 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/optionality_backend"]
 
-# the tools for this package's own suite and lint, as python/ has them
+# the tools for this package's own suite and lint, as python/ has them — and `ib_async`, through the
+# library's `ibkr` extra, for the TESTS only: the no-trading lint re-derives its forbidden names from
+# the installed library, and a derivation the gate skips is a guard nobody runs. The backend itself
+# still depends on the library alone until the client that needs `ib_async` lands (phase 4).
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "ruff",
+    "optionality[ibkr]",
 ]
 
 [tool.ruff]

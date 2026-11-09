@@ -316,9 +316,10 @@ def depends_on_ib_async() -> bool:
 def test_the_names_are_what_ib_async_says() -> None:
     """The written-down list against the library it was derived from.
 
-    `ib_async` is not a dependency of the backend yet — it arrives with the client, in phase 4 — so
-    this SKIPS where it is not installed. It cannot skip for ever: the moment the backend declares
-    it, absence is a failure, so an upgrade of `ib_async` is always re-derived."""
+    `ib_async` is not a dependency of the backend yet — it arrives with the client, in phase 4 — but
+    the backend's dev group installs it (through the library's `ibkr` extra), so `make check` always
+    runs this. It SKIPS only in an environment without the dev group, and not for ever: the moment
+    the backend declares it, absence is a failure, so an upgrade of `ib_async` is always re-derived."""
     library = installed()
     if library is None:
         assert not depends_on_ib_async(), "the backend depends on ib_async and it is not installed"

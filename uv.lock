@@ -618,6 +618,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "optionality", extra = ["ibkr"] },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -627,6 +628,7 @@ requires-dist = [{ name = "optionality", editable = "python" }]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "optionality", extras = ["ibkr"], editable = "python" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff" },
 ]
