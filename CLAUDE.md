@@ -109,8 +109,16 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 - `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (everything pure
   and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
-  `alarm.ts` and its Telegram wording, `lifecycle.ts`'s quarantine and expiry verdicts, and `js.ts`,
-  the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
+  `alarm.ts` and its Telegram wording, `lifecycle.ts`'s expiry verdict and all THREE
+  quarantine faults — an unknown contract, a figure that never arrives, and a row that cannot be hydrated;
+  the first and the last were written beside the `updateMonitorFields` they caused until the second was
+  already cased, so a notebook could ask what the next sweep would do about one fault and not the others, and `js.ts`,
+  the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `health.ts`
+  (the engine's account of its own health — the WHOLE of `ports.ts`'s `SweeperPort`, which is what made
+  splitting it out of the sweeper free; `main.ts` hands the routes and the bot that object rather than the
+  sweeper, so nothing reachable from a request can start a sweep), `notify.ts` (the Telegram send, and
+  whether it got through: one answer for the sweep, the health account and `positions.ts`, which had each
+  grown their own), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (the long-poll
   Telegram TRANSPORT in `bot.ts` — the poll, the owner check, the reply — and the commands
   themselves in `bot/commands/`, a TABLE rather than a switch: a command is
@@ -138,7 +146,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
-- `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions).
+- `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions). `sweep.ts`
+  holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
+  the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
+  that is where the batch they read happened to be.
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
   service. Both are tested against a FIXTURE TREE rather than against this repository, which is

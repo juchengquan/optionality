@@ -638,6 +638,26 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "expiryVerdict", name: "the retention boundary itself is not past",
       args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false }, "2026-11-27", 7] },
 
+    // the other two faults a sweep quarantines for. `silenceVerdict` above counts sweeps because a
+    // figure may yet arrive; these two are facts already stated, so one sweep settles them.
+    { fn: "unreadableNotice", name: "a row that cannot be hydrated at all", args: ["1120_IC"] },
+
+    { fn: "unknownContractVerdict", name: "a single contract the provider does not carry",
+      args: [single, new Set([SC])] },
+    { fn: "unknownContractVerdict", name: "nothing unknown, so the rule stands",
+      args: [single, new Set([LP])] },
+    { fn: "unknownContractVerdict", name: "one delisted leg takes the whole combo",
+      args: [combo, new Set([SP])] },
+    // the put is EARLIER in the combo's legs and LATER in sorted order, the case that tells the two
+    // apart: a notice must not depend on how the structure was entered (silenceReason's rule)
+    { fn: "unknownContractVerdict", name: "named in sorted order, not the order entered",
+      args: [combo, new Set([SP, LC])] },
+    { fn: "unknownContractVerdict", name: "every leg gone", args: [combo, new Set([LP, SP, SC, LC])] },
+    // an unknown set naming codes this rule does not watch says nothing about this rule: the batch
+    // is the whole watchlist's, so most of what it refuses belongs to somebody else
+    { fn: "unknownContractVerdict", name: "another rule's unknown contract is not this rule's fault",
+      args: [single, new Set([LP, SP, LC])] },
+
     { fn: "addDays", name: "across a month end", args: ["2026-11-28", 7] },
     { fn: "addDays", name: "backwards across a month end", args: ["2026-12-03", -7] },
     { fn: "addDays", name: "across a leap day", args: ["2028-02-28", 2] },

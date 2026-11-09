@@ -8,7 +8,12 @@
  */
 import type { QuoteFetcher } from "./quotes.ts";
 
-/** The alarm engine's account of its own health, as /health reports it. */
+/** The alarm engine's account of its own health, as /health reports it.
+ *
+ *  `SweepHealth` in `health.ts` is the implementation, and this is its whole surface — which is
+ *  what made splitting it out of `MonitorSweeper` free: the seam had been drawn here since phase 5
+ *  and the engine had simply grown through it. `main.ts` hands the routes and the bot that object
+ *  rather than the sweeper, so nothing reachable from a request can start a sweep. */
 export interface SweeperPort {
   lastSweepAt(): Date | null;
   lastSweepOk(): boolean;
