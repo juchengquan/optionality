@@ -23,7 +23,7 @@ import { type FakeProvider, fakeFetcher } from "../testing/harness.ts";
 import {
   SINGLE_CODE as CODE, SWEEP_SETTINGS, insertMonitor, quoting,
 } from "../testing/sweep.ts";
-import { MonitorSweeper } from "./sweeper.ts";
+import { MonitorSweeper } from "./engine/index.ts";
 
 let dir: string;
 let db: ReturnType<typeof createDatabase>;

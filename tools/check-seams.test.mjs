@@ -26,7 +26,10 @@ function write(path, text) {
 /** One seam, shaped like the real one but under names that say nothing about it: the rule is about
  *  a DIRECTORY with a door, not about vendors. */
 const SEAM = [{ dir: "pkg/src/things", doors: ["index.ts"], why: "one door" }];
-const found = () => breaches(repo, SEAM);
+/** Just the lines: `breaches` returns `{ seam, line }` so the runner can print the right
+ *  reason, and every assertion here is about the line. */
+const lines = (seams = SEAM) => breaches(repo, seams).map((b) => b.line);
+const found = () => lines();
 
 describe("a seam's interior is private", () => {
   it("refuses a reach past the door", () => {
@@ -85,8 +88,7 @@ describe("a seam's interior is private", () => {
     write("pkg/src/things/one/client.ts", "export const c = 1;\n");
     write("pkg/src/a.ts", 'import { f } from "./things/one/fake.ts";\n');
     write("pkg/src/b.ts", 'import { c } from "./things/one/client.ts";\n');
-    const lines = breaches(repo, seam);
-    expect(lines).toEqual([expect.stringContaining("pkg/src/b.ts")]);
+    expect(lines(seam)).toEqual([expect.stringContaining("pkg/src/b.ts")]);
   });
 
   it("is quiet about a package specifier, which is check-boundaries' business", () => {
@@ -111,7 +113,7 @@ describe("a door the seam itself forbids", () => {
     }];
     write("pkg/src/things/index.ts", "export const open = () => {};\n");
     write("pkg/src/things/one/client.ts", "export const c = 1;\n");
-    expect(breaches(repo, seam)).toEqual([
+    expect(lines(seam)).toEqual([
       expect.stringContaining('"one/client.ts" is named as a door'),
     ]);
   });
@@ -123,7 +125,7 @@ describe("a door the seam itself forbids", () => {
     }];
     write("pkg/src/things/index.ts", "export const open = () => {};\n");
     write("pkg/src/things/one/fake.ts", "export const f = 1;\n");
-    expect(breaches(repo, seam)).toEqual([]);
+    expect(lines(seam)).toEqual([]);
   });
 });
 
@@ -136,6 +138,21 @@ describe("the seams this repository declares", () => {
       expect(seam.never, `${seam.dir} says nothing about what may not be a door`).toBeTruthy();
     }
     expect(SEAMS.length).toBeGreaterThan(0);
+  });
+
+  it("keeps SweepHealth behind the engine's door, which is what that seam is FOR", async () => {
+    // #230's mutation M7: `sweeper: new SweepHealth({...})` in main.ts typechecked and passed all
+    // 143 route, app and boot tests, and described a service whose /health says "starting" for
+    // ever while the sweeps run. Catching it needed a boot test that sweeps, which needs a fake
+    // provider in production code. Withholding the class closes it instead — but only while the
+    // door keeps withholding it, which is this test.
+    const door = await import("../backend/src/engine/index.ts");
+    expect(Object.keys(door), "the engine's door exports SweepHealth again — M7 is reopened")
+      .not.toContain("SweepHealth");
+    // and it still hands out what main.ts actually needs, so this is not passing by exporting nothing
+    for (const name of ["MonitorSweeper", "Scheduler", "STALE_AFTER_SWEEPS"]) {
+      expect(Object.keys(door), `the engine's door no longer exports ${name}`).toContain(name);
+    }
   });
 
   it("has a `never` that actually matches something in the tree it guards", () => {
