@@ -12,12 +12,20 @@ read with `optionality.js.number`, which is JavaScript's `Number` — so `0x10` 
 not a number, where Python's `float` says the opposite of both — and "set to nothing" trims as
 JavaScript's `trim` does, not as `str.strip`. A count is kept as an `int` and a fraction as a
 `float`, which is the one distinction JavaScript's single number type cannot make.
+
+**`.env` itself is read here too**, which the TypeScript never does: Node reads it for `main.ts`, from
+the `--env-file=.env` in the launchd plist, before `main.ts` runs. Python has no such flag, so the
+Python's plist passes the same flag to `-m optionality_backend` and `__main__` hands it to
+`load_env_file` before anything else — the same file, read the same way. "The same way" is Node's
+reader, quirks and all (`parse_env_file`), held to the real `node --env-file` by `tests/test_env.py`
+rather than to a description of it: a library such as `python-dotenv` keeps a `#` inside a value that
+Node cuts at, and expands `${VAR}` where Node does not, so one `.env` would mean two things.
 """
 
 import dataclasses
 import math
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 
 from optionality.js import js_string, number
@@ -244,3 +252,90 @@ def settings_for(**over: object) -> Settings:
     # checked here too: `settings_for` is how every test builds Settings, so a knob the service would
     # refuse must not be constructible in a test either
     return _check_settings(dataclasses.replace(DEFAULTS, **over))
+
+
+#: what Node's env-file reader trims: spaces, tabs and newlines, and nothing else
+_ENV_FILE_SPACE = " \t\n"
+
+
+def _trim(text: str) -> str:
+    return text.strip(_ENV_FILE_SPACE)
+
+
+def parse_env_file(text: str) -> dict[str, str]:
+    """The variables an env file sets, read as `node --env-file` reads them: a port, branch for branch,
+    of `Dotenv::ParseContent` in Node 25's `src/node_dotenv.cc`, quirks included — a value is cut at
+    its first `#` unless quoted, `\\n` becomes a newline only inside double quotes, a quote may span
+    lines, and `KEY= ` followed by a line takes that line as its value. The last of a repeated key
+    wins."""
+    store: dict[str, str] = {}
+    content = _trim(text.replace("\r", ""))
+    while content:
+        # an empty line, or a comment
+        if content[0] in "\n#":
+            newline = content.find("\n")
+            content = content[newline + 1 :] if newline >= 0 else ""
+            continue
+        # a line with no `=` before its end is skipped
+        at = next((i for i, c in enumerate(content) if c in "=\n"), -1)
+        if at < 0 or content[at] == "\n":
+            if at >= 0:
+                content = _trim(content[at + 1 :])
+                continue
+            break
+        key = _trim(content[:at])
+        content = content[at + 1 :]
+        if not content or content[0] == "\n":
+            store[key] = ""
+            continue
+        content = _trim(content)
+        if not key:
+            continue
+        if key.startswith("export "):
+            key = _trim(key[7:])
+        if not content:
+            store[key] = ""
+            break
+        if content[0] == '"':
+            closing = content.find('"', 1)
+            if closing >= 0:
+                store[key] = content[1:closing].replace("\\n", "\n")
+                newline = content.find("\n", closing + 1)
+                content = content[newline + 1 :] if newline >= 0 else ""
+                continue
+        if content[0] in "'\"`":
+            closing = content.find(content[0], 1)
+            if closing < 0:
+                # never closed: the rest of the line, quote and all
+                newline = content.find("\n")
+                if newline < 0:
+                    store[key] = content
+                    break
+                store[key] = content[:newline]
+                content = content[newline + 1 :]
+            else:
+                store[key] = content[1:closing]
+                newline = content.find("\n", closing + 1)
+                content = content[newline + 1 :] if newline >= 0 else ""
+                continue
+        else:
+            newline = content.find("\n")
+            value = content[:newline] if newline >= 0 else content
+            comment = value.find("#")
+            store[key] = _trim(value[:comment] if comment >= 0 else value)
+            content = content[newline + 1 :] if newline >= 0 else ""
+        content = _trim(content)
+    return store
+
+
+def load_env_file(path: str | os.PathLike[str], environ: MutableMapping[str, str] | None = None) -> None:
+    """`node --env-file=<path>`: set every variable the file names that `environ` — the process
+    environment when None — does not already have, so the environment wins, even with an empty value.
+    A missing file raises, as Node refuses to start without one."""
+    if environ is None:
+        environ = os.environ
+    with open(path, encoding="utf-8") as file:
+        text = file.read()
+    for key, value in parse_env_file(text).items():
+        if key not in environ:
+            environ[key] = value
