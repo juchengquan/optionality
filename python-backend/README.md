@@ -86,13 +86,14 @@ which holds the app to the whole surface less what it names and may only shrink.
 says which of the TypeScript's tests wait for the missing part.
 
 **Async.** `async` in the TypeScript is `async def`, and everything runs on ONE asyncio loop (ADR
-0021, Decision 6), so there are no threads — except the moomoo SDK, which blocks and so runs in a
-worker thread with a timeout. A callback typed `Promise<T> | T` is awaited only when it answers an
-awaitable. `AbortSignal.timeout(ms)` is `asyncio.timeout(s)` around the whole exchange, with any
-client's own per-phase timeouts off: httpx2 defaults to five seconds a phase, which would cut the
-bot's 25-second long poll (`telegram.py`). The service's `QuoteFetcher` is `ports.QuoteFetcher`,
-which is awaited — never the library's `optionality.quotes.QuoteFetcher`, which is synchronous
-because a notebook has no loop.
+0021, Decision 6), so there are no threads — except a vendor client that blocks, the moomoo SDK
+and yfinance, which runs on a worker thread of its own (`vendors.Worker`), with the TypeScript's
+deadlines where it has any (`vendors/opend/vendor.py`). A callback typed `Promise<T> | T` is
+awaited only when it answers an awaitable. `AbortSignal.timeout(ms)` is `asyncio.timeout(s)`
+around the whole exchange, with any client's own per-phase timeouts off: httpx2 defaults to five
+seconds a phase, which would cut the bot's 25-second long poll (`telegram.py`). The service's
+`QuoteFetcher` is `ports.QuoteFetcher`, which is awaited — never the library's
+`optionality.quotes.QuoteFetcher`, which is synchronous because a notebook has no loop.
 
 **The database.** `sqlite3`, blocking on the loop's thread as `node:sqlite` blocks Node's, opened
 by `db/open.open_database`: autocommit (`isolation_level=None`), so a statement is written when it

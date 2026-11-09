@@ -725,7 +725,7 @@ source = { editable = "python-backend" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx2" },
-    { name = "optionality" },
+    { name = "optionality", extra = ["ibkr", "opend", "yahoo"] },
     { name = "uvicorn" },
 ]
 
@@ -740,7 +740,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.162.2" },
     { name = "httpx2", specifier = ">=2.16" },
-    { name = "optionality", editable = "python" },
+    { name = "optionality", extras = ["opend", "yahoo", "ibkr"], editable = "python" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]
 
