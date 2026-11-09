@@ -49,11 +49,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   documented SET is complete, so a target added to the `check` rule is nobody's job to write down
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
   alone is only the Python (every golden case, reproduced exactly, then `python-backend/`'s suite).
-  `make lint` is ruff over both Python packages plus five scripts — `check-boundaries`,
+  `make lint` is ruff over both Python packages plus six scripts — `check-boundaries`,
   `check-test-support`, `check-seams` (four seams: the backend's `vendors/` and the library's,
-  `engine/`, `entrypoints/`), `check-make-targets`, `check-served-root` — and `check-py-backend`,
-  the Python backend's two lines (ADR 0021): it imports only the library's public modules, and it
-  names no order call or class outside a `trading/` that does not exist. The first:
+  `engine/`, `entrypoints/`), `check-module-map`, `check-make-targets`, `check-served-root` — and
+  `check-py-backend`, the Python backend's two lines (ADR 0021): it imports only the library's
+  public modules, and it names no order call or class outside a `trading/` that does not exist.
+  `check-module-map` holds the same backend module for module: every TypeScript backend module has
+  its Python port, a reason in the tool's table, or a place on a backlog frozen on 2026-11-09 that
+  may only shrink (ADR 0021). The first:
   no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas, `optionality/...` for the library; ADR 0014) — and its
   `DEPENDS` says which may import which BY NAME at all: the library nothing, the backend the library,

@@ -1,4 +1,4 @@
-.PHONY: check lint check-boundaries check-test-support check-seams check-make-targets cases check-cases scenarios check-scenarios format test test-ui test-ui-fast test-ui-layout test-lib test-api typecheck check-api \
+.PHONY: check lint check-boundaries check-test-support check-seams check-module-map check-make-targets cases check-cases scenarios check-scenarios format test test-ui test-ui-fast test-ui-layout test-lib test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui check-served-root resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
@@ -34,7 +34,7 @@ UI_BASE ?= /opt/
 #
 # Both Python packages are members of ONE uv workspace (the root pyproject.toml, ADR 0021), so each
 # `uv run --directory` below shares the root's .venv and uv.lock and reads its own [tool.ruff].
-lint: check-boundaries check-test-support check-seams check-make-targets check-served-root check-py-backend
+lint: check-boundaries check-test-support check-seams check-module-map check-make-targets check-served-root check-py-backend
 	uv run --directory python ruff check .
 	uv run --directory python-backend ruff check .
 
@@ -60,6 +60,11 @@ check-test-support:
 # second displaces the first in silence. See tools/check-seams.mjs.
 check-seams:
 	node tools/check-seams.mjs
+
+# Module for module (ADR 0021): every TypeScript backend module has a Python counterpart, or the
+# table in tools/check-module-map.mjs says why not, or it is on a backlog that may only shrink.
+check-module-map:
+	node tools/check-module-map.mjs
 
 # frontend/dist is the live document root, not just a committed artefact: a target that deletes it
 # takes the dashboard down. See tools/check-served-root.mjs.
