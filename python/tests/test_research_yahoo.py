@@ -8,7 +8,10 @@ case.
 
 import importlib.abc
 import math
+import pathlib
+import re
 import sys
+import tomllib
 
 import pytest
 
@@ -167,7 +170,7 @@ def test_asking_without_the_extra_says_what_to_install(monkeypatch: pytest.Monke
         lambda: yahoo.option_chain("^SPX", "2026-12-18"),
         lambda: yahoo.daily_bars("^SPX"),
     ):
-        with pytest.raises(ImportError, match=r"optionality\[research\]"):
+        with pytest.raises(ImportError, match=r"optionality\[yahoo\]"):
             call()
 
 
@@ -176,3 +179,25 @@ def test_nan_and_none_both_mean_absent():
     assert yahoo._number(None) is None
     assert yahoo._number(3) == 3.0
     assert not math.isnan(yahoo._number(1.5))
+
+
+def test_the_extra_the_message_names_actually_exists(monkeypatch: pytest.MonkeyPatch):
+    """The literal above says WHICH extra; this says it is real.
+
+    Found by a mutation: the message named `optionality[research]` after that extra had been renamed
+    to `yahoo`, and the test above passed because it asserted the same stale literal. A message
+    telling somebody to install something that does not exist is worse than no message — they run
+    it, uv refuses, and the package looks broken rather than unconfigured.
+    """
+    monkeypatch.setattr(sys, "meta_path", [Absent(), *sys.meta_path])
+    monkeypatch.delitem(sys.modules, "yfinance", raising=False)
+    with pytest.raises(ImportError) as err:
+        yahoo.expirations("^SPX")
+    named = re.findall(r"optionality\[([a-z,]+)\]", str(err.value))
+    assert named, f"the message names no extra at all: {err.value}"
+    pyproject = tomllib.loads(
+        (pathlib.Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+    declared = set(pyproject["project"]["optional-dependencies"])
+    for group in named:
+        for name in group.split(","):
+            assert name in declared, f"the message names extra '{name}', which is not declared"

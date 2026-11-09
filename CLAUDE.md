@@ -227,7 +227,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   **`src/optionality/research/`** is the package's other half, and the only subdirectory: chains,
   historical bars, anything the service never fetches, so it mirrors no TypeScript, no golden case
   holds it and NOTHING CHECKS WHETHER IT IS RIGHT — its own `__init__.py` says so plainly rather
-  than dressing it up. `research/yahoo.py` needs the `research` extra (yfinance, reached inside the
+  than dressing it up. `research/yahoo.py` needs the `yahoo` extra (yfinance, SHARED with the Yahoo port — one
+  library, one extra; the port/research line is an import rule and not an install one), reached inside the
   function as `opend.py` reaches the SDK), separate from `opend` because the two buy different
   things and one extra would hide which a notebook asked for. The line is held structurally, not
   remembered: `test_standalone.py` refuses an import of `optionality.research` from any pure module

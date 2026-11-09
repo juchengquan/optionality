@@ -45,7 +45,7 @@ whether it is right**. Its tests say a response was parsed as intended, not that
 Treat a figure out of it as you would your own cell.
 
 ```python
-from optionality.research.yahoo import daily_bars, expirations, option_chain  # the `research` extra
+from optionality.research.yahoo import daily_bars, expirations, option_chain  # the `yahoo` extra
 ```
 
 The line is structural: `tests/test_standalone.py` refuses an import of `optionality.research` from

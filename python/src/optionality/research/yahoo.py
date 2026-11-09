@@ -29,7 +29,7 @@ _CODE, _STRIKE = "contractSymbol", "strike"
 _BID, _ASK, _LAST = "bid", "ask", "lastPrice"
 _VOLUME, _OPEN_INTEREST, _IV = "volume", "openInterest", "impliedVolatility"
 
-_MISSING = "optionality.research.yahoo needs yfinance: uv add 'optionality[research]'"
+_MISSING = "optionality.research.yahoo needs yfinance: uv add 'optionality[yahoo]'"
 
 
 @dataclass(frozen=True, slots=True)

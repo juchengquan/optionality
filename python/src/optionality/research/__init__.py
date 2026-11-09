@@ -21,6 +21,6 @@ So the line is structural, not remembered. `tests/test_standalone.py` refuses an
 uncased one. The other direction is free — research reads the maths and drives the ports, which is
 what it is for.
 
-Each module needs its own extra, named in the error when it is missing: `research` for
+Each module names the extra it needs in the error when it is missing: `yahoo` for
 `optionality.research.yahoo` (yfinance).
 """

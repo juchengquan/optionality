@@ -14,15 +14,20 @@ dependencies = [
 opend = [
     "moomoo-api>=10",
 ]
-# yfinance, for the research half's chains and bars (`optionality.research.yahoo`). Separate from
-# `opend` and not merged with it, because the two buy different things: `opend` is the live quote
-# path the service itself uses, held to recorded fixtures, while `research` is the half that mirrors
-# no TypeScript and that nothing checks (see src/optionality/research/__init__.py). One extra would
-# install a vendor SDK and an unheld research dependency together and hide which of the two a
-# notebook actually asked for — and it would put pandas and numpy on the quote path, which wants
-# neither.
-research = [
+# yfinance, SHARED by the Yahoo port and the research half. One extra and not two, because it is
+# one library: the port reads `regularMarketPrice` through it and `research.yahoo` reads chains and
+# bars through it, and two extras pulling the same package would be a second thing to get right for
+# no second thing installed. The line between port and research is an IMPORT rule
+# (tests/test_standalone.py) and an extra cannot express it either way.
+yahoo = [
     "yfinance>=1.8",
+]
+# everything, so a notebook can stop thinking about extras. Named rather than implied: a base
+# dependency on yfinance would make pandas 3.x and numpy 2.x HARD requirements of the maths, and a
+# notebook pinned to pandas 2.x could then not install this package at all. Measured: the base is
+# 5 packages and 7.2 MB, and yfinance alone brings it to 22 and 107 MB.
+all = [
+    "optionality[opend,yahoo]",
 ]
 
 [build-system]
