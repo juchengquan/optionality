@@ -75,12 +75,6 @@ BACKLOG = [
     "http/delete-monitors-id-removes-the-rule-and-its-links-and-keeps-the-holding.json",
     "http/delete-positions-id-on-a-holding-that-does-not-exist.json",
     "http/delete-positions-id-removes-the-holding-with-its-links-and-samples-and-keeps-the-rules.json",
-    # /health is ported, and these wait for the sweep: the route reads the engine's health account,
-    # which the engine's door hands out only as `MonitorSweeper.health` (`engine/__init__.py`), so the
-    # scenario backend has none to give it until the sweeper is ported. Two replay an earlier sweep too.
-    "http/get-health-after-a-sweep-that-worked.json",
-    "http/get-health-after-the-provider-failed-a-sweep.json",
-    "http/get-health-answers-without-a-token-on-a-service-that-has-not-swept-yet.json",
     "http/get-monitors-lists-every-rule-with-the-holdings-it-covers.json",
     "http/get-positions-id-vol-measures-vol-over-the-holding-s-own-samples.json",
     "http/get-positions-id-vol-on-a-holding-that-does-not-exist.json",
