@@ -23,6 +23,11 @@
  *  a socket would be a flaky test, not a corpus. So the batch here is what the client makes of
  *  the gateway's WHOLE answer. Where that differs from what it made of the live one, the
  *  recording's provenance says so.
+ *
+ *  A conversation with `later` asks is asked them in turn by the SAME client after its first, so
+ *  what the client holds between asks (the connection, the conids) is part of what is recorded,
+ *  and each later outcome is written beside the first. The service holds one connection for days,
+ *  and a fault that only a warm cache shows needs a second ask to be seen at all.
  */
 import { IbkrClient, type IbkrConfig } from "./client.ts";
 import { startFakeGateway } from "./fake.ts";
@@ -50,6 +55,9 @@ export interface Expectation {
   ask: string[];
   /** the batch, or `{ "$throws": message }` — the tag the golden cases use */
   expect: unknown;
+  /** each of the recording's `later` asks and what it came to, in order; absent where it has none,
+   *  so a conversation of one ask renders exactly as before the field existed */
+  later?: { ask: string[]; expect: unknown }[];
 }
 
 /** The stub's port is chosen by the OS, so a message that names it is spelled with `<port>`. */
@@ -62,12 +70,24 @@ export async function replay(name: string): Promise<Expectation> {
   const conversation = loadConversation(name);
   const gateway = await startFakeGateway(0, { conversation });
   const client = new IbkrClient({ host: "127.0.0.1", port: gateway.port, ...REPLAY_CONFIG });
+  const outcome = async (codes: string[]): Promise<unknown> => {
+    try {
+      return await client.fetchQuotes(codes);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { $throws: withoutPort(message, gateway.port) };
+    }
+  };
   let expect: unknown;
+  let later: Expectation["later"];
   try {
-    expect = await client.fetchQuotes(conversation.ask);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    expect = { $throws: withoutPort(message, gateway.port) };
+    expect = await outcome(conversation.ask);
+    if (conversation.later) {
+      later = [];
+      for (const codes of conversation.later) {
+        later.push({ ask: codes, expect: await outcome(codes) });
+      }
+    }
   } finally {
     client.close();
     await gateway.close();
@@ -75,7 +95,7 @@ export async function replay(name: string): Promise<Expectation> {
   return {
     conversation: name, provenance: conversation.provenance.kind,
     client: "typescript/src/vendors/ibkr/client.ts", config: REPLAY_CONFIG,
-    ask: conversation.ask, expect,
+    ask: conversation.ask, expect, ...(later ? { later } : {}),
   };
 }
 

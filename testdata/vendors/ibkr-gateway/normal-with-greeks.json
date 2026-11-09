@@ -14,7 +14,7 @@
     "timing": "atMs is each reply's arrival, in milliseconds after its request was sent. A replay ignores it; it is kept because it is evidence (see notes).",
     "notes": [
       "IbkrClient itself, pointed at the same gateway 48 seconds earlier (11:13:06Z), returned this contract WITHOUT its greeks. Across the six full captures of the control that morning the model computation (tick 13) arrived 0.3 to 1.7 seconds after the book, and in five of them a silence longer than the client's 250ms quiet window came first, so the client would have finished without it. Here the gap before it is 1.2 seconds. A replay delivers every reply at once, so the expected batch for this conversation carries the greeks the live client missed.",
-      "The snapshot end (57) does arrive, about eleven seconds after the request. client.ts says the gateway sends no end-of-snapshot marker; on this gateway, on this day, it did.",
+      "The snapshot end (57) does arrive, about eleven seconds after the request. client.ts said the gateway sends no end-of-snapshot marker; on this gateway, on this day, it did, and client.ts now says so and why it does not wait for it.",
       "The reply to cancelMktData is error 300 because the snapshot had already ended. It is kept as onCancel, since a replay also ends the snapshot before the client cancels."
     ]
   },

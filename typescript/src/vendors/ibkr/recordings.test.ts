@@ -28,6 +28,23 @@ describe("the conversations", () => {
     }
   });
 
+  it("reads the asks made LATER on the same connection, where a file has them", () => {
+    // a link that drops between two asks is met behind a warm conid cache, which one ask on a
+    // fresh connection can never show
+    expect(loadConversation("link-down-between-asks").later)
+      .toEqual([["US.SPXW261218C8100000"]]);
+    expect(loadConversation("normal-with-greeks").later).toBeUndefined();
+  });
+
+  it("refuses later asks that are not a list of lists of codes", () => {
+    const text = readFileSync(join(RECORDINGS, "normal-with-greeks.json"), "utf8");
+    for (const later of [["US.SPXW261218C8100000"], [[]], [[8100]], "again"]) {
+      const file = { ...JSON.parse(text) as object, later };
+      expect(() => parseConversation("normal-with-greeks", file), JSON.stringify(later))
+        .toThrow(/later must be a list of asks/);
+    }
+  });
+
   it("keeps every field as the text the wire carried, never a number", () => {
     // "4.10" and 4.1 are different bytes, and so are "2.1E-4" and 0.00021. A recording that let
     // JSON reformat a field would replay something the gateway never sent.

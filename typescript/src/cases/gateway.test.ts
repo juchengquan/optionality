@@ -58,6 +58,15 @@ describe("testdata/vendors/ibkr-gateway/expected/", () => {
       expect(expectOf(name), name).toEqual({ $throws: expect.stringMatching(/answered none/) });
     }
     expect(expectOf("unknown-contract")).toMatchObject({ unknown: ["US.SPXW261218C8101000"] });
+    // and the same silence met on a LATER ask, behind a conid cached by the first: the first ask
+    // priced, the second thrown, whatever the cache holds — never an empty batch
+    const between = JSON.parse(built["link-down-between-asks"]!) as {
+      expect: { records: unknown[] }; later: { ask: string[]; expect: unknown }[];
+    };
+    expect(between.expect.records).toHaveLength(1);
+    expect(between.later).toEqual([{
+      ask: ["US.SPXW261218C8100000"], expect: { $throws: expect.stringMatching(/answered none/) },
+    }]);
     // the silent contract is neither priced nor unknown: it may exist
     expect(expectOf("never-answers")).toMatchObject({ unknown: [] });
     expect((expectOf("never-answers") as { records: unknown[] }).records).toHaveLength(1);
