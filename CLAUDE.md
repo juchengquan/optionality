@@ -18,6 +18,13 @@ sits in `data/` at all: it went into `archive/python-era-20261017.tar.gz` in `BA
 `python/`, is ported FROM it for notebook use (ADR 0014) and held to it by the golden cases in `testdata/golden/`,
 compared exactly. A TypeScript domain fix therefore makes `make test` red until the Python is ported.
 
+**ADR 0021 (accepted 2026-11-09, not built) takes the Python to the whole service**: a second
+backend that can run the sweep, the alarms, the database, the API and the bot, one backend at a
+time, ported module for module and held to the TypeScript at its three doors. It is built in six
+phases, and each phase updates this file when it lands, so everything below describes what exists
+today. Until a phase says otherwise, nothing here changes: the TypeScript is the only backend, and
+the read-only property below still holds for the only code that runs.
+
 ## Commands
 
 - **`make check` before every commit** — everything, in one target, and it passes in any timezone:
