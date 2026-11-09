@@ -10,7 +10,9 @@ import { DatabaseSync } from "node:sqlite";
 
 import { stampAll } from "./migrate.ts";
 
-const SCHEMA = new URL("./schema.sql", import.meta.url);
+/** `schema/schema.sql` at the repository root, for the reason `migrate.ts` gives its migrations:
+ *  one schema that either backend builds a database from (ADR 0021), resolved from this module. */
+const SCHEMA = new URL("../../../schema/schema.sql", import.meta.url);
 
 /** Open an existing database for reading and writing, with the pragmas the Python sets.
  *

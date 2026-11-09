@@ -3,7 +3,9 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { DEPENDS, PACKAGES as REAL_PACKAGES, crossings } from "./check-boundaries.mjs";
+import {
+  DEPENDS, PACKAGES as REAL_PACKAGES, SHARED as REAL_SHARED, crossings,
+} from "./check-boundaries.mjs";
 
 /** The guard, against a fixture tree rather than against this repository (ADR 0016).
  *
@@ -173,5 +175,20 @@ describe("the table this repository declares", () => {
 
   it("has a row for every package, so none is ruled by the default by accident", () => {
     expect(Object.keys(DEPENDS).sort()).toEqual([...REAL_PACKAGES].sort());
+  });
+
+  it("shares the schema, which either backend builds its database from (ADR 0021)", () => {
+    // one database file, one schema, the same migrations: inside backend/ the Python could read
+    // them only by reaching into another package's source, which is what this whole file refuses
+    expect(REAL_SHARED).toEqual(expect.arrayContaining(["testdata", "schema"]));
+    expect(REAL_PACKAGES, "shared ground is nobody's package").not.toContain("schema");
+  });
+});
+
+describe("the shared schema (ADR 0021)", () => {
+  it("lets either backend read it by path, and refuses neither", () => {
+    write("backend/src/db/open.ts", 'const S = new URL("../../../schema/schema.sql", import.meta.url);\n');
+    write("python/tests/t.py", 'S = Path(__file__).resolve().parents[2] / "schema" / "migrations"\n');
+    expect(crossings(repo, PACKAGES, ["testdata", "schema"])).toEqual([]);
   });
 });

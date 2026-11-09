@@ -21,3 +21,10 @@ It depends on `optionality` only through what the library publishes, and it plac
   Decision 8). The list of what it refuses is derived from `ib_async`, and the test says how.
 
 Both run in `make lint` and in `make test`, which is part of `make check`.
+
+It is held to the TypeScript at the service's three doors (ADR 0021, Decision 4):
+`tests/test_scenarios.py` replays every scenario in `testdata/scenarios/` through
+`tests/scenarios/`, the Python's half of the replay. The one place the backend plugs in is
+`tests/scenarios/backend.py`'s `build`. Until a scenario passes it stays on
+`tests/scenarios/backlog.py`, skipped with its reason; the suite ends by counting the port —
+"door scenarios: N of 120 ported" — and the list may only shrink.

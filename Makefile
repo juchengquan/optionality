@@ -196,8 +196,8 @@ resolve-ui:
 # checkpoint — measured at 1 row of 500 on a scratch database, and still valid SQLite, which is
 # what makes it dangerous. This backup is the one taken immediately before a migration runs.
 #
-# The schema step is the service's own: `main.ts` applies what is pending in
-# backend/src/db/migrations at boot and fails fatally if one does not (ADR 0011).
+# The schema step is the service's own: `main.ts` applies what is pending in schema/migrations/
+# at boot and fails fatally if one does not (ADR 0011).
 deploy:
 	git pull --ff-only
 	npm install --silent

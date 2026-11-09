@@ -27,7 +27,12 @@ function ensureTable(db: DatabaseSync): void {
   );
 }
 
-const DIRECTORY = new URL("./migrations/", import.meta.url);
+/** `schema/migrations/` at the repository root, not beside this file: the migrations are shared
+ *  ground that either backend applies to the one database (ADR 0021), so they cannot live inside
+ *  one backend's source, which the other may not read (`check-boundaries`). Resolved from this
+ *  module rather than from the working directory, because launchd, `make serve` and the suites
+ *  each start Node somewhere different. */
+const DIRECTORY = new URL("../../../schema/migrations/", import.meta.url);
 
 function allMigrations(dir?: string): string[] {
   const from = dir ?? DIRECTORY;

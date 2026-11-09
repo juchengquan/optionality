@@ -135,6 +135,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `outcomes.ts` — whose own list is held to the decisions the engine imports and the
   `disabled_reason`s it writes. Ids and the clock are INJECTED (`Deps.newId`, `BotDeps.newId`), not
   scrubbed. `testdata/scenarios/README.md` is the format, for a runner in another language.
+  **The Python's runner** (phase 2) is `python-backend/tests/scenarios/`, module for module with
+  `backend/testing/scenarios/`, and `make test` replays every file through it. While the first port
+  lasts, a scenario on its BACKLOG (`scenarios/backlog.py`) is skipped with its reason, and the
+  suite's last line counts the port: "door scenarios: N of 120 ported". The backlog was frozen on
+  2026-11-09 with all 120 and may only shrink — the same rules and wording as
+  `tools/check-module-map.mjs`'s.
 - **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
   `ibkr/` client by hand (`ARGS="--conversation link-down"` picks what it replays). It says nothing
   of its own: it replays one conversation from `testdata/vendors/ibkr-gateway/` (above), the same
@@ -169,13 +175,18 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
 - **Schema change:** add a `.sql` file to
-  `backend/src/db/migrations/` AND put the same shape in `backend/src/db/schema.sql`, then update
-  `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `db/rows.ts` — the compiler and
-  `rows.test.ts` tie those three together, so a half-done change fails rather than drifts. They tie
-  three legs of four: `rows.test.ts` builds its subject from `schema.sql`, so the MIGRATION is held
-  by `migrate.test.ts`'s "the two roads into a database", which migrates `db/schema-base.sql` (the
-  shape before 0001 — never edit it) and compares the result to a fresh database, column for column
-  and null for null. Without it a column added everywhere but the migrations passed every check and
+  `schema/migrations/` AND put the same shape in `schema/schema.sql`, then update
+  `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `backend/src/db/rows.ts` — the
+  compiler and `rows.test.ts` tie those three together, so a half-done change fails rather than
+  drifts. They tie three legs of four: `rows.test.ts` builds its subject from `schema.sql`, so the
+  MIGRATION is held by `migrate.test.ts`'s "the two roads into a database", which migrates
+  `schema/schema-base.sql` (the shape before 0001 — never edit it) and compares the result to a
+  fresh database, column for column and null for null.
+  `schema/` sits at the repository root, not in `backend/`, because it is SHARED GROUND like
+  `testdata/` (ADR 0021): one database file, one schema and the same migrations, applied by
+  whichever backend starts first — and `check-boundaries` refuses either backend reading the
+  other's source tree. `db/open.ts` and `db/migrate.ts` resolve it from their own module, never
+  from the working directory, so the service finds it wherever Node was started. Without it a column added everywhere but the migrations passed every check and
   reached the live file as `no such column`.
   `main.ts` applies what is pending at boot and a failure there is fatal on purpose. A database
   built from `schema.sql` is STAMPED, not migrated (ADR 0011). `make deploy` backs the file up
@@ -258,8 +269,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   client that has the figure; since ADR 0021 that client is in the library, and only these
   descriptors may import it. IB Gateway is reached as a
   REFERENCE source whether or not it is the Provider, because a Reference alarms on nothing;
-  `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, and `queries/` —
-  one module per TABLE, re-exported by `queries/index.ts` so every caller keeps one import path;
+  `IBKR_HOST` turns it on and blank turns it off), `db/` (opening the database, the migration
+  runner, the row shapes, and `queries/` — the schema and the migrations themselves are in
+  `schema/`, shared ground; `queries/` is one module per TABLE, re-exported by `queries/index.ts` so every caller keeps one import path;
   `queries/sql.ts` holds what all of them were repeating, and its `insertRow` names
   `COLUMNS[table]` rather than the value's own keys on purpose: a row with a column MISSING then
   fails to bind instead of storing the database's defaults in silence),
@@ -286,6 +298,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
   the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
   that is where the batch they read happened to be.
+- `schema/` — `schema.sql`, `migrations/` and `schema-base.sql` (see **Schema change**): the one
+  schema either backend builds a database from, and the migrations either applies to the live
+  file (ADR 0021). Shared ground, declared beside `testdata/` in `check-boundaries`, and moved out
+  of `backend/src/db/` for exactly that reason: from there the Python could have read it only by
+  reaching into another package's source.
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
   generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
   Gateway conversations (inputs) beside the batches `make cases` generates from them.
@@ -369,6 +386,22 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   must not exist until a trading ADR creates it; the forbidden names are DERIVED from `ib_async`'s
   source and re-derived whenever it is installed). Both run against fixture trees. Never released:
   it runs from the working tree, as `backend/` does.
+  **`tests/scenarios/`** is the door scenarios' Python runner (ADR 0021, phase 2), mirroring
+  `backend/testing/scenarios/`: `world.py` builds a scenario's database from `schema/schema.sql`,
+  STAMPED as `createDatabase` does, fills it and reads it back — the TypeScript's database cell for
+  cell, storage class and stored bytes, all but the stamp's own time (measured ONCE, by hand, over
+  all 120 worlds on 2026-11-09: no gate can run both languages), and round-tripped against every
+  file by `test_scenario_world.py`, which IS a gate; `compare.py` is the README's "Comparing" (`1` is `1.0`,
+  `True` is not `1`, key order is nothing, an extra key is a difference); `doors.py` runs the
+  three doors in `doors.ts`'s four steps. **`backend.py` is THE SEAM**: `build(world)` returns the
+  Python backend on a world, and raises `NotPorted` until phase 3 fills it with `GET /positions`
+  through FastAPI's `TestClient`. A door not yet ported must RAISE, never do nothing: two
+  scenarios expect nothing at all, and an empty backend passes both. `backlog.py` holds the
+  shrinking list: a listed scenario that passes FAILS ("take it off the backlog"), one not listed
+  must pass, a listed one that no longer exists fails, and the list is written out — a test reads
+  its syntax — so a new scenario joins it only in a diff. `test_scenario_runner.py` holds all of
+  that against small worlds and a fake backend, because 120 skips cannot show a runner compares
+  anything.
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 

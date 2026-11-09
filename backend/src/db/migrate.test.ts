@@ -283,7 +283,7 @@ describe("the two roads into a database", () => {
    *  migration is pending, exactly as it was on the live file. */
   const baseDatabase = (path: string) => {
     const db = openDatabase(path);
-    db.exec(readFileSync(new URL("./schema-base.sql", import.meta.url), "utf8"));
+    db.exec(readFileSync(new URL("../../../schema/schema-base.sql", import.meta.url), "utf8"));
     return db;
   };
 
@@ -359,7 +359,8 @@ describe("the two roads into a database", () => {
     // nothing. It is only a baseline while every migration still has work to do on it.
     const db = baseDatabase(join(dir, "base3.db"));
     expect(pendingMigrations(db)).toEqual(
-      readdirSync(new URL("./migrations/", import.meta.url)).filter((n) => n.endsWith(".sql")).sort(),
+      readdirSync(new URL("../../../schema/migrations/", import.meta.url))
+        .filter((n) => n.endsWith(".sql")).sort(),
     );
     db.close();
   });
