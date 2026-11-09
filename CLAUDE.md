@@ -110,7 +110,15 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Layout
 
-- `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (everything pure
+- `backend/src/`: `main.ts` (the process),
+  **`http/`** (the whole HTTP layer behind one door, `http/index.ts`: `app.ts` (routes, auth,
+  `/docs`), `routes/` (one module per resource, each paired by name with its service beside
+  `src/` — `routes/monitors.ts` with `monitors.ts`), `deps.ts`, `errors.ts`, `validate.ts`,
+  `openapi.ts` and `hc.types.ts`. `main.ts` and the harness ask for `createApp` and `Deps` and
+  nothing else. The WEAKEST of the three seams `check-seams` holds, and `http/index.ts` says so:
+  unlike `vendors/` and `engine/` it closes no measured failure. `ports.ts` is NOT in it —
+  `bot/bot.ts`, `engine/health.ts` and `vendors/index.ts` all import it, so it is the service's
+  interface vocabulary rather than the HTTP layer's), `domain/` (everything pure
   and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
   `alarm.ts` and its Telegram wording, `lifecycle.ts`'s expiry verdict and all THREE
   quarantine faults — an unknown contract, a figure that never arrives, and a row that cannot be hydrated;
@@ -160,6 +168,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
+- `http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
+  so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
+  end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole
+  value and was held by nobody — complete by diligence, with no file a seventeenth endpoint would
+  have broken — so `http/hc.types.test.ts` takes the endpoint list from `/openapi.json`, which is built
+  from the routes, and names any the client does not call.
 - `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions). `sweep.ts`
   holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
   the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
@@ -167,7 +181,7 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
   service; `tools/check-seams.mjs` — the same rule INSIDE a package, for a directory whose whole
-  point is one door (`src/vendors/` and `src/engine/`). Its `SEAMS` table carries each seam's doors, a `never` that
+  point is one door (`src/vendors/`, `src/engine/` and `src/http/`). Its `SEAMS` table carries each seam's doors, a `never` that
   says what may not become one, and the reason, printed on failure. The `never` exists because a
   sweep found that adding `ibkr/client.ts` to the door list passed every test the guard had: an
   exemption list that can be opened from the inside is not a guard. All three are tested against a

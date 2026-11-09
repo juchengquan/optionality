@@ -81,6 +81,17 @@ export const SEAMS = [
     why: "the engine is reached by `main.ts` alone; a request must not be able to start a sweep, "
       + "and `index.ts` withholds SweepHealth so a second health account cannot be built",
   },
+  {
+    dir: "backend/src/http",
+    doors: ["index.ts"],
+    /** The weakest of the three, and said plainly in `http/index.ts`: unlike the other two this
+     *  one closes no measured failure. `routes/` is named here because a route factory mounted
+     *  twice, or mounted from somewhere that is not `app.ts`, is the one thing in this layer that
+     *  would be hard to see — and `app.ts` because it is reached through the door. */
+    never: /\/(app\.ts|routes\/.*)$/,
+    why: "the app is a value `main.ts` and the harness ask for by name; routes are mounted by "
+      + "`app.ts` and by nothing else",
+  },
 ];
 
 /** Exported so the test can ask what a seam actually contains. */
