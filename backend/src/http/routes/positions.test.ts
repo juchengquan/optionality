@@ -5,10 +5,10 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildSpxCode } from "../domain/contract.ts";
+import { buildSpxCode } from "../../domain/contract.ts";
 import {
   type FakeProvider, type Harness, body, harness, json, pricedFetcher,
-} from "../../testing/harness.ts";
+} from "../../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());

@@ -11,8 +11,7 @@
  */
 import { serve } from "@hono/node-server";
 
-import { createApp } from "./app.ts";
-import type { Deps } from "./deps.ts";
+import { type Deps, createApp } from "./http/index.ts";
 import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";

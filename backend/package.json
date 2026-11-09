@@ -4,7 +4,7 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/app.ts",
+    ".": "./src/http/index.ts",
     "./schemas": "./src/schemas/index.ts",
     "./schemas/sources": "./src/schemas/sources.ts"
   },
