@@ -4,17 +4,16 @@ These seed their positions directly, as the TypeScript's do, because what is und
 arithmetic of deriving the one wing that cannot be edited, not the creation route.
 
 `watchlist_quotes` is held by `test_watchlist.py`, as the TypeScript holds it by `watchlist.test.ts`.
-`link_to_positions` and `adopt_orphan_monitors` are held in the TypeScript by their callers' suites —
-`routes/monitors.test.ts`'s "the links to positions" (POST /monitors, ported beside this) and
-`routes/positions.test.ts`'s adoption tests (POST and DELETE /positions, not ported yet) — so what
-those rely on is held here too, at the end, until the second arrives.
+`link_to_positions` and `adopt_orphan_monitors` are held, as in the TypeScript, by their callers'
+suites: `routes/monitors.test.ts`'s "the links to positions" (POST /monitors) and
+`routes/positions.test.ts`'s adoption tests (POST and DELETE /positions), both ported beside this.
 """
 
 import pytest
 
 from optionality_backend.db.open import create_database
 from optionality_backend.db.values import to_sqlite_json
-from optionality_backend.monitors import adopt_orphan_monitors, apply_total_entry, link_to_positions
+from optionality_backend.monitors import apply_total_entry
 
 EXPIRY = "2026-12-18"
 CALLS = "c" * 32
@@ -153,75 +152,3 @@ class TestACreditThatCannotBeDerived:
         before = entry_of(db, PUTS)
         assert "first" in await apply_total_entry(db, SPAN, 3.21)
         assert entry_of(db, PUTS) == before
-
-
-def links(db, monitor_id):
-    """Which holdings a rule is linked to, and the scope it says it covers them with."""
-    linked = [
-        r[0]
-        for r in db.execute("select position_id from monitor_positions where monitor_id = ? order by 1", (monitor_id,))
-    ]
-    return linked, db.execute("select scope from monitors where id = ?", (monitor_id,)).fetchone()[0]
-
-
-SPREAD = [
-    {"side": "short", "option_type": "CALL", "strike": 8050},
-    {"side": "long", "option_type": "CALL", "strike": 8075},
-]
-C8050 = "US.SPXW261218C8050000"
-C8075 = "US.SPXW261218C8075000"
-
-
-class TestWhatTheLinkingCallersRelyOn:
-    """`link_to_positions`, which creating a monitor runs, and `adopt_orphan_monitors`, which recording
-    or deleting a holding runs: a rule is linked to what holds its contracts, whichever came first."""
-
-    def test_links_a_rule_to_the_one_holding_of_its_contracts_covering_it_whole(self, db):
-        position(db, CALLS, "calls", 2.87, SPREAD)
-        rule(db, WING, "calls_rule", None, [])
-        link_to_positions(db, WING, [C8050, C8075])
-        assert links(db, WING) == ([CALLS], "all")
-
-    def test_links_a_rule_watching_part_of_a_holding_as_a_leg(self, db):
-        position(db, CALLS, "calls", 2.87, SPREAD)
-        rule(db, WING, "calls_rule", None, [])
-        link_to_positions(db, WING, [C8050])
-        assert links(db, WING) == ([CALLS], "leg")
-
-    def test_links_nothing_and_writes_no_scope_when_nothing_holds_the_contracts(self, db):
-        rule(db, WING, "calls_rule", None, [])
-        link_to_positions(db, WING, [C8050])
-        assert links(db, WING) == ([], None)
-
-    def test_adopts_a_rule_set_before_the_holding_was_recorded(self, db):
-        # the order a create could not handle: the alarm first, the holding after
-        rule(
-            db,
-            WING,
-            "calls_rule",
-            None,
-            [],
-            legs=[
-                {"sign": -1, "option_type": "CALL", "strike": 8050},
-                {"sign": 1, "option_type": "CALL", "strike": 8075},
-            ],
-        )
-        position(db, CALLS, "calls", 2.87, SPREAD)
-        adopt_orphan_monitors(db)
-        assert links(db, WING) == ([CALLS], "all")
-
-    def test_never_moves_a_rule_that_already_has_a_link(self, db):
-        # what you already have cannot be taken away by something you subsequently hold
-        position(db, CALLS, "calls", 2.87, SPREAD)
-        rule(db, WING, "calls_rule", "leg", [CALLS])
-        position(db, PUTS, "other", 1.0, [{"side": "short", "option_type": "CALL", "strike": 8050}])
-        adopt_orphan_monitors(db)
-        assert links(db, WING) == ([CALLS], "leg")
-
-    def test_leaves_an_orphan_alone_when_its_contract_is_held_twice(self, db):
-        # ambiguous, and a wrong P&L is worse than an absent one
-        position(db, CALLS, "old", 2.87, SPREAD)
-        position(db, PUTS, "new", 1.0, SPREAD)
-        rule(db, WING, "calls_rule", None, [])
-        adopt_orphan_monitors(db)
-        assert links(db, WING) == ([], None)

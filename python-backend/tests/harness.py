@@ -14,9 +14,8 @@ connection refuses any other thread. FastAPI's `TestClient` runs the app on a lo
 own, and the first query fails there with sqlite3's "objects created in a thread can only be used in
 that same thread" — measured, and the reason this is not built on it.
 
-**Partly ported**: what the routes and the sweep ported so far need. `pricedFetcher` arrives with the
-routes whose tests use it. `json` is `json_body`: under its own name it would shadow the standard
-library's module in every test that imports both.
+`json` is `json_body`: under its own name it would shadow the standard library's module in every
+test that imports both. `body` has no counterpart: an `httpx2` response parses itself (`.json()`).
 
 `FakeProvider` is what it is in the TypeScript: what a test's fake answers with, a function of the
 codes asked for. The Provider CLIENT a harness app is built on is `HarnessProvider`, the TypeScript's
@@ -230,6 +229,25 @@ def harness(
         sources={provider.name: provider.fetch_quotes, **(reference_sources or {})},
     )
     return Harness(app=create_app(deps), db=db, settings=s, sweeper=sweeper, folder=folder, clock=clock)
+
+
+#: the mid each leg of the position tests' condor is priced at, by the end of its code
+_MIDS = {"C8050": 5.0, "C8075": 2.0, "P7100": 3.0, "P7075": 1.5}
+
+
+async def priced_fetcher(codes: list[str]) -> Batch:
+    """The fetcher the position tests want: every leg priced, so cost to close and P&L are real."""
+
+    def record(code: str) -> Quote:
+        hit = next((mid for suffix, mid in _MIDS.items() if code.endswith(f"{suffix}000")), None)
+        return {
+            "code": code,
+            "mid_price": hit if hit is not None else 1.0,
+            "option_delta": 0.2,
+            "option_contract_size": 100.0,
+        }
+
+    return priced([record(c) for c in codes])
 
 
 def json_body(payload: Any) -> dict[str, Any]:
