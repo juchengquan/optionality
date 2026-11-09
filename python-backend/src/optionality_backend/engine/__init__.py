@@ -1,4 +1,4 @@
-"""The alarm engine's one door. Port of backend/src/engine/index.ts — PARTLY: see the last paragraph.
+"""The alarm engine's one door. Port of backend/src/engine/index.ts.
 
 Three modules behind it — `sweeper.py` (the sweep), `health.py` (the account of itself that
 `/health` reads) and `scheduler.py` (the loop and its watchdog) — and `__main__` is the only thing
@@ -32,14 +32,12 @@ out through this package's own namespace. So the rule is two halves, both in `te
 this `__all__` withholds the class (under any name), and the seam lint refuses every spelling of a
 reach past it from outside the engine and its tests. `SweepWatchdog` is exported where the
 TypeScript exports nothing: there `main.ts` passes an object literal the compiler checks by shape,
-and here `__main__` builds the record by name.
-
-**Partly ported**: `MonitorSweeper` and `SweeperDeps` (`sweeper.py`) join `__all__` with their
-module. Until then the sweep door's scenarios cannot run, and `tests/test_seams.py`'s `NOT_YET` names
-both.
+and here `__main__` builds the record by name. `SweeperDeps` is a record built by name for the same
+reason, where the TypeScript exports it as a type.
 """
 
 from .health import STALE_AFTER_SWEEPS
 from .scheduler import Scheduler, SweepWatchdog
+from .sweeper import MonitorSweeper, SweeperDeps
 
-__all__ = ["STALE_AFTER_SWEEPS", "Scheduler", "SweepWatchdog"]
+__all__ = ["STALE_AFTER_SWEEPS", "MonitorSweeper", "Scheduler", "SweepWatchdog", "SweeperDeps"]
