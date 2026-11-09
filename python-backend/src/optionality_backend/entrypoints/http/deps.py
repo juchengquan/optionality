@@ -5,19 +5,19 @@ Passed into each router factory as a closure rather than carried on the framewor
 closure is checked at the point of construction, and FastAPI's `Depends` would make every handler
 declare what this hands it whole.
 
-**Where the Python differs, and why.** `sources` is a `Mapping` of name to fetcher, where the
-TypeScript names the type `Sources` in `references.ts`; that module is not ported yet, and this is its
-shape (`Readonly<Record<string, QuoteFetcher>>`). The fetchers are the backend's awaitable
+**Where the Python differs, and why.** `sources` is `references.Sources`, a `Mapping` of name to fetcher
+(`Readonly<Record<string, QuoteFetcher>>`), and the fetchers are the backend's awaitable
 `ports.QuoteFetcher`, never the library's synchronous one.
 """
 
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
 from ...env import Settings
-from ...ports import ProviderClient, QuoteFetcher, SweeperPort
+from ...ports import ProviderClient, SweeperPort
+from ...references import Sources
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,7 @@ class Deps:
     #: alarms on it and nothing is derived from it, so the one-Provider rule does not reach it. The
     #: vendor door assembles this, which is also what guarantees the Provider's own Reference rows are
     #: served by the same client the alarms read from.
-    sources: Mapping[str, QuoteFetcher]
+    sources: Sources
     #: The id a write mints, injectable for the same reason as `now`: a door scenario (ADR 0021)
     #: records the rows a request wrote, and a random id there could only be scrubbed after the fact.
     #: None, as it is in `__main__`, mints a uuid (`db.values.new_id`).

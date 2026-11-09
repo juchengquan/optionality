@@ -14,10 +14,12 @@ connection refuses any other thread. FastAPI's `TestClient` runs the app on a lo
 own, and the first query fails there with sqlite3's "objects created in a thread can only be used in
 that same thread" — measured, and the reason this is not built on it.
 
-**Partly ported**: what the routes ported so far need. `fakeFetcher`, `quoting`, `poisonable`,
-`pricedFetcher` and `json` arrive with the routes whose tests use them.
+**Partly ported**: what the routes ported so far need. `fakeFetcher`, `poisonable` and
+`pricedFetcher` arrive with the routes whose tests use them. `json` is `json_body`: under its own name
+it would shadow the standard library's module in every test that imports both.
 """
 
+import json
 import shutil
 import sqlite3
 import tempfile
@@ -28,7 +30,7 @@ from typing import Any
 
 import httpx2
 from fastapi import FastAPI
-from optionality.quote import Batch
+from optionality.quote import Batch, Quote
 
 from optionality_backend.db.open import create_database
 from optionality_backend.entrypoints.http import Deps, create_app
@@ -79,9 +81,24 @@ class FakeSweeper:
         return AlarmState(label=self.label, bad=self.bad)
 
 
+def priced(records: list[Quote]) -> Batch:
+    """A batch in which every code was priced — what a fake Provider answers unless the test is about
+    one that was not."""
+    return Batch(records=records, unknown=[])
+
+
 async def echo_fetcher(codes: list[str]) -> Batch:
     """The permissive default: every requested contract "exists"."""
     return Batch(records=[{"code": c} for c in codes], unknown=[])
+
+
+def quoting(by_code: dict[str, Quote]) -> QuoteFetcher:
+    """A fetcher that returns the given figures per code, and nothing for a code it does not know."""
+
+    async def fetch(codes: list[str]) -> Batch:
+        return priced([{"code": c, **by_code[c]} for c in codes if c in by_code])
+
+    return fetch
 
 
 @dataclass
@@ -169,3 +186,12 @@ def harness(
         sources={provider.name: provider.fetch_quotes, **(reference_sources or {})},
     )
     return Harness(app=create_app(deps), db=db, settings=s, sweeper=sweeper, folder=folder, clock=clock)
+
+
+def json_body(payload: Any) -> dict[str, Any]:
+    """POST JSON, the shape nearly every write test needs: `h.call(path, **json_body({...}))`."""
+    return {
+        "method": "POST",
+        "content": json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
+        "headers": {"Content-Type": "application/json"},
+    }

@@ -106,3 +106,11 @@ def test_unknown_when_the_service_refuses(service):
     verdict = api.agrees(service.url)
     assert verdict.agrees is None
     assert verdict
+
+
+def test_the_package_publishes_the_fingerprint_it_was_cut_against():
+    # the Python backend states it on its own /health (ADR 0021), and reaches the library only through
+    # what it publishes — never `_ported`, which is generated and private. So the package names it.
+    import optionality
+
+    assert optionality.GOLDEN_CASES == GOLDEN_CASES

@@ -1,12 +1,11 @@
 """The app itself: what is open, what needs a token, and what a refusal leaves in the log.
 
 Port of backend/src/entrypoints/http/app.test.ts — PARTLY, as `app.py` is: the tests that need a
-route the Python does not serve yet wait for it. Not ported yet: the whole `/health` group (its
-route), "names the method, the path and the status of a refusal it threw" and "the error shape" (a
-422 from POST /positions), "names one a route THREW" (GET /positions/:id/vol — its path through the
-app is held meanwhile by `test_errors.py`), "says nothing at all about a request that succeeded"
-(/health) and "names a write that SUCCEEDED" (POST /positions). Two ported tests ask for /positions
-where the TypeScript asks for /monitors, which is not ported: they are about the token, not the
+route the Python does not serve yet wait for it. Not ported yet: "names the method, the path and the
+status of a refusal it threw" and "the error shape" (a 422 from POST /positions), "names one a route
+THREW" (GET /positions/:id/vol — its path through the app is held meanwhile by `test_errors.py`) and
+"names a write that SUCCEEDED" (POST /positions). Three ported tests ask for /positions where the
+TypeScript asks for /monitors, which is not ported: they are about the token or the log, not the
 route, and each says so.
 
 What only the Python can get wrong is at the end: FastAPI and Starlette answer differently from Hono
@@ -16,9 +15,11 @@ asks for a route that exists.
 
 import asyncio
 import logging
+import re
 import socket
 
 import httpx2
+import optionality
 import pytest
 import uvicorn
 from fastapi.openapi.utils import get_openapi
@@ -57,21 +58,17 @@ SURFACE = {
 NOT_YET = {
     "DELETE /monitors/:id",
     "DELETE /positions/:id",
-    "DELETE /references/:id",
     "GET /docs",
-    "GET /health",
     "GET /monitors",
     "GET /openapi.json",
     "GET /positions/:id/vol",
     "GET /positions/values",
     "GET /quotes",
-    "GET /references",
     "PATCH /monitors/:id",
     "PATCH /positions/:id",
     "POST /monitors",
     "POST /monitors/:id/total-entry",
     "POST /positions",
-    "POST /references",
 }
 
 OPEN = ("/health", "/openapi.json", "/docs")
@@ -104,6 +101,87 @@ def holding(id_, name, strike_date="2026-12-18"):
         "opened_at": None,
         "manage_notified_at": None,
     }
+
+
+class TestHealth:
+    async def test_is_open_and_reports_status_rather_than_raising(self, start):
+        resp = await start().call("/health", anonymous=True)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["db"] is True
+        # the Provider names itself: the dashboard said "OpenD" whatever was actually behind the port,
+        # and a second Provider would have made that a lie on screen (#169)
+        assert data["provider"] == {"name": "moomoo", "ok": False}  # nothing listens on the test port
+
+    async def test_reports_the_name_of_whichever_provider_answered_not_the_one_it_was_written_against(self, start):
+        # the route must read the Provider's own name: hard-coding "moomoo" here would pass every other
+        # test in this file and put the wrong vendor on the dashboard the day a second one lands
+        data = (await start(provider_name="ibkr").call("/health", anonymous=True)).json()
+        assert data["provider"]["name"] == "ibkr"
+
+    async def test_carries_the_fingerprint_of_the_golden_cases_for_a_port_to_compare_itself_against(self, start):
+        """The one field a notebook reads rather than the dashboard (ADR 0016).
+
+        `python/`'s port is held to the TypeScript by the golden cases, but only at the moment it is
+        written. A notebook pins a tag and keeps it for months, so the staleness it cannot otherwise see
+        is "the engine has moved since my port was cut". This is how it finds out: the running service
+        states which cases it IS, and `optionality.api.agrees` compares. The Python backend's maths is
+        the library, so the cases it IS are the ones the library was cut against.
+        """
+        data = (await start().call("/health", anonymous=True)).json()
+        # the published constant, not a literal: a copy here would agree with a stale port forever
+        assert data["golden_cases"] == optionality.GOLDEN_CASES
+        assert re.fullmatch(r"[0-9a-f]{12}", data["golden_cases"], re.ASCII)
+
+    async def test_reports_the_last_fetch_for_the_provider_not_a_port_that_merely_accepts(self, start):
+        # 2026-10-16: OpenD held the socket open and would not log in. The probe said true, every
+        # OpenD-backed route returned 502, and the dashboard showed a green light for a gateway the
+        # service could not speak to. What the last batch actually did is the only honest answer, and it
+        # costs no extra call.
+        h = start(opend=True)
+        h.sweeper.fetch_ok = False
+        data = (await h.call("/health", anonymous=True)).json()
+        assert data["provider"]["ok"] is False
+
+    async def test_falls_back_to_the_port_probe_only_while_nothing_has_been_fetched_yet(self, start):
+        # a service that has not asked yet cannot report what asking would do, and "unknown" is not one
+        # of the two values this field has
+        h = start(opend=True)
+        assert h.sweeper.fetch_ok is None
+        data = (await h.call("/health", anonymous=True)).json()
+        assert data["provider"]["ok"] is True
+
+    async def test_reports_the_knobs_a_client_cannot_guess(self, start):
+        h = start(
+            settings={"monitor_interval_seconds": 45, "expired_retention_days": 3, "display_tz": "Asia/Singapore"}
+        )
+        data = (await h.call("/health", anonymous=True)).json()
+        assert data["settings"] == {
+            # the manage-by DTE is a knob too, and the dashboard needs it: it is the horizon the
+            # watchlist's pressure reading weighs fill against, and a second copy of 21 in the frontend
+            # would drift from EXIT_MANAGE_BY_DTE the first time it moved
+            "manage_by_dte": 21,
+            "sweep_seconds": 45,
+            "expired_retention_days": 3,
+            "display_tz": "Asia/Singapore",
+        }
+
+    async def test_says_the_alarm_engine_has_not_swept_yet_rather_than_inventing_a_time(self, start):
+        data = (await start().call("/health", anonymous=True)).json()
+        assert data["monitor"] == {
+            "last_sweep_at": None,
+            "last_sweep_ok": True,
+            "consecutive_failures": 0,
+            "alarms": {"label": "watching", "bad": False},
+            "fetched_at": None,
+        }
+
+    async def test_says_so_when_the_database_has_gone_instead_of_failing_the_request(self, start):
+        h = start()
+        h.db.close()  # every query from here on raises
+        resp = await h.call("/health", anonymous=True)
+        assert resp.status_code == 200
+        assert resp.json()["db"] is False
 
 
 class TestTheBearerToken:
@@ -164,11 +242,18 @@ class TestARefusalInTheLog:
         assert lines, f"nothing logged a 401; saw {caplog.messages}"
         assert "GET" in lines[0]
 
+    async def test_says_nothing_at_all_about_a_request_that_succeeded(self, start, caplog):
+        # the log is read by eye during an incident; a line per poll would bury the one that matters
+        with caplog.at_level(logging.ERROR, logger=LOG):
+            await start().call("/health", anonymous=True)
+        assert [m for m in caplog.messages if "/health" in m] == []
+
     async def test_still_says_nothing_about_a_get_that_succeeded_which_is_the_flood(self, start, caplog):
-        # the log is read by eye during an incident; a line per poll would bury the one that matters.
-        # /positions where the TypeScript asks /monitors and /health, which are not ported yet
+        # /positions where the TypeScript asks /monitors, which is not ported yet
+        h = start()
         with caplog.at_level(logging.DEBUG, logger=LOG):
-            assert (await start().call("/positions")).status_code == 200
+            assert (await h.call("/positions")).status_code == 200
+            assert (await h.call("/health", anonymous=True)).status_code == 200
         assert caplog.messages == []
 
 
