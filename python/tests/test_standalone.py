@@ -29,6 +29,24 @@ bite would pass while proving nothing — the failure `cases.test.ts` records as
 quietly matched nothing, and which this review round has hit twice — so the script asserts that
 `import moomoo` DOES raise and that `optionality.opend` therefore fails, before it concludes
 anything about the rest.
+
+A second line runs through this file, and it is about CORRECTNESS rather than installability.
+`optionality.research/` mirrors no TypeScript, so no golden case holds it and nothing in this
+repository can say whether it is right (see its own `__init__.py`). The cased half must therefore
+not depend on it, in either of its two kinds:
+
+* a PURE module may not import it, for the same reason it may not import `opend` — it is the half
+  the golden cases compare, and a case that reached uncased code would be comparing the wrong
+  thing.
+* a PORT may not import it either. A port implements `quotes.QuoteFetcher` and is held to the
+  TypeScript vendor it mirrors by recorded fixtures; a port whose answer passed through an unheld
+  chain reader would be a port in name only.
+
+The other direction is fine and is asserted as such: research reads the maths and may drive a port.
+The ports are DERIVED rather than listed, because `yahoo` and `ibkr` ports are in flight and a list
+written today goes stale — they are the impure modules that are not the contract itself and not the
+service reader, and the existing static check above already forces a new port into `IMPURE` by
+failing the moment it is treated as pure.
 """
 
 import ast
@@ -45,9 +63,18 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "optionality"
 IMPURE = {"opend", "quotes", "api"}
 #: generated, and the package docstring
 NOT_A_MODULE = {"_ported", "__init__"}
+#: the two impure modules that are not PORTS: the `QuoteFetcher` contract itself, and the reader of
+#: the live service. Everything else impure answers that contract, which is what makes the port list
+#: derived — see the docstring
+NOT_A_PORT = {"quotes", "api"}
+#: the uncased half, as a subpackage so it is a directory rather than a name to remember
+RESEARCH_DIR = PACKAGE / "research"
+RESEARCH = "optionality.research"
 
-#: what a pure module may never import, at module level or inside a function
-FORBIDDEN_ROOTS = {"moomoo", "urllib", "http", "requests", "httpx", "socket", "ssl"}
+#: what a pure module may never import, at module level or inside a function. `yfinance` joins
+#: `moomoo` for the same reason: it is an extra, and a pure module reaching it would break
+#: `import optionality.alarm` for everyone who installed without one
+FORBIDDEN_ROOTS = {"moomoo", "yfinance", "urllib", "http", "requests", "httpx", "socket", "ssl"}
 
 
 def pure_modules() -> list[str]:
@@ -59,11 +86,31 @@ def pure_modules() -> list[str]:
     return names
 
 
-def imported_by(module: str) -> list[tuple[int, str]]:
-    """Every name `module` imports, with its line — from the AST, so an import nested inside a
-    function is seen too. A lazy import is still an import-time dependency the moment the
+def port_modules() -> list[str]:
+    """The modules that answer `quotes.QuoteFetcher`, derived rather than listed."""
+    names = sorted(IMPURE - NOT_A_PORT)
+    # an exemption list that can be widened from the inside is not a rule: adding "opend" to
+    # NOT_A_PORT would leave nothing to check and every assertion below would pass
+    assert "opend" in names, f"no ports left to check — NOT_A_PORT has swallowed them: {names}"
+    return names
+
+
+def research_modules() -> list[Path]:
+    """Every file of the uncased half. Its ABSENCE is a failure, not a pass: the rules below forbid
+    an import of something that does not exist, which is satisfied by an empty repository."""
+    paths = sorted(RESEARCH_DIR.glob("*.py"))
+    names = [p.stem for p in paths]
+    assert "__init__" in names and len(names) >= 2, (
+        f"no research half found in {RESEARCH_DIR} — the rules below would be about nothing: {names}"
+    )
+    return paths
+
+
+def imported_by(path: Path) -> list[tuple[int, str]]:
+    """Every name the file at `path` imports, with its line — from the AST, so an import nested
+    inside a function is seen too. A lazy import is still an import-time dependency the moment the
     function is called, and `opend/client.ts` does exactly that trick on the TypeScript side."""
-    tree = ast.parse((PACKAGE / f"{module}.py").read_text())
+    tree = ast.parse(path.read_text())
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -76,7 +123,7 @@ def imported_by(module: str) -> list[tuple[int, str]]:
 @pytest.mark.parametrize("module", pure_modules())
 def test_a_pure_module_reaches_nothing_outside_itself(module: str) -> None:
     offences = []
-    for line, name in imported_by(module):
+    for line, name in imported_by(PACKAGE / f"{module}.py"):
         root = name.split(".")[0]
         if root in FORBIDDEN_ROOTS:
             offences.append(f"{module}.py:{line} imports {name}")
@@ -87,6 +134,61 @@ def test_a_pure_module_reaches_nothing_outside_itself(module: str) -> None:
         "`import optionality` for anyone who installed without the `opend` extra: "
         + "; ".join(offences)
     )
+
+
+def reaches_research(path: Path) -> list[str]:
+    """Where the file at `path` imports the uncased half, with lines."""
+    return [
+        f"{path.name}:{line} imports {name}"
+        for line, name in imported_by(path)
+        if name == RESEARCH or name.startswith(RESEARCH + ".")
+    ]
+
+
+@pytest.mark.parametrize("module", pure_modules())
+def test_a_pure_module_does_not_reach_the_uncased_half(module: str) -> None:
+    offences = reaches_research(PACKAGE / f"{module}.py")
+    assert offences == [], (
+        "a pure module reached optionality.research, which no golden case holds — the cased half "
+        "would then be compared to the TypeScript through code nothing checks: " + "; ".join(offences)
+    )
+
+
+@pytest.mark.parametrize("module", port_modules())
+def test_a_port_does_not_reach_the_uncased_half(module: str) -> None:
+    offences = reaches_research(PACKAGE / f"{module}.py")
+    assert offences == [], (
+        "a port reached optionality.research. A port is held to the TypeScript vendor it mirrors "
+        "by recorded fixtures, and an answer routed through unheld code is not held at all: "
+        + "; ".join(offences)
+    )
+
+
+def test_the_research_half_may_reach_the_cased_one(tmp_path: Path) -> None:
+    """The direction that is fine, asserted so an over-broad rule cannot pass as a strict one.
+
+    Research exists to drive the maths and the ports from a notebook; a rule that forbade that
+    would have left the subpackage with nothing to do."""
+    # every research file as it stands, first: nothing here may be flagged
+    for path in research_modules():
+        assert reaches_research(path) == [], f"{path.name} imports itself?"
+    allowed = tmp_path / "chains.py"
+    allowed.write_text("from optionality.opend import OpenD\nfrom optionality import expiry\n")
+    assert reaches_research(allowed) == []
+
+
+def test_the_research_rule_bites(tmp_path: Path) -> None:
+    """The detector itself, against a file that breaks the rule. A guard whose matcher quietly
+    matched nothing would pass every test above while holding nothing — `cases.test.ts` records
+    exactly that failure, and this review round has hit it twice."""
+    for source in (
+        "from optionality.research.yahoo import option_chain\n",
+        "import optionality.research\n",
+        "def chain():\n    from optionality.research import yahoo\n",  # nested is still an import
+    ):
+        offender = tmp_path / "offender.py"
+        offender.write_text(source)
+        assert reaches_research(offender) != [], f"the rule did not see: {source!r}"
 
 
 STANDALONE = r'''
