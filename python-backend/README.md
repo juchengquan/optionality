@@ -121,13 +121,17 @@ defaults would serve a strike stored as `"8050"` or `true`, which zod refuses wi
 RAISED from `entrypoints/http/errors.py`, and keeps `{"detail": "..."}`. FastAPI's own behaviour is
 replaced wherever Hono's differs, in `app.py` and said there: the 404 for what nobody routes, the
 catch-all, the docs. A route is declared on the module's `APIRouter`, closing over `Deps`, as the
-TypeScript's closes over `deps`.
+TypeScript's closes over `deps`. A request body is validated by taking
+`Annotated[PositionIn, Depends(valid("json", PositionIn))]` (`entrypoints/http/validate.py`), never by
+declaring it as a FastAPI body parameter: its 422 is zod's text, which the dashboard prints.
 
 **Names.** `snake_case` functions, methods, variables and fields; `PascalCase` classes; constants
 spelled as the TypeScript spells them. An interface something IMPLEMENTS is a `typing.Protocol`,
 `runtime_checkable` so a test can ask whether a fake answers it (`ports.py`); a plain record is a
 frozen dataclass; an anonymous object type a function returns gets a name (`ports.AlarmState`). zod
-schemas become pydantic models. A global the TypeScript reaches, like `fetch`, is a keyword-only
+schemas become pydantic models; a REQUEST schema is a `schemas/zod.Shape` whose every field carries
+the zod schema it is (`Annotated[float, Number()]` for `z.number()`), so that a refusal is zod's, word
+for word — `Shape` refuses a field without one. A global the TypeScript reaches, like `fetch`, is a keyword-only
 parameter here that defaults to the real thing (`transport=`), because vitest can stub a global
 and a Python test cannot.
 

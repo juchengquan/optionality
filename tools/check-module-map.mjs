@@ -44,15 +44,16 @@ export const RENAMED = {
 };
 
 /** Python backend modules with no TypeScript counterpart, and why. */
-export const PY_ONLY = {};
+export const PY_ONLY = {
+  "schemas/zod.py":
+    "zod's refusals in zod's words, which the TypeScript has from the zod library: a refused request "
+    + "answers with z.prettifyError's text, the dashboard prints it verbatim, and pydantic says other "
+    + "things, and in places refuses other values",
+};
 
 /** Not yet ported. Frozen on 2026-11-09 with everything the backend had; it may only shrink. */
 export const BACKLOG = [
   "create-monitor.ts",
-  "db/queries/links.ts",
-  "db/queries/monitors.ts",
-  "db/queries/references.ts",
-  "db/queries/samples.ts",
   "engine/positions.ts",
   "engine/sweeper.ts",
   "entrypoints/bot/bot.ts",
@@ -68,17 +69,10 @@ export const BACKLOG = [
   "entrypoints/http/routes/health.ts",
   "entrypoints/http/routes/monitors.ts",
   "entrypoints/http/routes/references.ts",
-  "entrypoints/http/validate.ts",
   "holdings.ts",
-  "hydrate.ts",
   "main.ts",
   "monitors.ts",
   "references.ts",
-  "schemas/index.ts",
-  "schemas/monitor.ts",
-  "schemas/position.ts",
-  "schemas/reference.ts",
-  "schemas/sources.ts",
   "watchlist.ts",
 ];
 
