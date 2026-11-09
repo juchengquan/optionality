@@ -160,6 +160,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
+- `hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
+  so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
+  end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole
+  value and was held by nobody — complete by diligence, with no file a seventeenth endpoint would
+  have broken — so `hc.types.test.ts` takes the endpoint list from `/openapi.json`, which is built
+  from the routes, and names any the client does not call.
 - `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions). `sweep.ts`
   holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
   the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
