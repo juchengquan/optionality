@@ -123,6 +123,10 @@ export const SEAMS = [
       // — the omission that makes #230's mutation M7 fail to compile. Declared rather than
       // exempted as a class: "any test may reach in" is how the engine stops being main-only.
       "tools/check-seams.test.mjs",
+      // the door scenarios (ADR 0021): a sweep scenario is one tick of the REAL engine on a
+      // stated world, so the file that runs it must build a `MonitorSweeper` as `main.ts` does.
+      // It gets the door's exports and nothing more — `SweepHealth` stays withheld.
+      "backend/testing/scenarios/doors.ts",
     ],
     why: "the engine is reached by `main.ts` alone; a request must not be able to start a sweep, "
       + "and `index.ts` withholds SweepHealth so a second health account cannot be built",
@@ -148,7 +152,13 @@ export const SEAMS = [
      *  guard never sees it. Which is also right under ADR 0020: the dashboard is an HTTP client
      *  and should depend on the HTTP entrypoint.
      */
-    importableBy: ["backend/src/main.ts", "backend/testing/harness.ts"],
+    importableBy: [
+      "backend/src/main.ts", "backend/testing/harness.ts",
+      // the door scenarios (ADR 0021) open both surfaces on a stated world — the bot through
+      // `handleUpdate`, the routes through `createApp` — beside the real engine `harness.ts`
+      // never builds. Test support, as the harness is; `check-test-support` keeps it out of `src/`.
+      "backend/testing/scenarios/doors.ts",
+    ],
     /** `app.ts` and a route may never be doors: a route mounted from anywhere but `app.ts`, or
      *  mounted twice, is the one thing in this layer that would be hard to see. */
     never: /\/(app\.ts|routes\/.*)$/,

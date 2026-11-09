@@ -1,0 +1,60 @@
+{
+  "name": "POST /monitors refuses while the Provider cannot confirm the contract",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/monitors",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "strike_date": "2026-12-18",
+      "option_type": "CALL",
+      "strike": 7300,
+      "threshold": 0.3
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "cannot verify contract: the Provider did not confirm it — connect ECONNREFUSED 127.0.0.1:33333"
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000"
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "/holdings with nothing held",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "update": {
+    "update_id": 1,
+    "message": {
+      "chat": {
+        "id": 42
+      },
+      "text": "/holdings"
+    }
+  },
+  "expect": {
+    "reply": {
+      "chat_id": "42",
+      "text": "No holdings recorded. Record one on the dashboard, beside the rule that watches it.",
+      "parse_mode": null
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

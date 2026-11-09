@@ -1,0 +1,49 @@
+{
+  "name": "a word that is not a command gets the help",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "update": {
+    "update_id": 1,
+    "message": {
+      "chat": {
+        "id": 42
+      },
+      "text": "what is my delta"
+    }
+  },
+  "expect": {
+    "reply": {
+      "chat_id": "42",
+      "text": "Commands:\n/holdings — where each Position stands: cost, P&L, pace\n/monitors — list the watchlist with live state\n/quotes — live prices (mid, bid/ask) for every watched code\n/greeks — live delta/gamma/theta for every watched code\n/vol — live IV/vega for every watched code\n/watch <date> <CALL|PUT> <strike> <threshold> [field] [above|below] [signed] — add a monitor\n/watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below] [signed] — watch a combo\n/unwatch <name, code, id prefix, or contract like 260918 C8100> — remove a monitor\n/combo <name> — per-leg breakdown of a combo\n/threshold <name or contract> <value> — change a monitor's threshold\n/rename <old> <new> — rename a combo (keeps its alarm state and history)\n/snapshot <date> <CALL|PUT> <strike> — live quote\n(leg signs: − short, the leg you sold; + long)\n(dates: YYYY-MM-DD or YYYYMMDD)\n/health — service status\n/help — this message",
+      "parse_mode": null
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

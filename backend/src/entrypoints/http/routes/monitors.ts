@@ -93,8 +93,10 @@ export function monitorRoutes(deps: Deps) {
    */
   const one = (row: MonitorRow) => out(row, positionsForMonitors(db, [row.id]));
 
-  /** What create-monitor.ts needs, which is the database, one Provider and a clock. */
-  const creating = { db, fetchQuotes: deps.provider.fetchQuotes, now: deps.now };
+  /** What create-monitor.ts needs, which is the database, one Provider, a clock and the ids. */
+  const creating = {
+    db, fetchQuotes: deps.provider.fetchQuotes, now: deps.now, newId: deps.newId,
+  };
 
   return new Hono()
     .get("/", list, (c) => {

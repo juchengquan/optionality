@@ -1,0 +1,62 @@
+{
+  "name": "POST /monitors refuses a contract the Provider does not know",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [
+        "US.SPXW261218C7500000"
+      ],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/monitors",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "strike_date": "2026-12-18",
+      "option_type": "CALL",
+      "strike": 7500,
+      "threshold": 0.3
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "contract does not exist: US.SPXW261218C7500000 — check strike and expiry"
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7500000"
+        ]
+      ]
+    }
+  }
+}

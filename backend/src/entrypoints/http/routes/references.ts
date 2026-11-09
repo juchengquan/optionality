@@ -100,7 +100,7 @@ export function referenceRoutes(deps: Deps) {
       const why = await verifyContracts([code], fetch);
       if (why) throw httpError(422, why);
       const row: ReferenceRow = {
-        id: newId(),
+        id: (deps.newId ?? newId)(),
         code,
         label: label ?? null,
         source,

@@ -24,6 +24,8 @@ export interface BotContext {
   sweeper?: SweeperPort;
   /** injectable, so a test states the time rather than waiting for it */
   now(): Date;
+  /** the id a created rule gets, injectable for the same reason; absent mints a uuid */
+  newId?: () => string;
 }
 
 /** The arguments are the words after the command, already split. Parsing them is each command's
@@ -38,9 +40,9 @@ export function requireNumber(text: string): number {
   return value;
 }
 
-/** What create-monitor.ts needs: the database, one Provider and a clock. */
+/** What create-monitor.ts needs: the database, one Provider, a clock and the ids. */
 export function creating(ctx: BotContext) {
-  return { db: ctx.db, fetchQuotes: ctx.fetchQuotes, now: () => ctx.now() };
+  return { db: ctx.db, fetchQuotes: ctx.fetchQuotes, now: () => ctx.now(), newId: ctx.newId };
 }
 
 /** A failed market-data call, said the way each table says it.

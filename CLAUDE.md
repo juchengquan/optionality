@@ -40,10 +40,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   frontend's vitest configs, the Python suite, and the case generator), because the frontend's was
   not and the gate was green only at +08. The browser
   suite is checked zone-independent instead — `env` would not reach its Chromium. Targets, in the
-  order they run: lint, typecheck, `check-api`, `check-cases`, the Python suites (the library's, then
-  the Python backend's), `test-tools` (the repo-wide `tools/`, which no workspace's suite covers),
-  the library suite (`test-lib`), the API suite, both UI suites, `check-ui` and `check-opend`. This
-  list went stale twice without a gate noticing, and it is worth knowing why:
+  order they run: lint, typecheck, `check-api`, `check-cases`, `check-scenarios`, the Python suites
+  (the library's, then the Python backend's), `test-tools` (the repo-wide `tools/`, which no
+  workspace's suite covers), the library suite (`test-lib`), the API suite, both UI suites,
+  `check-ui` and `check-opend`. This list went stale twice without a gate noticing, and it is
+  worth knowing why:
   `check-make-targets` checks that every backticked invocation names a rule that EXISTS, never that a
   documented SET is complete, so a target added to the `check` rule is nobody's job to write down
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
@@ -108,6 +109,18 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
   repo-wide codegen step rather than something the library may do. Both stamps are generated and
   committed; `make check-cases` fails when either is stale.
+- **Door scenarios** (ADR 0021, phase 1c): `testdata/scenarios/{http,bot,sweep}/` — a stated world
+  (rows, `.env` lines, what each vendor answers, the clock), ONE request, Telegram update or sweep
+  tick, and exactly what the service did: the response or reply, the rows it changed, the messages
+  it sent, the codes it asked each vendor for. The shared ground a second backend is held to.
+  **`make scenarios`** regenerates them from `backend/testing/scenarios/inputs/` (and `make cases`
+  runs it too, because `/health` carries the golden fingerprint); **`make check-scenarios`** fails
+  on a stale, missing or orphaned file. Never edit them by hand. `test-api` replays every file
+  (`replay.test.ts`) and holds each door's coverage (`coverage.test.ts`): every status of every
+  endpoint in `/openapi.json`, every command in the bot's published "/" menu, and every outcome in
+  `outcomes.ts` — whose own list is held to the decisions the engine imports and the
+  `disabled_reason`s it writes. Ids and the clock are INJECTED (`Deps.newId`, `BotDeps.newId`), not
+  scrubbed. `testdata/scenarios/README.md` is the format, for a runner in another language.
 - **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
   `ibkr/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
   from the official Python client with `sendMsg` intercepted at protocol 157, and what the gateway

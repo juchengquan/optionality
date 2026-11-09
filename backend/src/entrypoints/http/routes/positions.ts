@@ -197,7 +197,7 @@ export function positionRoutes(deps: Deps) {
         throw httpError(409, `position '${p.name}' already exists`);
       }
       const row: PositionRow = {
-        id: newId(),
+        id: (deps.newId ?? newId)(),
         name: p.name,
         strategy: p.strategy ?? null,
         strike_date: p.strike_date,

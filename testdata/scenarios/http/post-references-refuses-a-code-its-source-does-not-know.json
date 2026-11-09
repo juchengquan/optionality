@@ -1,0 +1,60 @@
+{
+  "name": "POST /references refuses a code its source does not know",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [
+        "US..SPX"
+      ],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/references",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "code": "US..SPX",
+      "source": "moomoo"
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "contract does not exist: US..SPX — check strike and expiry"
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US..SPX"
+        ]
+      ]
+    }
+  }
+}

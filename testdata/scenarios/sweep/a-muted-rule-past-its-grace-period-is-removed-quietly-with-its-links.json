@@ -1,0 +1,124 @@
+{
+  "name": "a muted rule past its grace period is removed quietly with its links",
+  "outcomes": [
+    "expired-and-removed-quietly"
+  ],
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-oct",
+          "name": "oct-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-10-30",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": null,
+          "manage_notified_at": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261030C7300000",
+          "strike_date": "2026-10-30",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": "leg",
+          "enabled": 0,
+          "disabled_reason": "expired",
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-1",
+          "position_id": "pos-oct"
+        }
+      ],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "expect": {
+    "messages": [],
+    "rows": {
+      "monitors": {
+        "removed": [
+          {
+            "id": "mon-1"
+          }
+        ]
+      },
+      "monitor_positions": {
+        "removed": [
+          {
+            "monitor_id": "mon-1",
+            "position_id": "pos-oct"
+          }
+        ]
+      }
+    },
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261030C7300000",
+          "US.SPXW261030C7350000",
+          "US.SPXW261030P6350000",
+          "US.SPXW261030P6400000"
+        ]
+      ]
+    }
+  }
+}

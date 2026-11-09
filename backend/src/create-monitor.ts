@@ -46,6 +46,8 @@ export interface CreateDeps {
   db: DatabaseSync;
   fetchQuotes: QuoteFetcher;
   now: () => Date;
+  /** the new row's id; a uuid unless a door scenario states it (ADR 0021) */
+  newId?: () => string;
 }
 
 /** The rule's shape, with every default still optional: applying them HERE is what stops the two
@@ -91,9 +93,9 @@ export function isFault(result: MonitorRow | CreateFault): result is CreateFault
 }
 
 /** Every column of a new monitor, so neither door writes a half-built row. */
-function blank(now: Date, over: Partial<MonitorRow>): MonitorRow {
+function blank(deps: CreateDeps, over: Partial<MonitorRow>): MonitorRow {
   return {
-    id: newId(),
+    id: (deps.newId ?? newId)(),
     code: "",
     strike_date: "",
     option_type: "",
@@ -110,7 +112,7 @@ function blank(now: Date, over: Partial<MonitorRow>): MonitorRow {
     last_value: null,
     last_checked_at: null,
     last_alarm_at: null,
-    created_at: toSqlDatetime(now),
+    created_at: toSqlDatetime(deps.now()),
     ...over,
   } as MonitorRow;
 }
@@ -152,7 +154,7 @@ export async function createSingleMonitor(
   const field = input.field ?? DEFAULT_SINGLE_FIELD;
   const enabled = input.enabled ?? DEFAULT_ENABLED;
 
-  return finish(deps, code, field, [code], () => blank(deps.now(), {
+  return finish(deps, code, field, [code], () => blank(deps, {
     code,
     strike_date: input.strike_date,
     option_type: input.option_type,
@@ -183,7 +185,7 @@ export async function createComboMonitor(
   const enabled = input.enabled ?? DEFAULT_ENABLED;
   const legCodes = input.legs.map((l) => buildSpxCode(input.strike_date, l.option_type, l.strike));
 
-  return finish(deps, input.name, field, legCodes, () => blank(deps.now(), {
+  return finish(deps, input.name, field, legCodes, () => blank(deps, {
     code: input.name,
     strike_date: input.strike_date,
     option_type: "CMB",
