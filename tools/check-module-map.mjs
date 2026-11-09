@@ -53,7 +53,6 @@ export const PY_ONLY = {
 
 /** Not yet ported. Frozen on 2026-11-09 with everything the backend had; it may only shrink. */
 export const BACKLOG = [
-  "create-monitor.ts",
   "entrypoints/bot/bot.ts",
   "entrypoints/bot/commands/context.ts",
   "entrypoints/bot/commands/create.ts",
@@ -63,11 +62,8 @@ export const BACKLOG = [
   "entrypoints/bot/commands/watchlist.ts",
   "entrypoints/bot/format.ts",
   "entrypoints/http/openapi.ts",
-  "entrypoints/http/routes/monitors.ts",
   "holdings.ts",
   "main.ts",
-  "monitors.ts",
-  "watchlist.ts",
 ];
 
 const SKIP_DIRS = new Set(["node_modules", "__pycache__", ".venv", "dist"]);

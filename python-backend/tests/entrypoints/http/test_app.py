@@ -4,9 +4,7 @@ Port of backend/src/entrypoints/http/app.test.ts — PARTLY, as `app.py` is: the
 route the Python does not serve yet wait for it. Not ported yet: "names the method, the path and the
 status of a refusal it threw" and "the error shape" (a 422 from POST /positions), "names one a route
 THREW" (GET /positions/:id/vol — its path through the app is held meanwhile by `test_errors.py`) and
-"names a write that SUCCEEDED" (POST /positions). Three ported tests ask for /positions where the
-TypeScript asks for /monitors, which is not ported: they are about the token or the log, not the
-route, and each says so.
+"names a write that SUCCEEDED" (POST /positions).
 
 What only the Python can get wrong is at the end: FastAPI and Starlette answer differently from Hono
 wherever nobody told them otherwise, and those differences are invisible to a scenario that only ever
@@ -56,18 +54,12 @@ SURFACE = {
 #: empty. Holding the Python to the WHOLE surface less this is what keeps an unported route ABSENT — a
 #: half-built one would answer, and a scenario could pass by accident.
 NOT_YET = {
-    "DELETE /monitors/:id",
     "DELETE /positions/:id",
     "GET /docs",
-    "GET /monitors",
     "GET /openapi.json",
     "GET /positions/:id/vol",
     "GET /positions/values",
-    "GET /quotes",
-    "PATCH /monitors/:id",
     "PATCH /positions/:id",
-    "POST /monitors",
-    "POST /monitors/:id/total-entry",
     "POST /positions",
 }
 
@@ -195,14 +187,12 @@ class TestTheBearerToken:
         assert resp.status_code == 401
 
     async def test_accepts_the_right_one(self, start):
-        # /positions where the TypeScript asks /monitors, which is not ported yet
-        assert (await start().call("/positions")).status_code == 200
+        assert (await start().call("/monitors")).status_code == 200
 
     async def test_asks_for_nothing_when_no_token_is_configured(self, start):
-        # the owner's deployment sets API_TOKEN; a local run without one must still work. /positions
-        # where the TypeScript asks /monitors, which is not ported yet
+        # the owner's deployment sets API_TOKEN; a local run without one must still work
         h = start(settings={"api_token": ""})
-        assert (await h.call("/positions", anonymous=True)).status_code == 200
+        assert (await h.call("/monitors", anonymous=True)).status_code == 200
 
     def test_serves_exactly_these_doors_and_no_others(self, start):
         # The API's whole surface, stated, less what is not ported yet. A route nothing calls is a
@@ -249,10 +239,10 @@ class TestARefusalInTheLog:
         assert [m for m in caplog.messages if "/health" in m] == []
 
     async def test_still_says_nothing_about_a_get_that_succeeded_which_is_the_flood(self, start, caplog):
-        # /positions where the TypeScript asks /monitors, which is not ported yet
+        # the log is read by eye during an incident; a line per poll would bury the one that matters
         h = start()
         with caplog.at_level(logging.DEBUG, logger=LOG):
-            assert (await h.call("/positions")).status_code == 200
+            assert (await h.call("/monitors")).status_code == 200
             assert (await h.call("/health", anonymous=True)).status_code == 200
         assert caplog.messages == []
 
