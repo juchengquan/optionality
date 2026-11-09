@@ -16,7 +16,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { createDatabase } from "../../src/db/open.ts";
 import { type Settings, settingsFromEnv } from "../../src/env.ts";
-import type { QuoteFetcher } from "../../src/quotes.ts";
+import type { QuoteFetcher } from "optionality/quotes";
 import {
   type Calls, type Diff, JSON_COLUMNS, type Row, TABLES, type TableName, type Tables,
   type Vendor, type World, columnsOf, primaryKeys,

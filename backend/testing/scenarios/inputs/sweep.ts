@@ -5,7 +5,7 @@
  *  as one event rather than as a busy morning; where the engine's MEMORY matters — a run of failed
  *  sweeps, a figure silent for several — the earlier sweeps say so, and write nothing.
  */
-import { buildSpxCode } from "../../../src/domain/contract.ts";
+import { buildSpxCode } from "optionality/domain/contract";
 import type { World } from "../format.ts";
 import {
   BOOK, C7300, C7350, EXPIRED, P6350, P6400, at, combo, except, link, monitor, position, quote,

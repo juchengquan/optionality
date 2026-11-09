@@ -5,7 +5,7 @@
  *  column of every row, every setting — so a reader never needs this file to know what a scenario
  *  says, and a second backend never needs it to run one.
  */
-import { buildSpxCode } from "../../../src/domain/contract.ts";
+import { buildSpxCode } from "optionality/domain/contract";
 import type {
   EarlierSweep, HttpRequest, Provider, Row, Tables, Update, Vendor, World,
 } from "../format.ts";
