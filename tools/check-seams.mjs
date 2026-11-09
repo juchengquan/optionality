@@ -51,6 +51,11 @@ export const SEAMS = [
       // (CLAUDE.md). It lives beside `wire.ts` and `messages.ts` because it speaks that protocol —
       // moving it out would reach INTO the seam instead, which is the same hole reversed.
       "ibkr/fake.ts",
+      // every vendor's PURE field mapping, so `testdata/vendors/` can record one truth for two
+      // languages. A door rather than a re-export from `index.ts`, measured: that route typechecks
+      // the whole vendor graph — and therefore the moomoo SDK's declarations — into the case
+      // generator, which calls neither. `never` below still forbids a client or a descriptor.
+      "fields.ts",
     ],
     /** What may NEVER become a door, whatever the pressure.
      *

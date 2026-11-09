@@ -1,0 +1,198 @@
+{
+  "module": "yahoo-fields",
+  "constants": {},
+  "cases": [
+    {
+      "fn": "toRecord",
+      "name": "an index carries no book and no mid, only the price Yahoo means",
+      "args": [
+        "^GSPC",
+        {
+          "symbol": "^GSPC",
+          "shortName": "S&P 500",
+          "regularMarketPrice": 7376.86,
+          "regularMarketPreviousClose": 7353.73,
+          "bid": 7524.56,
+          "ask": 7624.67,
+          "exchangeDataDelayedBy": 0,
+          "marketState": "CLOSED"
+        }
+      ],
+      "expect": {
+        "code": "^GSPC",
+        "name": "S&P 500",
+        "last_price": 7376.86,
+        "prev_close_price": 7353.73,
+        "delayed": false,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "toRecord",
+      "name": "the regular-market price and the previous close",
+      "args": [
+        "^VIX",
+        {
+          "symbol": "^VIX",
+          "shortName": "CBOE Volatility Index",
+          "regularMarketPrice": 25.64,
+          "regularMarketPreviousClose": 28.18,
+          "bid": 0,
+          "ask": 0,
+          "exchangeDataDelayedBy": 15,
+          "marketState": "CLOSED"
+        }
+      ],
+      "expect": {
+        "code": "^VIX",
+        "name": "CBOE Volatility Index",
+        "last_price": 25.64,
+        "prev_close_price": 28.18,
+        "delayed": true,
+        "delayed_by_minutes": 15,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "toRecord",
+      "name": "not delayed where Yahoo says zero minutes",
+      "args": [
+        "^GSPC",
+        {
+          "symbol": "^GSPC",
+          "shortName": "S&P 500",
+          "regularMarketPrice": 7376.86,
+          "regularMarketPreviousClose": 7353.73,
+          "bid": 7524.56,
+          "ask": 7624.67,
+          "exchangeDataDelayedBy": 0,
+          "marketState": "CLOSED"
+        }
+      ],
+      "expect": {
+        "code": "^GSPC",
+        "name": "S&P 500",
+        "last_price": 7376.86,
+        "prev_close_price": 7353.73,
+        "delayed": false,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "toRecord",
+      "name": "states the minutes where Yahoo does — the only source that can",
+      "args": [
+        "^VIX",
+        {
+          "symbol": "^VIX",
+          "shortName": "CBOE Volatility Index",
+          "regularMarketPrice": 25.64,
+          "regularMarketPreviousClose": 28.18,
+          "bid": 0,
+          "ask": 0,
+          "exchangeDataDelayedBy": 15,
+          "marketState": "CLOSED"
+        }
+      ],
+      "expect": {
+        "code": "^VIX",
+        "name": "CBOE Volatility Index",
+        "last_price": 25.64,
+        "prev_close_price": 28.18,
+        "delayed": true,
+        "delayed_by_minutes": 15,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "toRecord",
+      "name": "a regular session is not last known",
+      "args": [
+        "^GSPC",
+        {
+          "symbol": "^GSPC",
+          "shortName": "S&P 500",
+          "regularMarketPrice": 7376.86,
+          "regularMarketPreviousClose": 7353.73,
+          "bid": 7524.56,
+          "ask": 7624.67,
+          "exchangeDataDelayedBy": 0,
+          "marketState": "REGULAR"
+        }
+      ],
+      "expect": {
+        "code": "^GSPC",
+        "name": "S&P 500",
+        "last_price": 7376.86,
+        "prev_close_price": 7353.73,
+        "delayed": false,
+        "last_known": false
+      }
+    },
+    {
+      "fn": "toRecord",
+      "name": "pre-market is last known, because an index is not calculated then",
+      "args": [
+        "^GSPC",
+        {
+          "symbol": "^GSPC",
+          "shortName": "S&P 500",
+          "regularMarketPrice": 7376.86,
+          "regularMarketPreviousClose": 7353.73,
+          "bid": 7524.56,
+          "ask": 7624.67,
+          "exchangeDataDelayedBy": 0,
+          "marketState": "PRE"
+        }
+      ],
+      "expect": {
+        "code": "^GSPC",
+        "name": "S&P 500",
+        "last_price": 7376.86,
+        "prev_close_price": 7353.73,
+        "delayed": false,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "toRecord",
+      "name": "post-market is too",
+      "args": [
+        "^GSPC",
+        {
+          "symbol": "^GSPC",
+          "shortName": "S&P 500",
+          "regularMarketPrice": 7376.86,
+          "regularMarketPreviousClose": 7353.73,
+          "bid": 7524.56,
+          "ask": 7624.67,
+          "exchangeDataDelayedBy": 0,
+          "marketState": "POST"
+        }
+      ],
+      "expect": {
+        "code": "^GSPC",
+        "name": "S&P 500",
+        "last_price": 7376.86,
+        "prev_close_price": 7353.73,
+        "delayed": false,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "toRecord",
+      "name": "says nothing where Yahoo said nothing, rather than claiming live",
+      "args": [
+        "^GSPC",
+        {
+          "symbol": "^GSPC",
+          "regularMarketPrice": 1
+        }
+      ],
+      "expect": {
+        "code": "^GSPC",
+        "last_price": 1
+      }
+    }
+  ]
+}

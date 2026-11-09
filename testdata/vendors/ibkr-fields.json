@@ -1,0 +1,222 @@
+{
+  "module": "ibkr-fields",
+  "constants": {
+    "GREEK_TICKS": {
+      "$set": [
+        13,
+        53
+      ]
+    },
+    "PRICE_TICKS": {
+      "1": "bid_price",
+      "2": "ask_price",
+      "4": "last_price",
+      "9": "prev_close_price",
+      "66": "bid_price",
+      "67": "ask_price",
+      "68": "last_price",
+      "75": "prev_close_price"
+    }
+  },
+  "cases": [
+    {
+      "fn": "greekFields",
+      "name": "implied volatility changes units, fraction into percent",
+      "args": [
+        {
+          "impliedVol": 0.13679778548286392,
+          "delta": null,
+          "gamma": null,
+          "vega": null,
+          "theta": null
+        }
+      ],
+      "expect": {
+        "option_implied_volatility": 13.679778548286393
+      }
+    },
+    {
+      "fn": "greekFields",
+      "name": "the greeks themselves are already dimensionless",
+      "args": [
+        {
+          "impliedVol": null,
+          "delta": 0.02806614063578037,
+          "gamma": 0.00018826189971762677,
+          "vega": 1.8321828845155324,
+          "theta": -0.28028107934963487
+        }
+      ],
+      "expect": {
+        "option_delta": 0.02806614063578037,
+        "option_gamma": 0.00018826189971762677,
+        "option_vega": 1.8321828845155324,
+        "option_theta": -0.28028107934963487
+      }
+    },
+    {
+      "fn": "greekFields",
+      "name": "omits a greek that was not computed rather than writing null",
+      "args": [
+        {
+          "impliedVol": null,
+          "delta": null,
+          "gamma": null,
+          "vega": null,
+          "theta": null
+        }
+      ],
+      "expect": {}
+    },
+    {
+      "fn": "grade",
+      "name": "grade 1 is live and not frozen",
+      "args": [
+        1
+      ],
+      "expect": {
+        "delayed": false,
+        "last_known": false
+      }
+    },
+    {
+      "fn": "grade",
+      "name": "grade 2 is live and last known",
+      "args": [
+        2
+      ],
+      "expect": {
+        "delayed": false,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "grade",
+      "name": "grade 3 is delayed",
+      "args": [
+        3
+      ],
+      "expect": {
+        "delayed": true,
+        "last_known": false
+      }
+    },
+    {
+      "fn": "grade",
+      "name": "grade 4 is delayed AND last known, kept as both",
+      "args": [
+        4
+      ],
+      "expect": {
+        "delayed": true,
+        "last_known": true
+      }
+    },
+    {
+      "fn": "grade",
+      "name": "says nothing about a grade nobody documented",
+      "args": [
+        0
+      ],
+      "expect": null
+    },
+    {
+      "fn": "grade",
+      "name": "and nothing about one out of range",
+      "args": [
+        7
+      ],
+      "expect": null
+    },
+    {
+      "fn": "withMid",
+      "name": "the midpoint where both sides arrived",
+      "args": [
+        {
+          "bid_price": 3.5,
+          "ask_price": 4.1,
+          "mid_price": 3.8
+        }
+      ],
+      "expect": {
+        "bid_price": 3.5,
+        "ask_price": 4.1,
+        "mid_price": 3.8
+      }
+    },
+    {
+      "fn": "withMid",
+      "name": "absent where only the bid did",
+      "args": [
+        {
+          "bid_price": 3.5
+        }
+      ],
+      "expect": {
+        "bid_price": 3.5
+      }
+    },
+    {
+      "fn": "withMid",
+      "name": "absent where only the ask did",
+      "args": [
+        {
+          "ask_price": 4.1
+        }
+      ],
+      "expect": {
+        "ask_price": 4.1
+      }
+    },
+    {
+      "fn": "withMid",
+      "name": "zero for an empty book, left for the domain to judge",
+      "args": [
+        {
+          "bid_price": 0,
+          "ask_price": 0,
+          "mid_price": 0
+        }
+      ],
+      "expect": {
+        "bid_price": 0,
+        "ask_price": 0,
+        "mid_price": 0
+      }
+    },
+    {
+      "fn": "hasFigures",
+      "name": "false for a record carrying only its identity",
+      "args": [
+        {
+          "code": "SPX",
+          "name": "S&P 500"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "hasFigures",
+      "name": "false for identity plus a grade, which is not a figure",
+      "args": [
+        {
+          "code": "SPX",
+          "delayed": true,
+          "last_known": true
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "hasFigures",
+      "name": "true for one figure, however little",
+      "args": [
+        {
+          "code": "SPX",
+          "prev_close_price": 7353.73
+        }
+      ],
+      "expect": true
+    }
+  ]
+}
