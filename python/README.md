@@ -26,7 +26,7 @@ claim — Yahoo states minutes, IBKR states only that it is delayed, moomoo stat
 of `None` with its own `error`, so you read the reason rather than catch an exception (ADR 0018).
 
 `optionality.yahoo` is the second provider beside `opend`, answering the same contract through
-yfinance (the `yahoo` extra) and held to `backend/src/vendors/yahoo/fields.ts` by the recorded cases
+yfinance (the `yahoo` extra) and held to `typescript/src/vendors/yahoo/fields.ts` by the recorded cases
 in `testdata/vendors/` — compared exactly, as the domain's are. It carries no bid, ask or mid: `^GSPC`
 returned a bid 148 points above a price that matched Cboe's own close, and `reference.FIELDS` prefers
 the mid, so mapping that book faithfully would have put 7,574 on the strip entirely plausibly.
@@ -46,7 +46,7 @@ the service from elsewhere on the tailnet.
 
 ## Two halves, and the line between them
 
-Everything above `research/` is a port: it mirrors a `backend/src/domain/` module or a vendor client
+Everything above `research/` is a port: it mirrors a `typescript/src/domain/` module or a vendor client
 and is held there — by the golden cases for the maths and the decisions, compared exactly, and by
 recorded fixtures for the providers. A wrong answer turns `make test` red.
 

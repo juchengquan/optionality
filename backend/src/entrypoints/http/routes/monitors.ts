@@ -18,7 +18,7 @@ import {
 } from "../../../create-monitor.ts";
 import type { MonitorRow } from "../../../db/rows.ts";
 import { fromSqliteBool, toSqliteBool } from "../../../db/values.ts";
-import { exitPolicy } from "../../../domain/exit.ts";
+import { exitPolicy } from "optionality/domain/exit";
 import { httpError, notFound, providerFailed } from "../errors.ts";
 import { applyTotalEntry, watchlistQuotes } from "../../../monitors.ts";
 import {

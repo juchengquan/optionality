@@ -14,7 +14,7 @@
  *  loaded lazily on the first call that needs it (`client.ts`), so a build with no Yahoo
  *  Reference never imports it at all.
  */
-import { yahooFetcher } from "./client.ts";
+import { yahooFetcher } from "optionality/vendors/yahoo/client";
 import type { ReferenceVendor } from "../index.ts";
 
 export const yahooVendor: ReferenceVendor = {

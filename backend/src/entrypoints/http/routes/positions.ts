@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { POSITION_GREEK_FIELDS, contractSize, positionGreek, positionLegCodes } from "../../../domain/position.ts";
+import { POSITION_GREEK_FIELDS, contractSize, positionGreek, positionLegCodes } from "optionality/domain/position";
 import type { Deps } from "../deps.ts";
 import {
   clearPositionLinks, clearPositionSamples, clearScopeOfOrphans, deletePositionRow, findPosition,
@@ -20,13 +20,13 @@ import type { PositionRow } from "../../../db/rows.ts";
 import { newId, toSqliteJson } from "../../../db/values.ts";
 import { toSqlDatetime } from "../../../db/time.ts";
 import { httpError, notFound, providerFailed } from "../errors.ts";
-import { volAttribution, type VolSample } from "../../../domain/vol.ts";
+import { volAttribution, type VolSample } from "optionality/domain/vol";
 import { toPosition } from "../../../hydrate.ts";
 import { adoptOrphanMonitors } from "../../../monitors.ts";
-import { verifyContracts } from "../../../quotes.ts";
+import { verifyContracts } from "optionality/quotes";
 import { DEFAULT_CONTRACTS, PositionIn, PositionPatch } from "../../../schemas/position.ts";
 import { displayStored } from "../../../db/time.ts";
-import { displayTime } from "../../../domain/timefmt.ts";
+import { displayTime } from "optionality/domain/timefmt";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 

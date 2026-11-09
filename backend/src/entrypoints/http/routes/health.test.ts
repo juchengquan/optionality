@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  *  route reads the module rather than a copy of its value, and the only way to state that is to
  *  make the module say something else.
  */
-vi.mock("../../../golden.ts", () => ({ GOLDEN_CASES: "feedfacecafe" }));
+vi.mock("optionality/golden", () => ({ GOLDEN_CASES: "feedfacecafe" }));
 
 const { body, harness } = await import("../../../../testing/harness.ts");
 

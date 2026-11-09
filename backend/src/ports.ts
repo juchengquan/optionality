@@ -6,7 +6,7 @@
  *  exists for: a test must never reach the real moomoo SDK, because it blocks indefinitely on a
  *  dead port and a missing fake looks like a hung suite (CLAUDE.md).
  */
-import type { QuoteFetcher } from "./quotes.ts";
+import type { QuoteFetcher } from "optionality/quotes";
 
 /** The alarm engine's account of its own health, as /health reports it.
  *

@@ -91,7 +91,9 @@ describe("a seam's interior is private", () => {
     expect(lines(seam)).toEqual([expect.stringContaining("pkg/src/b.ts")]);
   });
 
-  it("is quiet about a package specifier, which is check-boundaries' business", () => {
+  it("is quiet about a package specifier when the seam declares no package", () => {
+    // check-boundaries' business for a seam whose callers all live in its own package; a seam
+    // reached from ANOTHER package declares its package, below
     write("pkg/src/caller.ts", 'import { x } from "backend/schemas";\n');
     expect(found()).toEqual([]);
   });
@@ -129,6 +131,78 @@ describe("a door the seam itself forbids", () => {
   });
 });
 
+describe("a seam reached by name from another package (ADR 0021)", () => {
+  // the shape the vendors took: clients in a library, the door that opens them in a service, and
+  // the service reaching the library by its npm name because check-boundaries refuses a path
+  const EXPORTS = {
+    "./things/one/client": "./src/things/one/client.ts",
+    "./things/one/fake": "./src/things/one/fake.ts",
+  };
+  const library = (exports = EXPORTS) => {
+    write("lib/package.json", JSON.stringify({ name: "named", exports }));
+    write("lib/src/things/one/client.ts", "export const c = 1;\n");
+    write("lib/src/things/one/fake.ts", "export const f = 1;\n");
+  };
+  const DOOR = { dir: "app/src/door", doors: ["index.ts"], never: /\/client\.ts$/, why: "door" };
+  const seams = (extra = {}) => [{
+    dir: "lib/src/things", package: "lib", doors: ["one/fake.ts"], insiders: ["app/src/door"],
+    never: /\/client\.ts$/, why: "opened in one place", ...extra,
+  }, DOOR];
+
+  it("refuses a reach past the door spelled as a package name", () => {
+    library();
+    write("app/src/route.ts", 'import { c } from "named/things/one/client";\n');
+    expect(lines(seams())).toEqual([
+      expect.stringMatching(/app\/src\/route\.ts: .*lib\/src\/things\/one\/client\.ts is inside/),
+    ]);
+  });
+
+  it("follows a wildcard export, so a pattern cannot carry the interior out", () => {
+    library({ "./*": "./src/*.ts" });
+    write("app/src/route.ts", 'const m = await import("named/things/one/client");\n');
+    expect(lines(seams())).toEqual([expect.stringContaining("app/src/route.ts")]);
+  });
+
+  it("allows a door reached by name, from anywhere", () => {
+    library();
+    write("app/tools/gateway.ts", 'import { f } from "named/things/one/fake";\n');
+    expect(lines(seams())).toEqual([]);
+  });
+
+  it("lets an insider reach the interior, and only the insider", () => {
+    library();
+    write("app/src/door/one.ts", 'import { c } from "named/things/one/client";\n');
+    write("app/src/sweeper.ts", 'import { c } from "named/things/one/client";\n');
+    expect(lines(seams())).toEqual([expect.stringContaining("app/src/sweeper.ts")]);
+  });
+
+  it("refuses an insider that is not itself a seam, so the interior cannot leak", () => {
+    // the cheap fix for a dashed row, one level up: naming the whole service as an insider
+    library();
+    expect(lines(seams({ insiders: ["app/src"] }))).toEqual([
+      expect.stringContaining('"app/src" is named as an insider and is not itself a seam'),
+    ]);
+  });
+
+  it("still sees a relative reach, which check-boundaries would refuse as well", () => {
+    library();
+    write("app/src/route.ts", 'import { c } from "../../lib/src/things/one/client.ts";\n');
+    expect(lines(seams())).toEqual([expect.stringContaining("app/src/route.ts")]);
+  });
+
+  it("says nothing about a name the package does not export, which Node refuses first", () => {
+    library();
+    write("app/src/route.ts", 'import { w } from "named/things/one/wire";\n');
+    expect(lines(seams())).toEqual([]);
+  });
+
+  it("says nothing about a different package that merely shares a prefix", () => {
+    library();
+    write("app/src/route.ts", 'import { x } from "named-too/things/one/client";\n');
+    expect(lines(seams())).toEqual([]);
+  });
+});
+
 describe("who may knock", () => {
   const seam = () => [{
     dir: "pkg/src/things", doors: ["index.ts"], importableBy: ["pkg/src/main.ts"],
@@ -157,7 +231,7 @@ describe("who may knock", () => {
     expect(lines(seam())[0]).toMatch(/reached only by pkg\/src\/main\.ts/);
   });
 
-  it("lets anyone through when the field is absent, which is the other three seams", () => {
+  it("lets anyone through when the field is absent, which is both vendor seams", () => {
     const open = [{ dir: "pkg/src/things", doors: ["index.ts"], never: /\/x$/, why: "any" }];
     write("pkg/src/things/index.ts", "export const open = () => {};\n");
     write("pkg/src/service.ts", 'import { open } from "./things/index.ts";\n');
@@ -234,6 +308,20 @@ describe("the seams this repository declares", () => {
     expect(undoored, "an entrypoint with no door in SEAMS — add one, with its reason")
       .toEqual([]);
     expect(surfaces.length, "entrypoints/ holds no surfaces at all").toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps the library's vendor clients behind the backend's vendor door (ADR 0021)", () => {
+    // Every field here is one a mutation could delete with the fixtures still green, because they
+    // declare their own seams: without `package` the backend's imports are names this guard does
+    // not read, and an `insiders` grown past the door hands the clients to the whole service.
+    const seam = SEAMS.find((x) => x.dir === "typescript/src/vendors");
+    expect(seam, "the library's vendor seam is gone").toBeTruthy();
+    expect(seam.package, "the seam no longer resolves the name the backend reaches it by")
+      .toBe("typescript");
+    expect(seam.insiders, "something besides the vendor door may open a client")
+      .toEqual(["backend/src/vendors"]);
+    expect(SEAMS.find((x) => x.dir === "backend/src/vendors")?.doors,
+      "the vendor door has grown a second way in").toEqual(["index.ts"]);
   });
 
   it("has a `never` that actually matches something in the tree it guards", () => {

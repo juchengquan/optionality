@@ -21,7 +21,7 @@ export interface TwsSocketConfig {
   host: string;
   port: number;
   /** IB Gateway permits ONE connection per client id, and a second user of the same number
-   *  displaces the first in silence. Each consumer carries its own (see `env.ts`). */
+   *  displaces the first in silence. Each consumer carries its own (see the backend's `env.ts`). */
   clientId: number;
   /** Bounds the handshake: a port that accepts is not a gateway that answers. */
   connectTimeoutMs?: number;

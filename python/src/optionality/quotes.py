@@ -1,6 +1,6 @@
 """The market-data port's contract, and the one thing above it that is not pure.
 
-Mirrors backend/src/quotes.ts. A Provider is anything that answers `QuoteFetcher`: it returns the
+Mirrors typescript/src/quotes.ts. A Provider is anything that answers `QuoteFetcher`: it returns the
 records it has AND the codes it does not know, and it raises only when it could not answer at all.
 A raise is an outage, and an outage must never read as a watchlist full of unknown contracts.
 

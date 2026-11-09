@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { crossings } from "./check-boundaries.mjs";
+import { DEPENDS, PACKAGES as REAL_PACKAGES, crossings } from "./check-boundaries.mjs";
 
 /** The guard, against a fixture tree rather than against this repository (ADR 0016).
  *
@@ -93,5 +93,85 @@ describe("the files it reads", () => {
     // a README quoting a bad import is documentation, not a dependency
     write("python/README.md", 'from ...backend.src import thing\nparents[2] / "backend" / "src"\n');
     expect(found()).toEqual([]);
+  });
+});
+
+describe("which package may depend on which (ADR 0021)", () => {
+  // the real shape: the library's directory and its npm name differ, which is the case a table
+  // keyed by names would have got wrong
+  const TREE = ["typescript", "backend", "frontend"];
+  const ROWS = { typescript: [], backend: ["typescript"], frontend: ["backend"] };
+  const named = (dir, name) => write(`${dir}/package.json`, JSON.stringify({ name }));
+  const tree = () => {
+    named("typescript", "optionality");
+    named("backend", "backend");
+    named("frontend", "frontend");
+  };
+  const byName = (depends = ROWS) => crossings(repo, TREE, SHARED, depends);
+
+  it("refuses the library importing the backend, though the name is a published one", () => {
+    // the hole the rules above leave: a published name passes every one of them
+    tree();
+    write("typescript/src/domain/alarm.ts", 'import type { Settings } from "backend";\n');
+    expect(byName()).toEqual([expect.stringContaining("makes typescript/ depend on backend/")]);
+  });
+
+  it("sees a subpath and a dynamic import of a package as that package", () => {
+    tree();
+    write("typescript/src/a.ts", 'import { SOURCES } from "backend/schemas";\n');
+    write("typescript/src/b.ts", 'const m = await import("frontend/src/api.ts");\n');
+    expect(byName()).toHaveLength(2);
+  });
+
+  it("says what the package MAY import, so the message is actionable", () => {
+    tree();
+    write("typescript/src/a.ts", 'import { x } from "backend";\n');
+    expect(byName()[0]).toMatch(/typescript\/ may import nothing by name/);
+  });
+
+  it("allows the backend importing the library by its npm name", () => {
+    tree();
+    write("backend/src/holdings.ts", 'import { costToClose } from "optionality/domain/position";\n');
+    write("frontend/src/api.ts", 'import type { AppType } from "backend";\n');
+    expect(byName()).toEqual([]);
+  });
+
+  it("resolves the name through package.json, not through the directory", () => {
+    // `typescript` is the compiler, a third-party package like any other — not the library
+    tree();
+    write("backend/tools/t.ts", 'import ts from "typescript";\n');
+    write("frontend/src/b.ts", 'import { x } from "optionality/quotes";\n');
+    expect(byName()).toEqual([expect.stringContaining("makes frontend/ depend on typescript/")]);
+  });
+
+  it("allows a package importing itself by its own name", () => {
+    tree();
+    write("typescript/src/cases/build.ts", 'import * as alarm from "optionality/domain/alarm";\n');
+    expect(byName()).toEqual([]);
+  });
+
+  it("lets a package with no row import nothing by name, rather than anything", () => {
+    tree();
+    write("backend/src/a.ts", 'import { x } from "optionality";\n');
+    expect(byName({ typescript: [], frontend: ["backend"] }))
+      .toEqual([expect.stringContaining("makes backend/ depend on typescript/")]);
+  });
+
+  it("is quiet about third-party packages, which are not this repository's to rule", () => {
+    tree();
+    write("typescript/src/a.ts", 'import { Socket } from "node:net";\nimport x from "moomoo-api";\n');
+    expect(byName()).toEqual([]);
+  });
+});
+
+describe("the table this repository declares", () => {
+  it("keeps the library depending on nothing here, which is what the table is FOR", () => {
+    // deleting the row would not do it — a missing row means nothing — but widening it would,
+    // and a row that can be widened from the inside is the exemption-list failure check-seams met
+    expect(DEPENDS.typescript, "the library may import another package by name again").toEqual([]);
+  });
+
+  it("has a row for every package, so none is ruled by the default by accident", () => {
+    expect(Object.keys(DEPENDS).sort()).toEqual([...REAL_PACKAGES].sort());
   });
 });

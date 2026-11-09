@@ -23,7 +23,7 @@ import { toSqlDatetime } from "../../../db/time.ts";
 import { httpError, notFound } from "../errors.ts";
 import { documented } from "../openapi.ts";
 import { noClient, referenceReadings } from "../../../references.ts";
-import { verifyContracts } from "../../../quotes.ts";
+import { verifyContracts } from "optionality/quotes";
 import { ReferenceIn } from "../../../schemas/reference.ts";
 import { valid } from "../validate.ts";
 

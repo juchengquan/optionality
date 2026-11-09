@@ -170,7 +170,7 @@ export const setTotalEntry = (monitorId: string, entry: number) =>
  *  the sentence above the legs on this form all say minus is short. ComboLegIn said the opposite
  *  until then — "+ on sold legs watches the cost to close" — and nothing failed, because the sign
  *  is otherwise just a multiplier and `compare: abs` is indifferent to it. The relationship is
- *  pinned in backend/src/domain/position.test.ts rather than left to these comments.
+ *  pinned in typescript/src/domain/position.test.ts rather than left to these comments.
  */
 interface ComboLeg { sign: number; option_type: string; strike: number }
 const holdingLegs = (legs: ComboLeg[]) =>

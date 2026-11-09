@@ -7,14 +7,14 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { costToClose, positionLegCodes, positionPnl, type Position } from "./domain/position.ts";
-import { dteAtOpen, exitLevels, exitPolicy, type ExitLevels } from "./domain/exit.ts";
-import { daysToExpiry } from "./domain/expiry.ts";
+import { costToClose, positionLegCodes, positionPnl, type Position } from "optionality/domain/position";
+import { dteAtOpen, exitLevels, exitPolicy, type ExitLevels } from "optionality/domain/exit";
+import { daysToExpiry } from "optionality/domain/expiry";
 import { listPositions } from "./db/queries/index.ts";
 import type { PositionRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
 import { toPosition } from "./hydrate.ts";
-import { displayRecords, type QuoteFetcher } from "./quotes.ts";
+import { displayRecords, type QuoteFetcher } from "optionality/quotes";
 
 export interface HoldingValue {
   row: PositionRow;

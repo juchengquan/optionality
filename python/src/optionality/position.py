@@ -1,5 +1,5 @@
 """Position maths: what a held structure costs to close, what it is exposed to, what it is worth.
-Mirrors backend/src/domain/position.ts.
+Mirrors typescript/src/domain/position.ts.
 
 Every figure derives from each Leg's Side, and the two signings are INVERSES: buying back a short leg
 COSTS money, while that same short leg contributes NEGATIVE exposure. Greeks are only ever signed

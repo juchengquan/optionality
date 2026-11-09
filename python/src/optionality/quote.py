@@ -1,4 +1,4 @@
-"""Quotes: one contract's live figures. Mirrors backend/src/domain/quote.ts.
+"""Quotes: one contract's live figures. Mirrors typescript/src/domain/quote.ts.
 
 A Quote stays a plain dict on purpose. moomoo sends about a hundred fields and the maths reads eight;
 a model would either drop the ones a notebook wants or need changing whenever moomoo adds one.

@@ -1,4 +1,4 @@
-"""Whether a reading alarms, and what to say about it. Mirrors backend/src/domain/alarm.ts.
+"""Whether a reading alarms, and what to say about it. Mirrors typescript/src/domain/alarm.ts.
 
 Ported under ADR 0017, which extended the golden cases past the arithmetic to the DECISIONS. The
 notice is compared exactly, emoji and all: the direction (`fell ≤` against `crossed ≥`), the

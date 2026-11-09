@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 
-import { normalizeStrikeDate } from "../domain/contract.ts";
+import { normalizeStrikeDate } from "optionality/domain/contract";
 
 export const DEFAULT_CONTRACTS = 1;
 

@@ -13,9 +13,9 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { daysToExpiry, marketDate } from "../domain/expiry.ts";
-import { dteAtOpen, onPace } from "../domain/exit.ts";
-import { costToClose, legReadings } from "../domain/position.ts";
+import { daysToExpiry, marketDate } from "optionality/domain/expiry";
+import { dteAtOpen, onPace } from "optionality/domain/exit";
+import { costToClose, legReadings } from "optionality/domain/position";
 import {
   findPositionSample, recordPositionSample, stampManageNotified,
 } from "../db/queries/index.ts";
@@ -24,7 +24,7 @@ import { toSqlDatetime } from "../db/time.ts";
 import { toSqliteJson } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import type { Notifier } from "../notify.ts";
-import type { QuoteRecord } from "../quotes.ts";
+import type { QuoteRecord } from "optionality/quotes";
 import { toPosition } from "../hydrate.ts";
 
 /** What the sweep hands these: the database, the policy, and a way to send that reports whether it

@@ -6,8 +6,8 @@
  */
 import { z } from "zod";
 
-import { normalizeStrikeDate } from "../domain/contract.ts";
-import { thresholdFault } from "../domain/monitor.ts";
+import { normalizeStrikeDate } from "optionality/domain/contract";
+import { thresholdFault } from "optionality/domain/monitor";
 
 export const DEFAULT_SINGLE_FIELD = "option_delta";
 export const DEFAULT_COMBO_FIELD = "mid_price";

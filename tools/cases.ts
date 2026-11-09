@@ -1,5 +1,5 @@
 /** `make cases` writes testdata/golden/*.json from the TypeScript; `make check-cases` (--check) only
- *  compares, and fails if a file is missing or stale (ADR 0014). See backend/src/cases/.
+ *  compares, and fails if a file is missing or stale (ADR 0014). See typescript/src/cases/.
  *
  *  It writes the two FINGERPRINT stamps in the same pass (ADR 0016) — one for the TypeScript, one
  *  inside the Python package — because this is the only place that knows the cases changed. Written
@@ -13,9 +13,9 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-import { buildCases, buildFrom, render } from "../backend/src/cases/build.ts";
-import { VENDOR_INPUTS, VENDOR_MODULES } from "../backend/src/cases/vendors.ts";
-import { goldenHash, pythonStamp, tsStamp } from "../backend/src/cases/stamp.ts";
+import { buildCases, buildFrom, render } from "../typescript/src/cases/build.ts";
+import { VENDOR_INPUTS, VENDOR_MODULES } from "../typescript/src/cases/vendors.ts";
+import { goldenHash, pythonStamp, tsStamp } from "../typescript/src/cases/stamp.ts";
 
 const REPO = new URL("..", import.meta.url).pathname;
 const check = process.argv.includes("--check");
@@ -66,7 +66,7 @@ for (const [name, file] of Object.entries(buildFrom(VENDOR_INPUTS, VENDOR_MODULE
 
 const hash = goldenHash(rendered);
 for (const [path, text] of [
-  ["backend/src/golden.ts", tsStamp(hash)],
+  ["typescript/src/golden.ts", tsStamp(hash)],
   ["python/src/optionality/_ported.py", pythonStamp(hash)],
 ] as const) {
   const full = join(ROOT, path);

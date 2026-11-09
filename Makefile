@@ -1,4 +1,4 @@
-.PHONY: check lint check-boundaries check-test-support check-seams check-make-targets cases check-cases format test test-ui test-ui-fast test-ui-layout test-api typecheck check-api \
+.PHONY: check lint check-boundaries check-test-support check-seams check-make-targets cases check-cases format test test-ui test-ui-fast test-ui-layout test-lib test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
 	serve build-ui check-ui check-served-root resolve-ui deploy \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
@@ -43,9 +43,10 @@ check-test-support:
 	node tools/check-test-support.mjs
 
 # and the same rule INSIDE a package, for the directories whose whole point is one door:
-# `src/vendors/` exists so every market-data vendor is reached through `openVendors` (ADR 0015,
-# 0019). IB Gateway allows one connection per client id and the second displaces the first in
-# silence. See tools/check-seams.mjs.
+# `backend/src/vendors/` exists so every market-data vendor is reached through `openVendors` (ADR
+# 0015, 0019), and the clients it opens live in the library, `typescript/src/vendors/`, where only
+# that door may reach them (ADR 0021). IB Gateway allows one connection per client id and the
+# second displaces the first in silence. See tools/check-seams.mjs.
 check-seams:
 	node tools/check-seams.mjs
 
@@ -72,7 +73,7 @@ test:
 # EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
 # subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
 # the Python. check-ui comes last because it rebuilds the bundle.
-check: lint typecheck check-api check-cases test test-tools test-api test-ui check-ui check-opend
+check: lint typecheck check-api check-cases test test-tools test-lib test-api test-ui check-ui check-opend
 	@echo "all checks passed"
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
@@ -195,9 +196,9 @@ ibkr-fake-gateway:
 	node backend/tools/ibkr-fake-gateway.ts $(ARGS)
 
 # The golden cases (ADR 0014): what the TypeScript domain computes, which the Python package must
-# reproduce exactly. Generated, never edited; `test-api` fails too when they are stale.
+# reproduce exactly. Generated, never edited; `test-lib` fails too when they are stale.
 #
-# TZ=UTC, for the same reason backend/vitest.config.ts pins it: a function with a default zone
+# TZ=UTC, for the same reason typescript/vitest.config.ts pins it: a function with a default zone
 # reads the RUNNING machine's, so `displayTime(when)` wrote +08:00 here and would write +01:00 in
 # Berlin. The corpus is shared ground that a third implementation has to agree with (ADR 0017), so
 # it cannot depend on where it was generated. The verifier already ran under UTC and the generator
@@ -228,6 +229,12 @@ py-cut:
 py-tag:
 	node tools/py-release.mjs --tag
 
+# the TypeScript library (ADR 0021): the domain, the vendor clients, and the golden cases' own
+# guards — `cases.test.ts` is what fails when the corpus is stale or a domain export has no case.
+# Named by its npm name, `optionality`; its directory is `typescript/` (the compiler owns that name).
+test-lib:
+	npm install --silent && npm test --workspace optionality
+
 # the TypeScript backend (ADR 0009). No build target: Node runs the source directly, so there
 # is nothing to compile and nothing to commit — the frontend's dist has no backend equivalent.
 test-api:
@@ -236,11 +243,12 @@ test-api:
 typecheck:
 	npm install --silent && npm run typecheck
 
-# tsc is not enough. Node runs the backend by ERASING types, so syntax that would have to EMIT code
-# is rejected at load time — and tsc accepts it while vitest transforms it, so neither notices. Two
-# classes reached main unable to load at all. See backend/tools/check-loads.ts.
+# tsc is not enough. Node runs the TypeScript by ERASING types, so syntax that would have to EMIT
+# code is rejected at load time — and tsc accepts it while vitest transforms it, so neither
+# notices. Two classes reached main unable to load at all. Both packages Node runs, the library
+# and the backend. See tools/check-loads.ts.
 check-api:
-	node backend/tools/check-loads.ts
+	node tools/check-loads.ts
 
 launchd-api-install:
 	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }

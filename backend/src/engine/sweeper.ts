@@ -35,12 +35,12 @@ import type { DatabaseSync } from "node:sqlite";
 import { SweepHealth } from "./health.ts";
 import { type NotifySender, type Notifier, notifier } from "../notify.ts";
 import { noticeManageBy, recordSamples } from "./positions.ts";
-import { alarmPolicy, alarmTransition } from "../domain/alarm.ts";
+import { alarmPolicy, alarmTransition } from "optionality/domain/alarm";
 import {
   expiryVerdict, silenceVerdict, unknownContractVerdict, unreadableNotice,
-} from "../domain/lifecycle.ts";
-import { monitorLegCodes, monitorValue } from "../domain/monitor.ts";
-import { positionLegCodes } from "../domain/position.ts";
+} from "optionality/domain/lifecycle";
+import { monitorLegCodes, monitorValue } from "optionality/domain/monitor";
+import { positionLegCodes } from "optionality/domain/position";
 import { atomic } from "../db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, findMonitor, listMonitors, listPositions,
@@ -52,7 +52,7 @@ import { toSqliteBool, } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import type { DisabledReason } from "../schemas/monitor.ts";
 import { toMonitor, toPosition } from "../hydrate.ts";
-import type { QuoteFetcher, QuoteRecord } from "../quotes.ts";
+import type { QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
 export interface SweeperDeps {
   db: DatabaseSync;

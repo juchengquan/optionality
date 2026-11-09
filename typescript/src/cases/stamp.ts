@@ -6,9 +6,9 @@
  *  affect the port, so a sha-based stamp cries wolf until it is ignored.
  *
  *  `testdata/golden/*.json` IS the contract. `make cases` regenerates it whenever anything
- *  `backend/src/domain/` exports changes, so a hash of those files moves exactly when the thing the
- *  port must reproduce moves, and never otherwise. Its README is prose and is left out: a comment
- *  edit must not look like a domain change.
+ *  `typescript/src/domain/` exports changes, so a hash of those files moves exactly when the thing
+ *  the port must reproduce moves, and never otherwise. Its README is prose and is left out: a
+ *  comment edit must not look like a domain change.
  *
  *  Twelve hex characters. It is read by eye in a notebook header and compared by machine against
  *  `/health`; 48 bits is far past collision for nine files that one command writes.

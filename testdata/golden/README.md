@@ -5,7 +5,7 @@ them, so they sit outside both packages (ADR 0014).
 
 What the TypeScript domain computes for a fixed set of inputs, one file per module (ADR 0014).
 The TypeScript is canonical: these files are **generated**, never edited. `make cases` rewrites
-them from `backend/src/cases/inputs.ts`, and `make check-cases` (and the backend's test suite)
+them from `typescript/src/cases/inputs.ts`, and `make check-cases` (and the library's test suite)
 fail when they no longer match what the TypeScript computes. The Python package must reproduce
 every `expect` exactly — no tolerance, because the differences that matter are rounding at `.5`.
 

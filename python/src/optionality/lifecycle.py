@@ -1,6 +1,6 @@
 """What the sweep does about a rule it cannot evaluate, and one whose expiry has passed.
 
-Mirrors backend/src/domain/lifecycle.ts. Ported under ADR 0017, which asked for every decision the
+Mirrors typescript/src/domain/lifecycle.ts. Ported under ADR 0017, which asked for every decision the
 sweep makes to be held by a golden case rather than only the arithmetic underneath it. Both were
 branches inside the service's sweeper, tangled with the writes they caused.
 

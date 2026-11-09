@@ -1,4 +1,4 @@
-"""Monitors: a rule that watches one value. Mirrors backend/src/domain/monitor.ts.
+"""Monitors: a rule that watches one value. Mirrors typescript/src/domain/monitor.ts.
 
 A combo's value is the signed sum of its legs under their signs — minus is short — with NO partial
 sums: any unpriced leg leaves no value. IV is never summed. The 🔔 flips at the EXACT threshold.

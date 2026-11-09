@@ -23,7 +23,7 @@ import { createApp } from "../src/entrypoints/http/index.ts";
 import { createDatabase } from "../src/db/open.ts";
 import { type Settings, settingsFor } from "../src/env.ts";
 import type { Deps } from "../src/entrypoints/http/index.ts";
-import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "../src/quotes.ts";
+import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
 const TOKEN = "tok";
 

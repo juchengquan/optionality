@@ -7,7 +7,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { GOLDEN_CASES } from "../../golden.ts";
+import { GOLDEN_CASES } from "optionality/golden";
 import { type Harness, body, harness } from "../../../testing/harness.ts";
 
 let h: Harness;

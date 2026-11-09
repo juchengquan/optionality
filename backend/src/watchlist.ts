@@ -7,15 +7,15 @@
  */
 import {
   COMBO_GREEK_FIELDS, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdFill,
-} from "./domain/monitor.ts";
-import { dteAtOpen, exitLevels, type ExitLevels, type ExitPolicy } from "./domain/exit.ts";
-import { daysToExpiry } from "./domain/expiry.ts";
+} from "optionality/domain/monitor";
+import { dteAtOpen, exitLevels, type ExitLevels, type ExitPolicy } from "optionality/domain/exit";
+import { daysToExpiry } from "optionality/domain/expiry";
 import {
   combinedCostToClose, combinedEntry, combinedPnl, costToCloseOf, positionLegCodes,
-} from "./domain/position.ts";
-import type { Monitor, MonitorLeg } from "./domain/monitor.ts";
-import type { Position } from "./domain/position.ts";
-import type { QuoteRecord } from "./quotes.ts";
+} from "optionality/domain/position";
+import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
+import type { Position } from "optionality/domain/position";
+import type { QuoteRecord } from "optionality/quotes";
 
 export interface WatchlistEntry {
   id: string;

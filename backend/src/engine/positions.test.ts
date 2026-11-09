@@ -14,11 +14,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { buildSpxCode } from "../domain/contract.ts";
+import { buildSpxCode } from "optionality/domain/contract";
 import { createDatabase } from "../db/open.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { settingsFor, type Settings } from "../env.ts";
-import type { QuoteRecord } from "../quotes.ts";
+import type { QuoteRecord } from "optionality/quotes";
 import { type FakeProvider, fakeFetcher } from "../../testing/harness.ts";
 import {
   SINGLE_CODE as CODE, SWEEP_SETTINGS, insertMonitor, quoting,

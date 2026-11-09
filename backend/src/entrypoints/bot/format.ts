@@ -9,7 +9,7 @@
  *  Every string here is asserted character for character in the tests, because they are read on a
  *  phone and a column that wraps is a table that cannot be read at all.
  */
-import { thresholdFault } from "../../domain/monitor.ts";
+import { thresholdFault } from "optionality/domain/monitor";
 import type { HoldingValue } from "../../holdings.ts";
 
 export const HELP_TEXT = `Commands:

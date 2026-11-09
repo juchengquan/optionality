@@ -15,7 +15,7 @@
  *  Off unless `IBKR_HOST` is set: `open` answers null, a Reference naming `ibkr` gets a dash
  *  saying "no ibkr client in this build", and naming it as the Provider is fatal at boot.
  */
-import { IbkrClient } from "./client.ts";
+import { IbkrClient } from "optionality/vendors/ibkr/client";
 import type { Settings } from "../../env.ts";
 import type { ProviderVendor } from "../index.ts";
 

@@ -165,7 +165,7 @@ describe("adding a single-leg monitor", () => {
     // the whole reason the form asks which side you are on. entry is a net credit received, and
     // P&L is entry − costToClose, where costToClose is negative for a long. Bought a call for
     // 5.00, now worth 8.00: entry −5 gives +300, entry +5 gives +1300. Verified against
-    // backend/src/domain/position.ts, not reasoned about.
+    // typescript/src/domain/position.ts, not reasoned about.
     const monitor = await openForm("monitor");
     await fillCall(monitor, "long", "5.00");
 

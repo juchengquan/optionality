@@ -9,7 +9,7 @@ import { marketDay } from "../format";
 /** Opened is a TRADING day, and nothing on screen said so.
  *
  *  `position_samples.observed_on` is keyed to the New York calendar (`marketDate`,
- *  backend/src/domain/expiry.ts) and `volAttribution` returns null unless the FIRST sample's
+ *  typescript/src/domain/expiry.ts) and `volAttribution` returns null unless the FIRST sample's
  *  market day equals the holding's `opened_at` — "the baseline is the vol you SOLD". Singapore
  *  runs 12 hours ahead, so through the whole SGT morning, which is exactly when a trade gets
  *  recorded after the 04:00 close, the local date is a day ahead of the trading day.

@@ -1,4 +1,4 @@
-"""What the owner is told when the service cannot see the market. Mirrors backend/src/domain/degraded.ts.
+"""What the owner is told when the service cannot see the market. Mirrors typescript/src/domain/degraded.ts.
 
 The reminder this module exists for was written after 2026-11-08, when moomoo's OpenD exited cleanly
 after 23 days up, nothing restarted it, and the sweep failed 646 times over 2h42m — while the owner

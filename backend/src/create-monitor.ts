@@ -34,13 +34,13 @@ import { atomic } from "./db/open.ts";
 import type { MonitorRow } from "./db/rows.ts";
 import { newId, toSqliteBool, toSqliteJson } from "./db/values.ts";
 import { toSqlDatetime } from "./db/time.ts";
-import { buildSpxCode } from "./domain/contract.ts";
-import { comboFieldError, thresholdFault } from "./domain/monitor.ts";
+import { buildSpxCode } from "optionality/domain/contract";
+import { comboFieldError, thresholdFault } from "optionality/domain/monitor";
 import { linkToPositions } from "./monitors.ts";
 import {
   DEFAULT_COMBO_FIELD, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_ENABLED, DEFAULT_SINGLE_FIELD,
 } from "./schemas/monitor.ts";
-import { type QuoteFetcher, verifyContracts } from "./quotes.ts";
+import { type QuoteFetcher, verifyContracts } from "optionality/quotes";
 
 export interface CreateDeps {
   db: DatabaseSync;
