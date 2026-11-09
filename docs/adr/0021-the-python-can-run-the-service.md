@@ -149,8 +149,13 @@ being possible by accident. Until an ADR designs it, three locks:
   `trading/` module that does not exist until an ADR creates it. Built like `check-seams`, with a
   `never` the module cannot widen from inside and tests against a fixture tree, so loosening it
   fails a test.
-- **The TypeScript client keeps no order message.** `ib_async`'s `readonly=True` is used as well,
-  but it is one flag, so it is not counted as a lock.
+- **The TypeScript client keeps no order message.** `ib_async`'s `readonly=True` was meant to be
+  used as well, but it is not (amended when the client was built): in `ib_async` 2.1.0 it only
+  skips two order fetches at connect and blocks nothing. The Python client instead connects
+  through `ib_async`'s low-level `Client` and sends only startApi and the five read-only messages
+  the TypeScript client sends; its replay stub fails on any other message. The lint above holds the
+  library too: the forbidden list and its scanner live in `optionality.no_trading`, re-derived
+  from the installed `ib_async`, and refuse every order name anywhere under `python/src`.
 
 The trading ADR must also say which side writes trading first. Under Decision 2 that is the
 TypeScript, whose client would need order messages before the Python could trade.
