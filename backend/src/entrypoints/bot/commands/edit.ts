@@ -4,13 +4,13 @@
  *  an answer the owner can act on, and silently picking one is how the wrong alarm gets deleted.
  */
 import { type Command, requireNumber } from "./context.ts";
-import { expandSpxShort } from "../../domain/contract.ts";
-import { atomic } from "../../db/open.ts";
+import { expandSpxShort } from "../../../domain/contract.ts";
+import { atomic } from "../../../db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, findComboByName, findMonitorByCodeField,
   findMonitorsByIdentifier, updateMonitorFields,
-} from "../../db/queries/index.ts";
-import type { MonitorRow } from "../../db/rows.ts";
+} from "../../../db/queries/index.ts";
+import type { MonitorRow } from "../../../db/rows.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { ruleText, thresholdError } from "../format.ts";
 

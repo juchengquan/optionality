@@ -25,6 +25,7 @@ still in force. Git holds the full history of each.
 | [17](0017-the-cases-cover-the-decisions.md) | The golden cases cover the decisions, not only the maths | built (#193); the constants and the parity tier followed in #195, #198 |
 | [18](0018-references-stay-on-the-page.md) | References stay on the page, and SPX is reached by a scaled proxy | built (#202); the proxy half superseded by 19 |
 | [19](0019-a-reference-names-its-source.md) | A Reference names its source, and the proxy goes | built, all five tracks (#210–#212); one seam for every vendor in #218 |
+| [20](0020-delivery-is-an-entrypoint.md) | Delivery is an entrypoint, and the library never depends on it | built; follows the three seams of #235, #239, #240 |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained
 in force. A new decision takes the next number, and numbers are never reused.

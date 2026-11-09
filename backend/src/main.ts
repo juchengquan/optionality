@@ -11,14 +11,14 @@
  */
 import { serve } from "@hono/node-server";
 
-import { type Deps, createApp } from "./http/index.ts";
+import { type Deps, createApp } from "./entrypoints/http/index.ts";
 import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
 import { openVendors } from "./vendors/index.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS, Scheduler } from "./engine/index.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
-import { TelegramBot } from "./bot/bot.ts";
+import { TelegramBot } from "./entrypoints/bot/bot.ts";
 
 const settings = settingsFromEnv();
 const db = openDatabase(settings.dbPath);

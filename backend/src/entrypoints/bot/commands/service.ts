@@ -5,10 +5,10 @@
  *  the dashboard cannot disagree about a cost, a P&L or a Level.
  */
 import { type Command, failed, requireNumber } from "./context.ts";
-import { buildSpxCode } from "../../domain/contract.ts";
-import { displayTimeShort } from "../../domain/timefmt.ts";
-import { holdingValues } from "../../holdings.ts";
-import type { QuoteRecord } from "../../quotes.ts";
+import { buildSpxCode } from "../../../domain/contract.ts";
+import { displayTimeShort } from "../../../domain/timefmt.ts";
+import { holdingValues } from "../../../holdings.ts";
+import type { QuoteRecord } from "../../../quotes.ts";
 import { HELP_TEXT, fmtValue, standingNote, table } from "../format.ts";
 
 /** Where each Position stands: what it costs to buy back, what that is worth, and the one thing
