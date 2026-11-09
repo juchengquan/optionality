@@ -11,9 +11,9 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import type { Settings } from "../../env.ts";
-import type { SweeperPort } from "../../ports.ts";
-import type { QuoteFetcher } from "../../quotes.ts";
+import type { Settings } from "../../../env.ts";
+import type { SweeperPort } from "../../../ports.ts";
+import type { QuoteFetcher } from "../../../quotes.ts";
 
 export interface BotContext {
   db: DatabaseSync;

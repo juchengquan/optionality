@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type Harness, body, harness } from "../../testing/harness.ts";
+import { type Harness, body, harness } from "../../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());

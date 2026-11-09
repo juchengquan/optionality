@@ -78,19 +78,43 @@ export const SEAMS = [
      *  cannot be constructed from outside the engine — see that file. Naming `health.ts` as a
      *  door would hand the class back and reopen #230's mutation M7. */
     never: /\/(sweeper|health|scheduler)\.ts$/,
+    importableBy: [
+      "backend/src/main.ts",
+      // this guard's own test, which imports the door to assert it still withholds `SweepHealth`
+      // — the omission that makes #230's mutation M7 fail to compile. Declared rather than
+      // exempted as a class: "any test may reach in" is how the engine stops being main-only.
+      "tools/check-seams.test.mjs",
+    ],
     why: "the engine is reached by `main.ts` alone; a request must not be able to start a sweep, "
       + "and `index.ts` withholds SweepHealth so a second health account cannot be built",
   },
   {
-    dir: "backend/src/http",
-    doors: ["index.ts"],
-    /** The weakest of the three, and said plainly in `http/index.ts`: unlike the other two this
-     *  one closes no measured failure. `routes/` is named here because a route factory mounted
-     *  twice, or mounted from somewhere that is not `app.ts`, is the one thing in this layer that
-     *  would be hard to see — and `app.ts` because it is reached through the door. */
+    dir: "backend/src/entrypoints",
+    doors: ["http/index.ts", "bot/bot.ts"],
+    /** Who may use a door AT ALL (ADR 0020).
+     *
+     *  The rule here is not WHICH file is importable but which direction the dependency may run:
+     *  delivery depends on the library and never the reverse. `main.ts` is the one place that
+     *  wires the two halves, and `testing/harness.ts` builds the app for a test — declared, with
+     *  its reason, rather than exempted as a class. A blanket "anything under testing/ may reach
+     *  in" would be a hole with a comment.
+     *
+     *  Declared on `entrypoints/` rather than on `http/` and `bot/` separately, because a rule per
+     *  surface would leave a THIRD entrypoint unguarded until somebody remembered to add a line.
+     *  That is `hc.types.ts`'s "complete by diligence" failure, and the test that every directory
+     *  in here has a declared door closes it in advance.
+     *
+     *  The frontend reaches `AppType` through this seam too, but by the PACKAGE specifier
+     *  `backend` rather than a relative path — so `check-boundaries` owns that crossing and this
+     *  guard never sees it. Which is also right under ADR 0020: the dashboard is an HTTP client
+     *  and should depend on the HTTP entrypoint.
+     */
+    importableBy: ["backend/src/main.ts", "backend/testing/harness.ts"],
+    /** `app.ts` and a route may never be doors: a route mounted from anywhere but `app.ts`, or
+     *  mounted twice, is the one thing in this layer that would be hard to see. */
     never: /\/(app\.ts|routes\/.*)$/,
-    why: "the app is a value `main.ts` and the harness ask for by name; routes are mounted by "
-      + "`app.ts` and by nothing else",
+    why: "delivery depends on the library and never the reverse (ADR 0020); `main.ts` is the only "
+      + "wiring, and a request must not reach another surface's routes",
   },
 ];
 
@@ -143,10 +167,22 @@ export function breaches(repo = ROOT, seams = SEAMS) {
       for (const [, spec] of text.matchAll(SPECIFIER)) {
         if (!spec.startsWith(".")) continue;      // a package specifier is check-boundaries' business
         const target = resolve(dirname(file), spec);
-        if (!inside(target, dir) || doors.has(target)) continue;
+        if (!inside(target, dir)) continue;
+        const from = relative(repo, file);
+        if (doors.has(target)) {
+          // the door is the right file; the question `importableBy` asks is whether THIS caller
+          // may knock at all. Unset means anyone may.
+          if (seam.importableBy === undefined || seam.importableBy.includes(from)) continue;
+          found.push({
+            seam,
+            line: `${from}: imports "${spec}" — ${seam.dir}/ is reached only by `
+              + `${seam.importableBy.join(", ")}`,
+          });
+          continue;
+        }
         found.push({
           seam,
-          line: `${relative(repo, file)}: imports "${spec}" — ${relative(repo, target)} is inside `
+          line: `${from}: imports "${spec}" — ${relative(repo, target)} is inside `
             + `${seam.dir}/, whose doors are ${seam.doors.join(", ")}`,
         });
       }

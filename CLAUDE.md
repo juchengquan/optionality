@@ -31,7 +31,8 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   documented SET is complete, so a target added to the `check` rule is nobody's job to write down
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
   alone is only the Python package (every golden case, reproduced exactly). `make lint` is ruff plus
-  five scripts — `check-boundaries`, `check-test-support`, `check-seams`,
+  five scripts — `check-boundaries`, `check-test-support`, `check-seams` (three seams:
+  `vendors/`, `engine/`, `entrypoints/`),
   `check-make-targets`, `check-served-root`. The first:
   no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python only.
@@ -110,8 +111,16 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 ## Layout
 
-- `backend/src/`: `main.ts` (the process),
-  **`http/`** (the whole HTTP layer behind one door, `http/index.ts`: `app.ts` (routes, auth,
+- `backend/src/`: `main.ts` (the process, and the ONLY file that wires delivery to the library;
+  ADR 0020),
+  **`entrypoints/`** (every way the outside world reaches the service, each behind its own door:
+  `entrypoints/http/` and `entrypoints/bot/`. `make check-seams` holds the direction — the library
+  depends on neither, and `importableBy` names `main.ts` and the test harness as the only callers,
+  so no service can reach a surface and no request can reach another surface's routes. A test also
+  refuses a NEW surface that arrives with no door declared, which is the one thing a per-surface
+  rule could not do. The clock is deliberately NOT here: `engine/scheduler.ts` has no imports at
+  all, so it is a timer utility rather than a surface, and the sweeper it drives is logic.
+  `entrypoints/http/` is the HTTP layer behind `http/index.ts`: `app.ts` (routes, auth,
   `/docs`), `routes/` (one module per resource, each paired by name with its service beside
   `src/` — `routes/monitors.ts` with `monitors.ts`), `deps.ts`, `errors.ts`, `validate.ts`,
   `openapi.ts` and `hc.types.ts`. `main.ts` and the harness ask for `createApp` and `Deps` and
@@ -168,11 +177,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
-- `http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
+- `entrypoints/http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
   so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
   end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole
   value and was held by nobody — complete by diligence, with no file a seventeenth endpoint would
-  have broken — so `http/hc.types.test.ts` takes the endpoint list from `/openapi.json`, which is built
+  have broken — so its sibling test takes the endpoint list from `/openapi.json`, which is built
   from the routes, and names any the client does not call.
 - `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions). `sweep.ts`
   holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
@@ -181,7 +190,7 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
   service; `tools/check-seams.mjs` — the same rule INSIDE a package, for a directory whose whole
-  point is one door (`src/vendors/`, `src/engine/` and `src/http/`). Its `SEAMS` table carries each seam's doors, a `never` that
+  point is one door (`src/vendors/`, `src/engine/` and `src/entrypoints/`). Its `SEAMS` table carries each seam's doors, a `never` that
   says what may not become one, and the reason, printed on failure. The `never` exists because a
   sweep found that adding `ibkr/client.ts` to the door list passed every test the guard had: an
   exemption list that can be opened from the inside is not a guard. All three are tested against a
@@ -238,6 +247,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   last batch: `MonitorSweeper.cachedQuotes` was the cached alternative, no route ever called it, and it was
   REMOVED for that reason — which is what dropped `watchlist.ts`, `monitors.ts`, `domain/exit.ts` and
   `domain/timefmt.ts` out of the alarm engine's imports entirely (ADR 0010, amended).
+- Vocabulary: a **Position** is the stored record of something owned; a **Holding** is that record
+  VALUED — what it is worth and where it stands against its exit schedule. One concept at two
+  stages, which is why `holdings.ts` is the valuation of positions and keeps its name: both words
+  are public, the dashboard asks `/positions/values` and the bot asks `/holdings`, and renaming
+  either would be an API change for a glossary's sake (ADR 0020).
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
 - A provider is reported two ways, because they measure different things. `DEGRADED_AFTER_FAILURES`
   counts CONSECUTIVE failed sweeps — how long a failure lasted — and `FLAPPING_AFTER_FAILURES`

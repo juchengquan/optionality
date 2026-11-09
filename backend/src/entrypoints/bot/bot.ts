@@ -16,9 +16,9 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { COMMANDS, UNKNOWN, type BotContext } from "./commands/index.ts";
 import { BOT_COMMANDS } from "./format.ts";
-import type { Settings } from "../env.ts";
-import type { SweeperPort } from "../ports.ts";
-import type { QuoteFetcher } from "../quotes.ts";
+import type { Settings } from "../../env.ts";
+import type { SweeperPort } from "../../ports.ts";
+import type { QuoteFetcher } from "../../quotes.ts";
 
 /** One call to the Telegram API. A fake in tests; HTTPS in production. */
 export type TelegramApi = (method: string, params: Record<string, string>) => Promise<unknown>;

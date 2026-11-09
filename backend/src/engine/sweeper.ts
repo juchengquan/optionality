@@ -34,7 +34,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { SweepHealth } from "./health.ts";
 import { type NotifySender, type Notifier, notifier } from "../notify.ts";
-import { noticeManageBy, recordSamples } from "../positions.ts";
+import { noticeManageBy, recordSamples } from "./positions.ts";
 import { alarmPolicy, alarmTransition } from "../domain/alarm.ts";
 import {
   expiryVerdict, silenceVerdict, unknownContractVerdict, unreadableNotice,

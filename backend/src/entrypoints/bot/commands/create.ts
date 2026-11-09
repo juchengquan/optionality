@@ -7,8 +7,8 @@
  *  phone, and the bot's own wording for a refusal.
  */
 import { type BotContext, type Command, creating, requireNumber } from "./context.ts";
-import { buildSpxCode, normalizeStrikeDate } from "../../domain/contract.ts";
-import { type CreateFault, createComboMonitor, createSingleMonitor, isFault } from "../../create-monitor.ts";
+import { buildSpxCode, normalizeStrikeDate } from "../../../domain/contract.ts";
+import { type CreateFault, createComboMonitor, createSingleMonitor, isFault } from "../../../create-monitor.ts";
 import { ruleText, thresholdError } from "../format.ts";
 
 const LEG_TOKEN = /^([+-])([CP])(\d+(?:\.\d+)?)$/;

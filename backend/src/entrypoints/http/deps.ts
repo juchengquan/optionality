@@ -6,9 +6,9 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import type { Settings } from "../env.ts";
-import type { ProviderClient, SweeperPort } from "../ports.ts";
-import type { Sources } from "../references.ts";
+import type { Settings } from "../../env.ts";
+import type { ProviderClient, SweeperPort } from "../../ports.ts";
+import type { Sources } from "../../references.ts";
 
 export interface Deps {
   settings: Settings;

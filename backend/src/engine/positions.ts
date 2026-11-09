@@ -1,46 +1,31 @@
-/** Position operations that are more than a query (ADR 0009, phase 5). */
+/** What a sweep does to HOLDINGS: the daily sample, and the manage-by notice (ADR 0020).
+ *
+ *  Inside the engine's door because `engine/sweeper.ts` is the only caller — measured, and the
+ *  reason it matters is the sample. `recordSamples` writes one observation per Position per market
+ *  DAY, stamped with the sweep's single instant, which is what makes the √T decay shape checkable
+ *  against this book rather than defended on arithmetic (ADR 0011). While it sat at `src/` root any
+ *  route could have written a second observation for the same day, mid-request, outside that
+ *  guarantee; `check-seams` now refuses the import.
+ *
+ *  Neither of these is an alarm. They live here because the batch they read is the sweep's batch
+ *  and the instant they stamp is the sweep's instant — the figures come from one fetch, so a
+ *  Position cannot be in the batch and missing from the record.
+ */
 import type { DatabaseSync } from "node:sqlite";
 
-import { daysToExpiry, marketDate } from "./domain/expiry.ts";
-import { dteAtOpen, onPace } from "./domain/exit.ts";
-import { monitorLegCodes } from "./domain/monitor.ts";
-import { costToClose, legReadings, positionsHolding } from "./domain/position.ts";
+import { daysToExpiry, marketDate } from "../domain/expiry.ts";
+import { dteAtOpen, onPace } from "../domain/exit.ts";
+import { costToClose, legReadings } from "../domain/position.ts";
 import {
-  findPositionSample, linkMonitorToPositions, listPositions, orphanMonitors,
-  recordPositionSample, setMonitorScope, stampManageNotified,
-} from "./db/queries/index.ts";
-import type { PositionRow } from "./db/rows.ts";
-import { toSqlDatetime } from "./db/time.ts";
-import { toSqliteJson } from "./db/values.ts";
-import type { Settings } from "./env.ts";
-import type { Notifier } from "./notify.ts";
-import type { QuoteRecord } from "./quotes.ts";
-import { toMonitor, toPosition } from "./hydrate.ts";
-
-/** Link monitors that watch something now held, and never unlink anything.
- *
- *  The link is worked out when a thing is created, which handled only one order: position first,
- *  then monitor. Set the alarm before recording the holding and the monitor stayed orphaned for
- *  ever. This is the mirror image, so either order works.
- *
- *  It looks ONLY at monitors that have no link. The tempting alternative — recompute every link on a
- *  schedule — is worse than the bug: rolling a spread leaves the old and the new sharing a strike for
- *  a day, a recomputing job would call that contract ambiguous, and a monitor that had worked for
- *  weeks would silently lose its entry and P&L mid-session. What you already have cannot be taken
- *  away by something you subsequently hold.
- */
-export function adoptOrphanMonitors(db: DatabaseSync): void {
-  const orphans = orphanMonitors(db);
-  if (orphans.length === 0) return;
-  const positions = listPositions(db).map(toPosition);
-  for (const row of orphans) {
-    const monitor = toMonitor(row);
-    const { found, scope } = positionsHolding(positions, monitorLegCodes(monitor));
-    if (found.size === 0) continue;
-    setMonitorScope(db, monitor.id, scope);
-    linkMonitorToPositions(db, monitor.id, [...found]);
-  }
-}
+  findPositionSample, recordPositionSample, stampManageNotified,
+} from "../db/queries/index.ts";
+import type { PositionRow } from "../db/rows.ts";
+import { toSqlDatetime } from "../db/time.ts";
+import { toSqliteJson } from "../db/values.ts";
+import type { Settings } from "../env.ts";
+import type { Notifier } from "../notify.ts";
+import type { QuoteRecord } from "../quotes.ts";
+import { toPosition } from "../hydrate.ts";
 
 /** What the sweep hands these: the database, the policy, and a way to send that reports whether it
  *  got through. `notify.ts`'s notifier swallows a failed send — it must, since the sweep's job is
