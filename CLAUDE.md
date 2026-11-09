@@ -130,8 +130,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `entrypoints/http/` is the HTTP layer behind `http/index.ts`: `app.ts` (routes, auth,
   `/docs`), `routes/` (one module per resource, each paired by name with its service beside
   `src/` — `routes/monitors.ts` with `monitors.ts`), `deps.ts`, `errors.ts`, `validate.ts`,
-  `openapi.ts` and `hc.types.ts`. `main.ts` and the harness ask for `createApp` and `Deps` and
-  nothing else. The WEAKEST of the three seams `check-seams` holds, and `http/index.ts` says so:
+  `openapi.ts`, `hc.types.ts` and `listen.ts`. `main.ts` and the harness ask for `createApp`,
+  `Deps` and `takePort` and nothing else. **`takePort` runs first in `main.ts`, before settings,
+  the database, the vendors, the sweep or the bot: the port is the lock between two backends
+  (ADR 0021), so a second process stops having touched nothing, and requests that arrive while
+  the service starts get a 503 in the error shape rather than a refused connection.** `main.test.ts`
+  boots it against a taken port and checks the database file was never created. The WEAKEST of
+  the three seams `check-seams` holds, and `http/index.ts` says so:
   unlike `vendors/` and `engine/` it closes no measured failure. `ports.ts` is NOT in it —
   `bot/bot.ts`, `engine/health.ts` and `vendors/index.ts` all import it, so it is the service's
   interface vocabulary rather than the HTTP layer's), `domain/` (everything pure
