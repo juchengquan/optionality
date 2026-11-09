@@ -13,6 +13,12 @@
  *  It was `testdata/golden` here until ADR 0016's lint caught up with the code and found the second
  *  one had been outside the stated boundary since the day it was added.
  *
+ *  `schema/` is the second shared directory (ADR 0021): `schema.sql`, the migrations and the
+ *  pre-migration baseline, which lived in `backend/src/db/` until the Python became a second
+ *  backend. One database file, one schema, the same `.sql` migrations applied by whichever backend
+ *  starts first — so the files belong to neither, and inside `backend/` the Python could have read
+ *  them only by reaching into another package's source tree.
+ *
  *  A script rather than ESLint: the repo has no ESLint, and one rule did not justify a toolchain.
  *  It reads specifiers with a regex, which is enough for the forms this repo writes — `from "x"`,
  *  `import("x")`, bare `import "x"` — and is checked the way every guard here is, by adding a
@@ -42,7 +48,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 export const PACKAGES = ["typescript", "backend", "frontend", "python", "python-backend"];
-export const SHARED = ["testdata"];
+export const SHARED = ["testdata", "schema"];
 /** Which packages each may import BY NAME, as directories (ADR 0021).
  *
  *  Directories, not npm names, and resolved through each package.json: the library's directory is
@@ -183,7 +189,8 @@ const found = crossings();
 if (found.length > 0) {
   console.error(`${found.length} reference(s) reach into another package's source:`);
   for (const c of found) console.error(`  ${c}`);
-  console.error(`use what the package publishes (its package.json "exports"), or testdata/ for shared data`);
+  const ground = SHARED.map((s) => `${s}/`).join(" or ");
+  console.error(`use what the package publishes (its package.json "exports"), or ${ground} for shared ground`);
   process.exit(1);
 }
 console.log("no package reaches into another's source");

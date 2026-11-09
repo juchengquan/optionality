@@ -169,13 +169,18 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
 - **Schema change:** add a `.sql` file to
-  `backend/src/db/migrations/` AND put the same shape in `backend/src/db/schema.sql`, then update
-  `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `db/rows.ts` — the compiler and
-  `rows.test.ts` tie those three together, so a half-done change fails rather than drifts. They tie
-  three legs of four: `rows.test.ts` builds its subject from `schema.sql`, so the MIGRATION is held
-  by `migrate.test.ts`'s "the two roads into a database", which migrates `db/schema-base.sql` (the
-  shape before 0001 — never edit it) and compares the result to a fresh database, column for column
-  and null for null. Without it a column added everywhere but the migrations passed every check and
+  `schema/migrations/` AND put the same shape in `schema/schema.sql`, then update
+  `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `backend/src/db/rows.ts` — the
+  compiler and `rows.test.ts` tie those three together, so a half-done change fails rather than
+  drifts. They tie three legs of four: `rows.test.ts` builds its subject from `schema.sql`, so the
+  MIGRATION is held by `migrate.test.ts`'s "the two roads into a database", which migrates
+  `schema/schema-base.sql` (the shape before 0001 — never edit it) and compares the result to a
+  fresh database, column for column and null for null.
+  `schema/` sits at the repository root, not in `backend/`, because it is SHARED GROUND like
+  `testdata/` (ADR 0021): one database file, one schema and the same migrations, applied by
+  whichever backend starts first — and `check-boundaries` refuses either backend reading the
+  other's source tree. `db/open.ts` and `db/migrate.ts` resolve it from their own module, never
+  from the working directory, so the service finds it wherever Node was started. Without it a column added everywhere but the migrations passed every check and
   reached the live file as `no such column`.
   `main.ts` applies what is pending at boot and a failure there is fatal on purpose. A database
   built from `schema.sql` is STAMPED, not migrated (ADR 0011). `make deploy` backs the file up
@@ -258,8 +263,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   client that has the figure; since ADR 0021 that client is in the library, and only these
   descriptors may import it. IB Gateway is reached as a
   REFERENCE source whether or not it is the Provider, because a Reference alarms on nothing;
-  `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, and `queries/` —
-  one module per TABLE, re-exported by `queries/index.ts` so every caller keeps one import path;
+  `IBKR_HOST` turns it on and blank turns it off), `db/` (opening the database, the migration
+  runner, the row shapes, and `queries/` — the schema and the migrations themselves are in
+  `schema/`, shared ground; `queries/` is one module per TABLE, re-exported by `queries/index.ts` so every caller keeps one import path;
   `queries/sql.ts` holds what all of them were repeating, and its `insertRow` names
   `COLUMNS[table]` rather than the value's own keys on purpose: a row with a column MISSING then
   fails to bind instead of storing the database's defaults in silence),
@@ -286,6 +292,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
   the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
   that is where the batch they read happened to be.
+- `schema/` — `schema.sql`, `migrations/` and `schema-base.sql` (see **Schema change**): the one
+  schema either backend builds a database from, and the migrations either applies to the live
+  file (ADR 0021). Shared ground, declared beside `testdata/` in `check-boundaries`, and moved out
+  of `backend/src/db/` for exactly that reason: from there the Python could have read it only by
+  reaching into another package's source.
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
   generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
   Gateway conversations (inputs) beside the batches `make cases` generates from them.

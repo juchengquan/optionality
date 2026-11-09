@@ -38,7 +38,7 @@ Every scenario starts from one, written out in full:
   null, is that sweep's Provider failing with that message; otherwise it answers from its table.
 - `tables` — every row of the five tables a door can see, every column, in primary-key order:
   `positions`, `monitors`, `monitor_positions`, `position_samples`, `reference_securities`.
-  `schema_migrations` is not stated; build the database from `backend/src/db/schema.sql`.
+  `schema_migrations` is not stated; build the database from `schema/schema.sql`.
 
 Rows hold what SQLite holds — booleans as `0`/`1`, instants as UTC text
 `YYYY-MM-DD HH:MM:SS.ffffff` — with one exception: the JSON columns (`monitors.legs`,
