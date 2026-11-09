@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { documented, mountDocs } from "./openapi.ts";
-import { type Harness, body, harness } from "../testing/harness.ts";
+import { type Harness, body, harness } from "../../testing/harness.ts";
 import { valid } from "./validate.ts";
 
 let h: Harness;

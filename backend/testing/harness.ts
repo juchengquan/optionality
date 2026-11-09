@@ -19,10 +19,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
-import { createApp } from "../src/app.ts";
+import { createApp } from "../src/http/index.ts";
 import { createDatabase } from "../src/db/open.ts";
 import { type Settings, settingsFor } from "../src/env.ts";
-import type { Deps } from "../src/deps.ts";
+import type { Deps } from "../src/http/index.ts";
 import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "../src/quotes.ts";
 
 const TOKEN = "tok";

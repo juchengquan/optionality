@@ -11,7 +11,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../../testing/harness.ts";
+import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());

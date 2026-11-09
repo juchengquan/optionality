@@ -7,8 +7,8 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { GOLDEN_CASES } from "./golden.ts";
-import { type Harness, body, harness } from "../testing/harness.ts";
+import { GOLDEN_CASES } from "../golden.ts";
+import { type Harness, body, harness } from "../../testing/harness.ts";
 
 let h: Harness;
 const start = (...args: Parameters<typeof harness>) => (h = harness(...args));
