@@ -52,9 +52,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `make lint` is ruff over both Python packages plus six scripts — `check-boundaries`,
   `check-test-support`, `check-seams` (four seams: the backend's `vendors/` and the library's,
   `engine/`, `entrypoints/`), `check-module-map`, `check-make-targets`, `check-served-root` — and
-  `check-py-backend`, the Python backend's two lines (ADR 0021): it imports only the library's
-  public modules, and it names no order call or class outside a `trading/` that does not exist
-  (the library holds itself to the second with no door at all, in its own suite).
+  `check-py-backend`, the Python backend's three lines (ADR 0021): it imports only the library's
+  public modules, it names no order call or class outside a `trading/` that does not exist
+  (the library holds itself to the second with no door at all, in its own suite), and nothing
+  outside its `engine/` reaches past that package's door (`check-seams`' engine rule, which reads
+  no Python).
   `check-module-map` holds the same backend module for module: every TypeScript backend module has
   its Python port, a reason in the tool's table, or a place on a backlog frozen on 2026-11-09 that
   may only shrink (ADR 0021). The first:
@@ -405,13 +407,20 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the whole service, one backend at a time. Being ported module by module, bottom up (phase 4):
   **read its README's "Porting a module" before porting one** — the path, the docstring, which
   JavaScript behaviours go through `optionality.js`, async on one loop, names, and how the tests
-  are ported. Its suite also holds the two lines `check-py-backend` runs —
-  `tests/test_library_boundary.py` (no `optionality._*`, no `optionality.research`, no reach into the library's source by path) and `tests/test_no_trading.py`
+  are ported. Its suite also holds the three lines `check-py-backend` runs —
+  `tests/test_library_boundary.py` (no `optionality._*`, no `optionality.research`, no reach into the library's source by path), `tests/test_seams.py`
+  (nothing outside `engine/` and `tests/engine/` reaches past the engine's door, and only
+  `__main__` uses it; with the door's `__all__` withholding `SweepHealth`, that makes the class
+  unnameable from outside, as `check-seams` and `engine/index.ts` do for `main.ts` — the omission
+  alone holds nothing where any submodule is one import away) and `tests/test_no_trading.py`
   (no order placed, modified, cancelled or exercised outside `optionality_backend/trading/`, which
   must not exist until a trading ADR creates it; the forbidden names and the reader that applies
   them are the library's `optionality.no_trading`, imported by name, whose own suite re-derives
-  them from `ib_async`'s source and holds the library to the same rule with no door). Both run
-  against fixture trees. Never released:
+  them from `ib_async`'s source and holds the library to the same rule with no door). All three run
+  against fixture trees. `tests/engine/` runs on a VIRTUAL-TIME loop (`tests/engine/conftest.py`,
+  through pytest-asyncio's loop-factory hook): the scheduler's suite keeps the TypeScript's real
+  intervals and deadlines and sleeps for none of them, and an exception a timer callback raised,
+  which a real loop only logs, errors the test. Never released:
   it runs from the working tree, as `backend/` does.
   **`tests/scenarios/`** is the door scenarios' Python runner (ADR 0021, phase 2), mirroring
   `backend/testing/scenarios/`: `world.py` builds a scenario's database with the backend's own

@@ -41,12 +41,13 @@ lint: check-boundaries check-test-support check-seams check-module-map check-mak
 check-boundaries:
 	node tools/check-boundaries.mjs
 
-# The Python backend's two lines (ADR 0021): it reaches the library only through its public modules,
-# and it places, modifies, cancels and exercises no order outside a `trading/` that does not exist.
-# pytest rather than a node script because both read the Python AST; each file says why it refuses
-# what it refuses. `make test` runs them again with the rest of the backend's suite.
+# The Python backend's three lines (ADR 0021): it reaches the library only through its public
+# modules, it places, modifies, cancels and exercises no order outside a `trading/` that does not
+# exist, and nothing outside the engine reaches past the engine's door (check-seams' rule, which reads
+# no Python). pytest rather than a node script because all three read the Python AST; each file says
+# why it refuses what it refuses. `make test` runs them again with the rest of the backend's suite.
 check-py-backend:
-	uv run --directory python-backend pytest -q tests/test_library_boundary.py tests/test_no_trading.py
+	uv run --directory python-backend pytest -q tests/test_library_boundary.py tests/test_no_trading.py tests/test_seams.py
 
 # `src/` is the service and `testing/` is the harness that fakes it. Nothing the service runs may
 # import the harness — it prices every code it is asked for. See tools/check-test-support.mjs.
