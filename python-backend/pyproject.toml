@@ -8,10 +8,14 @@ readme = "README.md"
 requires-python = ">=3.12"
 classifiers = ["Private :: Do Not Upload"]
 # each dependency arrives with the code that uses it. `httpx2` is Pydantic's maintained
-# continuation of `httpx` (ADR 0021, Decision 6), for Telegram: `telegram.py`.
+# continuation of `httpx` (ADR 0021, Decision 6), for Telegram: `telegram.py`. `fastapi` serves the
+# HTTP door (`entrypoints/http/`), and `uvicorn` is what `__main__` will serve it on (phase 4) —
+# here now because `tests/entrypoints/http/test_app.py` proves the app answers under it, on one loop.
 dependencies = [
+    "fastapi>=0.162.2",
     "httpx2>=2.16",
     "optionality",
+    "uvicorn>=0.54.0",
 ]
 
 [tool.uv.sources]

@@ -33,7 +33,10 @@ It is held to the TypeScript at the service's three doors (ADR 0021, Decision 4)
 
 Every TypeScript backend module is ported to one Python module, bottom up (ADR 0021, Decision 4 and
 phase 4). These are the rules each port follows. The first five — `ports`, `notify`, `telegram`,
-`db/time` and `db/values` — were written to them and are the examples to read.
+`db/time` and `db/values` — were written to them and are the examples to read; the tracer bullet
+(phase 3: `GET /positions`, end to end) added `env`, `db/open`, `db/migrate`, `db/rows`,
+`db/queries/` and the first of `entrypoints/http/`, the examples for a table, a route and a partial
+port.
 
 **One module for one.** `backend/src/<path>.ts` becomes the file `pythonFor()` in
 `tools/check-module-map.mjs` names: the same path, `snake_case`, and a directory's `index.ts` its
@@ -71,6 +74,15 @@ Python differs, and why** says how, so a reader of a TypeScript change can find 
   configures where they go. The scenarios do not hold log lines, so their format may differ; what
   they say may not.
 
+**A partial port.** A module may be ported in part when the rest of it needs modules still on the
+backlog — a route module whose other routes need `holdings`, a door that re-exports four tables of
+five. Its docstring says **Partly ported** and names what is missing; what is missing is ABSENT,
+never stubbed, so a caller fails at import and a request gets the 404, and every scenario that needs
+it fails rather than passing on a stand-in. `make check-module-map` counts the file as ported, so the
+docstring is the only record — and for routes, `tests/entrypoints/http/test_app.py`'s `NOT_YET`,
+which holds the app to the whole surface less what it names and may only shrink. The test module
+says which of the TypeScript's tests wait for the missing part.
+
 **Async.** `async` in the TypeScript is `async def`, and everything runs on ONE asyncio loop (ADR
 0021, Decision 6), so there are no threads — except the moomoo SDK, which blocks and so runs in a
 worker thread with a timeout. A callback typed `Promise<T> | T` is awaited only when it answers an
@@ -79,6 +91,25 @@ client's own per-phase timeouts off: httpx2 defaults to five seconds a phase, wh
 bot's 25-second long poll (`telegram.py`). The service's `QuoteFetcher` is `ports.QuoteFetcher`,
 which is awaited — never the library's `optionality.quotes.QuoteFetcher`, which is synchronous
 because a notebook has no loop.
+
+**The database.** `sqlite3`, blocking on the loop's thread as `node:sqlite` blocks Node's, opened
+by `db/open.open_database`: autocommit (`isolation_level=None`), so a statement is written when it
+runs and the other backend's connection sees it, and `check_same_thread` left ON — a connection
+refuses every thread but the loop's, which is what HOLDS the one-loop rule. `executescript` commits an
+open transaction before it starts (Python 3.12, whatever the isolation level), so a transaction around
+a script opens INSIDE it (`db/migrate.py`). A stored row is a `TypedDict` keyed by column, as a query
+answers one (`db/queries/sql.rows`); `db/rows.ROW_TYPES` and `tests/db/test_rows.py` do what the
+TypeScript's compiler does with `SchemaChecks`.
+
+**Routes.** Every handler is `async def`: a plain `def` runs in FastAPI's threadpool, and its first
+query fails on the same-thread check. An answer goes through the route's `response_model` — the
+TypeScript's `documented(...).reply`, which parses every answer through its zod schema — and a model
+on that path takes `ConfigDict(strict=True, allow_inf_nan=False)`, zod's refusals: pydantic's
+defaults would serve a strike stored as `"8050"` or `true`, which zod refuses with a 500. A refusal is
+RAISED from `entrypoints/http/errors.py`, and keeps `{"detail": "..."}`. FastAPI's own behaviour is
+replaced wherever Hono's differs, in `app.py` and said there: the 404 for what nobody routes, the
+catch-all, the docs. A route is declared on the module's `APIRouter`, closing over `Deps`, as the
+TypeScript's closes over `deps`.
 
 **Names.** `snake_case` functions, methods, variables and fields; `PascalCase` classes; constants
 spelled as the TypeScript spells them. An interface something IMPLEMENTS is a `typing.Protocol`,
@@ -98,6 +129,11 @@ so, never folded into a ported test. A module with no TypeScript test of its own
 its CALLERS' tests rely on, and the test module's docstring names them.
 
 - `async def test_…` runs as it is (pytest-asyncio's auto mode).
+- An HTTP test drives the app with `tests/harness.py`, the TypeScript's `testing/harness.ts`:
+  `httpx2.ASGITransport` on the test's own loop, through the `start` fixture. Never FastAPI's
+  `TestClient`, which runs the app on a loop in another thread, where the database refuses the first
+  query. A ported test whose setup needs a route not ported yet (POST /positions, to create what a
+  GET lists) inserts the rows that route would have stored, and says so.
 - `TZ=UTC`, as everywhere. A test that needs another zone sets `TZ` and calls `time.tzset()`, as
   `tests/db/test_time.py` does: Python, unlike Node, does not re-read the variable on its own.
 - Fakes are injected where the TypeScript injects them, and nothing reaches Telegram, moomoo or IB

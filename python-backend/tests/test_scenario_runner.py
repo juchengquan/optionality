@@ -1,9 +1,10 @@
 """The scenario runner's own logic, on small worlds made here (ADR 0021, phase 2).
 
-Nothing is ported, so the corpus can only show the runner skipping 120 scenarios — which a runner
-that compared nothing would also do. These cases are what show it would catch a difference: the
-comparison's strictness, the row diff, the vendors' rules, the order the doors run things in, and
-the backlog's rules, each against a fake backend plugged into the seam phase 3 will fill.
+While most of the corpus is on the backlog, the corpus can only show the runner skipping it — which a
+runner that compared nothing would also do. These cases are what show it would catch a difference:
+the comparison's strictness, the row diff, the vendors' rules, the order the doors run things in, and
+the backlog's rules, each against a fake backend plugged into the seam — and, since phase 3, what the
+seam builds.
 """
 
 import ast
@@ -213,6 +214,7 @@ class Fake:
         self.world = world
         self.on_request, self.on_update, self.on_sweep = on_request, on_update, on_sweep
         self.seen = []
+        self.closed = False
 
     def request(self, method, path, headers, body):
         self.seen.append((method, path, headers, body))
@@ -223,6 +225,9 @@ class Fake:
 
     def sweep(self):
         self.on_sweep(self.world)
+
+    def close(self):
+        self.closed = True
 
 
 def build_with(**handlers):
@@ -349,14 +354,42 @@ def test_the_bot_may_say_nothing_but_not_twice():
         run_bot({"world": world(), "update": update}, loud)
 
 
-def test_the_seam_says_nothing_is_ported_yet():
-    # the one thing phase 3 changes: `build` returns the Python backend on the world
-    w = open_world(world())
+def test_the_seam_builds_the_python_backend_on_the_world():
+    # phase 3: `build` answers with the real app, on the world's database and its `.env` lines
+    w = open_world(world(settings={"API_TOKEN": "tok"}))
+    service = backend.build(w)
     try:
-        with pytest.raises(NotPorted, match="phase 3"):
-            backend.build(w)
+        assert service.request("GET", "/positions", {"Authorization": "Bearer tok"}, None) == Response(
+            200, "application/json", "[]"
+        )
+        assert service.request("GET", "/positions", {}, None).status == 401
     finally:
+        service.close()
         w.close()
+
+
+def test_a_door_the_backend_does_not_have_yet_raises_rather_than_doing_nothing():
+    w = open_world(world())
+    service = backend.build(w)
+    try:
+        with pytest.raises(NotPorted, match="phase 4"):
+            service.sweep()
+        with pytest.raises(NotPorted, match="phase 4"):
+            service.handle_update({"update_id": 1})
+    finally:
+        service.close()
+        w.close()
+
+
+def test_the_backend_is_closed_with_its_world_even_when_its_door_fails():
+    def broken(w):
+        raise RuntimeError("the door broke")
+
+    build, built = build_with(on_request=broken)
+    request = {"method": "GET", "path": "/positions", "headers": {}, "body": None}
+    with pytest.raises(RuntimeError, match="the door broke"):
+        run_http({"world": world(), "request": request}, build)
+    assert built[0].closed
 
 
 # -- the backlog's rules ------------------------------------------------------------------------------

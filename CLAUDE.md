@@ -389,15 +389,19 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   source and re-derived whenever it is installed). Both run against fixture trees. Never released:
   it runs from the working tree, as `backend/` does.
   **`tests/scenarios/`** is the door scenarios' Python runner (ADR 0021, phase 2), mirroring
-  `backend/testing/scenarios/`: `world.py` builds a scenario's database from `schema/schema.sql`,
-  STAMPED as `createDatabase` does, fills it and reads it back — the TypeScript's database cell for
+  `backend/testing/scenarios/`: `world.py` builds a scenario's database with the backend's own
+  `db/open.create_database` (from `schema/schema.sql`, STAMPED), as `world.ts` calls `createDatabase`, fills it and reads it back — the TypeScript's database cell for
   cell, storage class and stored bytes, all but the stamp's own time (measured ONCE, by hand, over
   all 120 worlds on 2026-11-09: no gate can run both languages), and round-tripped against every
   file by `test_scenario_world.py`, which IS a gate; `compare.py` is the README's "Comparing" (`1` is `1.0`,
   `True` is not `1`, key order is nothing, an extra key is a difference); `doors.py` runs the
   three doors in `doors.ts`'s four steps. **`backend.py` is THE SEAM**: `build(world)` returns the
-  Python backend on a world, and raises `NotPorted` until phase 3 fills it with `GET /positions`
-  through FastAPI's `TestClient`. A door not yet ported must RAISE, never do nothing: two
+  Python backend on a world — since phase 3 the HTTP door (`create_app` on the world's database,
+  Settings read from its `.env` lines), driven through `httpx2.ASGITransport` on an
+  `asyncio.Runner` the service owns, in the caller's thread. Not FastAPI's `TestClient`: it runs the
+  app on a loop in a thread of its own, and the database, opened with sqlite3's same-thread check ON
+  so that it holds the one-loop rule, refuses the first query there. A door not yet ported must
+  RAISE, never do nothing (`sweep` and `handle_update` raise `NotPorted` until phase 4): two
   scenarios expect nothing at all, and an empty backend passes both. `backlog.py` holds the
   shrinking list: a listed scenario that passes FAILS ("take it off the backlog"), one not listed
   must pass, a listed one that no longer exists fails, and the list is written out — a test reads
