@@ -7,8 +7,10 @@ description = "The optionality service, in Python: the standby backend beside th
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = ["Private :: Do Not Upload"]
-# the library, and nothing else yet: each dependency arrives with the code that uses it
+# each dependency arrives with the code that uses it. `httpx2` is Pydantic's maintained
+# continuation of `httpx` (ADR 0021, Decision 6), for Telegram: `telegram.py`.
 dependencies = [
+    "httpx2>=2.16",
     "optionality",
 ]
 
@@ -25,13 +27,27 @@ packages = ["src/optionality_backend"]
 # the tools for this package's own suite and lint, as python/ has them — and `ib_async`, through the
 # library's `ibkr` extra, for the TESTS only: the no-trading lint re-derives its forbidden names from
 # the installed library, and a derivation the gate skips is a guard nobody runs. The backend itself
-# still depends on the library alone until the client that needs `ib_async` lands (phase 4).
+# does not depend on `ib_async` until the client that needs it lands (phase 4). `pytest-asyncio`
+# because the service is `async` from end to end (Decision 6), and its auto mode runs an
+# `async def test_` as vitest runs an `async () =>` test: one test for one, with no marker each.
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4",
     "ruff",
     "optionality[ibkr]",
 ]
+
+# Tests sit at the path of the module they test (README, "Porting a module"), so their basenames
+# repeat — `engine/positions.test.ts` and `entrypoints/http/routes/positions.test.ts` both become a
+# `test_positions.py` — and pytest's default import mode refuses two modules of one name. `importlib`
+# imports each by its path instead, which also stops adding every test directory to `sys.path`;
+# `pythonpath` puts back the one that holds the shared helpers (`reading.py`, `scenarios/`).
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+pythonpath = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 120

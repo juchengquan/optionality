@@ -1,7 +1,8 @@
 """The optionality service, in Python (ADR 0021): the standby backend beside the TypeScript one.
 
-Empty for now. It will run the whole service — the sweep and its alarms, the database, the API the
-dashboard calls and the bot — so that either backend can be the live one, one at a time.
+Ported from `backend/src/` module for module, bottom up (phase 4; README, "Porting a module"). It will
+run the whole service — the sweep and its alarms, the database, the API the dashboard calls and the
+bot — so that either backend can be the live one, one at a time.
 
 Two lines it may not cross, held by its own suite rather than promised here:
 
