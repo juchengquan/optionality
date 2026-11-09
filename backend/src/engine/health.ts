@@ -23,11 +23,11 @@
  *  happens) and only one of them may speak per sweep, because two notices about one unavailable
  *  provider is the noise that teaches somebody to stop reading the channel.
  */
-import { degradedPolicy, degradedVerdict, recoveredNotice } from "./domain/degraded.ts";
-import { flappingPolicy, flappingVerdict } from "./domain/flapping.ts";
-import type { Settings } from "./env.ts";
-import type { Notifier } from "./notify.ts";
-import type { SweeperPort } from "./ports.ts";
+import { degradedPolicy, degradedVerdict, recoveredNotice } from "../domain/degraded.ts";
+import { flappingPolicy, flappingVerdict } from "../domain/flapping.ts";
+import type { Settings } from "../env.ts";
+import type { Notifier } from "../notify.ts";
+import type { SweeperPort } from "../ports.ts";
 
 /** How many sweep intervals may pass with nothing starting before the engine calls itself stalled.
  *

@@ -116,13 +116,18 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   quarantine faults — an unknown contract, a figure that never arrives, and a row that cannot be hydrated;
   the first and the last were written beside the `updateMonitorFields` they caused until the second was
   already cased, so a notebook could ask what the next sweep would do about one fault and not the others, and `js.ts`,
-  the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `health.ts`
-  (the engine's account of its own health — the WHOLE of `ports.ts`'s `SweeperPort`, which is what made
-  splitting it out of the sweeper free; `main.ts` hands the routes and the bot that object rather than the
-  sweeper, so nothing reachable from a request can start a sweep), `notify.ts` (the Telegram send, and
-  whether it got through: one answer for the sweep, the health account and `positions.ts`, which had each
-  grown their own), `scheduler.ts` (the sweep loop
-  and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (the long-poll
+  the four JavaScript behaviours a port must reproduce. See golden cases), **`engine/`** (the alarm engine behind ONE DOOR, `engine/index.ts`: `sweeper.ts` (the sweep),
+  `health.ts` (its account of itself — the WHOLE of `ports.ts`'s `SweeperPort`) and `scheduler.ts`
+  (the sweep loop and its watchdog — NOT dead code: it is what drives the alarms). `main.ts` is the
+  only thing outside that needs any of them, and `make check-seams` holds it there, so a route or a
+  bot command cannot start a sweep — they get the read-only `SweeperPort` in `deps`. The door
+  deliberately does NOT export `SweepHealth`: #230's mutation sweep found that a freshly
+  constructed one in `main.ts` typechecked and passed all 143 route, app and boot tests while
+  describing a service whose `/health` says "starting" for ever as the sweeps run. Withholding the
+  class makes that unwritable rather than merely caught — `main.ts` now fails to COMPILE.
+  `notify.ts` stays outside, because `positions.ts` uses it for the manage-by notice and a pass
+  through that door would be the first exception),
+  `watchlist.ts`, `bot/` (the long-poll
   Telegram TRANSPORT in `bot.ts` — the poll, the owner check, the reply — and the commands
   themselves in `bot/commands/`, a TABLE rather than a switch: a command is
   `(context, words) => reply text`, it never touches the Telegram API, and `index.test.ts` holds
@@ -162,7 +167,7 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
   service; `tools/check-seams.mjs` — the same rule INSIDE a package, for a directory whose whole
-  point is one door (`src/vendors/`). Its `SEAMS` table carries each seam's doors, a `never` that
+  point is one door (`src/vendors/` and `src/engine/`). Its `SEAMS` table carries each seam's doors, a `never` that
   says what may not become one, and the reason, printed on failure. The `never` exists because a
   sweep found that adding `ibkr/client.ts` to the door list passed every test the guard had: an
   exemption list that can be opened from the inside is not a guard. All three are tested against a

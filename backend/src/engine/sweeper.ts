@@ -33,26 +33,26 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { SweepHealth } from "./health.ts";
-import { type NotifySender, type Notifier, notifier } from "./notify.ts";
-import { noticeManageBy, recordSamples } from "./positions.ts";
-import { alarmPolicy, alarmTransition } from "./domain/alarm.ts";
+import { type NotifySender, type Notifier, notifier } from "../notify.ts";
+import { noticeManageBy, recordSamples } from "../positions.ts";
+import { alarmPolicy, alarmTransition } from "../domain/alarm.ts";
 import {
   expiryVerdict, silenceVerdict, unknownContractVerdict, unreadableNotice,
-} from "./domain/lifecycle.ts";
-import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
-import { positionLegCodes } from "./domain/position.ts";
-import { atomic } from "./db/open.ts";
+} from "../domain/lifecycle.ts";
+import { monitorLegCodes, monitorValue } from "../domain/monitor.ts";
+import { positionLegCodes } from "../domain/position.ts";
+import { atomic } from "../db/open.ts";
 import {
   clearMonitorLinks, deleteMonitorRow, findMonitor, listMonitors, listPositions,
   updateMonitorFields,
-} from "./db/queries/index.ts";
-import type { MonitorRow, PositionRow } from "./db/rows.ts";
-import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
-import { toSqliteBool, } from "./db/values.ts";
-import type { Settings } from "./env.ts";
-import type { DisabledReason } from "./schemas/monitor.ts";
-import { toMonitor, toPosition } from "./hydrate.ts";
-import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
+} from "../db/queries/index.ts";
+import type { MonitorRow, PositionRow } from "../db/rows.ts";
+import { fromSqlDatetime, toSqlDatetime } from "../db/time.ts";
+import { toSqliteBool, } from "../db/values.ts";
+import type { Settings } from "../env.ts";
+import type { DisabledReason } from "../schemas/monitor.ts";
+import { toMonitor, toPosition } from "../hydrate.ts";
+import type { QuoteFetcher, QuoteRecord } from "../quotes.ts";
 
 export interface SweeperDeps {
   db: DatabaseSync;
