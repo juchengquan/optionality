@@ -11,7 +11,8 @@ pins. The library beside it, `python/`, is the opposite: released by git tag (AD
 by notebooks from its subdirectory. The two share one uv workspace, rooted at the repository's
 `pyproject.toml`, with one `uv.lock`.
 
-It depends on `optionality` only through what the library publishes, and it places no order:
+It depends on `optionality` only through what the library publishes, it places no order, and its
+engine is reached through one door:
 
 - `tests/test_library_boundary.py` refuses a private `optionality._*` module or name,
   `optionality.research` (no golden case holds it, ADR 0020), and any reach into the library's
@@ -21,8 +22,12 @@ It depends on `optionality` only through what the library publishes, and it plac
   Decision 8). The list of what it refuses, and the reader that applies it, are the library's
   (`optionality.no_trading`): the IB Gateway client is the library's too, and the library holds
   itself to the same rule with no door at all, re-deriving the list from `ib_async` in its suite.
+- `tests/test_seams.py` is `check-seams`' engine rule, which reads no Python: nothing outside
+  `engine/` and `tests/engine/` reaches past `engine/__init__.py`, and only `__main__` uses it. With
+  the door's `__all__` withholding `SweepHealth`, that makes the class unnameable from outside, as
+  it is for `main.ts` (`engine/__init__.py` says why that matters).
 
-Both run in `make lint` and in `make test`, which is part of `make check`.
+All three run in `make lint` and in `make test`, which is part of `make check`.
 
 It is held to the TypeScript at the service's three doors (ADR 0021, Decision 4):
 `tests/test_scenarios.py` replays every scenario in `testdata/scenarios/` through
@@ -93,7 +98,11 @@ awaited only when it answers an awaitable. `AbortSignal.timeout(ms)` is `asyncio
 around the whole exchange, with any client's own per-phase timeouts off: httpx2 defaults to five
 seconds a phase, which would cut the bot's 25-second long poll (`telegram.py`). The service's
 `QuoteFetcher` is `ports.QuoteFetcher`, which is awaited — never the library's
-`optionality.quotes.QuoteFetcher`, which is synchronous because a notebook has no loop.
+`optionality.quotes.QuoteFetcher`, which is synchronous because a notebook has no loop. JavaScript runs an async function to its first `await` the moment it
+is called, so work the TypeScript starts without awaiting has BEGUN by the next line; an asyncio task
+has not, until the loop turns, so such a task is created with `eager_start=True`
+(`engine/scheduler.py`'s sweeps). A task nobody awaits is held in a set until it settles: the loop
+holds tasks only weakly, and a JavaScript promise in the same state is never collected mid-flight.
 
 **The database.** `sqlite3`, blocking on the loop's thread as `node:sqlite` blocks Node's, opened
 by `db/open.open_database`: autocommit (`isolation_level=None`), so a statement is written when it
@@ -141,6 +150,13 @@ its CALLERS' tests rely on, and the test module's docstring names them.
   `tests/db/test_time.py` does: Python, unlike Node, does not re-read the variable on its own.
 - Fakes are injected where the TypeScript injects them, and nothing reaches Telegram, moomoo or IB
   Gateway — `telegram.py`'s suite runs on `httpx2.MockTransport`.
+- Time in a test about the CLOCK is virtual, never slept: `tests/engine/` runs on
+  `VirtualTimeLoop` (its `conftest.py`, through pytest-asyncio's `pytest_asyncio_loop_factories`
+  hook), a real asyncio loop whose clock jumps to the next timer whenever it would wait. The
+  TypeScript's real-timer intervals and deadlines are kept as written, and the module reads the
+  LOOP's clock (`loop.time()`), never `time.monotonic()`, so the test moves both. That loop also
+  raises, at close, whatever reached its exception handler — a timer callback that raised, a task
+  destroyed unfinished — which a real loop only logs.
 - Mirrored paths repeat basenames (`engine/` and `entrypoints/http/routes/` each have a
   `test_positions.py`), so the suite imports by path: `--import-mode=importlib`, in `pyproject.toml`.
 
