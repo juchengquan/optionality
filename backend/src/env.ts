@@ -51,6 +51,12 @@ export interface Settings {
    *  unnoticed by the service (domain/flapping.ts). */
   flappingWindowSeconds: number;
   flappingAfterFailures: number;
+  /** The least time between two flapping notices, measured from the last one, so one missed
+   *  message is not the end of it. 0 says it ONCE until the service restarts: the stamp lives in
+   *  memory and nothing clears it, because a success is what a flapping provider looks like and no
+   *  sweep can tell the end of a bout from a gap inside one. So a later bout waits out the same
+   *  interval, and with 0 is never announced at all (domain/flapping.ts, engine/health.ts). */
+  flappingRepeatSeconds: number;
   /** consecutive sweeps a monitor's figure may fail to arrive before it is quarantined; 0 never
    *  quarantines and only warns, which is what the engine did before (#167) */
   quarantineAfterSilentSweeps: number;
@@ -92,6 +98,9 @@ export const DEFAULTS: Settings = {
   degradedRepeatSeconds: 1800,
   flappingWindowSeconds: 900,
   flappingAfterFailures: 5,
+  // the same as the other two reminders, because it is the same idea about the same channel —
+  // and declared here, once: the policy reader supplied it itself while no variable reached it
+  flappingRepeatSeconds: 1800,
   // ten sweeps, so a gap of a few seconds is never a quarantine while a figure that is simply not
   // served stops being waited for within minutes at any sweep interval
   quarantineAfterSilentSweeps: 10,
@@ -124,6 +133,7 @@ const FROM_ENV = {
   degradedRepeatSeconds: "DEGRADED_REPEAT_SECONDS",
   flappingWindowSeconds: "FLAPPING_WINDOW_SECONDS",
   flappingAfterFailures: "FLAPPING_AFTER_FAILURES",
+  flappingRepeatSeconds: "FLAPPING_REPEAT_SECONDS",
   quarantineAfterSilentSweeps: "QUARANTINE_AFTER_SILENT_SWEEPS",
   expiredRetentionDays: "EXPIRED_RETENTION_DAYS",
   exitTakeFraction: "EXIT_TAKE_FRACTION",

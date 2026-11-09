@@ -29,6 +29,11 @@ import type { ZodType } from "zod";
 export function valid<T extends ZodType, Target extends keyof ValidationTargets>(
   target: Target,
   schema: T,
+  /** For a UNION `schema`: the member this value is meant for, which then validates it alone.
+   *  Zod answers a union that every member refuses with "Invalid input" and no reason, so the
+   *  member's own message is the only useful one. `schema` still documents and types the
+   *  request, whole. */
+  member?: (value: unknown) => ZodType<z.output<T>>,
 ) {
   // The first type argument is the REQUEST type, and it has to be passed explicitly. Hono decides
   // between "the caller's shape" and "the parsed shape" with `unknown extends InputType`, and
@@ -37,7 +42,7 @@ export function valid<T extends ZodType, Target extends keyof ValidationTargets>
   // caller. Naming it here is what makes `tz` and `enabled` optional on a schedule, and `notify`
   // optional on a run, which is how the dashboard will actually call them.
   const middleware = validator(target, (value, c) => {
-    const result = schema.safeParse(value);
+    const result = (member?.(value) ?? schema).safeParse(value);
     if (!result.success) return c.json({ detail: z.prettifyError(result.error) }, 422);
     return result.data as z.output<T>;
   });

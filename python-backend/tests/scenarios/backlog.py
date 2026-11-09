@@ -31,6 +31,9 @@ from .doors import RUN, Builder
 SOURCE = Path(__file__)
 
 #: Not yet ported. Frozen on 2026-11-09 with all 120 scenarios the corpus had; it may only shrink.
+#: Three joined the same day, written in by the fix that added them (POST /monitors' specific
+#: message, FLAPPING_REPEAT_SECONDS) while no Python door existed to port them to: a new scenario
+#: joins only in a diff like that one, and only while its door is still unported.
 BACKLOG = [
     "bot/a-message-from-any-other-chat-gets-no-reply.json",
     "bot/a-word-that-is-not-a-command-gets-the-help.json",
@@ -111,6 +114,7 @@ BACKLOG = [
     "http/post-monitors-id-total-entry-on-a-rule-that-does-not-exist.json",
     "http/post-monitors-id-total-entry-refuses-a-rule-that-covers-no-holding.json",
     "http/post-monitors-refuses-a-combo-on-a-figure-that-does-not-add-up.json",
+    "http/post-monitors-refuses-a-combo-s-strike-date-it-cannot-read.json",
     "http/post-monitors-refuses-a-contract-the-provider-does-not-know.json",
     "http/post-monitors-refuses-a-duplicate-without-asking-the-provider.json",
     "http/post-monitors-refuses-a-strike-date-it-cannot-read.json",
@@ -136,6 +140,7 @@ BACKLOG = [
     "sweep/a-holding-inside-its-manage-by-window-is-announced-once-with-its-pace.json",
     "sweep/a-manage-by-notice-telegram-did-not-take-is-owed-rather-than-stamped.json",
     "sweep/a-muted-rule-past-its-grace-period-is-removed-quietly-with-its-links.json",
+    "sweep/a-provider-still-dropping-is-called-unreliable-again-after-flapping-repeat-seconds.json",
     "sweep/a-provider-that-keeps-dropping-and-recovering-is-called-unreliable.json",
     "sweep/a-put-s-negative-delta-breaches-an-absolute-threshold.json",
     "sweep/a-row-the-engine-cannot-read-is-quarantined-and-the-rest-is-swept.json",
@@ -151,6 +156,7 @@ BACKLOG = [
     "sweep/the-day-s-sample-is-rewritten-when-the-mark-moves.json",
     "sweep/the-fifth-consecutive-failure-says-monitoring-is-degraded.json",
     "sweep/the-first-sweep-to-work-after-an-announced-outage-says-it-recovered.json",
+    "sweep/with-flapping-repeat-seconds-0-a-provider-is-called-unreliable-once-and-never-again.json",
     "sweep/with-telegram-not-configured-a-breach-is-recorded-and-nobody-is-told.json",
 ]
 

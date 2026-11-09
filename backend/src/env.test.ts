@@ -105,6 +105,23 @@ describe("the knobs a service must not start on", () => {
     expect(settingsFromEnv({ EXPIRED_RETENTION_DAYS: "0" }).expiredRetentionDays).toBe(0);
     // and the two flapping knobs, where 0 failures is the off switch (domain/flapping.ts)
     expect(settingsFromEnv({ FLAPPING_AFTER_FAILURES: "0" }).flappingAfterFailures).toBe(0);
+    // and its reminder, where 0 says it once
+    expect(settingsFromEnv({ FLAPPING_REPEAT_SECONDS: "0" }).flappingRepeatSeconds).toBe(0);
+  });
+
+  it("reads the flapping notice's repeat interval, which had no variable at all", () => {
+    // The policy said "0 off" about a cadence nothing could set: the reader defaulted it to
+    // 1800 itself, and no line in `.env` reached it.
+    expect(settingsFromEnv({}).flappingRepeatSeconds).toBe(1800);
+    expect(settingsFromEnv({ FLAPPING_REPEAT_SECONDS: "600" }).flappingRepeatSeconds).toBe(600);
+    expect(() => settingsFromEnv({ FLAPPING_REPEAT_SECONDS: "-1" }))
+      .toThrow(/FLAPPING_REPEAT_SECONDS cannot be negative/);
+    expect(() => settingsFromEnv({ FLAPPING_REPEAT_SECONDS: "1.5" }))
+      .toThrow(/FLAPPING_REPEAT_SECONDS is not an integer/);
+    expect(() => settingsFromEnv({ FLAPPING_REPEAT_SECONDS: "half an hour" }))
+      .toThrow(/FLAPPING_REPEAT_SECONDS is not a number/);
+    expect(() => settingsFromEnv({ FLAPPING_REPEAT_SECONDS: "" }))
+      .toThrow(/FLAPPING_REPEAT_SECONDS is set to nothing/);
   });
 
   it("checks the defaults themselves, so a bad default cannot ship", () => {

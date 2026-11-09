@@ -101,6 +101,36 @@ describe("dates and shapes", () => {
     }
   });
 
+  it("says what is wrong with a body, whichever of the two shapes it is", async () => {
+    // The two shapes are one union, and a union that every member refuses answers "Invalid
+    // input" and nothing else — so a date it cannot read, a missing threshold and a combo leg
+    // signed 2 all read the same on the dashboard, which prints `detail` verbatim. The shape
+    // picks the member, and the member says what it refused.
+    h = harness();
+    const detail = async (payload: unknown) => {
+      const resp = await post(payload);
+      expect(resp.status).toBe(422);
+      return (await body(resp)).detail as string;
+    };
+    const date = "✖ invalid strike_date '18 Dec': use YYYY-MM-DD or YYYYMMDD\n  → at strike_date";
+    expect(await detail(single({ strike_date: "18 Dec" }))).toBe(date);
+    expect(await detail(combo({ strike_date: "18 Dec" })), "and a combo's").toBe(date);
+    expect(await detail(single({ threshold: undefined })))
+      .toBe("✖ Invalid input: expected number, received undefined\n  → at threshold");
+    expect(await detail(combo({ legs: [{ ...COMBO.legs[0], sign: 2 }, COMBO.legs[1]] })))
+      .toBe("✖ Invalid option: expected one of 1|-1\n  → at legs[0].sign");
+  });
+
+  it("reads a body that carries legs as a combo, and refuses it as one", async () => {
+    // The union took this as a single-leg rule and dropped the legs without a word: the
+    // combo member refused it for want of a name, and the single-leg member accepted it.
+    h = harness();
+    const resp = await post(single({ legs: COMBO.legs }));
+    expect(resp.status).toBe(422);
+    expect((await body(resp)).detail)
+      .toBe("✖ Invalid input: expected string, received undefined\n  → at name");
+  });
+
   it("rejects an option type that is not CALL or PUT, and a direction that is neither", async () => {
     h = harness();
     expect((await post(single({ option_type: "FOO" }))).status).toBe(422);

@@ -1,0 +1,65 @@
+{
+  "name": "POST /monitors refuses a combo's strike date it cannot read",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/monitors",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "name": "dec-calls",
+      "strike_date": "18 Dec",
+      "threshold": 4,
+      "legs": [
+        {
+          "sign": -1,
+          "option_type": "CALL",
+          "strike": 7300
+        },
+        {
+          "sign": 1,
+          "option_type": "CALL",
+          "strike": 7350
+        }
+      ]
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "✖ invalid strike_date '18 Dec': use YYYY-MM-DD or YYYYMMDD\n  → at strike_date"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

@@ -46,18 +46,19 @@ export interface FlappingPolicy {
   windowSeconds: number;
   /** how many failures inside that window before the owner hears about it; 0 off */
   afterFailures: number;
-  /** re-reminds while it is still flapping; 0 off */
+  /** the least time from the last notice to the next, whether or not it stopped flapping in
+   *  between; 0 never sends another. This said "re-reminds while it is still flapping; 0 off",
+   *  true of the reminder but not of "still": a later bout is held to the same interval, and
+   *  with 0 never announced, unless the caller clears `lastNoticeAt` — which the sweep does not */
   repeatSeconds: number;
 }
 
 export const flappingPolicy = (
-  s: { flappingWindowSeconds: number; flappingAfterFailures: number; flappingRepeatSeconds?: number },
+  s: { flappingWindowSeconds: number; flappingAfterFailures: number; flappingRepeatSeconds: number },
 ): FlappingPolicy => ({
   windowSeconds: s.flappingWindowSeconds,
   afterFailures: s.flappingAfterFailures,
-  // the same default and meaning as the other two reminders in this service, because it is the
-  // same idea about the same channel
-  repeatSeconds: s.flappingRepeatSeconds ?? 1800,
+  repeatSeconds: s.flappingRepeatSeconds,
 });
 
 export interface FlappingVerdict {
