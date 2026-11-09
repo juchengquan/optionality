@@ -7,7 +7,8 @@ either can be the live one, one at a time (ADR 0021). It is being ported module 
 
 **It is never released.** It runs from the working tree, as `backend/` does, under the launchd agent
 that `make deploy` restarts — so what is checked out is what runs, and there is no version anybody
-pins. The library beside it, `python/`, is the opposite: released by git tag (ADR 0016) and installed
+pins. `make use BACKEND=python` puts it there, and refuses to until the port is done: the door
+backlog empty and `__main__.py` written (`tools/use-backend.mjs`). The library beside it, `python/`, is the opposite: released by git tag (ADR 0016) and installed
 by notebooks from its subdirectory. The two share one uv workspace, rooted at the repository's
 `pyproject.toml`, with one `uv.lock`.
 

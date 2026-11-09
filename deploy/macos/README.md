@@ -8,7 +8,7 @@ What makes each one macOS-bound:
 
 | file | why |
 |---|---|
-| `optionality-api.launchd.plist.template` | launchd, `~/Library/LaunchAgents` |
+| `optionality-api.launchd.plist.template` | launchd, `~/Library/LaunchAgents`; rendered for either backend by `tools/use-backend.mjs` (`make use`) |
 | `optionality-ui.launchd.plist.template` | the same |
 | `optionality-backup.launchd.plist.template` | the same |
 | `optionality-opend.launchd.plist.template` | the same, plus `StartInterval` rather than a cron |

@@ -2,16 +2,30 @@
 it rather than implementation detail — a renamed variable silently reverts a setting the owner has
 made, and a parse that rejects a legal value stops the service at boot.
 
-Port of backend/src/env.test.ts, test for test; what only the Python can get wrong is at the end.
+Port of backend/src/env.test.ts, test for test; what only the Python can get wrong is at the end,
+and after it how `.env` itself is read, which the TypeScript leaves to Node's `--env-file` and the
+Python has to do on its own — held here to the real `node --env-file`, never to a reading of it.
 """
 
 import dataclasses
+import json
 import os
 import re
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 
-from optionality_backend.env import DEFAULTS, FROM_ENV, Settings, settings_for, settings_from_env
+from optionality_backend.env import (
+    DEFAULTS,
+    FROM_ENV,
+    Settings,
+    load_env_file,
+    parse_env_file,
+    settings_for,
+    settings_from_env,
+)
 
 
 class TestWhichDatabase:
@@ -173,3 +187,86 @@ class TestWhatOnlyThePythonCanGetWrong:
         # runs the suite cannot decide the answer
         monkeypatch.setattr(os, "environ", {"DISPLAY_TZ": "Asia/Singapore"})
         assert settings_from_env().display_tz == "Asia/Singapore"
+
+
+#: Env files with every shape a line can take, and every quirk Node's reader has: an inline comment,
+#: a `#` inside a value, three kinds of quote, `\\n` expanded only inside double ones, `export`, a key
+#: with spaces round it, a line with no `=`, an empty key, an unclosed quote, a quote spanning lines,
+#: CRLF, a repeated key (the last wins), and `KEY= ` followed by a line, which Node reads as the
+#: NEXT line's text — a bug, but Node's, and so the TypeScript backend's.
+ENV_FILES = {
+    "every-line-shape": (
+        'A=plain\nB=  spaced  \nC=1800   # 0 disables reminders\nD=a#b\nE="double # kept"\n'
+        "F='single # kept'\nG=\"line\\nbreak\"\nH='no\\nbreak'\nP=`back tick`\nQ=tab\tvalue\t\n"
+        "R=x=y=z\nexport I=exported\n  J  =  trimmed key  \nK=\nL\n=nokey\n# comment\n   # indented\n"
+        'S="quoted" trailing\nA=second\nT=last'
+    ),
+    "quotes-that-do-not-close": 'M="unclosed\nN=after\nO="multi\nline"\nU=\'open\nV=`also open',
+    "an-empty-key-then-a-pair": "=a=b\nW=1",
+    "a-blank-value-then-a-line": "X= \nY=2\nZ=\t\n",
+    "crlf": 'A=1\r\nB="two\r\nlines"\r\nC=3\r\n',
+    "only-comments": "# nothing\n\n   \n",
+}
+
+
+def node_environment(env_file: Path | None, environ: dict[str, str]) -> dict[str, str]:
+    """The environment `node` runs with, started from exactly `environ` and given `env_file`."""
+    node = shutil.which("node")
+    assert node, "node is on the PATH wherever `make check` runs"
+    flags = [f"--env-file={env_file}"] if env_file else []
+    out = subprocess.run(
+        [node, *flags, "-e", "process.stdout.write(JSON.stringify(process.env))"],
+        env=environ,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(out.stdout)
+
+
+def as_node_reads_it(env_file: Path, environ: dict[str, str]) -> dict[str, str]:
+    """What `node --env-file` makes of the file, less what node adds to every environment by itself
+    (`__CF_USER_TEXT_ENCODING` on macOS)."""
+    own = set(node_environment(None, environ)) - set(environ)
+    return {k: v for k, v in node_environment(env_file, environ).items() if k not in own}
+
+
+class TestTheEnvFile:
+    """`.env`, read as the TypeScript backend reads it. Node reads it for `main.ts`, from the
+    `--env-file=.env` in the launchd plist; the Python's plist passes the same flag and the same file,
+    and `__main__` must read it before anything else (`entrypoints/http/listen.py`)."""
+
+    @pytest.mark.parametrize("name", ENV_FILES)
+    def test_reads_a_file_exactly_as_node_s_env_file_does(self, name, tmp_path):
+        path = tmp_path / ".env"
+        path.write_bytes(ENV_FILES[name].encode())
+        environ: dict[str, str] = {}
+        load_env_file(path, environ)
+        assert environ == as_node_reads_it(path, {})
+
+    def test_reads_the_example_the_deployment_is_copied_from_as_node_does(self):
+        # the owner's `.env` mirrors `.env.example`'s structure (CLAUDE.md): inline comments included
+        example = Path(__file__).resolve().parents[2] / ".env.example"
+        environ: dict[str, str] = {}
+        load_env_file(example, environ)
+        assert environ == as_node_reads_it(example, {})
+        assert environ["ALARM_REPEAT_SECONDS"] == "1800", "the inline comment is not part of the value"
+
+    def test_lets_the_environment_win_over_the_file_as_node_does(self, tmp_path):
+        # the plist's PORT, OPTIONALITY_DB_PATH and OPTIONALITY_BOT beat whatever `.env` says, and
+        # `make serve`'s blanked Telegram variables beat the file's: an EMPTY value is still a value
+        path = tmp_path / ".env"
+        path.write_text("PORT=31417\nTELEGRAM_BOT_TOKEN=secret\nDISPLAY_TZ=Asia/Singapore\n")
+        environ = {"PORT": "31415", "TELEGRAM_BOT_TOKEN": ""}
+        load_env_file(path, environ)
+        assert environ == {"PORT": "31415", "TELEGRAM_BOT_TOKEN": "", "DISPLAY_TZ": "Asia/Singapore"}
+        assert environ == as_node_reads_it(path, {"PORT": "31415", "TELEGRAM_BOT_TOKEN": ""})
+
+    def test_refuses_a_file_that_is_not_there_as_node_does(self, tmp_path):
+        # Node will not start without it, and a service started on the defaults would sweep and alarm
+        # with Telegram blank — every alarm recorded and nobody told
+        with pytest.raises(FileNotFoundError):
+            load_env_file(tmp_path / ".env", {})
+
+    def test_reads_the_text_without_touching_the_process(self):
+        assert parse_env_file("A=1 # one\nexport B='2'") == {"A": "1", "B": "2"}
