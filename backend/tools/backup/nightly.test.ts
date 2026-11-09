@@ -159,7 +159,9 @@ describe("checking a copy before it is kept", () => {
   it("refuses a copy that is not intact", () => {
     const copy = join(dir, "copy.db");
     writeFileSync(copy, "this is not a database");
-    expect(() => verifyCopy(copy, {}, {})).toThrow();
+    // the message is the whole claim: a bare matcher would have accepted the TypeError from a
+    // verifyCopy that could no longer open a file at all
+    expect(() => verifyCopy(copy, {}, {})).toThrow(/not a database/);
   });
 });
 
@@ -219,7 +221,19 @@ describe("restoring a nightly backup", () => {
     db.close();
     const bad = join(dir, "bad.db.gz");
     writeFileSync(bad, gzipSync(Buffer.from("not a database")));
-    expect(() => run(bad, live)).toThrow();
+    // execFileSync's own message is only "Command failed: node <path>", which any crash in the
+    // script would produce just as well. What is being claimed is the REFUSAL — the sentence the
+    // child prints and the non-zero exit — so that is what is read.
+    const failure = (() => {
+      try {
+        run(bad, live);
+        return undefined;
+      } catch (err) {
+        return err as { status?: number; stderr?: string };
+      }
+    })();
+    expect(failure?.status, "restore exits non-zero").toBe(1);
+    expect(failure?.stderr).toMatch(/not restoring, the backup is not intact/);
     const back = new DatabaseSync(live, { readOnly: true });
     expect(back.prepare("select count(*) n from monitors").get()).toEqual({ n: 0 });
     back.close();

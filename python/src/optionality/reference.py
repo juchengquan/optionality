@@ -1,13 +1,15 @@
-"""What a Reference reads. Mirrors backend/src/domain/reference.ts.
+"""What a Reference reads. Mirrors backend/src/domain/reference.ts (ADR 0018, amended by 0019).
 
 A Reference is a Security kept on the page to read the market by: it never alarms, need not be held,
-and no rule reads one. SPX is shown through SPY ×10 because moomoo refuses every US stock index as a
-CLASS — measured against the live gateway, where `GetStaticInfo` names `US..SPX` happily and all
-three quote endpoints decline it (ADR 0018).
+and no rule reads one.
 
-The arithmetic is a multiplication, which is not the decision. The decision is WHICH FIELD IS TRUE:
-on 2026-11-02 SPY's last trade read 755.72 while its own book gave 758.73, stale from the previous
-session while the book was current pre-market. So the mid leads and the last is the fallback.
+There is no arithmetic left. `scale` was here for SPY ×10 standing in for SPX, and ADR 0019 dropped
+it: a scaled stand-in is a simulation rather than a reading, and the index turned out to be
+obtainable from a vendor that will quote it — "the Provider cannot quote it" was a fact about moomoo
+recorded as a fact about the world. What remains is the part that was always the decision, WHICH
+FIELD IS TRUE: on 2026-11-02 SPY's last trade read 755.72 while its own book gave 758.73, stale from
+the previous session while the book was current pre-market. So the mid leads and the last is the
+fallback.
 """
 
 import math

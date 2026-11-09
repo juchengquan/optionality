@@ -54,6 +54,51 @@ export function silenceVerdict(
   return { count, quarantine: false, notice: null };
 }
 
+/** The notice for a rule whose ROW the engine could not read at all.
+ *
+ *  Here rather than in `sweeper.ts` for the reason the other two verdicts are: the three faults a
+ *  sweep can quarantine for are one decision wearing three hats, and two of them had their words
+ *  written beside the `updateMonitorFields` they caused while the third was already cased. A
+ *  notebook that asks "what would the next sweep say about this rule?" could be answered for a
+ *  silent figure and not for a corrupt one.
+ *
+ *  A notice rather than a verdict object, because there is nothing to decide: a row that cannot be
+ *  hydrated cannot be evaluated, so it is always quarantined. What varies is only the sentence.
+ */
+export function unreadableNotice(code: string): string {
+  return `⚠️ monitor ${code} disabled: its row could not be read `
+    + "(corrupt legs, or a strike date this service refuses)";
+}
+
+export interface UnknownContractVerdict {
+  /** the legs this provider does not recognise, sorted — so the sentence does not depend on the
+   *  order the structure was entered in, which is `silenceReason`'s rule and for its reason */
+  hits: string[];
+  /** true once ANY leg is unknown: a combo with one delisted leg has no value to compare */
+  quarantine: boolean;
+  notice: string | null;
+}
+
+/** A sweep whose batch came back naming some of this rule's contracts as ones it does not carry.
+ *
+ *  `silenceVerdict`'s twin, and the symmetry is the point: the same answer — disable with a notice,
+ *  never delete — to the other half of "cannot evaluate". The asymmetry is in how long it takes to
+ *  be sure. An unknown contract is a fact the provider stated, so one sweep is enough; a figure
+ *  that has not arrived may yet arrive, which is why only that one counts sweeps.
+ */
+export function unknownContractVerdict(
+  monitor: Monitor, unknown: Set<string>,
+): UnknownContractVerdict {
+  const hits = monitorLegCodes(monitor).filter((code) => unknown.has(code)).sort();
+  if (hits.length === 0) return { hits, quarantine: false, notice: null };
+  return {
+    hits,
+    quarantine: true,
+    notice: `⚠️ monitor ${monitor.code} disabled: unknown contract ${hits.join(", ")} `
+      + "(delisted or never existed)",
+  };
+}
+
 export type ExpiryAction = "remove" | "mute" | "keep";
 
 export interface ExpiryVerdict {

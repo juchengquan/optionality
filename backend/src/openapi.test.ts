@@ -21,12 +21,14 @@ const start = (...args: Parameters<typeof harness>) => (h = harness(...args));
 afterEach(() => h?.close());
 
 type Operation = {
+  security?: { bearer?: string[] }[];
   requestBody?: { content: Record<string, { schema: Record<string, unknown> }> };
   parameters?: { in: string; name: string }[];
   responses: Record<string, { content?: Record<string, { schema: unknown }> }>;
 };
 type Spec = {
   servers?: { url: string }[];
+  security?: { bearer?: string[] }[];
   paths: Record<string, Record<string, Operation>>;
   components?: { schemas?: Record<string, Record<string, unknown>> };
 };
@@ -44,6 +46,17 @@ describe("/openapi.json and /docs", () => {
     expect((await h.call("/docs", { anonymous: true })).status).toBe(200);
     // and opening them did not open anything else
     expect((await h.call("/monitors", { anonymous: true })).status).toBe(401);
+
+    // the runtime above is one claim; what the document SAYS about the same three paths is
+    // another, and the document is what a reader believes. An empty `security` on an operation
+    // overrides the document-wide `[{ bearer: [] }]`, so these two assertions are what hold the
+    // spec to the auth middleware rather than to the default.
+    const s = await spec(h);
+    expect(s.security, "the document asks for a bearer token by default").toEqual([{ bearer: [] }]);
+    // an EMPTY `security` on an operation is what overrides that default; absent means inherit
+    expect(s.paths["/health"]!.get!.security, "/health is documented as open").toEqual([]);
+    expect(s.paths["/monitors"]!.get!.security, "/monitors inherits the document's bearer")
+      .toBeUndefined();
   });
 
   it("point at the prefixed paths behind the path-stripping proxy", async () => {

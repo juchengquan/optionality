@@ -309,6 +309,38 @@ describe("the two roads into a database", () => {
     fresh.close();
   });
 
+  /** The indexes as SQLite itself records them, `sqlite_autoindex_…` rows included. Those are how
+   *  a table-level UNIQUE shows up, and they carry no `sql`, so an index comparison that filtered
+   *  them out — as open.test.ts's by-name listing does — would see a dropped `UNIQUE (code)` as
+   *  nothing at all. */
+  const indexes = (db: DatabaseSync) =>
+    db.prepare("select name, tbl_name, sql from sqlite_master where type='index' order by name")
+      .all();
+
+  /** Every link out of a table: which table it points at, which columns, and what happens to the
+   *  child row. A foreign key is in the CREATE TABLE text, so a table-recreating migration drops
+   *  one by omission and the orphan rows the pragma was turned on to prevent become legal again. */
+  const foreignKeys = (db: DatabaseSync, table: string) =>
+    db.prepare(`select "table", "from", "to", on_update, on_delete from pragma_foreign_key_list(?)
+      order by "table", "from"`).all(table);
+
+  it("ends with the same indexes and the same foreign keys", () => {
+    // the shape test above compares columns, which is three quarters of a schema: a constraint, an
+    // index and a foreign key are all invisible to pragma_table_info. Removing `UNIQUE (code)`
+    // from one road alone is then a divergence nothing reported.
+    const migrated = baseDatabase(join(dir, "base-constraints.db"));
+    migrate(migrated);
+    const fresh = createDatabase(join(dir, "fresh-constraints.db"));
+
+    expect(indexes(migrated)).toEqual(indexes(fresh));
+    for (const table of Object.keys(COLUMNS)) {
+      expect(foreignKeys(migrated, table), `${table}'s foreign keys differ between the two roads`)
+        .toEqual(foreignKeys(fresh, table));
+    }
+    migrated.close();
+    fresh.close();
+  });
+
   it("leaves no table behind on either road", () => {
     // the other direction: a table created by schema.sql and by no migration is missing from the
     // live file, and one the migrations fail to drop outlives the code that read it. 0005 drops

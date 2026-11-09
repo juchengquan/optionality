@@ -1,6 +1,6 @@
 /** Monitor operations that are more than a query (ADR 0009, phase 5).
  *
- *  Ported from the non-sweeper half of monitor.py. The sweeper itself is phase 6.
+ *  Ported from the non-sweeper half of monitor.py; the sweeper itself is `sweeper.ts`.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -62,7 +62,7 @@ export async function applyTotalEntry(
 /** A monitor row in the shape buildEntries needs — which no longer includes the engine's
  *  `triggered` or `last_value`. An entry describes the row as of the batch it is built from, and
  *  those two describe the last sweep (ADR 0010). */
-export function forEntry(row: {
+function forEntry(row: {
   id: string; code: string; strike_date: string; option_type: string; strike: number; field: string;
   threshold: number; direction: string; compare: string; legs: string | null; scope: string | null;
 }): MonitorForEntry {
@@ -73,9 +73,9 @@ export function forEntry(row: {
  *
  *  Used by the bot's `/quotes` family AND by the dashboard, which polls it. This comment said the
  *  opposite for as long as the route existed: that the dashboard rendered the sweeper's cached
- *  records instead. It never did — `MonitorSweeper.cachedQuotes` is that path and no route calls
- *  it. The owner ratified the live reading in ADR 0010, so a row's figures come from THIS call and
- *  its bell is derived from them rather than from the engine's stored verdict.
+ *  records instead. It never did, and the sweeper's cached view has since been deleted for exactly
+ *  that reason. The owner ratified the live reading in ADR 0010, so a row's figures come from THIS
+ *  call and its bell is derived from them rather than from the engine's stored verdict.
  */
 export async function watchlistQuotes(
   db: DatabaseSync, displayTz: string, fetch: QuoteFetcher,

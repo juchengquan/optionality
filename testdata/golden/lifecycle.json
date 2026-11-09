@@ -481,6 +481,254 @@
       }
     },
     {
+      "fn": "unreadableNotice",
+      "name": "a row that cannot be hydrated at all",
+      "args": [
+        "1120_IC"
+      ],
+      "expect": "⚠️ monitor 1120_IC disabled: its row could not be read (corrupt legs, or a strike date this service refuses)"
+    },
+    {
+      "fn": "unknownContractVerdict",
+      "name": "a single contract the provider does not carry",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000"
+          ]
+        }
+      ],
+      "expect": {
+        "hits": [
+          "US.SPXW261120C7100000"
+        ],
+        "quarantine": true,
+        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: unknown contract US.SPXW261120C7100000 (delisted or never existed)"
+      }
+    },
+    {
+      "fn": "unknownContractVerdict",
+      "name": "nothing unknown, so the rule stands",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": [
+            "US.SPXW261120P6450000"
+          ]
+        }
+      ],
+      "expect": {
+        "hits": [],
+        "quarantine": false,
+        "notice": null
+      }
+    },
+    {
+      "fn": "unknownContractVerdict",
+      "name": "one delisted leg takes the whole combo",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": {
+        "hits": [
+          "US.SPXW261120P6500000"
+        ],
+        "quarantine": true,
+        "notice": "⚠️ monitor 1120_IC disabled: unknown contract US.SPXW261120P6500000 (delisted or never existed)"
+      }
+    },
+    {
+      "fn": "unknownContractVerdict",
+      "name": "named in sorted order, not the order entered",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7150000",
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": {
+        "hits": [
+          "US.SPXW261120C7150000",
+          "US.SPXW261120P6500000"
+        ],
+        "quarantine": true,
+        "notice": "⚠️ monitor 1120_IC disabled: unknown contract US.SPXW261120C7150000, US.SPXW261120P6500000 (delisted or never existed)"
+      }
+    },
+    {
+      "fn": "unknownContractVerdict",
+      "name": "every leg gone",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000",
+            "US.SPXW261120C7150000",
+            "US.SPXW261120P6450000",
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": {
+        "hits": [
+          "US.SPXW261120C7100000",
+          "US.SPXW261120C7150000",
+          "US.SPXW261120P6450000",
+          "US.SPXW261120P6500000"
+        ],
+        "quarantine": true,
+        "notice": "⚠️ monitor 1120_IC disabled: unknown contract US.SPXW261120C7100000, US.SPXW261120C7150000, US.SPXW261120P6450000, US.SPXW261120P6500000 (delisted or never existed)"
+      }
+    },
+    {
+      "fn": "unknownContractVerdict",
+      "name": "another rule's unknown contract is not this rule's fault",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7150000",
+            "US.SPXW261120P6450000",
+            "US.SPXW261120P6500000"
+          ]
+        }
+      ],
+      "expect": {
+        "hits": [],
+        "quarantine": false,
+        "notice": null
+      }
+    },
+    {
       "fn": "addDays",
       "name": "across a month end",
       "args": [

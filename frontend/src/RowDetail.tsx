@@ -10,7 +10,6 @@ import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
 import { alarmText, DASH, fmt, legSummary, shortContract } from "./format";
 import { PaceLine } from "./PaceLine";
 import { EntryCell, HoldingForm, RowActions } from "./RowActions";
-import { cellValue } from "./cells";
 import type { RowHandlers } from "./WatchlistTable";
 
 /** Everything about one row, at any screen size.
@@ -110,7 +109,7 @@ export function RowDetail({
           {columns.map((c) => (
             <div key={c.key} className="contents">
               <dt className="text-muted-foreground">{c.label}</dt>
-              <dd className="text-right">{cellValue(entry, c.key, isCombo) || "—"}</dd>
+              <dd className="text-right">{c.text(entry, isCombo) || "—"}</dd>
             </div>
           ))}
         </dl>

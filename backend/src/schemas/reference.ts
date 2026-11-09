@@ -10,20 +10,17 @@
  */
 import { z } from "zod";
 
+import { SOURCES, type Source } from "./sources.ts";
+
 /** Trimmed and upper-cased: every code in this service is upper-case — `buildSpxCode` writes them
  *  that way and moomoo's own `stock_owner` hands them back that way — so `us.spy` typed into a box
  *  is the same Security and must not become a second row the live probe then refuses. */
 const Code = z.string().trim().min(1).transform((c) => c.toUpperCase());
 
-/** Every vendor a Reference can name. The VENDOR outright, never "the Provider": a row meaning
- *  "wherever the service is pointed" would silently show a different company's figure for the
- *  same ticker the day OPTIONALITY_PROVIDER changes, under the same unchanged label (ADR 0019).
- *
- *  Listed here means KNOWN, not available. Whether this build can actually reach one is a
- *  separate question the route answers, the same way `makeProvider` refuses a Provider name it
- *  has no case for rather than booting without market data.
- */
-export const SOURCES = ["moomoo", "ibkr", "yahoo"] as const;
+/** Every vendor a Reference can name, kept in `sources.ts` and re-exported here: the list is the
+ *  schema's vocabulary, but a page renders a box from it at runtime and must not drag zod across
+ *  the boundary to read three strings. See that file. */
+export { SOURCES, type Source };
 
 export const ReferenceIn = z.object({
   code: Code,

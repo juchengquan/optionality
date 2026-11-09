@@ -109,9 +109,11 @@ def call(module: str, fn: str, args: list):
     converted = [TypeAdapter(hints[p.name]).validate_python(a) for p, a in zip(params, decode(args), strict=False)]
     try:
         return encode(f(*converted))
-    except ValueError:
-        # the contract is THAT it refuses, not what it says; anything but ValueError is a bug here
-        return {"$throws": True}
+    except ValueError as err:
+        # the contract is the refusal AND its wording: encoded as `True`, a case asserted only that
+        # something had gone wrong, and a port raising from a typo or a pydantic coercion failure
+        # passed it. Anything but ValueError is still a bug here.
+        return {"$throws": str(err)}
 
 
 def load():

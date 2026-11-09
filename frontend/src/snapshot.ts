@@ -57,16 +57,17 @@ export function captureBox(width: number, height: number): {
 }
 
 /** What happened to the image: shared, saved, or neither because you closed the sheet. */
-export type Delivery = "shared" | "downloaded" | "cancelled";
+type Delivery = "shared" | "downloaded" | "cancelled";
 
-/** The platform bits, injected so the three paths can be tested without a device each. */
-export interface Deliverer {
+/** The platform bits, injected so the three paths can be tested without a device each — with a
+ *  literal object, which is why this shape and the real platform below stay in this module. */
+interface Deliverer {
   canShare: (file: File) => boolean;
   share: (data: { files: File[]; title?: string }) => Promise<void>;
   download: (blob: Blob, name: string) => void;
 }
 
-export const platform: Deliverer = {
+const platform: Deliverer = {
   // `canShare` with the FILE, not merely with `{files: []}`: whether a device will take an image
   // is a question about the image, and Safari answers differently for different types
   canShare: (file) => Boolean(navigator.canShare?.({ files: [file] })),

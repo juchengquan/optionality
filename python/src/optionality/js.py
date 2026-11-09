@@ -56,7 +56,9 @@ def to_fixed(x: float, digits: int) -> float:
     that passes one has a bug, and answering anyway hides it.
     """
     if not 0 <= digits <= 100:
-        raise ValueError(f"toFixed() digits argument must be between 0 and 100, got {digits}")
+        # V8's own words, to the character: the golden case compares the message, and the point of
+        # this module is to refuse where JavaScript refuses, in the way JavaScript refuses
+        raise ValueError("toFixed() digits argument must be between 0 and 100")
     if not math.isfinite(x) or abs(x) >= 1e21:
         return x
     with localcontext() as ctx:

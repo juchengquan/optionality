@@ -5,11 +5,18 @@
  *  to reach into this directory by relative path; this entry is what they may use instead, and
  *  anything not exported here is the backend's own business.
  *
- *  And one vocabulary: the reasons the service disables a monitor for, which the dashboard groups
- *  its muted tables by (#167).
+ *  And two vocabularies, for the same reason: a list the service writes from, published rather
+ *  than hand-written a second time on the other side. The reasons the service disables a monitor
+ *  for, which the dashboard groups its muted tables by (#167); and `SOURCES`, every vendor a
+ *  Reference may name, which the dashboard's "from" box offers. `VENDORS` is held to `SOURCES` on
+ *  this side and the box is held to it on that one, so adding a vendor stays a file beside its
+ *  client plus a line in `VENDORS`, as it already was for the backend alone.
  */
 export {
   ComboMonitorIn, DISABLED_REASONS, type DisabledReason, MonitorCreateIn, MonitorIn, MonitorPatch,
   TotalEntryIn,
 } from "./monitor.ts";
 export { LegIn, PositionIn, PositionPatch } from "./position.ts";
+export { ReferenceIn, type Source, SOURCES } from "./reference.ts";
+// and `backend/schemas/sources` publishes that list ALONE, which is what the dashboard's box
+// imports: this entry carries the schemas and therefore zod, which a page must not pay for.

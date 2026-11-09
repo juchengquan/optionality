@@ -214,8 +214,17 @@ export function json(body: unknown): RequestInit {
  *
  *  Typed loosely on purpose. A route test exists to assert the shape that goes over the wire, and
  *  taking that shape from the route's own inferred type would make the assertion agree with the
- *  implementation by construction — the test would then pass whatever the route returned. The
- *  types are checked where it means something instead: against `hc`, in hc.test-d.ts.
+ *  implementation by construction — the test would then pass whatever the route returned.
+ *
+ *  What this sentence used to claim — that the types are checked against `hc`, in `hc.test-d.ts` —
+ *  was never true: no such file has ever existed, and it would not have run if it had, because
+ *  neither vitest config turns `typecheck` on. So the shapes the dashboard reads are pinned by
+ *  nothing. `frontend/src/api.ts` takes them from `hc<AppType>`, which READS them off the routes
+ *  rather than stating them, so a route that changes its body changes the frontend's idea of it in
+ *  the same step; only a read the dashboard can no longer compile against fails. A field renamed
+ *  and then ignored, or a number that became a string, is caught here by nobody. Pinning it takes
+ *  a type test of its own — `expectTypeOf` against `hc`, in a file a vitest config actually runs
+ *  with `typecheck` enabled — and that test has not been written.
  */
 export async function body(resp: Response): Promise<any> {
   return resp.json() as Promise<any>;

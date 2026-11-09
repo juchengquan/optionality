@@ -13,6 +13,7 @@ import type { PositionRow } from "./db/rows.ts";
 import { toSqlDatetime } from "./db/time.ts";
 import { toSqliteJson } from "./db/values.ts";
 import type { Settings } from "./env.ts";
+import type { Notifier } from "./notify.ts";
 import type { QuoteRecord } from "./quotes.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
 
@@ -42,13 +43,13 @@ export function adoptOrphanMonitors(db: DatabaseSync): void {
 }
 
 /** What the sweep hands these: the database, the policy, and a way to send that reports whether it
- *  got through. `MonitorSweeper.notify` swallows a failed send — it must, since the sweep's job is
+ *  got through. `notify.ts`'s notifier swallows a failed send — it must, since the sweep's job is
  *  the alarm — so a caller that needs to know asks for the answer rather than for a throw.
  */
 export interface PositionSweepDeps {
   db: DatabaseSync;
   settings: Settings;
-  notify: (text: string) => Promise<boolean>;
+  notify: Notifier;
 }
 
 /** One notice per Position when it reaches the manage-by DTE (ADR 0011).

@@ -2,8 +2,6 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-// mirrors vite.config.ts: the tests exercise the skew banner, which needs the baked constant
-
 export default defineConfig({
   plugins: [react()],
   // must mirror vite.config.ts: these are separate files, and shadcn's components
@@ -11,6 +9,14 @@ export default defineConfig({
   // to resolve rather than fails an assertion
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   // __browser__ is the other suite: it needs a real layout engine (ADR 0008)
+  //
+  // No `setupFiles`, deliberately. Phase 0 planned one stubbing ResizeObserver, matchMedia and
+  // friends, on the grounds that jsdom lacks them. jsdom does lack them — but Base UI guards their
+  // absence itself, verified by running the components with the stubs removed, so the stubs were
+  // dropped rather than shipped dead. If a later change crashes inside a positioning engine, that
+  // is what this note is for. (`Setup.test.tsx` carried it, around a smoke test of a `Select` the
+  // dashboard does not use; `Columns.test.tsx` opens a real `Popover` and finds its content
+  // through the portal with `screen.findByRole`, which is the same claim about live code.)
   test: {
     environment: "jsdom",
     globals: true,

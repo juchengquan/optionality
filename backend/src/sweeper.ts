@@ -5,35 +5,46 @@
  *  value and its 🔔 still come from the same instant — `buildEntries` reads the watched figure once
  *  and derives both the fill bar and the bell from it with `isBreached`, this engine's own
  *  predicate — but that instant is the poll's, not the sweep's, so the dashboard's bell may lead or
- *  lag what has been sent. `cachedRecords` (and `cachedQuotes`, built on it) still hold the sweep's
- *  own view of its last batch; NO ROUTE CALLS EITHER, and the comments there say why they are kept.
+ *  lag what has been sent. This engine therefore keeps NO cached view of its last batch: a
+ *  `cachedRecords`/`cachedQuotes` pair was built as the dashboard's path, the dashboard was wired
+ *  to the live `/quotes` instead, and after three weeks of no route calling either they were
+ *  deleted — which is what dropped `watchlist.ts`, `monitors.ts`, `domain/exit.ts` and
+ *  `domain/timefmt.ts` out of the alarm engine's imports altogether.
  *
  *  WHETHER a reading alarms is `alarm.ts` and not this file: the threshold rule, the cooldown that
  *  throttles flapping and the cadence a persisting breach re-reminds on are one decision, and it
  *  takes a reading and two knobs rather than a database. What is left here is the engine — getting
  *  the quotes, deciding which rules are evaluable at all, writing the rows and sending the words.
+ *  Two more things left with it: how healthy the engine says it is, which is `health.ts` and the
+ *  whole of the `SweeperPort` the HTTP layer reads, and the Telegram send itself, which is
+ *  `notify.ts` because the sweep, the health account and `positions.ts` all need the same answer
+ *  about a message that did not get through.
  *
  *  Nothing here is auto-deleted except an expired monitor past its retention window. A rule the
  *  engine cannot evaluate is quarantined — disabled with a notice, kept for inspection — and never
- *  removed. There are two such faults, and they are symmetrical: a contract the Provider does not
- *  recognise, and a figure that never arrives for one it does. The second used to be a log line
- *  and a `continue`, which is the quietest failure this service had: an alarm that cannot fire
- *  reads exactly like one that is not breached (#167).
+ *  removed. There are THREE such faults, and the decision in each is `domain/lifecycle.ts`'s so a
+ *  notebook can ask what the next sweep would do without a sweep running (ADR 0017): a contract
+ *  the Provider does not recognise (`unknownContractVerdict`), a figure that never arrives for one
+ *  it does (`silenceVerdict`), and a row this service cannot hydrate at all (`unreadableNotice`).
+ *  The first two are symmetrical in their answer and differ only in how long it takes to be sure.
+ *  The second used to be a log line and a `continue`, which is the quietest failure this service
+ *  had: an alarm that cannot fire reads exactly like one that is not breached (#167).
  */
 import type { DatabaseSync } from "node:sqlite";
 
+import { SweepHealth } from "./health.ts";
+import { type NotifySender, type Notifier, notifier } from "./notify.ts";
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { alarmPolicy, alarmTransition } from "./domain/alarm.ts";
-import { degradedPolicy, degradedVerdict, recoveredNotice } from "./domain/degraded.ts";
-import { flappingPolicy, flappingVerdict } from "./domain/flapping.ts";
-import { expiryVerdict, silenceVerdict } from "./domain/lifecycle.ts";
+import {
+  expiryVerdict, silenceVerdict, unknownContractVerdict, unreadableNotice,
+} from "./domain/lifecycle.ts";
 import { monitorLegCodes, monitorValue } from "./domain/monitor.ts";
-import { exitPolicy } from "./domain/exit.ts";
 import { positionLegCodes } from "./domain/position.ts";
 import { atomic } from "./db/open.ts";
 import {
-  clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, listPositions,
-  positionsForMonitors, updateMonitorFields,
+  clearMonitorLinks, deleteMonitorRow, findMonitor, listMonitors, listPositions,
+  updateMonitorFields,
 } from "./db/queries/index.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { fromSqlDatetime, toSqlDatetime } from "./db/time.ts";
@@ -41,13 +52,7 @@ import { toSqliteBool, } from "./db/values.ts";
 import type { Settings } from "./env.ts";
 import type { DisabledReason } from "./schemas/monitor.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
-import { displayRecords, type QuoteFetcher, type QuoteRecord } from "./quotes.ts";
-import { displayTime } from "./domain/timefmt.ts";
-import { buildEntries, type WatchlistEntry } from "./watchlist.ts";
-import { forEntry } from "./monitors.ts";
-
-/** Sending a message to the owner's phone. The real Telegram client arrives in phase 7. */
-export type NotifySender = (text: string) => Promise<void> | void;
+import type { QuoteFetcher, QuoteRecord } from "./quotes.ts";
 
 export interface SweeperDeps {
   db: DatabaseSync;
@@ -56,15 +61,6 @@ export interface SweeperDeps {
   send: NotifySender;
   now?: () => Date;
 }
-
-/** How many sweep intervals may pass with nothing starting before the engine calls itself stalled.
- *
- *  One sweep can legitimately overrun a tick — a batch takes real time. Four in a row is not an
- *  overrun, it is a sweep that is not coming back, and /health must stop calling that "active".
- *  scheduler.ts's watchdog abandons at the same age, so the engine says stalled and then recovers
- *  itself rather than waiting for a restart.
- */
-export const STALE_AFTER_SWEEPS = 4;
 
 /** The date a sweep reckons expiry against: the UTC day, as the Python's `utcnow().date()` gives.
  *
@@ -81,172 +77,42 @@ function lastAlarmAt(monitor: MonitorRow): Date | null {
 }
 
 export class MonitorSweeper {
-  consecutiveFailuresCount = 0;
-  /** When the current run of failures began, and when the owner was last told about it.
-   *
-   *  In memory with the count, for the reason given below it: the claim is about a RUN, and a
-   *  restart genuinely breaks the run. The cost is that a service restarted mid-outage reports
-   *  the failures without the duration, which `degraded.ts` prints as nothing rather than as a
-   *  guess.
-   */
-  degradedSince: Date | null = null;
-  lastDegradedNoticeAt: Date | null = null;
-  /** When each recent sweep failed, for the RATE rather than the run.
-   *
-   *  A consecutive count measures how LONG a failure lasted and cannot see a provider that keeps
-   *  dropping and recovering — which went unnoticed for an hour on 2026-11-08. Pruned to the
-   *  window on every append, so this cannot grow: at a 15s sweep and a 15m window it holds at
-   *  most 60 entries.
-   */
-  readonly recentFailures: Date[] = [];
-  lastFlappingNoticeAt: Date | null = null;
   /** Consecutive sweeps a monitor's figure has failed to arrive for, by monitor id.
    *
-   *  In memory, like `consecutiveFailuresCount` and for the same reason: the claim is about a RUN
+   *  In memory, like everything `health.ts` remembers and for its reason: the claim is about a RUN
    *  of sweeps, and a restart genuinely breaks the run — nothing was being swept while the service
    *  was down, so a count carried across it would be about a stretch of time the engine did not
    *  observe. The cost is that a deploy gives a silent rule its N sweeps again, which is the
    *  conservative direction.
    */
   readonly silentSweeps = new Map<string, number>();
-  sweepAt: Date | null = null;
-  /** null until the first sweep: "starting" is a different thing from "working" */
-  sweepOk: boolean | null = null;
-  /** the last successful batch, kept so the dashboard renders the same instant the alarm engine
-   *  evaluated rather than fetching a second, slightly different one */
-  lastRecords: QuoteRecord[] = [];
-  lastBadCodes: string[] = [];
-  fetchAt: Date | null = null;
-  /** What the last batch actually did: null before any was asked for. A port probe cannot answer
-   *  this — OpenD can hold the socket open and refuse to log in (2026-10-16). */
-  fetchOk: boolean | null = null;
+  /** The engine's account of itself, and the `SweeperPort` the HTTP layer reads (health.ts). It
+   *  is the sweep's own, rather than a dependency, because nothing else may write to it: a sweep
+   *  is the only thing that knows whether a sweep succeeded. */
+  readonly health: SweepHealth;
 
   /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
    *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
    *  so it is rejected outright at load time (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX). tsc accepts it and
    *  vitest transforms it, which is how two of these reached main unable to run (see check-api). */
   private readonly deps: SweeperDeps;
+  /** Telling the owner, shared with `health.ts` and `positions.ts` so one answer about a failed
+   *  send serves all three (notify.ts). */
+  private readonly notify: Notifier;
 
   constructor(deps: SweeperDeps) {
     this.deps = deps;
+    this.notify = notifier(deps.settings, deps.send);
+    this.health = new SweepHealth({
+      settings: deps.settings, notify: this.notify, now: () => this.now(),
+    });
   }
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();
   }
 
-  // --- the SweeperPort the /health route reads ---------------------------------------------
-  lastSweepAt(): Date | null {
-    return this.sweepAt;
-  }
-
-  lastFetchAt(): Date | null {
-    return this.fetchAt;
-  }
-
-  /** How long since a sweep last BEGAN, if that is longer than the engine tolerates.
-   *
-   *  `sweepAt` is stamped at the start of a sweep on purpose — one instant per sweep — which makes
-   *  it a start time, not a completion. Nothing else notices a sweep that began and never ended.
-   */
-  private staleFor(): number | null {
-    if (this.sweepAt === null) return null;   // nothing has started: that is "starting", not stalled
-    const age = (this.now().getTime() - this.sweepAt.getTime()) / 1000;
-    const limit = this.deps.settings.monitorIntervalSeconds * STALE_AFTER_SWEEPS;
-    return age > limit ? age : null;
-  }
-
-  lastSweepOk(): boolean {
-    if (this.staleFor() !== null) return false;
-    return this.sweepOk ?? true;
-  }
-
-  /** Whether the last batch came back, for /health to report in place of a port probe. */
-  lastFetchOk(): boolean | null {
-    return this.fetchOk;
-  }
-
-  consecutiveFailures(): number {
-    return this.consecutiveFailuresCount;
-  }
-
-  /** The human label the status strip shows. Derived here so the engine gives its own account of
-   *  its health rather than the client inferring one. */
-  alarmState(): { label: string; bad: boolean } {
-    // a sweep that never came back outranks whatever the last one that did come back reported
-    const stale = this.staleFor();
-    if (stale !== null) {
-      return { label: `STALLED (no sweep for ${Math.round(stale)}s)`, bad: true };
-    }
-    if (this.sweepOk === null) return { label: "starting", bad: false };
-    if (this.sweepOk) return { label: "active", bad: false };
-    const n = this.consecutiveFailuresCount;
-    return { label: `STALLED (${n} failed sweep${n === 1 ? "" : "s"})`, bad: true };
-  }
-
-  /** The last sweep's quotes indexed by code, display-stamped.
-   *
-   *  Positions read from here too, so everything on the dashboard — a monitor's value, a position's
-   *  cost to close — comes from one instant. */
-  cachedRecords(): { byCode: Record<string, QuoteRecord>; fetched: string | null } {
-    if (this.fetchAt === null) return { byCode: {}, fetched: null };
-    return {
-      byCode: displayRecords(this.lastRecords, this.deps.settings.displayTz, this.fetchAt),
-      fetched: displayTime(this.fetchAt, this.deps.settings.displayTz),
-    };
-  }
-
-  /** Watchlist entries built from the LAST SWEEP's records — no OpenD call.
-   *
-   *  NO ROUTE CALLS THIS. It was built as the dashboard's path and the dashboard was wired to the
-   *  live `/quotes` instead, which is the reading ADR 0010 ratified — so this is the sweep's own
-   *  view of its last batch, kept because the sweep's state is observable through nothing else and
-   *  because it is the alternative if that decision is ever revisited. Six tests exercised it
-   *  while asserting the invariant the shipped dashboard was breaking.
-   *
-   *  A monitor created since the last sweep has no record here and renders as "—" until the next
-   *  one. */
-  cachedQuotes(includeCombos = true): { entries: WatchlistEntry[]; fetched: string | null } {
-    const { db } = this.deps;
-    const monitors = enabledMonitors(db, includeCombos).map(forEntry);
-    const { byCode, fetched } = this.cachedRecords();
-    const ownedRows = positionsForMonitors(db, monitors.map((m) => m.id));
-    const owned = Object.fromEntries(
-      Object.entries(ownedRows).map(([id, ps]) => [id, ps.map(toPosition)]),
-    );
-    return {
-      entries: buildEntries({
-        monitors, byCode, bad: new Set(this.lastBadCodes), owned, now: this.now(),
-        policy: exitPolicy(this.deps.settings),
-      }),
-      fetched,
-    };
-  }
-
   // --- the sweep ---------------------------------------------------------------------------
-  /** Send, and say whether it got through.
-   *
-   *  A failed send must never stop a sweep — its job is the alarm — so this swallows the error.
-   *  That makes "did it throw" useless to a caller, and the manage-by notice needs the answer: it
-   *  is raised ONCE, so a stamp written after an undelivered notice loses it for ever. Hence a
-   *  return value rather than a rethrow. Telegram not being configured counts as delivered: there
-   *  is nothing to retry, and retrying every sweep would log the same line for ever.
-   */
-  private async notify(text: string): Promise<boolean> {
-    const { settings } = this.deps;
-    if (!settings.telegramBotToken || !settings.telegramChatId) {
-      console.info(`telegram not configured; alarm suppressed: ${text}`);
-      return true;
-    }
-    try {
-      await this.deps.send(text);
-      return true;
-    } catch (err) {
-      console.error("telegram send failed:", err);
-      return false;
-    }
-  }
-
   /** One sweep, and an honest account of whether it happened.
    *
    *  The account is the whole point of the wrapper. `runSweep` below records success on its LAST
@@ -267,7 +133,7 @@ export class MonitorSweeper {
       await this.runSweep();
     } catch (err) {
       console.error("monitor sweep failed:", err);
-      await this.recordFailure(`the sweep threw: ${err instanceof Error ? err.message : String(err)}`);
+      await this.health.failure(`the sweep threw: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -277,7 +143,7 @@ export class MonitorSweeper {
     // sweep reckons — expiry, and the samples' market day — must come from ONE instant or a
     // sweep straddling midnight disagrees with itself
     const at = this.now();
-    this.sweepAt = at;
+    this.health.startedSweep(at);
     const today = utcDate(at);
 
     let active = await this.runExpiryLifecycle(today);
@@ -325,7 +191,7 @@ export class MonitorSweeper {
     }
     const codes = [...new Set([...monitorCodes, ...positionCodes])].sort();
     if (codes.length === 0) {
-      await this.recordSuccess();
+      await this.health.success();
       return;
     }
 
@@ -333,16 +199,13 @@ export class MonitorSweeper {
     let badCodes: string[];
     try {
       ({ records, unknown: badCodes } = await this.deps.fetchQuotes(codes));
-      this.fetchOk = true;
     } catch (err) {
-      this.fetchOk = false;
+      this.health.fetched(false);
       console.error("monitor sweep snapshot failed:", err);
-      await this.recordFailure();
+      await this.health.failure();
       return;
     }
-    this.lastRecords = records;
-    this.lastBadCodes = badCodes;
-    this.fetchAt = this.now();
+    this.health.fetched(true, this.now());
 
     let surviving = active;
     if (badCodes.length > 0) surviving = await this.quarantineUnknown(active, new Set(badCodes));
@@ -362,10 +225,10 @@ export class MonitorSweeper {
     // have been, which is what the containment in `evaluate` buys; saying so here is what stops
     // the rest from going quiet without a word.
     if (refused.length > 0) {
-      await this.recordFailure(`could not evaluate ${refused.join(", ")}`);
+      await this.health.failure(`could not evaluate ${refused.join(", ")}`);
       return;
     }
-    await this.recordSuccess();
+    await this.health.success();
   }
 
   /** Drop the silence counts of rules this sweep is not evaluating.
@@ -435,10 +298,8 @@ export class MonitorSweeper {
         updateMonitorFields(db, monitor.id, {
           enabled: toSqliteBool(false), disabled_reason: reason,
         });
-        notices.push(
-          `⚠️ monitor ${monitor.code} disabled: its row could not be read `
-          + "(corrupt legs, or a strike date this service refuses)",
-        );
+        // the words are `domain/lifecycle.unreadableNotice`'s (ADR 0017); this applies it
+        notices.push(unreadableNotice(monitor.code));
       }
     });
     for (const text of notices) await this.notify(text);
@@ -454,8 +315,9 @@ export class MonitorSweeper {
     const notices: string[] = [];
     await atomic(db, () => {
       for (const monitor of active) {
-        const hits = monitorLegCodes(toMonitor(monitor)).filter((c) => bad.has(c)).sort();
-        if (hits.length === 0) {
+        // the decision is `domain/lifecycle.unknownContractVerdict` (ADR 0017); this applies it
+        const verdict = unknownContractVerdict(toMonitor(monitor), bad);
+        if (!verdict.quarantine) {
           surviving.push(monitor);
           continue;
         }
@@ -463,10 +325,7 @@ export class MonitorSweeper {
         updateMonitorFields(db, monitor.id, {
           enabled: toSqliteBool(false), disabled_reason: reason,
         });
-        notices.push(
-          `⚠️ monitor ${monitor.code} disabled: unknown contract ${hits.join(", ")} `
-          + "(delisted or never existed)",
-        );
+        if (verdict.notice !== null) notices.push(verdict.notice);
       }
     });
     for (const text of notices) await this.notify(text);
@@ -566,87 +425,5 @@ export class MonitorSweeper {
     });
     for (const text of notices) await this.notify(text);
     return refused;
-  }
-
-  /** A sweep the loop gave up waiting for (scheduler.ts's watchdog).
-   *
-   *  Counted as a failure, because a sweep that never returned told us less than one that failed:
-   *  without this the next tick simply starts another and the stall leaves no trace anywhere.
-   */
-  async recordStall(ageSeconds: number): Promise<void> {
-    const age = Math.round(ageSeconds);
-    console.error(`monitor sweep abandoned after ${age}s`);
-    await this.recordFailure(`a sweep stuck for ${age}s`);
-  }
-
-  /** The default names no vendor on purpose: the Provider is whichever one this deployment is
-   *  configured with, and this said "OpenD unreachable?" whatever was answering. Same bug ADR
-   *  0018 fixed in `verifyContracts`, which was not the only place it had been written. */
-  private async recordFailure(reason = "the Provider did not answer"): Promise<void> {
-    const now = this.now();
-    this.sweepOk = false;
-    this.consecutiveFailuresCount += 1;
-    this.degradedSince ??= now;
-
-    // the rate, beside the run: pruned here so the list cannot grow
-    const { flappingWindowSeconds } = this.deps.settings;
-    this.recentFailures.push(now);
-    while (this.recentFailures.length > 0
-      && (now.getTime() - this.recentFailures[0]!.getTime()) / 1000 > flappingWindowSeconds) {
-      this.recentFailures.shift();
-    }
-
-    const announced = this.lastDegradedNoticeAt !== null;
-    const { notice } = degradedVerdict(
-      {
-        failures: this.consecutiveFailuresCount,
-        since: this.degradedSince,
-        lastNoticeAt: this.lastDegradedNoticeAt,
-      },
-      degradedPolicy(this.deps.settings), reason, now,
-    );
-    // the stamp moves only when something was actually said, which is what makes the interval
-    // measure silence rather than sweeps
-    if (notice !== null) {
-      this.lastDegradedNoticeAt = now;
-      await this.notify(notice);
-      return;
-    }
-
-    // and only where the sustained notice said nothing: two notices about one unavailable
-    // provider is noise, and `announced` is read BEFORE the line above so a sweep cannot both
-    // announce an outage and call it unreliable
-    const flapping = flappingVerdict(
-      {
-        failures: this.recentFailures,
-        lastNoticeAt: this.lastFlappingNoticeAt,
-        announced,
-      },
-      flappingPolicy(this.deps.settings), now,
-    );
-    if (flapping.notice !== null) {
-      this.lastFlappingNoticeAt = now;
-      await this.notify(flapping.notice);
-    }
-  }
-
-  private async recordSuccess(): Promise<void> {
-    const notice = recoveredNotice(
-      {
-        failures: this.consecutiveFailuresCount,
-        since: this.degradedSince,
-        lastNoticeAt: this.lastDegradedNoticeAt,
-      },
-      degradedPolicy(this.deps.settings), this.now(),
-    );
-    this.consecutiveFailuresCount = 0;
-    this.degradedSince = null;
-    this.lastDegradedNoticeAt = null;
-    this.sweepOk = true;
-    // `recentFailures` is NOT cleared, which is the whole point: a success is exactly what a
-    // flapping provider produces between failures, and clearing on one would make this blind to
-    // the thing it was written for. Entries age out of the window instead.
-    // after the counters are cleared: a failed send must not leave the service looking degraded
-    if (notice !== null) await this.notify(notice);
   }
 }
