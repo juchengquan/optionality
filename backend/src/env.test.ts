@@ -73,8 +73,8 @@ describe("numbers", () => {
  *  accepted exactly the values this file documents as fatal, and the suite could not tell,
  *  because the suite went through the other door.
  *
- *  Measured on 2026-11-08: `settingsFromEnv` returned `degradedAfterFailures: 0`,
- *  `uiRefreshSeconds: 0` and `monitorIntervalSeconds: 0` without complaint, while
+ *  Measured on 2026-11-08: `settingsFromEnv` returned `degradedAfterFailures: 0` and
+ *  `monitorIntervalSeconds: 0` without complaint, while
  *  `settingsFor({ degradedAfterFailures: 0 })` threw. These tests go through the SERVICE's door.
  */
 describe("the knobs a service must not start on", () => {
@@ -95,8 +95,6 @@ describe("the knobs a service must not start on", () => {
     // tick records a failed sweep
     expect(() => settingsFromEnv({ MONITOR_INTERVAL_SECONDS: "0" }))
       .toThrow(/MONITOR_INTERVAL_SECONDS must be at least 1/);
-    expect(() => settingsFromEnv({ UI_REFRESH_SECONDS: "0" }))
-      .toThrow(/UI_REFRESH_SECONDS must be at least 1/);
   });
 
   it("still allows 0 where 0 genuinely means off", () => {

@@ -190,8 +190,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   instant. That is now true by construction — `buildEntries` reads the watched figure once and derives both
   the fill bar and the bell from it, with `isBreached`, the engine's own predicate. The engine is untouched:
   the stored `triggered`, the cooldowns and the Telegram messages remain the sweep's business, and the
-  dashboard's bell may therefore lead or lag what has been sent. `MonitorSweeper.cachedQuotes` is the cached
-  alternative and no route calls it.
+  dashboard's bell may therefore lead or lag what has been sent. The engine keeps NO cached view of its
+  last batch: `MonitorSweeper.cachedQuotes` was the cached alternative, no route ever called it, and it was
+  REMOVED for that reason — which is what dropped `watchlist.ts`, `monitors.ts`, `domain/exit.ts` and
+  `domain/timefmt.ts` out of the alarm engine's imports entirely (ADR 0010, amended).
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
 - A provider is reported two ways, because they measure different things. `DEGRADED_AFTER_FAILURES`
   counts CONSECUTIVE failed sweeps — how long a failure lasted — and `FLAPPING_AFTER_FAILURES`
