@@ -12,10 +12,11 @@ is cased and the half where a wrong answer is PLAUSIBLE: a delayed tick id landi
 field shows a bid as a last, and IBKR's implied volatility of 0.1368 is moomoo's 14.007, so a rule
 written at 14 would never fire. Those are the errors a corpus catches.
 
-A `quotes()` answering `quotes.QuoteFetcher` is the other half, and it needs a decision this module
-should not take alone: it can only be verified against `make ibkr-fake-gateway`, whose replies were
-captured from the real gateway — and driving that from pytest means the Python suite spawning a Node
-process and depending on the TypeScript tree, which `make test` deliberately does not today.
+A `quotes()` answering `quotes.QuoteFetcher` is the other half. It was blocked on how to verify it
+without the Python suite spawning Node, and that is now answered (ADR 0021, Decision 7): the
+gateway conversations are recorded once in `testdata/vendors/ibkr-gateway/`, a Python stub replays
+the same messages to `ib_async`, and the client must return exactly the batch the TypeScript client
+did (`expected/`). It lands with the Python backend's vendor door (phase 4).
 
 ## What the client will use, when it is written, and why
 
