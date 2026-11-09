@@ -202,7 +202,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `opend.py` needs the `opend` extra AND owns the containment loop that drops a code moomoo names as
   unknown — inside the provider, where `opend/client.ts` has it (ADR 0015, #168), not above the port;
   `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
-  loads Positions and Monitors from the live service (`OPTIONALITY_API` for its URL). Only those
+  loads Positions, Monitors and References from the live service (`OPTIONALITY_API` for its
+  URL) — but NOT quotes: `GET /quotes` takes no parameters, so it cannot price a contract the
+  service does not already watch, and a notebook wanting an arbitrary code wants a Provider.
+  Only those
   three are not golden-cased: they mirror no domain module. Everything else is, decisions included —
   52 of the package's 58 public functions, which is exactly the 52 of the TypeScript domain's 56
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the

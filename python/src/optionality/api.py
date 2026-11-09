@@ -23,7 +23,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from optionality._ported import GOLDEN_CASES
 from optionality.monitor import Monitor
@@ -96,6 +96,45 @@ def _rows[T: BaseModel](model: type[T], body: Any, path: str) -> list[T]:
     return TypeAdapter(list[model]).validate_python(body)
 
 
+class Reference(BaseModel):
+    """One Reference with its live figure, as `GET /references` sends it.
+
+    Here and not in `reference.py` on purpose. That module is golden-cased and its public surface is
+    counted (CLAUDE.md: "52 of the package's 58 public functions"); this is an API row with no
+    TypeScript domain counterpart, so putting it there would add an uncased public name to a cased
+    module. `reference.ReferenceReading` is the DECISION — which field is true and what the day's
+    move is — and this is the service's answer carrying it.
+
+    Every field is required-but-nullable, faithfully: the service's `ReadingOut` declares each one
+    `.nullable()` rather than `.optional()`, so all twelve arrive on every row and a MISSING one is
+    a shape that has moved. `_rows` below only guards fields a model would silently default, so
+    requiredness here is what makes that guard unnecessary rather than absent.
+    """
+
+    model_config = ConfigDict(frozen=True)
+    id: str
+    code: str
+    label: str | None
+    #: the vendor that answers for this code, which the strip shows (ADR 0019)
+    source: str
+    #: the Security's own name as the vendor gives it, None where no quote arrived
+    name: str | None
+    figure: float | None
+    #: "mid_price" or "last_price": which number this is, so it can be checked against a broker
+    #: screen. The mid leads because a last trade can be a session old (domain/reference.ts).
+    field: str | None
+    #: the day's move as a FRACTION of the previous close
+    change: float | None
+    #: why there is no figure, or None. A dash on the page and nothing more (ADR 0018).
+    error: str | None
+    #: the vendor's own claim about freshness, or None where it made none — moomoo reports no grade,
+    #: and False would read as "it told us this is live" (ADR 0019)
+    delayed: bool | None
+    last_known: bool | None
+    #: minutes, where the vendor states them: Yahoo does, IBKR does not
+    delayed_by_minutes: float | None
+
+
 def positions(base_url: str | None = None, token: str | None = None) -> list[Position]:
     """Every Position the service holds (`GET /positions`)."""
     return _rows(Position, _get("/positions", base_url, token), "/positions")
@@ -104,6 +143,23 @@ def positions(base_url: str | None = None, token: str | None = None) -> list[Pos
 def monitors(base_url: str | None = None, token: str | None = None) -> list[Monitor]:
     """Every Monitor, enabled or not (`GET /monitors`)."""
     return _rows(Monitor, _get("/monitors", base_url, token), "/monitors")
+
+
+def references(base_url: str | None = None, token: str | None = None) -> list[Reference]:
+    """Every Reference with its live figure (`GET /references`).
+
+    One bounded call per SOURCE in use happens on the service's side, not here — the invariant is
+    the service's and this is a read of its answer (CLAUDE.md). It is also the one route that
+    cannot fail: a vendor that is wholly down leaves each row a `figure` of None with its own
+    `error`, so this returns rows either way and a notebook reads the reason rather than an
+    exception (ADR 0018).
+
+    There is deliberately no `quotes()` beside this. `GET /quotes` takes NO parameters — it is
+    "live quotes for the whole watchlist" — so it cannot price a contract the service does not
+    already watch, which is the bounded-call invariant working as intended. A notebook that wants
+    an arbitrary code wants a Provider, not this.
+    """
+    return _rows(Reference, _get("/references", base_url, token), "/references")
 
 
 @dataclass(frozen=True)
