@@ -29,8 +29,7 @@ yahoo = [
 # ib_async, for IB Gateway. BSD and maintained, where PyPI's `ibapi` is a third party's upload of
 # IBKR's 2020 code under IBKR's own non-OSS licence, topping out at protocol 157 — exactly what the
 # gateway here negotiates down to, so no headroom. The live gateway offers 178 and ib_async knows it.
-# Declared now, ahead of the client that will use it, so `all` is complete and the licence decision
-# is recorded where it is made rather than in a commit message.
+# `optionality.ibkr` imports it inside the function that connects, so the mapping needs no extra.
 ibkr = [
     "ib_async>=2.1",
 ]
@@ -56,9 +55,9 @@ exclude = ["tests", ".ruff_cache"]
 
 # the tools for this package's own suite and lint — `make test`, `make lint` and `make format` run them
 # here, in python/. Not installed by a notebook that depends on the package. And this package's own
-# `ibkr` extra, named rather than repeated: the no-trading lint re-derives its names from the
-# installed `ib_async` — a derivation the gate skipped would be a guard nobody runs, so it is
-# installed and never skipped.
+# `ibkr` extra, named rather than repeated: the IB Gateway client is replayed against the recorded
+# conversations, and the no-trading lint re-derives its names from the installed `ib_async` — a
+# derivation the gate skipped would be a guard nobody runs, so it is installed and never skipped.
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",

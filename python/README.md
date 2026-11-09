@@ -31,15 +31,31 @@ in `testdata/vendors/` — compared exactly, as the domain's are. It carries no 
 returned a bid 148 points above a price that matched Cboe's own close, and `reference.FIELDS` prefers
 the mid, so mapping that book faithfully would have put 7,574 on the strip entirely plausibly.
 
-`optionality.ibkr` ports IB Gateway's field mapping — the tick-id tables, the four data grades as
-the two facts they are, the 100x on implied volatility that makes IBKR's 0.1368 the service's
-14.007 — held to `testdata/vendors/ibkr-fields.json`. The client that fetches is not written yet;
-the mapping is the half where a wrong answer is plausible rather than loud.
+`optionality.ibkr` is the third provider: IB Gateway, through `ib_async` (the `ibkr` extra). Its
+field mapping — the tick-id tables, the four data grades as the two facts they are, the 100x on
+implied volatility that makes IBKR's 0.1368 the service's 14.007 — is held to
+`testdata/vendors/ibkr-fields.json`, and its client to every conversation recorded from the gateway
+in `testdata/vendors/ibkr-gateway/`: a stub replays each one to it, and the batch it returns, or the
+words it raises, must be exactly what the service's TypeScript client made of the same bytes.
+
+```python
+from optionality.ibkr import IbkrClient, quotes
+
+client = IbkrClient(port=4002, client_id=9301)  # a client id of your own: a second user of one displaces the first
+records, unknown = await client.fetch_quotes(["US.SPXW261218C8100000", "SPX", "VIX"])  # in a notebook
+client.close()
+
+records, unknown = quotes(["SPX"], port=4002, client_id=9301)  # from a script: connect, ask, close
+```
+
+It reads market data and nothing else: it sends the five messages the service's client sends, and
+`optionality.no_trading` names everything in `ib_async` that would place, change, cancel or
+exercise an order, which `tests/test_no_trading.py` refuses anywhere in this package.
 
 There is deliberately no `api.quotes()`. `GET /quotes` takes no parameters — it is "live quotes for
 the whole watchlist" — so it cannot price a contract the service does not already watch, which is
 the bounded-call invariant working as intended. For an arbitrary code you want a Provider:
-`optionality.opend` today.
+`optionality.opend` or `optionality.ibkr`.
 
 `api` reads `http://127.0.0.1:31415` by default; set `OPTIONALITY_API=https://<host>/opt/api` to use
 the service from elsewhere on the tailnet.
@@ -87,10 +103,10 @@ It never runs on import and never raises: with no service reachable it says so a
 works, which is the whole point of the package (ADR 0014).
 
 That last sentence is checked rather than promised. `tests/test_standalone.py` holds it two ways,
-because they fail differently: a static pass reads all fourteen pure modules and names any line
-reaching the SDK, the network or one of the three impure modules — including an import nested
-inside a function — and a subprocess then imports all fourteen with `moomoo` made unimportable and
-`OPTIONALITY_API` unset, and computes with them. Only the second can see an import-time dependency
+because they fail differently: a static pass reads all fifteen pure modules and names any line
+reaching an SDK, the network or one of the impure modules — including an import nested
+inside a function — and a subprocess then imports all fifteen with `moomoo` and `ib_async` made
+unimportable and `OPTIONALITY_API` unset, and computes with them. Only the second can see an import-time dependency
 no pattern would list, such as the zone data `timefmt` needs, which is present on a developer's
 machine and absent from a slim container. It was worth writing: `moomoo` is installed in the venv
 the suite runs in, so until now a pure module reaching for it would have passed every test.

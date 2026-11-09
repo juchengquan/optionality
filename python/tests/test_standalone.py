@@ -15,19 +15,21 @@ Two checks, because they fail differently and a mutation should have to defeat b
 
 * the STATIC one reads each module and names the offending line. It is a proxy: it knows only the
   dependencies it was told to look for.
-* the DYNAMIC one imports all fourteen in a subprocess with `moomoo` made unimportable and
-  `OPTIONALITY_API` unset, and then COMPUTES with them. Writing it corrected an assumption: it
+* the DYNAMIC one imports every pure module in a subprocess with `moomoo` and `ib_async` made
+  unimportable and `OPTIONALITY_API` unset, and then COMPUTES with them. Writing it corrected an assumption: it
   found that `optionality.opend` imports PERFECTLY WELL with no SDK, because `_moomoo_connect`
   imports it inside the function ("it is heavy and only wanted when asked for"). So the extra is
   needed to CONNECT, not to import, and what this asserts instead is that connecting fails with
-  words naming the extra to install. It tests the promise itself rather than a
+  words naming the extra to install. `optionality.ibkr` is held the same way since its client
+  landed: the mapping and the naming import with no `ib_async`, and connecting names the `ibkr`
+  extra. It tests the promise itself rather than a
   proxy for it — including the import-time dependencies no pattern would list, such as the zone
   data `timefmt` needs, which is present on this machine and absent from a slim container.
 
 The dynamic one carries its own anti-vacuum check. A subprocess whose blocker silently failed to
 bite would pass while proving nothing — the failure `cases.test.ts` records as a filter that
 quietly matched nothing, and which this review round has hit twice — so the script asserts that
-`import moomoo` DOES raise and that `optionality.opend` therefore fails, before it concludes
+`import moomoo` and `import ib_async` DO raise and that `optionality.opend` therefore fails, before it concludes
 anything about the rest.
 
 A second line runs through this file, and it is about CORRECTNESS rather than installability.
@@ -72,10 +74,10 @@ NOT_A_PORT = {"quotes", "api"}
 RESEARCH_DIR = PACKAGE / "research"
 RESEARCH = "optionality.research"
 
-#: what a pure module may never import, at module level or inside a function. `yfinance` joins
-#: `moomoo` for the same reason: it is an extra, and a pure module reaching it would break
-#: `import optionality.alarm` for everyone who installed without one
-FORBIDDEN_ROOTS = {"moomoo", "yfinance", "urllib", "http", "requests", "httpx", "socket", "ssl"}
+#: what a pure module may never import, at module level or inside a function. `yfinance` and
+#: `ib_async` join `moomoo` for the same reason: each is an extra, and a pure module reaching one
+#: would break `import optionality.alarm` for everyone who installed without it
+FORBIDDEN_ROOTS = {"moomoo", "yfinance", "ib_async", "urllib", "http", "requests", "httpx", "socket", "ssl"}
 
 
 def pure_modules() -> list[str]:
@@ -195,8 +197,11 @@ def test_the_research_rule_bites(tmp_path: Path) -> None:
 STANDALONE = r'''
 import importlib, importlib.abc, sys
 
+#: the SDKs that are extras, made absent: moomoo for `opend`, ib_async for `ibkr`
+EXTRAS = ("moomoo", "ib_async")
+
 class Absent(importlib.abc.MetaPathFinder):
-    """moomoo is not installed, as far as anything below is concerned.
+    """moomoo and ib_async are not installed, as far as anything below is concerned.
 
     ModuleNotFoundError and not ImportError: that is what absence actually raises, and
     `opend.py` catches the narrower one by name. A blocker raising the wider class would have
@@ -204,19 +209,20 @@ class Absent(importlib.abc.MetaPathFinder):
     """
 
     def find_spec(self, name, path=None, target=None):
-        if name == "moomoo" or name.startswith("moomoo."):
+        if any(name == root or name.startswith(root + ".") for root in EXTRAS):
             raise ModuleNotFoundError(f"No module named {name!r}", name=name)
         return None
 
 sys.meta_path.insert(0, Absent())
 
 # --- the blocker must actually bite, or every assertion below is vacuous -------------------
-try:
-    import moomoo
-except ModuleNotFoundError:
-    pass
-else:
-    raise SystemExit("BLOCKER DEAD: moomoo imported anyway, so this check proves nothing")
+for root in EXTRAS:
+    try:
+        importlib.import_module(root)
+    except ModuleNotFoundError:
+        pass
+    else:
+        raise SystemExit(f"BLOCKER DEAD: {root} imported anyway, so this check proves nothing")
 
 # --- opend IMPORTS without the SDK, by design ---------------------------------------------
 # `_moomoo_connect` imports the SDK inside the function, "not at the top: it is heavy and only
@@ -231,7 +237,20 @@ except ImportError as err:
 else:
     raise SystemExit("OpenD connected with no SDK — what did it connect to?")
 
-# --- the fourteen, imported with no SDK and no service ------------------------------------
+# --- ibkr the same way: the mapping and the naming import with no ib_async ----------------
+# `_transport` imports it inside the function that connects, so only connecting needs the extra
+import asyncio
+import optionality.ibkr as ib
+
+assert ib.contract_for("SPX").contract.exchange == "CBOE"
+try:
+    asyncio.run(ib.IbkrClient(port=1, client_id=1).fetch_quotes(["SPX"]))
+except ImportError as err:
+    assert "optionality[ibkr]" in str(err), f"unhelpful message: {err}"
+else:
+    raise SystemExit("IbkrClient connected with no ib_async — what did it connect to?")
+
+# --- the pure modules, imported with no SDK and no service --------------------------------
 MODULES = __MODULES__
 for name in MODULES:
     importlib.import_module(f"optionality.{name}")

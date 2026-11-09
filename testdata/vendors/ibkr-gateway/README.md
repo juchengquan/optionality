@@ -123,9 +123,15 @@ The rules `typescript/src/vendors/ibkr/fake.ts` follows, which a stub in any lan
    answered from, if any. Send nothing for reqMarketDataType (`59`) or anything else; the real
    gateway sends nothing for the first, and the rest are not part of a quote fetch.
 
-`ib_async` sends more than a quote fetch on connect (positions, open orders and the like). No
-recording holds them, so by rule 4 they go unanswered; the Python client is expected to connect
-with `readonly=True` and its startup fetch off (`python/src/optionality/ibkr.py`).
+`ib_async`'s `IB.connectAsync` sends more than a quote fetch on connect: the account's positions
+whatever its fetch flags say, and open and completed orders unless `readonly=True`. No recording
+holds any of it, and none should — a quote fetch has nothing account-shaped in it (ADR 0019). So
+the Python client (`python/src/optionality/ibkr.py`) does not connect that way: it connects
+`ib_async`'s `Client`, which performs the handshake and sends nothing else, and sends exactly the
+TypeScript's messages after it. A stub needs no rule for the rest, and the Python one,
+`python/tests/fake_gateway.py`, records every message it receives so `test_ibkr_gateway.py` can
+hold the client to those five. Rule 4 still answers anything a future client sends unasked: with
+silence, which is what makes it visible.
 
 ## What an expectation says
 
@@ -157,9 +163,10 @@ the OS picks, names `<port>` instead. Every reply is delivered at once, so the b
 client makes of the gateway's **whole** answer; where that differs from what it made of the live
 one, the recording's provenance says so (`normal-with-greeks`: the live client missed the greeks).
 
-The batch is what must match. Whether a second client must also reproduce a thrown message word
-for word, rather than throw where this one throws, is for that client's phase to settle (ADR 0021,
-phase 4).
+The batch is what must match, and for the Python client the thrown message does too, word for
+word: `python/tests/test_ibkr_gateway.py` compares the whole `expect` (and each `later`) with the
+golden cases' `same`, a raise included. A client that raises in the right place with other words
+would be telling the owner something different about the same gateway.
 
 Where it throws is the rule worth building to rather than discovering. A contract the gateway says
 does not exist is `unknown`. SILENCE is a throw: when no contract that was asked for market data

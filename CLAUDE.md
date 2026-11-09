@@ -53,7 +53,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `check-test-support`, `check-seams` (four seams: the backend's `vendors/` and the library's,
   `engine/`, `entrypoints/`), `check-module-map`, `check-make-targets`, `check-served-root` — and
   `check-py-backend`, the Python backend's two lines (ADR 0021): it imports only the library's
-  public modules, and it names no order call or class outside a `trading/` that does not exist.
+  public modules, and it names no order call or class outside a `trading/` that does not exist
+  (the library holds itself to the second with no door at all, in its own suite).
   `check-module-map` holds the same backend module for module: every TypeScript backend module has
   its Python port, a reason in the tool's table, or a place on a backlog frozen on 2026-11-09 that
   may only shrink (ADR 0021). The first:
@@ -113,8 +114,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   repo-wide codegen step rather than something the library may do. Both stamps are generated and
   committed; `make check-cases` fails when either is stale.
   **A THIRD corpus**, `testdata/vendors/ibkr-gateway/`, holds the two IB Gateway clients of ADR
-  0021 (Decision 7) — this one, hand-written, and the Python backend's, on `ib_async` — to "the
-  same recording in, the same quote batch out". Its `*.json` are RECORDINGS: what the gateway
+  0021 (Decision 7) — this one, hand-written, and the Python library's, on `ib_async`
+  (`python/src/optionality/ibkr.py`) — to "the same recording in, the same quote batch out". Its `*.json` are RECORDINGS: what the gateway
   sends, message by message, every field the exact text the wire carried, each file saying in
   `provenance` whether it was captured (when, which gateway, how, and every byte altered since)
   or constructed (why, and from what). They are inputs; `make cases` never writes them, and
@@ -122,7 +123,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the placeholder. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
   replayed through the fake by `ibkr/replay.ts`, every reply at once. `make check-cases` and
   `cases/gateway.test.ts` fail when one is stale, missing, or has no recording; outside the
-  fingerprint for the vendor corpus' reason. Its README is written for the Python stub's author.
+  fingerprint for the vendor corpus' reason. Its README is written for the Python stub's author,
+  and that stub is `python/tests/fake_gateway.py`: `tests/test_ibkr_gateway.py` replays EVERY
+  recording through it to the Python client and compares the batch, or the exact words raised, to
+  `expected/` with `test_cases.same`. Parametrized from the directory, so a new recording is
+  replayed there too and fails until the Python answers what the TypeScript did.
 - **Door scenarios** (ADR 0021, phase 1c): `testdata/scenarios/{http,bot,sweep}/` — a stated world
   (rows, `.env` lines, what each vendor answers, the clock), ONE request, Telegram update or sweep
   tick, and exactly what the service did: the response or reply, the rows it changed, the messages
@@ -144,7 +149,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 - **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
   `ibkr/` client by hand (`ARGS="--conversation link-down"` picks what it replays). It says nothing
   of its own: it replays one conversation from `testdata/vendors/ibkr-gateway/` (above), the same
-  files a Python stub will replay to `ib_async`. `normal-with-greeks`, the default, is what the real
+  files `python/tests/fake_gateway.py` replays to `ib_async`. `normal-with-greeks`, the default, is what the real
   gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-09, byte for byte. The stub's
   inline replies of 2026-11-08 were retired with that move, because three things in them no
   capture shows: a contract reply cut to the fifteen fields this client reads (`ib_async` reads
@@ -328,27 +333,44 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   loads Positions, Monitors and References from the live service (`OPTIONALITY_API` for its
   URL) — but NOT quotes: `GET /quotes` takes no parameters, so it cannot price a contract the
   service does not already watch, and a notebook wanting an arbitrary code wants a Provider.
-  `yahoo.py` is the
-  second PORT beside `opend.py`, and `ibkr.py` a third — though `ibkr.py` is the MAPPING only, with
-  no client yet. Driving the Node stub from pytest would make `make test` depend on the TypeScript
-  tree, which it does not today; the client's half is to be held instead by a Python stub replaying
-  `testdata/vendors/ibkr-gateway/` to `ib_async` (ADR 0021, phase 4), against the batches there.
-  The stub answers `managedAccounts` because `ib_async` will not report a connection until the
-  accounts list is populated — recorded in SHAPE (one nine-character "DU" paper account) with the
-  identifier replaced, since the recordings are committed. `yahoo.py` is the
+  `ibkr.py` is the third PORT: IB Gateway's field mapping (held to `testdata/vendors/ibkr-fields.json`),
+  `contract_for` (a code as the contract the gateway wants, `contract.ts`) and `IbkrClient`
+  (`client.ts`'s bounded ask, async, on `ib_async`; `quotes()` is the one-shot for a script, as
+  `opend` and `yahoo` have). It needs the `ibkr` extra to CONNECT, not to import. `ib_async` owns
+  the wire — socket, handshake, encodings, every message's layout — and the module owns what a
+  field means and every decision `client.ts` makes; the two figure messages (ticks 1 and 21) are
+  read field by field by its own decoder subclass, because `ib_async`'s drops an empty price
+  before any callback and an empty greek with a traceback, and the TypeScript reads an empty price
+  as no figure but still an ANSWER. It connects `ib_async`'s `Client`, never `IB.connectAsync`,
+  which asks for the account's positions on every connect whatever its flags say and whose
+  `readonly=True` refuses nothing: the Python sends exactly `messages.ts`'s messages, and
+  `tests/test_ibkr_gateway.py` holds it to that as well as to every batch. One module rather than a
+  subpackage, like its two siblings: the TypeScript splits `ibkr/` by layer because it owns the
+  wire, which `ib_async` owns here. The stub answers `managedAccounts` because `ib_async` will not
+  report a connection until the accounts list is populated — recorded in SHAPE (one
+  nine-character "DU" paper account) with the identifier replaced, since the recordings are
+  committed. **`no_trading.py`** is the no-trading lint's whole content (ADR 0021, Decision 8):
+  every call and class in `ib_async` that places, modifies, cancels or exercises an order, the
+  string reader, and `breaches_in`. In the LIBRARY because the library's client is what holds an
+  `ib_async` connection and its `ibkr` extra is what installs it; ONE list, which
+  `tests/test_no_trading.py` re-derives from the installed `ib_async` and refuses anywhere under
+  `python/src` (no door — only `no_trading.py`'s own strings are exempt, since they are the list),
+  and which `python-backend/`'s lint imports by name. `yahoo.py` is the
   second PORT beside `opend.py`, answering the same `QuoteFetcher` through yfinance — library for
   library with `yahoo/client.ts`, which uses `yahoo-finance2` because a bare fetch is refused with
   429, and both surface Yahoo's own field names so the mapping is the same mapping. Only `quotes.py`
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
-  52 of the package's 69 public functions, which is exactly the 52 of the TypeScript domain's 56
+  52 of the package's 79 public functions, which is exactly the 52 of the TypeScript domain's 56
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
   package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
   `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and
   `js.js_string`
   mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
-  spell the conversion out.
+  spell the conversion out. Ten more since the IB Gateway client landed: `ibkr.contract_for` and
+  `ibkr.quotes`, held by the recorded conversations and their own tests rather than a corpus, and
+  `no_trading`'s eight, a lint held by fixture sources.
   **`src/optionality/research/`** is the package's other half, and the only subdirectory: chains,
   historical bars, anything the service never fetches, so it mirrors no TypeScript, no golden case
   holds it and NOTHING CHECKS WHETHER IT IS RIGHT — its own `__init__.py` says so plainly rather
@@ -364,13 +386,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   maths and drives the ports, which is what it is for.
   `tests/test_cases.py` runs every golden case, and `tests/test_standalone.py` holds the promise
   three documents make and nothing checked: the maths imports and computes with NO `opend` extra
-  and NO service. Two checks, because they fail differently — a static pass over the fourteen pure
+  and NO service. Two checks, because they fail differently — a static pass over the fifteen pure
   modules (it reads the AST, so a lazy import inside a function is seen too) and a subprocess that
-  imports them all with `moomoo` unimportable and `OPTIONALITY_API` unset. The second is the only
+  imports them all with `moomoo` and `ib_async` unimportable and `OPTIONALITY_API` unset. The second is the only
   one that can catch an import-time dependency no pattern lists, like zone data. Worth having
   because `moomoo` IS installed in the venv the suite runs in, so a violation was invisible here.
   Writing it also corrected a belief: `optionality.opend` imports perfectly well without the SDK —
   it reaches `moomoo` inside the function that connects, so the extra is needed to CONNECT.
+  `optionality.ibkr` is held the same way, for `ib_async`.
   **Installed by a pinned git ref** (ADR 0016), never from a path that tracks the working tree —
   an editable install serves a notebook whatever half-ported state the tree is in:
   `uv add "optionality @ git+https://github.com/juchengquan/optionality.git@py-<version>#subdirectory=python"`.
@@ -385,8 +408,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   are ported. Its suite also holds the two lines `check-py-backend` runs —
   `tests/test_library_boundary.py` (no `optionality._*`, no `optionality.research`, no reach into the library's source by path) and `tests/test_no_trading.py`
   (no order placed, modified, cancelled or exercised outside `optionality_backend/trading/`, which
-  must not exist until a trading ADR creates it; the forbidden names are DERIVED from `ib_async`'s
-  source and re-derived whenever it is installed). Both run against fixture trees. Never released:
+  must not exist until a trading ADR creates it; the forbidden names and the reader that applies
+  them are the library's `optionality.no_trading`, imported by name, whose own suite re-derives
+  them from `ib_async`'s source and holds the library to the same rule with no door). Both run
+  against fixture trees. Never released:
   it runs from the working tree, as `backend/` does.
   **`tests/scenarios/`** is the door scenarios' Python runner (ADR 0021, phase 2), mirroring
   `backend/testing/scenarios/`: `world.py` builds a scenario's database from `schema/schema.sql`,
