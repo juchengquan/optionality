@@ -454,11 +454,19 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   its syntax — so a new scenario joins it only in a diff. `test_scenario_runner.py` holds all of
   that against small worlds and a fake backend, because 120 skips cannot show a runner compares
   anything.
-  **How it starts** is half built: `entrypoints/http/listen.py` takes the port first, as `listen.ts`
-  does — a socket it binds itself and hands to uvicorn, with `SO_REUSEADDR` as libuv sets it (without
-  it a restart is refused for ~30s by TIME_WAIT and reads "another backend is running") and
-  uvicorn's signal handling, logging and access log off. `__main__` is not ported; `listen.py`'s
-  docstring is the order it owes the lock (.env, port, settings, database, vendors, sweep, bot).
+  **How it starts**: `python -m optionality_backend --env-file=.env`, which is `__main__.py`, the
+  port of `main.ts`, in the order `listen.py`'s docstring gives the lock (.env, port, settings,
+  database, vendors, sweep, app, startup line). `entrypoints/http/listen.py` takes the port first, as
+  `listen.ts` does — a socket it binds itself and hands to uvicorn, with `SO_REUSEADDR` as libuv
+  sets it (without it a restart is refused for ~30s by TIME_WAIT and reads "another backend is
+  running") and uvicorn's signal handling, logging and access log off. **Partly ported: the bot**,
+  which is absent, and `OPTIONALITY_BOT=1` is REFUSED right after the port rather than run without
+  it. Every way out is `exit_now` — the exit line, then `os._exit`, as `process.exit` leaves —
+  because the interpreter's own exit joins every non-daemon thread, and the moomoo SDK's connect
+  retries a dead OpenD for ever on one: a stop during an OpenD outage would otherwise wait for
+  launchd's SIGKILL (`tests/test_main.py` boots it against TEST-NET-1 and stops it mid-retry). Its
+  logging sends INFO to stdout and WARNING up to stderr, as `console` splits them, and holds every
+  library at WARNING: httpx2 logs each request at INFO, and Telegram's URL carries the bot token.
   `.env` reaches it as `--env-file=.env`, read by `env.load_env_file`: Node's own reader ported
   branch for branch and held to the real `node --env-file`, because `python-dotenv` reads the same
   file differently (a `#` inside a value, `${VAR}`).

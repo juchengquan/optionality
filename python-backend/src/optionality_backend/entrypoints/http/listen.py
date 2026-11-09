@@ -16,8 +16,7 @@ Holding the port before the app exists means requests can arrive while the servi
 They get a 503 in the dashboard's error shape (`errors.py`) rather than a refused connection, and the
 app is attached once it is ready.
 
-**The order `__main__` must follow**, as `main.ts` does. `__main__` is not ported yet (it wires modules
-that are not), and this is what it owes the lock:
+**The order `__main__` follows**, as `main.ts` does, and what it owes the lock:
 
 1. **`.env`**, named by `--env-file=.env` on its command line as Node's is, and read with
    `env.load_env_file` before anything, as Node reads its own before `main.ts` runs. Reading a file
@@ -35,7 +34,8 @@ that are not), and this is what it owes the lock:
    which point requests stop being answered 503.
 7. **The bot** built, the sweep started (at once and on the interval, with its stall watchdog), and
    the bot started ONLY when `OPTIONALITY_BOT=1` and Telegram is configured: one `getUpdates` consumer
-   per token, and only the plist sets the flag.
+   per token, and only the plist sets the flag. (The bot is not ported yet: `__main__` refuses the flag,
+   right after the port, rather than run without it.)
 8. **Signals and logging**, which `take_port` leaves alone: `__main__` configures where logs go, and on
    SIGTERM — how launchd stops it — stops the bot, the scheduler, `await held.close()`, the vendors and
    the database, in that order, and exits 0.

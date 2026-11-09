@@ -62,7 +62,6 @@ export const BACKLOG = [
   "entrypoints/bot/commands/watchlist.ts",
   "entrypoints/bot/format.ts",
   "entrypoints/http/openapi.ts",
-  "main.ts",
 ];
 
 const SKIP_DIRS = new Set(["node_modules", "__pycache__", ".venv", "dist"]);

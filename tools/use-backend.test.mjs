@@ -130,7 +130,7 @@ describe("the guard: the live service never switches to a half-ported Python", (
   it("refuses the Python today, counting the port and naming every door still missing", () => {
     // Measured, not remembered: the counts below come from the corpus and from Python's own reading
     // of the backlog, so the test holds while the parallel ports shrink it. When the port is done
-    // the backlog empties, `__main__.py` appears, and this test is replaced by the one it guards.
+    // the backlog empties, and this test is replaced by the one it guards.
     const lines = refusals("python", ROOT);
     const total = DOORS.flatMap((d) => readdirSync(join(ROOT, "testdata/scenarios", d)).filter((f) => f.endsWith(".json"))).length;
     const backlog = pythonsBacklog();
@@ -140,7 +140,10 @@ describe("the guard: the live service never switches to a half-ported Python", (
       const waiting = backlog.filter((n) => n.startsWith(`${door}/`)).length;
       if (waiting > 0) expect(lines).toContainEqual(expect.stringMatching(new RegExp(`^  ${door} +${waiting} of \\d+ still on the backlog$`)));
     }
-    expect(lines).toContainEqual(expect.stringMatching(/__main__\.py does not exist/));
+    // `__main__.py` is written (the process is ported, less the bot), so the backlog alone refuses:
+    // the guard waits for every door, not for a file that can run
+    expect(existsSync(join(ROOT, "python-backend/src/optionality_backend/__main__.py"))).toBe(true);
+    expect(lines.some((l) => /__main__\.py/.test(l))).toBe(false);
   });
 
   it("reads the backlog exactly as Python does", () => {
