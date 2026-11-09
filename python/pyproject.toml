@@ -26,8 +26,16 @@ yahoo = [
 # dependency on yfinance would make pandas 3.x and numpy 2.x HARD requirements of the maths, and a
 # notebook pinned to pandas 2.x could then not install this package at all. Measured: the base is
 # 5 packages and 7.2 MB, and yfinance alone brings it to 22 and 107 MB.
+# ib_async, for IB Gateway. BSD and maintained, where PyPI's `ibapi` is a third party's upload of
+# IBKR's 2020 code under IBKR's own non-OSS licence, topping out at protocol 157 — exactly what the
+# gateway here negotiates down to, so no headroom. The live gateway offers 178 and ib_async knows it.
+# Declared now, ahead of the client that will use it, so `all` is complete and the licence decision
+# is recorded where it is made rather than in a commit message.
+ibkr = [
+    "ib_async>=2.1",
+]
 all = [
-    "optionality[opend,yahoo]",
+    "optionality[opend,yahoo,ibkr]",
 ]
 
 [build-system]

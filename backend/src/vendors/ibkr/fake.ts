@@ -22,6 +22,10 @@ import { frame, readFields, readFrames, toFields } from "./wire.ts";
 /** The contract the probes asked about, and the conId the real gateway returned for it. */
 export const FAKE_CONID = 902390015;
 
+/** The managed account this stub reports: the SHAPE the live gateway gave on 2026-11-09 — one
+ *  paper account, nine alphanumeric characters, "DU" prefix — with the number itself replaced. */
+export const FAKE_ACCOUNT = "DU0000000";
+
 /** The greeks the real gateway sent for SPXW 20261218 C 8100, frozen, on 2026-11-08.
  *
  *  Corrected after running our own client against the gateway: `optPrice` and `undPrice` were
@@ -105,6 +109,18 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
           }
           if (options.silent) continue;                   // accepted, then nothing — the hang
           socket.write(frame(toFields([9, 1, 1])));       // nextValidId: the session is up
+          // and the accounts the session manages, which a real gateway always sends next. This
+          // client ignores it — `messages.ts` has no case for id 15, so it falls to `other` — but
+          // it is not decoration: `ib_async`, which the Python port uses, will not report a
+          // connection until the accounts list is populated, and reporting NO account times out
+          // just as sending nothing does (measured against this stub, 2026-11-09).
+          //
+          // RECORDED in shape, with the identifier replaced. The live gateway on this machine
+          // answered with ONE account of nine alphanumeric characters beginning "DU" — a paper
+          // account — and the id below has that shape and is not it. Everything else about this
+          // message is what the gateway sent; the account number is the owner's and `fake.ts` is
+          // committed, which is the same reason `.env` never is.
+          socket.write(frame(toFields([15, 1, FAKE_ACCOUNT])));
           continue;
         }
 

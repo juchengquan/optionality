@@ -13,8 +13,14 @@ import { MIN_SERVER_VERSION, frame, toFields } from "./wire.ts";
  *  this protocol that produces plausible wrong numbers instead of an error.
  *
  *  Raising it is a deliberate act: re-read the reference client's decoder for every message in
- *  `messages.ts`, then raise it, in that order. 157 is what the gateway on this machine speaks
- *  and what the probes of 2026-11-08 were decoded against.
+ *  `messages.ts`, then raise it, in that order. 157 is what the probes of 2026-11-08 were decoded
+ *  against, and it is what this client asks for.
+ *
+ *  It is NO LONGER what the gateway speaks. Measured 2026-11-09: IB Gateway 10.52 offered
+ *  serverVersion 178 to a client that asked for it, and answers 157 here only because that is
+ *  the ceiling above. Nothing is wrong — the cap is doing exactly the job this comment
+ *  describes — but the sentence that used to say 157 was the gateway's own version was true when
+ *  written and is not now, and a stale measurement reads like a current one.
  */
 export const MAX_SERVER_VERSION = 157;
 
