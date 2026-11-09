@@ -12,23 +12,39 @@
  *  default, and the message names what to fix. CLAUDE.md calls a boot failure "fatal on purpose":
  *  launchd keeps trying, so the log is the only thing that tells the owner why.
  *
- *  Each case must die BEFORE anything is served. The order in `main.ts` is settings, then the
- *  database, then the vendors, then `serve` — so a refused setting never opens a file, and a
- *  refused Provider opens only the throwaway database named here. The environment is built from
- *  nothing rather than inherited: no bot flag and no Telegram token, so a boot cannot become a
- *  second `getUpdates` consumer or send the owner a message (CLAUDE.md), and `PORT=0` so that
- *  nothing can land on the live port even if a future change moved `serve` earlier.
+ *  Each case must die BEFORE anything is served. The order in `main.ts` is the port (it is the lock
+ *  between two backends, ADR 0021), then settings, then the database, then the vendors, and only
+ *  then is the app attached — so a taken port touches nothing, a refused setting never opens a
+ *  file, and a refused Provider opens only the throwaway database named here. The environment is
+ *  built from nothing rather than inherited: no bot flag and no Telegram token, so a boot cannot
+ *  become a second `getUpdates` consumer or send the owner a message (CLAUDE.md), and `PORT=0`
+ *  by default, so the port each case takes first is never the live one.
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
+import { type Server, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { createDatabase } from "./db/open.ts";
 
 const MAIN = join(import.meta.dirname, "main.ts");
+
+/** A port some other process already holds, as a second backend would find it. */
+const occupied: Server[] = [];
+afterAll(() => { for (const s of occupied) s.close(); });
+function occupy(): Promise<number> {
+  return new Promise((resolve) => {
+    const other = createServer();
+    occupied.push(other);
+    other.listen(0, "127.0.0.1", () => {
+      const address = other.address();
+      resolve(typeof address === "object" && address ? address.port : 0);
+    });
+  });
+}
 
 /** Boot it, and give back what it said and how it died. */
 function boot(env: Record<string, string>): Promise<{ code: number | null; stderr: string }> {
@@ -52,6 +68,20 @@ describe("booting the service", () => {
     const { code, stderr } = await boot({ MONITOR_INTERVAL_SECONDS: "every minute" });
     expect(code, "a service that cannot read its settings must not start").not.toBe(0);
     expect(stderr).toMatch(/MONITOR_INTERVAL_SECONDS/);
+  }, 30_000);
+
+  it("takes the port before it touches anything, and stops if another backend holds it", async () => {
+    // the port is the lock between the two backends (ADR 0021): a second process must die having
+    // opened nothing. The database is the witness, because `openDatabase` creates a missing file:
+    // if this boot got as far as the database, the file below would exist afterwards.
+    const port = await occupy();
+    const db = join(mkdtempSync(join(tmpdir(), "boot-")), "never-opened.db");
+    const { code, stderr } = await boot({
+      PORT: String(port), OPTIONALITY_DB_PATH: db, MOOMOO_WS_PORT: "1",
+    });
+    expect(code).not.toBe(0);
+    expect(stderr).toMatch(new RegExp(`port ${port} on 127\\.0\\.0\\.1 is taken`));
+    expect(existsSync(db), "a refused boot must not have opened the database").toBe(false);
   }, 30_000);
 
   it("refuses a Provider no vendor carries, naming the ones that exist", async () => {

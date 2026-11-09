@@ -27,3 +27,4 @@
  */
 export { createApp, type AppType } from "./app.ts";
 export type { Deps } from "./deps.ts";
+export { type HeldPort, takePort } from "./listen.ts";

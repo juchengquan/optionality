@@ -9,9 +9,7 @@
  *  (CLAUDE.md), and only the launchd plist sets the flag, so `make serve` and every other local run
  *  cannot become a second consumer and take a random half of the owner's commands.
  */
-import { serve } from "@hono/node-server";
-
-import { type Deps, createApp } from "./entrypoints/http/index.ts";
+import { type Deps, createApp, takePort } from "./entrypoints/http/index.ts";
 import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
@@ -19,6 +17,17 @@ import { openVendors } from "./vendors/index.ts";
 import { MonitorSweeper, STALE_AFTER_SWEEPS, Scheduler } from "./engine/index.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
 import { TelegramBot } from "./entrypoints/bot/bot.ts";
+
+/** The port, before anything else: it is the lock between the two backends (ADR 0021). Either may
+ *  be the live one and they share the database, the bot token and the gateway client id, so a
+ *  second process must stop having touched none of them. Until the app is attached below, requests
+ *  are answered 503 rather than refused (`listen.ts`). `PORT` is read here rather than through
+ *  Settings so that not even a settings error can come first. */
+const port = Number(process.env.PORT ?? 31417);
+const held = await takePort(port).catch((err: Error) => {
+  console.error(`${err.message}: stopping before the database, the vendors or Telegram are touched`);
+  return process.exit(1);
+});
 
 const settings = settingsFromEnv();
 const db = openDatabase(settings.dbPath);
@@ -57,9 +66,9 @@ const deps: Deps = {
   sources: vendors.sources,
 };
 
-const port = Number(process.env.PORT ?? 31417);
-// 127.0.0.1: reachable only via the tailscale serve proxy and localhost, never the LAN
-const server = serve({ fetch: createApp(deps).fetch, port, hostname: "127.0.0.1" });
+// 127.0.0.1 (takePort's default): reachable only via the tailscale serve proxy and localhost,
+// never the LAN. Requests stop being answered 503 from here.
+held.serve(createApp(deps).fetch);
 
 const bot = new TelegramBot({
   db,
@@ -90,7 +99,7 @@ if (botWanted) {
 }
 
 console.log(
-  `optionality backend on 127.0.0.1:${port} — `
+  `optionality backend on 127.0.0.1:${held.port} — `
   + `reading ${provider.name}, sweeping every ${settings.monitorIntervalSeconds}s, `
   // every vendor that opened, so the log says which Reference sources this build actually has
   + `references from ${Object.keys(vendors.sources).sort().join(", ")}, `
@@ -146,7 +155,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     console.log(`${signal}: stopping`);
     bot.stop();
     scheduler.stopSweep();
-    server.close();
+    held.server.close();
     // one loop over everything that opened, the Provider included: a vendor cannot be forgotten
     // here by growing a connection later, which the hand-written pair of calls allowed
     vendors.close();
