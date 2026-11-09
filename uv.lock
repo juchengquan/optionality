@@ -10,6 +10,12 @@ resolution-markers = [
     "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "optionality",
+    "optionality-backend",
+]
+
 [[package]]
 name = "aeventkit"
 version = "2.1.0"
@@ -559,7 +565,7 @@ wheels = [
 [[package]]
 name = "optionality"
 version = "2026.11.9.1"
-source = { editable = "." }
+source = { editable = "python" }
 dependencies = [
     { name = "pydantic" },
 ]
@@ -598,6 +604,31 @@ provides-extras = ["opend", "yahoo", "ibkr", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "ruff" },
+]
+
+[[package]]
+name = "optionality-backend"
+version = "0"
+source = { editable = "python-backend" }
+dependencies = [
+    { name = "optionality" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "optionality", extra = ["ibkr"] },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "optionality", editable = "python" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "optionality", extras = ["ibkr"], editable = "python" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff" },
 ]

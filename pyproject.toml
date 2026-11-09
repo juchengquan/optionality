@@ -1,0 +1,12 @@
+# The uv workspace (ADR 0021): one lock and one environment for the two Python packages, which
+# mirror the TypeScript's two. Virtual on purpose — there is no `[project]` here, so the repository
+# root is not itself a package and nothing can depend on it.
+#
+#   python/          the library, `optionality`. RELEASED by git tag (ADR 0016) and installed by
+#                    notebooks from its subdirectory, so its own pyproject.toml must stay
+#                    self-contained: nothing in it may name this workspace, or a pinned install
+#                    stops building outside a checkout.
+#   python-backend/  the backend, `optionality_backend`. Never released; it runs from the working
+#                    tree as the TypeScript does, and depends on the library through the workspace.
+[tool.uv.workspace]
+members = ["python", "python-backend"]
