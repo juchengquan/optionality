@@ -144,6 +144,10 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "normalizeStrikeDate", name: "compact becomes dashed", args: ["20261120"] },
     { fn: "normalizeStrikeDate", name: "an impossible date is refused", args: ["2026-13-45"] },
     { fn: "normalizeStrikeDate", name: "a date with a time after it", args: ["2026-11-20T00:00"] },
+    // JavaScript's \d is 0-9 alone; Python's matches every Unicode decimal digit. These hold the
+    // port to the TypeScript's refusal (found porting the Python backend's request schemas).
+    { fn: "normalizeStrikeDate", name: "Arabic-Indic digits are not a date", args: ["\u0662\u0660\u0662\u0666-\u0661\u0662-\u0661\u0668"] },
+    { fn: "normalizeStrikeDate", name: "full-width digits are not a date", args: ["\uff12\uff10\uff12\uff16\uff11\uff12\uff11\uff18"] },
     { fn: "buildSpxCode", name: "a put", args: ["2026-11-20", "PUT", 6500] },
     { fn: "buildSpxCode", name: "a call from a compact date", args: ["20261120", "CALL", 7100] },
     { fn: "buildSpxCode", name: "an end-of-month expiry", args: ["2026-12-31", "PUT", 6000] },
@@ -161,6 +165,7 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // would read a code out of surrounding text — which these two are what catch
     { fn: "parseSpxCode", name: "a code with something before it", args: ["XUS.SPXW261120P6500000"] },
     { fn: "parseSpxCode", name: "a code with something after it", args: ["US.SPXW261120P6500000X"] },
+    { fn: "parseSpxCode", name: "a code with non-ASCII digits", args: ["US.SPXW\u0662\u0666\u0661\u0661\u0662\u0660P6500000"] },
     { fn: "shortSpxCode", name: "a call", args: ["US.SPXW260918C8100000"] },
     { fn: "shortSpxCode", name: "a name it cannot read", args: ["sep-condor"] },
     { fn: "expandSpxShort", name: "as the bot prints it", args: ["260918 C8100"] },
@@ -168,6 +173,12 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "expandSpxShort", name: "not the short form at all", args: ["sep-condor"] },
     { fn: "expandSpxShort", name: "a day that does not exist", args: ["260230C8100"] },
     { fn: "expandSpxShort", name: "a short form inside other text", args: ["x260918C8100"] },
+    { fn: "expandSpxShort", name: "non-ASCII digits are not a short form", args: ["\u0662\u0666\u0660\u0669\u0661\u0668 C8100"] },
+    // what JavaScript's \s strips and Python's does not, and the reverse: a no-break space and a
+    // byte-order mark are whitespace to JavaScript; a file separator is whitespace only to Python
+    { fn: "expandSpxShort", name: "a no-break space is whitespace", args: ["260918\u00a0C8100"] },
+    { fn: "expandSpxShort", name: "a byte-order mark is whitespace", args: ["\ufeff260918 C8100"] },
+    { fn: "expandSpxShort", name: "a file separator is not whitespace", args: ["260918\u001cC8100"] },
   ],
   expiry: [
     { fn: "marketDate", name: "one minute before New York's midnight", args: [at("2026-10-17T03:59:00Z")] },
@@ -209,6 +220,7 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "marketTimeToDisplay", name: "moomoo's naive Eastern time", args: ["2026-10-16 15:59:58", "Asia/Singapore"] },
     { fn: "marketTimeToDisplay", name: "with a fraction", args: ["2026-10-16 15:59:58.125", "Asia/Singapore"] },
     { fn: "marketTimeToDisplay", name: "the hour that happens twice", args: ["2026-11-01 01:30:00", "UTC"] },
+    { fn: "marketTimeToDisplay", name: "non-ASCII digits are not a market time", args: ["\u0662\u0660\u0662\u0666-10-16 15:59:58", "UTC"] },
     { fn: "marketTimeToDisplay", name: "not a time comes back untouched", args: ["N/A", "Asia/Singapore"] },
     { fn: "marketTimeToDisplay", name: "an impossible time comes back untouched", args: ["2026-13-45 99:99:99", "UTC"] },
     // a value that already carries an offset is NOT a naive market time, so the pattern declines it

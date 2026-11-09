@@ -60,7 +60,8 @@ def display_time_short(when: datetime | None, tz_name: str = "") -> str | None:
     return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
 
 
-_MARKET_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?")
+# re.ASCII: JavaScript's \d is 0-9 alone; Python's is every Unicode decimal digit.
+_MARKET_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?", re.ASCII)
 
 
 def _naive_instant(y: str, mo: str, d: str, h: str, mi: str, s: str, frac: str) -> int | None:
