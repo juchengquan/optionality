@@ -179,6 +179,15 @@
     },
     {
       "fn": "marketTimeToDisplay",
+      "name": "non-ASCII digits are not a market time",
+      "args": [
+        "٢٠٢٦-10-16 15:59:58",
+        "UTC"
+      ],
+      "expect": "٢٠٢٦-10-16 15:59:58"
+    },
+    {
+      "fn": "marketTimeToDisplay",
       "name": "not a time comes back untouched",
       "args": [
         "N/A",

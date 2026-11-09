@@ -39,6 +39,26 @@
       }
     },
     {
+      "fn": "normalizeStrikeDate",
+      "name": "Arabic-Indic digits are not a date",
+      "args": [
+        "٢٠٢٦-١٢-١٨"
+      ],
+      "expect": {
+        "$throws": "invalid strike_date: ٢٠٢٦-١٢-١٨"
+      }
+    },
+    {
+      "fn": "normalizeStrikeDate",
+      "name": "full-width digits are not a date",
+      "args": [
+        "２０２６１２１８"
+      ],
+      "expect": {
+        "$throws": "invalid strike_date: ２０２６１２１８"
+      }
+    },
+    {
       "fn": "buildSpxCode",
       "name": "a put",
       "args": [
@@ -179,6 +199,14 @@
       "expect": null
     },
     {
+      "fn": "parseSpxCode",
+      "name": "a code with non-ASCII digits",
+      "args": [
+        "US.SPXW٢٦١١٢٠P6500000"
+      ],
+      "expect": null
+    },
+    {
       "fn": "shortSpxCode",
       "name": "a call",
       "args": [
@@ -231,6 +259,38 @@
       "name": "a short form inside other text",
       "args": [
         "x260918C8100"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "non-ASCII digits are not a short form",
+      "args": [
+        "٢٦٠٩١٨ C8100"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "a no-break space is whitespace",
+      "args": [
+        "260918 C8100"
+      ],
+      "expect": "US.SPXW260918C8100000"
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "a byte-order mark is whitespace",
+      "args": [
+        "﻿260918 C8100"
+      ],
+      "expect": "US.SPXW260918C8100000"
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "a file separator is not whitespace",
+      "args": [
+        "260918\u001cC8100"
       ],
       "expect": null
     }

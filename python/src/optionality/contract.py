@@ -8,8 +8,10 @@ from pydantic import BaseModel, ConfigDict
 
 type OptionType = Literal["CALL", "PUT"]
 
-_ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
-_COMPACT_DATE = re.compile(r"(\d{4})(\d{2})(\d{2})")
+# re.ASCII throughout: JavaScript's \d is 0-9 alone, and Python's matches every Unicode decimal
+# digit, so without it "٢٠٢٦-١٢-١٨" was a strike date here and refused by the TypeScript.
+_ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})", re.ASCII)
+_COMPACT_DATE = re.compile(r"(\d{4})(\d{2})(\d{2})", re.ASCII)
 
 
 def _parse_strike_date(strike_date: str) -> tuple[str, str, str]:
@@ -57,8 +59,13 @@ class SpxContract(BaseModel):
 
 # Strict, because it is build_spx_code's inverse and nothing else: a leading-zero strike parses to a
 # number whose own code is a different string, so it is refused rather than round-tripped.
-_SPX_CODE = re.compile(r"US\.SPXW(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)000")
-_SHORT_CODE = re.compile(r"(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)")
+_SPX_CODE = re.compile(r"US\.SPXW(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)000", re.ASCII)
+_SHORT_CODE = re.compile(r"(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)", re.ASCII)
+
+# JavaScript's \s, spelled out: its WhiteSpace and LineTerminator characters. Python's own \s differs
+# at both edges — it takes the file, group, record and unit separators (\x1c-\x1f) and \x85, which
+# JavaScript does not, and misses the byte-order mark, which JavaScript strips.
+_JS_WHITESPACE = re.compile("[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+")
 
 
 def parse_spx_code(code: str) -> SpxContract | None:
@@ -99,7 +106,7 @@ def short_spx_code(code: str) -> str:
 def expand_spx_short(short: str) -> str | None:
     """short_spx_code read backwards: what the bot prints is what /unwatch accepts. Spaces and case
     are a person's, not the grammar's, so they are stripped before matching."""
-    m = _SHORT_CODE.fullmatch(re.sub(r"\s+", "", short).upper())
+    m = _SHORT_CODE.fullmatch(_JS_WHITESPACE.sub("", short).upper())
     if not m:
         return None
     yy, mo, d, letter, strike = m.groups()
