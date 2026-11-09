@@ -80,7 +80,7 @@ def test_verify_says_which_contract_does_not_exist():
 def test_verify_refuses_while_opend_is_down():
     ctx = FakeContext(error=RuntimeError("Client connection failed!"))
     with opend.OpenD(connect=connect(ctx)) as od:
-        assert od.verify([A]) == "cannot verify contract: OpenD unreachable (Client connection failed!)"
+        assert od.verify([A]) == "cannot verify contract: the Provider did not confirm it — Client connection failed!"
 
 
 def test_verify_notices_a_contract_moomoo_quietly_left_out():

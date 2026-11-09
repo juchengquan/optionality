@@ -10,21 +10,29 @@ provider on the reasoning that moomoo's grammar is moomoo's business, and ADR 00
 one Provider among others; this module kept the old shape for three weeks because nothing cased it.
 `opend.OpenD.quotes` owns the loop now, as `opend/client.ts` does.
 
-The verdict itself is `quote.verify_verdict`, which is cased. What is left here is the fetch and the
-catch, which cannot be.
+The verdicts are `quote.verify_verdict` and `quote.unverifiable_verdict`, both cased. What is left
+here is the fetch and the catch, which cannot be.
 """
 
 from collections.abc import Callable
 
-from optionality.quote import Batch, verify_verdict
+from optionality.quote import Batch, unverifiable_verdict, verify_verdict
 
 type QuoteFetcher = Callable[[list[str]], Batch]
 
 
 def verify_contracts(codes: list[str], fetch: QuoteFetcher) -> str | None:
-    """Why these contracts cannot be trusted to exist, or None. Strict: it refuses while OpenD is down."""
+    """Why these contracts cannot be trusted to exist, or None.
+
+    Strict: it refuses while the Provider is down. Both verdicts are `quote`'s and cased: a raise and an
+    answer are two different refusals, and the raised one used to claim an outage, "OpenD unreachable",
+    about a Provider that had answered perfectly well and declined the security (ADR 0018). This
+    function kept that sentence after the verdict replacing it was ported, because a case calls the
+    verdict and never this catch; `tests/test_quotes.py` holds the catch.
+    """
     try:
         batch = fetch(codes)
     except Exception as err:
-        return f"cannot verify contract: OpenD unreachable ({err})"
+        return unverifiable_verdict(str(err))
+    # everything but the fetch and the catch is `quote.verify_verdict`, which is cased
     return verify_verdict(codes, batch)
