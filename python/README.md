@@ -25,6 +25,12 @@ claim — Yahoo states minutes, IBKR states only that it is delayed, moomoo stat
 0019). It is the one route that cannot fail: a vendor that is wholly down leaves each row a figure
 of `None` with its own `error`, so you read the reason rather than catch an exception (ADR 0018).
 
+`optionality.yahoo` is the second provider beside `opend`, answering the same contract through
+yfinance (the `yahoo` extra) and held to `backend/src/vendors/yahoo/fields.ts` by the recorded cases
+in `testdata/vendors/` — compared exactly, as the domain's are. It carries no bid, ask or mid: `^GSPC`
+returned a bid 148 points above a price that matched Cboe's own close, and `reference.FIELDS` prefers
+the mid, so mapping that book faithfully would have put 7,574 on the strip entirely plausibly.
+
 There is deliberately no `api.quotes()`. `GET /quotes` takes no parameters — it is "live quotes for
 the whole watchlist" — so it cannot price a contract the service does not already watch, which is
 the bounded-call invariant working as intended. For an arbitrary code you want a Provider:
