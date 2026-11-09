@@ -46,3 +46,12 @@ gate can contradict is worse than no figure, because a reader compares theirs ag
 It never runs on import and never raises: with no service reachable it says so and the maths still
 works, which is the whole point of the package (ADR 0014).
 
+That last sentence is checked rather than promised. `tests/test_standalone.py` holds it two ways,
+because they fail differently: a static pass reads all fourteen pure modules and names any line
+reaching the SDK, the network or one of the three impure modules — including an import nested
+inside a function — and a subprocess then imports all fourteen with `moomoo` made unimportable and
+`OPTIONALITY_API` unset, and computes with them. Only the second can see an import-time dependency
+no pattern would list, such as the zone data `timefmt` needs, which is present on a developer's
+machine and absent from a slim container. It was worth writing: `moomoo` is installed in the venv
+the suite runs in, so until now a pure module reaching for it would have passed every test.
+

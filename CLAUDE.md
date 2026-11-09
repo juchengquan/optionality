@@ -209,7 +209,15 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   package takes their knobs directly instead. Six uncased rather than five, because `js.js_string`
   mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
   spell the conversion out.
-  `tests/test_cases.py` runs every golden case.
+  `tests/test_cases.py` runs every golden case, and `tests/test_standalone.py` holds the promise
+  three documents make and nothing checked: the maths imports and computes with NO `opend` extra
+  and NO service. Two checks, because they fail differently — a static pass over the fourteen pure
+  modules (it reads the AST, so a lazy import inside a function is seen too) and a subprocess that
+  imports them all with `moomoo` unimportable and `OPTIONALITY_API` unset. The second is the only
+  one that can catch an import-time dependency no pattern lists, like zone data. Worth having
+  because `moomoo` IS installed in the venv the suite runs in, so a violation was invisible here.
+  Writing it also corrected a belief: `optionality.opend` imports perfectly well without the SDK —
+  it reaches `moomoo` inside the function that connects, so the extra is needed to CONNECT.
   **Installed by a pinned git ref** (ADR 0016), never from a path that tracks the working tree —
   an editable install serves a notebook whatever half-ported state the tree is in:
   `uv add "optionality @ git+https://github.com/juchengquan/optionality.git@py-<version>#subdirectory=python"`.
