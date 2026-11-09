@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { buildSpxCode } from "./domain/contract.ts";
-import { createDatabase } from "./db/open.ts";
-import { toSqlDatetime } from "./db/time.ts";
-import { toSqliteJson } from "./db/values.ts";
-import { settingsFor, type Settings } from "./env.ts";
-import { type FakeProvider, fakeFetcher } from "../testing/harness.ts";
+import { buildSpxCode } from "../domain/contract.ts";
+import { createDatabase } from "../db/open.ts";
+import { toSqlDatetime } from "../db/time.ts";
+import { toSqliteJson } from "../db/values.ts";
+import { settingsFor, type Settings } from "../env.ts";
+import { type FakeProvider, fakeFetcher } from "../../testing/harness.ts";
 import { STALE_AFTER_SWEEPS } from "./health.ts";
 import {
   SINGLE_CODE as CODE, SWEEP_SETTINGS as BASE, insertCombo, insertMonitor, monitorState, quoting,
-} from "../testing/sweep.ts";
+} from "../../testing/sweep.ts";
 import { MonitorSweeper } from "./sweeper.ts";
 
 /** A contract the Provider cannot price. How it SAYS so is its own business and is tested in
