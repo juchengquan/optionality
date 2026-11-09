@@ -1,6 +1,6 @@
 .PHONY: check lint check-boundaries check-test-support check-seams check-module-map check-make-targets cases check-cases scenarios check-scenarios format test test-ui test-ui-fast test-ui-layout test-lib test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
-	serve build-ui check-ui check-served-root resolve-ui deploy \
+	serve build-ui check-ui check-served-root resolve-ui deploy deploy-backup use \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
 	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
@@ -192,21 +192,51 @@ resolve-ui:
 # The one path that keeps both services in step. Skew is the price of running them
 # separately (ADR 0006); this is what stops it happening by simple forgetfulness.
 #
-# The backup is taken with SQLite's online backup, NOT `cp`. In WAL mode `cp` copies the main file
-# and leaves the write-ahead log beside it, so the copy is current only as far as the last
-# checkpoint — measured at 1 row of 500 on a scratch database, and still valid SQLite, which is
-# what makes it dangerous. This backup is the one taken immediately before a migration runs.
+# BOTH backends are installed, whichever is live (ADR 0021): npm for the TypeScript, uv for the
+# Python, so a switch never waits on an install and a merge that changes either lands in both.
+# `--locked` because this is the live checkout: a lock that would have to be rewritten here means
+# the merge carried a stale one, and a deploy that dirties the tree breaks the next `git pull`.
+# Which backend the API agent runs is READ from its installed plist, never assumed — and a Python
+# this tree cannot back (the guard in tools/use-backend.mjs) stops the deploy before the restart.
 #
-# The schema step is the service's own: `main.ts` applies what is pending in schema/migrations/
-# at boot and fails fatally if one does not (ADR 0011).
+# The schema step is the backend's own: whichever runs applies what is pending in
+# schema/migrations/ at boot and fails fatally if one does not (ADR 0011).
 deploy:
 	git pull --ff-only
 	npm install --silent
-	node backend/tools/backup/backup.ts $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S)
-	node backend/tools/backup/prune-deploy.ts data
+	uv sync --all-packages --locked
+	@backend=$$(node tools/use-backend.mjs installed) && echo "restarting $(API_LABEL), which runs the $$backend backend"
+	$(MAKE) deploy-backup
 	$(MAKE) launchd-api-restart
 	$(MAKE) launchd-ui-restart
 	@echo "both services restarted"
+
+# The backup every restart takes first, so it predates whatever migration the restarted backend
+# applies at boot: `make deploy`'s and `make use`'s, which are the same backup on purpose.
+#
+# It is taken with SQLite's online backup, NOT `cp`. In WAL mode `cp` copies the main file
+# and leaves the write-ahead log beside it, so the copy is current only as far as the last
+# checkpoint — measured at 1 row of 500 on a scratch database, and still valid SQLite, which is
+# what makes it dangerous.
+deploy-backup:
+	node backend/tools/backup/backup.ts $(TS_DB) $(TS_DB).bak-$$(date +%Y%m%d-%H%M%S)
+	node backend/tools/backup/prune-deploy.ts data
+
+# Switch the live service between the two backends (ADR 0021, Decision 3): ONE agent label, so
+# exactly one is ever loaded. Checked first — the guard and a rendering that lints — so a refused
+# switch touches nothing and takes no backup (which would prune an older one); then the backup
+# `make deploy` takes; then tools/use-backend.mjs boots the running backend out, waits for it and
+# its port to be gone, installs the plist for BACKEND, boots it in and waits for /health to
+# answer 200, saying so if it does not.
+#
+# BACKEND=python is REFUSED while the port is unfinished: the door-scenario backlog not empty,
+# no `__main__.py`, or no uv environment for launchd to run. There is no override. A drill —
+# the Python live by hand, on the owner's request, never on a schedule — waits for the port.
+use:
+	@case "$(BACKEND)" in ts|python) ;; *) echo "usage: make use BACKEND=ts|python"; exit 2;; esac
+	node tools/use-backend.mjs check $(BACKEND)
+	$(MAKE) deploy-backup
+	node tools/use-backend.mjs switch $(BACKEND)
 
 # A stub IB Gateway speaking the SOCKET protocol, for driving the TWS client by hand. It replays a
 # conversation from testdata/vendors/ibkr-gateway/ (ARGS="--conversation <name>"), each recorded
@@ -289,12 +319,12 @@ typecheck:
 check-api:
 	node tools/check-loads.ts
 
+# A first install, for a machine with no agent loaded: the TypeScript unless BACKEND says otherwise,
+# rendered by the same script `make use` uses, so the Python's guard stands here too. Switching an
+# agent that is already loaded is `make use`'s.
 launchd-api-install:
-	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }
 	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/Library/Logs
-	sed -e 's|__NODE__|$(NODE_BIN)|g' -e 's|__REPO__|$(CURDIR)|g' -e 's|__HOME__|$(HOME)|g' \
-		deploy/macos/optionality-api.launchd.plist.template > $(API_PLIST)
-	plutil -lint $(API_PLIST)
+	node tools/use-backend.mjs render $(or $(BACKEND),ts) $(API_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
 
 launchd-api-restart:

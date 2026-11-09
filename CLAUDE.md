@@ -7,7 +7,8 @@ the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving 
 Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
 
 **The service is TypeScript (ADR 0009):** `com.optionality.api` runs `backend/src/main.ts` under node,
-on `data/optionality-ts.db`. Node runs the TypeScript directly, so what is in the working tree is what
+on `data/optionality-ts.db` — and only it, until ADR 0021's port is done: `make use BACKEND=python`
+refuses until then (below). Node runs the TypeScript directly, so what is in the working tree is what
 runs. The Python service it replaced, and the run pipeline (strategy and holdings scans), were deleted in
 phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them. The Python's own database,
 `data/optionality.db`, was frozen at the 2026-10-02 cutover and never opened again — and no longer
@@ -79,10 +80,18 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   because `typescript` is the compiler's own npm name (ADR 0021). `npm install` links it from the
   workspace (`node_modules/optionality -> ../typescript`), never from the public registry, which
   has a package of the same name (1.2.1 when measured on 2026-11-09).
-- `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, restart BOTH
-  agents (the API applies pending migrations at boot). launchd does not watch the repo and the agents
+- `make deploy` — **the only correct way to land a merge**: pull, install BOTH backends (`npm install`
+  and `uv sync --all-packages --locked`, whichever is live), back up the DB, restart BOTH agents (the
+  API applies pending migrations at boot). Which backend the API agent runs is READ from its
+  installed plist, never assumed, and a Python this tree cannot back stops the deploy before the
+  restart. launchd does not watch the repo and the agents
   run this working tree, so a merge that skips this leaves stale code running. Doing the steps by hand
   is how the dashboard and the API drift apart.
+- `make use BACKEND=ts|python` — **switch the live backend** (ADR 0021, Decision 3): the guard, the
+  backup `make deploy` takes, then boot the running backend out and the chosen one in under the
+  same label, and wait for `/health` to answer 200. **`BACKEND=python` is refused** until the port
+  is done, printing `N of M door scenarios ported` and each door still missing; see Workflow &
+  environment. Never run it to "try" the Python: a drill is the owner's call.
 - TypeScript: `make test-lib` (the library's suite), `make test-api` (the backend's), `make typecheck`,
   **`make check-api`** (every module of BOTH packages loads under Node — `tsc` and vitest both accept
   syntax Node refuses to run, and two classes reached main unable to load at all. It is
@@ -313,6 +322,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
   generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
   Gateway conversations (inputs) beside the batches `make cases` generates from them.
+  `tools/use-backend.mjs` — `make use`'s guard, the plist renderer for either backend and the
+  switch itself, behind one injectable system so its suite never runs launchctl;
   `tools/check-boundaries.mjs` — the package-boundary lint; `tools/check-test-support.mjs` — the
   one that keeps the harness out of the service; `tools/check-seams.mjs` — the same rule INSIDE a
   package, for a directory whose whole point is one door (`backend/src/vendors/`,
@@ -442,6 +453,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   its syntax — so a new scenario joins it only in a diff. `test_scenario_runner.py` holds all of
   that against small worlds and a fake backend, because 120 skips cannot show a runner compares
   anything.
+  **How it starts** is half built: `entrypoints/http/listen.py` takes the port first, as `listen.ts`
+  does — a socket it binds itself and hands to uvicorn, with `SO_REUSEADDR` as libuv sets it (without
+  it a restart is refused for ~30s by TIME_WAIT and reads "another backend is running") and
+  uvicorn's signal handling, logging and access log off. `__main__` is not ported; `listen.py`'s
+  docstring is the order it owes the lock (.env, port, settings, database, vendors, sweep, bot).
+  `.env` reaches it as `--env-file=.env`, read by `env.load_env_file`: Node's own reader ported
+  branch for branch and held to the real `node --env-file`, because `python-dotenv` reads the same
+  file differently (a `#` inside a value, `${VAR}`).
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
@@ -532,6 +551,27 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   dangerous.
   - `make deploy` takes one before every restart and migration, in `data/`, and keeps the last 3
     plus any renamed `optionality-ts.db.bak-pre-<what>-<stamp>` — rename one to keep it for good.
+- **`com.optionality.api` runs ONE backend under one label** (ADR 0021, Decision 3), so exactly one
+  is ever loaded: one port (each backend takes it FIRST, and it is the lock), one database, one
+  `getUpdates` consumer. `make use BACKEND=ts|python` switches it: `tools/use-backend.mjs` renders
+  the plist from `deploy/macos/optionality-api.launchd.plist.template` (never by hand), the
+  backup is `make deploy`'s, and the switch boots the running backend out, waits for it and its
+  port to be gone (so a 200 cannot come from something else holding 31415), boots the chosen one in
+  and waits for `/health` — saying, if any step fails, that NOTHING is loaded and that
+  `make use BACKEND=ts` puts the TypeScript back. The two renderings differ in what runs and nothing
+  else: `node --env-file=.env backend/src/main.ts`, or `<repo>/.venv/bin/python -m
+  optionality_backend --env-file=.env` — the uv environment's interpreter by absolute path,
+  because launchd's PATH is minimal, running the working tree because uv installs the workspace
+  editable, plus `PYTHONUNBUFFERED=1` because the log is the only witness of a boot that failed.
+  **The guard** refuses the Python while `python-backend/tests/scenarios/backlog.py` names any
+  scenario (it prints `N of M door scenarios ported` and each door still missing), while
+  `python-backend/src/optionality_backend/__main__.py` does not exist, or while `.venv/bin/python`
+  is not installed. Every road to a Python plist goes through it — `make use`,
+  `make launchd-api-install BACKEND=python` and `make deploy`'s restart — and there is no
+  override. **A drill** — the Python live for a while, by hand, then back — is run when the owner
+  asks and never on a schedule: only a drill shows launchd, the real vendors and the switch itself
+  working, and it waits for the guard. `DRY_RUN=1 node tools/use-backend.mjs switch <backend>`
+  prints the switch without doing any of it.
 - **`com.optionality.opend`** (`make launchd-opend-install`) watches OpenD, which everything else
   depends on and nothing was watching: it exited cleanly after 23 days up on 2026-11-08 and the
   sweep failed 646 times over 2h42m. A TIMER every 60s calling `~/openD.sh ensure`, not KeepAlive,
