@@ -239,6 +239,34 @@ export const SWEEP: readonly SweepInput[] = [
       sweeps: earlier([DOWN, null, DOWN, null, DOWN, null, DOWN, null], 60),
     }),
   },
+  {
+    // told at the fifth failure, ten minutes ago, and dropping every two minutes since: at 600s
+    // it is said again, where the default 1800 would still be quiet
+    name: "a Provider still dropping is called unreliable again after FLAPPING_REPEAT_SECONDS",
+    outcomes: ["flapping-notice"],
+    world: world({
+      settings: { FLAPPING_REPEAT_SECONDS: "600" },
+      tables: { positions: [position({ id: "pos-1" })] },
+      provider: { down: DOWN },
+      sweeps: earlier(Array.from({ length: 18 }, (_, i) => (i % 2 === 0 ? DOWN : null)), 60),
+    }),
+  },
+  {
+    // told at the end of a bout exactly half an hour ago, and dropping again now: the default
+    // would say so, and 0 never does — nothing marks the end of a bout, so nothing clears the
+    // stamp. No sweeps between the bouts: a success there would change nothing the engine keeps.
+    name: "with FLAPPING_REPEAT_SECONDS=0 a Provider is called unreliable once and never again",
+    outcomes: ["flapping-not-repeated"],
+    world: world({
+      settings: { FLAPPING_REPEAT_SECONDS: "0" },
+      tables: { positions: [position({ id: "pos-1" })] },
+      provider: { down: DOWN },
+      sweeps: [
+        ...earlier([DOWN, null, DOWN, null, DOWN, null, DOWN, null, DOWN], 60, 1800),
+        ...earlier([DOWN, null, DOWN, null, DOWN, null, DOWN, null], 60),
+      ],
+    }),
+  },
 
   // --- holdings -----------------------------------------------------------------------------
   {

@@ -561,6 +561,51 @@ describe("the watchdog", () => {
     now = started;
   });
 
+  /** A bout of flapping: `sweeps` sweeps 90s apart from `from` seconds after `started`, every
+   *  other one failing — five failures inside the 15m window by the ninth sweep, never two in a
+   *  row. Returns how many times the owner has been called unreliable so far. */
+  const flappingBouts = (over: Partial<Settings>) => {
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => {
+      if (failing) return Promise.reject(new Error("Client connection failed!"));
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 })));
+    }, over);
+    const started = now;
+    return async (from: number, sweeps: number) => {
+      for (let i = 0; i < sweeps; i += 1) {
+        now = new Date(started.getTime() + (from + i * 90) * 1000);
+        failing = i % 2 === 0;
+        await s.sweep();
+      }
+      return sent.filter((t) => t.includes("unreliable")).length;
+    };
+  };
+
+  it("says a provider is unreliable again on FLAPPING_REPEAT_SECONDS, from the last notice", async () => {
+    // first said at the fifth failure, 720s in; the failures after it are 180s apart, so the
+    // first one 600s on is at 1440s — and at the default 1800 nothing more is said in 1710s
+    const bout = flappingBouts({ flappingRepeatSeconds: 600 });
+    expect(await bout(0, 20)).toBe(2);
+    expect(sent.filter((t) => t.includes("monitoring degraded")), "never five in a row")
+      .toEqual([]);
+  });
+
+  it("with FLAPPING_REPEAT_SECONDS=0 says it once, and not for a later bout either", async () => {
+    // Nothing marks the end of a bout — a success is what flapping looks like — so nothing
+    // clears the stamp, and 0 means one notice until the service restarts. At the default the
+    // second bout, an hour on, is announced as the first was.
+    const once = flappingBouts({ flappingRepeatSeconds: 0 });
+    expect(await once(0, 20)).toBe(1);
+    expect(await once(3600, 10), "an hour later, flapping again").toBe(1);
+  });
+
+  it("announces a later bout at the default interval, as it did before there was a knob", async () => {
+    const bout = flappingBouts({});
+    expect(await bout(0, 20)).toBe(1);
+    expect(await bout(3600, 10)).toBe(2);
+  });
+
   it("does not call a single blip unreliable", async () => {
     monitor();
     let failing = true;

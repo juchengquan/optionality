@@ -1,0 +1,158 @@
+{
+  "name": "a Provider still dropping is called unreliable again after FLAPPING_REPEAT_SECONDS",
+  "outcomes": [
+    "flapping-notice"
+  ],
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "FLAPPING_REPEAT_SECONDS": "600",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [
+      {
+        "at": "2026-11-09T14:42:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:43:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:44:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:45:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:46:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:47:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:48:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:49:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:50:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:51:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:52:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:53:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:54:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:55:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:56:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:57:00.000Z",
+        "down": null
+      },
+      {
+        "at": "2026-11-09T14:58:00.000Z",
+        "down": "connect ECONNREFUSED 127.0.0.1:33333"
+      },
+      {
+        "at": "2026-11-09T14:59:00.000Z",
+        "down": null
+      }
+    ],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "expect": {
+    "messages": [
+      "⚠️ monitoring unreliable: 8 failed sweeps in the last 15m, with successes in between — a provider that keeps dropping and recovering"
+    ],
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000",
+          "US.SPXW261218C7350000",
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}

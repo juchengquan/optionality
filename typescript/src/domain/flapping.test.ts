@@ -16,7 +16,9 @@ import { type FlappingState, flappingPolicy, flappingVerdict } from "./flapping.
 
 const NOW = new Date("2026-11-08T22:00:00Z");
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000);
-const policy = flappingPolicy({ flappingWindowSeconds: 900, flappingAfterFailures: 5 });
+const policy = flappingPolicy({
+  flappingWindowSeconds: 900, flappingAfterFailures: 5, flappingRepeatSeconds: 1800,
+});
 
 function state(over: Partial<FlappingState> = {}): FlappingState {
   return { failures: [], lastNoticeAt: null, announced: false, ...over };
@@ -100,7 +102,9 @@ describe("the reminder", () => {
 
 describe("turning it off", () => {
   it("is off when the threshold is 0, as every other threshold here is", () => {
-    const off = flappingPolicy({ flappingWindowSeconds: 900, flappingAfterFailures: 0 });
+    const off = flappingPolicy({
+      flappingWindowSeconds: 900, flappingAfterFailures: 0, flappingRepeatSeconds: 1800,
+    });
     const failures = Array.from({ length: 50 }, (_, i) => ago(i + 1));
     expect(flappingVerdict(state({ failures }), off, NOW).notice).toBe(null);
   });
@@ -108,13 +112,17 @@ describe("turning it off", () => {
 
 describe("how the window is said", () => {
   it("is minutes under an hour", () => {
-    const p = flappingPolicy({ flappingWindowSeconds: 300, flappingAfterFailures: 2 });
+    const p = flappingPolicy({
+      flappingWindowSeconds: 300, flappingAfterFailures: 2, flappingRepeatSeconds: 1800,
+    });
     expect(flappingVerdict(state({ failures: [ago(10), ago(20)] }), p, NOW).notice)
       .toContain("in the last 5m");
   });
 
   it("is hours and minutes above one", () => {
-    const p = flappingPolicy({ flappingWindowSeconds: 5400, flappingAfterFailures: 2 });
+    const p = flappingPolicy({
+      flappingWindowSeconds: 5400, flappingAfterFailures: 2, flappingRepeatSeconds: 1800,
+    });
     expect(flappingVerdict(state({ failures: [ago(10), ago(20)] }), p, NOW).notice)
       .toContain("in the last 1h30m");
   });

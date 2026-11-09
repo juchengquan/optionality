@@ -20,6 +20,7 @@
  *  `shows` is how a scenario claiming the outcome must look, and is checked against every claim —
  *  a scenario cannot cover an outcome by saying so.
  */
+import { settingsFromEnv } from "../../src/env.ts";
 import type { Change, Row, SweepScenario } from "./format.ts";
 
 export interface Outcome {
@@ -146,6 +147,18 @@ export const OUTCOMES: readonly Outcome[] = [
     name: "flapping-notice",
     decision: "flappingVerdict",
     shows: (s) => said(s, /^⚠️ monitoring unreliable: /),
+  },
+  {
+    // FLAPPING_REPEAT_SECONDS=0 after enough earlier failures to have been told: a failing tick,
+    // and not a word. The knobs are read as the world reads them, defaults included.
+    name: "flapping-not-repeated",
+    decision: "flappingVerdict",
+    shows: (s) => {
+      const knobs = settingsFromEnv(s.world.settings);
+      const failed = s.world.sweeps.filter((w) => w.down !== null).length;
+      return knobs.flappingRepeatSeconds === 0 && failed >= knobs.flappingAfterFailures
+        && s.world.provider.down !== null && quiet(s) && untouched(s);
+    },
   },
   {
     name: "sample-recorded",
