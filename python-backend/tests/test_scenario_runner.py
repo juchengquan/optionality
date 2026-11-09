@@ -368,12 +368,45 @@ def test_the_seam_builds_the_python_backend_on_the_world():
         w.close()
 
 
+def test_the_seam_runs_a_tick_of_the_real_engine_on_the_world():
+    # phase 4: `sweep` is one tick of `MonitorSweeper` on the world's database, at its clock, asking
+    # its Provider and telling its Telegram — the held position's leg is in the batch and its sample
+    # is written, which no stand-in would do
+    w = open_world(
+        world(
+            settings={"API_TOKEN": "tok", "TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "42"},
+            provider={
+                "name": "moomoo",
+                "reachable": True,
+                **vendor(quotes={"US.SPXW261218C7300000": {"mid_price": 2}}),
+            },
+            tables=held(POSITION),
+        )
+    )
+    service = backend.build(w)
+    try:
+        service.sweep()
+        assert w.calls == {"moomoo": [["US.SPXW261218C7300000"]]}
+        assert dump_tables(w.db)["position_samples"] == [
+            {
+                "position_id": "pos-1",
+                "observed_on": "2026-11-09",
+                "dte": 39,
+                "cost_to_close": 2,
+                "legs_iv": None,
+                "legs_vega": None,
+            }
+        ]
+        assert w.sent == []
+    finally:
+        service.close()
+        w.close()
+
+
 def test_a_door_the_backend_does_not_have_yet_raises_rather_than_doing_nothing():
     w = open_world(world())
     service = backend.build(w)
     try:
-        with pytest.raises(NotPorted, match="phase 4"):
-            service.sweep()
         with pytest.raises(NotPorted, match="phase 4"):
             service.handle_update({"update_id": 1})
     finally:

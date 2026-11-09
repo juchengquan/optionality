@@ -14,15 +14,21 @@ connection refuses any other thread. FastAPI's `TestClient` runs the app on a lo
 own, and the first query fails there with sqlite3's "objects created in a thread can only be used in
 that same thread" — measured, and the reason this is not built on it.
 
-**Partly ported**: what the routes ported so far need. `fakeFetcher`, `poisonable` and
-`pricedFetcher` arrive with the routes whose tests use them. `json` is `json_body`: under its own name
-it would shadow the standard library's module in every test that imports both.
+**Partly ported**: what the routes and the sweep ported so far need. `poisonable` and
+`pricedFetcher` arrive with the routes whose tests use them. `json` is `json_body`: under its own
+name it would shadow the standard library's module in every test that imports both.
+
+The TypeScript's `FakeProvider` — what a test's fake answers with — is `FakeFetch` here, because
+`FakeProvider` below is the Provider CLIENT a harness app is built on, and Python has one namespace
+for the two. It answers at once rather than with a promise: `fake_fetcher` makes it the awaitable
+port, and a fake that raises is a Provider that rejected the batch.
 """
 
 import json
 import shutil
 import sqlite3
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -85,6 +91,24 @@ def priced(records: list[Quote]) -> Batch:
     """A batch in which every code was priced — what a fake Provider answers unless the test is about
     one that was not."""
     return Batch(records=records, unknown=[])
+
+
+#: What a test answers with: records alone, or a whole batch.
+#:
+#: Nearly every test prices everything it is asked for, and writing `Batch(records, [])` forty times
+#: says nothing. The tests that are ABOUT a code the Provider cannot price answer with the batch
+#: itself, and read as the exception they are (#168).
+type FakeFetch = Callable[[list[str]], list[Quote] | Batch]
+
+
+def fake_fetcher(fetch: FakeFetch) -> QuoteFetcher:
+    """A fake Provider as the port wants it. `Batch` is a tuple, so a list is records alone."""
+
+    async def fetch_quotes(codes: list[str]) -> Batch:
+        answer = fetch(codes)
+        return priced(answer) if isinstance(answer, list) else answer
+
+    return fetch_quotes
 
 
 async def echo_fetcher(codes: list[str]) -> Batch:

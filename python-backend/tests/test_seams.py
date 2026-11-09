@@ -22,14 +22,16 @@ What it refuses, from any file outside the seam's insiders:
   Python hands out through the door's namespace), the same reached as an attribute of a door or a
   parent package, a relative import that resolves there, and a dotted name in a string, because
   `importlib.import_module` takes one;
-* the door itself, from anyone but `importable_by`: the engine is reached by `__main__` alone.
+* the door itself, from anyone but `importable_by`: the engine is reached by `__main__` alone, and
+  by the scenario runner's seam, which builds the real engine on a world as `doors.ts` does.
 
 **Insiders** are the engine's own package and its tests at the mirrored path, `tests/engine/`. The
 TypeScript keeps a module's tests BESIDE it, inside the directory, where they are insiders by
 position; here they live in `tests/` (README, "Porting a module"), so they are named. Every other
 test is read like the service, as `check-seams` reads a test outside the seam: "a suite that drives
-a client directly is how the seam stops being the only way in". This file is the one other caller,
-as `check-seams.test.mjs` is in the TypeScript, because it imports the door to ask what it exports.
+a client directly is how the seam stops being the only way in". Two tests are callers of the door
+and say so in `importable_by`: this file, as `check-seams.test.mjs` is in the TypeScript, because it
+imports the door to ask what it exports; and `tests/scenarios/backend.py`, as `doors.ts` is.
 
 It is a lint and not a sandbox: `type(sweeper.health)(...)` gets the class back from an instance, as
 `sweeper.health.constructor` would in the TypeScript. What it stops is the accidental crossing and
@@ -73,6 +75,11 @@ SEAMS = (
             # account's class. Declared rather than exempted as a class: "any test may reach in" is
             # how the engine stops being main-only.
             "tests/test_seams.py",
+            # the door scenarios (ADR 0021): a sweep scenario is one tick of the REAL engine on a
+            # stated world, so the file that builds it must build a `MonitorSweeper` as `__main__`
+            # does — `doors.ts`, declared in `check-seams` for the same reason. It gets the door's
+            # exports and nothing more: `SweepHealth` stays withheld.
+            "tests/scenarios/backend.py",
         ),
         why=(
             "the engine is reached by `__main__` alone; a request must not be able to start a sweep, "
@@ -343,13 +350,9 @@ def test_hands_out_nothing_through_a_door_with_no_all(tree: Path) -> None:
 #: What the TypeScript's door exports, as `engine/index.ts` writes it.
 ENGINE_DOOR = {"MonitorSweeper", "SweeperDeps", "Scheduler", "STALE_AFTER_SWEEPS"}
 #: What the Python's door exports that the TypeScript's leaves to the compiler: `startSweep`'s
-#: watchdog is an object literal checked by its shape there, and a record built by name here.
+#: watchdog is an object literal checked by its shape there, and a record built by name here. (A
+#: `NOT_YET` stood beside these while the sweeper was unported; the door is whole, so it went.)
 PYTHON_ONLY = {"SweepWatchdog"}
-#: What is not ported yet (ADR 0021, the first port). Written out, never derived, and it may only
-#: shrink: a name leaves it in the change that ports its module, and the door is whole when it is
-#: empty. Holding the door to the TypeScript's whole list less this is what keeps an unported name
-#: ABSENT rather than stubbed.
-NOT_YET = {"MonitorSweeper", "SweeperDeps"}
 
 
 class TestTheSeamsThisBackendDeclares:
@@ -375,7 +378,7 @@ class TestTheSeamsThisBackendDeclares:
                 f"the engine's door hands out SweepHealth as {name}"
             )
         # and it still hands out what `__main__` needs, so this is not passing by exporting nothing
-        assert exported == (ENGINE_DOOR - NOT_YET) | PYTHON_ONLY
+        assert exported == ENGINE_DOOR | PYTHON_ONLY
         assert all(hasattr(engine, name) for name in exported)
 
     def test_keeps_the_engine_main_only_which_widening_its_callers_would_not(self) -> None:
@@ -384,11 +387,13 @@ class TestTheSeamsThisBackendDeclares:
         [engine] = [s for s in SEAMS if s.door == "optionality_backend.engine"]
         assert "src/optionality_backend/__main__.py" in engine.importable_by
         others = [f for f in engine.importable_by if f != "src/optionality_backend/__main__.py"]
-        assert others == ["tests/test_seams.py"], "the engine admits a caller that is neither __main__ nor this guard"
+        assert others == ["tests/test_seams.py", "tests/scenarios/backend.py"], (
+            "the engine admits a caller that is neither __main__, this guard nor the scenarios' seam"
+        )
         assert set(engine.insiders) == {"src/optionality_backend/engine", "tests/engine"}
 
     def test_reads_the_real_tree_and_finds_the_door(self) -> None:
         # an empty tree, or a door this lint cannot read, passes every rule while proving nothing
         [engine] = SEAMS
-        assert door_exports(BACKEND, engine) == (ENGINE_DOOR - NOT_YET) | PYTHON_ONLY
+        assert door_exports(BACKEND, engine) == ENGINE_DOOR | PYTHON_ONLY
         assert any(rel.parts[0] == "tests" for _, rel in python_files(BACKEND))

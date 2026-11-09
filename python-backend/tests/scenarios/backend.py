@@ -6,14 +6,19 @@ Python runner asks for all three at once, through `build`: the backend construct
 world, with only the vendors, Telegram, the clock and the id minter faked — the real routes, the
 real bot, the real engine.
 
-**What is built so far** (phase 3, the tracer): the HTTP door. `build` reads Settings from the
-world's `.env` lines with the backend's own `env.settings_from_env`, as `world.ts` does, and builds
-`create_app` on `world.db` with the world's clock, id minter, Provider and sources. The doors it does
-not have yet raise `NotPorted` from their own method — `sweep` until the engine lands in phase 4 and
-`handle_update` until the bot does — so a scenario needing one stays on the backlog and its skip says
-which. A world with earlier sweeps needs `sweep` before its event can even start. The sweeper's
-account of itself, which `/health` will read, raises too; inside a request the app answers that as
-its 500, so such a skip shows the difference rather than naming the engine.
+**What is built so far** (phase 4): the sweep door and the HTTP door. `build` reads Settings from
+the world's `.env` lines with the backend's own `env.settings_from_env`, as `world.ts` does, and
+builds a `MonitorSweeper` on `world.db` with the world's clock, its Provider and its Telegram, as
+`doors.ts`'s `open` does; then `create_app` on the same database with the world's id minter and
+sources, and the sweeper's own health account as the `SweeperPort` — as `runHttp` hands the app
+`sweeper.health`, so a `/health` after the earlier sweeps reads what they did. The bot door raises
+`NotPorted` from its own method until the bot lands, so a scenario needing it stays on the backlog
+and its skip says which.
+
+This file is the one outside `src/` that reaches the engine's door, declared in
+`tests/test_seams.py` with its reason, as `doors.ts` is in `check-seams`: a sweep scenario is one tick
+of the REAL engine on a stated world, so the file that builds it must build a `MonitorSweeper` as
+`__main__` does. It gets the door's exports and nothing more — `SweepHealth` stays withheld.
 
 **An unported door RAISES; it never does nothing.** Two scenarios expect nothing at all to happen —
 `bot/a-message-from-any-other-chat-gets-no-reply.json` and
@@ -24,26 +29,27 @@ them with "take it off the backlog", which is the rule working and the stub lyin
 **One loop, the caller's thread.** The service runs on ONE asyncio loop (ADR 0021, Decision 6), and
 its database connection refuses any thread but the one that opened it — `world.db`, opened in the
 runner's. So a `Service` owns an `asyncio.Runner` for its whole life, in the caller's thread, and
-every door runs on it: a request goes through `httpx2.ASGITransport` there, and the sweep and the
-bot will join it. FastAPI's `TestClient` cannot be used: it runs the app on a loop in a thread of its
-own, where the first query fails with sqlite3's "objects created in a thread can only be used in that
-same thread" (measured). The runner itself stays synchronous, so it never grows an event loop of its
-own to keep in step with the backend's; `close` ends the loop, and `doors.opened` calls it.
+every door runs on it: a request goes through `httpx2.ASGITransport` there, a sweep is the engine's
+coroutine run there, and the bot will join them. FastAPI's `TestClient` cannot be used: it runs the
+app on a loop in a thread of its own, where the first query fails with sqlite3's "objects created in
+a thread can only be used in that same thread" (measured). The runner itself stays synchronous, so
+it never grows an event loop of its own to keep in step with the backend's; `close` ends the loop,
+and `doors.opened` calls it.
 """
 
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Protocol
 
 import httpx2
 from optionality.quote import Batch
 from optionality.quotes import QuoteFetcher as LibraryFetcher
 
+from optionality_backend.engine import MonitorSweeper, SweeperDeps
 from optionality_backend.entrypoints.http import Deps, create_app
 from optionality_backend.env import settings_from_env
-from optionality_backend.ports import AlarmState, QuoteFetcher
+from optionality_backend.ports import QuoteFetcher
 
 from .world import OpenWorld
 
@@ -106,33 +112,6 @@ class _Provider:
         """Nothing to hang up."""
 
 
-class _NoEngine:
-    """The sweeper's account of itself, which `/health` reads and the engine owns. Not ported: every
-    question raises, so a scenario that reaches it says why it cannot pass rather than passing on an
-    invented answer."""
-
-    def _unported(self) -> Any:
-        raise NotPorted("the alarm engine is not ported yet (ADR 0021, phase 4)")
-
-    def last_sweep_at(self) -> datetime | None:
-        return self._unported()
-
-    def last_sweep_ok(self) -> bool:
-        return self._unported()
-
-    def consecutive_failures(self) -> int:
-        return self._unported()
-
-    def alarm_state(self) -> AlarmState:
-        return self._unported()
-
-    def last_fetch_at(self) -> datetime | None:
-        return self._unported()
-
-    def last_fetch_ok(self) -> bool | None:
-        return self._unported()
-
-
 class _Backend:
     def __init__(self, world: OpenWorld) -> None:
         self._loop = asyncio.Runner()
@@ -143,12 +122,22 @@ class _Backend:
             fetch_quotes=fetchers[world.provider.name],
             answers=world.provider.reachable,
         )
+        settings = settings_from_env(world.env)
+        self._sweeper = MonitorSweeper(
+            SweeperDeps(
+                db=world.db,
+                settings=settings,
+                fetch_quotes=provider.fetch_quotes,
+                send=world.send,
+                now=lambda: world.clock.now,
+            )
+        )
         deps = Deps(
-            settings=settings_from_env(world.env),
+            settings=settings,
             db=world.db,
             now=lambda: world.clock.now,
             new_id=world.new_id,
-            sweeper=_NoEngine(),
+            sweeper=self._sweeper.health,
             provider=provider,
             sources=fetchers,
         )
@@ -157,7 +146,7 @@ class _Backend:
         )
 
     def sweep(self) -> None:
-        raise NotPorted("the sweep is not ported yet (ADR 0021, phase 4: the engine)")
+        self._loop.run(self._sweeper.sweep())
 
     def handle_update(self, update: dict[str, Any]) -> None:
         raise NotPorted("the bot is not ported yet (ADR 0021, phase 4)")
