@@ -224,6 +224,18 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   package takes their knobs directly instead. Six uncased rather than five, because `js.js_string`
   mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
   spell the conversion out.
+  **`src/optionality/research/`** is the package's other half, and the only subdirectory: chains,
+  historical bars, anything the service never fetches, so it mirrors no TypeScript, no golden case
+  holds it and NOTHING CHECKS WHETHER IT IS RIGHT — its own `__init__.py` says so plainly rather
+  than dressing it up. `research/yahoo.py` needs the `research` extra (yfinance, reached inside the
+  function as `opend.py` reaches the SDK), separate from `opend` because the two buy different
+  things and one extra would hide which a notebook asked for. The line is held structurally, not
+  remembered: `test_standalone.py` refuses an import of `optionality.research` from any pure module
+  AND from any port — a port is held to its TypeScript vendor by recorded fixtures, and an answer
+  routed through unheld code is not held at all. The ports are DERIVED there (`IMPURE - NOT_A_PORT`)
+  so `yahoo` and `ibkr` ports are picked up when they land, and that exemption list cannot be
+  widened from the inside without a test failing. The other direction is free: research reads the
+  maths and drives the ports, which is what it is for.
   `tests/test_cases.py` runs every golden case, and `tests/test_standalone.py` holds the promise
   three documents make and nothing checked: the maths imports and computes with NO `opend` extra
   and NO service. Two checks, because they fail differently — a static pass over the fourteen pure

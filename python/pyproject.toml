@@ -14,6 +14,16 @@ dependencies = [
 opend = [
     "moomoo-api>=10",
 ]
+# yfinance, for the research half's chains and bars (`optionality.research.yahoo`). Separate from
+# `opend` and not merged with it, because the two buy different things: `opend` is the live quote
+# path the service itself uses, held to recorded fixtures, while `research` is the half that mirrors
+# no TypeScript and that nothing checks (see src/optionality/research/__init__.py). One extra would
+# install a vendor SDK and an unheld research dependency together and hide which of the two a
+# notebook actually asked for — and it would put pandas and numpy on the quote path, which wants
+# neither.
+research = [
+    "yfinance>=1.8",
+]
 
 [build-system]
 requires = ["hatchling"]

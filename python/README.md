@@ -33,6 +33,25 @@ the bounded-call invariant working as intended. For an arbitrary code you want a
 `api` reads `http://127.0.0.1:31415` by default; set `OPTIONALITY_API=https://<host>/opt/api` to use
 the service from elsewhere on the tailnet.
 
+## Two halves, and the line between them
+
+Everything above `research/` is a port: it mirrors a `backend/src/domain/` module or a vendor client
+and is held there — by the golden cases for the maths and the decisions, compared exactly, and by
+recorded fixtures for the providers. A wrong answer turns `make test` red.
+
+`optionality.research` is the other half. Chains, historical bars, anything the service never
+fetches: it mirrors no TypeScript, so there is nothing to compare it against and **nothing checks
+whether it is right**. Its tests say a response was parsed as intended, not that the intention was.
+Treat a figure out of it as you would your own cell.
+
+```python
+from optionality.research.yahoo import daily_bars, expirations, option_chain  # the `research` extra
+```
+
+The line is structural: `tests/test_standalone.py` refuses an import of `optionality.research` from
+any pure module and from any port, so the cased half can never come to depend on the uncased one.
+The other direction is free, and is what the subpackage is for.
+
 ## Installing
 
 A pinned ref, never a path into a working tree (ADR 0016) — an editable install would serve this
