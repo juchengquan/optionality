@@ -6,7 +6,12 @@
  *  blank cell at the end of a sweep.
  *
  *  It is a .ts file rather than a .test.ts because its assertions are for the compiler: `npm run
- *  typecheck` is what runs them, and nothing here executes. The checks are written so that `any`
+ *  typecheck` is what runs them, and nothing here executes.
+ *
+ *  "EVERY endpoint" is now CHECKED rather than claimed — `hc.types.test.ts` takes the endpoint list
+ *  from `/openapi.json`, which is built from the routes, and names any this file does not call. It
+ *  was complete before that test existed, but complete by diligence: nothing imports this file, so
+ *  there was nothing a seventeenth endpoint would have broken. The checks are written so that `any`
  *  FAILS them — a response typed `any` satisfies every ordinary annotation, which is exactly how this
  *  could pass while proving nothing.
  */
