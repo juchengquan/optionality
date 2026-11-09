@@ -55,11 +55,15 @@ packages = ["src/optionality"]
 exclude = ["tests", ".ruff_cache"]
 
 # the tools for this package's own suite and lint — `make test`, `make lint` and `make format` run them
-# here, in python/. Not installed by a notebook that depends on the package.
+# here, in python/. Not installed by a notebook that depends on the package. And this package's own
+# `ibkr` extra, named rather than repeated: the no-trading lint re-derives its names from the
+# installed `ib_async` — a derivation the gate skipped would be a guard nobody runs, so it is
+# installed and never skipped.
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "ruff",
+    "optionality[ibkr]",
 ]
 
 [tool.ruff]

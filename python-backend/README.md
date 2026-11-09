@@ -18,7 +18,9 @@ It depends on `optionality` only through what the library publishes, and it plac
   source by path.
 - `tests/test_no_trading.py` refuses any reference that places, modifies, cancels or exercises an
   order, outside a `trading/` module that does not exist until an ADR creates it (ADR 0021,
-  Decision 8). The list of what it refuses is derived from `ib_async`, and the test says how.
+  Decision 8). The list of what it refuses, and the reader that applies it, are the library's
+  (`optionality.no_trading`): the IB Gateway client is the library's too, and the library holds
+  itself to the same rule with no door at all, re-deriving the list from `ib_async` in its suite.
 
 Both run in `make lint` and in `make test`, which is part of `make check`.
 
