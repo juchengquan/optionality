@@ -218,19 +218,13 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   URL) — but NOT quotes: `GET /quotes` takes no parameters, so it cannot price a contract the
   service does not already watch, and a notebook wanting an arbitrary code wants a Provider.
   `yahoo.py` is the
-  second PORT beside `opend.py`, and `ibkr.py` a third — though `ibkr.py` is the MAPPING only, with
-  no client yet: that half can only be verified against `make ibkr-fake-gateway`, and driving a Node
-  stub from pytest would make `make test` depend on the TypeScript tree, which it does not today.
-  The stub now answers `managedAccounts` because `ib_async` will not report a connection until the
-  accounts list is populated — recorded in SHAPE (one nine-character "DU" paper account) with the
-  identifier replaced, since `fake.ts` is committed. `yahoo.py` is the
   second PORT beside `opend.py`, answering the same `QuoteFetcher` through yfinance — library for
   library with `yahoo/client.ts`, which uses `yahoo-finance2` because a bare fetch is refused with
   429, and both surface Yahoo's own field names so the mapping is the same mapping. Only `quotes.py`
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
-  52 of the package's 69 public functions, which is exactly the 52 of the TypeScript domain's 56
+  52 of the package's 63 public functions, which is exactly the 52 of the TypeScript domain's 56
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
   package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
   `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and

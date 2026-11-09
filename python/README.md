@@ -31,11 +31,6 @@ in `testdata/vendors/` — compared exactly, as the domain's are. It carries no 
 returned a bid 148 points above a price that matched Cboe's own close, and `reference.FIELDS` prefers
 the mid, so mapping that book faithfully would have put 7,574 on the strip entirely plausibly.
 
-`optionality.ibkr` ports IB Gateway's field mapping — the tick-id tables, the four data grades as
-the two facts they are, the 100x on implied volatility that makes IBKR's 0.1368 the service's
-14.007 — held to `testdata/vendors/ibkr-fields.json`. The client that fetches is not written yet;
-the mapping is the half where a wrong answer is plausible rather than loud.
-
 There is deliberately no `api.quotes()`. `GET /quotes` takes no parameters — it is "live quotes for
 the whole watchlist" — so it cannot price a contract the service does not already watch, which is
 the bounded-call invariant working as intended. For an arbitrary code you want a Provider:

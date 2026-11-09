@@ -61,7 +61,7 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "optionality"
 
 #: the modules that mirror no domain module and reach the outside (CLAUDE.md): the two vendor
 #: providers, the one fetch-and-catch, and the reader of the live service
-IMPURE = {"opend", "yahoo", "ibkr", "quotes", "api"}
+IMPURE = {"opend", "yahoo", "quotes", "api"}
 #: generated, and the package docstring
 NOT_A_MODULE = {"_ported", "__init__"}
 #: the two impure modules that are not PORTS: the `QuoteFetcher` contract itself, and the reader of
