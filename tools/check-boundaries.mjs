@@ -1,11 +1,11 @@
 /** No package reaches into another's source (ADR 0014).
  *
  *  The repository is one repo of separate packages — typescript/ (the library, ADR 0021),
- *  backend/, frontend/ and python/ — and a package may use another only through what that one
- *  PUBLISHES: its package.json `exports` for the TypeScript, its importable modules for the
- *  Python. A relative import that climbs out of its own package root is what this refuses. The
- *  frontend's `../../backend/src/app.ts` was exactly that, and it is what would have made
- *  splitting the repositories a refactor instead of a move.
+ *  backend/, frontend/, python/ and python-backend/ (also ADR 0021) — and a package may use
+ *  another only through what that one PUBLISHES: its package.json `exports` for the TypeScript,
+ *  its importable modules for the Python. A relative import that climbs out of its own package
+ *  root is what this refuses. The frontend's `../../backend/src/app.ts` was exactly that, and it
+ *  is what would have made splitting the repositories a refactor instead of a move.
  *
  *  `testdata/` is the shared directory: data both suites read, and reading it by path is the point.
  *  Two things live there — the golden cases (ADR 0014), written by the TypeScript, and
@@ -41,7 +41,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
-export const PACKAGES = ["typescript", "backend", "frontend", "python"];
+export const PACKAGES = ["typescript", "backend", "frontend", "python", "python-backend"];
 export const SHARED = ["testdata"];
 /** Which packages each may import BY NAME, as directories (ADR 0021).
  *
@@ -62,6 +62,7 @@ export const DEPENDS = {
   backend: ["typescript"],
   frontend: ["backend"],
   python: [],
+  "python-backend": [],
 };
 const SKIP_DIRS = new Set(["node_modules", "dist", ".venv", "__pycache__", ".out"]);
 const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx|py)$/;

@@ -40,21 +40,27 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   frontend's vitest configs, the Python suite, and the case generator), because the frontend's was
   not and the gate was green only at +08. The browser
   suite is checked zone-independent instead — `env` would not reach its Chromium. Targets, in the
-  order they run: lint, typecheck, `check-api`, `check-cases`, the Python suite, `test-tools` (the repo-wide
-  `tools/`, which no workspace's suite covers), the library suite (`test-lib`), the API suite, both
-  UI suites, `check-ui` and `check-opend`. This list went stale twice without a gate noticing, and it is worth knowing why:
+  order they run: lint, typecheck, `check-api`, `check-cases`, the Python suites (the library's, then
+  the Python backend's), `test-tools` (the repo-wide `tools/`, which no workspace's suite covers),
+  the library suite (`test-lib`), the API suite, both UI suites, `check-ui` and `check-opend`. This
+  list went stale twice without a gate noticing, and it is worth knowing why:
   `check-make-targets` checks that every backticked invocation names a rule that EXISTS, never that a
   documented SET is complete, so a target added to the `check` rule is nobody's job to write down
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
-  alone is only the Python package (every golden case, reproduced exactly). `make lint` is ruff plus
-  five scripts — `check-boundaries`, `check-test-support`, `check-seams` (four seams:
-  the backend's `vendors/` and the library's, `engine/`, `entrypoints/`),
-  `check-make-targets`, `check-served-root`. The first:
+  alone is only the Python (every golden case, reproduced exactly, then `python-backend/`'s suite).
+  `make lint` is ruff over both Python packages plus five scripts — `check-boundaries`,
+  `check-test-support`, `check-seams` (four seams: the backend's `vendors/` and the library's,
+  `engine/`, `entrypoints/`), `check-make-targets`, `check-served-root` — and `check-py-backend`,
+  the Python backend's two lines (ADR 0021): it imports only the library's public modules, and it
+  names no order call or class outside a `trading/` that does not exist. The first:
   no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas, `optionality/...` for the library; ADR 0014) — and its
   `DEPENDS` says which may import which BY NAME at all: the library nothing, the backend the library,
   the frontend the backend (ADR 0021). A published name passes the first rule, so without the second
   the library could import the service. `make format` formats the Python only.
+  **The Python is one uv workspace** (ADR 0021): the root `pyproject.toml` (virtual, no package of
+  its own) with members `python/` and `python-backend/`, one root `uv.lock` and one root `.venv`.
+  `python/pyproject.toml` must stay self-contained — notebooks build it alone from its subdirectory.
 - **The TypeScript has no formatter, by decision** (2026-10-17). Prettier and Biome were measured
   against this code with its own settings: both rewrote about 120 of 143 files, nearly all of it
   exploding the compact parameter lists below one-per-line, and Prettier dropped grouping
@@ -316,6 +322,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `make py-cut` on a branch and tagged with `make py-tag` on main after the bump merges.
   `optionality.api.agrees()` asks a running service whether the port is still current; it never
   runs on import, and answers "no service" rather than raising.
+- `python-backend/` — `optionality_backend` (ADR 0021): the Python backend that will be able to run
+  the whole service, one backend at a time. A skeleton today: the package, its suite, and the two
+  lines `check-py-backend` holds — `tests/test_library_boundary.py` (no `optionality._*`, no
+  `optionality.research`, no reach into the library's source by path) and `tests/test_no_trading.py`
+  (no order placed, modified, cancelled or exercised outside `optionality_backend/trading/`, which
+  must not exist until a trading ADR creates it; the forbidden names are DERIVED from `ib_async`'s
+  source and re-derived whenever it is installed). Both run against fixture trees. Never released:
+  it runs from the working tree, as `backend/` does.
 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 

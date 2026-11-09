@@ -11,14 +11,17 @@ data/
 node_modules/
 .venv/
 
-# Python caches, and what `uv build` would write (python/)
+# Python caches, and what `uv build` would write. Inside the uv workspace (ADR 0021) a build of either
+# member lands in the ROOT's dist/, not the member's; python/dist/ is where it lands from a copy of the
+# library on its own. Both anchored, for the reason /opend/ is below.
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+/dist/
 python/dist/
 
-# the frontend bundle IS committed (ADR 0005), which is why there is no dist/ rule above
+# the frontend bundle IS committed (ADR 0005), which is why no dist/ rule above is a bare `dist/`
 
 # playwright writes test traces and screenshots beside the tests it runs
 frontend/src/__browser__/__screenshots__/

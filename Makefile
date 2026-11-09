@@ -4,7 +4,7 @@
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
 	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
-	test-tools py-cut py-tag ibkr-fake-gateway
+	test-tools py-cut py-tag ibkr-fake-gateway check-py-backend
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
@@ -31,11 +31,22 @@ UI_BASE ?= /opt/
 
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
-lint: check-boundaries check-test-support check-seams check-make-targets check-served-root
+#
+# Both Python packages are members of ONE uv workspace (the root pyproject.toml, ADR 0021), so each
+# `uv run --directory` below shares the root's .venv and uv.lock and reads its own [tool.ruff].
+lint: check-boundaries check-test-support check-seams check-make-targets check-served-root check-py-backend
 	uv run --directory python ruff check .
+	uv run --directory python-backend ruff check .
 
 check-boundaries:
 	node tools/check-boundaries.mjs
+
+# The Python backend's two lines (ADR 0021): it reaches the library only through its public modules,
+# and it places, modifies, cancels and exercises no order outside a `trading/` that does not exist.
+# pytest rather than a node script because both read the Python AST; each file says why it refuses
+# what it refuses. `make test` runs them again with the rest of the backend's suite.
+check-py-backend:
+	uv run --directory python-backend pytest -q tests/test_library_boundary.py tests/test_no_trading.py
 
 # `src/` is the service and `testing/` is the harness that fakes it. Nothing the service runs may
 # import the harness — it prices every code it is asked for. See tools/check-test-support.mjs.
@@ -64,11 +75,14 @@ check-make-targets:
 # the Python only: the TypeScript has no formatter, by decision (CLAUDE.md says why)
 format:
 	uv run --directory python ruff format .
+	uv run --directory python-backend ruff format .
 
 # the Python package's suite (ADR 0014): every golden case in testdata/golden/, and the OpenD client with fakes
 # TZ=UTC, as `cases` is: the corpus is generated under it, so it must be read under it
+# and then the Python backend's (ADR 0021), pinned the same way before it has a clock to read
 test:
 	TZ=UTC uv run --directory python pytest
+	TZ=UTC uv run --directory python-backend pytest
 
 # EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
 # subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
