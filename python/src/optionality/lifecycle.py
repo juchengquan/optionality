@@ -56,6 +56,49 @@ def silence_verdict(monitor: Monitor, priced: set[str], sweeps_so_far: int, limi
     return SilenceVerdict(count=count, quarantine=False, notice=None)
 
 
+def unreadable_notice(code: str) -> str:
+    """The notice for a rule whose ROW the engine could not read at all.
+
+    A notice rather than a verdict, because there is nothing to decide: a row that cannot be
+    hydrated cannot be evaluated, so it is always quarantined. What varies is only the sentence.
+    """
+    return (
+        f"⚠️ monitor {code} disabled: its row could not be read "
+        "(corrupt legs, or a strike date this service refuses)"
+    )
+
+
+class UnknownContractVerdict(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    #: the legs this provider does not recognise, sorted — so the sentence does not depend on the
+    #: order the structure was entered in
+    hits: list[str]
+    #: true once ANY leg is unknown: a combo with one delisted leg has no value to compare
+    quarantine: bool
+    notice: str | None
+
+
+def unknown_contract_verdict(monitor: Monitor, unknown: set[str]) -> UnknownContractVerdict:
+    """A sweep whose batch named some of this rule's contracts as ones the provider does not carry.
+
+    `silence_verdict`'s twin, and the symmetry is the point: the same answer — disable with a
+    notice, never delete — to the other half of "cannot evaluate". The asymmetry is in how long it
+    takes to be sure. An unknown contract is a fact the provider stated, so one sweep is enough; a
+    figure that has not arrived may yet arrive, which is why only that one counts sweeps.
+    """
+    hits = sorted(code for code in monitor_leg_codes(monitor) if code in unknown)
+    if not hits:
+        return UnknownContractVerdict(hits=hits, quarantine=False, notice=None)
+    return UnknownContractVerdict(
+        hits=hits,
+        quarantine=True,
+        notice=(
+            f"⚠️ monitor {monitor.code} disabled: unknown contract {', '.join(hits)} "
+            "(delisted or never existed)"
+        ),
+    )
+
+
 ExpiryAction = Literal["remove", "mute", "keep"]
 
 

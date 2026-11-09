@@ -15,11 +15,12 @@ import { OpenedField } from "./OpenedField";
  *  of them.
  *
  *  A rule watching part of a structure has no entry of its own — that figure would be a fraction of
- *  someone else's credit (ADR 0003) — and an unheld rule has nothing to attach one to. Exported so
- *  the box and its label cannot disagree: the labelled row used to go up around a box that rendered
- *  nothing, leaving the word "entry" beside empty space, which reads as a control that has broken.
+ *  someone else's credit (ADR 0003) — and an unheld rule has nothing to attach one to. One
+ *  predicate so the box and its label cannot disagree: the labelled row used to go up around a box
+ *  that rendered nothing, leaving the word "entry" beside empty space, which reads as a control
+ *  that has broken. Both readers are in this file, which is what makes that hold.
  */
-export function hasEntryToType(entry: Entry): boolean {
+function hasEntryToType(entry: Entry): boolean {
   return entry.scope === "all" && entry.positions.length > 0;
 }
 
@@ -103,9 +104,6 @@ function Labelled({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-/** Entry is typed straight onto a rule watching exactly one holding. Where it spans several
- *  you type the TOTAL and the unrecorded wing is derived from it — a summed credit is not
- *  something you can type. */
 /** Record what a holding cost and when it was put on — the FULL form, for the sheet.
  *
  *  The inline EntryCell below stays what it is: one number, for a holding that already exists.
@@ -195,6 +193,9 @@ export function HoldingForm({ entry, onHolding }: {
   );
 }
 
+/** Entry is typed straight onto a rule watching exactly one holding. Where it spans several
+ *  you type the TOTAL and the unrecorded wing is derived from it — a summed credit is not
+ *  something you can type. */
 export function EntryCell({
   entry, onEntry, onTotal,
 }: {

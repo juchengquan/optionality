@@ -4,7 +4,8 @@ Date: 2026-10-06
 
 ## Status
 
-Accepted. Ratified by the owner on 2026-10-06 ("fix the /quotes invariant, keep it live").
+Accepted. Ratified by the owner on 2026-10-06 ("fix the /quotes invariant, keep it live"). Amended
+2026-11-09: the cached path this kept as an unused alternative was deleted (see Consequences).
 
 ## Context
 
@@ -63,6 +64,14 @@ since the last sweep — at most 15 seconds.
 
 `cachedQuotes` is kept, unused, as the alternative if this is revisited, and its comment now says
 so plainly rather than claiming the dashboard renders it.
+
+**Amended 2026-11-09:** that cached path has been DELETED. Three weeks on, no route had come to call
+it, and keeping an unused alternative cost more than it was worth: `cachedQuotes` and
+`cachedRecords`, with the `lastRecords` and `lastBadCodes` they read, were the alarm engine's only
+reason to import `watchlist.ts`, `monitors.ts`, `domain/exit.ts` and `domain/timefmt.ts` — four
+modules the engine does not otherwise need. The decision above is unchanged: the dashboard polls
+live quotes, and a row's value and its 🔔 come from the same instant by construction. Reinstating
+the rejected alternative below now means writing it again, which git has.
 
 ## Alternatives
 

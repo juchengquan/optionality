@@ -171,10 +171,13 @@ describe("the box the image is captured in", () => {
   // and 204px in WebKit, the squeezed columns pushed the page from 1535px to 4224px tall, and
   // the resulting 2000x8448 canvas crossed the area cap iOS enforces — which is how one cause
   // produced all three truncations at once: columns, cell text, and the bottom of the image.
-  it("captures the SCROLL size, so nothing that overflows is left out", () => {
-    expect(captureBox(1145, 900)).toMatchObject({ width: 1145, height: 900 });
-  });
-
+  //
+  // "captures the SCROLL size, so nothing that overflows is left out" was here and has gone:
+  // `captureBox` takes two numbers and hands them back, so the assertion was an identity on its
+  // own arguments. The behaviour it NAMED — reading scrollWidth/scrollHeight off the stage rather
+  // than its offset size — is `useSnapshot.ts`'s, and `UseSnapshot.test.tsx` already holds it
+  // under that same title, against the hook. Mutating the real line fails there and left all
+  // twenty tests in this file green.
   it("keeps the doubled resolution whenever it fits", () => {
     // the common case must not get worse: a normal book is nowhere near the caps
     expect(captureBox(1328, 1536).pixelRatio).toBe(2);

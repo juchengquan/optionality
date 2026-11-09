@@ -23,11 +23,16 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 - **`make check` before every commit** — everything, in one target, and it passes in any timezone:
   every suite that reads a clock is pinned to `TZ=UTC` (both vitest configs, the Python suite, and the
   case generator), because the frontend's was not and the gate was green only at +08. The browser
-  suite is checked zone-independent instead — `env` would not reach its Chromium. Targets: lint, typecheck, `check-api`,
-  `check-cases`, the Python suite, the API suite, both UI suites and `check-ui`. Running a subset is
-  how a commit passes while something it touched is broken: `make test` alone is only the Python
-  package (every golden case, reproduced exactly). `make lint` is ruff plus `check-boundaries`: no
-  package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
+  suite is checked zone-independent instead — `env` would not reach its Chromium. Targets, in the
+  order they run: lint, typecheck, `check-api`, `check-cases`, the Python suite, `test-tools` (the repo-wide
+  `tools/`, which neither workspace's suite covers), the API suite, both UI suites, `check-ui` and
+  `check-opend`. This list went stale twice without a gate noticing, and it is worth knowing why:
+  `check-make-targets` checks that every backticked invocation names a rule that EXISTS, never that a
+  documented SET is complete, so a target added to the `check` rule is nobody's job to write down
+  here. Running a subset is how a commit passes while something it touched is broken: `make test`
+  alone is only the Python package (every golden case, reproduced exactly). `make lint` is ruff plus
+  four scripts — `check-boundaries`, `check-test-support`, `check-make-targets`, `check-served-root`. The first:
+  no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python only.
 - **The TypeScript has no formatter, by decision** (2026-10-17). Prettier and Biome were measured
   against this code with its own settings: both rewrote about 120 of 143 files, nearly all of it
@@ -44,8 +49,12 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached main
   unable to load at all).
 - **Golden cases:** a change to anything `backend/src/domain/` exports changes what
-  `testdata/golden/*.json` should say. `make cases` regenerates them and `make check-cases` — and `make test-api`
-  — fail until you do. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
+  `testdata/golden/*.json` should say. `make cases` regenerates them, and WHICH gate stops you depends on
+  the kind of change: a CHANGED function or constant renders different bytes, so `make check-cases` and
+  `make test-api` both fail until you regenerate. An ADDITION renders no bytes — a new exported
+  function with no case, or a whole new `domain/` module, produces nothing to compare — so
+  `make check-cases` stays green and only `make test-api` catches it, through `cases.test.ts`'s
+  coverage guards. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`. Every
   exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
   holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port.
   The harness refuses a case passing MORE arguments than the port takes — `zip(strict=False)` dropped
@@ -100,8 +109,16 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
 
 - `backend/src/`: `main.ts` (the process), `app.ts` (routes, auth, `/docs`), `routes/`, `domain/` (everything pure
   and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
-  `alarm.ts` and its Telegram wording, `lifecycle.ts`'s quarantine and expiry verdicts, and `js.ts`,
-  the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `scheduler.ts` (the sweep loop
+  `alarm.ts` and its Telegram wording, `lifecycle.ts`'s expiry verdict and all THREE
+  quarantine faults — an unknown contract, a figure that never arrives, and a row that cannot be hydrated;
+  the first and the last were written beside the `updateMonitorFields` they caused until the second was
+  already cased, so a notebook could ask what the next sweep would do about one fault and not the others, and `js.ts`,
+  the four JavaScript behaviours a port must reproduce. See golden cases), `sweeper.ts` (the alarm engine), `health.ts`
+  (the engine's account of its own health — the WHOLE of `ports.ts`'s `SweeperPort`, which is what made
+  splitting it out of the sweeper free; `main.ts` hands the routes and the bot that object rather than the
+  sweeper, so nothing reachable from a request can start a sweep), `notify.ts` (the Telegram send, and
+  whether it got through: one answer for the sweep, the health account and `positions.ts`, which had each
+  grown their own), `scheduler.ts` (the sweep loop
   and its watchdog — NOT dead code: it is what drives the alarms), `watchlist.ts`, `bot/` (the long-poll
   Telegram TRANSPORT in `bot.ts` — the poll, the owner check, the reply — and the commands
   themselves in `bot/commands/`, a TABLE rather than a switch: a command is
@@ -129,7 +146,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
-- `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions).
+- `backend/testing/` — the test harness, deliberately outside `src/` (see Testing conventions). `sweep.ts`
+  holds the rows a sweep test needs, shared by `sweeper.test.ts` and `positions.test.ts`: the sampler and
+  the manage-by notice are `positions.ts`'s and spent 494 lines inside the alarm engine's suite, because
+  that is where the batch they read happened to be.
 - `testdata/golden/` — the golden cases (generated test data). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
   service. Both are tested against a FIXTURE TREE rather than against this repository, which is
@@ -142,7 +162,11 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
   loads Positions and Monitors from the live service (`OPTIONALITY_API` for its URL). Only those
   three are not golden-cased: they mirror no domain module. Everything else is, decisions included —
-  45 of 51 public functions.
+  52 of the package's 58 public functions, which is exactly the 52 of the TypeScript domain's 56
+  exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
+  package takes their knobs directly instead. Six uncased rather than five, because `js.js_string`
+  mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
+  spell the conversion out.
   `tests/test_cases.py` runs every golden case.
   **Installed by a pinned git ref** (ADR 0016), never from a path that tracks the working tree —
   an editable install serves a notebook whatever half-ported state the tree is in:
@@ -177,8 +201,10 @@ compared exactly. A TypeScript domain fix therefore makes `make test` red until 
   instant. That is now true by construction — `buildEntries` reads the watched figure once and derives both
   the fill bar and the bell from it, with `isBreached`, the engine's own predicate. The engine is untouched:
   the stored `triggered`, the cooldowns and the Telegram messages remain the sweep's business, and the
-  dashboard's bell may therefore lead or lag what has been sent. `MonitorSweeper.cachedQuotes` is the cached
-  alternative and no route calls it.
+  dashboard's bell may therefore lead or lag what has been sent. The engine keeps NO cached view of its
+  last batch: `MonitorSweeper.cachedQuotes` was the cached alternative, no route ever called it, and it was
+  REMOVED for that reason — which is what dropped `watchlist.ts`, `monitors.ts`, `domain/exit.ts` and
+  `domain/timefmt.ts` out of the alarm engine's imports entirely (ADR 0010, amended).
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
 - A provider is reported two ways, because they measure different things. `DEGRADED_AFTER_FAILURES`
   counts CONSECUTIVE failed sweeps — how long a failure lasted — and `FLAPPING_AFTER_FAILURES`

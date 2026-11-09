@@ -25,7 +25,7 @@
         "2026-13-45"
       ],
       "expect": {
-        "$throws": true
+        "$throws": "invalid strike_date: 2026-13-45"
       }
     },
     {
@@ -35,7 +35,7 @@
         "2026-11-20T00:00"
       ],
       "expect": {
-        "$throws": true
+        "$throws": "invalid strike_date: 2026-11-20T00:00"
       }
     },
     {
@@ -77,7 +77,7 @@
         6000
       ],
       "expect": {
-        "$throws": true
+        "$throws": "invalid strike_date: 2026-02-30"
       }
     },
     {
@@ -103,7 +103,7 @@
         "2026-02-30"
       ],
       "expect": {
-        "$throws": true
+        "$throws": "invalid strike_date: 2026-02-30"
       }
     },
     {

@@ -37,8 +37,6 @@ export interface Settings {
   alarmCooldownSeconds: number;
   /** reminder cadence while a breach persists; 0 disables reminders */
   alarmRepeatSeconds: number;
-  /** dashboard live-region poll interval */
-  uiRefreshSeconds: number;
   /** consecutive sweep failures before the degraded telegram alert */
   degradedAfterFailures: number;
   /** re-reminds while the sweep is still failing, so one missed notice is not the end of it.
@@ -90,7 +88,6 @@ export const DEFAULTS: Settings = {
   monitorIntervalSeconds: 60,
   alarmCooldownSeconds: 120,
   alarmRepeatSeconds: 1800,
-  uiRefreshSeconds: 30,
   degradedAfterFailures: 5,
   degradedRepeatSeconds: 1800,
   flappingWindowSeconds: 900,
@@ -123,7 +120,6 @@ const FROM_ENV = {
   monitorIntervalSeconds: "MONITOR_INTERVAL_SECONDS",
   alarmCooldownSeconds: "ALARM_COOLDOWN_SECONDS",
   alarmRepeatSeconds: "ALARM_REPEAT_SECONDS",
-  uiRefreshSeconds: "UI_REFRESH_SECONDS",
   degradedAfterFailures: "DEGRADED_AFTER_FAILURES",
   degradedRepeatSeconds: "DEGRADED_REPEAT_SECONDS",
   flappingWindowSeconds: "FLAPPING_WINDOW_SECONDS",
@@ -155,7 +151,7 @@ const FRACTIONAL: ReadonlySet<keyof Settings> = new Set(["exitTakeFraction", "ex
  *  this list has to be explicit rather than "no zeroes anywhere" (review 2026-11-01).
  */
 const AT_LEAST_ONE: readonly (keyof Settings)[] = [
-  "monitorIntervalSeconds", "degradedAfterFailures", "uiRefreshSeconds",
+  "monitorIntervalSeconds", "degradedAfterFailures",
 ];
 
 /** Every count is non-negative; some must be positive. Fatal, as a mistyped setting already is in

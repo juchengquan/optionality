@@ -197,11 +197,9 @@ tr.group:first-child td { padding-top: 4px; border-top: none; }
 /* said only when the figure is a last trade, which is the weaker claim */
 .reference-field { margin-left: 0.35rem; font-size: 0.8125rem; opacity: 0.8; }
 
-.health { color: var(--muted-foreground); font-size: 0.875rem; margin-bottom: 1.2rem; }
-/* the status strip and the refresh selector sit on one line at a desk and wrap on a
-   phone, rather than deciding the page is wider than the screen */
-form.health { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
-.health .bad { color: var(--destructive); font-weight: 700; }
+/* No `.health` rules here. That strip — the status line and the refresh selector on one row —
+   became `TopLine` and the Service panel, and nothing has carried the class since. `.bad` survives
+   as `.topline.bad` above; only the `.health`-scoped copies went. */
 .pending { color: var(--muted-foreground); }
 /* the page's name and the two things you can create, on one line. Same idea as the table
    headings below: a control sits with what it belongs to rather than in a band of its own. */
@@ -218,7 +216,9 @@ form.health { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; 
 /* form.inline is gone: it was written when these forms sat in a table cell holding only
    inline elements. NumberField renders a block wrapper, so an inline form dropped its
    button onto the next line. They are flex rows now, stated where they are used. */
-td.actions { text-align: left; }
+/* No `td.actions` either: no element carries that class, and the only `actions` left in the
+   markup is the word inside a muted table's `<th className="left">` (columns.ts says the same —
+   "actions" was a column until the detail sheet took the controls). */
 /* No `fieldset` rule here. There was one -- `display: inline-block` for side-by-side
    placement, from when both add-forms sat permanently on the page. The forms live in a
    Sheet now and only one is ever open, so the placement had nothing left to do, but the

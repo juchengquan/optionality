@@ -11,7 +11,7 @@ import { Scheduler } from "./scheduler.ts";
 let scheduler: Scheduler;
 
 beforeEach(() => { scheduler = new Scheduler(); });
-afterEach(() => { scheduler.stop(); });
+afterEach(() => { scheduler.stopSweep(); });
 
 /** A deadline no test here will reach, for the cases that are not about the watchdog. Written out
  *  at each call rather than made optional: `startSweep` requires the decision, because the absence

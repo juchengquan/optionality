@@ -55,7 +55,11 @@ describe("the watchlist", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("Single-leg")).toBeTruthy());
     expect(screen.getByText("Combos")).toBeTruthy();
-    expect(screen.getByText("261120 8100C")).toBeTruthy();
+    // `find`, not `get`: a table with no rows draws its own heading and says "nothing watched
+    // yet", so the two headings being up is not evidence that the quotes have landed. This failed
+    // once inside a full `make check` and never once in eight runs of this file alone, which is
+    // what a race between two state updates looks like rather than a broken row.
+    expect(await screen.findByText("261120 8100C")).toBeTruthy();
   });
 
   it("shows cost to close positive, and the P&L it implies", async () => {
@@ -116,19 +120,12 @@ describe("the watchlist", () => {
   });
 });
 
-describe("the shapes the dashboard draws", () => {
-  it("no longer checks a contract version, because the compiler does", async () => {
-    // Two tests used to live here: one asserting a banner when the service reported a different
-    // contract version, one asserting silence when it agreed. Both are gone with the version itself
-    // (ADR 0009 phase 8) — the dashboard now takes its types FROM the API, so a response that has
-    // changed shape is a compile error in this workspace rather than a banner on a page nobody may be
-    // looking at. There is nothing left here to assert at runtime; `npm run typecheck` is the test.
-    mockApi([wing]);
-    render(<App />);
-    await waitFor(() => expect(screen.getByText("1016_bs_8050")).toBeTruthy());
-    expect(screen.queryByText(/out of date/i)).toBeNull();
-  });
-});
+// "the shapes the dashboard draws" was one test here, and it asserted nothing: it looked for the
+// absence of /out of date/i, and the only occurrence of that string anywhere in this codebase was
+// the query looking for it. Its own comment said so — two tests about a contract-version banner
+// used to live there, and both went with the version itself (ADR 0009 phase 8), since the dashboard
+// takes its types FROM the API now and a changed response shape is a compile error in this
+// workspace. `npm run typecheck` is that test.
 
 describe("the legs, exactly once", () => {
   it("draws the leg summary in its own column and nowhere else", async () => {

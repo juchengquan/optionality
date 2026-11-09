@@ -33,8 +33,10 @@ describe("numbers", () => {
     // interval should stop the service, not quietly sweep every 60 seconds
     expect(() => settingsFromEnv({ MONITOR_INTERVAL_SECONDS: "1.5" }))
       .toThrow(/MONITOR_INTERVAL_SECONDS/);
-    expect(() => settingsFromEnv({ EXPIRED_RETENTION_DAYS: "7.5" })).toThrow();
-    expect(() => settingsFromEnv({ EXIT_MANAGE_BY_DTE: "21.5" }), "a DTE is a whole day").toThrow();
+    expect(() => settingsFromEnv({ EXPIRED_RETENTION_DAYS: "7.5" }))
+      .toThrow(/EXPIRED_RETENTION_DAYS is not an integer/);
+    expect(() => settingsFromEnv({ EXIT_MANAGE_BY_DTE: "21.5" }), "a DTE is a whole day")
+      .toThrow(/EXIT_MANAGE_BY_DTE is not an integer/);
   });
 
   it("accepts a fractional FRACTION, which the integer rule would have killed at boot", () => {
@@ -50,7 +52,10 @@ describe("numbers", () => {
 
   it("rejects what is not a number at all, fractional or not", () => {
     expect(() => settingsFromEnv({ EXIT_TAKE_FRACTION: "half" })).toThrow(/EXIT_TAKE_FRACTION/);
-    expect(() => settingsFromEnv({ EXIT_STOP_MULTIPLE: "" })).toThrow();
+    // a variable set to nothing is its own message: an empty string is not "not a number", it is
+    // a knob somebody meant to set and left blank
+    expect(() => settingsFromEnv({ EXIT_STOP_MULTIPLE: "" }))
+      .toThrow(/EXIT_STOP_MULTIPLE is set to nothing/);
   });
 
   it("leaves a knob alone when the variable is absent", () => {
@@ -68,8 +73,8 @@ describe("numbers", () => {
  *  accepted exactly the values this file documents as fatal, and the suite could not tell,
  *  because the suite went through the other door.
  *
- *  Measured on 2026-11-08: `settingsFromEnv` returned `degradedAfterFailures: 0`,
- *  `uiRefreshSeconds: 0` and `monitorIntervalSeconds: 0` without complaint, while
+ *  Measured on 2026-11-08: `settingsFromEnv` returned `degradedAfterFailures: 0` and
+ *  `monitorIntervalSeconds: 0` without complaint, while
  *  `settingsFor({ degradedAfterFailures: 0 })` threw. These tests go through the SERVICE's door.
  */
 describe("the knobs a service must not start on", () => {
@@ -90,8 +95,6 @@ describe("the knobs a service must not start on", () => {
     // tick records a failed sweep
     expect(() => settingsFromEnv({ MONITOR_INTERVAL_SECONDS: "0" }))
       .toThrow(/MONITOR_INTERVAL_SECONDS must be at least 1/);
-    expect(() => settingsFromEnv({ UI_REFRESH_SECONDS: "0" }))
-      .toThrow(/UI_REFRESH_SECONDS must be at least 1/);
   });
 
   it("still allows 0 where 0 genuinely means off", () => {

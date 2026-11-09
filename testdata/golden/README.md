@@ -23,7 +23,9 @@ JSON:
 
 - `{"$date": "<ISO instant>"}` — a Date argument
 - `{"$set": [...]}` — a Set, members sorted. An argument as well as a result since ADR 0017
-- `{"$throws": true}` — the function raised; the message is not part of the contract
+- `{"$throws": "<message>"}` — the function raised, with this message. The wording is part of the
+  contract: as `true` it only said that something had gone wrong, which a port satisfies by raising
+  for the wrong reason
 - `{"$num": "NaN" | "Infinity" | "-Infinity" | "-0"}` — a number JSON has no spelling for. Added
   with `domain/js.ts` (ADR 0017), whose `number` answers NaN by contract, and it is also what lets
   `-0` be compared rather than exempted: `Math.round(-0.5)` is `-0` in JavaScript, and a port that

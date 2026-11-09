@@ -36,8 +36,12 @@ The version says WHEN it was cut; `optionality._ported.GOLDEN_CASES` says WHAT i
 cell tells you whether it is still current:
 
 ```python
-print(api.agrees())  # "this port agrees with the service (7ed1a1af…)"
+print(api.agrees())  # "this port agrees with the service (<fingerprint>)"
 ```
+
+The fingerprint itself is deliberately not written out here. It changes with every domain commit,
+nothing checks this file against it, and it has gone stale twice — a figure in a document that no
+gate can contradict is worse than no figure, because a reader compares theirs against it.
 
 It never runs on import and never raises: with no service reachable it says so and the maths still
 works, which is the whole point of the package (ADR 0014).

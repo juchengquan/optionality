@@ -31,6 +31,9 @@ const monitor = (id: string, code = "US.SPXW261016C8050000", field = "option_del
 const position = (id: string, name: string) =>
   db.prepare(`insert into positions (id, name, strike_date, contracts, legs, created_at)
     values (?, ?, '2026-10-16', 1, '[]', ?)`).run(id, name, now);
+const reference = (id: string, code: string, label: string | null = null) =>
+  db.prepare(`insert into reference_securities (id, code, label, source, created_at)
+    values (?, ?, ?, 'opend', ?)`).run(id, code, label, now);
 
 describe("the schema", () => {
   it("creates the tables the alarm engine and the holdings use, and no others", () => {
@@ -80,6 +83,16 @@ describe("the schema", () => {
   it("keeps a position's name unique", () => {
     position("a".repeat(32), "1016_IC");
     expect(() => position("b".repeat(32), "1016_IC")).toThrow(/UNIQUE|constraint/i);
+  });
+
+  it("keeps a reference's code unique", () => {
+    // the route refuses a duplicate with a 409 after a `findReferenceByCode` of its own, so its
+    // test passes with no constraint at all; the table-level UNIQUE is also invisible to the
+    // index test above, which filters out the `sqlite_autoindex_` a table-level UNIQUE creates
+    reference("a".repeat(32), "US.SPY");
+    // a second row for a different code is what the table is for
+    expect(() => reference("b".repeat(32), "HK.800000")).not.toThrow();
+    expect(() => reference("c".repeat(32), "US.SPY")).toThrow(/UNIQUE|constraint/i);
   });
 });
 

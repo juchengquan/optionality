@@ -70,8 +70,4 @@ export class Scheduler {
     if (this.sweepTimer !== null) clearInterval(this.sweepTimer);
     this.sweepTimer = null;
   }
-
-  stop(): void {
-    this.stopSweep();
-  }
 }
