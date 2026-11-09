@@ -10,8 +10,8 @@
  *  absent — which the sweep reports and quarantine never acts on, because an unreachable Provider
  *  says nothing about whether a rule is evaluable.
  */
-import { OpendClient } from "./client.ts";
-import { probeOpend } from "./probe.ts";
+import { OpendClient } from "optionality/vendors/opend/client";
+import { probeOpend } from "optionality/vendors/opend/probe";
 import type { Settings } from "../../env.ts";
 import type { ProviderVendor } from "../index.ts";
 

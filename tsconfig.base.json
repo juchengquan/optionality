@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared by both workspaces. The frontend adds its DOM and JSX settings, the backend adds Node's; everything here is a rule neither should disagree about.",
+  "_comment": "Shared by every workspace. The frontend adds its DOM and JSX settings, the library and the backend add Node's; everything here is a rule none should disagree about.",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",

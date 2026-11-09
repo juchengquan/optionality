@@ -1,4 +1,4 @@
-"""What of a pace gap vol accounts for (ADR 0011). Mirrors backend/src/domain/vol.ts.
+"""What of a pace gap vol accounts for (ADR 0011). Mirrors typescript/src/domain/vol.ts.
 
 Measured from the Position's own daily samples, starting on the day it was Opened. None — never a
 guess — whenever the chain is not whole.

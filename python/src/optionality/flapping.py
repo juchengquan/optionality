@@ -1,4 +1,4 @@
-"""A provider that keeps failing and recovering. Mirrors backend/src/domain/flapping.ts.
+"""A provider that keeps failing and recovering. Mirrors typescript/src/domain/flapping.ts.
 
 Written after an hour of exactly that went unnoticed on 2026-11-08: a launchd agent was killing
 OpenD 27 seconds after every start and restarting it a minute later, so the sweep failed roughly a

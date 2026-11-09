@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
  *  somebody commits golden cases they never looked at.
  */
 const ROOT = new URL("..", import.meta.url).pathname;
-const STAMPS = ["backend/src/golden.ts", "python/src/optionality/_ported.py"];
+const STAMPS = ["typescript/src/golden.ts", "python/src/optionality/_ported.py"];
 const A_CASE_FILE = "testdata/golden/alarm.json";
 
 let tree;

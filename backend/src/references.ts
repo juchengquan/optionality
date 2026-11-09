@@ -21,9 +21,9 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { listReferences } from "./db/queries/index.ts";
-import { referenceFigure } from "./domain/reference.ts";
-import type { Quote } from "./domain/quote.ts";
-import type { QuoteFetcher } from "./quotes.ts";
+import { referenceFigure } from "optionality/domain/reference";
+import type { Quote } from "optionality/domain/quote";
+import type { QuoteFetcher } from "optionality/quotes";
 
 /** One Reference, ready to draw: no arithmetic left for the client and no reason left unsaid. */
 export interface ReferenceEntry {

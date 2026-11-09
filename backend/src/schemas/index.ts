@@ -9,8 +9,8 @@
  *  than hand-written a second time on the other side. The reasons the service disables a monitor
  *  for, which the dashboard groups its muted tables by (#167); and `SOURCES`, every vendor a
  *  Reference may name, which the dashboard's "from" box offers. `VENDORS` is held to `SOURCES` on
- *  this side and the box is held to it on that one, so adding a vendor stays a file beside its
- *  client plus a line in `VENDORS`, as it already was for the backend alone.
+ *  this side and the box is held to it on that one, so adding a vendor stays a descriptor plus a
+ *  line in `VENDORS` (and its client in the library), as it already was for the backend alone.
  */
 export {
   ComboMonitorIn, DISABLED_REASONS, type DisabledReason, MonitorCreateIn, MonitorIn, MonitorPatch,

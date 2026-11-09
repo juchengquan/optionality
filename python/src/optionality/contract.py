@@ -1,4 +1,4 @@
-"""SPX contract codes. Mirrors backend/src/domain/contract.ts."""
+"""SPX contract codes. Mirrors typescript/src/domain/contract.ts."""
 
 import re
 from datetime import date

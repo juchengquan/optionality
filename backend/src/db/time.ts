@@ -4,7 +4,7 @@
  *  and six fractional digits. Keeping that format is what lets the Python open this file if the
  *  cutover has to be undone, so it is not an implementation detail to tidy up later.
  */
-import { displayTime } from "../domain/timefmt.ts";
+import { displayTime } from "optionality/domain/timefmt";
 
 /** Format an instant the way the Python writes it. */
 export function toSqlDatetime(when: Date = new Date()): string {

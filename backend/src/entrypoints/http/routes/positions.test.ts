@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildSpxCode } from "../../../domain/contract.ts";
+import { buildSpxCode } from "optionality/domain/contract";
 import {
   type FakeProvider, type Harness, body, harness, json, pricedFetcher,
 } from "../../../../testing/harness.ts";

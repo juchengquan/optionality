@@ -67,7 +67,7 @@ export function readGreeting(fields: readonly string[]): Greeted {
  *
  *  The client id identifies this connection, and IB Gateway permits ONE connection per id — so a
  *  second process using the same number silently displaces the first. The service, `make serve`
- *  and the first-contact harness therefore each carry their own (see `env.ts`).
+ *  and the first-contact harness therefore each carry their own (see the backend's `env.ts`).
  */
 export function startApi(clientId: number): string {
   const START_API = 71, VERSION = 2;

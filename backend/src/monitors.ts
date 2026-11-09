@@ -4,9 +4,9 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { positionsHolding } from "./domain/position.ts";
-import { monitorLegCodes } from "./domain/monitor.ts";
-import { round4 } from "./domain/quote.ts";
+import { positionsHolding } from "optionality/domain/position";
+import { monitorLegCodes } from "optionality/domain/monitor";
+import { round4 } from "optionality/domain/quote";
 import { atomic } from "./db/open.ts";
 import {
   enabledMonitors, linkMonitorToPositions, listPositions, orphanMonitors, positionsForMonitor,
@@ -14,10 +14,10 @@ import {
   updateMonitorFields,
 } from "./db/queries/index.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
-import { displayRecords, type QuoteFetcher } from "./quotes.ts";
-import type { ExitPolicy } from "./domain/exit.ts";
+import { displayRecords, type QuoteFetcher } from "optionality/quotes";
+import type { ExitPolicy } from "optionality/domain/exit";
 import { buildEntries, codesFor, type MonitorForEntry, type WatchlistEntry } from "./watchlist.ts";
-import type { Position } from "./domain/position.ts";
+import type { Position } from "optionality/domain/position";
 
 /** Attach a new Monitor to whatever Position already holds its contracts.
  *

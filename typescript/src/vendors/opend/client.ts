@@ -13,6 +13,10 @@
  *  property the per-call version got for free: a socket that has quietly died produces a failed
  *  sweep and a visible `last_sweep_ok: false`, not a silent stream of empty batches.
  */
+// The SDK's declarations travel WITH the client rather than with whoever includes `src/`. The
+// backend reaches this file through the library's exports (ADR 0021), so its program never lists
+// the `.d.ts` beside it, and `import("moomoo-api")` below was an untyped module there.
+/// <reference path="./moomoo-api.d.ts" />
 import type { MoomooClient, Security, Snapshot } from "./types.ts";
 import { toRecords } from "./snapshot.ts";
 import type { QuoteBatch, QuoteFetcher } from "../../quotes.ts";

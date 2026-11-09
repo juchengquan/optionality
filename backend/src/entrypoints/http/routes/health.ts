@@ -15,9 +15,9 @@ import { z } from "zod";
 
 import type { Deps } from "../deps.ts";
 import { databaseResponds } from "../../../db/queries/index.ts";
-import { GOLDEN_CASES } from "../../../golden.ts";
+import { GOLDEN_CASES } from "optionality/golden";
 import { documented } from "../openapi.ts";
-import { displayTime } from "../../../domain/timefmt.ts";
+import { displayTime } from "optionality/domain/timefmt";
 
 const HealthResponse = z.object({
   db: z.boolean(),

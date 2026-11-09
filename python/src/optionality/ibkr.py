@@ -1,4 +1,4 @@
-"""IB Gateway's figures, under the service's names. A PORT of `backend/src/vendors/ibkr/fields.ts`.
+"""IB Gateway's figures, under the service's names. A PORT of `typescript/src/vendors/ibkr/fields.ts`.
 
 `tests/test_ibkr.py` holds it to `testdata/vendors/ibkr-fields.json` — what the TypeScript computes
 for all sixteen recorded cases, over figures measured against the live gateway on 2026-11-08. Two

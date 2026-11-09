@@ -14,56 +14,74 @@ phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them. The Python's o
 sits in `data/` at all: it went into `archive/python-era-20261017.tar.gz` in `BACKUP_DIR` on
 2026-10-17, as `pyarch/optionality.db`. There is no rollback.
 
-**The TypeScript domain is canonical** (`backend/src/domain/`). A Python package, `optionality` in
+**The TypeScript domain is canonical** (`typescript/src/domain/`). A Python package, `optionality` in
 `python/`, is ported FROM it for notebook use (ADR 0014) and held to it by the golden cases in `testdata/golden/`,
 compared exactly. A TypeScript domain fix therefore makes `make test` red until the Python is ported.
 
-**ADR 0021 (accepted 2026-11-09, not built) takes the Python to the whole service**: a second
+**ADR 0021 (accepted 2026-11-09, being built) takes the Python to the whole service**: a second
 backend that can run the sweep, the alarms, the database, the API and the bot, one backend at a
 time, ported module for module and held to the TypeScript at its three doors. It is built in six
 phases, and each phase updates this file when it lands, so everything below describes what exists
 today. Until a phase says otherwise, nothing here changes: the TypeScript is the only backend, and
 the read-only property below still holds for the only code that runs.
 
+**Each language has a library and a backend (ADR 0021).** The TypeScript library is `typescript/`,
+npm package `optionality` — everything callable with NO service running: the domain, `quotes.ts`, the
+vendor clients and their field mappings, the fake IB Gateway, the case builder and the golden stamp.
+The backend, `backend/`, is everything that needs Settings, the database, the sweep loop or a way to
+deliver, and it reaches the library only by name (`optionality/domain/alarm`, `optionality/quotes`, …),
+through `typescript/package.json`'s `exports`. The library imports nothing from the backend, and
+`check-boundaries` holds that direction.
+
 ## Commands
 
 - **`make check` before every commit** — everything, in one target, and it passes in any timezone:
-  every suite that reads a clock is pinned to `TZ=UTC` (both vitest configs, the Python suite, and the
-  case generator), because the frontend's was not and the gate was green only at +08. The browser
+  every suite that reads a clock is pinned to `TZ=UTC` (the library's, the backend's and the
+  frontend's vitest configs, the Python suite, and the case generator), because the frontend's was
+  not and the gate was green only at +08. The browser
   suite is checked zone-independent instead — `env` would not reach its Chromium. Targets, in the
   order they run: lint, typecheck, `check-api`, `check-cases`, the Python suite, `test-tools` (the repo-wide
-  `tools/`, which neither workspace's suite covers), the API suite, both UI suites, `check-ui` and
-  `check-opend`. This list went stale twice without a gate noticing, and it is worth knowing why:
+  `tools/`, which no workspace's suite covers), the library suite (`test-lib`), the API suite, both
+  UI suites, `check-ui` and `check-opend`. This list went stale twice without a gate noticing, and it is worth knowing why:
   `check-make-targets` checks that every backticked invocation names a rule that EXISTS, never that a
   documented SET is complete, so a target added to the `check` rule is nobody's job to write down
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
   alone is only the Python package (every golden case, reproduced exactly). `make lint` is ruff plus
-  five scripts — `check-boundaries`, `check-test-support`, `check-seams` (three seams:
-  `vendors/`, `engine/`, `entrypoints/`),
+  five scripts — `check-boundaries`, `check-test-support`, `check-seams` (four seams:
+  the backend's `vendors/` and the library's, `engine/`, `entrypoints/`),
   `check-make-targets`, `check-served-root`. The first:
   no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
-  `backend/schemas` for the input schemas; ADR 0014). `make format` formats the Python only.
+  `backend/schemas` for the input schemas, `optionality/...` for the library; ADR 0014) — and its
+  `DEPENDS` says which may import which BY NAME at all: the library nothing, the backend the library,
+  the frontend the backend (ADR 0021). A published name passes the first rule, so without the second
+  the library could import the service. `make format` formats the Python only.
 - **The TypeScript has no formatter, by decision** (2026-10-17). Prettier and Biome were measured
   against this code with its own settings: both rewrote about 120 of 143 files, nearly all of it
   exploding the compact parameter lists below one-per-line, and Prettier dropped grouping
   parentheses that carry meaning (`(s - t) + x` in `pySum`). The style is consistent without one —
   keep it: **double quotes, semicolons, two-space indent, about 100 columns, related parameters on
   one line**, comments as hand-wrapped prose. `.editorconfig` holds the mechanical part. Workspace
-  package names are their directory names (`backend`, `frontend`).
+  package names are their directory names (`backend`, `frontend`), with ONE exception: the library's
+  directory is `typescript/` and its package is `optionality` — the Python library's name too —
+  because `typescript` is the compiler's own npm name (ADR 0021). `npm install` links it from the
+  workspace (`node_modules/optionality -> ../typescript`), never from the public registry, which
+  has a package of the same name (1.2.1 when measured on 2026-11-09).
 - `make deploy` — **the only correct way to land a merge**: pull, install, back up the DB, restart BOTH
   agents (the API applies pending migrations at boot). launchd does not watch the repo and the agents
   run this working tree, so a merge that skips this leaves stale code running. Doing the steps by hand
   is how the dashboard and the API drift apart.
-- TypeScript: `make test-api` (the suite), `make typecheck`, **`make check-api`** (every module loads
-  under Node — `tsc` and vitest both accept syntax Node refuses to run, and two classes reached main
-  unable to load at all).
-- **Golden cases:** a change to anything `backend/src/domain/` exports changes what
+- TypeScript: `make test-lib` (the library's suite), `make test-api` (the backend's), `make typecheck`,
+  **`make check-api`** (every module of BOTH packages loads under Node — `tsc` and vitest both accept
+  syntax Node refuses to run, and two classes reached main unable to load at all. It is
+  `tools/check-loads.ts`, repo-wide, because walking the library from inside the backend would be a
+  path into another package's source).
+- **Golden cases:** a change to anything `typescript/src/domain/` exports changes what
   `testdata/golden/*.json` should say. `make cases` regenerates them, and WHICH gate stops you depends on
   the kind of change: a CHANGED function or constant renders different bytes, so `make check-cases` and
-  `make test-api` both fail until you regenerate. An ADDITION renders no bytes — a new exported
+  `make test-lib` both fail until you regenerate. An ADDITION renders no bytes — a new exported
   function with no case, or a whole new `domain/` module, produces nothing to compare — so
-  `make check-cases` stays green and only `make test-api` catches it, through `cases.test.ts`'s
-  coverage guards. Never edit them by hand; add inputs to `backend/src/cases/inputs.ts`.
+  `make check-cases` stays green and only `make test-lib` catches it, through `cases.test.ts`'s
+  coverage guards. Never edit them by hand; add inputs to `typescript/src/cases/inputs.ts`.
   **A SECOND corpus**, `testdata/vendors/`, records what each vendor's `fields.ts` computes — pure,
   canonical logic that the guard above cannot reach, because it holds its module list to the
   `domain/` DIRECTORY and these are not in it. Same shape, same `make cases`, same staleness check,
@@ -79,17 +97,19 @@ the read-only property below still holds for the only code that runs.
   the coverage guard was found to filter on `typeof v === "function"`. **Generated under `TZ=UTC`**,
   as the suites read them: a default zone is the running machine's, so an unpinned corpus would say
   `+08:00` here and `+01:00` in Berlin. The generator is `tools/cases.ts`, not
-  `backend/`'s: it also writes the two FINGERPRINT stamps (`backend/src/golden.ts` and
+  the library's: it also writes the two FINGERPRINT stamps (`typescript/src/golden.ts`, which the
+  backend's `/health` reads as `optionality/golden`, and
   `python/src/optionality/_ported.py`, ADR 0016), and writing into another package's source is a
-  repo-wide codegen step rather than something the backend may do. Both stamps are generated and
+  repo-wide codegen step rather than something the library may do. Both stamps are generated and
   committed; `make check-cases` fails when either is stale.
 - **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
   `ibkr/` client by hand. Its replies are RECORDED, not invented: what the client sends was captured
   from the official Python client with `sendMsg` intercepted at protocol 157, and what the gateway
   replies is what the real gateway on this machine sent for `SPXW 20261218 C 8100` on 2026-11-08.
-  One definition, in `src/vendors/ibkr/fake.ts`, shared with the suite so the two cannot
-  drift — and the one file besides `vendors/index.ts` that `check-seams` lets anything outside
-  the seam import, because it is the fake GATEWAY and not a client. A run
+  One definition, in the library's `typescript/src/vendors/ibkr/fake.ts` (`optionality/vendors/ibkr/fake`
+  to the backend's `tools/ibkr-fake-gateway.ts`), shared with the library's suite so the two cannot
+  drift — and, with `vendors/fields.ts`, one of the two doors of the library's vendor seam that
+  `check-seams` lets anything import, because it is the fake GATEWAY and not a client. A run
   against it proves the CLIENT and is never evidence about a provider, an account's entitlements,
   a dead session or an open market.
   This name is REUSED rather than new: `ibkr-fake-gateway` served the Client Portal stub until
@@ -125,8 +145,33 @@ the read-only property below still holds for the only code that runs.
 
 ## Layout
 
-- `backend/src/`: `main.ts` (the process, and the ONLY file that wires delivery to the library;
-  ADR 0020),
+- `typescript/src/` — the LIBRARY, npm package `optionality` (ADR 0021): callable with no service
+  running, and importing nothing from the backend. `domain/` (everything pure
+  and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
+  `alarm.ts` and its Telegram wording, `lifecycle.ts`'s expiry verdict and all THREE
+  quarantine faults — an unknown contract, a figure that never arrives, and a row that cannot be hydrated;
+  the first and the last were written beside the `updateMonitorFields` they caused until the second was
+  already cased, so a notebook could ask what the next sweep would do about one fault and not the others, and `js.ts`,
+  the four JavaScript behaviours a port must reproduce. See golden cases), `quotes.ts` (the
+  market-data port, `QuoteFetcher`, and what the service does with a batch — logic rather than
+  transport), **`vendors/`** (the CLIENTS. `opend/` is the moomoo websocket client; `ibkr/` is IB Gateway's own socket protocol:
+  framing, the handshake with its protocol floor of 156, the five messages a read-only quote fetch
+  sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
+  importable, so the service cannot trade by absence rather than by discipline; `yahoo/` wraps
+  `yahoo-finance2`. Each vendor's pure `fields.ts` is re-exported by `vendors/fields.ts`, a door
+  of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but
+  the two `fields.ts` modules, because a door that reached a client would typecheck the moomoo
+  SDK's declarations into the case generator, which calls neither. `ibkr/fake.ts` is the fake
+  gateway (`make ibkr-fake-gateway`). The interior is a seam: only the backend's `vendors/` may
+  import a client — `check-seams` names it the one `insider`, and resolves the backend's imports BY
+  NAME through `exports` to the file they land on), `cases/` (the golden cases' inputs and
+  builder) and `golden.ts` (the stamp `/health` carries). `package.json`'s `exports` name what is
+  public — `./domain/*`, `./quotes`, `./golden`, `./vendors/fields`, each vendor's client, OpenD's
+  probe and the fake gateway — and Node refuses the rest, so `wire.ts`, `socket.ts` and their
+  siblings are the library's own.
+- `backend/src/`: `main.ts` (the process, and the ONLY file that wires delivery to the library —
+  ADR 0020's word for the service's own logic beside its entrypoints, which predates the
+  `typescript/` library and means `backend/src/` minus delivery),
   **`entrypoints/`** (every way the outside world reaches the service, each behind its own door:
   `entrypoints/http/` and `entrypoints/bot/`. `make check-seams` holds the direction — the library
   depends on neither, and `importableBy` names `main.ts` and the test harness as the only callers,
@@ -143,16 +188,10 @@ the read-only property below still holds for the only code that runs.
   (ADR 0021), so a second process stops having touched nothing, and requests that arrive while
   the service starts get a 503 in the error shape rather than a refused connection.** `main.test.ts`
   boots it against a taken port and checks the database file was never created. The WEAKEST of
-  the three seams `check-seams` holds, and `http/index.ts` says so:
+  the seams `check-seams` holds, and `http/index.ts` says so:
   unlike `vendors/` and `engine/` it closes no measured failure. `ports.ts` is NOT in it —
   `bot/bot.ts`, `engine/health.ts` and `vendors/index.ts` all import it, so it is the service's
-  interface vocabulary rather than the HTTP layer's), `domain/` (everything pure
-  and canonical, importing nothing outside itself — the maths, and since ADR 0017 the DECISIONS too:
-  `alarm.ts` and its Telegram wording, `lifecycle.ts`'s expiry verdict and all THREE
-  quarantine faults — an unknown contract, a figure that never arrives, and a row that cannot be hydrated;
-  the first and the last were written beside the `updateMonitorFields` they caused until the second was
-  already cased, so a notebook could ask what the next sweep would do about one fault and not the others, and `js.ts`,
-  the four JavaScript behaviours a port must reproduce. See golden cases), **`engine/`** (the alarm engine behind ONE DOOR, `engine/index.ts`: `sweeper.ts` (the sweep),
+  interface vocabulary rather than the HTTP layer's), **`engine/`** (the alarm engine behind ONE DOOR, `engine/index.ts`: `sweeper.ts` (the sweep),
   `health.ts` (its account of itself — the WHOLE of `ports.ts`'s `SweeperPort`) and `scheduler.ts`
   (the sweep loop and its watchdog — NOT dead code: it is what drives the alarms). `main.ts` is the
   only thing outside that needs any of them, and `make check-seams` holds it there, so a route or a
@@ -169,14 +208,13 @@ the read-only property below still holds for the only code that runs.
   `(context, words) => reply text`, it never touches the Telegram API, and `index.test.ts` holds
   the table to `format.ts`'s `BOT_COMMANDS`, the "/" menu that announces it),
   **`vendors/`** (every market-data vendor, and the ONE DOOR they are reached through:
-  `vendors/index.ts`'s `openVendors`, with `opend/`, `ibkr/` and `yahoo/` inside it. The
+  `vendors/index.ts`'s `openVendors`, with a descriptor per vendor in `opend/`, `ibkr/` and
+  `yahoo/` that builds the library's client from Settings. The
   interior is private and `make check-seams` says so — the three directories were already
   reached from three lines in one file and from nowhere else, measured, but that was a fact
   about today rather than a rule, and the cheapest way to fix a dashed row is to import the
-  client that has the figure. `opend/` is the moomoo websocket client; `ibkr/` is IB Gateway's own socket protocol:
-  framing, the handshake with its protocol floor of 156, the five messages a read-only quote fetch
-  sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
-  importable, so the service cannot trade by absence rather than by discipline. Reached as a
+  client that has the figure; since ADR 0021 that client is in the library, and only these
+  descriptors may import it. IB Gateway is reached as a
   REFERENCE source whether or not it is the Provider, because a Reference alarms on nothing;
   `IBKR_HOST` turns it on and blank turns it off), `db/` (schema, migrations, and `queries/` —
   one module per TABLE, re-exported by `queries/index.ts` so every caller keeps one import path;
@@ -184,19 +222,15 @@ the read-only property below still holds for the only code that runs.
   `COLUMNS[table]` rather than the value's own keys on purpose: a row with a column MISSING then
   fails to bind instead of storing the database's defaults in silence),
   `vendors/index.ts` (a DESCRIPTOR per
-  vendor — `vendors/opend/vendor.ts` and its two siblings. `vendors/fields.ts` is a SECOND door,
-  re-exporting every vendor's pure field mapping so `testdata/vendors/` can record one truth for
-  two languages; it imports nothing but the two `fields.ts` modules, because re-exporting them
-  from `index.ts` instead typechecks the whole vendor graph — and the moomoo SDK's declarations —
-  into the case generator, which calls neither. Adding a vendor is a FOLDER inside
-  `vendors/` plus a line in `VENDORS`. `PROVIDERS` is derived from the descriptors that
+  vendor — `vendors/opend/vendor.ts` and its two siblings. Adding a vendor is a FOLDER inside
+  `vendors/` plus a line in `VENDORS`, and its client in the library's `vendors/`. `PROVIDERS` is derived from the descriptors that
   say `canBeProvider`, never listed twice; a Reference-only vendor like Yahoo prices no option,
   so naming it as the Provider is fatal at boot and it owes no `reachable`. `openVendors` opens
   each vendor ONCE and hands the Provider back among the sources under its own name, which is
   what makes ADR 0019's "one client either way" structural rather than remembered — IB Gateway
   allows one connection per client id and the second displaces the first in silence. It replaced
   three shapes merged by hand in `main.ts` and again in `routes/references.ts`),
-  `cases/` (the golden cases' inputs and builder), `references.ts` (the Reference path: one bounded
+  `references.ts` (the Reference path: one bounded
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
@@ -214,13 +248,17 @@ the read-only property below still holds for the only code that runs.
   generated test data, both written by `make cases`). `tools/check-boundaries.mjs` — the
   package-boundary lint; `tools/check-test-support.mjs` — the one that keeps the harness out of the
   service; `tools/check-seams.mjs` — the same rule INSIDE a package, for a directory whose whole
-  point is one door (`src/vendors/`, `src/engine/` and `src/entrypoints/`). Its `SEAMS` table carries each seam's doors, a `never` that
-  says what may not become one, and the reason, printed on failure. The `never` exists because a
+  point is one door (`backend/src/vendors/`, `typescript/src/vendors/`, `src/engine/` and
+  `src/entrypoints/`). Its `SEAMS` table carries each seam's doors, a `never` that
+  says what may not become one, and the reason, printed on failure. A seam reached from ANOTHER
+  package declares its `package`, so a name like `optionality/vendors/ibkr/client` is resolved
+  through `exports` and caught like a path; its `insiders` must themselves be seams, so the
+  library's clients cannot be handed to the whole backend by naming `backend/src`. The `never` exists because a
   sweep found that adding `ibkr/client.ts` to the door list passed every test the guard had: an
   exemption list that can be opened from the inside is not a guard. All three are tested against a
   FIXTURE TREE rather than against this repository, which is
   what a sweep of `check-boundaries` taught: three ways to gut it left every suite green.
-- `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `backend/src/domain/` module
+- `python/` — the `optionality` package (ADR 0014): `src/optionality/` mirrors `typescript/src/domain/` module
   for module (snake_case the only translation), `js.py` holds the JavaScript number rules the port
   must reproduce (cased since ADR 0017, and named `js.py` not `_js.py` for that reason),
   `opend.py` needs the `opend` extra AND owns the containment loop that drops a code moomoo names as

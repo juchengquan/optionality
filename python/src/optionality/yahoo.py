@@ -1,6 +1,6 @@
 """Live figures from Yahoo, through yfinance. Needs the `yahoo` extra.
 
-A PORT, not a reimplementation. It mirrors `backend/src/vendors/yahoo/fields.ts` and
+A PORT, not a reimplementation. It mirrors `typescript/src/vendors/yahoo/fields.ts` and
 `yahoo/client.ts`, and `tests/test_yahoo.py` holds it there against `testdata/vendors/`, which
 records what the TypeScript computes for every one of those cases. A wrong answer turns `make test`
 red — which is the whole difference between this half of the package and `research/`.

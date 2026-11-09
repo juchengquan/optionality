@@ -1,4 +1,4 @@
-"""What a Reference reads. Mirrors backend/src/domain/reference.ts (ADR 0018, amended by 0019).
+"""What a Reference reads. Mirrors typescript/src/domain/reference.ts (ADR 0018, amended by 0019).
 
 A Reference is a Security kept on the page to read the market by: it never alarms, need not be held,
 and no rule reads one.

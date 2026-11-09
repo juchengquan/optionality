@@ -181,7 +181,7 @@ export const INPUTS: Record<string, CaseInput[]> = {
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },
     // the zone left off, which no case did until now. "" is not UTC: it means the RUNNING
-    // machine's zone, and both suites pin TZ for exactly that reason — the backend's vitest config
+    // machine's zone, and both suites pin TZ for exactly that reason — the library's vitest config
     // sets TZ=UTC so a date test reads the same anywhere
     { fn: "displayTime", name: "no zone given, so the machine's own",
       args: [at("2026-10-17T05:26:06Z")] },

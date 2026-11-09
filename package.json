@@ -4,6 +4,7 @@
   "license": "MIT",
   "type": "module",
   "workspaces": [
+    "typescript",
     "backend",
     "frontend"
   ],

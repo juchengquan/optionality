@@ -98,9 +98,9 @@ export function shortStamp(served: string): string {
 
 /** Today's TRADING day, as the service counts it: the New York calendar date.
  *
- *  A mirror of `marketDate` in backend/src/domain/expiry.ts, four lines of Intl rather than an
- *  import, because this package may not reach into the backend's source tree — only its declared
- *  `exports`, which carry types and the input schemas and no runtime (check-boundaries, ADR 0014).
+ *  A mirror of `marketDate` in typescript/src/domain/expiry.ts, four lines of Intl rather than an
+ *  import, because this package may import only the backend, and only its declared `exports`,
+ *  which carry types and the input schemas and no runtime (check-boundaries, ADR 0014 and 0021).
  *  The domain copy is canonical; this one exists so the browser can NAME the day without a round
  *  trip, and `en-CA` is what makes it YYYY-MM-DD with no arithmetic of our own.
  *

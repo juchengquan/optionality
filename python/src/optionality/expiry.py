@@ -1,4 +1,4 @@
-"""DTE, counted from New York's calendar day. Mirrors backend/src/domain/expiry.ts."""
+"""DTE, counted from New York's calendar day. Mirrors typescript/src/domain/expiry.ts."""
 
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo

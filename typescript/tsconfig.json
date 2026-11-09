@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "_comment": "The library (ADR 0021): everything callable with no service running. Node runs these files directly, as it does the backend (ADR 0009), so allowImportingTsExtensions lets the source import './x.ts' the way Node requires.",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src"]
+}

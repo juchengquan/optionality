@@ -18,7 +18,7 @@ import { COMMANDS, UNKNOWN, type BotContext } from "./commands/index.ts";
 import { BOT_COMMANDS } from "./format.ts";
 import type { Settings } from "../../env.ts";
 import type { SweeperPort } from "../../ports.ts";
-import type { QuoteFetcher } from "../../quotes.ts";
+import type { QuoteFetcher } from "optionality/quotes";
 
 /** One call to the Telegram API. A fake in tests; HTTPS in production. */
 export type TelegramApi = (method: string, params: Record<string, string>) => Promise<unknown>;

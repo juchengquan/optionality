@@ -1,4 +1,4 @@
-"""JavaScript's number rules, reproduced exactly. Mirrors backend/src/domain/js.ts.
+"""JavaScript's number rules, reproduced exactly. Mirrors typescript/src/domain/js.ts.
 
 Named `js.py` since ADR 0017, not `_js.py`: the leading underscore said "internal helper", and
 these four are now a cased module of the contract like any other. The package mirrors the domain

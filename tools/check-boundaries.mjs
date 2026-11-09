@@ -1,11 +1,11 @@
 /** No package reaches into another's source (ADR 0014).
  *
- *  The repository is one repo of separate packages — backend/, frontend/, and python/ once it
- *  exists — and a package may use another only through what that one PUBLISHES: its package.json
- *  `exports` for the TypeScript, its importable modules for the Python. A relative import that
- *  climbs out of its own package root is what this refuses. The frontend's
- *  `../../backend/src/app.ts` was exactly that, and it is what would have made splitting the
- *  repositories a refactor instead of a move.
+ *  The repository is one repo of separate packages — typescript/ (the library, ADR 0021),
+ *  backend/, frontend/ and python/ — and a package may use another only through what that one
+ *  PUBLISHES: its package.json `exports` for the TypeScript, its importable modules for the
+ *  Python. A relative import that climbs out of its own package root is what this refuses. The
+ *  frontend's `../../backend/src/app.ts` was exactly that, and it is what would have made
+ *  splitting the repositories a refactor instead of a move.
  *
  *  `testdata/` is the shared directory: data both suites read, and reading it by path is the point.
  *  Two things live there — the golden cases (ADR 0014), written by the TypeScript, and
@@ -29,13 +29,40 @@
  *  import specifiers. Nothing stopped the next one landing in `backend/src/` and reading the
  *  canonical TypeScript as data. A package boundary that only guards the door nobody uses is
  *  decoration.
+ *
+ *  And DIRECTION, since ADR 0021 split the library out of the backend. Everything above is about
+ *  HOW one package reaches another, and a published name passes all of it — so
+ *  `import type { Settings } from "backend"` inside the library would have been legal, and would
+ *  have put the service inside the thing whose whole promise is that it runs with no service.
+ *  `DEPENDS` says which package may import which by name, the way `test_standalone.py` holds the
+ *  Python's library away from everything impure.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
-export const PACKAGES = ["backend", "frontend", "python"];
+export const PACKAGES = ["typescript", "backend", "frontend", "python"];
 export const SHARED = ["testdata"];
+/** Which packages each may import BY NAME, as directories (ADR 0021).
+ *
+ *  Directories, not npm names, and resolved through each package.json: the library's directory is
+ *  `typescript/` and its name is `optionality`, because the compiler owns `typescript` on npm. A
+ *  table of names would have to say `optionality` and mean a directory nobody would look for.
+ *
+ *  The library imports nothing here; that row is the reason this table exists. A package with NO
+ *  row may import nothing by name either, rather than anything: a sixth package arriving
+ *  unguarded until somebody remembered this table is the "complete by diligence" failure
+ *  `hc.types.ts` had. Importing ITSELF by its own name is always allowed — that is a consumer's
+ *  path through its own exports, not a dependency.
+ *
+ *  The Python's imports carry no quotes and are not read here; `test_standalone.py` holds its
+ *  library, and the coming `python-backend/` lint holds that one (ADR 0021). */
+export const DEPENDS = {
+  typescript: [],
+  backend: ["typescript"],
+  frontend: ["backend"],
+  python: [],
+};
 const SKIP_DIRS = new Set(["node_modules", "dist", ".venv", "__pycache__", ".out"]);
 const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx|py)$/;
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/g;
@@ -70,8 +97,9 @@ const inside = (path, dir) => path === dir || path.startsWith(dir + sep);
  *  a mutation sweep found three ways to gut it with every suite still green, including removing
  *  `.py` from the files it reads. "Add a crossing and watch it fail" is the right check; doing it
  *  by hand is what let the hole last. */
-export function crossings(repo = ROOT, packages = PACKAGES, shared = SHARED) {
+export function crossings(repo = ROOT, packages = PACKAGES, shared = SHARED, depends = DEPENDS) {
   const found = [];
+  const names = npmNames(repo, packages);
   for (const pkg of packages) {
     const root = join(repo, pkg);
     try { statSync(root); } catch { continue; }
@@ -91,9 +119,15 @@ export function crossings(repo = ROOT, packages = PACKAGES, shared = SHARED) {
         inside(target, root) || !packages.some((p) => inside(target, join(repo, p)));
 
     for (const [, spec] of text.matchAll(SPECIFIER)) {
-      // a relative import only. A bare `optionality.position` is the package importing itself
-      // through its own name, which is what a consumer does and is the point.
-      if (!spec.startsWith(".")) continue;
+      if (!spec.startsWith(".")) {
+        // a name: legal as a ROUTE, being what the other package publishes, so the only question
+        // is whether this package may depend on that one at all
+        const dep = names.get(packageName(spec));
+        if (dep === undefined || dep === pkg || (depends[pkg] ?? []).includes(dep)) continue;
+        found.push(`${relative(repo, file)}: "${spec}" makes ${pkg}/ depend on ${dep}/, `
+          + `and ${pkg}/ may import ${listed(depends[pkg])} by name`);
+        continue;
+      }
       const target = resolve(dirname(file), spec);
       if (importable(target)) continue;
         found.push(`${relative(repo, file)}: "${spec}" leaves ${pkg}/`);
@@ -125,6 +159,24 @@ export function crossings(repo = ROOT, packages = PACKAGES, shared = SHARED) {
   }
   return found;
 }
+
+/** Each package's npm name, to its directory. Only a package.json names one: the Python's
+ *  `pyproject.toml` says `optionality` as well, and its imports are not read by name here. */
+function npmNames(repo, packages) {
+  const names = new Map();
+  for (const pkg of packages) {
+    try {
+      const { name } = JSON.parse(readFileSync(join(repo, pkg, "package.json"), "utf8"));
+      if (name) names.set(name, pkg);
+    } catch { /* no package.json: nothing to be imported by */ }
+  }
+  return names;
+}
+
+/** `optionality/domain/alarm` is `optionality`; `@scope/x/y` is `@scope/x`. */
+const packageName = (spec) => spec.split("/").slice(0, spec.startsWith("@") ? 2 : 1).join("/");
+
+const listed = (deps) => (deps?.length ? deps.map((d) => `${d}/`).join(", ") : "nothing");
 
 const found = crossings();
 if (found.length > 0) {

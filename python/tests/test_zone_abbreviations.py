@@ -7,7 +7,7 @@ drifted anywhere outside that single row and the suite would have stayed green.
 
 The table is the fix, and it is data both suites read. This file asserts the `py` column — tzdata's
 answer, which is what this package prints — and the TypeScript asserts the `ts` column from the same
-rows (backend/src/domain/zone-abbreviations.test.ts). A change in tzdata fails here, a change in ICU
+rows (typescript/src/domain/zone-abbreviations.test.ts). A change in tzdata fails here, a change in ICU
 fails there, and nobody can quietly teach this function ICU's answer to make the two match.
 
 The rows where they agree are golden cases as well, and those are compared exactly as everything

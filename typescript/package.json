@@ -1,0 +1,28 @@
+{
+  "name": "optionality",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./domain/*": "./src/domain/*.ts",
+    "./quotes": "./src/quotes.ts",
+    "./golden": "./src/golden.ts",
+    "./vendors/fields": "./src/vendors/fields.ts",
+    "./vendors/opend/client": "./src/vendors/opend/client.ts",
+    "./vendors/opend/probe": "./src/vendors/opend/probe.ts",
+    "./vendors/ibkr/client": "./src/vendors/ibkr/client.ts",
+    "./vendors/ibkr/fake": "./src/vendors/ibkr/fake.ts",
+    "./vendors/yahoo/client": "./src/vendors/yahoo/client.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3"
+  },
+  "dependencies": {
+    "moomoo-api": "^10.11.7108",
+    "yahoo-finance2": "4.0.5"
+  }
+}

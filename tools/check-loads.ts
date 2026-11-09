@@ -1,4 +1,4 @@
-/** Every backend module, loaded by Node itself (ADR 0009, phase 6).
+/** Every TypeScript module the service runs, loaded by Node itself (ADR 0009, phase 6).
  *
  *  Node runs TypeScript by ERASING types. Anything that would have to EMIT code is rejected outright:
  *  parameter properties, enums, namespaces, decorators, `import =`. tsc accepts all of them and vitest
@@ -13,20 +13,26 @@ import { spawn } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-// resolved straight to this package's own source. It climbed to the repository root and joined
-// "backend/src" back on, which read as a tool reaching out of its package when ADR 0016 taught
-// check-boundaries to resolve paths — and it was never anything but indirection: the one directory
-// this walks is its own. The root is still wanted for the names it PRINTS, which are repo-relative.
-/** The service, and the harness the tests build it with.
+/** The library, the service, and the harness the tests build it with.
  *
  *  `testing/` was inside `src/` until #221, so it was loaded along with the modules it fakes and
  *  got this check for free. Moving it out of `src/` is what makes `src/` mean "the service" — and
  *  it quietly took the harness out of the one gate that exists because two classes reached main
  *  unable to load at all. It is 222 lines that every route test depends on, so a load failure
  *  there is a whole suite that cannot start.
+ *
+ *  `typescript/src` is the same lesson a third time. The domain and the vendor clients left
+ *  `backend/src` for the library (ADR 0021), and a walk of the backend alone would have dropped
+ *  them from this gate in the same quiet way: the backend still LOADS them, but only the parts
+ *  it imports, and the case generator and the fake gateway are imported by nothing it runs.
+ *
+ *  Which is why this lives in `tools/` and not in either package. It lived in `backend/tools/`
+ *  while the one tree it walked was its own; walking the library from there would be the backend
+ *  reading another package's source by path, which `check-boundaries` refuses — the reason
+ *  `tools/cases.ts` sits here too.
  */
-const DIRS = ["../src", "../testing"].map((d) => new URL(d, import.meta.url).pathname);
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = new URL("..", import.meta.url).pathname;
+const DIRS = ["typescript/src", "backend/src", "backend/testing"].map((d) => join(ROOT, d));
 
 /** main.ts is the entry point: loading it starts the service on purpose, so it cannot be checked
  *  by importing it. It is checked by BOOTING it instead, in `src/main.test.ts`, which spawns it

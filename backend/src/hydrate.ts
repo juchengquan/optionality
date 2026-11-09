@@ -5,8 +5,8 @@
  *  of the two has to be converted, and doing it here means no row type ever claims to be something
  *  it is not and no domain function ever parses JSON.
  */
-import type { Leg, Position } from "./domain/position.ts";
-import type { Monitor, MonitorLeg } from "./domain/monitor.ts";
+import type { Leg, Position } from "optionality/domain/position";
+import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
 import { fromSqliteJson } from "./db/values.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 

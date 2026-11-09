@@ -10,8 +10,9 @@
  *  editing both merges, and a vendor that later grew a `close` would have been hung up in one
  *  place and leaked in the other, because the merge named `ibkr.close` specifically.
  *
- *  So a vendor is now a DESCRIPTOR, and adding one is a file beside its client plus a line in the
- *  list below. Nothing else in the service learns its name.
+ *  So a vendor is now a DESCRIPTOR, and adding one is a descriptor in a folder here plus a line in
+ *  the list below — and its client in the library, `typescript/src/vendors/`, which only these
+ *  folders may import (ADR 0021; `check-seams`). Nothing else in the service learns its name.
  *
  *  ## The two kinds, and why they are a union rather than a flag
  *
@@ -35,7 +36,7 @@ import type { Settings } from "../env.ts";
 import { ibkrVendor } from "./ibkr/vendor.ts";
 import { moomooVendor } from "./opend/vendor.ts";
 import type { ProviderClient, VendorClient } from "../ports.ts";
-import type { QuoteFetcher } from "../quotes.ts";
+import type { QuoteFetcher } from "optionality/quotes";
 import type { Sources } from "../references.ts";
 import { yahooVendor } from "./yahoo/vendor.ts";
 
@@ -66,7 +67,7 @@ export interface ReferenceVendor extends Described {
 
 export type Vendor = ProviderVendor | ReferenceVendor;
 
-/** Every vendor this build carries. Adding one is a line here and a file beside its client.
+/** Every vendor this build carries. Adding one is a line here and a descriptor beside this file.
  *
  *  Held to `schemas/reference.ts`'s `SOURCES` by a test: a name a Reference may be created with
  *  and no vendor to serve it is a row that validates and then shows a dash for ever, and a vendor

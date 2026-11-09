@@ -22,8 +22,9 @@ import { join, relative, resolve } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 // where an instruction reads as something to do NOW: the source, the tools, and the two files that
-// are read before working here
-const SCAN_DIRS = ["backend/src", "backend/tools", "frontend/src", "tools"];
+// are read before working here. `typescript/src` since ADR 0021 moved the domain, the vendor
+// clients and the case builder out of `backend/src`, comments naming `make cases` and all.
+const SCAN_DIRS = ["typescript/src", "backend/src", "backend/tools", "frontend/src", "tools"];
 const SCAN_FILES = ["CLAUDE.md", "README.md", ".env.example"];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".venv", "__pycache__", ".out"]);
 const TEXT = /\.(ts|tsx|mts|js|mjs|jsx|md|sql|example)$/;

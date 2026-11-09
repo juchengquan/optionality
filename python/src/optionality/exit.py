@@ -1,4 +1,4 @@
-"""Exit schedules from a decay shape (ADR 0011). Mirrors backend/src/domain/exit.ts.
+"""Exit schedules from a decay shape (ADR 0011). Mirrors typescript/src/domain/exit.ts.
 
 On-pace is a REFERENCE — what Cost to close would be at a DTE if only time had passed — and no alarm
 is ever raised from it. `target_dte` uses JavaScript's `Math.round`, which ties up where Python's

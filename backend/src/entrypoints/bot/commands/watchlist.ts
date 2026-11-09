@@ -6,15 +6,15 @@
  *  at most: a new question gets a new command, never a fifth column (CLAUDE.md).
  */
 import { EMPTY_WATCHLIST, type BotContext, type Command, failed } from "./context.ts";
-import { monitorLegCodes } from "../../../domain/monitor.ts";
-import { round4 } from "../../../domain/quote.ts";
-import { shortSpxCode } from "../../../domain/contract.ts";
-import { exitPolicy } from "../../../domain/exit.ts";
+import { monitorLegCodes } from "optionality/domain/monitor";
+import { round4 } from "optionality/domain/quote";
+import { shortSpxCode } from "optionality/domain/contract";
+import { exitPolicy } from "optionality/domain/exit";
 import { findComboByName, listMonitors } from "../../../db/queries/index.ts";
 import { fromSqliteBool } from "../../../db/values.ts";
 import { toMonitor } from "../../../hydrate.ts";
 import { watchlistQuotes } from "../../../monitors.ts";
-import type { QuoteRecord } from "../../../quotes.ts";
+import type { QuoteRecord } from "optionality/quotes";
 import { FIELD_SHORT, fmtValue, hasFormat, pyNumber, table } from "../format.ts";
 
 /** A figure that may not have arrived, rendered the way its own field wants. */
