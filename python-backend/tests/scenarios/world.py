@@ -7,12 +7,11 @@ Nothing here knows a door. `doors.py` runs the three on top of this, and the bac
 it through `backend.py`, so this half stands on its own — which is why it can be tested in full
 before a line of the backend exists.
 
-**The database is built as the TypeScript builds it**, because the two backends will share one
-file (ADR 0021): from `schema/schema.sql`, with the two pragmas `openDatabase` sets, and STAMPED
-rather than migrated (ADR 0011) — every file in `schema/migrations/` recorded as run, as
-`stampAll` records them, because schema.sql already has their effect. When the backend's own
-`db/open.py` lands (phase 4), `create_database` here should become a call to it, as `world.ts`
-calls the TypeScript's `createDatabase`.
+**The database is built by the backend's own `db/open.create_database`**, as `world.ts` calls the
+TypeScript's `createDatabase`, because the two backends share one file (ADR 0021): from
+`schema/schema.sql`, with the two pragmas `open_database` sets, and STAMPED rather than migrated
+(ADR 0011) — every file in `schema/migrations/` recorded as run, because schema.sql already has their
+effect. Until phase 3 this module wrote its own copy of all three, character for character.
 
 Deterministic BY INJECTION, never by scrubbing: the clock and the id minter are handed to the
 backend, so what a replay records is what the backend actually wrote.
@@ -31,14 +30,13 @@ from typing import Any
 from optionality.quote import Batch
 from optionality.quotes import QuoteFetcher
 
+from optionality_backend.db.migrate import DIRECTORY
+from optionality_backend.db.open import create_database
+
 from .compare import same
 
-#: `schema/` at the repository root: the one schema either backend builds a database from (ADR 0021)
-SCHEMA = Path(__file__).resolve().parents[3] / "schema"
-MIGRATIONS = SCHEMA / "migrations"
-
-#: the TypeScript's `APPLIED_TABLE`, named once so the stamp cannot drift from the runner's
-APPLIED_TABLE = "schema_migrations"
+#: `schema/migrations/` at the repository root, which the backend stamps a new database with
+MIGRATIONS = DIRECTORY
 
 #: every table a scenario states, in an order rows can be inserted without breaking a foreign key.
 #: `schema_migrations` is not one: it is bookkeeping, stamped when a database is made, and no door
@@ -84,42 +82,6 @@ def json_text(value: Any) -> str:
 
 
 # -- the database --------------------------------------------------------------------------------
-
-
-def open_database(path: Path) -> sqlite3.Connection:
-    """Open a database with the pragmas the TypeScript sets (`db/open.ts`). Autocommit, as
-    `node:sqlite` is: a statement is written when it runs, and a door's transaction is its own."""
-    db = sqlite3.connect(path, isolation_level=None)
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute("PRAGMA foreign_keys=ON")
-    return db
-
-
-def stamp(db: sqlite3.Connection) -> None:
-    """Record every migration as run without running any (`stampAll`). The time is the real one,
-    as the TypeScript's is: it is bookkeeping, and no door reads it.
-
-    The DDL is `ensureTable`'s character for character, whitespace included, because SQLite keeps
-    it verbatim in `sqlite_master`: spelled any other way, the two backends' databases differ in
-    one cell nobody reads, which is one cell too many to have to explain."""
-    db.execute(
-        f"CREATE TABLE IF NOT EXISTS {APPLIED_TABLE} (\n"
-        "       name VARCHAR(100) NOT NULL PRIMARY KEY,\n"
-        "       applied_at DATETIME NOT NULL\n"
-        "     )"
-    )
-    # `toISOString().replace("T", " ").slice(0, 23)`: milliseconds, no zone
-    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:23]
-    for name in sorted(p.name for p in MIGRATIONS.glob("*.sql")):
-        db.execute(f"insert or ignore into {APPLIED_TABLE} (name, applied_at) values (?, ?)", (name, now))
-
-
-def create_database(path: Path) -> sqlite3.Connection:
-    """A new database from `schema/schema.sql`, stamped (`createDatabase`)."""
-    db = open_database(path)
-    db.executescript((SCHEMA / "schema.sql").read_text(encoding="utf-8"))
-    stamp(db)
-    return db
 
 
 def _info(db: sqlite3.Connection, table: str) -> list[tuple]:

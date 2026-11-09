@@ -46,11 +46,13 @@ def ordered(calls: Calls) -> Calls:
 
 @contextmanager
 def opened(world: dict[str, Any], build: Builder | None) -> Iterator[Opened]:
-    """Steps 1 to 3: the backend built on the world, with its memory, at the event's instant.
+    """Steps 1 to 3: the backend built on the world, with its memory, at the event's instant. The
+    backend is closed before the world it was built on.
 
     `build` is looked up when called rather than bound as a default, so a test that replaces
     `backend.build` replaces it here too."""
     w = open_world(world)
+    service: Service | None = None
     try:
         service = (build or backend.build)(w)
         for earlier in world["sweeps"]:
@@ -71,7 +73,11 @@ def opened(world: dict[str, Any], build: Builder | None) -> Iterator[Opened]:
         w.replies.clear()
         yield Opened(w, service, before)
     finally:
-        w.close()
+        try:
+            if service is not None:
+                service.close()
+        finally:
+            w.close()
 
 
 def _after(o: Opened) -> dict[str, Any]:
