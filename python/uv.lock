@@ -558,7 +558,7 @@ wheels = [
 
 [[package]]
 name = "optionality"
-version = "2026.11.9"
+version = "2026.11.9.1"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
