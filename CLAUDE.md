@@ -379,9 +379,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `optionality.api.agrees()` asks a running service whether the port is still current; it never
   runs on import, and answers "no service" rather than raising.
 - `python-backend/` — `optionality_backend` (ADR 0021): the Python backend that will be able to run
-  the whole service, one backend at a time. A skeleton today: the package, its suite, and the two
-  lines `check-py-backend` holds — `tests/test_library_boundary.py` (no `optionality._*`, no
-  `optionality.research`, no reach into the library's source by path) and `tests/test_no_trading.py`
+  the whole service, one backend at a time. Being ported module by module, bottom up (phase 4):
+  **read its README's "Porting a module" before porting one** — the path, the docstring, which
+  JavaScript behaviours go through `optionality.js`, async on one loop, names, and how the tests
+  are ported. Its suite also holds the two lines `check-py-backend` runs —
+  `tests/test_library_boundary.py` (no `optionality._*`, no `optionality.research`, no reach into the library's source by path) and `tests/test_no_trading.py`
   (no order placed, modified, cancelled or exercised outside `optionality_backend/trading/`, which
   must not exist until a trading ADR creates it; the forbidden names are DERIVED from `ib_async`'s
   source and re-derived whenever it is installed). Both run against fixture trees. Never released:
