@@ -206,6 +206,13 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/monitors", { ...single, strike_date: "18 Dec" }),
   },
   {
+    // a body carrying legs is a combo, and the combo's own refusal is the one reported — not
+    // "Invalid input" from both shapes at once, nor the single-leg shape's missing option_type
+    name: "POST /monitors refuses a combo's strike date it cannot read",
+    world: world(),
+    request: request("POST", "/monitors", { ...comboBody, strike_date: "18 Dec" }),
+  },
+  {
     name: "POST /monitors refuses a combo on a figure that does not add up",
     world: world({ provider: { quotes: BOOK } }),
     request: request("POST", "/monitors", { ...comboBody, field: "option_implied_volatility" }),

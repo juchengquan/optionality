@@ -23,7 +23,7 @@ import { httpError, notFound, providerFailed } from "../errors.ts";
 import { applyTotalEntry, watchlistQuotes } from "../../../monitors.ts";
 import {
   ComboMonitorIn, MonitorCreateIn, MonitorIn, MonitorPatch, TotalEntryIn, isCombo,
-  patchThresholdError, thresholdError,
+  monitorCreateMember, patchThresholdError, thresholdError,
 } from "../../../schemas/monitor.ts";
 import { displayStored } from "../../../db/time.ts";
 import { documented } from "../openapi.ts";
@@ -105,9 +105,11 @@ export function monitorRoutes(deps: Deps) {
       return list.reply(c, 200, rows.map((r) => out(r, owned)));
     })
 
-    .post("/", create, valid("json", MonitorCreateIn), async (c) => {
+    .post("/", create, valid("json", MonitorCreateIn, monitorCreateMember), async (c) => {
       const payload = c.req.valid("json");
-      // the payload shape decides: single-leg (option_type + strike) or combo (name + legs)
+      // the payload shape decides: single-leg (option_type + strike) or combo (name + legs).
+      // `monitorCreateMember` put the same question before validating, so a refusal is the
+      // chosen shape's own rather than the union's "Invalid input"
       return isCombo(payload) ? createCombo(payload) : createSingle(payload);
 
       /** Both faults and the row come back as values (create-monitor.ts); this is where they

@@ -45,7 +45,7 @@
     "response": {
       "status": 422,
       "body": {
-        "detail": "✖ Invalid input"
+        "detail": "✖ invalid strike_date '18 Dec': use YYYY-MM-DD or YYYYMMDD\n  → at strike_date"
       }
     },
     "rows": {},

@@ -97,7 +97,9 @@ export const ComboLegIn = z.object({
    *  form derives a holding's SIDES from these signs, and the wrong reading inverts every P&L
    *  rather than failing. The relationship is pinned in domain/position.test.ts — "the sign
    *  convention, so neither vocabulary can drift from the other" — rather than left to prose. */
-  sign: z.union([z.literal(1), z.literal(-1)]),
+  // one literal of two values rather than a union of two literals, which answered a 2 here with
+  // "Invalid input" and nothing about what it would have taken
+  sign: z.literal([1, -1]),
   option_type: z.enum(["CALL", "PUT"]),
   strike: z.number(),
 });
@@ -114,10 +116,23 @@ export const ComboMonitorIn = z.object({
   enabled: z.boolean().optional(),
 });
 
-/** Combo first: a combo payload carries `name` and `legs` and no `option_type`, and a single-leg one
- *  the reverse, so the two are disjoint and the order only decides which error text a malformed
- *  payload gets. */
+/** Either shape, as the request is DOCUMENTED and typed: what `/openapi.json` and `hc` describe,
+ *  and what the dashboard's tests parse its bodies with. The route does not validate with it —
+ *  see `monitorCreateMember`. */
 export const MonitorCreateIn = z.union([ComboMonitorIn, MonitorIn]);
+
+/** The member a body is meant for, by its shape: a combo carries `legs`, the same test `isCombo`
+ *  puts to a parsed one. The route validates against this member alone.
+ *
+ *  A union refused by both members answers "Invalid input" and nothing else, because it cannot
+ *  know whose complaint applies: an unreadable strike date, a missing threshold and an empty body
+ *  all read the same, and the dashboard prints that `detail` verbatim. The shape can know. It also
+ *  stops a body carrying `legs` but no `name` being taken as a single-leg rule with its legs
+ *  dropped, which the union did because the second member accepted what the first refused.
+ */
+export function monitorCreateMember(body: unknown): typeof ComboMonitorIn | typeof MonitorIn {
+  return typeof body === "object" && body !== null && "legs" in body ? ComboMonitorIn : MonitorIn;
+}
 
 export const MonitorPatch = z.object({
   /** combos only: the name IS the code; single-leg codes are contract-derived */
