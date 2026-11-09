@@ -88,6 +88,11 @@ export const SEAMS = [
       // (CLAUDE.md). It lives beside `wire.ts` and `messages.ts` because it speaks that protocol —
       // moving it out would reach INTO the seam instead, which is the same hole reversed.
       "ibkr/fake.ts",
+      // what the IB Gateway client makes of each recorded conversation, which the case generator
+      // writes to `testdata/vendors/ibkr-gateway/expected/` (ADR 0021, Decision 7). It runs a
+      // client, so it is the one door that does — and it takes no host and no port: the only
+      // gateway it can reach is the stub it starts itself on loopback and closes before returning.
+      "ibkr/replay.ts",
       // every vendor's PURE field mapping, so `testdata/vendors/` can record one truth for two
       // languages. A door rather than a re-export from the backend's `vendors/index.ts`, measured
       // before ADR 0021 put the two in different packages: that route typechecks the whole

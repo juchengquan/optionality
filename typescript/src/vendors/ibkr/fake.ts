@@ -3,83 +3,101 @@
  *  ## What this is and is not evidence of
  *
  *  A run against this proves the CLIENT works. It is never evidence about IB Gateway, for the
- *  reason `ibkr-fake-gateway.ts` already carries: a stub I wrote from my own reading will agree
- *  with a decoder I wrote from the same reading, and agree wrongly if the reading was wrong.
+ *  reason `ibkr-fake-gateway.ts` already carries: a stub written from the same reading as the
+ *  decoder agrees with it, and agrees wrongly if the reading was wrong.
  *
- *  So nothing here is invented. Every reply is a byte sequence that was validated twice over on
- *  2026-11-08: what the client SENDS was captured from the official Python client with its
- *  sendMsg intercepted at protocol 157, and what the gateway REPLIES is the message the real
- *  gateway on this machine sent for the same contract. The sequencing — greeting, then startApi,
- *  then an unprompted next-valid-id — is what the probes observed, not what the docs describe.
+ *  So it says nothing of its own. Everything it sends comes from a conversation under
+ *  `testdata/vendors/ibkr-gateway/` — recorded from the real gateway, or constructed and labelled
+ *  so, each file saying which and why — and the same files are what a Python stub replays to
+ *  `ib_async` (ADR 0021, Decision 7). Keeping the replies OUT of this file is the point: one
+ *  truth, two clients, and nothing in either stub that the other does not also send.
+ *
+ *  It replaced a stub that carried its replies inline, and the move found three things wrong
+ *  with them that a recording does not allow: a contract reply cut to the fifteen fields this
+ *  client reads (`ib_async` reads all thirty-nine, and ran off the end), nextValidId sent before
+ *  managedAccounts (the real gateway sends them the other way round), and a gateway clock written
+ *  in a format the gateway does not use.
+ *
+ *  ## How it answers
+ *
+ *  The greeting, then the recording's session messages when startApi arrives. A contract lookup
+ *  or a market-data request is answered with the exchange whose contract it names, with its own
+ *  id put where the recording says `$reqId`; a request no exchange names is never answered, as a
+ *  gateway that does not answer is the only honest reply to a question nobody recorded. A cancel
+ *  gets what the gateway said to that cancel, and reqMarketDataType gets nothing, as from the
+ *  real one.
  *
  *  It still cannot speak for an account's entitlements, a dead session, or a market that is open.
  */
-import { createServer, type Server } from "node:net";
+import { createServer, type Server, type Socket } from "node:net";
 
-import { MAX_SERVER_VERSION } from "./handshake.ts";
+import {
+  CONTRACT_KEYS, type ContractKey, type Conversation, type Exchange, fill, loadConversation,
+} from "./recordings.ts";
 import { frame, readFields, readFrames, toFields } from "./wire.ts";
 
-/** The contract the probes asked about, and the conId the real gateway returned for it. */
-export const FAKE_CONID = 902390015;
-
-/** The managed account this stub reports: the SHAPE the live gateway gave on 2026-11-09 — one
- *  paper account, nine alphanumeric characters, "DU" prefix — with the number itself replaced. */
-export const FAKE_ACCOUNT = "DU0000000";
-
-/** The greeks the real gateway sent for SPXW 20261218 C 8100, frozen, on 2026-11-08.
- *
- *  Corrected after running our own client against the gateway: `optPrice` and `undPrice` were
- *  INVENTED in the first draft (4.05 and 6702.5) under a comment claiming they were measured.
- *  The real reading carries an option price of 3.6244 and NO underlying price at all — which is
- *  consistent with the 10090 the gateway returns about the SPX index itself, and is worth having
- *  in the fixture rather than a plausible number: a null here is a real shape the client meets.
- */
-export const FAKE_GREEKS = {
-  impliedVol: 0.13679778548286392, delta: 0.02806614063578037,
-  gamma: 0.00018826189971762677, vega: 1.8321828845155324, theta: -0.28028107934963487,
-  optPrice: 3.624407920679289,
-  /** -1 on the wire, which `notComputed` turns into null. The index is not priced here. */
-  undPriceWire: -1,
-} as const;
+/** What the stub replays when nobody says otherwise: one option, resolved and priced, recorded
+ *  from the real gateway on 2026-11-09. */
+export const DEFAULT_CONVERSATION = "normal-with-greeks";
 
 export interface FakeOptions {
-  /** Refuse the session the way a duplicate client id does, to exercise that path. */
-  refuseSession?: string;
-  /** Answer the handshake and then say nothing, which is the hang the 2026-10-16 incident was. */
-  silent?: boolean;
-  /** Claim a protocol below the floor, so the client's refusal can be tested. */
+  /** The conversation to replay, by name under `testdata/vendors/ibkr-gateway/` or as data. */
+  conversation?: string | Conversation;
+  /** Claim this protocol version in place of the recording's, so the client's refusal of a
+   *  gateway below its floor can be tested. The one thing this stub says that no recording
+   *  holds, and it is a number rather than a reply: no gateway here speaks below 157. */
   serverVersion?: number;
-  /** Grant the DELAYED tier rather than frozen — what the real gateway does for an index this
-   *  account is not subscribed to, which is the case that made FROZEN the wrong request. */
-  grantDelayed?: boolean;
-  /** Answer market data with no figures at all — "subscribed, nothing yet". */
-  noFigures?: boolean;
-  /** Answer bid and ask with -1, which is what the real gateway sends for a price it does not
-   *  have: live mode on a shut market, and SKEW outside its calculation window. */
-  noPrices?: boolean;
-  /** Complete the handshake, accept every request, and answer NOTHING — the shape measured on
-   *  2026-11-08 when the gateway's link to IBKR dropped while its own socket stayed open. The
-   *  dangerous one: reporting those contracts as unknown would quarantine every rule. */
-  deaf?: boolean;
 }
 
 /** Listening, with the port it actually got (0 asks the OS for a free one). */
 export interface FakeGateway {
   server: Server;
   port: number;
-  /** How many contract lookups it has answered, so a test can prove the conid cache saves one. */
+  /** what it is replaying */
+  conversation: Conversation;
+  /** How many contract lookups it has been asked, so a test can prove the conid cache saves one. */
   lookups: number;
   close: () => Promise<void>;
 }
 
+/** Message ids the stub reads. Everything else a client sends is accepted and not answered. */
+const START_API = "71", REQ_MKT_DATA = "1", CANCEL_MKT_DATA = "2", REQ_CONTRACT_DATA = "9";
+
+/** Where both requests carry the contract fields, at the versions this client and `ib_async`
+ *  send at protocol 157: reqContractDetails is version 8 and reqMktData version 11, and after
+ *  the message id, version and request id both lay out conId, symbol, secType and the rest
+ *  identically (`messages.ts`'s `contractFields`). */
+const AT: Record<ContractKey, number> = {
+  symbol: 4, secType: 5, lastTradeDateOrContractMonth: 6, strike: 7, right: 8, exchange: 10,
+  tradingClass: 14,
+};
+
+/** Whether a request names this exchange's contract. The strike by value — "8100.0" from this
+ *  client and "8100" from another are one double to the gateway — and the rest as exact text. */
+function names(exchange: Exchange, fields: string[]): boolean {
+  return CONTRACT_KEYS.every((key) => key === "strike"
+    ? Number(fields[AT[key]]) === Number(exchange.contract[key])
+    : fields[AT[key]] === exchange.contract[key]);
+}
+
 export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<FakeGateway> {
+  const conversation = typeof options.conversation === "object"
+    ? options.conversation : loadConversation(options.conversation ?? DEFAULT_CONVERSATION);
   const counts = { lookups: 0 };
-  const open = new Set<import("node:net").Socket>();
+  const open = new Set<Socket>();
+
   const server = createServer((socket) => {
     open.add(socket);
     socket.on("close", () => open.delete(socket));
     let buffer: Buffer = Buffer.alloc(0);
     let greeted = false;
+    /** market-data requests answered on this connection, by id, for what a cancel is told */
+    const answered = new Map<string, Exchange>();
+    const send = (messages: string[][], reqId?: string) => {
+      for (const m of messages) {
+        socket.write(frame(toFields(reqId === undefined ? m : fill(m, reqId))));
+      }
+    };
 
     socket.on("error", () => { /* a test closing its end is not a fault */ });
     socket.on("data", (chunk: Buffer) => {
@@ -94,64 +112,32 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
       for (const payload of frames) {
         if (!greeted) {
           greeted = true;
-          const version = options.serverVersion ?? MAX_SERVER_VERSION;
-          socket.write(frame(`${version}\u000020261108 10:35:00 Asia/Singapore\u0000`));
+          const [version, ...clock] = conversation.handshake.greeting;
+          send([[String(options.serverVersion ?? version), ...clock]]);
           continue;
         }
         const f = readFields(payload);
-        const id = Number(f[0]);
+        const reqId = f[2] ?? "";
 
-        if (id === 71) {                                  // startApi
-          if (options.refuseSession) {
-            // reqId -1 is how the gateway reports a fault that belongs to no request
-            socket.write(frame(toFields([4, 2, -1, 326, options.refuseSession])));
-            continue;
-          }
-          if (options.silent) continue;                   // accepted, then nothing — the hang
-          socket.write(frame(toFields([9, 1, 1])));       // nextValidId: the session is up
-          // and the accounts the session manages, which a real gateway always sends next. This
-          // client ignores it — `messages.ts` has no case for id 15, so it falls to `other` — but
-          // it is not decoration: `ib_async`, which the Python port uses, will not report a
-          // connection until the accounts list is populated, and reporting NO account times out
-          // just as sending nothing does (measured against this stub, 2026-11-09).
-          //
-          // RECORDED in shape, with the identifier replaced. The live gateway on this machine
-          // answered with ONE account of nine alphanumeric characters beginning "DU" — a paper
-          // account — and the id below has that shape and is not it. Everything else about this
-          // message is what the gateway sent; the account number is the owner's and `fake.ts` is
-          // committed, which is the same reason `.env` never is.
-          socket.write(frame(toFields([15, 1, FAKE_ACCOUNT])));
+        if (f[0] === START_API) {
+          send(conversation.handshake.onStartApi);
           continue;
         }
-
-        if (options.deaf) continue;                       // accepted, and never answered
-
-        if (id === 9) {                                   // reqContractDetails
-          counts.lookups += 1;
-          const reqId = Number(f[2]);
-          socket.write(frame(toFields([
-            10, 8, reqId, "SPX", "OPT", "20261218", "8100.0", "C", "SMART", "USD",
-            "SPXW  261218C08100000", "SPX", "SPXW", FAKE_CONID, "0.05",
-          ])));
-          socket.write(frame(toFields([52, 1, reqId])));  // contractDetailsEnd
+        if (f[0] === REQ_CONTRACT_DATA || f[0] === REQ_MKT_DATA) {
+          if (f[0] === REQ_CONTRACT_DATA) counts.lookups += 1;
+          const request = f[0] === REQ_CONTRACT_DATA ? "reqContractDetails" : "reqMktData";
+          const exchange = conversation.exchanges
+            .find((e) => e.request === request && names(e, f));
+          if (!exchange) continue;                      // nobody recorded an answer to this
+          if (request === "reqMktData") answered.set(reqId, exchange);
+          send(exchange.replies, reqId);
           continue;
         }
-
-        if (id === 1) {                                   // reqMktData
-          const reqId = Number(f[2]);
-          // the grade it SERVED, which is not always the one asked for
-          socket.write(frame(toFields([58, 1, reqId, options.grantDelayed ? 4 : 2])));
-          if (options.noFigures) continue;
-          const [bid, ask] = options.noPrices ? ["-1", "-1"] : ["3.5", "4.1"];
-          socket.write(frame(toFields([1, 6, reqId, 1, bid, 0, 0])));   // bid
-          socket.write(frame(toFields([1, 6, reqId, 2, ask, 0, 0])));   // ask
-          socket.write(frame(toFields([
-            21, reqId, 13, 0, FAKE_GREEKS.impliedVol, FAKE_GREEKS.delta, FAKE_GREEKS.optPrice,
-            0, FAKE_GREEKS.gamma, FAKE_GREEKS.vega, FAKE_GREEKS.theta, FAKE_GREEKS.undPriceWire,
-          ])));
-          continue;
+        if (f[0] === CANCEL_MKT_DATA) {
+          send(answered.get(reqId)?.onCancel ?? [], reqId);
+          answered.delete(reqId);
         }
-        // reqMarketDataType and cancelMktData need no answer, as the real gateway gives none
+        // reqMarketDataType, and anything else, gets no answer, as from the real gateway
       }
     });
   });
@@ -164,6 +150,7 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
       resolve({
         server,
         port: got,
+        conversation,
         get lookups() { return counts.lookups; },
         close: () => new Promise<void>((done) => {
           // destroyed, not just closed: `server.close()` waits for open connections to end, so a

@@ -1,0 +1,75 @@
+{
+  "conversation": "no-prices",
+  "summary": "One option whose bid and ask arrive as -1, the gateway's 'no price', beside a previous close and greeks that are real.",
+  "provenance": {
+    "kind": "constructed",
+    "observed": "2026-11-08: live mode on a shut market answered bid and ask with -1, and SKEW outside its calculation window answered its price with -1; the official client reported each as -1.0.",
+    "why": "When these files were recorded SPXW was trading in global hours, so the gateway had a book to give, and the wire text of the 2026-11-08 -1 was not kept.",
+    "built": "normal-with-greeks (recorded 2026-11-09) with ONE alteration: the price field of its bid (tick 1) and ask (tick 2) messages is -1 where the gateway sent 4.10 and 4.50. Nothing else changed, so its greeks still carry the option prices of the real book."
+  },
+  "ask": ["US.SPXW261218C8100000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["15", "1", "DU0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:hfarm"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+      ["4", "2", "-1", "2107", "HMDS data farm connection is inactive but should be available upon demand.apachmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [
+        ["10", "8", "$reqId", "SPX", "OPT", "20261218 15:00 US/Central", "8100", "C", "SMART", "USD", "SPXW  261218C08100000", "SPXW", "SPXW", "902390015", "0.05", "1", "100", "ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,DIS,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NGCOMB,NONALGO,OCA,OPENCLOSE,PEGMIDVOL,PEGMKTVOL,PEGPRMVOL,PEGSRFVOL,POSTONLY,PRICECHK,REL,RELPCTOFS,RELSTK,RTH,SCALE,SCALERST,SIZECHK,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF", "SMART,CBOE,IBUSOPT", "1", "416904", "S&P 500 Stock Index", "", "202612", "Indices", "Broad Range Equity Index", "*", "US/Central", "20261108:1915-20261109:0825;20261109:0830-20261109:1600;20261109:1915-20261110:0825;20261110:0830-20261110:1600;20261110:1915-20261111:0825;20261111:0830-20261111:1600;20261111:1915-20261112:0825;20261112:0830-20261112:1600;20261112:1915-20261113:0825;20261113:0830-20261113:1600", "20261109:0830-20261109:1515;20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "", "", "0", "2", "SPX", "IND", "110,110,110", "20261218", ""],
+        ["52", "1", "$reqId"]
+      ],
+      "atMs": [84, 84]
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["1", "11", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", "1", "0", ""],
+      "replies": [
+        ["81", "$reqId", "0.05", "c70003", "3"],
+        ["58", "1", "$reqId", "1"],
+        ["1", "6", "$reqId", "1", "-1", "60", "0"],
+        ["1", "6", "$reqId", "2", "-1", "169", "0"],
+        ["2", "6", "$reqId", "8", "0"],
+        ["1", "6", "$reqId", "9", "3.65", "0", "0"],
+        ["21", "$reqId", "10", "0", "0.13751149004779709", "0.03134487351546349", "4.099999904632568", "13.815378082166315", "2.1090088777040204E-4", "1.7166417306189379", "-0.3265273861833117", "7418.1865234375"],
+        ["21", "$reqId", "11", "0", "0.13974503204135946", "0.03355721602542973", "4.5", "13.815378082166315", "2.1954209066427506E-4", "1.8160025042769246", "-0.3509034864869343", "7418.1865234375"],
+        ["46", "6", "$reqId", "32", "C"],
+        ["46", "6", "$reqId", "33", "C"],
+        ["21", "$reqId", "13", "0", "0.13795658209227243", "0.03210521375811607", "4.147539309669099", "13.815378082166315", "2.1436871413159725E-4", "1.9762596873379437", "-0.32748349484896266", "7418.1865234375"],
+        ["21", "$reqId", "12", "0", "-1", "-2", "-1", "13.815378082166315", "-2", "-2", "-2", "7416.9384765625"],
+        ["57", "1", "$reqId"]
+      ],
+      "atMs": [46, 267, 267, 268, 489, 489, 710, 710, 712, 712, 1945, 11104, 11104],
+      "onCancel": [
+        ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "conversation": "session-never-starts",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [
+    "US.SPXW261218C8100000"
+  ],
+  "expect": {
+    "$throws": "IB Gateway at 127.0.0.1:<port> did not complete the handshake within 1000ms"
+  }
+}

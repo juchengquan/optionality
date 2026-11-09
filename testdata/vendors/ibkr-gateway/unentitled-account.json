@@ -1,0 +1,40 @@
+{
+  "conversation": "unentitled-account",
+  "summary": "A session that starts normally on an account with no market data: every request is accepted and nothing comes back, not even an error.",
+  "provenance": {
+    "kind": "constructed",
+    "observed": "2026-11-08 (the market-data field notes of that day): a paper account without shared market data answered every request with no figures and no error at all.",
+    "why": "The account this gateway is logged in to is entitled now, so the shape cannot be reproduced on it, and that session's bytes were not kept.",
+    "built": "normal-with-greeks' handshake, farm notices included (recorded 2026-11-09), and its lookup with no reply. Whether that session's lookups answered while its market data did not was not noted; this takes 'every request accepted, nothing back' literally, as ADR 0021 states it."
+  },
+  "ask": ["US.SPXW261218C8100000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["15", "1", "DU0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:hfarm"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+      ["4", "2", "-1", "2107", "HMDS data farm connection is inactive but should be available upon demand.apachmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [],
+      "atMs": []
+    }
+  ]
+}

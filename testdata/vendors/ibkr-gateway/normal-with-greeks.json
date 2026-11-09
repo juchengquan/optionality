@@ -1,0 +1,86 @@
+{
+  "conversation": "normal-with-greeks",
+  "summary": "One option, resolved and priced: its book, its previous close and the model's greeks, then the snapshot's end.",
+  "provenance": {
+    "kind": "recorded",
+    "at": "2026-11-09T11:13:54Z",
+    "gateway": "IB Gateway 10.52 (build 10521) on the owner's machine, port 4002, logged in to a paper account, with the Read-Only API switch on",
+    "protocol": 157,
+    "how": "Asked with the library's own encoders (handshake.ts, messages.ts) on client id 9201, the same messages in the same order as IbkrClient: the greeting, startApi, reqMarketDataType(4), then per code reqContractDetails, reqMktData as a snapshot and cancelMktData, with no market data asked for a code whose lookup found nothing. Every frame was logged in both directions before anything decoded it. One difference from IbkrClient, on purpose: each market-data request was listened to until the gateway's snapshot end (57) rather than for IbkrClient's 250ms of quiet, so the replies are the gateway's whole answer rather than what one client's window caught.",
+    "market": "Monday 2026-11-09, around 06:15 New York. SPXW options were trading in Cboe's global trading hours, so the gateway served the LIVE grade (1) although DELAYED_FROZEN (4) was asked; the cash index was not being calculated.",
+    "altered": [
+      "handshake.onStartApi[0]: the managed account, replaced by DU0000000, which has its shape (DU and seven characters) and is not it. The number is the owner's and this file is committed."
+    ],
+    "timing": "atMs is each reply's arrival, in milliseconds after its request was sent. A replay ignores it; it is kept because it is evidence (see notes).",
+    "notes": [
+      "IbkrClient itself, pointed at the same gateway 48 seconds earlier (11:13:06Z), returned this contract WITHOUT its greeks. Across the six full captures of the control that morning the model computation (tick 13) arrived 0.3 to 1.7 seconds after the book, and in five of them a silence longer than the client's 250ms quiet window came first, so the client would have finished without it. Here the gap before it is 1.2 seconds. A replay delivers every reply at once, so the expected batch for this conversation carries the greeks the live client missed.",
+      "The snapshot end (57) does arrive, about eleven seconds after the request. client.ts says the gateway sends no end-of-snapshot marker; on this gateway, on this day, it did.",
+      "The reply to cancelMktData is error 300 because the snapshot had already ended. It is kept as onCancel, since a replay also ends the snapshot before the client cancels."
+    ]
+  },
+  "ask": ["US.SPXW261218C8100000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["15", "1", "DU0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:hfarm"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+      ["4", "2", "-1", "2107", "HMDS data farm connection is inactive but should be available upon demand.apachmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [
+        ["10", "8", "$reqId", "SPX", "OPT", "20261218 15:00 US/Central", "8100", "C", "SMART", "USD", "SPXW  261218C08100000", "SPXW", "SPXW", "902390015", "0.05", "1", "100", "ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,DIS,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NGCOMB,NONALGO,OCA,OPENCLOSE,PEGMIDVOL,PEGMKTVOL,PEGPRMVOL,PEGSRFVOL,POSTONLY,PRICECHK,REL,RELPCTOFS,RELSTK,RTH,SCALE,SCALERST,SIZECHK,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF", "SMART,CBOE,IBUSOPT", "1", "416904", "S&P 500 Stock Index", "", "202612", "Indices", "Broad Range Equity Index", "*", "US/Central", "20261108:1915-20261109:0825;20261109:0830-20261109:1600;20261109:1915-20261110:0825;20261110:0830-20261110:1600;20261110:1915-20261111:0825;20261111:0830-20261111:1600;20261111:1915-20261112:0825;20261112:0830-20261112:1600;20261112:1915-20261113:0825;20261113:0830-20261113:1600", "20261109:0830-20261109:1515;20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "", "", "0", "2", "SPX", "IND", "110,110,110", "20261218", ""],
+        ["52", "1", "$reqId"]
+      ],
+      "atMs": [84, 84]
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["1", "11", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", "1", "0", ""],
+      "replies": [
+        ["81", "$reqId", "0.05", "c70003", "3"],
+        ["58", "1", "$reqId", "1"],
+        ["1", "6", "$reqId", "1", "4.10", "60", "0"],
+        ["1", "6", "$reqId", "2", "4.50", "169", "0"],
+        ["2", "6", "$reqId", "8", "0"],
+        ["1", "6", "$reqId", "9", "3.65", "0", "0"],
+        ["21", "$reqId", "10", "0", "0.13751149004779709", "0.03134487351546349", "4.099999904632568", "13.815378082166315", "2.1090088777040204E-4", "1.7166417306189379", "-0.3265273861833117", "7418.1865234375"],
+        ["21", "$reqId", "11", "0", "0.13974503204135946", "0.03355721602542973", "4.5", "13.815378082166315", "2.1954209066427506E-4", "1.8160025042769246", "-0.3509034864869343", "7418.1865234375"],
+        ["46", "6", "$reqId", "32", "C"],
+        ["46", "6", "$reqId", "33", "C"],
+        ["21", "$reqId", "13", "0", "0.13795658209227243", "0.03210521375811607", "4.147539309669099", "13.815378082166315", "2.1436871413159725E-4", "1.9762596873379437", "-0.32748349484896266", "7418.1865234375"],
+        ["21", "$reqId", "12", "0", "-1", "-2", "-1", "13.815378082166315", "-2", "-2", "-2", "7416.9384765625"],
+        ["57", "1", "$reqId"]
+      ],
+      "atMs": [46, 267, 267, 268, 489, 489, 710, 710, 712, 712, 1945, 11104, 11104],
+      "onCancel": [
+        ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
+      ]
+    }
+  ]
+}

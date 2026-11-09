@@ -1,0 +1,39 @@
+{
+  "conversation": "link-down",
+  "summary": "The handshake completes and the gateway reports its link to IBKR broken, against request id -1; every request is then accepted and none is answered.",
+  "provenance": {
+    "kind": "constructed",
+    "observed": "2026-11-08, during IBKR's Sunday maintenance (the market-data field notes of that day): the gateway kept its local socket open and completed handshakes, isConnected stayed true, requests were accepted and nothing came back. The only signal was unsolicited 2110, 2103 and 2157 against request id -1.",
+    "why": "The gateway's link to IBKR cannot be dropped on demand, and that session's bytes were not kept.",
+    "built": "The greeting, managedAccounts and nextValidId are normal-with-greeks' (recorded 2026-11-09). The three notices stand where its farm notices stood: their codes are the ones observed, their texts are IBKR's wording for those codes rather than captured text, and the farm names are copied from normal-with-greeks' OK notices. The lookup is normal-with-greeks' request with no reply."
+  },
+  "ask": ["US.SPXW261218C8100000"],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["15", "1", "DU0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2110", "Connectivity between Trader Workstation and server is broken. It will be restored automatically."],
+      ["4", "2", "-1", "2103", "Market data farm connection is broken:usfarm.nj"],
+      ["4", "2", "-1", "2103", "Market data farm connection is broken:usopt"],
+      ["4", "2", "-1", "2157", "Sec-def data farm connection is broken:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [],
+      "atMs": []
+    }
+  ]
+}
