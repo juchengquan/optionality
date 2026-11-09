@@ -17,7 +17,7 @@
  *  four wrong mappings the live comparison could not see.
  */
 import type { Long, Snapshot } from "./types.ts";
-import type { Quote } from "../domain/quote.ts";
+import type { Quote } from "../../domain/quote.ts";
 
 /** protobufjs decodes int64 to {low, high, unsigned}; the Python SDK gives a float. */
 function fromLong(value: Long | number | undefined): number | undefined {

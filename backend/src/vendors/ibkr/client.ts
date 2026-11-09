@@ -42,8 +42,8 @@ import {
   reqMktData,
 } from "./messages.ts";
 import { TwsSocket, type TwsSocketConfig } from "./socket.ts";
-import type { Quote } from "../domain/quote.ts";
-import type { QuoteBatch } from "../quotes.ts";
+import type { Quote } from "../../domain/quote.ts";
+import type { QuoteBatch } from "../../quotes.ts";
 
 export interface IbkrConfig extends TwsSocketConfig {
   /** Bounds the ASK, where the socket's own timeout bounds the handshake. A logged-in gateway can

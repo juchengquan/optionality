@@ -15,7 +15,7 @@
  *  Reference never imports it at all.
  */
 import { yahooFetcher } from "./client.ts";
-import type { ReferenceVendor } from "../vendors.ts";
+import type { ReferenceVendor } from "../index.ts";
 
 export const yahooVendor: ReferenceVendor = {
   name: "yahoo",
