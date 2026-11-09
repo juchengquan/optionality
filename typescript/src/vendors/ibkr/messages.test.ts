@@ -142,6 +142,18 @@ describe("reading the greeks", () => {
     });
   });
 
+  it("turns an EMPTY field into no figure, not into zero", () => {
+    // the same pitfall as an empty price: `Number("")` is 0, and a delta or theta of exactly
+    // zero is a plausible figure that no sentinel check would catch
+    const empty = msg(21, 100, 13, 0, "", "", "", 0, "", "", "", "");
+    const got = readMessage(empty);
+    if (got.kind !== "greeks") throw new Error("unreachable");
+    expect(got.figures).toEqual({
+      impliedVol: null, delta: null, gamma: null, vega: null, theta: null,
+      optPrice: null, undPrice: null,
+    });
+  });
+
   it("keeps a put's negative delta, which is a figure and not a sentinel", () => {
     const put = msg(21, 100, 13, 0, 0.21, -0.42, 3.1, 0, 0.0002, 1.4, -0.3, 6702.5);
     const got = readMessage(put);
@@ -173,6 +185,14 @@ describe("reading everything else", () => {
     // shown — that is the Reference's judgement to make, not this decoder's to pre-empt
     expect(readMessage(msg(1, 6, 100, 1, 0, 0, 0)))
       .toEqual({ kind: "price", reqId: 100, tickType: 1, price: 0 });
+  });
+
+  it("reads an EMPTY price as no price, not as a price of zero", () => {
+    // Recorded on 2026-11-09 (`index-before-the-open`): SPX before the cash session sent its
+    // previous close (tick 9) with the price field empty. `Number("")` is 0 and passes a
+    // finiteness check, so that close read as 0.00, a figure the gateway never sent.
+    expect(readMessage(msg(1, 6, 100, 9, "", 0, 0)))
+      .toEqual({ kind: "price", reqId: 100, tickType: 9, price: null });
   });
 
   it("reads an error with its code, which is how a refusal is told from an outage", () => {

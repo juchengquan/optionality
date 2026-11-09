@@ -155,8 +155,29 @@ export interface Greeks {
   undPrice: number | null;
 }
 
+/** An id, a tick type, a grade or an error code: a field that names something rather than
+ *  measures it. Read with a bare `Number`, so an empty one becomes 0 — which is harmless for
+ *  these and only these: no request is ever sent with id 0 (`client.ts` counts from 1), so a reply
+ *  routed to 0 reaches nobody; tick type 0 is a size, which `PRICE_TICKS` does not map; grade 0
+ *  is not a grade; message id 0 is no message this decoder reads; and an error is acted on by its
+ *  kind and its request id, never by whether its code is 0. Figures go through `reading` below. */
 function num(fields: string[], at: number): number {
   return Number(fields[at]);
+}
+
+/** A FIGURE, or null where the field carries none.
+ *
+ *  Not `Number` alone, because `Number("")` is 0, and 0 passes every finiteness check. An empty
+ *  field is the gateway declining to answer that one (`readFields` keeps it so nothing after it
+ *  shifts), and read as a number it becomes a figure nobody sent. Recorded on 2026-11-09: SPX
+ *  before the cash session sent its previous close with an empty price, and the strip would have
+ *  read a close of 0.00. The sentinels are a separate matter, decided by each reader below.
+ */
+function reading(fields: string[], at: number): number | null {
+  const text = fields[at];
+  if (text === undefined || text.trim() === "") return null;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : null;
 }
 
 /** A price, or null where the gateway means it has none.
@@ -171,19 +192,20 @@ function num(fields: string[], at: number): number {
  *  ask. Typing it as a number would put `-1.00` on the dashboard beside figures that are real.
  *
  *  Zero is kept. An empty book quotes 0, and whether 0 may be shown is ADR 0018's positivity
- *  guard to decide for a Reference, not this decoder's to pre-empt.
+ *  guard to decide for a Reference, not this decoder's to pre-empt. But a zero the gateway SENT
+ *  is "0"; an empty field is no price at all, and `reading` keeps the two apart.
  */
 function price(fields: string[], at: number): number | null {
-  const value = Number(fields[at]);
-  if (!Number.isFinite(value) || value === -1) return null;
+  const value = reading(fields, at);
+  if (value === null || value === -1) return null;
   return value;
 }
 
 /** A figure that may not have been computed. The sentinels are NUMBERS — -2 for a greek, -1 for
  *  a price — so this is the difference between a null delta and a delta of minus two. */
 function figure(fields: string[], at: number, what: string): number | null {
-  const value = Number(fields[at]);
-  if (!Number.isFinite(value)) return null;
+  const value = reading(fields, at);
+  if (value === null) return null;
   return notComputed(what, value) ? null : value;
 }
 

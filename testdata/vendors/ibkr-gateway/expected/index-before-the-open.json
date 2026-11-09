@@ -31,8 +31,7 @@
       {
         "code": "SPX",
         "delayed": false,
-        "last_known": false,
-        "prev_close_price": 0
+        "last_known": false
       }
     ],
     "unknown": []

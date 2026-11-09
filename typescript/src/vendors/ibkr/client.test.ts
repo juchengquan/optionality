@@ -78,6 +78,15 @@ describe("one bounded ask", () => {
     expect(q!.last_known).toBe(false);
   });
 
+  it("reports an index's empty close as no figure, never as a close of zero", async () => {
+    // SPX before the cash session, recorded 2026-11-09: granted, graded, and its one price tick
+    // carries an empty field. A close of 0 on the strip would be a reading nobody sent.
+    const c = await connected({ conversation: "index-before-the-open" });
+    const batch = await c.fetchQuotes([OPTION, "SPX"]);
+    expect(batch.records.find((r) => r.code === "SPX"))
+      .toEqual({ code: "SPX", delayed: false, last_known: false });
+  });
+
   it("asks nothing at all for an empty list", async () => {
     const c = await connected();
     expect(await c.fetchQuotes([])).toEqual({ records: [], unknown: [] });
