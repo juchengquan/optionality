@@ -188,6 +188,29 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "daysToExpiry", name: "late evening in New York is still that day", args: [EXP, at("2026-10-18T03:30:00Z")] },
     { fn: "daysToExpiry", name: "expiry day is zero", args: [EXP, at("2026-11-20T15:00:00Z")] },
     { fn: "daysToExpiry", name: "after expiry is negative", args: [EXP, at("2026-11-23T15:00:00Z")] },
+    // the hours a day's sample may be taken in: each boundary from both sides, to the millisecond,
+    // because the Python reads a microsecond clock and has to land where JavaScript's does
+    { fn: "inSampleHours", name: "a millisecond before 09:30", args: [at("2026-11-09T14:29:59.999Z")] },
+    { fn: "inSampleHours", name: "09:30 exactly", args: [at("2026-11-09T14:30:00.000Z")] },
+    { fn: "inSampleHours", name: "16:00 exactly", args: [at("2026-11-09T21:00:00.000Z")] },
+    { fn: "inSampleHours", name: "a millisecond after 16:00", args: [at("2026-11-09T21:00:00.001Z")] },
+    // every calendar day, because the vol chain needs a row for each: these carry the last close
+    { fn: "inSampleHours", name: "Saturday noon", args: [at("2026-11-07T17:00:00Z")] },
+    { fn: "inSampleHours", name: "Sunday evening, when Global Trading Hours have begun",
+      args: [at("2026-11-09T01:30:00Z")] },
+    { fn: "inSampleHours", name: "Thanksgiving noon, a holiday with no calendar to say so",
+      args: [at("2026-11-26T17:00:00Z")] },
+    { fn: "inSampleHours", name: "a half-day after its 13:00 close", args: [at("2026-11-27T19:00:00Z")] },
+    // each 2026 clock change, on an instant a fixed offset would get wrong
+    { fn: "inSampleHours", name: "09:30 EDT, the Monday after the clocks went forward",
+      args: [at("2026-03-09T13:30:00Z")] },
+    { fn: "inSampleHours", name: "16:30 EDT, the Friday before the clocks went back",
+      args: [at("2026-10-30T20:30:00Z")] },
+    { fn: "inSampleHours", name: "09:00 EST, the Monday after the clocks went back",
+      args: [at("2026-11-02T14:00:00Z")] },
+    // an overnight mark: New York is still on Monday evening while UTC has reached Tuesday
+    { fn: "inSampleHours", name: "Monday 23:30 in New York, Tuesday in UTC",
+      args: [at("2026-11-10T04:30:00Z")] },
   ],
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },

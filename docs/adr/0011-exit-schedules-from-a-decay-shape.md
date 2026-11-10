@@ -4,7 +4,8 @@ Date: 2026-10-12
 
 ## Status
 
-Accepted. Decided with the owner on 2026-10-12.
+Accepted. Decided with the owner on 2026-10-12. Amended 2026-11-10: the daily sample is the day's
+close, and records each leg's delta (last section).
 
 ## Context
 
@@ -150,3 +151,32 @@ gives a principled DTE curve for anyone who wants to read the level off it.
 tighten by themselves. Powerful and invasive: it changes what a Monitor is, moves the dashboard's
 bell with no edit to any rule, and leaves "what is my alarm set to" without a single answer. If it
 is ever wanted it deserves its own decision.
+
+## Amended 2026-11-10: the sample is the day's close, and records delta
+
+Decided with the owner for the dashboard's redesign, whose review of a trade charts these rows and
+calls them closes. They were not: the day's row was rewritten whenever a figure moved until New
+York's midnight, and SPXW trades again from about 20:15 in Global Trading Hours, so the row that
+survived could be an overnight mark.
+
+**The sample is taken from 09:30 to 16:00 in New York, both ends included, and at no other time**
+(`inSampleHours` in `domain/expiry.ts`, cased and ported). The last sweep at or before 16:00 is the
+row that stays. 09:30 is the floor so a service that slept through a session writes no row made of
+the morning's overnight marks.
+
+**Still every calendar day**, which is what keeps the chain above exact: nothing trades in those
+hours on a weekend or a holiday, so their rows carry the last close forward, as weekend rows always
+have, and no exchange calendar is needed. A half-day (13:00, options 13:15) is static from its close
+to 16:00, so its row is its close too. The owner's brief said weekdays only; this file's chain is
+the reason it is every day instead.
+
+Two consequences for the chain. **A date absent now means the service was down for the whole of
+that day's sample hours**, not the whole day — a shorter outage than before makes a hole, which is
+the honest reading, since a row from outside the hours is not that day's close. And **a Position
+put on in the evening session** (after 16:00 New York) has no sample on its Opened day, because
+the hours had passed before it existed; its chain starts the next day, so its Vol part stays absent
+unless Opened is set to that next market day.
+
+**Each leg's delta is recorded beside its IV and vega** (`legs_delta`, migration 0009): the risk the
+owner manages by, only knowable when observed, all or nothing per map and gated on its own, exactly
+as the vega is. Rows written before it carry none.

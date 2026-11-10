@@ -40,7 +40,7 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
     "position_samples": (
         "position_id", "observed_on", "dte", "cost_to_close",
         # appended, because ALTER TABLE adds at the end
-        "legs_iv", "legs_vega",
+        "legs_iv", "legs_vega", "legs_delta",
     ),
     "monitor_positions": ("monitor_id", "position_id"),
     "reference_securities": ("id", "code", "label", "source", "created_at"),
@@ -57,7 +57,7 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
 NULLABLE: dict[TableName, tuple[str, ...]] = {
     "monitors": ("legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at"),
     "positions": ("strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit"),
-    "position_samples": ("legs_iv", "legs_vega"),
+    "position_samples": ("legs_iv", "legs_vega", "legs_delta"),
     "monitor_positions": (),
     "reference_securities": ("label",),
     "schema_migrations": (),
@@ -157,6 +157,9 @@ class PositionSampleRow(TypedDict):
     #: from legs_iv: a withheld vega does not make the IV reading untrue, and the IV is the half no
     #: later sweep can recover (ADR 0011).
     legs_vega: str | None
+    #: JSON text: contract code -> delta, the risk the book is managed by. None on the same
+    #: all-or-nothing rule and gated on its own, like the vega: only knowable when observed.
+    legs_delta: str | None
 
 
 class MonitorPositionRow(TypedDict):

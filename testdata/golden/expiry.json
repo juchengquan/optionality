@@ -77,6 +77,126 @@
         }
       ],
       "expect": -3
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "a millisecond before 09:30",
+      "args": [
+        {
+          "$date": "2026-11-09T14:29:59.999Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "09:30 exactly",
+      "args": [
+        {
+          "$date": "2026-11-09T14:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "16:00 exactly",
+      "args": [
+        {
+          "$date": "2026-11-09T21:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "a millisecond after 16:00",
+      "args": [
+        {
+          "$date": "2026-11-09T21:00:00.001Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Saturday noon",
+      "args": [
+        {
+          "$date": "2026-11-07T17:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Sunday evening, when Global Trading Hours have begun",
+      "args": [
+        {
+          "$date": "2026-11-09T01:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Thanksgiving noon, a holiday with no calendar to say so",
+      "args": [
+        {
+          "$date": "2026-11-26T17:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "a half-day after its 13:00 close",
+      "args": [
+        {
+          "$date": "2026-11-27T19:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "09:30 EDT, the Monday after the clocks went forward",
+      "args": [
+        {
+          "$date": "2026-03-09T13:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "16:30 EDT, the Friday before the clocks went back",
+      "args": [
+        {
+          "$date": "2026-10-30T20:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "09:00 EST, the Monday after the clocks went back",
+      "args": [
+        {
+          "$date": "2026-11-02T14:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Monday 23:30 in New York, Tuesday in UTC",
+      "args": [
+        {
+          "$date": "2026-11-10T04:30:00.000Z"
+        }
+      ],
+      "expect": false
     }
   ]
 }

@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { daysToExpiry, marketDate } from "./expiry.ts";
+import { daysToExpiry, inSampleHours, marketDate } from "./expiry.ts";
 
 describe("the market date", () => {
   it("is New York's calendar day, not the viewer's", () => {
@@ -71,5 +71,53 @@ describe("days to expiry", () => {
   it("takes both spellings of the date, like the Python", () => {
     expect(daysToExpiry("20261016", at)).toBe(16);
     expect(() => daysToExpiry("2026-02-30", at)).toThrow(/invalid strike_date/);
+  });
+});
+
+const at = (iso: string) => new Date(iso);
+
+describe("inSampleHours — when a day's sample may be taken", () => {
+  // Monday 9 November 2026: New York is on EST, five hours behind UTC
+  it("opens at 09:30 New York, to the millisecond", () => {
+    expect(inSampleHours(at("2026-11-09T14:29:59.999Z"))).toBe(false);
+    expect(inSampleHours(at("2026-11-09T14:30:00.000Z"))).toBe(true);
+  });
+
+  it("includes 16:00 itself and nothing after it, so the row settles on the close", () => {
+    expect(inSampleHours(at("2026-11-09T21:00:00.000Z"))).toBe(true);
+    expect(inSampleHours(at("2026-11-09T21:00:00.001Z"))).toBe(false);
+  });
+
+  it("refuses the overnight session, whose marks are not the day's close", () => {
+    // Global Trading Hours resume about 20:15: Monday 23:30 in New York is already Tuesday in UTC
+    expect(inSampleHours(at("2026-11-10T04:30:00Z"))).toBe(false);
+    // and the small hours before the open
+    expect(inSampleHours(at("2026-11-09T11:00:00Z"))).toBe(false); // 06:00 EST
+  });
+
+  it("is open on a weekend, because the vol chain needs a row every calendar day", () => {
+    // volAttribution steps exactly one day between samples; nothing trades in these hours on a
+    // Saturday, so its row is the Friday close carried forward
+    expect(inSampleHours(at("2026-11-07T17:00:00Z"))).toBe(true); // Saturday noon
+    // Sunday 20:30, when the overnight session has begun, is outside like any evening
+    expect(inSampleHours(at("2026-11-09T01:30:00Z"))).toBe(false);
+  });
+
+  it("reads the hours in New York's zone on both sides of each 2026 clock change", () => {
+    // Monday after the clocks went forward (8 March): EDT, so 13:30Z is 09:30 and open — a fixed
+    // five-hour offset would call it 08:30 and shut
+    expect(inSampleHours(at("2026-03-09T13:30:00Z"))).toBe(true);
+    // Friday before they went back (1 November): 20:30Z is 16:30 EDT and shut — at EST it would
+    // be 15:30 and open
+    expect(inSampleHours(at("2026-10-30T20:30:00Z"))).toBe(false);
+    // Monday after they went back: 14:00Z is 09:00 EST and shut — at EDT it would be 10:00
+    expect(inSampleHours(at("2026-11-02T14:00:00Z"))).toBe(false);
+  });
+
+  it("needs no exchange calendar: a half-day and a holiday carry their last close", () => {
+    // the Friday after Thanksgiving closes at 13:00 (options 13:15) and is static until 16:00
+    expect(inSampleHours(at("2026-11-27T19:00:00Z"))).toBe(true);
+    // Thanksgiving itself trades nothing, so its row is Wednesday's close, as a Saturday's is
+    expect(inSampleHours(at("2026-11-26T17:00:00Z"))).toBe(true);
   });
 });

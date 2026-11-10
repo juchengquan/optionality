@@ -1,0 +1,15 @@
+-- Per-leg delta on each sample, beside the IV and the vega (ADR 0011, amended).
+--
+-- Short-leg delta is the risk this book is managed by, and the redesigned dashboard's review of a
+-- trade wants it charted over the trade's life. Like a vega, a delta is only knowable at the moment
+-- it was observed: it moves with spot and with time, and no later sweep can say what it was on a
+-- day that has passed. So it is recorded from the first day it can be, rather than when a chart
+-- first asks for it — every row written before this column exists is permanently without one.
+--
+-- The same shape and the same rules as legs_iv and legs_vega: JSON text, contract code -> delta,
+-- null rather than a partial map, and gated on its own, so a withheld delta never costs the IV or
+-- the vega reading beside it.
+--
+-- Nullable with no default, so ADD COLUMN suffices and every existing row reads as having none,
+-- which is what each of them has.
+ALTER TABLE position_samples ADD COLUMN legs_delta TEXT;

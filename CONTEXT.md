@@ -101,6 +101,15 @@ is money, and money needs a contract size that only a Quote carries, while a clo
 longer quoted.
 _Avoid_: exit price, closing price, debit, sale price (a sale is a NEGATIVE Exit)
 
+**Daily sample**:
+One observation of a held Position per New York calendar day: its DTE, Cost to close, and each
+leg's IV, vega and delta. It is the day's CLOSE — taken only from 09:30 to 16:00 in New York, so
+the last sweep at or before 16:00 is the one that stays and an overnight mark never replaces it —
+and it is taken on every calendar day, a weekend or a holiday carrying the last close forward,
+because the Vol part chains days exactly one apart. Recorded, never derived: none of it can be
+read again once its day has passed.
+_Avoid_: snapshot (moomoo's word for a quote), tick, mark
+
 **Pace gap**:
 How far a Position's Cost to close sits from its On-pace figure. BEHIND means costing more to buy
 back than time alone accounts for. Said in words wherever it is shown, because "behind" is bad

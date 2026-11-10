@@ -21,6 +21,40 @@ export function marketDate(now: Date = new Date()): string {
   return MARKET_DAY.format(now);
 }
 
+const SAMPLE_CLOCK = new Intl.DateTimeFormat("en-US", {
+  timeZone: MARKET_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
+/** 09:30 and 16:00 in New York, as milliseconds since its midnight. */
+const SAMPLE_FROM = (9 * 60 + 30) * 60_000;
+const SAMPLE_UNTIL = 16 * 60 * 60_000;
+
+/** Whether a holding's daily sample may be taken at `now`: 09:30 to 16:00 in New York, both ends
+ *  included, on EVERY calendar day.
+ *
+ *  The sample is the day's CLOSE, and a burndown labelled "close" has to mean it. Without this the
+ *  day's row was rewritten whenever a figure moved until New York's midnight, and SPXW trades again
+ *  from about 20:15 in Global Trading Hours, so the row that survived could be an overnight mark.
+ *  Writing only inside these hours makes the day's row the last sweep at or before 16:00, and
+ *  nothing after it can move the row. 16:00 itself is in: a sweep landing exactly on the close is
+ *  the best observation of it there is. 09:30 is the floor so a service that slept through a whole
+ *  session writes no row for it, rather than one made of the morning's overnight marks.
+ *
+ *  Every day, weekends included, and that is not an oversight: `volAttribution` chains samples
+ *  EXACTLY one calendar day apart (vol.ts), so a row skipped on a Saturday breaks the vol figure
+ *  across every weekend. Nothing trades in these hours on a weekend, so a Saturday's row is the
+ *  Friday close carried forward — which is what weekend rows have always held. A holiday is the
+ *  same case and needs no calendar, and a half-day (the Friday after Thanksgiving, Christmas Eve:
+ *  13:00, options 13:15) is static from its close to 16:00, so its row is its close too.
+ */
+export function inSampleHours(now: Date = new Date()): boolean {
+  const part = Object.fromEntries(SAMPLE_CLOCK.formatToParts(now).map((p) => [p.type, p.value]));
+  // every zone New York has used is a whole number of hours from UTC, so the milliseconds are the
+  // same in both and can be read straight off the instant
+  const sinceMidnight = ((Number(part.hour) * 60 + Number(part.minute)) * 60 + Number(part.second))
+    * 1000 + now.getUTCMilliseconds();
+  return sinceMidnight >= SAMPLE_FROM && sinceMidnight <= SAMPLE_UNTIL;
+}
+
 /** Calendar days from the current MARKET date to expiry.
  *
  *  Market date, not DISPLAY_TZ: at 09:40 in Singapore it is still the previous afternoon in New

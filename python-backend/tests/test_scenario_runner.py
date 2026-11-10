@@ -397,6 +397,7 @@ def test_the_seam_runs_a_tick_of_the_real_engine_on_the_world():
                 "cost_to_close": 2,
                 "legs_iv": None,
                 "legs_vega": None,
+                "legs_delta": None,
             }
         ]
         assert w.sent == []

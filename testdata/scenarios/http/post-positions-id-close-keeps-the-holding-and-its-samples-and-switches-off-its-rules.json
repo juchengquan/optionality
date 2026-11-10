@@ -128,7 +128,8 @@
           "dte": 39,
           "cost_to_close": 3.1,
           "legs_iv": null,
-          "legs_vega": null
+          "legs_vega": null,
+          "legs_delta": null
         }
       ],
       "reference_securities": []

@@ -69,6 +69,7 @@ CREATE TABLE position_samples (
 	cost_to_close FLOAT NOT NULL,
 	legs_iv TEXT,
 	legs_vega TEXT,
+	legs_delta TEXT,
 	PRIMARY KEY (position_id, observed_on),
 	FOREIGN KEY(position_id) REFERENCES positions (id)
 );

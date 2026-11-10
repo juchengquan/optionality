@@ -28,7 +28,7 @@ export type Tables = Record<TableName, Row[]>;
 export const JSON_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   monitors: ["legs"],
   positions: ["legs"],
-  position_samples: ["legs_iv", "legs_vega"],
+  position_samples: ["legs_iv", "legs_vega", "legs_delta"],
 };
 
 /** One market-data vendor, as a table of what it answers.

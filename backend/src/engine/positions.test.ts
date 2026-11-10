@@ -133,6 +133,10 @@ describe("recording what a Position was worth", () => {
       mid_price: c === buildSpxCode(future(), "CALL", 8050) ? sold : bought,
     })));
 
+  // inside the hours a sample may be taken in (11:00 in New York, the same market day as the
+  // file's 01:00 clock): the file's clock is the small hours, which is now when nothing is written
+  beforeEach(() => { now = new Date("2026-10-01T15:00:00Z"); });
+
   it("writes one row per Position, with the Cost to close and the dashboard's DTE", async () => {
     const id = held("held");
     await sweeper(spread(5.0, 1.0)).sweep();
@@ -157,16 +161,45 @@ describe("recording what a Position was worth", () => {
     ]);
   });
 
-  it("keys the day where the option TRADES, not where UTC is", async () => {
+  it("writes nothing outside the sample hours — the evening, where UTC and New York disagree", async () => {
     // the hazard the sweeper's own expiry comment names: for the hours New York is behind UTC the
-    // two dates differ, and `dte` beside it is reckoned from the market date. A sample keyed on
-    // the UTC day would pair a New York Wednesday with a Thursday's DTE.
+    // two dates differ. Those hours are all evening or night in New York, and since the row became
+    // the day's CLOSE (09:30–16:00, inSampleHours) none of them writes, so a sample can no longer
+    // pair a New York Wednesday with a Thursday's DTE at all. The row is still keyed by
+    // `marketDate`, which inside the sample hours is always the UTC date too.
     now = new Date("2026-10-01T02:00:00Z"); // 22:00 on 2026-09-30 in New York
     held("held");
     await sweeper(spread(5.0, 1.0)).sweep();
 
-    expect(samples()[0]!.observed_on).toBe("2026-09-30");
-    expect(now.toISOString().slice(0, 10)).toBe("2026-10-01"); // and the UTC day is not that
+    expect(samples()).toEqual([]);
+  });
+
+  it("settles on the close: a mark that moves after 16:00 does not move the day's row", async () => {
+    // SPXW trades again from about 20:15 in Global Trading Hours, and until this the day's row was
+    // rewritten by every overnight mark that differed, up to New York's midnight — so the row that
+    // survived was whatever traded last before it, not the close the burndown says it is.
+    const id = held("held");
+    now = new Date("2026-10-01T19:59:45Z"); // 15:59:45 EDT
+    await sweeper(spread(5.0, 1.0)).sweep();
+    now = new Date("2026-10-01T20:00:00Z"); // 16:00:00 EDT, the close itself, still in
+    await sweeper(spread(4.5, 1.0)).sweep();
+    now = new Date("2026-10-01T20:00:15Z"); // the next sweep, after the close
+    await sweeper(spread(4.0, 1.0)).sweep();
+    now = new Date("2026-10-02T01:30:00Z"); // 21:30, overnight trading, same market day
+    await sweeper(spread(3.0, 1.0)).sweep();
+
+    expect(samples()).toEqual([
+      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 3.5 },
+    ]);
+  });
+
+  it("writes no row from the morning's overnight marks before 09:30", async () => {
+    // a service that slept through a whole session writes nothing for it, rather than a row made
+    // of the marks Global Trading Hours left before the open
+    now = new Date("2026-10-01T13:29:59Z"); // 09:29:59 EDT
+    held("held");
+    await sweeper(spread(5.0, 1.0)).sweep();
+    expect(samples()).toEqual([]);
   });
 
   it("records a Position whose Opened nobody has entered yet", async () => {
@@ -364,6 +397,42 @@ describe("recording what a Position was worth", () => {
     expect(row.legs_iv).toBeNull();
     expect(row.cost_to_close).toBe(4);
   });
+
+  it("records each leg's delta, which is the risk the owner watches", async () => {
+    // short-leg delta is how this book is managed, and a chart of it over a trade's life needs it
+    // recorded on the day: like a vega, a delta is only knowable when it was observed
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c,
+      mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_delta: c === buildSpxCode(future(), "CALL", 8050) ? 0.16 : 0.11,
+    })))).sweep();
+
+    const row = db.prepare("select legs_delta from position_samples where position_id = ?").get(id) as
+      { legs_delta: string | null };
+    expect(JSON.parse(row.legs_delta!)).toEqual({
+      [buildSpxCode(future(), "CALL", 8050)]: 0.16,
+      [buildSpxCode(future(), "CALL", 8075)]: 0.11,
+    });
+  });
+
+  it("records no delta at all rather than some of it, and the other maps regardless", async () => {
+    // the same all-or-nothing per map as the IV and the vega, and gated on its own: a withheld
+    // delta makes neither the IV nor the vega reading untrue
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_implied_volatility: 10.5, option_vega: 1.0,
+      ...(c === buildSpxCode(future(), "CALL", 8050) ? { option_delta: 0.16 } : {}),
+    })))).sweep();
+
+    const row = db.prepare(
+      "select legs_delta, legs_iv, legs_vega from position_samples where position_id = ?",
+    ).get(id) as { legs_delta: string | null; legs_iv: string | null; legs_vega: string | null };
+    expect(row.legs_delta).toBeNull();
+    expect(row.legs_iv).not.toBeNull();
+    expect(row.legs_vega).not.toBeNull();
+  });
 });
 
 describe("how often the sampler actually writes", () => {
@@ -388,13 +457,17 @@ describe("how often the sampler actually writes", () => {
   };
   const writes = () =>
     (db.prepare("select total_changes() n").get() as { n: number }).n;
-  const quiet = (mid: number, iv: number, vega = 1.0): FakeProvider => (codes) =>
+  const quiet = (mid: number, iv: number, vega = 1.0, delta = 0.16): FakeProvider => (codes) =>
     Promise.resolve(codes.map((c) => ({
       code: c, name: c,
       mid_price: c === buildSpxCode(future(), "CALL", 8050) ? mid : 1.0,
       option_implied_volatility: iv,
       option_vega: vega,
+      option_delta: delta,
     })));
+
+  // inside the sample hours, so each sweep below is one that may write (see the suite above)
+  beforeEach(() => { now = new Date("2026-10-01T15:00:00Z"); });
 
   it("writes nothing on a sweep that would store the same row again", async () => {
     held("held");
@@ -441,6 +514,20 @@ describe("how often the sampler actually writes", () => {
 
     const row = db.prepare("select legs_vega from position_samples").get() as { legs_vega: string };
     expect(JSON.parse(row.legs_vega)[buildSpxCode(future(), "CALL", 8050)]).toBe(1.1);
+  });
+
+  it("writes when only a delta moves, which the cost, the IV and the vega can all hide", async () => {
+    // spot moving between two strikes changes the deltas while a mid barely does, and the delta is
+    // the figure the owner manages by — a row that kept the morning's delta beside the close's
+    // cost would chart a risk that was never there at the close
+    held("held");
+    await sweeper(quiet(5.0, 10.5, 1.0, 0.16)).sweep();
+    const after = writes();
+    await sweeper(quiet(5.0, 10.5, 1.0, 0.21)).sweep();
+    expect(writes()).toBeGreaterThan(after);
+
+    const row = db.prepare("select legs_delta from position_samples").get() as { legs_delta: string };
+    expect(JSON.parse(row.legs_delta)[buildSpxCode(future(), "CALL", 8050)]).toBe(0.21);
   });
 
   it("does not stop the sweep if recording fails", async () => {

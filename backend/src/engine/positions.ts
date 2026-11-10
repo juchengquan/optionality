@@ -13,7 +13,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { daysToExpiry, marketDate } from "optionality/domain/expiry";
+import { daysToExpiry, inSampleHours, marketDate } from "optionality/domain/expiry";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
 import { costToClose, legReadings } from "optionality/domain/position";
 import {
@@ -84,7 +84,13 @@ export async function noticeManageBy(
 }
 
   /** One observation per Position per market day, so the decay shape can be checked against this
- *  book rather than defended on arithmetic (ADR 0011). Nothing reads these yet.
+ *  book rather than defended on arithmetic (ADR 0011).
+ *
+ *  Taken only in the sample hours, 09:30 to 16:00 in New York (`inSampleHours`), so the day's row
+ *  is the last sweep at or before the close and nothing after it moves the row. Until then it was
+ *  rewritten up to New York's midnight, and SPXW trades again from about 20:15 — so the row that
+ *  survived could be an overnight mark under a chart that calls it the close. Every calendar day,
+ *  weekends included, because the vol chain needs a row for each (vol.ts).
  *
  *  Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a
  *  sample is a nice-to-have that must never be the reason a breach went unmessaged.
@@ -95,6 +101,7 @@ export async function noticeManageBy(
 export function recordSamples(
   db: DatabaseSync, rows: PositionRow[], byCode: Record<string, QuoteRecord>, at: Date,
 ): void {
+  if (!inSampleHours(at)) return;
   const observedOn = marketDate(at);
   for (const row of rows) {
     try {
@@ -118,6 +125,11 @@ export function recordSamples(
       const vegas = legReadings(position, byCode, "option_vega");
       const legsIv = ivs === null ? null : toSqliteJson(ivs);
       const legsVega = vegas === null ? null : toSqliteJson(vegas);
+      // The delta the same way and for the same reason as the vega: the risk the owner manages
+      // by, only knowable when observed, all or nothing, and gated on its own so a withheld delta
+      // never costs the IV or the vega reading beside it.
+      const deltas = legReadings(position, byCode, "option_delta");
+      const legsDelta = deltas === null ? null : toSqliteJson(deltas);
 
       // Only when something actually differs. The sweep runs every 15 seconds and the day's row
       // is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
@@ -125,11 +137,12 @@ export function recordSamples(
       // triples what each one carries.
       const stored = findPositionSample(db, row.id, observedOn);
       if (stored && stored.dte === dte && stored.cost_to_close === cost
-        && stored.legs_iv === legsIv && stored.legs_vega === legsVega) continue;
+        && stored.legs_iv === legsIv && stored.legs_vega === legsVega
+        && stored.legs_delta === legsDelta) continue;
 
       recordPositionSample(db, {
         position_id: row.id, observed_on: observedOn, dte, cost_to_close: cost,
-        legs_iv: legsIv, legs_vega: legsVega,
+        legs_iv: legsIv, legs_vega: legsVega, legs_delta: legsDelta,
       });
     } catch (err) {
       console.error(`recording a sample for ${row.name} failed:`, err);

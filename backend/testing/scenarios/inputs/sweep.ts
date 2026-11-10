@@ -53,6 +53,7 @@ const todays = sample({
   position_id: "pos-1", observed_on: "2026-11-09", dte: 39, cost_to_close: 3.25,
   legs_iv: { [C7300]: 14.5, [C7350]: 14.5, [P6400]: 19.25, [P6350]: 20 },
   legs_vega: { [C7300]: 4.25, [C7350]: 4.25, [P6400]: 4.25, [P6350]: 4.25 },
+  legs_delta: { [C7300]: 0.21, [C7350]: 0.15, [P6400]: -0.18, [P6350]: -0.12 },
 });
 
 export const SWEEP: readonly SweepInput[] = [
@@ -321,6 +322,19 @@ export const SWEEP: readonly SweepInput[] = [
     world: world({
       tables: { positions: [position({ id: "pos-1" })], position_samples: [todays] },
       provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // the row is the day's close: after 16:00 in New York a moved mark leaves it alone, which is
+    // what stops an overnight mark from becoming what the burndown calls the close
+    name: "after the close a moved mark does not rewrite the day's sample",
+    outcomes: ["sample-left-alone-outside-the-sample-hours"],
+    world: world({
+      clock: "2026-11-09T21:30:00.000Z", // 16:30 in New York, the same market day
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, cost_to_close: 3.5 }],
+      },
     }),
   },
   {

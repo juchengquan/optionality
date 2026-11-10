@@ -48,7 +48,7 @@ TABLES = ("positions", "monitors", "monitor_positions", "position_samples", "ref
 JSON_COLUMNS = {
     "monitors": ("legs",),
     "positions": ("legs",),
-    "position_samples": ("legs_iv", "legs_vega"),
+    "position_samples": ("legs_iv", "legs_vega", "legs_delta"),
 }
 
 type Row = dict[str, Any]

@@ -538,6 +538,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   backdated close hides later samples from every reader and deletes none. A mistyped close is
   corrected by PATCH (`exit`, `closed_on`); DELETE is for a holding recorded by mistake, and still
   takes the samples.
+- Daily samples are the day's CLOSE: written only from 09:30 to 16:00 New York (`inSampleHours`), so
+  the last sweep at or before 16:00 stays and no overnight mark replaces it — but on EVERY calendar day,
+  weekends included, because the vol chain steps exactly one day (ADR 0011, amended 2026-11-10). The
+  one exception is a holding's FIRST row (`takesSample`): written at the next sweep whatever the hour,
+  because the owner records trades after the close and the vol chain must start on the Opened day.
+  Each carries per-leg IV, vega and delta, all-or-nothing per map, each gated on its own.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import days_to_expiry, market_date
+from optionality.expiry import days_to_expiry, in_sample_hours, market_date
 from optionality.js import js_string, to_fixed
 from optionality.position import cost_to_close, leg_readings
 from optionality.quote import ByCode
@@ -109,7 +109,13 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
 
 def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByCode, at: datetime) -> None:
     """One observation per Position per market day, so the decay shape can be checked against this
-    book rather than defended on arithmetic (ADR 0011). Nothing reads these yet.
+    book rather than defended on arithmetic (ADR 0011).
+
+    Taken only in the sample hours, 09:30 to 16:00 in New York (`in_sample_hours`), so the day's row is
+    the last sweep at or before the close and nothing after it moves the row. Until then it was
+    rewritten up to New York's midnight, and SPXW trades again from about 20:15 — so the row that
+    survived could be an overnight mark under a chart that calls it the close. Every calendar day,
+    weekends included, because the vol chain needs a row for each (vol.py).
 
     Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a sample is
     a nice-to-have that must never be the reason a breach went unmessaged.
@@ -118,6 +124,8 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
     Deliberately not the sweeper's `_utc_date` — that is the expiry reckoning, and the two differ for
     the hours New York is behind UTC, which would pair a New York Wednesday with Thursday's DTE.
     """
+    if not in_sample_hours(at):
+        return
     observed_on = market_date(at)
     for row in rows:
         try:
@@ -143,6 +151,11 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
             vegas = leg_readings(position, by_code, "option_vega")
             legs_iv = None if ivs is None else to_sqlite_json(ivs)
             legs_vega = None if vegas is None else to_sqlite_json(vegas)
+            # The delta the same way and for the same reason as the vega: the risk the owner manages
+            # by, only knowable when observed, all or nothing, and gated on its own so a withheld delta
+            # never costs the IV or the vega reading beside it.
+            deltas = leg_readings(position, by_code, "option_delta")
+            legs_delta = None if deltas is None else to_sqlite_json(deltas)
 
             # Only when something actually differs. The sweep runs every 15 seconds and the day's row
             # is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
@@ -155,6 +168,7 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                 and stored["cost_to_close"] == cost
                 and stored["legs_iv"] == legs_iv
                 and stored["legs_vega"] == legs_vega
+                and stored["legs_delta"] == legs_delta
             ):
                 continue
 
@@ -167,6 +181,7 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                     "cost_to_close": cost,
                     "legs_iv": legs_iv,
                     "legs_vega": legs_vega,
+                    "legs_delta": legs_delta,
                 },
             )
         except Exception:

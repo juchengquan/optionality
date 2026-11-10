@@ -52,6 +52,7 @@ def sample(observed_on, cost_to_close=1.5, position_id="p1", **over):
         "cost_to_close": cost_to_close,
         "legs_iv": '{"US.SPXW261218C8100000":0.12}',
         "legs_vega": None,
+        "legs_delta": None,
         **over,
     }
 

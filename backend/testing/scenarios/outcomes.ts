@@ -20,6 +20,7 @@
  *  `shows` is how a scenario claiming the outcome must look, and is checked against every claim —
  *  a scenario cannot cover an outcome by saying so.
  */
+import { inSampleHours } from "optionality/domain/expiry";
 import { settingsFromEnv } from "../../src/env.ts";
 import type { Change, Row, SweepScenario } from "./format.ts";
 
@@ -177,6 +178,14 @@ export const OUTCOMES: readonly Outcome[] = [
     decision: "recordSamples",
     shows: (s) => s.world.tables.position_samples.length > 0 && asked(s)
       && s.expect.rows.position_samples === undefined,
+  },
+  {
+    // after 16:00 in New York the day's row is its close, and a mark that moved since does not
+    // reach it: a stored sample the batch differs from, and no write
+    name: "sample-left-alone-outside-the-sample-hours",
+    decision: "inSampleHours",
+    shows: (s) => !inSampleHours(new Date(s.world.clock)) && s.world.tables.position_samples.length > 0
+      && asked(s) && s.expect.rows.position_samples === undefined,
   },
   {
     // one unpriced leg and there is no observation to make
