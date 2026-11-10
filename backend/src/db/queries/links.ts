@@ -8,7 +8,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import type { PositionRow } from "../rows.ts";
+import type { MonitorRow, PositionRow } from "../rows.ts";
 
 export function clearMonitorLinks(db: DatabaseSync, monitorId: string): void {
   db.prepare("delete from monitor_positions where monitor_id = ?").run(monitorId);
@@ -49,6 +49,17 @@ export function positionsForMonitors(
     (owned[monitor_id] ??= []).push(position as PositionRow);
   }
   return owned;
+}
+
+/** The rules that watch one holding — every Monitor linked to it, in the watchlist's own order
+ *  of code then field, so whatever reports them reads them as the page lists them. */
+export function monitorsWatching(db: DatabaseSync, positionId: string): MonitorRow[] {
+  return db.prepare(
+    `select m.* from monitor_positions mp
+     join monitors m on m.id = mp.monitor_id
+     where mp.position_id = ?
+     order by m.code, m.field`,
+  ).all(positionId) as unknown as MonitorRow[];
 }
 
 export function positionsForMonitor(db: DatabaseSync, monitorId: string): PositionRow[] {

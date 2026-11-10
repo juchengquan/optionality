@@ -49,3 +49,16 @@ export const PositionPatch = z.object({
    *  can get one — created_at is right for some of them and wrong for the rest */
   opened_at: StrikeDate.optional(),
 });
+
+/** Closing a holding: what was paid, and when. Both optional.
+ *
+ *  `exit` is per contract, in points, like Entry, and may be left out or null — the owner may not
+ *  know it, and a blank is kept as a blank rather than guessed (ADR 0022). The dashboard prefills
+ *  it from the live Cost to close it is already showing; the service makes no market call here.
+ *
+ *  `closed_on` is a New York market date, spelled either way, like Opened. Left out, it is today's
+ *  market date — or the expiry, if that is earlier, since nothing is held past one. */
+export const ClosePositionIn = z.object({
+  exit: z.number().nullish(),
+  closed_on: StrikeDate.optional(),
+});

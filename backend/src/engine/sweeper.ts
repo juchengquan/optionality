@@ -43,7 +43,7 @@ import { monitorLegCodes, monitorValue } from "optionality/domain/monitor";
 import { positionLegCodes } from "optionality/domain/position";
 import { atomic } from "../db/open.ts";
 import {
-  clearMonitorLinks, deleteMonitorRow, findMonitor, listMonitors, listPositions,
+  clearMonitorLinks, deleteMonitorRow, findMonitor, listMonitors, openPositions,
   updateMonitorFields,
 } from "../db/queries/index.ts";
 import type { MonitorRow, PositionRow } from "../db/rows.ts";
@@ -179,9 +179,13 @@ export class MonitorSweeper {
 
     // positions join the batch for the dashboard's sake, so an unreadable one costs its own figures
     // and nothing else. A holding is not a rule and cannot be quarantined; the panel shows the gap.
+    //
+    // Only those still HELD. A closed holding is kept with its history (ADR 0022), but it is not
+    // valued, sampled or told it is due a manage-by: its last sample is the record of how it ended,
+    // and a sweep writing one more would rewrite that record with a market it was no longer in.
     const positionRows: PositionRow[] = [];
     const positionCodes: string[] = [];
-    for (const position of listPositions(db)) {
+    for (const position of openPositions(db)) {
       try {
         positionCodes.push(...positionLegCodes(toPosition(position)));
         positionRows.push(position);

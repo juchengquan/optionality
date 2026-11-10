@@ -8,7 +8,7 @@
  */
 import { buildSpxCode } from "./contract.ts";
 import type { OptionType } from "./contract.ts";
-import type { ByCode } from "./quote.ts";
+import { round4, type ByCode } from "./quote.ts";
 
 /** long if you bought it, short if you sold it (ADR 0013). sold/bought name the TRADES that open
  *  or close a Leg; greek exposure is only ever a signed number, so "short" means a Leg and
@@ -198,6 +198,20 @@ export function positionPnl(p: Position, byCode: ByCode): number | null {
   // money, so 2dp is its own precision: float noise here reads as 160.99999999999986.
   // points and greeks stay exact and are rounded at display instead.
   return roundMoney((p.entry - closing) * p.contracts * size);
+}
+
+/** What a closed Position made: Entry less Exit, across the contracts held, in POINTS.
+ *
+ *  Not P&L, and deliberately not called it. P&L is money (CONTEXT.md), and money needs a contract
+ *  size that only a Quote carries (`contractSize`, never assumed to be 100) — while a Position that
+ *  has been closed is no longer quoted, and one closed after its expiry never can be again. Points
+ *  are the unit Entry and Exit are already in, so this is the whole of what can honestly be said.
+ *
+ *  Null where either side is unknown: an Exit left blank when the holding was closed, or an Entry
+ *  never recorded. An unknown result is never a fabricated one (ADR 0022). */
+export function realizedPoints(p: Position, exit: number | null): number | null {
+  if (p.entry === null || exit === null) return null;
+  return round4((p.entry - exit) * p.contracts);
 }
 
 /** Python's sum() over floats, which since CPython 3.12 is NOT a left-to-right addition: it

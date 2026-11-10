@@ -10,7 +10,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { costToClose, positionLegCodes, positionPnl, type Position } from "optionality/domain/position";
 import { dteAtOpen, exitLevels, exitPolicy, type ExitLevels } from "optionality/domain/exit";
 import { daysToExpiry } from "optionality/domain/expiry";
-import { listPositions } from "./db/queries/index.ts";
+import { openPositions } from "./db/queries/index.ts";
 import type { PositionRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
 import { toPosition } from "./hydrate.ts";
@@ -43,7 +43,7 @@ function scheduleOf(
   return levels === null ? null : { dte_at_open: openedDte, ...levels };
 }
 
-/** Every holding, valued from ONE batch.
+/** Every holding still held, valued from ONE batch.
  *
  *  Throws if the batch fails: whether that is a 502 or a sentence in a Telegram reply is the
  *  caller's business, not this module's.
@@ -51,7 +51,9 @@ function scheduleOf(
 export async function holdingValues(
   db: DatabaseSync, fetchQuotes: QuoteFetcher, now: Date, settings: Settings, tz: string,
 ): Promise<{ byCode: Record<string, Record<string, unknown>>; values: HoldingValue[] }> {
-  const rows = listPositions(db);
+  // what is HELD: a closed holding is kept with its history but valued no longer, and must not
+  // widen the batch for contracts nobody holds (ADR 0022)
+  const rows = openPositions(db);
   if (rows.length === 0) return { byCode: {}, values: [] };
 
   const positions = rows.map(toPosition);

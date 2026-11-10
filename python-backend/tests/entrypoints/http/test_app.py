@@ -43,6 +43,7 @@ SURFACE = {
     "POST /monitors",
     "POST /monitors/:id/total-entry",
     "POST /positions",
+    "POST /positions/:id/close",
     "POST /references",
 }
 
@@ -84,6 +85,8 @@ def holding(id_, name, strike_date="2026-12-18"):
         "created_at": "2026-10-01 00:00:00.000000",
         "opened_at": None,
         "manage_notified_at": None,
+        "closed_on": None,
+        "exit": None,
     }
 
 
@@ -200,9 +203,9 @@ class TestTheBearerToken:
         # GET, each with no body: auth runs before validation too.
         h = start()
         doors = {d for d in served(h.app) if d.split(" ")[1] not in OPEN}
-        # the real number of doors, 15, less those not ported yet
-        assert len({d for d in SURFACE if d.split(" ")[1] not in OPEN}) == 15
-        assert len(doors) == 15 - len({d for d in NOT_YET if d.split(" ")[1] not in OPEN})
+        # the real number of doors, 16, less those not ported yet
+        assert len({d for d in SURFACE if d.split(" ")[1] not in OPEN}) == 16
+        assert len(doors) == 16 - len({d for d in NOT_YET if d.split(" ")[1] not in OPEN})
         for door in sorted(doors):
             method, path = door.split(" ")
             resp = await h.call(path.replace(":id", "x"), method=method, anonymous=True)

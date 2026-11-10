@@ -106,7 +106,9 @@
           ],
           "created_at": "2026-11-02 14:30:00.000000",
           "opened_at": "2026-10-12",
-          "manage_notified_at": null
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null
         }
       ],
       "monitors": [

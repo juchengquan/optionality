@@ -20,12 +20,13 @@ from .monitor import (
     MonitorPatch,
     TotalEntryIn,
 )
-from .position import LegIn, PositionIn, PositionPatch
+from .position import ClosePositionIn, LegIn, PositionIn, PositionPatch
 from .reference import SOURCES, ReferenceIn, Source
 
 __all__ = [
     "DISABLED_REASONS",
     "SOURCES",
+    "ClosePositionIn",
     "ComboMonitorIn",
     "DisabledReason",
     "LegIn",

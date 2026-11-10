@@ -61,7 +61,9 @@ describe("the schema", () => {
 
     const positions = (db.prepare("select name from pragma_table_info('positions')").all() as
       { name: string }[]).map((r) => r.name);
-    expect(positions.slice(-2)).toEqual(["opened_at", "manage_notified_at"]);
+    expect(positions.slice(-4, -2)).toEqual(["opened_at", "manage_notified_at"]);
+    // ...and after them, the two that let a holding be CLOSED rather than deleted (ADR 0022)
+    expect(positions.slice(-2)).toEqual(["closed_on", "exit"]);
   });
 
   it("creates every index under the name SQLAlchemy gave it", () => {

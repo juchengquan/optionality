@@ -18,6 +18,18 @@ export function listPositions(db: DatabaseSync): PositionRow[] {
   return rows<PositionRow>(db, "select * from positions order by strike_date, name");
 }
 
+/** The positions still HELD — every one not closed — in the same order.
+ *
+ *  Not the duplicate `listPositions`'s comment warns about: the two differ in what they answer, not
+ *  only in how. A closed holding is kept with its history (ADR 0022), so everything that asks
+ *  "what do I hold right now" — the sweep's batch and its samples, the valuation, a rule looking
+ *  for the holding it watches — must ask this, and only the listing asks for everything. */
+export function openPositions(db: DatabaseSync): PositionRow[] {
+  return rows<PositionRow>(
+    db, "select * from positions where closed_on is null order by strike_date, name",
+  );
+}
+
 export function findPosition(db: DatabaseSync, id: string): PositionRow | undefined {
   return row<PositionRow>(db, "select * from positions where id = ?", id);
 }

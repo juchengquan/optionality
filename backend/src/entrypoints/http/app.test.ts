@@ -148,6 +148,7 @@ describe("the bearer token", () => {
       "POST /monitors",
       "POST /monitors/:id/total-entry",
       "POST /positions",
+      "POST /positions/:id/close",
       "POST /references",
     ]);
   });
@@ -164,7 +165,7 @@ describe("the bearer token", () => {
     // the one worth guarding.
     //
     // Every METHOD, not only GET: the filter here read `r.method === "GET"` until this was widened,
-    // which left the three DELETEs, both PATCHes and the four POSTs — every write the API has —
+    // which left the three DELETEs, both PATCHes and the POSTs — every write the API has —
     // probed by nothing at all. The auth middleware could have been weakened on all of them with
     // the suite green. Each write is probed with its own verb and no body, because auth runs
     // before routing and before validation: a 401 is the answer whatever the body would have been.
@@ -176,7 +177,7 @@ describe("the bearer token", () => {
         return [`${r.method} ${path}`, { method: r.method, path }] as const;
       })).entries()];
     // the real number of doors, which the route list above enumerates one by one
-    expect(doors.length).toBe(15);
+    expect(doors.length).toBe(16);
     for (const [door, { method, path }] of doors) {
       expect((await h.call(path, { anonymous: true, method })).status, door).toBe(401);
     }

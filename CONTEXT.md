@@ -79,10 +79,25 @@ _Avoid_: expected value, fair value, theoretical price, target
 **Holding**:
 A Position, said the way the dashboard says it. The holdings list is the only screen that shows
 one whether or not a rule watches it — every other figure on the dashboard hangs off a Monitor,
-so a Position nothing watches used to appear nowhere at all. Deleting one is the only deliberate
-removal of a holding there is, and it takes the holding's recorded history with it: entry and
-Opened can be typed again, the daily samples cannot. The rules are kept.
+so a Position nothing watches used to appear nowhere at all. A trade that ends is CLOSED, which
+keeps it (ADR 0022); deleting is for a holding recorded by mistake, and it takes the recorded
+history with it: entry and Opened can be typed again, the daily samples cannot. The rules are
+kept either way.
 _Avoid_: trade, lot, leg (a Leg is part of one)
+
+**Closed**:
+A Position you no longer hold, kept with its legs, Entry, Opened and daily samples. Nothing live
+looks at it — no sweep values or samples it, and the rules that watched it are switched off — but
+it stays on record, which is what a review of past trades reads. Said of the day too: the New York
+market day it was closed.
+_Avoid_: deleted, removed, archived, expired (that word means the contract's own date)
+
+**Exit**:
+What you paid to close a Position, per contract, in points — Entry's counterpart, and like it
+left blank rather than guessed when unknown. Entry less Exit across the contracts held is what a
+closed Position made, said in POINTS: P&L is money, and money needs a contract size that only a
+Quote carries, while a closed Position is no longer quoted.
+_Avoid_: exit price, closing price, debit
 
 **Pace gap**:
 How far a Position's Cost to close sits from its On-pace figure. BEHIND means costing more to buy

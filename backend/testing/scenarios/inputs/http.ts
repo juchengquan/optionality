@@ -375,6 +375,67 @@ export const HTTP: readonly HttpInput[] = [
     request: request("PATCH", "/positions/pos-9", { entry: 6.5 }),
   },
   {
+    // ADR 0022: the holding and its samples are KEPT; the rules watching it go off and forget it
+    name: "POST /positions/{id}/close keeps the holding and its samples and switches off its rules",
+    world: world({
+      tables: {
+        ...held, position_samples: [sample({ position_id: "pos-1", observed_on: "2026-11-06" })],
+      },
+    }),
+    request: request("POST", "/positions/pos-1/close", { exit: 1.25 }),
+  },
+  {
+    // left out, the day is the clock's own New York market date, and a blank exit stays blank
+    name: "POST /positions/{id}/close with nothing said closes it today with no exit",
+    world: world({ tables: { positions: [position({ id: "pos-1" })] } }),
+    request: request("POST", "/positions/pos-1/close", {}),
+  },
+  {
+    name: "POST /positions/{id}/close refuses a day before the holding was opened",
+    world: world({ tables: held }),
+    request: request("POST", "/positions/pos-1/close", { exit: 1.25, closed_on: "2026-10-11" }),
+  },
+  {
+    name: "POST /positions/{id}/close refuses a holding already closed",
+    world: world({
+      tables: { positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 1.25 })] },
+    }),
+    request: request("POST", "/positions/pos-1/close", { exit: 0.5 }),
+  },
+  {
+    name: "POST /positions/{id}/close on a holding that does not exist",
+    world: world({ tables: held }),
+    request: request("POST", "/positions/pos-9/close", { exit: 1.25 }),
+  },
+  {
+    // a closed holding is listed with what it made, and valued no longer: the batch asks only
+    // for what is still held
+    name: "GET /positions/values leaves a closed holding out of the batch",
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-spread", entry: 2.5, closed_on: "2026-11-06", exit: 0.75,
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7500 },
+              { side: "long", option_type: "CALL", strike: 7550 },
+            ],
+          }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    name: "GET /positions lists a closed holding with what it made",
+    world: world({
+      tables: { positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 1.25 })] },
+    }),
+    request: request("GET", "/positions"),
+  },
+  {
     // the rules survive and forget the scope they had; the samples go with the holding
     name: "DELETE /positions/{id} removes the holding with its links and samples and keeps the rules",
     world: world({

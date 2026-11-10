@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict
 
 from optionality.contract import OptionType, build_spx_code
 from optionality.js import number, truthy
-from optionality.quote import ByCode
+from optionality.quote import ByCode, round4
 
 type Side = Literal["short", "long"]
 
@@ -150,6 +150,17 @@ def position_pnl(position: Position, by_code: ByCode) -> float | None:
     if closing is None or size is None or position.entry is None:
         return None
     return round((position.entry - closing) * position.contracts * size, 2)
+
+
+def realized_points(position: Position, exit_: float | None) -> float | None:
+    """What a closed Position made: Entry less Exit, across the contracts held, in POINTS.
+
+    Not P&L, and deliberately not called it: P&L is money, and money needs a contract size only a Quote
+    carries, while a Position that has been closed is no longer quoted. None where either side is
+    unknown — an unknown result is never a fabricated one (ADR 0022)."""
+    if position.entry is None or exit_ is None:
+        return None
+    return round4((position.entry - exit_) * position.contracts)
 
 
 def _sum_or_none(parts: list[float | None]) -> float | None:

@@ -24,11 +24,11 @@ export {
 } from "./monitors.ts";
 export {
   deletePositionRow, findPosition, findPositionByName, insertPosition, listPositions,
-  setPositionEntry, stampManageNotified, updatePositionFields,
+  openPositions, setPositionEntry, stampManageNotified, updatePositionFields,
 } from "./positions.ts";
 export {
-  clearMonitorLinks, clearPositionLinks, linkMonitorToPositions, positionsForMonitor,
-  positionsForMonitors, solelyWatchedPositions,
+  clearMonitorLinks, clearPositionLinks, linkMonitorToPositions, monitorsWatching,
+  positionsForMonitor, positionsForMonitors, solelyWatchedPositions,
 } from "./links.ts";
 export {
   clearPositionSamples, findPositionSample, listPositionSamples, recordPositionSample,

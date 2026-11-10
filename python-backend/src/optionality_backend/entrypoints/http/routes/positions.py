@@ -37,7 +37,15 @@ and not on a Monitor.
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Response
-from optionality.position import POSITION_GREEK_FIELDS, contract_size, position_greek, position_leg_codes
+from optionality.expiry import market_date
+from optionality.position import (
+    POSITION_GREEK_FIELDS,
+    Position,
+    contract_size,
+    position_greek,
+    position_leg_codes,
+    realized_points,
+)
 from optionality.timefmt import display_time
 from optionality.vol import VolSample, vol_attribution
 from pydantic import BaseModel, ConfigDict, Field
@@ -53,16 +61,19 @@ from ....db.queries import (
     insert_position,
     list_position_samples,
     list_positions,
+    monitors_watching,
+    update_monitor_fields,
     update_position_fields,
 )
 from ....db.rows import PositionRow
 from ....db.time import display_stored, to_sql_datetime
-from ....db.values import from_sqlite_json, new_id, to_sqlite_json
+from ....db.values import from_sqlite_json, new_id, to_sqlite_bool, to_sqlite_json
 from ....holdings import holding_values
 from ....hydrate import to_position
 from ....monitors import adopt_orphan_monitors
 from ....ports import verify_contracts
-from ....schemas.position import DEFAULT_CONTRACTS, PositionIn, PositionPatch
+from ....schemas.monitor import DisabledReason
+from ....schemas.position import DEFAULT_CONTRACTS, ClosePositionIn, PositionIn, PositionPatch
 from ..deps import Deps
 from ..errors import http_error, not_found, provider_failed
 from ..validate import valid
@@ -95,6 +106,28 @@ class PositionOut(BaseModel):
     created_at: str | None
     #: the day it was PUT ON, which created_at is not. None until declared (ADR 0011).
     opened_at: str | None
+    #: the New York market day it was closed, or None while it is held (ADR 0022)
+    closed_on: str | None
+    #: what was paid to close it, per contract, in points; None where nobody said
+    exit: float | None
+    #: Entry less Exit across the contracts held, in POINTS — not P&L, which is money and needs a contract
+    #: size only a Quote carries, while a closed holding is no longer quoted. None while it is held, and
+    #: wherever either side is unknown (`realized_points`).
+    realized_points: float | None
+
+
+class DisabledMonitor(BaseModel):
+    model_config = _AS_ZOD
+
+    id: str
+    code: str
+
+
+class ClosedOut(PositionOut):
+    """A close, answered: the holding as it now stands, and the rules the close switched off, so the page
+    can say which without a second request."""
+
+    disabled_monitors: list[DisabledMonitor]
 
 
 class ScheduleOut(BaseModel):
@@ -161,6 +194,16 @@ def _parse_map(text: str | None) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _realized(row: PositionRow) -> float | None:
+    """What a closed holding made, from the row's own figures. The legs play no part in it, so they are
+    not parsed for it — a row this listing could always serve must not start failing because it was
+    closed (`hydrate.py` validates where the TypeScript casts)."""
+    held = Position(
+        name=row["name"], strike_date=row["strike_date"], contracts=row["contracts"], entry=row["entry"], legs=()
+    )
+    return realized_points(held, row["exit"])
+
+
 def position_routes(deps: Deps) -> APIRouter:
     db, settings = deps.db, deps.settings
     tz = settings.display_tz
@@ -178,6 +221,10 @@ def position_routes(deps: Deps) -> APIRouter:
             # a plain date, NOT display_stored: created_at is an instant and converts to DISPLAY_TZ,
             # while Opened is the calendar day a trade was put on and has no time to convert
             "opened_at": row["opened_at"],
+            "closed_on": row["closed_on"],
+            "exit": row["exit"],
+            # only for a closed holding: an open one's result is its live P&L, which is /values' to say
+            "realized_points": None if row["closed_on"] is None else _realized(row),
         }
 
     router = APIRouter()
@@ -268,6 +315,9 @@ def position_routes(deps: Deps) -> APIRouter:
             "created_at": to_sql_datetime(deps.now()),
             "opened_at": p.opened_at,
             "manage_notified_at": None,
+            # recorded as held; closing it later is a state of this row, not its removal (ADR 0022)
+            "closed_on": None,
+            "exit": None,
         }
         # strict gate, as for monitors: nothing enters the table unverified
         codes = _js_sorted(set(position_leg_codes(to_position(row))))
@@ -303,6 +353,69 @@ def position_routes(deps: Deps) -> APIRouter:
         if given.opened_at is not None:
             changes["opened_at"] = given.opened_at
         return out(update_position_fields(db, id_, changes))
+
+    @router.post("/{id}/close", summary="Close a position, keeping it and its history", response_model=ClosedOut)
+    async def close(
+        id_: Annotated[str, Path(alias="id")],
+        given: Annotated[ClosePositionIn, Depends(valid("json", ClosePositionIn))],
+    ) -> dict[str, Any]:
+        """Close a holding: it is no longer held, and it is KEPT (ADR 0022).
+
+        Until this existed the only way off the dashboard was DELETE, which takes the daily samples with
+        it — and a closed trade's history is exactly what a review of past trades reads. So a close is a
+        state of the row: the legs, the entry and the samples stay, and everything live stops looking at
+        it (`open_positions`).
+
+        No market call. The exit is the owner's to say — the dashboard prefills it from the Cost to close
+        it is already showing — and a close after the expiry could not be priced anyway.
+        """
+        row = find_position(db, id_)
+        if row is None:
+            raise not_found("position")
+        if row["closed_on"] is not None:
+            raise http_error(409, f"position '{row['name']}' is already closed")
+
+        # Today in the market's reckoning, as Opened is — or the expiry, if that came first: nothing is
+        # held past one, so an iron condor that expired worthless last week and is only told to the app
+        # today was closed on its expiry, not today. ISO dates compare as text.
+        today = market_date(deps.now())
+        closed_on = given.closed_on or min(today, row["strike_date"])
+        if row["opened_at"] is not None and closed_on < row["opened_at"]:
+            raise http_error(422, f"closed on {closed_on}, before it was opened on {row['opened_at']}")
+        if closed_on > row["strike_date"]:
+            raise http_error(422, f"closed on {closed_on}, after its expiry on {row['strike_date']}")
+
+        def shut() -> list[dict[str, str]]:
+            # The rules that watched it go OFF, and are kept. A rule left on would go on alarming about
+            # contracts no longer held, and on valuing them against an Entry that is history. A rule
+            # spanning two holdings goes off when EITHER closes, for the same reason: its figure would now
+            # include legs nobody holds (ADR 0004, ADR 0022). One already off keeps its own reason — the
+            # owner's "manual", or the engine's quarantine — so the close neither claims it nor hides why
+            # it was off.
+            taken: list[dict[str, str]] = []
+            reason: DisabledReason = "holding-closed"
+            for monitor in monitors_watching(db, id_):
+                if not monitor["enabled"]:
+                    continue
+                update_monitor_fields(db, monitor["id"], {"enabled": to_sqlite_bool(False), "disabled_reason": reason})
+                taken.append({"id": monitor["id"], "code": monitor["code"]})
+            # ...and they stop claiming the holding, exactly as a DELETE leaves them: nothing alive is
+            # ever valued against a closed holding, because nothing alive is ever linked to one. A rule
+            # spanning two holdings keeps its link to the one still held.
+            clear_position_links(db, id_)
+            update_position_fields(db, id_, {"closed_on": closed_on, "exit": given.exit})
+            # the delete path's two steps, for the delete path's reason: a rule this orphaned may be
+            # watching a contract another holding still holds (a roll leaves the old and the new sharing
+            # a strike), and one that cannot be placed stops claiming a scope. Adoption looks only at
+            # OPEN holdings, so it can never put a rule straight back onto this one.
+            adopt_orphan_monitors(db)
+            clear_scope_of_orphans(db)
+            return taken
+
+        disabled = await atomic(db, shut)
+        closed = find_position(db, id_)
+        assert closed is not None  # written inside the transaction above
+        return {**out(closed), "disabled_monitors": disabled}
 
     @router.delete("/{id}", summary="Delete a position", status_code=204)
     async def remove(id_: Annotated[str, Path(alias="id")]) -> Response:

@@ -128,6 +128,7 @@ export function position(over: Row & { id: string }): Row {
       { side: "long", option_type: "PUT", strike: 6350 },
     ],
     created_at: CREATED, opened_at: "2026-10-12", manage_notified_at: null,
+    closed_on: null, exit: null,
     ...over,
   };
 }

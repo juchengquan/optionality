@@ -92,6 +92,8 @@ def _position(**overrides):
         "created_at": "2026-11-02 14:30:00.000000",
         "opened_at": None,
         "manage_notified_at": None,
+        "closed_on": None,
+        "exit": None,
     }
     return {**row, **overrides}
 

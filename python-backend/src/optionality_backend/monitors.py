@@ -24,7 +24,7 @@ from .db.open import atomic
 from .db.queries import (
     enabled_monitors,
     link_monitor_to_positions,
-    list_positions,
+    open_positions,
     orphan_monitors,
     positions_for_monitor,
     positions_for_monitors,
@@ -47,7 +47,9 @@ def link_to_positions(db: sqlite3.Connection, monitor_id: str, contracts: list[s
     which backfilled these rows. See `positions_holding` for the two cases that deliberately link
     nothing: a contract nothing holds, and a contract something holds twice.
     """
-    positions = [to_position(r) for r in list_positions(db)]
+    # only what is still held: a rule watching a contract of a closed holding watches an option, not a
+    # holding anyone has any more (ADR 0022)
+    positions = [to_position(r) for r in open_positions(db)]
     holding = positions_holding(positions, contracts)
     if not holding.found:
         return
@@ -147,7 +149,9 @@ def adopt_orphan_monitors(db: sqlite3.Connection) -> None:
     orphans = orphan_monitors(db)
     if not orphans:
         return
-    positions = [to_position(r) for r in list_positions(db)]
+    # never onto a closed holding: closing one is what ORPHANED the rules it took (ADR 0022), and
+    # adopting them straight back would undo the close
+    positions = [to_position(r) for r in open_positions(db)]
     for row in orphans:
         monitor = to_monitor(row)
         holding = positions_holding(positions, monitor_leg_codes(monitor))

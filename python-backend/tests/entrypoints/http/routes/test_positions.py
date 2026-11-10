@@ -898,6 +898,195 @@ class TestDeletingAPositionThatHasBeenSampled:
         assert (await delete(h, id_)).status_code == 204
 
 
+class TestClosingAHoldingKeepsIt:
+    """ADR 0022. The harness's clock is 2026-10-02T05:26Z, which is still 2026-10-02 in New York."""
+
+    @staticmethod
+    async def close(h, id_, payload=None):
+        return await h.call(f"/positions/{id_}/close", **json_body({} if payload is None else payload))
+
+    @staticmethod
+    def monitor_row(h, id_):
+        row = h.db.execute("select enabled, disabled_reason from monitors where id = ?", (id_,)).fetchone()
+        return None if row is None else {"enabled": row[0], "disabled_reason": row[1]}
+
+    @staticmethod
+    def add_sample(h, position_id, observed_on):
+        h.db.execute(
+            "insert into position_samples (position_id, observed_on, dte, cost_to_close) values (?, ?, 30, 2.5)",
+            (position_id, observed_on),
+        )
+
+    @staticmethod
+    def sample_count(h, position_id):
+        return h.db.execute("select count(*) from position_samples where position_id = ?", (position_id,)).fetchone()[0]
+
+    async def test_records_the_day_and_the_exit_and_keeps_the_legs_the_entry_and_the_samples(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor(contracts=2)))
+        self.add_sample(h, pid, "2026-10-01")
+
+        resp = await self.close(h, pid, {"exit": 0.4})
+        data = resp.json()
+        assert resp.status_code == 200, json.dumps(data)
+        assert {k: data[k] for k in ("id", "closed_on", "exit", "entry", "legs", "realized_points")} == {
+            "id": pid,
+            "closed_on": "2026-10-02",
+            "exit": 0.4,
+            "entry": 3.0,
+            "legs": CONDOR_LEGS,
+            # Entry less Exit across the contracts held, in points: P&L is money and needs a quote
+            "realized_points": 5.2,
+        }
+        assert data["disabled_monitors"] == []
+        assert self.sample_count(h, pid) == 1, "the history survives the close"
+
+    async def test_closes_without_an_exit_and_then_says_nothing_about_what_it_made(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        data = (await self.close(h, pid)).json()
+        assert (data["closed_on"], data["exit"], data["realized_points"]) == ("2026-10-02", None, None)
+
+    async def test_takes_the_day_it_was_closed_when_it_is_given_the_way_opened_is(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor(opened_at="2026-09-01")))
+        data = (await self.close(h, pid, {"exit": 0.4, "closed_on": "20260930"})).json()
+        assert data["closed_on"] == "2026-09-30"
+
+    async def test_defaults_to_the_expiry_for_a_holding_closed_after_it_since_nothing_is_held_past_one(self, start):
+        # an iron condor that expired worthless on 09-25 and was only told to the app today
+        h = start_with(start)
+        pid = created201(await post(h, condor(strike_date="2026-09-25")))
+        data = (await self.close(h, pid, {"exit": 0})).json()
+        assert (data["closed_on"], data["exit"], data["realized_points"]) == ("2026-09-25", 0, 3)
+
+    async def test_refuses_a_day_before_it_was_opened_and_a_day_after_its_expiry(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor(opened_at="2026-09-01")))
+        early = await self.close(h, pid, {"closed_on": "2026-08-31"})
+        assert early.status_code == 422
+        assert "before it was opened" in early.json()["detail"]
+        late = await self.close(h, pid, {"closed_on": "2026-12-19"})
+        assert late.status_code == 422
+        assert "after its expiry" in late.json()["detail"]
+        assert (await h.call("/positions")).json()[0]["closed_on"] is None, "and nothing was written"
+
+    async def test_refuses_an_impossible_date_and_an_exit_that_is_not_a_number(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        assert (await self.close(h, pid, {"closed_on": "2026-13-01"})).status_code == 422
+        assert (await self.close(h, pid, {"exit": "0.40"})).status_code == 422
+
+    async def test_is_409_for_a_holding_already_closed_and_keeps_what_the_first_close_said(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        await self.close(h, pid, {"exit": 0.4})
+        again = await self.close(h, pid, {"exit": 9})
+        assert again.status_code == 409
+        assert again.json()["detail"] == "position '1016_IC' is already closed"
+        assert (await h.call("/positions")).json()[0]["exit"] == 0.4
+
+    async def test_is_a_404_for_a_holding_that_was_never_there(self, start):
+        h = start_with(start)
+        assert (await self.close(h, "nope", {"exit": 0.4})).status_code == 404
+
+    async def test_disables_the_rules_watching_it_says_which_and_keeps_them(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        leg = await make_monitor(h, strike_date=EXPIRY, option_type="CALL", strike=8050)
+        data = (await self.close(h, pid, {"exit": 0.4})).json()
+        assert data["disabled_monitors"] == [{"id": leg, "code": build_spx_code(EXPIRY, "CALL", 8050)}]
+        assert self.monitor_row(h, leg) == {"enabled": 0, "disabled_reason": "holding-closed"}
+        # ...and it stops claiming the holding, so nothing alive is ever valued against a closed one
+        assert links(h, leg) == ([], None)
+
+    async def test_leaves_a_rule_already_off_as_the_owner_left_it_and_does_not_claim_to_have_disabled_it(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        leg = await make_monitor(h, strike_date=EXPIRY, option_type="CALL", strike=8050)
+        await h.call(f"/monitors/{leg}", **{**json_body({"enabled": False}), "method": "PATCH"})
+        data = (await self.close(h, pid, {"exit": 0.4})).json()
+        assert data["disabled_monitors"] == []
+        assert self.monitor_row(h, leg) == {"enabled": 0, "disabled_reason": "manual"}
+
+    async def test_disables_a_rule_spanning_two_holdings_when_either_closes_since_it_would_value_legs_no_longer_held(
+        self, start
+    ):
+        h = start_with(start)
+        calls = await make_position(h, "1016_bs_8050", EXPIRY, CONDOR_LEGS[:2])
+        puts = await make_position(h, "1016_bp_7100", EXPIRY, CONDOR_LEGS[2:])
+        both = created201(
+            await h.call(
+                "/monitors",
+                **json_body(
+                    {
+                        "name": "1016_IC",
+                        "strike_date": EXPIRY,
+                        "field": "option_delta",
+                        "threshold": 0.2,
+                        "direction": "above",
+                        "legs": [
+                            {"sign": -1, "option_type": "CALL", "strike": 8050},
+                            {"sign": -1, "option_type": "PUT", "strike": 7100},
+                        ],
+                    }
+                ),
+            )
+        )
+        assert links(h, both)[0] == sorted([calls, puts])
+
+        await self.close(h, puts, {"exit": 0.1})
+        assert self.monitor_row(h, both) == {"enabled": 0, "disabled_reason": "holding-closed"}
+        # the link to the holding still held is kept, as deleting the other spread would keep it
+        assert links(h, both)[0] == [calls]
+
+    async def test_is_listed_with_what_it_made_and_left_out_of_everything_live(self, start):
+        calls = 0
+
+        async def fetch(codes):
+            nonlocal calls
+            calls += 1
+            return await priced_fetcher(codes)
+
+        h = start_with(start, fetch)
+        pid = created201(await post(h, condor()))
+        await self.close(h, pid, {"exit": 0.4})
+
+        [listed] = (await h.call("/positions")).json()
+        assert (listed["id"], listed["closed_on"], listed["exit"], listed["realized_points"]) == (
+            pid,
+            "2026-10-02",
+            0.4,
+            2.6,
+        )
+        calls = 0
+        assert (await h.call("/positions/values")).json() == [], "nothing open is valued"
+        assert calls == 0, "and the Provider is asked nothing"
+
+    async def test_never_adopts_a_new_rule_onto_a_closed_holding(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        await self.close(h, pid, {"exit": 0.4})
+        leg = await make_monitor(h, strike_date=EXPIRY, option_type="CALL", strike=8050)
+        assert links(h, leg) == ([], None)
+
+    async def test_lets_the_same_contracts_be_held_again_and_the_new_holding_adopts_the_rules(self, start):
+        h = start_with(start)
+        first = created201(await post(h, condor()))
+        await self.close(h, first, {"exit": 0.4})
+        leg = await make_monitor(h, strike_date=EXPIRY, option_type="CALL", strike=8050)
+        again = created201(await post(h, condor(name="1016_IC_again")))
+        assert links(h, leg) == ([again], "leg")
+
+    async def test_can_still_be_deleted_for_a_holding_recorded_by_mistake_and_its_samples_go_with_it(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        self.add_sample(h, pid, "2026-10-01")
+        await self.close(h, pid, {"exit": 0.4})
+        assert (await delete(h, pid)).status_code == 204
+        assert self.sample_count(h, pid) == 0
+
+
 def insert_holding(h, name, strike_date, legs, **over):
     """A holding stored as POST /positions stores one, with what the route would refuse to write."""
     row = {
@@ -911,6 +1100,8 @@ def insert_holding(h, name, strike_date, legs, **over):
         "created_at": "2026-10-02 05:26:06.299000",
         "opened_at": None,
         "manage_notified_at": None,
+        "closed_on": None,
+        "exit": None,
         **over,
     }
     insert_position(h.db, row)
@@ -936,6 +1127,10 @@ class TestWhatOnlyThePythonCanGetWrong:
                 "legs": CONDOR_LEGS,
                 "created_at": "2026-10-02 13:26:06+08:00",
                 "opened_at": "2026-10-12",
+                # still held: no close, no exit, and nothing realized yet (ADR 0022)
+                "closed_on": None,
+                "exit": None,
+                "realized_points": None,
             }
         ]
 

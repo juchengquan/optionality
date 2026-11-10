@@ -498,3 +498,125 @@ describe("when a write is refused", () => {
     expect(within(row).queryByRole("alert"), "a complaint about a press that then worked").toBeNull();
   });
 });
+
+describe("closing a holding keeps it (ADR 0022)", () => {
+  /** Deleting was the only way a holding left the panel, and it took the daily samples with it —
+   *  the history a review of past trades reads. Closing keeps the record and switches off the rules
+   *  that watched it; the exit is prefilled from the cost to close the panel is already showing,
+   *  because that is the figure the owner is most likely to have just paid. */
+  const closedRow = {
+    id: "pOld", name: "1016_IC", strategy: null, strike_date: "2026-10-16", contracts: 1,
+    entry: 3.0, created_at: "x", opened_at: "2026-09-01",
+    legs: [{ side: "short", option_type: "CALL", strike: 8050 }],
+    closed_on: "2026-10-09", exit: 0.4, realized_points: 2.6,
+  };
+
+  function mockClosing(holdings: unknown[], listed: unknown[], disabled: unknown[] = []) {
+    calls = [];
+    posted = [];
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method !== "GET") {
+        const body = init?.body ? JSON.parse(init.body as string) : {};
+        posted.push({ url, method, body });
+        const answer = url.endsWith("/close")
+          ? { ...spread, closed_on: "2026-10-09", exit: body.exit, realized_points: null,
+              disabled_monitors: disabled }
+          : {};
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(answer) } as Response);
+      }
+      calls.push(url);
+      const body = url.includes("/positions/values") ? holdings
+        : url.endsWith("/positions") ? listed
+        : url.endsWith("/vol") ? { vol: null, from: null, to: null, days: null }
+        : url.endsWith("/quotes") ? [] : url.endsWith("/references") ? [] : url.endsWith("/monitors") ? [] : health;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+    }));
+  }
+
+  const closeDialog = async () => {
+    const panel = await holdingsOf();
+    await userEvent.click(
+      within(within(panel).getByTestId("holding-pBS")).getByRole("button", { name: /^close$/i }));
+    return await screen.findByRole("alertdialog");
+  };
+
+  it("asks first, with the exit prefilled from the cost to close, and sends nothing on cancel", async () => {
+    mockClosing([spread], []);
+    render(<App />);
+    const dialog = await closeDialog();
+    expect((within(dialog).getByLabelText(/exit/i) as HTMLInputElement).value).toBe("2.35");
+    expect(dialog.textContent).toMatch(/kept|history/i);
+    await userEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
+    expect(posted).toHaveLength(0);
+  });
+
+  it("closes the holding by its own id with the exit it was given", async () => {
+    mockClosing([spread], []);
+    render(<App />);
+    const dialog = await closeDialog();
+    fireEvent.change(within(dialog).getByLabelText(/exit/i), { target: { value: "2.4" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: /^close holding$/i }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.url).toMatch(/\/positions\/pBS\/close$/);
+    expect(posted[0]!.method).toBe("POST");
+    expect(posted[0]!.body).toEqual({ exit: 2.4 });
+  });
+
+  it("closes with no exit when the field is cleared, rather than inventing one", async () => {
+    mockClosing([spread], []);
+    render(<App />);
+    const dialog = await closeDialog();
+    fireEvent.change(within(dialog).getByLabelText(/exit/i), { target: { value: "" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: /^close holding$/i }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.body).toEqual({ exit: null });
+  });
+
+  it("says which rules the close switched off", async () => {
+    mockClosing([spread], [], [{ id: "m1", code: "US.SPXW261120P7100000" }]);
+    render(<App />);
+    const dialog = await closeDialog();
+    await userEvent.click(within(dialog).getByRole("button", { name: /^close holding$/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/switched off.*US\.SPXW261120P7100000/)).toBeTruthy());
+  });
+
+  it("re-reads the holdings afterwards, so the row leaves the live list", async () => {
+    mockClosing([spread], []);
+    render(<App />);
+    const dialog = await closeDialog();
+    const before = calls.filter((u) => u.includes("/positions/values")).length;
+    await userEvent.click(within(dialog).getByRole("button", { name: /^close holding$/i }));
+    await waitFor(() =>
+      expect(calls.filter((u) => u.includes("/positions/values")).length).toBeGreaterThan(before));
+  });
+
+  it("asks for the closed ones only when they are opened, and shows what each made", async () => {
+    mockClosing([spread], [{ ...spread, closed_on: null, exit: null, realized_points: null }, closedRow]);
+    render(<App />);
+    const panel = await holdingsOf();
+    expect(calls.some((u) => u.endsWith("/positions")), "closed is asked for, never polled").toBe(false);
+
+    await userEvent.click(within(panel).getByRole("button", { name: /closed/i }));
+    const closed = await within(panel).findByTestId("closed-holdings");
+    const row = within(closed).getByTestId("closed-pOld");
+    expect(row.textContent).toMatch(/1016_IC/);
+    expect(row.textContent).toMatch(/2026-10-09/);
+    expect(row.textContent).toMatch(/3\.00/);
+    expect(row.textContent).toMatch(/0\.40/);
+    expect(row.textContent).toMatch(/2\.60 pts/);
+    // only the closed one: the held holding is the live list's
+    expect(within(closed).queryByTestId("closed-pBS")).toBeNull();
+  });
+
+  it("says so when nothing has been closed yet", async () => {
+    mockClosing([spread], [{ ...spread, closed_on: null, exit: null, realized_points: null }]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(within(panel).getByRole("button", { name: /closed/i }));
+    expect(await within(panel).findByText(/nothing closed yet/i)).toBeTruthy();
+  });
+});

@@ -21,6 +21,19 @@ def list_positions(db: sqlite3.Connection) -> list[PositionRow]:
     return cast(list[PositionRow], rows(db, "select * from positions order by strike_date, name"))
 
 
+def open_positions(db: sqlite3.Connection) -> list[PositionRow]:
+    """The positions still HELD — every one not closed — in the same order.
+
+    Not the duplicate `list_positions`'s docstring warns about: the two differ in what they answer, not
+    only in how. A closed holding is kept with its history (ADR 0022), so everything that asks "what do I
+    hold right now" — the sweep's batch and its samples, the valuation, a rule looking for the holding it
+    watches — must ask this, and only the listing asks for everything."""
+    return cast(
+        list[PositionRow],
+        rows(db, "select * from positions where closed_on is null order by strike_date, name"),
+    )
+
+
 def find_position(db: sqlite3.Connection, id_: str) -> PositionRow | None:
     return cast(PositionRow | None, row(db, "select * from positions where id = ?", id_))
 

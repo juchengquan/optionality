@@ -276,6 +276,36 @@ export const SWEEP: readonly SweepInput[] = [
     world: world({ tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: BOOK } }),
   },
   {
+    // ADR 0022: closed is kept, not held — its last sample is how it ended, and nothing more is
+    // written over it. With nothing else to ask about, the sweep asks nothing at all.
+    name: "a closed holding is neither fetched nor sampled",
+    outcomes: ["nothing-to-sweep"],
+    world: world({
+      tables: { positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 1.25 })] },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // ...and beside one still held, only the held one joins the batch and gets the day's sample
+    name: "only the holding still held is sampled beside a closed one",
+    outcomes: ["sample-recorded"],
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-spread", entry: 2.5, closed_on: "2026-11-06", exit: 0.75,
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7500 },
+              { side: "long", option_type: "CALL", strike: 7550 },
+            ],
+          }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
     name: "the day's sample is rewritten when the mark moves",
     outcomes: ["sample-rewritten-when-it-moves"],
     world: world({

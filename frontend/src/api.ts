@@ -154,6 +154,32 @@ export const patchPosition = (id: string, body: Record<string, unknown>) =>
 export const deletePosition = (id: string) =>
   sent(client.positions[":id"].$delete({ param: { id } }), `/positions/${id}`);
 
+/** Every holding on record, held or CLOSED (ADR 0022), as stored — no live figures, no market
+ *  call. Asked for only when the closed list is opened: nothing else on the page needs it, and the
+ *  held ones' figures are `/positions/values`' to give. */
+export type Recorded = Awaited<ReturnType<typeof fetchPositions>>[number];
+export const fetchPositions = () =>
+  read<Exclude<Infer<typeof client.positions.$get>, { detail: string }>>(
+    client.positions.$get(), "/positions",
+  );
+
+/** What a close answers: the holding as it now stands, and the rules it switched off. */
+export type Closed = Exclude<
+  Infer<typeof client.positions[":id"]["close"]["$post"]>, { detail: string }
+>;
+
+/** Close a holding: it leaves the live list and is KEPT, with its samples, and the rules that
+ *  watched it are switched off (ADR 0022). The one write here whose answer is more than whether it
+ *  landed — the page says which rules went off, which only the service knows. */
+export async function closePosition(id: string, exit: number | null): Promise<Closed> {
+  const response = await client.positions[":id"].close.$post({ param: { id }, json: { exit } });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok || isRefusal(body)) {
+    throw new Error(isRefusal(body) ? body.detail : `/positions/${id}/close → ${response.status}`);
+  }
+  return body as Closed;
+}
+
 /** Record a credit taken in across everything a rule spans; the server derives the one wing
  *  that has no rule of its own, so the per-wing credits stay the single source of truth. */
 export const setTotalEntry = (monitorId: string, entry: number) =>

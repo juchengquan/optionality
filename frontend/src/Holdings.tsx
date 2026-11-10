@@ -1,11 +1,20 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { toast } from "@/components/ui/toast";
 import { OpenedField } from "./OpenedField";
 import { NumberField } from "@/components/ui/number-field";
 
-import { deletePosition, patchPosition, positionPatchBody, type Holding } from "./api";
+import {
+  closePosition, deletePosition, fetchPositions, patchPosition, positionPatchBody, type Holding,
+  type Recorded,
+} from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
 import { fmt } from "./format";
 import { PaceLine } from "./PaceLine";
@@ -37,6 +46,8 @@ export function Holdings({ reloadKey, rows, error, load, act }: {
   act: (fn: () => Promise<void>) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // bumped by a close, so the closed list re-reads the holding that has just joined it
+  const [closes, setCloses] = useState(0);
 
   // only while open, and again when the refresh button says so. Closed, this costs nothing —
   // which is the whole point of fetching on demand, and the reason saving an image asks for them
@@ -59,11 +70,127 @@ export function Holdings({ reloadKey, rows, error, load, act }: {
         <div data-testid="holdings">
           <HoldingList
             rows={rows} error={error} pending={<p className="meta">loading…</p>}
-            row={(h) => <HoldingRow key={h.id} holding={h} onSaved={() => void load()} act={act} />}
+            row={(h) => (
+              <HoldingRow key={h.id} holding={h} act={act}
+                          onSaved={() => void load()}
+                          onClosed={() => { void load(); setCloses((n) => n + 1); }} />
+            )}
           />
+          <ClosedHoldings reloadKey={`${reloadKey}-${closes}`} />
         </div>
       )}
     </section>
+  );
+}
+
+/** What has been held and closed, with what each made (ADR 0022).
+ *
+ *  Its own disclosure, ASKED FOR rather than fetched with the panel: it reads stored rows and costs
+ *  no market call, but nothing else on the page needs it, and a list that only grows has no place
+ *  above the holdings that need watching. The result is in POINTS, as the service says it: P&L is
+ *  money and needs a contract size, which only a quote carries, and a closed holding has none. */
+function ClosedHoldings({ reloadKey }: { reloadKey: string }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<Recorded[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    fetchPositions().then(
+      (all) => {
+        if (!live) return;
+        // selecting, not computing: which holdings are closed is the service's own field
+        setRows(all.filter((p) => p.closed_on !== null));
+        setError(null);
+      },
+      (e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); },
+    );
+    return () => { live = false; };
+  }, [open, reloadKey]);
+
+  return (
+    <div className="border-t pt-2">
+      <Button variant="ghost" size="sm" className="pointer-coarse:min-h-11" aria-expanded={open}
+              onClick={() => setOpen((o) => !o)}>
+        {`${open ? "▾" : "▸"} closed`}
+      </Button>
+      {!open ? null : (
+        <div data-testid="closed-holdings" className="tabular-nums">
+          {error !== null ? <p className="meta">{error}</p>
+            : rows === null ? <p className="meta">loading…</p>
+            : rows.length === 0 ? <p className="meta">Nothing closed yet.</p>
+            : rows.map((p) => (
+              <p key={p.id} data-testid={`closed-${p.id}`} className="py-1">
+                <strong>{p.name}</strong>
+                {` · closed ${p.closed_on} · entry ${fmt(p.entry, "mid")} → exit ${fmt(p.exit, "mid")} · `}
+                {p.realized_points === null
+                  ? <span className="meta">result unknown</span>
+                  : `${fmt(p.realized_points, "mid")} pts`}
+              </p>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Close a holding — the way off the live list that KEEPS it (ADR 0022).
+ *
+ *  Asked like a delete, though for a different reason: a close cannot be undone from here either,
+ *  and it switches off the rules that watched the holding. The exit is prefilled from the Cost to
+ *  close the panel is already showing, because that is the figure the owner most likely just paid;
+ *  it can be overwritten, or cleared to leave it unknown rather than guessed. */
+function CloseHolding({ holding, act, onClosed }: {
+  holding: Holding;
+  act: (fn: () => Promise<void>) => void;
+  onClosed: () => void;
+}) {
+  const [exit, setExit] = useState<number | null>(holding.cost_to_close);
+  const id = `p-exit-${holding.id}`;
+  return (
+    <AlertDialog onOpenChange={(open) => { if (open) setExit(holding.cost_to_close); }}>
+      {/* 44px on a touch screen, where a finger is the pointer (Apple's minimum), and the row's
+          own density at a desk, where the delete beside it is 28px */}
+      <AlertDialogTrigger
+        render={
+          <Button type="button" variant="ghost" size="sm" className="pointer-coarse:min-h-11">
+            close
+          </Button>
+        }
+      />
+      {/* held off the poll for the same reason the delete question is (App.beingOperated) */}
+      <AlertDialogContent data-poll="hold">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Close {holding.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            It leaves the live list and is kept, with its entry, its opened date and its recorded
+            history. The alarm rules watching it are switched off, and stay listed among the muted
+            rules.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Field>
+          <FieldLabel htmlFor={id}>exit — what you paid to close, per contract</FieldLabel>
+          <NumberField id={id} value={exit} onValueChange={setExit} />
+        </Field>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => act(async () => {
+            const closed = await closePosition(holding.id, exit);
+            const off = closed.disabled_monitors.map((m) => m.code);
+            toast.add({
+              title: off.length === 0
+                ? `closed ${holding.name}`
+                : `closed ${holding.name} — switched off ${off.join(", ")}`,
+              type: "success",
+            });
+            onClosed();
+          })}>
+            Close holding
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -138,9 +265,10 @@ export function HoldingReadout({ holding, beneath }: {
   );
 }
 
-function HoldingRow({ holding, onSaved, act }: {
+function HoldingRow({ holding, onSaved, onClosed, act }: {
   holding: Holding;
   onSaved: () => void;
+  onClosed: () => void;
   act: (fn: () => Promise<void>) => void;
 }) {
   return (
@@ -151,6 +279,9 @@ function HoldingRow({ holding, onSaved, act }: {
       />
       <div className="flex flex-wrap items-end gap-2">
         <HoldingEdit holding={holding} onSaved={onSaved} act={act} />
+        {/* Closing comes before deleting: it is how a trade normally ends, and it keeps what
+            deleting throws away (ADR 0022). Delete stays, for a holding recorded by mistake. */}
+        <CloseHolding holding={holding} act={act} onClosed={onClosed} />
         {/* Guarded like a rule delete, and for a stronger reason: a rule can be MUTED instead and
             unmuted with one click, and a holding cannot. Entry and Opened could be typed again;
             the samples could not, since IV and vega are only knowable on the day they were

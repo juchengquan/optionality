@@ -27,6 +27,7 @@ still in force. Git holds the full history of each.
 | [19](0019-a-reference-names-its-source.md) | A Reference names its source, and the proxy goes | built, all five tracks (#210–#212); one seam for every vendor in #218; "no order message" scoped to the TypeScript by 21 |
 | [20](0020-delivery-is-an-entrypoint.md) | Delivery is an entrypoint, and the library never depends on it | built; follows the three seams of #235, #239, #240 |
 | [21](0021-the-python-can-run-the-service.md) | The Python can run the service, one backend at a time | accepted, not built; six phases |
+| [22](0022-a-closed-holding-is-kept.md) | A closed holding is kept | built, in both backends |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained
 in force. A new decision takes the next number, and numbers are never reused.

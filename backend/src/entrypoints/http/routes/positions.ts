@@ -7,24 +7,30 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { POSITION_GREEK_FIELDS, contractSize, positionGreek, positionLegCodes } from "optionality/domain/position";
+import { marketDate } from "optionality/domain/expiry";
+import {
+  POSITION_GREEK_FIELDS, contractSize, positionGreek, positionLegCodes, realizedPoints,
+} from "optionality/domain/position";
 import type { Deps } from "../deps.ts";
 import {
   clearPositionLinks, clearPositionSamples, clearScopeOfOrphans, deletePositionRow, findPosition,
   findPositionByName, insertPosition,
-  listPositionSamples, listPositions, updatePositionFields,
+  listPositionSamples, listPositions, monitorsWatching, updateMonitorFields, updatePositionFields,
 } from "../../../db/queries/index.ts";
 import { atomic } from "../../../db/open.ts";
 import { holdingValues } from "../../../holdings.ts";
 import type { PositionRow } from "../../../db/rows.ts";
-import { newId, toSqliteJson } from "../../../db/values.ts";
+import { newId, toSqliteBool, toSqliteJson } from "../../../db/values.ts";
 import { toSqlDatetime } from "../../../db/time.ts";
 import { httpError, notFound, providerFailed } from "../errors.ts";
 import { volAttribution, type VolSample } from "optionality/domain/vol";
 import { toPosition } from "../../../hydrate.ts";
 import { adoptOrphanMonitors } from "../../../monitors.ts";
 import { verifyContracts } from "optionality/quotes";
-import { DEFAULT_CONTRACTS, PositionIn, PositionPatch } from "../../../schemas/position.ts";
+import type { DisabledReason } from "../../../schemas/monitor.ts";
+import {
+  ClosePositionIn, DEFAULT_CONTRACTS, PositionIn, PositionPatch,
+} from "../../../schemas/position.ts";
 import { displayStored } from "../../../db/time.ts";
 import { displayTime } from "optionality/domain/timefmt";
 import { documented } from "../openapi.ts";
@@ -47,6 +53,20 @@ const PositionOut = z.object({
   created_at: z.string().nullable(),
   /** the day it was PUT ON, which created_at is not. Null until declared (ADR 0011). */
   opened_at: z.string().nullable(),
+  /** the New York market day it was closed, or null while it is held (ADR 0022) */
+  closed_on: z.string().nullable(),
+  /** what was paid to close it, per contract, in points; null where nobody said */
+  exit: z.number().nullable(),
+  /** Entry less Exit across the contracts held, in POINTS — not P&L, which is money and needs a
+   *  contract size only a Quote carries, while a closed holding is no longer quoted. Null while
+   *  it is held, and wherever either side is unknown (`realizedPoints`). */
+  realized_points: z.number().nullable(),
+});
+
+/** A close, answered: the holding as it now stands, and the rules the close switched off, so the
+ *  page can say which without a second request. */
+const ClosedOut = PositionOut.extend({
+  disabled_monitors: z.array(z.object({ id: z.string(), code: z.string() })),
 });
 
 /** The exit schedule, or null for a Position whose Opened nobody has declared — which is the
@@ -89,6 +109,7 @@ const values = documented("Live value, P&L and exit schedule of every position",
 const vol = documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]);
 const create = documented("Create a position", { 201: PositionOut }, [409]);
 const update = documented("Update a position", { 200: PositionOut }, [404]);
+const close = documented("Close a position, keeping it and its history", { 200: ClosedOut }, [404, 409]);
 const remove = documented("Delete a position", { 204: null }, [404]);
 
 export function positionRoutes(deps: Deps) {
@@ -107,6 +128,12 @@ export function positionRoutes(deps: Deps) {
     // a plain date, NOT displayStored: created_at is an instant and converts to DISPLAY_TZ,
     // while Opened is the calendar day a trade was put on and has no time to convert
     opened_at: row.opened_at,
+    closed_on: row.closed_on,
+    exit: row.exit,
+    // only for a closed holding: an open one's result is its live P&L, which is /values' to say
+    // The legs play no part in it, so they are not parsed for it — a row this listing could always
+    // serve must not start failing because it was closed.
+    realized_points: row.closed_on === null ? null : realizedPoints({ ...row, legs: [] }, row.exit),
   });
 
   /** A stored JSON map, or null — including when it will not parse. Written by the sweeper and
@@ -207,6 +234,9 @@ export function positionRoutes(deps: Deps) {
         created_at: toSqlDatetime(deps.now()),
         opened_at: p.opened_at ?? null,
         manage_notified_at: null,
+        // recorded as held; closing it later is a state of this row, not its removal (ADR 0022)
+        closed_on: null,
+        exit: null,
       };
       // strict gate, as for monitors: nothing enters the table unverified
       const codes = [...new Set(positionLegCodes(toPosition(row)))].sort();
@@ -234,6 +264,65 @@ export function positionRoutes(deps: Deps) {
       if (given.strategy !== undefined) changes.strategy = given.strategy;
       if (given.opened_at !== undefined) changes.opened_at = given.opened_at;
       return update.reply(c, 200, out(updatePositionFields(db, id, changes)));
+    })
+
+    /** Close a holding: it is no longer held, and it is KEPT (ADR 0022).
+     *
+     *  Until this existed the only way off the dashboard was DELETE, which takes the daily samples
+     *  with it — and a closed trade's history is exactly what a review of past trades reads. So a
+     *  close is a state of the row: the legs, the entry and the samples stay, and everything live
+     *  stops looking at it (`openPositions`).
+     *
+     *  No market call. The exit is the owner's to say — the dashboard prefills it from the Cost to
+     *  close it is already showing — and a close after the expiry could not be priced anyway.
+     */
+    .post("/:id/close", close, valid("json", ClosePositionIn), async (c) => {
+      const id = c.req.param("id");
+      const given = c.req.valid("json");
+      const row = findPosition(db, id);
+      if (!row) throw notFound("position");
+      if (row.closed_on !== null) throw httpError(409, `position '${row.name}' is already closed`);
+
+      // Today in the market's reckoning, as Opened is — or the expiry, if that came first: nothing
+      // is held past one, so an iron condor that expired worthless last week and is only told to
+      // the app today was closed on its expiry, not today. ISO dates compare as text.
+      const today = marketDate(deps.now());
+      const closedOn = given.closed_on ?? (row.strike_date < today ? row.strike_date : today);
+      if (row.opened_at !== null && closedOn < row.opened_at) {
+        throw httpError(422, `closed on ${closedOn}, before it was opened on ${row.opened_at}`);
+      }
+      if (closedOn > row.strike_date) {
+        throw httpError(422, `closed on ${closedOn}, after its expiry on ${row.strike_date}`);
+      }
+
+      const disabled = await atomic(db, () => {
+        // The rules that watched it go OFF, and are kept. A rule left on would go on alarming about
+        // contracts no longer held, and on valuing them against an Entry that is history. A rule
+        // spanning two holdings goes off when EITHER closes, for the same reason: its figure would
+        // now include legs nobody holds (ADR 0004, ADR 0022). One already off keeps its own
+        // reason — the owner's "manual", or the engine's quarantine — so the close neither claims it
+        // nor hides why it was off.
+        const taken: { id: string; code: string }[] = [];
+        const reason: DisabledReason = "holding-closed";
+        for (const monitor of monitorsWatching(db, id)) {
+          if (!monitor.enabled) continue;
+          updateMonitorFields(db, monitor.id, { enabled: toSqliteBool(false), disabled_reason: reason });
+          taken.push({ id: monitor.id, code: monitor.code });
+        }
+        // ...and they stop claiming the holding, exactly as a DELETE leaves them: nothing alive is
+        // ever valued against a closed holding, because nothing alive is ever linked to one. A rule
+        // spanning two holdings keeps its link to the one still held.
+        clearPositionLinks(db, id);
+        updatePositionFields(db, id, { closed_on: closedOn, exit: given.exit ?? null });
+        // the delete path's two steps, for the delete path's reason: a rule this orphaned may be
+        // watching a contract another holding still holds (a roll leaves the old and the new
+        // sharing a strike), and one that cannot be placed stops claiming a scope. Adoption looks
+        // only at OPEN holdings, so it can never put a rule straight back onto this one.
+        adoptOrphanMonitors(db);
+        clearScopeOfOrphans(db);
+        return taken;
+      });
+      return close.reply(c, 200, { ...out(findPosition(db, id)!), disabled_monitors: disabled });
     })
 
     .delete("/:id", remove, async (c) => {
