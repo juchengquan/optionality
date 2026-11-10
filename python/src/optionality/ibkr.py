@@ -95,9 +95,10 @@ PRICE_TICKS: dict[int, str] = {
     75: "prev_close_price",
 }
 
-#: the greeks message's ids: the model computation, live and delayed. Nothing else is read — a bid-
-#: or ask-implied computation is a different claim from the model's.
-GREEK_TICKS = frozenset({13, 53})
+#: the greeks message's ids: the model computation, live (13) and delayed (83). Nothing else is read —
+#: a bid- or ask-implied computation is a different claim from the model's, and so is the CUSTOM one
+#: (53), which this once named as the delayed model's (`fields.ts` says how that was found)
+GREEK_TICKS = frozenset({13, 83})
 
 #: the keys `has_figures` does not count: identity and the grade. The gateway answers a grade for
 #: every request, including ones that then price nothing.
@@ -578,10 +579,13 @@ class IbkrClient:
     (`has_figures`, which keeps "subscribed, nothing yet" apart from a contract that does not
     exist), and for an option its model greeks too, computed or not — and a brief quiet has
     followed, `quiet_ms`, restarted by every NEW figure and not by a stream repeating one it
-    already sent; or at `request_timeout_ms`, keeping whatever arrived. Every contract is asked side
-    by side, so a batch costs its slowest contract, and an index is asked as a STREAM and cancelled
-    once read, because a snapshot of one carries no figure at any hour (the account has no
-    snapshot permission for an index). `client.ts` says why each, and what was measured.
+    already sent; or at `request_timeout_ms`, keeping whatever arrived. The snapshot's end comes
+    eleven to twelve seconds in, after the default timeout, so live it is the timeout that ends an
+    option whose model greeks never come. Every contract is asked side by side, so a batch costs
+    its slowest contract (`ib_async` paces the wire at 45 messages a second, as `socket.ts` now
+    does), and an index is asked as a STREAM and cancelled once read, because a snapshot of one
+    carries no figure at any hour (the account has no snapshot permission for an index).
+    `client.ts` says why each, and what was measured.
 
     **Silence is a failure, not an answer.** A gateway whose link to IBKR has dropped keeps its own
     socket open and answers nothing. Reporting those contracts as unknown would read as "none of

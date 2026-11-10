@@ -33,9 +33,10 @@
  *  from the real one.
  *
  *  Every reply goes at once, unless `pace` says otherwise: then each is sent at its recorded
- *  `atMs` times `pace` after the request, and a cancel stops what is still to come for that
- *  request, as the gateway stops a cancelled one. The corpus is replayed at once, because a
- *  timer racing a socket would make it flaky; pacing is for a client test whose claim is WHEN.
+ *  `atMs` times `pace` after the request, and a cancel that comes before the last of them stops
+ *  the rest and is answered with nothing, as the gateway answered a snapshot cancelled before its
+ *  end. The corpus is replayed at once, because a timer racing a socket would make it flaky;
+ *  pacing is for a client test whose claim is WHEN.
  *
  *  It still cannot speak for an account's entitlements, a dead session, or a market that is open.
  */
@@ -118,7 +119,7 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
     /** market-data requests answered on this connection, by id, for what a cancel is told */
     const answered = new Map<string, Exchange>();
     /** replies still to be sent, by request id, when pacing */
-    const pending = new Map<string, ReturnType<typeof setTimeout>[]>();
+    const pending = new Map<string, { timers: ReturnType<typeof setTimeout>[]; left: number }>();
     const write = (m: string[], reqId?: string) => {
       if (!socket.destroyed) socket.write(frame(toFields(reqId === undefined ? m : fill(m, reqId))));
     };
@@ -128,16 +129,23 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
     const reply = (exchange: Exchange, reqId: string) => {
       const pace = options.pace;
       if (pace === undefined || exchange.atMs.length === 0) return send(exchange.replies, reqId);
-      const timers = exchange.replies.map((m, i) =>
-        setTimeout(() => write(m, reqId), exchange.atMs[i]! * pace));
-      pending.set(reqId, [...(pending.get(reqId) ?? []), ...timers]);
+      const entry = { timers: [] as ReturnType<typeof setTimeout>[], left: exchange.replies.length };
+      entry.timers = exchange.replies.map((m, i) => setTimeout(() => {
+        write(m, reqId);
+        entry.left -= 1;
+      }, exchange.atMs[i]! * pace));
+      pending.set(reqId, entry);
     };
-    const stop = (reqId?: string) => {
-      for (const [id, timers] of pending) {
+    /** Stops pacing, and says whether any reply was still to come. */
+    const stop = (reqId?: string): boolean => {
+      let cut = false;
+      for (const [id, entry] of pending) {
         if (reqId !== undefined && id !== reqId) continue;
-        for (const timer of timers) clearTimeout(timer);
+        for (const timer of entry.timers) clearTimeout(timer);
+        cut ||= entry.left > 0;
         pending.delete(id);
       }
+      return cut;
     };
 
     socket.on("close", () => stop());
@@ -180,8 +188,10 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
           continue;
         }
         if (f[0] === CANCEL_MKT_DATA) {
-          stop(reqId);
-          send(answered.get(reqId)?.onCancel ?? [], reqId);
+          // `onCancel` is what a cancel got AFTER every recorded reply. One that cuts a paced
+          // answer short gets nothing, which is what the gateway sent a snapshot cancelled
+          // before its end: no reply, and nothing after it (measured 2026-11-10)
+          if (!stop(reqId)) send(answered.get(reqId)?.onCancel ?? [], reqId);
           answered.delete(reqId);
         }
         // reqMarketDataType, and anything else, gets no answer, as from the real gateway

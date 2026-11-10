@@ -32,7 +32,7 @@ client read, which is why `ib_async` could not decode it.
 | `normal-with-greeks` | recorded 2026-11-09 | resolves SPXW 20261218 C 8100 and prices it: book, close, greeks, snapshot end |
 | `unknown-contract` | recorded 2026-11-09 | the control, then a strike it does not list: 200 |
 | `not-subscribed` | recorded 2026-11-10 | the control, then INDU as a stream: resolved, then refused with 354 |
-| `index-in-the-session` | recorded 2026-11-10 | the control, then SPX and VIX as streams: every figure in one burst, then SPX's updates |
+| `index-in-the-session` | recorded 2026-11-10 | the control, then SPX and VIX as streams: every figure in one burst, then SPX's updates; and both as snapshots, which carry only empty prices |
 | `link-down` | constructed | farm-broken notices against -1, then silence (observed 2026-11-08) |
 | `link-down-between-asks` | constructed | normal-with-greeks' answer, then on a second ask its market data is silent, behind a cached contract id (observed 2026-11-08) |
 | `unentitled-account` | constructed | a normal session, then silence (observed 2026-11-08) |
@@ -88,8 +88,10 @@ as a 4-byte big-endian integer.
   1.7 seconds after the book in the captures of 2026-11-09, and the snapshot end after about
   eleven — and a stub told to PACE sends each reply at its `atMs`, scaled, for a client test whose
   claim is when something arrives (`fake.ts`' and `fake_gateway.py`'s `pace`).
-- `onCancel` (market data only) is what the gateway said to `cancelMktData` for that request.
-  For a snapshot that has already ended it is error 300; for a stream, nothing.
+- `onCancel` (market data only) is what the gateway said to `cancelMktData` for that request,
+  sent after every recorded reply. For a snapshot that had ended, or a request it had refused, it
+  is error 300; for a running stream, nothing. A cancel sent before a snapshot's end got no reply
+  at all, and nothing after it (measured 2026-11-10) — which is what a pacing stub does (rule 5).
 - `replies: []` is a request the gateway accepted and never answered. That is not the same as a
   request no exchange names, though a stub treats both alike: neither gets a reply.
 - `later` (optional) is further asks, each a list of codes, made in turn by the SAME client after
@@ -126,8 +128,9 @@ The rules `typescript/src/vendors/ibkr/fake.ts` follows, which a stub in any lan
    which is every file but `link-down-between-asks`, is unaffected.
 4. A request no exchange names gets nothing, ever.
 5. On cancelMktData (`2`), send the `onCancel` of the market-data exchange that request id was
-   answered from, if any, and — when pacing — nothing more of its replies, as the gateway stops
-   a cancelled request. Send nothing for reqMarketDataType (`59`) or anything else; the real
+   answered from, if any. A stub told to pace that still has replies to send for that request
+   sends none of them, and no `onCancel` either: a snapshot cancelled before its end got no reply
+   and nothing after it. Send nothing for reqMarketDataType (`59`) or anything else; the real
    gateway sends nothing for the first, and the rest are not part of a quote fetch.
 
 `ib_async`'s `IB.connectAsync` sends more than a quote fetch on connect: the account's positions

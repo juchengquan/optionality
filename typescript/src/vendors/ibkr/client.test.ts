@@ -34,10 +34,13 @@ afterEach(async () => {
 });
 
 async function connected(
-  options: FakeOptions = {}, requestTimeoutMs = 1500,
+  options: FakeOptions = {}, requestTimeoutMs = 1500, quietMs?: number,
 ): Promise<IbkrClient> {
   gateway = await startFakeGateway(0, options);
-  client = new IbkrClient({ host: "127.0.0.1", port: gateway.port, clientId: 31419, requestTimeoutMs });
+  client = new IbkrClient({
+    host: "127.0.0.1", port: gateway.port, clientId: 31419, requestTimeoutMs,
+    ...(quietMs === undefined ? {} : { quietMs }),
+  });
   return client;
 }
 
@@ -165,6 +168,59 @@ describe("when an ask is finished (#257)", () => {
     expect(ms).toBeLessThan(2000);
   });
 
+  it("waits for a DELAYED option's model greeks, which are tick 83", async () => {
+    // Graded delayed, the gateway sends the delayed ids: 66/67/75 for the book and close, 80-83
+    // for the computations, 83 the model's. This table once read 53 as the delayed model, which is
+    // the CUSTOM computation, so a delayed option waited out the timeout for greeks it already
+    // had. Constructed from normal-with-greeks: no capture holds a delayed option (the paper login
+    // here is served live), and the ids are IBKR's and ib_async's.
+    const delayedIds: Record<string, string> = {
+      1: "66", 2: "67", 9: "75", 10: "80", 11: "81", 12: "82", 13: "83",
+    };
+    const delayed = edited("normal-with-greeks", { symbol: "SPX", secType: "OPT" }, (e) => ({
+      replies: e.replies.map((m) => {
+        if (m[0] === "58") return [m[0], m[1]!, m[2]!, "3"];
+        if (m[0] === "1") return [...m.slice(0, 3), delayedIds[m[3]!] ?? m[3]!, ...m.slice(4)];
+        if (m[0] === "21") return [m[0], m[1]!, delayedIds[m[2]!] ?? m[2]!, ...m.slice(3)];
+        return m;
+      }),
+      atMs: e.atMs,
+    }));
+    const c = await connected({ conversation: delayed, pace: 0.25 }, 5000);
+    const { batch, ms } = await timed(c, [OPTION]);
+    expect(batch.records[0]).toMatchObject({
+      delayed: true, bid_price: 4.1, ask_price: 4.5, option_delta: MODEL.delta,
+    });
+    expect(ms).toBeLessThan(2000);
+  });
+
+  it("restarts the quiet on every NEW figure, so one that comes late is late rather than lost", async () => {
+    // The book at 100ms, the model's greeks at 200 (the ask is complete, and the quiet starts),
+    // the ask side at 600 and the close at 1000 — each inside the half-second quiet the figure
+    // before it restarted, and the close outside the one the greeks started. Constructed: the
+    // shape is a capture's (2026-11-10, 17:13:54Z: book 0.72s, greeks 1.40s, no close by 1.5s),
+    // the times are chosen to sit well clear of the window either way.
+    const late = edited("normal-with-greeks", { symbol: "SPX", secType: "OPT" }, (e) => {
+      const find = (test: (m: string[]) => boolean) => e.replies.find(test)!;
+      const at: [string[], number][] = [
+        [find((m) => m[0] === "58"), 50],
+        [find((m) => m[0] === "1" && m[3] === "1"), 100],
+        [find((m) => m[0] === "21" && m[2] === "13"), 200],
+        [find((m) => m[0] === "1" && m[3] === "2"), 600],
+        [find((m) => m[0] === "1" && m[3] === "9"), 1000],
+        [find((m) => m[0] === "57"), 6000],
+      ];
+      return { replies: at.map(([m]) => m), atMs: at.map(([, ms]) => ms) };
+    });
+    const c = await connected({ conversation: late, pace: 1 }, 8000, 500);
+    const { batch, ms } = await timed(c, [OPTION]);
+    expect(batch.records[0]).toMatchObject({
+      bid_price: 4.1, ask_price: 4.5, prev_close_price: 3.65, option_delta: MODEL.delta,
+    });
+    // finished on the quiet after the close, not on the snapshot's end
+    expect(ms).toBeLessThan(4000);
+  });
+
   it("finishes when the gateway says the snapshot has ended, greeks or none", async () => {
     // the one delimiter the protocol has: nothing more is coming, so an option whose model never
     // answers is finished there, with the figures it did send, rather than by the timeout
@@ -198,7 +254,10 @@ describe("when an ask is finished (#257)", () => {
     });
     const c = await connected({ conversation: busy, pace: 1 }, 5000);
     const { batch, ms } = await timed(c, ["SPX"]);
-    expect(batch.records[0]).toMatchObject({ last_price: 7499.44, prev_close_price: 7549.94 });
+    expect(batch.records[0]).toMatchObject({ prev_close_price: 7549.94 });
+    // the burst's last, or the first update's if it was read inside the quiet: which one is a
+    // race between two timers 16ms apart, and not what this test is about
+    expect([7499.18, 7499.44]).toContain(batch.records[0]!.last_price);
     // the burst at 0.5s and a quarter-second of quiet, not the 3.6s the updates last
     expect(ms).toBeLessThan(2000);
   });
@@ -213,6 +272,22 @@ describe("when an ask is finished (#257)", () => {
     const from = gateway!.received.length;
     await c.fetchQuotes([OPTION, "SPX", "VIX"]);
     expect(await sent(from, 6)).toEqual(["1", "1", "1", "2", "2", "2"]);
+  });
+});
+
+describe("the pace (#257's review)", () => {
+  it("puts a big batch on the wire at the gateway's pace, 45 messages a second", async () => {
+    // Side by side, a cold batch is a lookup per contract at once. ib_async holds itself to 45 a
+    // second, startApi counted, and so does this client, so the two put the same messages out at
+    // the same moments. Sixty contracts nobody recorded: none answers, and the ask then throws.
+    const c = await connected({}, 1500);
+    const codes = Array.from({ length: 60 }, (_, i) => `US.SPXW261218C${9001 + i}000`);
+    const asked = c.fetchQuotes(codes).catch((err: unknown) => err);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(gateway!.received.map((m) => m[0]).slice(0, 2)).toEqual(["71", "59"]);
+    expect(gateway!.received.length).toBe(45);            // startApi, the data type, 43 lookups
+    expect(await asked).toBeInstanceOf(Error);
+    expect(gateway!.received.length).toBe(62);            // the other 17 a second later
   });
 });
 

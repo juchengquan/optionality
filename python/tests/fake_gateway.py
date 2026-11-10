@@ -144,8 +144,9 @@ class FakeGateway:
     gateway can be tested — a number rather than a reply, as in the TypeScript's stub.
 
     `pace` sends each reply at its recorded `atMs` times `pace` after the request, rather than every
-    reply at once, and a cancel stops what is still to come for that request, as the gateway stops a
-    cancelled one. The corpus is replayed at once; pacing is for a client test whose claim is WHEN.
+    reply at once, and a cancel that comes before the last of them stops the rest and is answered
+    with nothing, as the gateway answered a snapshot cancelled before its end. The corpus is
+    replayed at once; pacing is for a client test whose claim is WHEN.
     """
 
     def __init__(
@@ -189,8 +190,8 @@ class FakeGateway:
         greeted = False
         #: market-data requests answered on THIS connection, by id, for what a cancel is told
         answered: dict[str, dict[str, Any]] = {}
-        #: replies still to be sent, by request id, when pacing
-        pending: dict[str, list[asyncio.TimerHandle]] = {}
+        #: replies still to be sent, by request id, when pacing: the timers, and how many are left
+        pending: dict[str, tuple[list[asyncio.TimerHandle], list[int]]] = {}
         loop = asyncio.get_running_loop()
 
         def write(message: Message, req_id: str | None = None) -> None:
@@ -205,16 +206,29 @@ class FakeGateway:
             if self.pace is None or not exchange["atMs"]:
                 send(exchange["replies"], req_id)
                 return
-            timers = [
-                loop.call_later(at * self.pace / 1000, write, message, req_id)
-                for message, at in zip(exchange["replies"], exchange["atMs"], strict=True)
-            ]
-            pending.setdefault(req_id, []).extend(timers)
+            # one timer per recorded moment, sending that moment's replies in order: asyncio's
+            # timer heap does not keep two equal deadlines in the order they were set
+            moments: dict[float, list[Message]] = {}
+            for message, at in zip(exchange["replies"], exchange["atMs"], strict=True):
+                moments.setdefault(at, []).append(message)
+            left = [len(exchange["replies"])]
 
-        def stop(req_id: str | None = None) -> None:
+            def burst(messages: list[Message]) -> None:
+                send(messages, req_id)
+                left[0] -= len(messages)
+
+            timers = [loop.call_later(at * self.pace / 1000, burst, messages) for at, messages in moments.items()]
+            pending[req_id] = (timers, left)
+
+        def stop(req_id: str | None = None) -> bool:
+            """Stops pacing, and says whether any reply was still to come."""
+            cut = False
             for key in [k for k in pending if req_id is None or k == req_id]:
-                for timer in pending.pop(key):
+                timers, left = pending.pop(key)
+                for timer in timers:
                     timer.cancel()
+                cut = cut or left[0] > 0
+            return cut
 
         try:
             while chunk := await reader.read(65536):
@@ -267,10 +281,12 @@ class FakeGateway:
             reply(exchange, req_id)
             return
         if message_id == CANCEL_MKT_DATA:
-            # rule 5: what the gateway said to that cancel, if anything
-            stop(req_id)
+            # rule 5: what the gateway said to that cancel, if anything — `onCancel` is what a
+            # cancel got after every recorded reply, and one that cuts a paced answer short gets
+            # nothing, as a snapshot cancelled before its end did (measured 2026-11-10)
             exchange = answered.pop(req_id, None)
-            send(exchange.get("onCancel", []) if exchange else [], req_id)
+            if not stop(req_id):
+                send(exchange.get("onCancel", []) if exchange else [], req_id)
         # reqMarketDataType, and anything else, gets no answer, as from the real gateway
 
 

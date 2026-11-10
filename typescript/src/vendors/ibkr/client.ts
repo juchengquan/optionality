@@ -9,17 +9,22 @@
  *
  *  The protocol never says how many figures a contract will produce — that depends on the account
  *  rather than on the code — and its one delimiter, the snapshot's end (message 57), comes 11.1 to
- *  11.5 seconds after the request in every capture, where the book arrives within half a second
- *  and an option's model greeks within two. So an ask is finished by whichever comes first of:
+ *  12.1 seconds after the request in every capture, where an option's book arrives within about
+ *  half a second (2.3 while the gateway's farms reconnect) and its model greeks 0.3 to 1.7
+ *  seconds after the book. So an ask is finished by whichever comes first of:
  *
- *  - **the snapshot's end**, where the gateway sends one: nothing more is coming, and an option
- *    whose model never answers is finished there rather than by the timeout;
+ *  - **the snapshot's end**: nothing more is coming. With the default timeout it is never first —
+ *    eight seconds is less than eleven — so it ends a replay, where every reply arrives at once,
+ *    or an ask given a longer timeout. Live, an option whose model greeks never come costs the
+ *    timeout, and since the contracts are asked side by side, so does its batch;
  *  - **every figure the contract's kind is waited for, then a brief QUIET**: a figure at all —
  *    `hasFigures`, which keeps the distinction ADR 0015 named, between "subscribed, nothing yet"
- *    and a contract that does not exist — and for an OPTION its model greeks too (tick 13, or 53
- *    delayed), computed or not. The quiet is restarted by every NEW figure, so one that arrives
- *    late is late rather than lost, and not by a repeat: a stream keeps sending what it has
- *    already sent, and a repeat is the running board rather than more of the answer;
+ *    and a contract that does not exist — and for an OPTION its model greeks too (tick 13, or 83
+ *    when the delayed tier answers), computed or not. The quiet is restarted by every NEW figure,
+ *    so one that arrives late is late rather than lost, and not by a repeat: a stream keeps
+ *    sending what it has already sent, and a repeat is the running board rather than more of the
+ *    answer. A figure later than the quiet after the last new one IS lost: an option's previous
+ *    close has come after its greeks, or not before the client was done (2026-11-10);
  *  - **the timeout**, `requestTimeoutMs`, which keeps whatever arrived.
  *
  *  The greeks are waited for because the quiet alone lost them: across six live captures of an
@@ -28,9 +33,10 @@
  *  is invented because nothing better can be waited for: it is bounded twice over, by itself and
  *  by the timeout.
  *
- *  **Every contract is asked side by side**, so a batch costs its slowest contract — about two
- *  seconds when an option's greeks are slow — where one after another it cost the sum, and the
- *  wait for greeks would be paid again for every option.
+ *  **Every contract is asked side by side**, so a batch costs its slowest contract — 1.4 to 2.2
+ *  seconds for an option, SPX and VIX against the gateway on 2026-11-10, about 3.3 while its farms
+ *  reconnect — where one after another it cost the sum, and the wait for greeks would be paid
+ *  again for every option. `socket.ts` paces what that puts on the wire, as `ib_async` does.
  *
  *  **An index is asked as a STREAM**, and cancelled once read. A snapshot of SPX or VIX carries no
  *  figure at any hour: its high, low and close come with their price fields EMPTY, then the

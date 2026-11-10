@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { contractFor } from "./contract.ts";
 import { type FakeGateway, startFakeGateway } from "./fake.ts";
 import type { Incoming } from "./messages.ts";
 import { reqContractDetails, reqMktData } from "./messages.ts";
@@ -165,6 +166,18 @@ describe("asking", () => {
     expect(prices).toEqual([null, null, 3.65]);
   });
 
+  it("reads a snapshot of an index, whose prices come EMPTY, as no prices at all", async () => {
+    // Recorded in the session on 2026-11-10 (`index-in-the-session`'s last exchanges): the high,
+    // low and close of SPX each with an empty price field, then the snapshot's end. The account
+    // has no snapshot permission for an index, which is why the client streams one instead; read
+    // as numbers these would be a close of 0.00, which the gateway never sent.
+    const { socket, seen } = await connected({ conversation: "index-in-the-session" });
+    socket.send(reqMktData(7, contractFor("SPX")!.contract, true));
+    await waitFor(() => seen.some((m) => m.kind === "snapshotEnd"));
+    expect(seen.filter((m) => m.kind === "price").map((m) => m.kind === "price" && [m.tickType, m.price]))
+      .toEqual([[6, null], [7, null], [9, null]]);
+  });
+
   it("refuses to send when there is no session", () => {
     const socket = new TwsSocket({ host: "127.0.0.1", port: 1, clientId: 31419 });
     expect(() => socket.send(reqMktData(1, SPXW, true))).toThrow(/not connected/);
@@ -179,6 +192,35 @@ describe("asking", () => {
     await waitFor(() => seen.some((m) => m.kind === "error" && m.reqId === 7));
     expect(seen.find((m) => m.kind === "error" && m.reqId === 7)).toMatchObject({ code: 354 });
     expect(seen.some((m) => m.kind === "price" || m.kind === "greeks")).toBe(false);
+  });
+});
+
+describe("the pace", () => {
+  it("sends at most 45 messages in any second and the rest after, as ib_async does", async () => {
+    // IB Gateway's documented limit is 50 a second, and `ib_async` holds itself to 45 with
+    // startApi counted. Sixty lookups nobody recorded, so none is answered and only the count of
+    // what arrived is measured.
+    const { socket } = await connected();
+    for (let id = 1; id <= 60; id++) socket.send(reqContractDetails(id, { ...SPXW, strike: 9000 + id }));
+    await new Promise((r) => setTimeout(r, 400));
+    expect(gateway!.received.length).toBe(45);            // startApi and 44 lookups
+    await waitFor(() => gateway!.received.length === 61, 2000);
+    // and in the order they were asked
+    expect(gateway!.received.slice(1).map((m) => m[2])).toEqual(
+      Array.from({ length: 60 }, (_, i) => String(i + 1)));
+  });
+
+  it("drops what is still waiting when it closes, so a new session never sends the old one's", async () => {
+    // the queue is the connection's: a request queued for a session that is gone would reach the
+    // next one unasked, with an id nobody is listening on
+    const { socket } = await connected();
+    for (let id = 1; id <= 60; id++) socket.send(reqContractDetails(id, { ...SPXW, strike: 9000 + id }));
+    socket.close();
+    await socket.connect(() => {});
+    await new Promise((r) => setTimeout(r, 1300));
+    // the first session's startApi and 44 lookups, then the second's startApi, and nothing else
+    expect(gateway!.received.map((m) => m[0]).slice(44)).toEqual(["9", "71"]);
+    expect(gateway!.received.length).toBe(46);
   });
 });
 

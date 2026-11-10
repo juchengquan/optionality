@@ -160,15 +160,26 @@ describe("replaying a recording", () => {
     expect(at["dataType"]).toBeLessThan(at["greeks 13"]!);
   });
 
-  it("stops pacing a request once it is cancelled, as the gateway stops a cancelled one", async () => {
+  it("answers a cancel that cuts a paced answer short with nothing, and sends no more", async () => {
+    // what the gateway did to a snapshot cancelled 1.5s in, before its end, on 2026-11-10: no
+    // reply to the cancel and nothing after it. The recorded error 300 answered a cancel sent
+    // AFTER the end, and is no reply to this one.
     const { socket, seen } = await connected(undefined, 0.1);
     socket.send(reqMktData(7, SPXW, true));
     await waitFor(() => seen.some((m) => m.kind === "price"));
     socket.send(cancelMktData(7));
     await new Promise((r) => setTimeout(r, 1300));
-    // the cancel's own answer came; the snapshot's end, due at 1110ms, never did
-    expect(seen.some((m) => m.kind === "error" && m.code === 300)).toBe(true);
+    // the snapshot's end was due at 1110ms
     expect(seen.some((m) => m.kind === "snapshotEnd")).toBe(false);
+    expect(seen.some((m) => m.kind === "error" && m.code === 300)).toBe(false);
+  });
+
+  it("answers a cancel after the last paced reply with what the gateway said to it", async () => {
+    const { socket, seen } = await connected(undefined, 0.1);
+    socket.send(reqMktData(7, SPXW, true));
+    await waitFor(() => seen.some((m) => m.kind === "snapshotEnd"), 3000);
+    socket.send(cancelMktData(7));
+    await waitFor(() => seen.some((m) => m.kind === "error" && m.code === 300));
   });
 
   it("replays a conversation given as data, not only by name", async () => {

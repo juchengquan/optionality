@@ -31,13 +31,18 @@ def against(
     *,
     pace: float | None = None,
     request_timeout_ms: int = 1000,
+    quiet_ms: int | None = None,
 ) -> Any:
     """Run `test` against a fresh stub replaying `conversation`, closing both whatever happens."""
 
     async def run() -> Any:
         gateway = await start_fake_gateway(conversation, server_version, pace)
         client = IbkrClient(
-            port=gateway.port, client_id=31419, connect_timeout_ms=1000, request_timeout_ms=request_timeout_ms
+            port=gateway.port,
+            client_id=31419,
+            connect_timeout_ms=1000,
+            request_timeout_ms=request_timeout_ms,
+            **({} if quiet_ms is None else {"quiet_ms": quiet_ms}),
         )
         try:
             return await test(client, gateway)
@@ -157,6 +162,68 @@ def test_an_options_greeks_are_waited_for_through_a_pause_longer_than_the_quiet_
     assert ms < 2000
 
 
+def test_a_delayed_options_model_greeks_are_tick_83_and_are_waited_for() -> None:
+    """Graded delayed, the gateway sends the delayed ids: 66/67/75 for the book and close, 80-83 for
+    the computations, 83 the model's. This once read 53 as the delayed model, which is the CUSTOM
+    computation, so a delayed option waited out the timeout for greeks it already had. Constructed
+    from normal-with-greeks: no capture holds a delayed option, and the ids are IBKR's and
+    ib_async's."""
+    delayed_ids = {"1": "66", "2": "67", "9": "75", "10": "80", "11": "81", "12": "82", "13": "83"}
+
+    def delayed(exchange: dict[str, Any]) -> None:
+        replies = []
+        for m in exchange["replies"]:
+            if m[0] == "58":
+                m = [*m[:3], "3"]
+            elif m[0] == "1":
+                m = [*m[:3], delayed_ids.get(m[3], m[3]), *m[4:]]
+            elif m[0] == "21":
+                m = [*m[:2], delayed_ids.get(m[2], m[2]), *m[3:]]
+            replies.append(m)
+        exchange["replies"] = replies
+
+    async def ask(client: IbkrClient, _: FakeGateway) -> Any:
+        return await _timed(client, [OPTION])
+
+    batch, ms = against(_edited("normal-with-greeks", "SPX", "OPT", delayed), ask, pace=0.25, request_timeout_ms=5000)
+    (q,) = batch.records
+    assert (q["delayed"], q["bid_price"], q["ask_price"], q["option_delta"]) == (True, 4.1, 4.5, MODEL_DELTA)
+    assert ms < 2000
+
+
+def test_every_new_figure_restarts_the_quiet_so_a_late_one_is_late_rather_than_lost() -> None:
+    """The book at 100ms, the model's greeks at 200 (complete, and the quiet starts), the ask side at
+    600 and the close at 1000 — each inside the half-second quiet the figure before it restarted,
+    and the close outside the one the greeks started. Constructed: the shape is a capture's
+    (2026-11-10, 17:13:54Z: book 0.72s, greeks 1.40s, no close by 1.5s), the times chosen to sit
+    well clear of the window either way."""
+
+    def late(exchange: dict[str, Any]) -> None:
+        def find(test: Callable[[list[str]], bool]) -> list[str]:
+            return next(m for m in exchange["replies"] if test(m))
+
+        at = [
+            (find(lambda m: m[0] == "58"), 50),
+            (find(lambda m: m[0] == "1" and m[3] == "1"), 100),
+            (find(lambda m: m[0] == "21" and m[2] == "13"), 200),
+            (find(lambda m: m[0] == "1" and m[3] == "2"), 600),
+            (find(lambda m: m[0] == "1" and m[3] == "9"), 1000),
+            (find(lambda m: m[0] == "57"), 6000),
+        ]
+        exchange["replies"], exchange["atMs"] = [m for m, _ in at], [ms for _, ms in at]
+
+    async def ask(client: IbkrClient, _: FakeGateway) -> Any:
+        return await _timed(client, [OPTION])
+
+    batch, ms = against(
+        _edited("normal-with-greeks", "SPX", "OPT", late), ask, pace=1, request_timeout_ms=8000, quiet_ms=500
+    )
+    (q,) = batch.records
+    assert (q["bid_price"], q["ask_price"], q["prev_close_price"], q["option_delta"]) == (4.1, 4.5, 3.65, MODEL_DELTA)
+    # finished on the quiet after the close, not on the snapshot's end
+    assert ms < 4000
+
+
 def test_the_snapshots_end_finishes_an_ask_greeks_or_none() -> None:
     """The one delimiter the protocol has: nothing more is coming, so an option whose model never
     answers is finished there, with the figures it did send, rather than by the timeout."""
@@ -196,7 +263,10 @@ def test_a_stream_repeating_figures_it_already_sent_does_not_hold_the_ask_open()
 
     batch, ms = against(_edited("index-in-the-session", "SPX", "IND", busy), ask, pace=1, request_timeout_ms=5000)
     (q,) = batch.records
-    assert (q["last_price"], q["prev_close_price"]) == (7499.44, 7549.94)
+    assert q["prev_close_price"] == 7549.94
+    # the burst's last, or the first update's if it was read inside the quiet: which one is a race
+    # between two timers 16ms apart, and not what this test is about
+    assert q["last_price"] in (7499.18, 7499.44)
     # the burst at 0.5s and a quarter-second of quiet, not the 3.6s the updates last
     assert ms < 2000
 
@@ -222,6 +292,30 @@ async def _until(done: Callable[[], bool], within: float = 2.0) -> None:
     async with asyncio.timeout(within):
         while not done():
             await asyncio.sleep(0.005)
+
+
+# --- the pace (#257's review) --------------------------------------------------------------------
+
+
+def test_a_big_batch_goes_on_the_wire_at_the_gateways_pace_45_messages_a_second() -> None:
+    """Side by side, a cold batch is a lookup per contract at once. `ib_async` holds itself to 45 a
+    second, startApi counted, and the TypeScript copies it, so the two put the same messages out at
+    the same moments. Sixty contracts nobody recorded: none answers, and the ask then raises."""
+    codes = [f"US.SPXW261218C{9001 + i}000" for i in range(60)]
+
+    async def ask(client: IbkrClient, gateway: FakeGateway) -> Any:
+        asked = asyncio.ensure_future(client.fetch_quotes(codes))
+        await asyncio.sleep(0.4)
+        early = [m[0] for m in gateway.received]
+        with pytest.raises(ConnectionError):
+            await asked
+        await _until(lambda: len(gateway.received) >= 62)
+        return early, len(gateway.received)
+
+    early, total = against("normal-with-greeks", ask, request_timeout_ms=1500)
+    assert early[:2] == ["71", "59"]
+    assert len(early) == 45  # startApi, the data type, 43 lookups
+    assert total == 62  # the other 17 a second later
 
 
 # --- a code it cannot name ---------------------------------------------------------------------
@@ -548,10 +642,10 @@ def test_the_stub_paces_replies_by_their_recorded_times_and_stops_at_a_cancel() 
         writer.write(frame(["2", "2", "7"]))
         await writer.drain()
         try:
-            after = await _replies(reader, 2, within=1.3)
+            after = await _replies(reader, 1, within=1.3)
         except TimeoutError:
             after = []
-        at["ended"] = float(any(m[0] == "57" for m in after))
+        at["after the cancel"] = float(len(after))
         writer.close()
         await gateway.close()
         return at
@@ -559,12 +653,67 @@ def test_the_stub_paces_replies_by_their_recorded_times_and_stops_at_a_cancel() 
     at = asyncio.run(run())
     assert at["58"] < at["model"]
     assert at["model"] >= 150
-    assert at["ended"] == 0.0, "the snapshot's end was sent after the request was cancelled"
+    # neither the snapshot's end, due at 1110ms, nor the error 300 recorded for a cancel AFTER the
+    # end: a snapshot cancelled before its end got no reply and nothing after it (2026-11-10)
+    assert at["after the cancel"] == 0.0, "something was sent after the request was cancelled"
+
+
+def test_the_stub_answers_a_cancel_after_the_last_paced_reply_with_what_the_gateway_said() -> None:
+    async def run() -> list[list[str]]:
+        gateway = await start_fake_gateway("normal-with-greeks", pace=0.1)
+        reader, writer = await _session(gateway)
+        await _replies(reader, 1 + len(gateway.conversation["handshake"]["onStartApi"]))
+        writer.write(frame(_data("7", snapshot="1")))
+        await writer.drain()
+        while not any(m[0] == "57" for m in await _replies(reader, 1, within=3.0)):
+            pass
+        writer.write(frame(["2", "2", "7"]))
+        await writer.drain()
+        got = await _replies(reader, 1)
+        writer.close()
+        await gateway.close()
+        return got
+
+    assert asyncio.run(run()) == [["4", "2", "7", "300", "Can't find EId with tickerId:7"]]
 
 
 def _data(req_id: str, snapshot: str) -> list[str]:
     """reqMktData for the control, a snapshot ("1") or a stream ("0") — field 17."""
     return ["1", "11", req_id, *_lookup(req_id, "8100.0")[3:15], "0", "", snapshot, "0", ""]
+
+
+def test_a_recorded_snapshot_of_an_index_carries_empty_prices_which_read_as_none() -> None:
+    """`index-in-the-session`'s last exchanges, recorded in the session on 2026-11-10: SPX asked as a
+    SNAPSHOT sends its high, low and close each with an empty price field, then the snapshot's end.
+    The client never asks that (it streams an index), so the stub is asked directly, with the
+    request the recording sent, and the price ticks are read with this module's own reader."""
+    from optionality import ibkr
+
+    conversation = load_conversation("index-in-the-session")
+    (snapshot,) = [
+        e
+        for e in conversation["exchanges"]
+        if e["request"] == "reqMktData"
+        and e["contract"]["symbol"] == "SPX"
+        and e["contract"]["secType"] == "IND"
+        and e["sent"][17] == "1"
+    ]
+
+    async def run() -> list[list[str]]:
+        gateway = await start_fake_gateway(conversation)
+        reader, writer = await _session(gateway)
+        await _replies(reader, 1 + len(conversation["handshake"]["onStartApi"]))
+        writer.write(frame([field.replace("$reqId", "7") for field in snapshot["sent"]]))
+        await writer.drain()
+        got: list[list[str]] = []
+        while not any(m[0] == "57" for m in got):
+            got += await _replies(reader, 1)
+        writer.close()
+        await gateway.close()
+        return got
+
+    prices = [ibkr._read_price(m) for m in asyncio.run(run()) if m[0] == "1"]
+    assert [(p.req_id, p.tick_type, p.price) for p in prices] == [(7, 6, None), (7, 7, None), (7, 9, None)]
 
 
 def test_an_empty_price_is_delivered_as_no_price_rather_than_dropped() -> None:
