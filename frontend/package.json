@@ -8,7 +8,8 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "vitest run --config vitest.browser.config.ts"
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "prototype": "vite --host 100.120.179.51 --port 5199 --strictPort --open /prototype.html"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

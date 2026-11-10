@@ -1,0 +1,1 @@
+{"db":true,"provider":{"name":"moomoo","ok":true},"golden_cases":"bcbaf6d4e273","monitor":{"last_sweep_at":"2026-11-10 12:27:20+08:00","last_sweep_ok":true,"consecutive_failures":0,"alarms":{"label":"active","bad":false},"fetched_at":"2026-11-10 12:27:20+08:00"},"settings":{"manage_by_dte":21,"sweep_seconds":15,"expired_retention_days":7,"display_tz":"Asia/Singapore"}}
