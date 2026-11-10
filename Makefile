@@ -99,7 +99,7 @@ check: lint typecheck check-api check-cases check-scenarios test test-tools test
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
 # so the documented way to "run the API locally" started the retired implementation instead.
 #
-# Three things are forced, because the live service is always running on this box:
+# Four things are forced, because the live service is always running on this box:
 #   a SNAPSHOT database  taken with the online backup, never cp (CLAUDE.md). A second sweeper
 #                        writing live rows can stamp last_alarm_at and suppress a real alarm's
 #                        cooldown, so a local instance gets its own copy of the real data.
@@ -110,11 +110,16 @@ check: lint typecheck check-api check-cases check-scenarios test test-tools test
 #                        Shell variables beat --env-file, which is what makes the blanking bite.
 #   a long sweep         one sweep at startup is unavoidable (the loop fires immediately, on
 #                        purpose), and 3600 stops it becoming a second sweeper after that.
+#   its own IB client id IB Gateway allows ONE connection per client id and the second displaces
+#                        the first in silence (ADR 0019), so a local run on the live service's id
+#                        (31415, the default) knocked the live service's References off the gateway
+#                        with nothing logged on either side. 31417, like the port. An id rather than
+#                        a blank IBKR_HOST, so a local run still reaches the gateway it is testing.
 # PORT is left alone: main.ts defaults to 31417, so it cannot collide with the live 31415.
 SERVE_DB = data/optionality-ts.db.serve
 serve:
 	node backend/tools/backup/backup.ts $(TS_DB) $(SERVE_DB)
-	OPTIONALITY_DB_PATH=$(SERVE_DB) TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID= \
+	OPTIONALITY_DB_PATH=$(SERVE_DB) TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID= IBKR_CLIENT_ID=31417 \
 	  MONITOR_INTERVAL_SECONDS=3600 node --env-file=.env backend/src/main.ts
 
 # two suites, split by what they can prove. jsdom has no layout engine at all, so the
