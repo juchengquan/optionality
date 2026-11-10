@@ -102,14 +102,15 @@ longer quoted.
 _Avoid_: exit price, closing price, debit, sale price (a sale is a NEGATIVE Exit)
 
 **Daily sample**:
-One observation of a held Position per New York calendar day: its DTE, Cost to close, and each
-leg's IV, vega and delta. It is the day's CLOSE — taken only from 09:30 to 16:00 in New York, so
-the last sweep at or before 16:00 is the one that stays and an overnight mark never replaces it —
-and it is taken on every calendar day, a weekend or a holiday carrying the last close forward,
-because the Vol part chains days exactly one apart. A holding's first one is taken whenever it is
-first seen, so a trade recorded in New York's evening still has a row on its Opened day — which
-can make that one point a post-close mark. Recorded, never derived: none of it can be read again
-once its day has passed.
+One observation of a held Position per New York calendar day: its DTE, Cost to close, each leg's
+IV, vega and delta, and when it was observed. It is the day's CLOSE — written freely from 09:30 to
+16:15 in New York, the options' close, so the last sweep by then is the one that stays and an
+overnight mark never replaces it — on every calendar day, a weekend or a holiday carrying the last
+close forward, because the Vol part chains days exactly one apart. A day with no row is filled
+whenever it is first seen (a trade recorded in New York's evening, a session missed whole), and a
+row without its vol readings is completed after hours; those points are not closes, and their
+observed time says so. Recorded, never derived: none of it can be read again once its day has
+passed.
 _Avoid_: snapshot (moomoo's word for a quote), tick, mark
 
 **Pace gap**:

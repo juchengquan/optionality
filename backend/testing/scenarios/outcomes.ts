@@ -20,7 +20,7 @@
  *  `shows` is how a scenario claiming the outcome must look, and is checked against every claim —
  *  a scenario cannot cover an outcome by saying so.
  */
-import { inSampleHours } from "optionality/domain/expiry";
+import { inSampleHours, marketDate } from "optionality/domain/expiry";
 import { settingsFromEnv } from "../../src/env.ts";
 import type { Change, Row, SweepScenario } from "./format.ts";
 
@@ -41,6 +41,12 @@ const moved = (s: SweepScenario, column: string, to?: unknown) =>
 const untouched = (s: SweepScenario) => Object.keys(s.expect.rows).length === 0;
 const asked = (s: SweepScenario) => Object.keys(s.expect.calls).length > 0;
 const combos = (s: SweepScenario) => s.world.tables.monitors.filter((m: Row) => m.legs !== null);
+/** Every code the tick asked for came back priced: a sample could have been written. */
+const priced = (s: SweepScenario) => asked(s) && Object.values(s.expect.calls)
+  .every((batches) => batches.every((codes) => codes.every((c) => c in s.world.provider.quotes)));
+/** The stored row for the clock's market day, if the world holds one. */
+const dayRow = (s: SweepScenario): Row | undefined => s.world.tables.position_samples
+  .find((r: Row) => r.observed_on === marketDate(new Date(s.world.clock)));
 
 export const OUTCOMES: readonly Outcome[] = [
   {
@@ -180,20 +186,37 @@ export const OUTCOMES: readonly Outcome[] = [
       && s.expect.rows.position_samples === undefined,
   },
   {
-    // after 16:00 in New York the day's row is its close, and a mark that moved since does not
-    // reach it: a stored sample the batch differs from, and no write
-    name: "sample-left-alone-outside-the-sample-hours",
+    // after the close a COMPLETE row is the day's close, and a mark that moved since does not reach
+    // it. Every leg of the holding was priced, so a write was possible and differed from the row:
+    // without the hours rule this tick would have rewritten it
+    name: "complete-row-left-alone-after-hours",
     decision: "takesSample",
-    shows: (s) => !inSampleHours(new Date(s.world.clock)) && s.world.tables.position_samples.length > 0
-      && asked(s) && s.expect.rows.position_samples === undefined,
+    shows: (s) => {
+      const day = dayRow(s);
+      return !inSampleHours(new Date(s.world.clock)) && priced(s) && day !== undefined
+        && day.legs_iv !== null && day.legs_vega !== null && s.expect.rows.position_samples === undefined;
+    },
   },
   {
-    // a holding's first row is taken whatever the hour: a trade recorded in New York's evening,
-    // after the close, still gets a row dated its own market day, which the vol chain starts from
-    name: "first-sample-taken-outside-the-sample-hours",
+    // a day with no row is filled whatever the hour: a trade recorded in New York's evening, after
+    // the close, and a session missed whole both leave one, and the vol chain needs every day
+    name: "day-filled-after-hours",
     decision: "takesSample",
-    shows: (s) => !inSampleHours(new Date(s.world.clock)) && s.world.tables.position_samples.length === 0
-      && (s.expect.rows.position_samples?.added ?? []).length > 0,
+    shows: (s) => !inSampleHours(new Date(s.world.clock)) && priced(s) && dayRow(s) === undefined
+      && (s.expect.rows.position_samples?.added ?? [])
+        .some((r) => r.observed_on === marketDate(new Date(s.world.clock))),
+  },
+  {
+    // a row the feed left without its IV or vega is completed after hours by a sweep that has both
+    name: "incomplete-row-completed-after-hours",
+    decision: "takesSample",
+    shows: (s) => {
+      const day = dayRow(s);
+      return !inSampleHours(new Date(s.world.clock)) && day !== undefined
+        && (day.legs_iv === null || day.legs_vega === null)
+        && (s.expect.rows.position_samples?.changed ?? [])
+          .some((c) => (c.to.legs_iv ?? day.legs_iv) !== null && (c.to.legs_vega ?? day.legs_vega) !== null);
+    },
   },
   {
     // one unpriced leg and there is no observation to make

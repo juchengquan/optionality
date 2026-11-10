@@ -1,7 +1,7 @@
 {
-  "name": "after the close a moved mark does not rewrite the day's sample",
+  "name": "after the close a complete row is not rewritten, however the mark moved",
   "outcomes": [
-    "sample-left-alone-outside-the-sample-hours"
+    "complete-row-left-alone-after-hours"
   ],
   "world": {
     "clock": "2026-11-09T21:30:00.000Z",
@@ -18,7 +18,60 @@
       "down": null,
       "rejects": {},
       "unknown": [],
-      "quotes": {}
+      "quotes": {
+        "US.SPXW261218C7300000": {
+          "name": "SPXW 261218 7300C",
+          "mid_price": 2.75,
+          "bid_price": 2.7,
+          "ask_price": 2.8,
+          "last_price": 2.75,
+          "option_delta": 0.21,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218C7350000": {
+          "name": "SPXW 261218 7350C",
+          "mid_price": 1.75,
+          "bid_price": 1.7,
+          "ask_price": 1.8,
+          "last_price": 1.75,
+          "option_delta": 0.15,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6350000": {
+          "name": "SPXW 261218 6350P",
+          "mid_price": 2.25,
+          "bid_price": 2.2,
+          "ask_price": 2.3,
+          "last_price": 2.25,
+          "option_delta": -0.12,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 20,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6400000": {
+          "name": "SPXW 261218 6400P",
+          "mid_price": 4.5,
+          "bid_price": 4.45,
+          "ask_price": 4.55,
+          "last_price": 4.5,
+          "option_delta": -0.18,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 19.25,
+          "option_contract_size": 100
+        }
+      }
     },
     "sources": {},
     "telegram": "up",
@@ -86,7 +139,8 @@
             "US.SPXW261218C7350000": 0.15,
             "US.SPXW261218P6400000": -0.18,
             "US.SPXW261218P6350000": -0.12
-          }
+          },
+          "observed_at": null
         }
       ],
       "reference_securities": []

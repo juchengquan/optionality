@@ -24,27 +24,28 @@ export function marketDate(now: Date = new Date()): string {
 const SAMPLE_CLOCK = new Intl.DateTimeFormat("en-US", {
   timeZone: MARKET_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
 });
-/** 09:30 and 16:00 in New York, as milliseconds since its midnight. */
+/** 09:30 and 16:15 in New York, as milliseconds since its midnight. */
 const SAMPLE_FROM = (9 * 60 + 30) * 60_000;
-const SAMPLE_UNTIL = 16 * 60 * 60_000;
+const SAMPLE_UNTIL = (16 * 60 + 15) * 60_000;
 
-/** Whether a holding's daily sample may be taken at `now`: 09:30 to 16:00 in New York, both ends
- *  included, on EVERY calendar day.
+/** Whether `now` is inside the sample hours: 09:30 to 16:15 in New York, both ends included, on
+ *  EVERY calendar day.
  *
  *  The sample is the day's CLOSE, and a burndown labelled "close" has to mean it. Without this the
  *  day's row was rewritten whenever a figure moved until New York's midnight, and SPXW trades again
  *  from about 20:15 in Global Trading Hours, so the row that survived could be an overnight mark.
- *  Writing only inside these hours makes the day's row the last sweep at or before 16:00, and
- *  nothing after it can move the row. 16:00 itself is in: a sweep landing exactly on the close is
- *  the best observation of it there is. 09:30 is the floor so a service that slept through a whole
- *  session writes no row for it, rather than one made of the morning's overnight marks.
+ *  Inside these hours the row is written and rewritten freely, so it settles on the last sweep at
+ *  or before 16:15 — the OPTIONS' close, a quarter hour after the stocks', and the one their own
+ *  marks settle on; a half-day closes them at 13:15 by the same rule. 16:15 itself is in: a sweep
+ *  landing exactly on the close is the best observation of it there is. Outside the hours a row is
+ *  only ever filled or completed, never changed (`takesSample`).
  *
  *  Every day, weekends included, and that is not an oversight: `volAttribution` chains samples
  *  EXACTLY one calendar day apart (vol.ts), so a row skipped on a Saturday breaks the vol figure
  *  across every weekend. Nothing trades in these hours on a weekend, so a Saturday's row is the
  *  Friday close carried forward — which is what weekend rows have always held. A holiday is the
  *  same case and needs no calendar, and a half-day (the Friday after Thanksgiving, Christmas Eve:
- *  13:00, options 13:15) is static from its close to 16:00, so its row is its close too.
+ *  13:00, options 13:15) is static from its close to 16:15, so its row is its close too.
  */
 export function inSampleHours(now: Date = new Date()): boolean {
   const part = Object.fromEntries(SAMPLE_CLOCK.formatToParts(now).map((p) => [p.type, p.value]));
@@ -55,23 +56,41 @@ export function inSampleHours(now: Date = new Date()): boolean {
   return sinceMidnight >= SAMPLE_FROM && sinceMidnight <= SAMPLE_UNTIL;
 }
 
-/** Whether the sweep at `now` writes a holding's daily sample, given whether it has any yet.
+/** The two vol readings of a day's row, as stored: JSON text, or null where the feed withheld one. */
+export interface SampleReadings {
+  legs_iv: string | null;
+  legs_vega: string | null;
+}
+
+/** Whether the sweep at `now` writes the day's row, given the row already stored for that market
+ *  day (null if none) and what this sweep read.
  *
- *  Inside the sample hours, always (`inSampleHours`). Outside them, only for a holding with NO
- *  sample at all: its first row is taken at the next sweep whatever the hour, dated the market day
- *  as every row is, and once it exists the hours rule holds for it too, so no later overnight mark
- *  rewrites it.
+ *  Inside the sample hours, always, as before (`inSampleHours`). Outside them the row is only ever
+ *  FILLED or COMPLETED, never changed:
  *
- *  The exception exists because of when trades are RECORDED. The owner enters a trade in the
- *  Singapore morning, which is New York's evening, after the close of the day it was put on. Under
- *  the hours alone, that holding's first row would be the next day's, never its Opened day — and
- *  `volAttribution` refuses any chain that does not start on Opened, so the Vol part would stay
- *  blank for every holding entered that way. The price is that the opening day's point can be a
- *  post-close or overnight mark rather than the close; a baseline from that evening is still that
- *  day's, which the chain needs, where no baseline at all is no answer.
+ *  - a day with no row yet gets one, whatever the hour. Two things leave a day without one. The
+ *    owner records a trade in the Singapore morning, which is New York's evening after the close of
+ *    the day it went on, so the holding's first row would otherwise be the next day's and never its
+ *    Opened day. And a session can be missed whole — a reboot waiting at the FileVault login, OpenD
+ *    waiting for one. `volAttribution` needs a row on Opened and on every day after it, so either
+ *    hole blanked the holding's Vol part for good; a row from that evening keeps the chain whole.
+ *  - a row the feed left without its IV or its vega is completed by a sweep that has BOTH, because
+ *    the chain needs both for every leg on every day. Both, not just the missing one: the row is
+ *    written whole from this sweep, so a sweep missing the other map would trade one hole for
+ *    another.
+ *  - a complete row is left alone: a settled close stays the close however the overnight mark
+ *    moves.
+ *
+ *  The price is that some points are not closes: an opening day recorded in the evening, a missed
+ *  session filled after it. Every row carries the instant it was observed (`observed_at`), so a
+ *  chart can tell those points from the closes rather than be told they are the same thing.
  */
-export function takesSample(now: Date, sampled: boolean): boolean {
-  return inSampleHours(now) || !sampled;
+export function takesSample(
+  now: Date, stored: SampleReadings | null, observed: SampleReadings,
+): boolean {
+  if (inSampleHours(now) || stored === null) return true;
+  const incomplete = stored.legs_iv === null || stored.legs_vega === null;
+  return incomplete && observed.legs_iv !== null && observed.legs_vega !== null;
 }
 
 /** Calendar days from the current MARKET date to expiry.

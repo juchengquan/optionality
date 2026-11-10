@@ -34,7 +34,7 @@ from optionality.js import js_string, to_fixed
 from optionality.position import cost_to_close, leg_readings
 from optionality.quote import ByCode
 
-from ..db.queries import find_position_sample, list_position_samples, record_position_sample, stamp_manage_notified
+from ..db.queries import find_position_sample, record_position_sample, stamp_manage_notified
 from ..db.rows import PositionRow
 from ..db.time import to_sql_datetime
 from ..db.values import to_sqlite_json
@@ -111,13 +111,14 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
     """One observation per Position per market day, so the decay shape can be checked against this
     book rather than defended on arithmetic (ADR 0011).
 
-    Taken only in the sample hours, 09:30 to 16:00 in New York (`in_sample_hours`), so the day's row is
-    the last sweep at or before the close and nothing after it moves the row. Until then it was
-    rewritten up to New York's midnight, and SPXW trades again from about 20:15 — so the row that
-    survived could be an overnight mark under a chart that calls it the close. Every calendar day,
-    weekends included, because the vol chain needs a row for each (vol.py). A holding's FIRST row is the
-    one exception (`takes_sample`): taken at the next sweep whatever the hour, because the owner records
-    trades in New York's evening and the chain must start on the Opened day.
+    Written freely only in the sample hours, 09:30 to 16:15 in New York, so the day's row is the last
+    sweep at or before the options' close. Until then it was rewritten up to New York's midnight, and
+    SPXW trades again from about 20:15 — so the row that survived could be an overnight mark under a
+    chart that calls it the close. Outside the hours a row is only ever FILLED (a day with none: a trade
+    recorded in the evening, a session missed whole) or COMPLETED (a row the feed left without its IV or
+    vega), never changed — `takes_sample` decides, and every write carries the sweep's instant in
+    `observed_at`, so a filled point is never mistaken for a close. Every calendar day, weekends
+    included, because the vol chain needs a row for each (vol.py).
 
     Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a sample is
     a nice-to-have that must never be the reason a breach went unmessaged.
@@ -129,10 +130,6 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
     observed_on = market_date(at)
     for row in rows:
         try:
-            # whether it has any sample at all, which only matters outside the hours — but asked every
-            # time, so the decision stays the domain's one function rather than half of it here
-            if not takes_sample(at, len(list_position_samples(db, row["id"])) > 0):
-                continue
             dte = days_to_expiry(row["strike_date"], at)
             if dte < 0:
                 continue
@@ -161,11 +158,18 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
             deltas = leg_readings(position, by_code, "option_delta")
             legs_delta = None if deltas is None else to_sqlite_json(deltas)
 
+            # The day's row as it stands decides whether this sweep may touch it at all: freely inside
+            # the hours, and outside them only to fill a day with no row or complete one without its vol
+            # readings — never to change a settled close.
+            stored = find_position_sample(db, row["id"], observed_on)
+            if not takes_sample(at, stored, {"legs_iv": legs_iv, "legs_vega": legs_vega}):
+                continue
+
             # Only when something actually differs. The sweep runs every 15 seconds and the day's row
             # is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
             # weekends nearly every one of those writes stored what was already there, and the IV map
-            # triples what each one carries.
-            stored = find_position_sample(db, row["id"], observed_on)
+            # triples what each one carries. `observed_at` is NOT compared: it stamps a write, so it says
+            # when the figures were last seen to change, which is when they were observed.
             if (
                 stored is not None
                 and stored["dte"] == dte
@@ -186,6 +190,7 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                     "legs_iv": legs_iv,
                     "legs_vega": legs_vega,
                     "legs_delta": legs_delta,
+                    "observed_at": to_sql_datetime(at),
                 },
             )
         except Exception:

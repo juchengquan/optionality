@@ -17,7 +17,7 @@ import { daysToExpiry, marketDate, takesSample } from "optionality/domain/expiry
 import { dteAtOpen, onPace } from "optionality/domain/exit";
 import { costToClose, legReadings } from "optionality/domain/position";
 import {
-  findPositionSample, listPositionSamples, recordPositionSample, stampManageNotified,
+  findPositionSample, recordPositionSample, stampManageNotified,
 } from "../db/queries/index.ts";
 import type { PositionRow } from "../db/rows.ts";
 import { toSqlDatetime } from "../db/time.ts";
@@ -86,13 +86,14 @@ export async function noticeManageBy(
   /** One observation per Position per market day, so the decay shape can be checked against this
  *  book rather than defended on arithmetic (ADR 0011).
  *
- *  Taken only in the sample hours, 09:30 to 16:00 in New York (`inSampleHours`), so the day's row
- *  is the last sweep at or before the close and nothing after it moves the row. Until then it was
- *  rewritten up to New York's midnight, and SPXW trades again from about 20:15 — so the row that
- *  survived could be an overnight mark under a chart that calls it the close. Every calendar day,
- *  weekends included, because the vol chain needs a row for each (vol.ts). A holding's FIRST row is
- *  the one exception (`takesSample`): taken at the next sweep whatever the hour, because the owner
- *  records trades in New York's evening and the chain must start on the Opened day.
+ *  Written freely only in the sample hours, 09:30 to 16:15 in New York, so the day's row is the last
+ *  sweep at or before the options' close. Until then it was rewritten up to New York's midnight,
+ *  and SPXW trades again from about 20:15 — so the row that survived could be an overnight mark
+ *  under a chart that calls it the close. Outside the hours a row is only ever FILLED (a day with
+ *  none: a trade recorded in the evening, a session missed whole) or COMPLETED (a row the feed left
+ *  without its IV or vega), never changed — `takesSample` decides, and every write carries the
+ *  sweep's instant in `observed_at`, so a filled point is never mistaken for a close. Every calendar
+ *  day, weekends included, because the vol chain needs a row for each (vol.ts).
  *
  *  Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a
  *  sample is a nice-to-have that must never be the reason a breach went unmessaged.
@@ -106,9 +107,6 @@ export function recordSamples(
   const observedOn = marketDate(at);
   for (const row of rows) {
     try {
-      // whether it has any sample at all, which only matters outside the hours — but asked every
-      // time, so the decision stays the domain's one function rather than half of it here
-      if (!takesSample(at, listPositionSamples(db, row.id).length > 0)) continue;
       const dte = daysToExpiry(row.strike_date, at);
       if (dte < 0) continue;
       const position = toPosition(row);
@@ -135,18 +133,24 @@ export function recordSamples(
       const deltas = legReadings(position, byCode, "option_delta");
       const legsDelta = deltas === null ? null : toSqliteJson(deltas);
 
+      // The day's row as it stands decides whether this sweep may touch it at all: freely inside
+      // the hours, and outside them only to fill a day with no row or complete one without its vol
+      // readings — never to change a settled close.
+      const stored = findPositionSample(db, row.id, observedOn);
+      if (!takesSample(at, stored ?? null, { legs_iv: legsIv, legs_vega: legsVega })) continue;
+
       // Only when something actually differs. The sweep runs every 15 seconds and the day's row
       // is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
       // weekends nearly every one of those writes stored what was already there, and the IV map
-      // triples what each one carries.
-      const stored = findPositionSample(db, row.id, observedOn);
+      // triples what each one carries. `observed_at` is NOT compared: it stamps a write, so it
+      // says when the figures were last seen to change, which is when they were observed.
       if (stored && stored.dte === dte && stored.cost_to_close === cost
         && stored.legs_iv === legsIv && stored.legs_vega === legsVega
         && stored.legs_delta === legsDelta) continue;
 
       recordPositionSample(db, {
         position_id: row.id, observed_on: observedOn, dte, cost_to_close: cost,
-        legs_iv: legsIv, legs_vega: legsVega, legs_delta: legsDelta,
+        legs_iv: legsIv, legs_vega: legsVega, legs_delta: legsDelta, observed_at: toSqlDatetime(at),
       });
     } catch (err) {
       console.error(`recording a sample for ${row.name} failed:`, err);

@@ -139,7 +139,8 @@
             "US.SPXW261218C7350000": 0.15,
             "US.SPXW261218P6400000": -0.18,
             "US.SPXW261218P6350000": -0.12
-          }
+          },
+          "observed_at": null
         }
       ],
       "reference_securities": []

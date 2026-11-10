@@ -5,7 +5,7 @@ Date: 2026-10-12
 ## Status
 
 Accepted. Decided with the owner on 2026-10-12. Amended 2026-11-10: the daily sample is the day's
-close, and records each leg's delta (last section).
+close (or marked as not one), and records each leg's delta (last section).
 
 ## Context
 
@@ -159,32 +159,43 @@ calls them closes. They were not: the day's row was rewritten whenever a figure 
 York's midnight, and SPXW trades again from about 20:15 in Global Trading Hours, so the row that
 survived could be an overnight mark.
 
-**The sample is taken from 09:30 to 16:00 in New York, both ends included, and at no other time**
-(`inSampleHours` in `domain/expiry.ts`, cased and ported). The last sweep at or before 16:00 is the
-row that stays. 09:30 is the floor so a service that slept through a session writes no row made of
-the morning's overnight marks.
+**Inside 09:30 to 16:15 in New York, both ends included, the day's row is written freely**
+(`inSampleHours` in `domain/expiry.ts`, cased and ported), so the last sweep at or before 16:15 is
+the row that stays. 16:15 is the OPTIONS' close, a quarter hour after the stocks', and the one
+their own marks settle on — the same rule that puts a half-day's close at 13:15.
+
+**Outside those hours a row is only ever filled or completed, never changed** (`takesSample`):
+
+- **A day with no row yet gets one, whatever the hour.** Two things leave a day without one. The
+  owner records trades in the Singapore morning — New York's evening, after the close of the day the
+  trade went on — so the holding's first row would otherwise be the next day's, and the chain above
+  refuses any start but Opened. And a session can be missed whole: a reboot waiting at the FileVault
+  login, OpenD waiting for one. Either hole blanked the holding's Vol part for good, because the
+  chain needs every day. A row from that evening keeps it whole. A day first seen before 09:30 is
+  filled the same way, and the session then writes over it freely.
+- **A row the feed left without its IV or its vega is completed** by a sweep that has BOTH. Both,
+  not just the missing one: the row is written whole from that sweep, so one missing the other map
+  would trade one hole for another.
+- **A complete row is left alone.** A settled close stays the close, however the overnight mark
+  moves.
+
+**So some points are not closes**: an opening day recorded in the evening, a missed session filled
+after it, a row completed that night. That is the honest trade — a reading taken the evening of the
+day is still that day's, where no reading is no answer — and it is made visible rather than hidden:
+**every write stamps `observed_at`**, the sweep's own instant in UTC (migration 0009), so a chart
+can tell a close from an off-close point. Rows written before it carry none.
 
 **Still every calendar day**, which is what keeps the chain above exact: nothing trades in those
 hours on a weekend or a holiday, so their rows carry the last close forward, as weekend rows always
-have, and no exchange calendar is needed. A half-day (13:00, options 13:15) is static from its close
-to 16:00, so its row is its close too. The owner's brief said weekdays only; this file's chain is
-the reason it is every day instead.
+have, and no exchange calendar is needed. A half-day is static from its 13:15 close to 16:15, so its
+row is its close too. The owner's brief said weekdays only; this file's chain is the reason it is
+every day instead.
 
-**A holding's FIRST sample is the one exception** (`takesSample`): it is taken at the next sweep
-whatever the hour, dated the market day like every row, and once it exists the hours rule holds for
-it too, so no later overnight mark rewrites it. The owner records trades in the Singapore morning —
-New York's evening, after the close of the day the trade was put on. Under the hours alone that
-holding's first row would be the next day's, never its Opened day, and the chain above refuses any
-start but Opened: the Vol part would have stayed blank for every holding entered that way, which
-is all of them. So **the opening day's point may be a post-close or overnight mark** rather than
-that day's close. That is the honest trade: a baseline taken the evening the trade went on is still
-that day's reading of the vol it was sold at, where no baseline at all is no answer.
-
-**A date absent now means the service was down for the whole of that day's sample hours**, not
-the whole day — a shorter outage than before makes a hole, which is the honest reading, since a
-row from outside the hours is not that day's close. A holding recorded after New York's MIDNIGHT
-(13:00 in Singapore, or later) gets its first row dated the next market day, and its Opened has to
-say that day for the chain to start, as before.
+**A date absent still means the service was down for that whole New York day**, since a day is
+filled whenever the service is up for any part of it. A holding recorded after New York's MIDNIGHT —
+13:00 in Singapore while New York keeps EST, 12:00 while it keeps EDT (Singapore has no daylight
+saving, so the hour moves with New York's) — gets its first row dated the next market day, and its
+Opened has to say that day for the chain to start, as before.
 
 **Each leg's delta is recorded beside its IV and vega** (`legs_delta`, migration 0009): the risk the
 owner manages by, only knowable when observed, all or nothing per map and gated on its own, exactly

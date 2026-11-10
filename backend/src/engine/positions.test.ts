@@ -164,19 +164,39 @@ describe("recording what a Position was worth", () => {
     ]);
   });
 
-  it("writes nothing in the evening once a holding has a sample, where UTC and New York disagree", async () => {
-    // the hazard the sweeper's own expiry comment names: for the hours New York is behind UTC the
-    // two dates differ. Those hours are all evening or night in New York, and since the row became
-    // the day's CLOSE (09:30–16:00, inSampleHours) none of them writes for a holding that has a
-    // sample. The row is keyed by `marketDate` either way, so a New York Thursday evening is still
-    // Thursday's row even though UTC has reached Friday.
-    const id = held("held");
-    await sweeper(spread(5.0, 1.0)).sweep(); // 11:00 on 2026-10-01
-    now = new Date("2026-10-02T02:00:00Z"); // 22:00 on 2026-10-01 in New York, Friday in UTC
-    await sweeper(spread(3.0, 1.0)).sweep();
+  /** The held spread priced at codes fixed by the caller — so moving the clock does not move the
+   *  contracts — with both vol readings unless `without` names one. */
+  const pricing = (short: string, sold: number, without?: "iv" | "vega"): FakeProvider => (codes) =>
+    Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === short ? sold : 1.0,
+      ...(without === "iv" ? {} : { option_implied_volatility: 14.5 }),
+      ...(without === "vega" ? {} : { option_vega: 4.25 }),
+    })));
+  const rows = () => db.prepare(
+    `select observed_on, cost_to_close, observed_at,
+            legs_iv is not null as iv, legs_vega is not null as vega
+     from position_samples order by observed_on`,
+  ).all();
 
-    expect(samples()).toEqual([
-      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 4 },
+  it("stamps every write with the sweep's own instant", async () => {
+    // so a chart can tell a close from a point filled after hours (ADR 0011)
+    held("held");
+    await sweeper(spread(5.0, 1.0)).sweep(); // 11:00 EDT on 2026-10-01
+    expect(db.prepare("select observed_at from position_samples").get())
+      .toEqual({ observed_at: "2026-10-01 15:00:00.000000" });
+  });
+
+  it("never changes a complete row outside the hours, however the mark moves", async () => {
+    // a settled close stays the close. The hazard the sweeper's own expiry comment names is here
+    // too: 22:00 on a New York Thursday is Friday in UTC, and the row is still Thursday's
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    await sweeper(pricing(short, 5.0)).sweep(); // 11:00 on 2026-10-01
+    now = new Date("2026-10-02T02:00:00Z"); // 22:00 on 2026-10-01 in New York, Friday in UTC
+    await sweeper(pricing(short, 3.0)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-01 15:00:00.000000", iv: 1, vega: 1 },
     ]);
   });
 
@@ -187,12 +207,59 @@ describe("recording what a Position was worth", () => {
     // (takesSample). The evening's row is dated the market day, as every row is.
     now = new Date("2026-10-02T00:30:00Z"); // 20:30 on 2026-10-01 in New York
     const id = held("recorded-late");
-    await sweeper(spread(5.0, 1.0)).sweep();
+    const short = buildSpxCode(future(), "CALL", 8050);
+    await sweeper(pricing(short, 5.0)).sweep();
     now = new Date("2026-10-02T00:45:00Z"); // 20:45, a moved mark, and the row now exists
-    await sweeper(spread(4.0, 1.0)).sweep();
+    await sweeper(pricing(short, 4.0)).sweep();
 
     expect(samples()).toEqual([
       { position_id: id, observed_on: "2026-10-01", dte: 31, cost_to_close: 4 },
+    ]);
+    expect(rows()[0]).toMatchObject({ observed_at: "2026-10-02 00:30:00.000000" });
+  });
+
+  it("fills a day whose session was missed whole, after the hours, and marks it", async () => {
+    // a reboot waiting at the FileVault login, OpenD waiting for one: no sweep ran in the session,
+    // and a day with no row is a hole that blanks the Vol part for good (vol.ts). The fill is
+    // written once and then left alone like any complete row.
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    await sweeper(pricing(short, 5.0)).sweep(); // 11:00 on 2026-10-01
+    now = new Date("2026-10-03T00:30:00Z"); // 20:30 on 2026-10-02: its whole session missed
+    await sweeper(pricing(short, 4.0)).sweep();
+    now = new Date("2026-10-03T00:45:00Z");
+    await sweeper(pricing(short, 3.0)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-01 15:00:00.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-02", cost_to_close: 3, observed_at: "2026-10-03 00:30:00.000000", iv: 1, vega: 1 },
+    ]);
+  });
+
+  it("completes a row the feed left without its vega, after the hours, from a sweep with both", async () => {
+    // the vol chain needs an IV and a vega for every leg on every day; the row is written whole
+    // from the completing sweep, and stamped with its instant
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    await sweeper(pricing(short, 5.0, "vega")).sweep(); // 11:00: the vegas withheld all session
+    now = new Date("2026-10-02T00:30:00Z"); // 20:30 the same market day
+    await sweeper(pricing(short, 4.5)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 3.5, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
+    ]);
+  });
+
+  it("does not 'complete' a row from a sweep missing the other map", async () => {
+    // the row is written whole, so this would trade the stored IV for the missing vega
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    await sweeper(pricing(short, 5.0, "vega")).sweep();
+    now = new Date("2026-10-02T00:30:00Z");
+    await sweeper(pricing(short, 4.5, "iv")).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-01 15:00:00.000000", iv: 1, vega: 0 },
     ]);
   });
 
@@ -231,34 +298,39 @@ describe("recording what a Position was worth", () => {
     expect(attributed).toMatchObject({ from: "2026-10-01", to: "2026-10-02", days: 1 });
   });
 
-  it("settles on the close: a mark that moves after 16:00 does not move the day's row", async () => {
+  it("settles on the close: a mark that moves after 16:15 does not move the day's row", async () => {
     // SPXW trades again from about 20:15 in Global Trading Hours, and until this the day's row was
     // rewritten by every overnight mark that differed, up to New York's midnight — so the row that
-    // survived was whatever traded last before it, not the close the burndown says it is.
-    const id = held("held");
-    now = new Date("2026-10-01T19:59:45Z"); // 15:59:45 EDT
-    await sweeper(spread(5.0, 1.0)).sweep();
-    now = new Date("2026-10-01T20:00:00Z"); // 16:00:00 EDT, the close itself, still in
-    await sweeper(spread(4.5, 1.0)).sweep();
-    now = new Date("2026-10-01T20:00:15Z"); // the next sweep, after the close
-    await sweeper(spread(4.0, 1.0)).sweep();
+    // survived was whatever traded last before it, not the close the burndown says it is. 16:15 is
+    // the options' close, a quarter hour after the stocks'.
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    now = new Date("2026-10-01T20:14:45Z"); // 16:14:45 EDT
+    await sweeper(pricing(short, 5.0)).sweep();
+    now = new Date("2026-10-01T20:15:00Z"); // 16:15:00 EDT, the close itself, still in
+    await sweeper(pricing(short, 4.5)).sweep();
+    now = new Date("2026-10-01T20:15:15Z"); // the next sweep, after the close
+    await sweeper(pricing(short, 4.0)).sweep();
     now = new Date("2026-10-02T01:30:00Z"); // 21:30, overnight trading, same market day
-    await sweeper(spread(3.0, 1.0)).sweep();
+    await sweeper(pricing(short, 3.0)).sweep();
 
-    expect(samples()).toEqual([
-      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 3.5 },
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 3.5, observed_at: "2026-10-01 20:15:00.000000", iv: 1, vega: 1 },
     ]);
   });
 
-  it("writes no row from the morning's overnight marks before 09:30", async () => {
-    // a service that slept through a whole session writes nothing for it, rather than a row made
-    // of the marks Global Trading Hours left before the open
-    const id = held("held");
-    await sweeper(spread(5.0, 1.0)).sweep(); // 11:00 on 2026-10-01, the holding's first row
-    now = new Date("2026-10-02T13:29:59Z"); // 09:29:59 EDT the next day
-    await sweeper(spread(5.0, 1.0)).sweep();
-    expect(samples()).toEqual([
-      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 4 },
+  it("fills a day before the open, and the session then writes over it", async () => {
+    // a day with no row is filled whenever it is first seen, the small hours included; inside the
+    // hours the row is written freely again, so the session's figures replace the overnight ones
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    now = new Date("2026-10-01T13:29:59Z"); // 09:29:59 EDT, no row for the day yet
+    await sweeper(pricing(short, 5.0)).sweep();
+    now = new Date("2026-10-01T13:30:00Z"); // 09:30, the session
+    await sweeper(pricing(short, 4.5)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 3.5, observed_at: "2026-10-01 13:30:00.000000", iv: 1, vega: 1 },
     ]);
   });
 

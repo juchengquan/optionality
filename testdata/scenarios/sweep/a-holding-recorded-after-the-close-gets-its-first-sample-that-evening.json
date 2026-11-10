@@ -1,7 +1,7 @@
 {
   "name": "a holding recorded after the close gets its first sample that evening",
   "outcomes": [
-    "first-sample-taken-outside-the-sample-hours",
+    "day-filled-after-hours",
     "sample-recorded"
   ],
   "world": {
@@ -148,7 +148,8 @@
               "US.SPXW261218C7350000": 0.15,
               "US.SPXW261218P6400000": -0.18,
               "US.SPXW261218P6350000": -0.12
-            }
+            },
+            "observed_at": "2026-11-10 01:30:00.000000"
           }
         ]
       }

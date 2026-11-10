@@ -83,9 +83,11 @@ describe("inSampleHours — when a day's sample may be taken", () => {
     expect(inSampleHours(at("2026-11-09T14:30:00.000Z"))).toBe(true);
   });
 
-  it("includes 16:00 itself and nothing after it, so the row settles on the close", () => {
-    expect(inSampleHours(at("2026-11-09T21:00:00.000Z"))).toBe(true);
-    expect(inSampleHours(at("2026-11-09T21:00:00.001Z"))).toBe(false);
+  it("closes at 16:15, the options' own close, and includes it", () => {
+    // SPX options trade until 16:15, a quarter hour after the stocks, so 16:00 is not their close
+    expect(inSampleHours(at("2026-11-09T21:00:00.000Z"))).toBe(true); // 16:00, still trading
+    expect(inSampleHours(at("2026-11-09T21:15:00.000Z"))).toBe(true);
+    expect(inSampleHours(at("2026-11-09T21:15:00.001Z"))).toBe(false);
   });
 
   it("refuses the overnight session, whose marks are not the day's close", () => {
@@ -115,30 +117,46 @@ describe("inSampleHours — when a day's sample may be taken", () => {
   });
 
   it("needs no exchange calendar: a half-day and a holiday carry their last close", () => {
-    // the Friday after Thanksgiving closes at 13:00 (options 13:15) and is static until 16:00
+    // the Friday after Thanksgiving closes at 13:00 (options 13:15) and is static until 16:15
     expect(inSampleHours(at("2026-11-27T19:00:00Z"))).toBe(true);
     // Thanksgiving itself trades nothing, so its row is Wednesday's close, as a Saturday's is
     expect(inSampleHours(at("2026-11-26T17:00:00Z"))).toBe(true);
   });
 });
 
-describe("takesSample — whether this sweep writes a holding's sample", () => {
+describe("takesSample — whether this sweep writes the day's row", () => {
   const evening = at("2026-11-10T01:30:00Z"); // Monday 20:30 in New York, overnight trading
   const session = at("2026-11-09T16:00:00Z"); // Monday 11:00 in New York
+  const whole = { legs_iv: "{}", legs_vega: "{}" };
+  const noVega = { legs_iv: "{}", legs_vega: null };
+  const noIv = { legs_iv: null, legs_vega: "{}" };
 
-  it("takes a holding's FIRST sample whatever the hour", () => {
-    // the owner records a trade in the Singapore morning, after New York's close: without this the
-    // holding's first row is the next day's, never its Opened day, and the vol chain never starts
-    expect(takesSample(evening, false)).toBe(true);
+  it("writes inside the sample hours whatever is stored, as it always has", () => {
+    expect(takesSample(session, null, whole)).toBe(true);
+    expect(takesSample(session, whole, whole)).toBe(true);
+    expect(takesSample(session, whole, noVega)).toBe(true);
   });
 
-  it("leaves a holding that has a sample alone outside the sample hours", () => {
-    // so that first row, once written, is never rewritten by a later overnight mark either
-    expect(takesSample(evening, true)).toBe(false);
+  it("fills a day with no row yet whatever the hour", () => {
+    // a trade recorded in New York's evening, and a session missed whole — a reboot waiting at the
+    // FileVault login, OpenD waiting for one — both leave a day with no row, and the vol chain
+    // needs every day: a hole there blanks the Vol part for good
+    expect(takesSample(evening, null, whole)).toBe(true);
+    expect(takesSample(evening, null, noVega)).toBe(true);
   });
 
-  it("writes inside the sample hours whether or not there is a sample yet", () => {
-    expect(takesSample(session, true)).toBe(true);
-    expect(takesSample(session, false)).toBe(true);
+  it("never changes a complete row outside the hours", () => {
+    // a settled close stays the close, however the overnight mark moves
+    expect(takesSample(evening, whole, whole)).toBe(false);
+  });
+
+  it("completes a row missing its vol readings, but only from a sweep that has both", () => {
+    // the vol chain needs an IV and a vega for every leg on every day
+    expect(takesSample(evening, noVega, whole)).toBe(true);
+    expect(takesSample(evening, noIv, whole)).toBe(true);
+    // a sweep that would trade one missing map for another is no completion: the row is replaced
+    // whole, so writing it would lose the reading the stored row had
+    expect(takesSample(evening, noVega, noIv)).toBe(false);
+    expect(takesSample(evening, noVega, noVega)).toBe(false);
   });
 });

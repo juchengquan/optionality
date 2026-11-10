@@ -40,7 +40,7 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
     "position_samples": (
         "position_id", "observed_on", "dte", "cost_to_close",
         # appended, because ALTER TABLE adds at the end
-        "legs_iv", "legs_vega", "legs_delta",
+        "legs_iv", "legs_vega", "legs_delta", "observed_at",
     ),
     "monitor_positions": ("monitor_id", "position_id"),
     "reference_securities": ("id", "code", "label", "source", "created_at"),
@@ -57,7 +57,7 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
 NULLABLE: dict[TableName, tuple[str, ...]] = {
     "monitors": ("legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at"),
     "positions": ("strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit"),
-    "position_samples": ("legs_iv", "legs_vega", "legs_delta"),
+    "position_samples": ("legs_iv", "legs_vega", "legs_delta", "observed_at"),
     "monitor_positions": (),
     "reference_securities": ("label",),
     "schema_migrations": (),
@@ -160,6 +160,9 @@ class PositionSampleRow(TypedDict):
     #: JSON text: contract code -> delta, the risk the book is managed by. None on the same
     #: all-or-nothing rule and gated on its own, like the vega: only knowable when observed.
     legs_delta: str | None
+    #: When the sweep that wrote this row ran, UTC. Inside the sample hours it is the close or near it;
+    #: outside them the row filled a day that had none (ADR 0011). None before migration 0009.
+    observed_at: str | None
 
 
 class MonitorPositionRow(TypedDict):

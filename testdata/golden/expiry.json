@@ -100,7 +100,7 @@
     },
     {
       "fn": "inSampleHours",
-      "name": "16:00 exactly",
+      "name": "16:00, the stocks' close",
       "args": [
         {
           "$date": "2026-11-09T21:00:00.000Z"
@@ -110,10 +110,20 @@
     },
     {
       "fn": "inSampleHours",
-      "name": "a millisecond after 16:00",
+      "name": "16:15 exactly",
       "args": [
         {
-          "$date": "2026-11-09T21:00:00.001Z"
+          "$date": "2026-11-09T21:15:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "a millisecond after 16:15",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
         }
       ],
       "expect": false
@@ -200,56 +210,172 @@
     },
     {
       "fn": "takesSample",
-      "name": "a first sample in the evening, as a trade recorded after the close",
+      "name": "in the hours, over a complete row",
       "args": [
         {
-          "$date": "2026-11-10T01:30:00.000Z"
+          "$date": "2026-11-09T16:00:00.000Z"
         },
-        false
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
       ],
       "expect": true
     },
     {
       "fn": "takesSample",
-      "name": "not again that evening once one exists",
+      "name": "in the hours, with no row yet",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        null,
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "takesSample",
+      "name": "in the hours, from a sweep missing a map",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "takesSample",
+      "name": "an evening with no row yet: a trade recorded after the close, or a missed session",
       "args": [
         {
           "$date": "2026-11-10T01:30:00.000Z"
         },
-        true
+        null,
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "takesSample",
+      "name": "an evening with no row yet, from a sweep missing a map",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        null,
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "takesSample",
+      "name": "an evening over a complete row",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
       ],
       "expect": false
     },
     {
       "fn": "takesSample",
-      "name": "in the hours with samples already",
+      "name": "an evening completing a row without its vega",
       "args": [
         {
-          "$date": "2026-11-09T16:00:00.000Z"
+          "$date": "2026-11-10T01:30:00.000Z"
         },
-        true
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
       ],
       "expect": true
     },
     {
       "fn": "takesSample",
-      "name": "in the hours with none yet",
+      "name": "an evening completing a row without its IV",
       "args": [
         {
-          "$date": "2026-11-09T16:00:00.000Z"
+          "$date": "2026-11-10T01:30:00.000Z"
         },
-        false
+        {
+          "legs_iv": null,
+          "legs_vega": "{\"a\":4.25}"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
       ],
       "expect": true
     },
     {
       "fn": "takesSample",
-      "name": "a millisecond after 16:00 with samples already",
+      "name": "an evening sweep that would trade one missing map for another",
       "args": [
         {
-          "$date": "2026-11-09T21:00:00.001Z"
+          "$date": "2026-11-10T01:30:00.000Z"
         },
-        true
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null
+        },
+        {
+          "legs_iv": null,
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "takesSample",
+      "name": "a millisecond after 16:15, over a complete row",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
       ],
       "expect": false
     }
