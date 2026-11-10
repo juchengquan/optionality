@@ -35,7 +35,23 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
-const SKIP_DIRS = new Set(["node_modules", "dist", ".venv", "__pycache__", ".out"]);
+/** Directories no guard walks into.
+ *
+ *  Exported so `guards.test.mjs` can hold every guard's list to one floor: this constant is
+ *  copied in five files, which is why `.claude` was missing from all five at once.
+ */
+export const SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  ".venv",
+  "__pycache__",
+  ".out",
+  // `.claude` holds agent WORKTREES — `.claude/worktrees/<agent>` is a checkout of this same
+  // repository on another branch, registered with git and live. Walking into one lints that
+  // branch's code against THIS branch's rules, which fails for everybody: on 2026-11-10 a
+  // leftover worktree on `feat/redesign-figures` made `make check` red on a clean main.
+  ".claude",
+]);
 const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx)$/;
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/g;
 
