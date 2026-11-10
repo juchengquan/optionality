@@ -58,8 +58,10 @@ class PositionPatch(Shape):
     #: one — created_at is right for some of them and wrong for the rest
     opened_at: Annotated[str | None, _StrikeDate] = None
     #: a CLOSED holding's exit and close day, correctable after the fact (ADR 0022) — a mistyped close was
-    #: otherwise fixable only by deleting, which loses the samples. Refused on a holding still held.
-    exit: Annotated[float | None, Number()] = None
+    #: otherwise fixable only by deleting, which loses the samples. Refused on a holding still held. A null
+    #: exit CLEARS it back to blank, as a close may leave it — the one PATCH field that takes a null, so
+    #: whether it was SENT is `model_fields_set`, never `is not None`.
+    exit: Annotated[float | None, Number().nullish()] = None
     closed_on: Annotated[str | None, _StrikeDate] = None
 
 

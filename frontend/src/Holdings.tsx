@@ -168,7 +168,6 @@ function ClosedRow({ holding, act, onSaved }: {
 }) {
   const [exit, setExit] = useState<number | null>(holding.exit);
   const [closedOn, setClosedOn] = useState(holding.closed_on ?? "");
-  const [why, setWhy] = useState<string | null>(null);
   return (
     <div data-testid={`closed-${holding.id}`} className="border-t py-2">
       <p>
@@ -182,16 +181,11 @@ function ClosedRow({ holding, act, onSaved }: {
         className="mt-2 flex min-w-0 flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          // each field sent only when it says something; a blank exit is left as it was, because
-          // the service takes a number here and an exit is cleared nowhere but the close itself
-          const body: Record<string, unknown> = {};
-          if (exit !== null) body.exit = exit;
+          // The exit is ALWAYS sent, and a cleared box sends null: blank is an answer here, as it
+          // is at the close ("I do not know what I paid"). Leaving it out when cleared answered 200
+          // with the old exit unchanged and nothing said. The day goes only when it says one.
+          const body: Record<string, unknown> = { exit };
           if (closedOn !== "") body.closed_on = closedOn;
-          if (Object.keys(body).length === 0) {
-            setWhy("Type the exit or the day it closed.");
-            return;
-          }
-          setWhy(null);
           act(async () => {
             await patchPosition(holding.id, body);
             onSaved();
@@ -223,7 +217,6 @@ function ClosedRow({ holding, act, onSaved }: {
             onSaved();
           })}
         />
-        {why ? <p className="meta w-full" role="alert">{why}</p> : null}
       </form>
     </div>
   );

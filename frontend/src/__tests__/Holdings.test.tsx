@@ -654,6 +654,20 @@ describe("closing a holding keeps it (ADR 0022)", () => {
     expect(posted[0]!.body).toEqual({ exit: 0.45, closed_on: "2026-10-08" });
   });
 
+  it("clears the exit back to blank when the box is emptied, rather than keeping the old one", async () => {
+    // pressing set with the box cleared sent only the day: a 200, the exit unchanged, and no word
+    mockClosing([spread], [closedRow]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(within(panel).getByRole("button", { name: /closed/i }));
+    const row = await within(panel).findByTestId("closed-pOld");
+    fireEvent.change(within(row).getByLabelText(/exit/i), { target: { value: "" } });
+    await userEvent.click(within(row).getByRole("button", { name: /^set$/i }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.body).toEqual({ exit: null, closed_on: "2026-10-09" });
+  });
+
   it("deletes a closed holding recorded by mistake, once asked", async () => {
     mockClosing([spread], [closedRow]);
     render(<App />);

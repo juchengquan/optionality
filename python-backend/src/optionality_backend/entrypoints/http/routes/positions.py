@@ -378,7 +378,7 @@ def position_routes(deps: Deps) -> APIRouter:
         # An exit and a close day belong to a closed holding, and are corrected here — a mistyped close is
         # otherwise fixable only by deleting, which loses the samples (ADR 0022). On a holding still held
         # they would half-close it, so they are refused.
-        if row["closed_on"] is None and (given.exit is not None or given.closed_on is not None):
+        if row["closed_on"] is None and ("exit" in given.model_fields_set or given.closed_on is not None):
             raise http_error(422, f"position '{row['name']}' is not closed: close it first")
         if row["closed_on"] is not None:
             # the close's own bounds, against whatever this request leaves Opened at
@@ -399,7 +399,7 @@ def position_routes(deps: Deps) -> APIRouter:
             changes["strategy"] = given.strategy
         if given.opened_at is not None:
             changes["opened_at"] = given.opened_at
-        if given.exit is not None:
+        if "exit" in given.model_fields_set:  # a null clears it, so sent is not the same as not None
             changes["exit"] = given.exit
         if given.closed_on is not None:
             changes["closed_on"] = given.closed_on

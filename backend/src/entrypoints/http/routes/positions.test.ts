@@ -1143,6 +1143,15 @@ describe("closing a holding keeps it (ADR 0022)", () => {
     expect(sampleCount(pid), "without losing the history a delete would").toBe(1);
   });
 
+  it("clears an exit back to blank, as a close may leave it, and says nothing about what it made", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    await close(pid, { exit: 0.4 });
+    const resp = await patch(pid, { exit: null });
+    expect(resp.status).toBe(200);
+    expect(await body(resp)).toMatchObject({ exit: null, realized_points: null, closed_on: "2026-10-02" });
+  });
+
   it("refuses an exit or a close day on a holding still held", async () => {
     start();
     const pid = await created201(await post(condor()));

@@ -1155,6 +1155,17 @@ class TestClosingAHoldingKeepsIt:
         assert (data["exit"], data["closed_on"], data["realized_points"]) == (0.45, "2026-09-30", 2.55)
         assert self.sample_count(h, pid) == 1, "without losing the history a delete would"
 
+    async def test_clears_an_exit_back_to_blank_as_a_close_may_leave_it_and_says_nothing_about_what_it_made(
+        self, start
+    ):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        await self.close(h, pid, {"exit": 0.4})
+        resp = await patch(h, pid, {"exit": None})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert (data["exit"], data["realized_points"], data["closed_on"]) == (None, None, "2026-10-02")
+
     async def test_refuses_an_exit_or_a_close_day_on_a_holding_still_held(self, start):
         h = start_with(start)
         pid = created201(await post(h, condor()))

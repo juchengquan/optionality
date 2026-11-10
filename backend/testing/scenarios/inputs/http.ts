@@ -471,6 +471,14 @@ export const HTTP: readonly HttpInput[] = [
     request: request("PATCH", "/positions/pos-1", { exit: 1.5, closed_on: "2026-11-05" }),
   },
   {
+    // a close may leave the exit blank, so a correction may put it back to blank
+    name: "PATCH /positions/{id} clears a closed holding's exit back to blank",
+    world: world({
+      tables: { positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 1.25 })] },
+    }),
+    request: request("PATCH", "/positions/pos-1", { exit: null }),
+  },
+  {
     name: "PATCH /positions/{id} refuses an exit on a holding still held",
     world: world({ tables: held }),
     request: request("PATCH", "/positions/pos-1", { exit: 1.25 }),

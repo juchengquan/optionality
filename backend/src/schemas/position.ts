@@ -50,8 +50,9 @@ export const PositionPatch = z.object({
   opened_at: StrikeDate.optional(),
   /** a CLOSED holding's exit and close day, correctable after the fact (ADR 0022) — a mistyped
    *  close was otherwise fixable only by deleting, which loses the samples. Refused on a holding
-   *  still held. */
-  exit: z.number().optional(),
+   *  still held. A null exit CLEARS it back to blank, as a close may leave it: the one PATCH field
+   *  that takes a null, because blank is a real answer here — "I do not know what I paid". */
+  exit: z.number().nullish(),
   closed_on: StrikeDate.optional(),
 });
 
