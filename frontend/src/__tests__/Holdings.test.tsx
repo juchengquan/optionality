@@ -561,7 +561,32 @@ describe("closing a holding keeps it (ADR 0022)", () => {
     await waitFor(() => expect(posted).toHaveLength(1));
     expect(posted[0]!.url).toMatch(/\/positions\/pBS\/close$/);
     expect(posted[0]!.method).toBe("POST");
-    expect(posted[0]!.body).toEqual({ exit: 2.4 });
+    expect(posted[0]!.body).toMatchObject({ exit: 2.4 });
+  });
+
+  it("offers the New York trading day as the close day, and sends the day chosen", async () => {
+    // 02:00 UTC on the 10th is still the 9th in New York — the day the service keys a close on
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T02:00:00Z") });
+    try {
+      mockClosing([spread], []);
+      render(<App />);
+      const dialog = await closeDialog();
+      const day = within(dialog).getByLabelText(/closed on/i) as HTMLInputElement;
+      expect(day.value).toBe("2026-11-09");
+      fireEvent.change(day, { target: { value: "2026-11-06" } });
+      await userEvent.click(within(dialog).getByRole("button", { name: /^close holding$/i }));
+      await waitFor(() => expect(posted).toHaveLength(1));
+      expect(posted[0]!.body).toEqual({ exit: 2.35, closed_on: "2026-11-06" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says which way round the exit's sign goes, since a long is closed for a credit", async () => {
+    mockClosing([spread], []);
+    render(<App />);
+    const dialog = await closeDialog();
+    expect(dialog.textContent).toMatch(/negative when (closing )?it paid you/i);
   });
 
   it("closes with no exit when the field is cleared, rather than inventing one", async () => {
@@ -572,7 +597,7 @@ describe("closing a holding keeps it (ADR 0022)", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: /^close holding$/i }));
 
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]!.body).toEqual({ exit: null });
+    expect(posted[0]!.body.exit).toBeNull();
   });
 
   it("says which rules the close switched off", async () => {
@@ -610,6 +635,52 @@ describe("closing a holding keeps it (ADR 0022)", () => {
     expect(row.textContent).toMatch(/2\.60 pts/);
     // only the closed one: the held holding is the live list's
     expect(within(closed).queryByTestId("closed-pBS")).toBeNull();
+  });
+
+  it("corrects a closed holding's exit and day in place, which keeps its history", async () => {
+    // a mistyped close was fixable only by deleting, which takes the samples with it
+    mockClosing([spread], [closedRow]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(within(panel).getByRole("button", { name: /closed/i }));
+    const row = await within(panel).findByTestId("closed-pOld");
+    fireEvent.change(within(row).getByLabelText(/exit/i), { target: { value: "0.45" } });
+    fireEvent.change(within(row).getByLabelText(/closed on/i), { target: { value: "2026-10-08" } });
+    await userEvent.click(within(row).getByRole("button", { name: /^set$/i }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.url).toMatch(/\/positions\/pOld$/);
+    expect(posted[0]!.method).toBe("PATCH");
+    expect(posted[0]!.body).toEqual({ exit: 0.45, closed_on: "2026-10-08" });
+  });
+
+  it("clears the exit back to blank when the box is emptied, rather than keeping the old one", async () => {
+    // pressing set with the box cleared sent only the day: a 200, the exit unchanged, and no word
+    mockClosing([spread], [closedRow]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(within(panel).getByRole("button", { name: /closed/i }));
+    const row = await within(panel).findByTestId("closed-pOld");
+    fireEvent.change(within(row).getByLabelText(/exit/i), { target: { value: "" } });
+    await userEvent.click(within(row).getByRole("button", { name: /^set$/i }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.body).toEqual({ exit: null, closed_on: "2026-10-09" });
+  });
+
+  it("deletes a closed holding recorded by mistake, once asked", async () => {
+    mockClosing([spread], [closedRow]);
+    render(<App />);
+    const panel = await holdingsOf();
+    await userEvent.click(within(panel).getByRole("button", { name: /closed/i }));
+    const row = await within(panel).findByTestId("closed-pOld");
+    await userEvent.click(within(row).getByRole("button", { name: /delete/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/history/i);
+    await userEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(posted.filter((p) => p.method === "DELETE")).toHaveLength(1));
+    expect(posted[0]!.url).toMatch(/\/positions\/pOld$/);
   });
 
   it("says so when nothing has been closed yet", async () => {

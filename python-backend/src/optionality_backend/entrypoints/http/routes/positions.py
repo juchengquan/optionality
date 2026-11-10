@@ -34,10 +34,12 @@ and not on a Monitor.
 - **The probe's codes are sorted as JavaScript sorts**, by UTF-16 code unit, as `holdings.py`'s are.
 """
 
+import sqlite3
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.expiry import market_date
+from optionality.monitor import monitor_leg_codes
 from optionality.position import (
     POSITION_GREEK_FIELDS,
     Position,
@@ -62,14 +64,15 @@ from ....db.queries import (
     list_position_samples,
     list_positions,
     monitors_watching,
+    open_positions,
     update_monitor_fields,
     update_position_fields,
 )
-from ....db.rows import PositionRow
+from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored, to_sql_datetime
 from ....db.values import from_sqlite_json, new_id, to_sqlite_bool, to_sqlite_json
 from ....holdings import holding_values
-from ....hydrate import to_position
+from ....hydrate import to_monitor, to_position
 from ....monitors import adopt_orphan_monitors
 from ....ports import verify_contracts
 from ....schemas.monitor import DisabledReason
@@ -202,6 +205,34 @@ def _realized(row: PositionRow) -> float | None:
         name=row["name"], strike_date=row["strike_date"], contracts=row["contracts"], entry=row["entry"], legs=()
     )
     return realized_points(held, row["exit"])
+
+
+def _closed_on_fault(row: PositionRow, closed_on: str, opened_at: str | None, today: str) -> str | None:
+    """Why a holding cannot have closed on this day, or None. Three bounds, the same for the close and for
+    correcting one afterwards: not before it was opened, not after its expiry — nothing is held past one —
+    and not after today in New York, since a close that has not happened yet is a plan. ISO dates compare
+    as text."""
+    if opened_at is not None and closed_on < opened_at:
+        return f"closed on {closed_on}, before it was opened on {opened_at}"
+    if closed_on > row["strike_date"]:
+        return f"closed on {closed_on}, after its expiry on {row['strike_date']}"
+    if closed_on > today:
+        return f"closed on {closed_on}, after today ({today} in New York)"
+    return None
+
+
+def _held_codes(db: sqlite3.Connection) -> set[str]:
+    """Every contract some OPEN holding holds."""
+    return {code for p in open_positions(db) for code in position_leg_codes(to_position(p))}
+
+
+def _still_held(monitor: MonitorRow, held: set[str]) -> bool:
+    """Whether every contract a rule names is still held by something open. A row that cannot be read names
+    nothing anyone can vouch for, so it reads as not held — the sweep would quarantine it anyway."""
+    try:
+        return all(code in held for code in monitor_leg_codes(to_monitor(monitor)))
+    except Exception:  # noqa: BLE001 — the TypeScript's bare `catch`: whatever hydrating refuses with
+        return False
 
 
 def position_routes(deps: Deps) -> APIRouter:
@@ -341,8 +372,24 @@ def position_routes(deps: Deps) -> APIRouter:
         """Record what was taken in, after the fact."""
         if not given.model_fields_set:
             raise http_error(422, "nothing to update")
-        if find_position(db, id_) is None:
+        row = find_position(db, id_)
+        if row is None:
             raise not_found("position")
+        # An exit and a close day belong to a closed holding, and are corrected here — a mistyped close is
+        # otherwise fixable only by deleting, which loses the samples (ADR 0022). On a holding still held
+        # they would half-close it, so they are refused.
+        if row["closed_on"] is None and ("exit" in given.model_fields_set or given.closed_on is not None):
+            raise http_error(422, f"position '{row['name']}' is not closed: close it first")
+        if row["closed_on"] is not None:
+            # the close's own bounds, against whatever this request leaves Opened at
+            fault = _closed_on_fault(
+                row,
+                given.closed_on or row["closed_on"],
+                given.opened_at or row["opened_at"],
+                market_date(deps.now()),
+            )
+            if fault:
+                raise http_error(422, fault)
         changes: dict[str, Any] = {}
         if given.entry is not None:
             changes["entry"] = given.entry
@@ -352,6 +399,10 @@ def position_routes(deps: Deps) -> APIRouter:
             changes["strategy"] = given.strategy
         if given.opened_at is not None:
             changes["opened_at"] = given.opened_at
+        if "exit" in given.model_fields_set:  # a null clears it, so sent is not the same as not None
+            changes["exit"] = given.exit
+        if given.closed_on is not None:
+            changes["closed_on"] = given.closed_on
         return out(update_position_fields(db, id_, changes))
 
     @router.post("/{id}/close", summary="Close a position, keeping it and its history", response_model=ClosedOut)
@@ -380,36 +431,39 @@ def position_routes(deps: Deps) -> APIRouter:
         # today was closed on its expiry, not today. ISO dates compare as text.
         today = market_date(deps.now())
         closed_on = given.closed_on or min(today, row["strike_date"])
-        if row["opened_at"] is not None and closed_on < row["opened_at"]:
-            raise http_error(422, f"closed on {closed_on}, before it was opened on {row['opened_at']}")
-        if closed_on > row["strike_date"]:
-            raise http_error(422, f"closed on {closed_on}, after its expiry on {row['strike_date']}")
+        fault = _closed_on_fault(row, closed_on, row["opened_at"], today)
+        if fault:
+            raise http_error(422, fault)
 
         def shut() -> list[dict[str, str]]:
-            # The rules that watched it go OFF, and are kept. A rule left on would go on alarming about
-            # contracts no longer held, and on valuing them against an Entry that is history. A rule
-            # spanning two holdings goes off when EITHER closes, for the same reason: its figure would now
-            # include legs nobody holds (ADR 0004, ADR 0022). One already off keeps its own reason — the
-            # owner's "manual", or the engine's quarantine — so the close neither claims it nor hides why
-            # it was off.
+            watchers = monitors_watching(db, id_)
+            update_position_fields(db, id_, {"closed_on": closed_on, "exit": given.exit})
+            # The rules stop claiming the holding, exactly as a DELETE leaves them: nothing alive is ever
+            # valued against a closed holding, because nothing alive is ever linked to one. A rule spanning
+            # two holdings keeps its link to the one still held.
+            clear_position_links(db, id_)
+            # ...then the delete path's two steps, for the delete path's reason: a rule this orphaned may
+            # watch a contract ANOTHER holding still holds — a roll leaves the old and the new sharing a
+            # strike — and it is handed to that one; one that cannot be placed stops claiming a scope.
+            # Adoption looks only at OPEN holdings, so never back onto this one.
+            adopt_orphan_monitors(db)
+            clear_scope_of_orphans(db)
+
+            # Only THEN is it decided which rules go off. Deciding first was a bug a review found: a rule
+            # switched off here and then adopted by the rolled holding was the new trade's alarm, silenced
+            # as "holding-closed" with no notice. So a rule goes off when something it names is no longer
+            # held by anything open: a leg rule on the closed holding alone, and a rule spanning two
+            # holdings when either closes, since its figure would now include legs nobody holds (ADR 0004,
+            # ADR 0022). One already off keeps its own reason — the owner's "manual", or the engine's
+            # quarantine — so the close neither claims it nor hides why.
+            held = _held_codes(db)
             taken: list[dict[str, str]] = []
             reason: DisabledReason = "holding-closed"
-            for monitor in monitors_watching(db, id_):
-                if not monitor["enabled"]:
+            for monitor in watchers:
+                if not monitor["enabled"] or _still_held(monitor, held):
                     continue
                 update_monitor_fields(db, monitor["id"], {"enabled": to_sqlite_bool(False), "disabled_reason": reason})
                 taken.append({"id": monitor["id"], "code": monitor["code"]})
-            # ...and they stop claiming the holding, exactly as a DELETE leaves them: nothing alive is
-            # ever valued against a closed holding, because nothing alive is ever linked to one. A rule
-            # spanning two holdings keeps its link to the one still held.
-            clear_position_links(db, id_)
-            update_position_fields(db, id_, {"closed_on": closed_on, "exit": given.exit})
-            # the delete path's two steps, for the delete path's reason: a rule this orphaned may be
-            # watching a contract another holding still holds (a roll leaves the old and the new sharing
-            # a strike), and one that cannot be placed stops claiming a scope. Adoption looks only at
-            # OPEN holdings, so it can never put a rule straight back onto this one.
-            adopt_orphan_monitors(db)
-            clear_scope_of_orphans(db)
             return taken
 
         disabled = await atomic(db, shut)

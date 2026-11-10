@@ -93,11 +93,13 @@ market day it was closed.
 _Avoid_: deleted, removed, archived, expired (that word means the contract's own date)
 
 **Exit**:
-What you paid to close a Position, per contract, in points — Entry's counterpart, and like it
-left blank rather than guessed when unknown. Entry less Exit across the contracts held is what a
-closed Position made, said in POINTS: P&L is money, and money needs a contract size that only a
-Quote carries, while a closed Position is no longer quoted.
-_Avoid_: exit price, closing price, debit
+The Cost to close you actually got when you closed a Position, per contract, in points — Entry's
+counterpart, and like it left blank rather than guessed when unknown. Signed like Cost to close:
+positive when closing cost you (a credit structure bought back), negative when it paid you (a long
+sold). Entry less Exit across the contracts held is what a closed Position made, said in POINTS: P&L
+is money, and money needs a contract size that only a Quote carries, while a closed Position is no
+longer quoted.
+_Avoid_: exit price, closing price, debit, sale price (a sale is a NEGATIVE Exit)
 
 **Pace gap**:
 How far a Position's Cost to close sits from its On-pace figure. BEHIND means costing more to buy

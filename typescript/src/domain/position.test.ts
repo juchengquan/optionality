@@ -223,6 +223,18 @@ describe("what a closed holding made", () => {
     // (1.5 − 0.4) × 2 is 2.2000000000000006 in binary floating point
     expect(realizedPoints(condor(1.5, 2), 0.4)).toBe(2.2);
   });
+
+  it("reads a long's exit the way Cost to close reads it, so a sale is NEGATIVE", () => {
+    // Exit is the Cost to close you actually got, signed the same way: positive when closing cost
+    // you, negative when it paid you. A long put bought for 5.00 (Entry −5) and sold for 7.00 is
+    // an Exit of −7, and made 2 — where a sale typed as +7 would read as a loss of 12.
+    const longPut: Position = {
+      name: "lp", strike_date: future(), contracts: 1, entry: -5,
+      legs: [{ side: "long", option_type: "PUT", strike: 7000 }],
+    };
+    expect(realizedPoints(longPut, -7)).toBe(2);
+    expect(realizedPoints(longPut, -3)).toBe(-2);
+  });
 });
 
 describe("scope", () => {

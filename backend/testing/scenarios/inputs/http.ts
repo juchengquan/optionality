@@ -391,6 +391,37 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/positions/pos-1/close", {}),
   },
   {
+    // the roll: a new spread shares the short call, so the rule watching it is handed to the new
+    // holding and stays ON — a review found it switched off, silencing the new trade's alarm
+    name: "POST /positions/{id}/close hands a rule to the holding that still holds its contract",
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-spread-rolled", entry: 2.5,
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7300 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+        ],
+        monitors: [monitor({ id: "mon-1", scope: "leg" })],
+        monitor_positions: [link("mon-1", "pos-1")],
+      },
+    }),
+    request: request("POST", "/positions/pos-1/close", { exit: 1.25 }),
+  },
+  {
+    // 02:00 UTC on the 10th is 21:00 on the 9th in New York, so the day is the 9th
+    name: "POST /positions/{id}/close takes the New York day, not the UTC one",
+    world: world({
+      clock: "2026-11-10T02:00:00.000Z",
+      tables: { positions: [position({ id: "pos-1" })] },
+    }),
+    request: request("POST", "/positions/pos-1/close", { exit: 1.25 }),
+  },
+  {
     name: "POST /positions/{id}/close refuses a day before the holding was opened",
     world: world({ tables: held }),
     request: request("POST", "/positions/pos-1/close", { exit: 1.25, closed_on: "2026-10-11" }),
@@ -427,6 +458,46 @@ export const HTTP: readonly HttpInput[] = [
       provider: { quotes: BOOK },
     }),
     request: request("GET", "/positions/values"),
+  },
+  {
+    // a mistyped close is corrected rather than deleted, so the samples survive it
+    name: "PATCH /positions/{id} corrects a closed holding's exit and close day",
+    world: world({
+      tables: {
+        positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 1.25 })],
+        position_samples: [sample({ position_id: "pos-1", observed_on: "2026-11-05" })],
+      },
+    }),
+    request: request("PATCH", "/positions/pos-1", { exit: 1.5, closed_on: "2026-11-05" }),
+  },
+  {
+    // a close may leave the exit blank, so a correction may put it back to blank
+    name: "PATCH /positions/{id} clears a closed holding's exit back to blank",
+    world: world({
+      tables: { positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 1.25 })] },
+    }),
+    request: request("PATCH", "/positions/pos-1", { exit: null }),
+  },
+  {
+    name: "PATCH /positions/{id} refuses an exit on a holding still held",
+    world: world({ tables: held }),
+    request: request("PATCH", "/positions/pos-1", { exit: 1.25 }),
+  },
+  {
+    // a backdated close: the sweep sampled it after the day it was sold, and those rows are
+    // ignored by the measurement — and kept
+    name: "GET /positions/{id}/vol measures a closed holding only to the day it closed",
+    world: world({
+      tables: {
+        positions: [{ ...opened, closed_on: "2026-11-07", exit: 1.25 }],
+        position_samples: [
+          day("2026-11-06", 42, [14.5, 14, 19.25, 20]),
+          day("2026-11-07", 41, [14.75, 14, 19.5, 20.25]),
+          day("2026-11-08", 40, [15, 14.25, 19, 20]),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/vol"),
   },
   {
     name: "GET /positions lists a closed holding with what it made",

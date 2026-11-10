@@ -8,6 +8,7 @@ them, because both backends write one file.
 """
 
 import json
+from datetime import UTC, datetime
 
 import pytest
 from harness import json_body, priced_fetcher
@@ -1085,6 +1086,101 @@ class TestClosingAHoldingKeepsIt:
         await self.close(h, pid, {"exit": 0.4})
         assert (await delete(h, pid)).status_code == 204
         assert self.sample_count(h, pid) == 0
+
+    async def test_hands_a_rule_to_the_holding_that_still_holds_its_contract_and_leaves_it_on_a_roll(self, start):
+        # Found in review: the close disabled the rule, unlinked it, and adoption then linked it to the
+        # rolled holding — leaving the new trade's alarm OFF, as "holding-closed", with no notice. A rule
+        # is switched off only when something it names is no longer held by anything open.
+        h = start_with(start)
+        old = created201(await post(h, condor()))
+        leg = await make_monitor(h, strike_date=EXPIRY, option_type="CALL", strike=8050)
+        # the roll: a new call spread sharing the short strike, recorded before the old one is closed
+        rolled = await make_position(
+            h,
+            "1016_bs_8050_rolled",
+            EXPIRY,
+            [
+                {"side": "short", "option_type": "CALL", "strike": 8050},
+                {"side": "long", "option_type": "CALL", "strike": 8100},
+            ],
+        )
+        assert links(h, leg)[0] == [old], "linked to the old holding until it closes"
+
+        data = (await self.close(h, old, {"exit": 0.4})).json()
+        assert data["disabled_monitors"] == []
+        assert self.monitor_row(h, leg) == {"enabled": 1, "disabled_reason": None}
+        assert links(h, leg) == ([rolled], "leg")
+
+    async def test_closes_on_the_new_york_market_day_not_the_utc_one(self, start):
+        # 02:00 UTC on the 10th is 21:00 on the 9th in New York: every clock the suite used fell on the
+        # same date in both, which is how a UTC date passed for a market one
+        h = start_with(start)
+        h.now = datetime(2026, 11, 10, 2, 0, tzinfo=UTC)
+        pid = created201(await post(h, condor()))
+        assert (await self.close(h, pid, {"exit": 0.4})).json()["closed_on"] == "2026-11-09"
+
+    async def test_refuses_a_day_that_has_not_come_yet_in_new_york(self, start):
+        h = start_with(start)
+        h.now = datetime(2026, 11, 10, 2, 0, tzinfo=UTC)
+        pid = created201(await post(h, condor()))
+        early = await self.close(h, pid, {"closed_on": "2026-11-10"})
+        assert early.status_code == 422
+        assert "after today" in early.json()["detail"]
+
+    async def test_reads_no_sample_after_the_day_it_closed_and_deletes_none_when_the_close_is_backdated(self, start):
+        # the sweep sampled it on the 2nd and 3rd, then the owner recorded that it closed on the 2nd: what
+        # it was worth after it was sold is not its history, but nothing is thrown away either
+        h = start_with(start)
+        pid = created201(await post(h, condor(opened_at="2026-09-01")))
+        ivs = lambda v: json.dumps({c: v for c in leg_codes()})
+        for on, dte, iv in (("2026-09-01", 45, 10), ("2026-09-02", 44, 11), ("2026-09-03", 43, 15)):
+            h.db.execute(
+                """insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
+                   values (?, ?, ?, 3.0, ?, ?)""",
+                (pid, on, dte, ivs(iv), ivs(4)),
+            )
+        await self.close(h, pid, {"exit": 0.4, "closed_on": "2026-09-02"})
+        vol = (await h.call(f"/positions/{pid}/vol")).json()
+        assert vol["to"] == "2026-09-02", "measured to the close, not past it"
+        assert self.sample_count(h, pid) == 3, "and every sample is still stored"
+
+    async def test_corrects_the_exit_and_the_day_after_the_close_which_a_mistyped_close_needs(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor(opened_at="2026-09-01")))
+        self.add_sample(h, pid, "2026-09-02")
+        await self.close(h, pid, {"exit": 0.4})
+        resp = await patch(h, pid, {"exit": 0.45, "closed_on": "2026-09-30"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert (data["exit"], data["closed_on"], data["realized_points"]) == (0.45, "2026-09-30", 2.55)
+        assert self.sample_count(h, pid) == 1, "without losing the history a delete would"
+
+    async def test_clears_an_exit_back_to_blank_as_a_close_may_leave_it_and_says_nothing_about_what_it_made(
+        self, start
+    ):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        await self.close(h, pid, {"exit": 0.4})
+        resp = await patch(h, pid, {"exit": None})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert (data["exit"], data["realized_points"], data["closed_on"]) == (None, None, "2026-10-02")
+
+    async def test_refuses_an_exit_or_a_close_day_on_a_holding_still_held(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor()))
+        resp = await patch(h, pid, {"exit": 0.4})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "position '1016_IC' is not closed: close it first"
+        assert (await patch(h, pid, {"closed_on": "2026-10-01"})).status_code == 422
+
+    async def test_holds_a_corrected_day_to_the_same_three_bounds_as_the_close(self, start):
+        h = start_with(start)
+        pid = created201(await post(h, condor(opened_at="2026-09-01")))
+        await self.close(h, pid, {"exit": 0.4})
+        assert "before it was opened" in (await patch(h, pid, {"closed_on": "2026-08-31"})).json()["detail"]
+        assert "after today" in (await patch(h, pid, {"closed_on": "2026-10-03"})).json()["detail"]
+        assert (await h.call("/positions")).json()[0]["closed_on"] == "2026-10-02", "and nothing was written"
 
 
 def insert_holding(h, name, strike_date, legs, **over):

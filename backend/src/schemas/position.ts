@@ -48,6 +48,12 @@ export const PositionPatch = z.object({
   /** settable after the fact, which is the only way the Positions recorded before this existed
    *  can get one — created_at is right for some of them and wrong for the rest */
   opened_at: StrikeDate.optional(),
+  /** a CLOSED holding's exit and close day, correctable after the fact (ADR 0022) — a mistyped
+   *  close was otherwise fixable only by deleting, which loses the samples. Refused on a holding
+   *  still held. A null exit CLEARS it back to blank, as a close may leave it: the one PATCH field
+   *  that takes a null, because blank is a real answer here — "I do not know what I paid". */
+  exit: z.number().nullish(),
+  closed_on: StrikeDate.optional(),
 });
 
 /** Closing a holding: what was paid, and when. Both optional.

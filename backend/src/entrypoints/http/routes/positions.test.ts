@@ -1074,4 +1074,100 @@ describe("closing a holding keeps it (ADR 0022)", () => {
     expect((await h.call(`/positions/${pid}`, { method: "DELETE" })).status).toBe(204);
     expect(sampleCount(pid)).toBe(0);
   });
+
+  it("hands a rule to the holding that still holds its contract, and leaves it ON (a roll)", async () => {
+    // Found in review: the close disabled the rule, unlinked it, and adoption then linked it to
+    // the rolled holding — leaving the new trade's alarm OFF, as "holding-closed", with no notice.
+    // A rule is switched off only when something it names is no longer held by anything open.
+    start();
+    const old = await created201(await post(condor()));
+    const leg = await makeMonitor({ strike_date: EXPIRY, option_type: "CALL", strike: 8050 });
+    // the roll: a new call spread sharing the short strike, recorded before the old one is closed
+    const rolled = await makePosition("1016_bs_8050_rolled", EXPIRY, [
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8100 },
+    ]);
+    expect(links(leg)[0], "linked to the old holding until it closes").toEqual([old]);
+
+    const data = await body(await close(old, { exit: 0.4 }));
+    expect(data.disabled_monitors).toEqual([]);
+    expect(monitorRow(leg)).toEqual({ enabled: 1, disabled_reason: null });
+    expect(links(leg)).toEqual([[rolled], "leg"]);
+  });
+
+  it("closes on the New York market day, not the UTC one", async () => {
+    // 02:00 UTC on the 10th is 21:00 on the 9th in New York: every clock the suite used fell on
+    // the same date in both, which is how a UTC date passed for a market one
+    start();
+    h.now = new Date("2026-11-10T02:00:00Z");
+    const pid = await created201(await post(condor()));
+    expect((await body(await close(pid, { exit: 0.4 }))).closed_on).toBe("2026-11-09");
+  });
+
+  it("refuses a day that has not come yet in New York", async () => {
+    start();
+    h.now = new Date("2026-11-10T02:00:00Z");
+    const pid = await created201(await post(condor()));
+    const early = await close(pid, { closed_on: "2026-11-10" });
+    expect(early.status).toBe(422);
+    expect((await body(early)).detail).toMatch(/after today/);
+  });
+
+  it("reads no sample after the day it closed, and deletes none, when the close is backdated", async () => {
+    // the sweep sampled it on the 7th and 8th, then the owner recorded that it closed on the 6th:
+    // what it was worth after it was sold is not its history, but nothing is thrown away either
+    start();
+    const pid = await created201(await post(condor({ opened_at: "2026-09-01" })));
+    const codes = CONDOR_LEGS.map((l) => buildSpxCode(EXPIRY, l.option_type as "CALL" | "PUT", l.strike));
+    const ivs = (v: number) => JSON.stringify(Object.fromEntries(codes.map((c) => [c, v])));
+    for (const [on, dte, iv] of [["2026-09-01", 45, 10], ["2026-09-02", 44, 11], ["2026-09-03", 43, 15]] as const) {
+      h.db.prepare(
+        `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
+         values (?, ?, ?, 3.0, ?, ?)`,
+      ).run(pid, on, dte, ivs(iv), ivs(4));
+    }
+    await close(pid, { exit: 0.4, closed_on: "2026-09-02" });
+    const vol = await body(await h.call(`/positions/${pid}/vol`));
+    expect(vol.to, "measured to the close, not past it").toBe("2026-09-02");
+    expect(sampleCount(pid), "and every sample is still stored").toBe(3);
+  });
+
+  it("corrects the exit and the day after the close, which a mistyped close needs", async () => {
+    start();
+    const pid = await created201(await post(condor({ opened_at: "2026-09-01" })));
+    addSample(pid, "2026-09-02");
+    await close(pid, { exit: 0.4 });
+    const resp = await patch(pid, { exit: 0.45, closed_on: "2026-09-30" });
+    expect(resp.status).toBe(200);
+    expect(await body(resp)).toMatchObject({ exit: 0.45, closed_on: "2026-09-30", realized_points: 2.55 });
+    expect(sampleCount(pid), "without losing the history a delete would").toBe(1);
+  });
+
+  it("clears an exit back to blank, as a close may leave it, and says nothing about what it made", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    await close(pid, { exit: 0.4 });
+    const resp = await patch(pid, { exit: null });
+    expect(resp.status).toBe(200);
+    expect(await body(resp)).toMatchObject({ exit: null, realized_points: null, closed_on: "2026-10-02" });
+  });
+
+  it("refuses an exit or a close day on a holding still held", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    const resp = await patch(pid, { exit: 0.4 });
+    expect(resp.status).toBe(422);
+    expect((await body(resp)).detail).toBe("position '1016_IC' is not closed: close it first");
+    expect((await patch(pid, { closed_on: "2026-10-01" })).status).toBe(422);
+  });
+
+  it("holds a corrected day to the same three bounds as the close", async () => {
+    start();
+    const pid = await created201(await post(condor({ opened_at: "2026-09-01" })));
+    await close(pid, { exit: 0.4 });
+    expect((await body(await patch(pid, { closed_on: "2026-08-31" }))).detail).toMatch(/before it was opened/);
+    expect((await body(await patch(pid, { closed_on: "2026-10-03" }))).detail).toMatch(/after today/);
+    const [listed] = await body(await h.call("/positions"));
+    expect(listed.closed_on, "and nothing was written").toBe("2026-10-02");
+  });
 });

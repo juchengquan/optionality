@@ -356,7 +356,9 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "realizedPoints", name: "expired worth nothing", args: [condor, 0] },
     { fn: "realizedPoints", name: "no exit is no result", args: [condor, null] },
     { fn: "realizedPoints", name: "no entry is no result", args: [noEntry, 0.4] },
-    { fn: "realizedPoints", name: "a long put's debit", args: [longPut, 0.4] },
+    // Exit is signed like Cost to close: selling a long PAYS you, so its Exit is negative
+    { fn: "realizedPoints", name: "a long put sold for more than it cost", args: [longPut, -7.0] },
+    { fn: "realizedPoints", name: "a long put sold for less than it cost", args: [longPut, -3.0] },
     { fn: "combinedCostToClose", name: "two spreads", args: [[callSpread, putSpread], quotes] },
     { fn: "combinedEntry", name: "two spreads", args: [[callSpread, putSpread]] },
     { fn: "combinedEntry", name: "one without an entry", args: [[callSpread, noEntry]] },

@@ -211,6 +211,26 @@ describe("recording what a Position was worth", () => {
     expect(samples()).toEqual([]);
   });
 
+  it("records nothing for a holding that has been closed (ADR 0022)", async () => {
+    const id = held("closed");
+    db.prepare("update positions set closed_on = '2026-08-02', exit = 0.5 where id = ?").run(id);
+    await sweeper(spread(5.0, 1.0)).sweep();
+    expect(samples()).toEqual([]);
+  });
+
+  it("records nothing for a holding CLOSED while the sweep's call was in flight", async () => {
+    // The holdings are read before the provider call and written after it. The rules are checked
+    // again at that point (a rule muted mid-fetch is not alarmed on); the holdings were not, so a
+    // close that landed during the fetch got one more sample, dated after it ended.
+    const id = held("closing");
+    const closingMidFetch: FakeProvider = (codes) => {
+      db.prepare("update positions set closed_on = '2026-08-02', exit = 0.5 where id = ?").run(id);
+      return spread(5.0, 1.0)(codes);
+    };
+    await sweeper(closingMidFetch).sweep();
+    expect(samples()).toEqual([]);
+  });
+
   it("records each leg's IV beside the cost, which is what a vol adjustment needs", async () => {
     // The √T shape silently assumes IV has not moved: time value scales with σ√T and only √T is
     // used. The condor's net vega is about -1.3 points per IV point, so half a vol point accounts

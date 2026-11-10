@@ -171,8 +171,10 @@ export type Closed = Exclude<
 /** Close a holding: it leaves the live list and is KEPT, with its samples, and the rules that
  *  watched it are switched off (ADR 0022). The one write here whose answer is more than whether it
  *  landed — the page says which rules went off, which only the service knows. */
-export async function closePosition(id: string, exit: number | null): Promise<Closed> {
-  const response = await client.positions[":id"].close.$post({ param: { id }, json: { exit } });
+export async function closePosition(
+  id: string, given: { exit: number | null; closed_on?: string },
+): Promise<Closed> {
+  const response = await client.positions[":id"].close.$post({ param: { id }, json: given });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok || isRefusal(body)) {
     throw new Error(isRefusal(body) ? body.detail : `/positions/${id}/close → ${response.status}`);

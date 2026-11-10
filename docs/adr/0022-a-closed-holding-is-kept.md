@@ -33,29 +33,46 @@ things and changes nothing else about the holding — its legs, entry, Opened an
 
 - **`closed_on`**, a New York market date like Opened beside it. Given, it is taken as given (either
   spelling); left out, it is today's market date — or the expiry, if that came first, since nothing
-  is held past one. A day before Opened or after the expiry is refused.
-- **`exit`**, what was paid to close, per contract, in points: Entry's counterpart. The dashboard
-  PREFILLS it from the Cost to close it is already showing and the owner overwrites or clears it; the
-  route makes no market call, and a close after the expiry could not be priced anyway. Blank is kept
-  as blank — the holding is closed either way.
+  is held past one. Three bounds are refused: a day before Opened, a day after the expiry, and a day
+  after today in New York — a close that has not happened yet is a plan.
+- **`exit`**, the Cost to close actually got, per contract, in points — **signed like Cost to
+  close**: positive when closing cost you (a credit structure bought back), negative when it paid
+  you (a long sold). Entry is signed the other way round, a credit received being positive, so one
+  subtraction serves both: a long put bought for 5.00 (Entry −5) and sold for 7.00 (Exit −7) made 2.
+  The dashboard PREFILLS it from the Cost to close it is already showing, which already carries the
+  sign, and says the convention beside the field, because a sale price typed positive for a long
+  reads as a large loss. The route makes no market call, and a close after the expiry could not be
+  priced anyway. Blank is kept as blank — the holding is closed either way.
 
-A second close is a 409. There is no reopen; DELETE stays, for a holding recorded by mistake, and
-still takes the samples.
+A second close is a 409. There is no reopen. A mistyped close is CORRECTED, by PATCH, which takes
+`exit` and `closed_on` on a closed holding (and refuses them on a held one), under the same three
+bounds — so a mistake costs nothing. DELETE stays, for a holding recorded by mistake, and still takes
+the samples.
 
 **Everything live stops looking at a closed holding** — the sweep's batch, its daily sample and its
 manage-by notice, `/positions/values`, the bot's `/holdings` — through one query, `openPositions`,
 beside the listing that returns everything. Its last sample is the record of how it ended; a sweep
-writing another would rewrite that with a market it was no longer in.
+writing another would rewrite that with a market it was no longer in. The sweep reads the holdings
+before its provider call and again after it, so a close that lands while the call is in flight gets
+no sample and no notice either. A close may be BACKDATED, after the sweep has sampled days it was no
+longer held: every reader of the history (`listPositionSamples`, which `/vol` reads) ignores samples
+after `closed_on`, and none is deleted, since the day may yet be corrected.
 
-**The rules that watched it are switched off, and kept**, with a new `disabled_reason`,
-`holding-closed`. A rule left on would go on alarming about contracts nobody holds. One that spans
-two holdings (ADR 0004) goes off when EITHER closes, because its figure would now include legs no
-longer held. A rule already off keeps its own reason, so the close neither claims it nor hides why it
-was off. No Telegram notice: the owner did this, and the close's own answer names the rules it took.
-They also lose their link to the holding, exactly as a DELETE leaves them, so **no monitor is ever
-linked to a closed holding**: nothing alive can be valued against an Entry that is history, and a rule
-re-enabled by hand watches a contract rather than a finished trade. Linking and adoption look only at
-open holdings for the same reason.
+**The rules that watched it are switched off when nothing open still holds what they name**, and
+kept, with a new `disabled_reason`, `holding-closed`. A rule left on would go on alarming about
+contracts nobody holds. One that spans two holdings (ADR 0004) goes off when EITHER closes, because its
+figure would now include legs no longer held. A rule already off keeps its own reason, so the close
+neither claims it nor hides why it was off. No Telegram notice: the owner did this, and the close's own
+answer names the rules it took. They also lose their link to the holding, exactly as a DELETE leaves
+them, so **no monitor is ever linked to a closed holding**: nothing alive can be valued against an
+Entry that is history, and a rule re-enabled by hand watches a contract rather than a finished trade.
+Linking and adoption look only at open holdings for the same reason.
+
+The ORDER matters, and a review found it wrong in the first build: the close unlinks, lets adoption
+hand each orphaned rule to whatever OPEN holding still holds its contracts, and only then decides
+what to switch off. Decided first, a roll — a new spread sharing the old one's short strike, recorded
+before the old one is closed — had its rule switched off and then adopted by the new holding: the new
+trade's alarm, silent as "holding-closed", with no notice.
 
 **What a closed holding made is reported in POINTS**, `realized_points`: Entry less Exit across the
 contracts held, from a new domain function, `realizedPoints`, cased and ported like every other. It
@@ -71,6 +88,10 @@ from a quote and never assumes — and a closed holding is no longer quoted.
   DTE goes negative, its monitors are muted and later removed by the expiry lifecycle, and the
   holding itself stays on the live list until it is closed or deleted. Nothing in that path deletes
   samples, so it was left alone.
-- The Exit cannot be corrected after the close. PATCH does not take it, and a mistyped one means
-  deleting the holding — which loses the samples. A reason to add it to PATCH when the review
-  screens need it.
+- The dashboard's closed list carries both remedies: a correction in place, and a delete behind
+  the same question a held holding's delete asks.
+- The notebook API (`python/src/optionality/api.py`) keeps `positions()` to what is still HELD, as
+  its docstring always promised, and adds `closed_positions()`, returning `ClosedPosition` rows that
+  carry the close. A field on `Position` instead would have left every notebook that values
+  `positions()` against live quotes pricing finished trades as though they were still on, and would
+  have put service state on a type the golden cases hold to the TypeScript's.

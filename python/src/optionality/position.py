@@ -155,6 +155,9 @@ def position_pnl(position: Position, by_code: ByCode) -> float | None:
 def realized_points(position: Position, exit_: float | None) -> float | None:
     """What a closed Position made: Entry less Exit, across the contracts held, in POINTS.
 
+    Exit is the Cost to close actually got, SIGNED LIKE Cost to close: positive when closing cost you, negative
+    when it paid you. A long put bought for 5.00 (Entry -5) and sold for 7.00 (Exit -7) made 2.
+
     Not P&L, and deliberately not called it: P&L is money, and money needs a contract size only a Quote
     carries, while a Position that has been closed is no longer quoted. None where either side is
     unknown — an unknown result is never a fabricated one (ADR 0022)."""

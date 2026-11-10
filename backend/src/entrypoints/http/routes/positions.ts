@@ -15,16 +15,18 @@ import type { Deps } from "../deps.ts";
 import {
   clearPositionLinks, clearPositionSamples, clearScopeOfOrphans, deletePositionRow, findPosition,
   findPositionByName, insertPosition,
-  listPositionSamples, listPositions, monitorsWatching, updateMonitorFields, updatePositionFields,
+  listPositionSamples, listPositions, monitorsWatching, openPositions, updateMonitorFields,
+  updatePositionFields,
 } from "../../../db/queries/index.ts";
+import { monitorLegCodes } from "optionality/domain/monitor";
 import { atomic } from "../../../db/open.ts";
 import { holdingValues } from "../../../holdings.ts";
-import type { PositionRow } from "../../../db/rows.ts";
+import type { MonitorRow, PositionRow } from "../../../db/rows.ts";
 import { newId, toSqliteBool, toSqliteJson } from "../../../db/values.ts";
 import { toSqlDatetime } from "../../../db/time.ts";
 import { httpError, notFound, providerFailed } from "../errors.ts";
 import { volAttribution, type VolSample } from "optionality/domain/vol";
-import { toPosition } from "../../../hydrate.ts";
+import { toMonitor, toPosition } from "../../../hydrate.ts";
 import { adoptOrphanMonitors } from "../../../monitors.ts";
 import { verifyContracts } from "optionality/quotes";
 import type { DisabledReason } from "../../../schemas/monitor.ts";
@@ -111,6 +113,37 @@ const create = documented("Create a position", { 201: PositionOut }, [409]);
 const update = documented("Update a position", { 200: PositionOut }, [404]);
 const close = documented("Close a position, keeping it and its history", { 200: ClosedOut }, [404, 409]);
 const remove = documented("Delete a position", { 204: null }, [404]);
+
+/** Why a holding cannot have closed on this day, or null. Three bounds, the same for the close and
+ *  for correcting one afterwards: not before it was opened, not after its expiry — nothing is held
+ *  past one — and not after today in New York, since a close that has not happened yet is a plan.
+ *  ISO dates compare as text. */
+function closedOnFault(
+  row: PositionRow, closedOn: string, openedAt: string | null, today: string,
+): string | null {
+  if (openedAt !== null && closedOn < openedAt) {
+    return `closed on ${closedOn}, before it was opened on ${openedAt}`;
+  }
+  if (closedOn > row.strike_date) return `closed on ${closedOn}, after its expiry on ${row.strike_date}`;
+  if (closedOn > today) return `closed on ${closedOn}, after today (${today} in New York)`;
+  return null;
+}
+
+/** Every contract some OPEN holding holds. */
+function heldCodes(db: Deps["db"]): Set<string> {
+  return new Set(openPositions(db).flatMap((p) => positionLegCodes(toPosition(p))));
+}
+
+/** Whether every contract a rule names is still held by something open. A row that cannot be read
+ *  names nothing anyone can vouch for, so it reads as not held — the sweep would quarantine it
+ *  anyway. */
+function stillHeld(monitor: MonitorRow, held: Set<string>): boolean {
+  try {
+    return monitorLegCodes(toMonitor(monitor)).every((code) => held.has(code));
+  } catch {
+    return false;
+  }
+}
 
 export function positionRoutes(deps: Deps) {
   const { db, settings } = deps;
@@ -257,12 +290,29 @@ export function positionRoutes(deps: Deps) {
       const given = c.req.valid("json");
       if (Object.keys(given).length === 0) throw httpError(422, "nothing to update");
       const id = c.req.param("id");
-      if (!findPosition(db, id)) throw notFound("position");
+      const row = findPosition(db, id);
+      if (!row) throw notFound("position");
+      // An exit and a close day belong to a closed holding, and are corrected here — a mistyped
+      // close is otherwise fixable only by deleting, which loses the samples (ADR 0022). On a
+      // holding still held they would half-close it, so they are refused.
+      if (row.closed_on === null && (given.exit !== undefined || given.closed_on !== undefined)) {
+        throw httpError(422, `position '${row.name}' is not closed: close it first`);
+      }
+      if (row.closed_on !== null) {
+        // the close's own bounds, against whatever this request leaves Opened at
+        const fault = closedOnFault(
+          row, given.closed_on ?? row.closed_on, given.opened_at ?? row.opened_at,
+          marketDate(deps.now()),
+        );
+        if (fault) throw httpError(422, fault);
+      }
       const changes: Partial<PositionRow> = {};
       if (given.entry !== undefined) changes.entry = given.entry;
       if (given.contracts !== undefined) changes.contracts = given.contracts;
       if (given.strategy !== undefined) changes.strategy = given.strategy;
       if (given.opened_at !== undefined) changes.opened_at = given.opened_at;
+      if (given.exit !== undefined) changes.exit = given.exit;
+      if (given.closed_on !== undefined) changes.closed_on = given.closed_on;
       return update.reply(c, 200, out(updatePositionFields(db, id, changes)));
     })
 
@@ -288,38 +338,38 @@ export function positionRoutes(deps: Deps) {
       // the app today was closed on its expiry, not today. ISO dates compare as text.
       const today = marketDate(deps.now());
       const closedOn = given.closed_on ?? (row.strike_date < today ? row.strike_date : today);
-      if (row.opened_at !== null && closedOn < row.opened_at) {
-        throw httpError(422, `closed on ${closedOn}, before it was opened on ${row.opened_at}`);
-      }
-      if (closedOn > row.strike_date) {
-        throw httpError(422, `closed on ${closedOn}, after its expiry on ${row.strike_date}`);
-      }
+      const fault = closedOnFault(row, closedOn, row.opened_at, today);
+      if (fault) throw httpError(422, fault);
 
       const disabled = await atomic(db, () => {
-        // The rules that watched it go OFF, and are kept. A rule left on would go on alarming about
-        // contracts no longer held, and on valuing them against an Entry that is history. A rule
-        // spanning two holdings goes off when EITHER closes, for the same reason: its figure would
-        // now include legs nobody holds (ADR 0004, ADR 0022). One already off keeps its own
-        // reason — the owner's "manual", or the engine's quarantine — so the close neither claims it
-        // nor hides why it was off.
-        const taken: { id: string; code: string }[] = [];
-        const reason: DisabledReason = "holding-closed";
-        for (const monitor of monitorsWatching(db, id)) {
-          if (!monitor.enabled) continue;
-          updateMonitorFields(db, monitor.id, { enabled: toSqliteBool(false), disabled_reason: reason });
-          taken.push({ id: monitor.id, code: monitor.code });
-        }
-        // ...and they stop claiming the holding, exactly as a DELETE leaves them: nothing alive is
+        const watchers = monitorsWatching(db, id);
+        updatePositionFields(db, id, { closed_on: closedOn, exit: given.exit ?? null });
+        // The rules stop claiming the holding, exactly as a DELETE leaves them: nothing alive is
         // ever valued against a closed holding, because nothing alive is ever linked to one. A rule
         // spanning two holdings keeps its link to the one still held.
         clearPositionLinks(db, id);
-        updatePositionFields(db, id, { closed_on: closedOn, exit: given.exit ?? null });
-        // the delete path's two steps, for the delete path's reason: a rule this orphaned may be
-        // watching a contract another holding still holds (a roll leaves the old and the new
-        // sharing a strike), and one that cannot be placed stops claiming a scope. Adoption looks
-        // only at OPEN holdings, so it can never put a rule straight back onto this one.
+        // ...then the delete path's two steps, for the delete path's reason: a rule this orphaned
+        // may watch a contract ANOTHER holding still holds — a roll leaves the old and the new
+        // sharing a strike — and it is handed to that one; one that cannot be placed stops
+        // claiming a scope. Adoption looks only at OPEN holdings, so never back onto this one.
         adoptOrphanMonitors(db);
         clearScopeOfOrphans(db);
+
+        // Only THEN is it decided which rules go off. Deciding first was a bug a review found: a
+        // rule switched off here and then adopted by the rolled holding was the new trade's alarm,
+        // silenced as "holding-closed" with no notice. So a rule goes off when something it names
+        // is no longer held by anything open: a leg rule on the closed holding alone, and a rule
+        // spanning two holdings when either closes, since its figure would now include legs
+        // nobody holds (ADR 0004, ADR 0022). One already off keeps its own reason — the owner's
+        // "manual", or the engine's quarantine — so the close neither claims it nor hides why.
+        const held = heldCodes(db);
+        const taken: { id: string; code: string }[] = [];
+        const reason: DisabledReason = "holding-closed";
+        for (const monitor of watchers) {
+          if (!monitor.enabled || stillHeld(monitor, held)) continue;
+          updateMonitorFields(db, monitor.id, { enabled: toSqliteBool(false), disabled_reason: reason });
+          taken.push({ id: monitor.id, code: monitor.code });
+        }
         return taken;
       });
       return close.reply(c, 200, { ...out(findPosition(db, id)!), disabled_monitors: disabled });
