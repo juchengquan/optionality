@@ -325,6 +325,27 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
+    // the refusal's words are the reply, so both backends must say them alike (#266). Under the
+    // Provider's name, as every failure of this route is: the read sits inside its one guard
+    name: "GET /positions/values answers 502 naming a holding that cannot be read",
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-spread", entry: 2.5,
+            legs: [
+              { side: "sold", option_type: "CALL", strike: 7500 },
+              { side: "long", option_type: "CALL", strike: 7550 },
+            ],
+          }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
     name: "GET /positions/values with nothing held asks the Provider nothing",
     world: world(),
     request: request("GET", "/positions/values"),
