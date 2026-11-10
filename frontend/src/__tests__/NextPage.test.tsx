@@ -215,6 +215,22 @@ describe("what is read again, and when", () => {
     expect(document.querySelector('[data-ref="p1"] [data-money]')!.textContent).toBe("+$180");
   });
 
+  it("still lands a valuation when every one takes longer than the poll", async () => {
+    // a half-up Provider answers in 10-18 s, past a 15 s poll: each answer then has a newer ask
+    // behind it, and dropping every answer that does left the old figures drawn for ever
+    at(SESSION);
+    await open();
+    await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
+    held = [];
+    for (let i = 0; i < 3; i++) await act(async () => { vi.advanceTimersByTime(15_000); });
+    await waitFor(() => expect(held!.length).toBe(3));
+    await act(async () => { held![0]!.settle(false); });
+    await waitFor(() => expect(screen.getByText(/could not be valued/)).toBeTruthy());
+    expect(document.querySelector('[data-ref="p1"]')).toBeNull();
+    await act(async () => { held![1]!.settle(true); });
+    await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
+  });
+
   it("forgets when the holdings were valued once a valuation fails", async () => {
     at(SUNDAY);
     await open();

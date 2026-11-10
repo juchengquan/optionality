@@ -19,7 +19,9 @@ body { margin: 0; }
    the light ground and a pale amber on the dark one. The browser suite holds every one of them at
    least 0.15 apart in OKLab from both direction colours and 0.08 apart in lightness, a chip's
    text at 4.5:1 against its fill, and a glyph at 3:1 against the page, in both schemes. */
-.nx {
+/* `.nx-tokens` is a surface drawn in a portal outside the page — the desk's Settings panel — and
+   carries the same tokens, so its glyphs are in their kinds' colours too */
+:is(.nx, .nx-tokens) {
   --green: oklch(0.55 0.15 150);
   --red: oklch(0.56 0.19 27);
   --up: var(--green);
@@ -33,7 +35,8 @@ body { margin: 0; }
   --entry: oklch(0.45 0.11 230);
   --chip-ink: oklch(0.99 0 0);
   --warn-ink: oklch(0.99 0 0);
-
+}
+.nx {
   --nx-gutter: 1.5rem;
   min-height: 100dvh;
   background: var(--background);
@@ -42,7 +45,7 @@ body { margin: 0; }
 }
 /* the dark ground is the one this is read on, at night, in the US session */
 @media (prefers-color-scheme: dark) {
-  .nx {
+  :is(.nx, .nx-tokens) {
     --green: oklch(0.76 0.15 152);
     --red: oklch(0.7 0.17 27);
     --alarm: oklch(0.54 0.2 340);
@@ -52,7 +55,7 @@ body { margin: 0; }
     --warn-ink: oklch(0.2 0.02 75);
   }
 }
-.nx[data-up="red"] { --up: var(--red); --down: var(--green); }
+:is(.nx, .nx-tokens)[data-up="red"] { --up: var(--red); --down: var(--green); }
 
 [data-outcome="gain"] { color: var(--gain); }
 [data-outcome="loss"] { color: var(--loss); }
@@ -64,7 +67,7 @@ body { margin: 0; }
 [data-attention="entry"], [data-kind="entry"], [data-kind="target"] { --chip: var(--entry); }
 [data-kind="manage"] { --chip: var(--warn); }
 [data-kind="manage"] .nx-chip, .nx-chip[data-attention="warn"] { color: var(--warn-ink); }
-.nx[data-entry="risk"] :is([data-attention="entry"], [data-kind="entry"]) { --chip: var(--alarm); }
+:is(.nx, .nx-tokens)[data-entry="risk"] :is([data-attention="entry"], [data-kind="entry"]) { --chip: var(--alarm); }
 
 .nx-chip {
   display: inline-flex; align-items: center; gap: 0.25rem;

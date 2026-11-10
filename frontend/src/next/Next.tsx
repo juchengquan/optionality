@@ -14,7 +14,7 @@ import { clockTime } from "../format";
 import { Freshness } from "../Freshness";
 import {
   readArrangement, readEntryStyle, readPrivacy, readRefresh, readUp, writeArrangement,
-  writeEntryStyle, writePrivacy, writeRefresh, writeUp,
+  writeEntryStyle, writePrivacy, writeRefresh, writeUp, type EntryStyle, type UpColour,
 } from "../prefs";
 import { ReferenceStrip } from "../ReferenceStrip";
 import { useDismissOnBack } from "../useDismissOnBack";
@@ -146,7 +146,7 @@ export function Next() {
       {/* Mounted in both arrangements and only OPEN on the desk: switching to the phone with it
           open then closes it, and closing is what takes its history entry back off the stack.
           Unmounted instead, the entry stayed and the next Back press did nothing. */}
-      <DeskSettings open={settingsOpen && !phone} onClose={closeSettings}>
+      <DeskSettings open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}>
         {phone ? null : settings}
       </DeskSettings>
       <Toaster />
@@ -185,13 +185,15 @@ function TabBar({ mode, settings, onMode, onSettings }: {
   );
 }
 
-function DeskSettings({ open, onClose, children }: {
-  open: boolean; onClose: () => void; children: React.ReactNode;
+function DeskSettings({ open, onClose, up, entryStyle, children }: {
+  open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle; children: React.ReactNode;
 }) {
   useDismissOnBack(open, onClose);
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent className="overflow-y-auto">
+      {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:
+          .nx-tokens) and the two settings they depend on — without them every glyph was grey */}
+      <SheetContent className="overflow-y-auto nx-tokens" data-up={up} data-entry={entryStyle}>
         <SheetHeader>
           <SheetTitle>Settings</SheetTitle>
           <SheetDescription>This screen's preferences, and where the service stands in full.</SheetDescription>
@@ -252,20 +254,26 @@ function useBook(mode: Mode) {
     }
   }, []);
 
-  // The LATEST ask wins. A valuation asked for by a LIVE poll can land after the switch to
-  // REVIEW, which asks again; the older answer — a success or a failure — must not replace the
-  // newer one, or REVIEW, which does not poll, keeps the wrong one for good.
+  // An answer lands unless a NEWER one already has. A valuation asked for by a LIVE poll can land
+  // after the switch to REVIEW, which asks again, and that older answer — success or failure —
+  // must not replace the newer one, or REVIEW, which does not poll, keeps it for good. Not "only
+  // the latest ASK lands": with a Provider slower than the poll (OpenD's 10 s request limit
+  // against a 5 s or 15 s poll) every answer has a newer ask behind it, none ever landed, and
+  // the page went on drawing the last figures with no error at all.
   const asked = useRef(0);
+  const landed = useRef(0);
   const loadHoldings = useCallback(async () => {
     const mine = ++asked.current;
     try {
       const valued = await fetchHoldings();
-      if (mine !== asked.current) return;
+      if (mine < landed.current) return;
+      landed.current = mine;
       setHoldings(valued);
       setHoldingsAt(clockTime(new Date()));
       setHoldingsError(null);
     } catch (e: unknown) {
-      if (mine !== asked.current) return;
+      if (mine < landed.current) return;
+      landed.current = mine;
       // CLEARED, unlike `/opt`, which keeps the rows and relies on drawing the error first: here
       // the needs-you line reads them too, and must not go on saying a Level from a valuation
       // that has since failed — nor a time it was valued at

@@ -21,7 +21,7 @@ export interface SettingsProps {
   needs: Need[];
   /** whether the list can claim to be whole: only with every holding valued (ADR 0012) */
   complete: boolean;
-  /** when the holdings it read were valued — asked for again whenever Settings opens */
+  /** when the holdings it read were valued — polled in LIVE, asked for again on opening in REVIEW */
   holdingsAt: string | null;
   references: Reference[];
   onAddReference: (body: { code: string; label?: string; source: Source }) => Promise<boolean>;

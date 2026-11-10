@@ -64,17 +64,17 @@ declare module "@vitest/browser/context" {
   }
 }
 
-/** Every write is refused, as the service refuses one it will not take: a layout suite never
- *  changes the book, and a refusal is how a toast gets onto the page to be measured. */
 /** Spreads on later expiries, so the page is longer than a phone's screen; the last one has fired,
  *  so its banner leads to a row that starts out of view. */
 export function longBook(n: number): object[] {
   const rows = Array.from({ length: n }, (_, i) =>
-    spread(`f${i}`, `2027-0${1 + (i % 6)}-${String(10 + i).padStart(2, "0")}`, 6000 + i * 10, 5950 + i * 10));
+    spread(`f${i}`, `2027-0${1 + (i % 6)}-${String(10 + (i % 18))}`, 6000 + i * 10, 5950 + i * 10));
   rows.push(spread("late", "2027-09-17", 5800, 5750, { triggered: true, watched: 6.2, distance: -0.19 }));
   return rows;
 }
 
+/** Every write is refused, as the service refuses one it will not take: a layout suite never
+ *  changes the book, and a refusal is how a toast gets onto the page to be measured. */
 export function serveBook(extra: object[] = []): void {
   const book = [...quotes, ...extra];
   window.fetch = ((url: string, init?: RequestInit) => {

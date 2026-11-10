@@ -1,6 +1,6 @@
 /** The redesigned page at the desk, measured in a real layout engine (ADR 0008, ADR 0023).
  *  The phone is measured in `NextLayout.iphone.test.tsx`, under an iPhone profile. */
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { commands, page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -172,4 +172,21 @@ describe("privacy, in a real browser", () => {
     for (const m of document.querySelectorAll("[data-money]")) expect(m.textContent).not.toMatch(/\d/);
     expect(page).toContain("captured 60%");
   });
+});
+
+describe("the desk's Settings panel, drawn outside the page", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    it(`draws each glyph in its kind's colour, as the line does, in the ${scheme} scheme`, async () => {
+      await commands.colorScheme(scheme);
+      await show();
+      const onLine = document.querySelector('.nx-needs [data-kind="fault"] svg.nx-glyph')!;
+      fireEvent.click(screen.getByRole("button", { name: "settings" }));
+      const panel = await screen.findByRole("dialog", { name: "Settings" });
+      // the panel is a portal: outside .nx, where the colour tokens were not
+      expect(panel.closest(".nx")).toBeNull();
+      const inPanel = panel.querySelector('[data-testid="needs"] [data-kind="fault"] svg.nx-glyph')!;
+      expect(getComputedStyle(inPanel).color).toBe(getComputedStyle(onLine).color);
+      expect(getComputedStyle(inPanel).color).not.toBe(getComputedStyle(panel).color);
+    });
+  }
 });
