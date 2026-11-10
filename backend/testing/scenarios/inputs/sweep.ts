@@ -165,6 +165,25 @@ export const SWEEP: readonly SweepInput[] = [
       provider: { quotes: delta(0.25) },
     }),
   },
+  {
+    // legs that parse but are not legs are as unreadable as legs that do not parse. A cast handed
+    // this one to the maths, every leg priced, with NaN for the missing sign, while the Python's
+    // models refused it (#266); both backends now refuse it where the row is read
+    name: "a combo whose legs parse but are not legs is quarantined and the rest is swept",
+    outcomes: ["quarantined-for-an-unreadable-row"],
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-1" }),
+          combo({
+            id: "mon-2",
+            legs: [{ option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7350 }],
+          }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
 
   // --- expiry -------------------------------------------------------------------------------
   {
@@ -298,6 +317,28 @@ export const SWEEP: readonly SweepInput[] = [
             id: "pos-2", name: "dec-call-spread", entry: 2.5, closed_on: "2026-11-06", exit: 0.75,
             legs: [
               { side: "short", option_type: "CALL", strike: 7500 },
+              { side: "long", option_type: "CALL", strike: 7550 },
+            ],
+          }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // a holding is not a rule, so one that cannot be read is not quarantined: it costs its own
+    // place in the batch and its own sample, and nothing else. A cast asked for its contracts with
+    // "sold" for a side (#266)
+    name: "a holding whose legs parse but are not legs is left out and the rest is sampled",
+    outcomes: ["sample-recorded"],
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-spread", entry: 2.5,
+            legs: [
+              { side: "sold", option_type: "CALL", strike: 7500 },
               { side: "long", option_type: "CALL", strike: 7550 },
             ],
           }),
