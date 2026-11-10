@@ -57,9 +57,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `engine/`, `entrypoints/`), `check-module-map`, `check-make-targets`, `check-served-root` — and
   `check-py-backend`, the Python backend's three lines (ADR 0021): it imports only the library's
   public modules, it names no order call or class outside a `trading/` that does not exist
-  (the library holds itself to the second with no door at all, in its own suite), and nothing
-  outside its `engine/` reaches past that package's door (`check-seams`' engine rule, which reads
-  no Python).
+  (the library holds itself to the second with no door at all, in its own suite), and it keeps
+  `check-seams`' four seams, which reads no Python: `vendors/` and the library's clients behind it,
+  `engine/`, `entrypoints/`.
   `check-module-map` holds the same backend module for module: every TypeScript backend module has
   its Python port or a reason in the tool's table, landed in the same change (lockstep, ADR 0021);
   the first port's backlog emptied on 2026-11-10 and was deleted. The first:
@@ -433,10 +433,15 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   JavaScript behaviours go through `optionality.js`, async on one loop, names, and how the tests
   are ported. Its suite also holds the three lines `check-py-backend` runs —
   `tests/test_library_boundary.py` (no `optionality._*`, no `optionality.research`, no reach into the library's source by path), `tests/test_seams.py`
-  (nothing outside `engine/` and `tests/engine/` reaches past the engine's door, and only
-  `__main__` uses it; with the door's `__all__` withholding `SweepHealth`, that makes the class
-  unnameable from outside, as `check-seams` and `engine/index.ts` do for `main.ts` — the omission
-  alone holds nothing where any submodule is one import away) and `tests/test_no_trading.py`
+  (`check-seams`' table, `SEAMS`, for the Python: the vendors' one door and the library clients
+  behind it, which only the descriptors may open; the engine's door, reached by `__main__` alone;
+  and `entrypoints/`, where `http/__init__.py` and `bot/bot.py` are the doors, `__main__` the only
+  caller besides two declared pieces of test support, and a new surface with no door fails. A
+  door hands out what its `__all__` lists and nothing else, so with the engine's withholding
+  `SweepHealth` the class is unnameable from outside, as `check-seams` and `engine/index.ts` make
+  it for `main.ts` — the omission alone holds nothing where any submodule is one import away. Its
+  own tests live at the mirrored path under `tests/`, and only they may reach in) and
+  `tests/test_no_trading.py`
   (no order placed, modified, cancelled or exercised outside `optionality_backend/trading/`, which
   must not exist until a trading ADR creates it; the forbidden names and the reader that applies
   them are the library's `optionality.no_trading`, imported by name, whose own suite re-derives

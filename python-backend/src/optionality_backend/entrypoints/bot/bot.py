@@ -49,6 +49,11 @@ from .format import BOT_COMMANDS, JS_WHITESPACE, js_text
 
 log = logging.getLogger(__name__)
 
+# The bot's door, as `bot.ts` is the TypeScript's (`check-seams`): what `__main__` builds the bot
+# with, and nothing else. `tests/test_seams.py` lets no other name through it, so the command table
+# and the formatter stay the bot's own.
+__all__ = ["BotDeps", "TelegramApi", "TelegramBot"]
+
 #: One call to the Telegram API. A fake in tests; HTTPS in production (`telegram.telegram_api`).
 type TelegramApi = Callable[[str, dict[str, str]], Awaitable[Any]]
 

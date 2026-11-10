@@ -24,10 +24,15 @@ engine is reached through one door:
   Decision 8). The list of what it refuses, and the reader that applies it, are the library's
   (`optionality.no_trading`): the IB Gateway client is the library's too, and the library holds
   itself to the same rule with no door at all, re-deriving the list from `ib_async` in its suite.
-- `tests/test_seams.py` is `check-seams`' engine rule, which reads no Python: nothing outside
-  `engine/` and `tests/engine/` reaches past `engine/__init__.py`, and only `__main__` uses it. With
-  the door's `__all__` withholding `SweepHealth`, that makes the class unnameable from outside, as
-  it is for `main.ts` (`engine/__init__.py` says why that matters).
+- `tests/test_seams.py` is `check-seams`, which reads no Python, for the Python: the same seams in
+  one table, `SEAMS`. `vendors/` has one door, and the library's clients behind it are opened by the
+  descriptors alone (IB Gateway's second connection on a client id displaces the first in silence);
+  `engine/`'s door is reached by `__main__` alone, and its `__all__` withholds `SweepHealth`, which
+  makes the class unnameable from outside, as it is for `main.ts` (`engine/__init__.py` says why);
+  `entrypoints/`' doors are `http/__init__.py` and `bot/bot.py`, for `__main__` and two declared
+  pieces of test support, and a new surface with no door fails the day it arrives. A door hands
+  out what its `__all__` lists, so a port that adds a door writes one. A seam's own tests live at
+  the mirrored path under `tests/` (`tests/engine/` for `engine/`), and only they may reach past it.
 
 All three run in `make lint` and in `make test`, which is part of `make check`.
 
