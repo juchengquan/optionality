@@ -28,7 +28,7 @@ export const COLUMNS = {
   position_samples: [
     "position_id", "observed_on", "dte", "cost_to_close",
     // appended, because ALTER TABLE adds at the end
-    "legs_iv", "legs_vega",
+    "legs_iv", "legs_vega", "legs_delta", "observed_at",
   ],
   monitor_positions: ["monitor_id", "position_id"],
   reference_securities: ["id", "code", "label", "source", "created_at"],
@@ -51,7 +51,7 @@ export const NULLABLE = {
     "legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at",
   ],
   positions: ["strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit"],
-  position_samples: ["legs_iv", "legs_vega"],
+  position_samples: ["legs_iv", "legs_vega", "legs_delta", "observed_at"],
   monitor_positions: [],
   reference_securities: ["label"],
   schema_migrations: [],
@@ -148,6 +148,13 @@ export interface PositionSampleRow {
    *  separately from legs_iv: a withheld vega does not make the IV reading untrue, and the IV is
    *  the half no later sweep can recover (ADR 0011). */
   legs_vega: string | null;
+  /** JSON text: contract code -> delta, the risk the book is managed by. Null on the same
+   *  all-or-nothing rule and gated on its own, like the vega: only knowable when observed. */
+  legs_delta: string | null;
+  /** When the sweep that wrote this row ran, UTC. Inside the sample hours it is the close or near
+   *  it; outside them the row filled a day that had none, and a chart should say so (ADR 0011).
+   *  Null on every row written before migration 0009. */
+  observed_at: string | null;
 }
 
 export interface MonitorPositionRow {

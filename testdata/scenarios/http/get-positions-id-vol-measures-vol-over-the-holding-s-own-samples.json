@@ -77,7 +77,9 @@
             "US.SPXW261218C7350000": 4.25,
             "US.SPXW261218P6400000": 4.25,
             "US.SPXW261218P6350000": 4.25
-          }
+          },
+          "legs_delta": null,
+          "observed_at": null
         },
         {
           "position_id": "pos-1",
@@ -95,7 +97,9 @@
             "US.SPXW261218C7350000": 4.25,
             "US.SPXW261218P6400000": 4.25,
             "US.SPXW261218P6350000": 4.25
-          }
+          },
+          "legs_delta": null,
+          "observed_at": null
         },
         {
           "position_id": "pos-1",
@@ -113,7 +117,9 @@
             "US.SPXW261218C7350000": 4.25,
             "US.SPXW261218P6400000": 4.25,
             "US.SPXW261218P6350000": 4.25
-          }
+          },
+          "legs_delta": null,
+          "observed_at": null
         }
       ],
       "reference_securities": []

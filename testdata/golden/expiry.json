@@ -77,6 +77,504 @@
         }
       ],
       "expect": -3
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "a millisecond before 09:30",
+      "args": [
+        {
+          "$date": "2026-11-09T14:29:59.999Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "09:30 exactly",
+      "args": [
+        {
+          "$date": "2026-11-09T14:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "16:00, the stocks' close",
+      "args": [
+        {
+          "$date": "2026-11-09T21:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "16:15 exactly",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "a millisecond after 16:15",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Saturday noon",
+      "args": [
+        {
+          "$date": "2026-11-07T17:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Sunday evening, when Global Trading Hours have begun",
+      "args": [
+        {
+          "$date": "2026-11-09T01:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Thanksgiving noon, a holiday with no calendar to say so",
+      "args": [
+        {
+          "$date": "2026-11-26T17:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "a half-day after its 13:00 close",
+      "args": [
+        {
+          "$date": "2026-11-27T19:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "09:30 EDT, the Monday after the clocks went forward",
+      "args": [
+        {
+          "$date": "2026-03-09T13:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "16:30 EDT, the Friday before the clocks went back",
+      "args": [
+        {
+          "$date": "2026-10-30T20:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "09:00 EST, the Monday after the clocks went back",
+      "args": [
+        {
+          "$date": "2026-11-02T14:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSampleHours",
+      "name": "Monday 23:30 in New York, Tuesday in UTC",
+      "args": [
+        {
+          "$date": "2026-11-10T04:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "takesSample",
+      "name": "no row, before the open",
+      "args": [
+        {
+          "$date": "2026-11-09T05:05:00.000Z"
+        },
+        null,
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "no row, in the hours",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        null,
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "no row, after the close, from a sweep missing a map",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        null,
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a provisional row, before the open",
+      "args": [
+        {
+          "$date": "2026-11-09T06:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a legacy row, before the open",
+      "args": [
+        {
+          "$date": "2026-11-09T06:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": null
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a provisional row in the hours is restamped, as a weekend's is",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a settled row in the hours",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "if-changed"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a legacy row in the hours",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": null
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "if-changed"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a provisional row after the close is replaced: a missed session",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a complete provisional row is not traded for readings without a vega",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "an incomplete provisional row is replaced whatever the readings",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null,
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": null,
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a row settled in the hours, after the close",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a row settled after the close, up to midnight",
+      "args": [
+        {
+          "$date": "2026-11-10T04:59:59.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-10 01:30:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a legacy row, after the close",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": null
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a settled row without its vega, completed after the close",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null,
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a legacy row without its IV, completed after the close",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": null,
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": null
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a sweep that would trade one missing map for another",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null,
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": null,
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a millisecond after 16:15, over a settled row",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "observed at 09:29:59 EDT is provisional",
+      "args": [
+        {
+          "$date": "2026-10-01T15:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-10-01 13:29:59.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "observed at 09:30 EDT is settled",
+      "args": [
+        {
+          "$date": "2026-10-01T15:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "observed_at": "2026-10-01 13:30:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}"
+        }
+      ],
+      "expect": "if-changed"
     }
   ]
 }

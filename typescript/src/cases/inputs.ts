@@ -137,6 +137,15 @@ const chain = [
 ];
 
 const at = (iso: string) => new Date(iso);
+/** A day's vol readings for `takesSample`: both maps, or one withheld. */
+const WHOLE = { legs_iv: '{"a":14.5}', legs_vega: '{"a":4.25}' };
+const NO_VEGA = { legs_iv: '{"a":14.5}', legs_vega: null };
+const NO_IV = { legs_iv: null, legs_vega: '{"a":4.25}' };
+/** A stored day's row for 9 November 2026 (EST), by when it was observed. */
+const PROVISIONAL = { ...WHOLE, observed_at: "2026-11-09 05:05:00.000000" }; // 00:05, before the open
+const IN_HOURS = { ...WHOLE, observed_at: "2026-11-09 16:00:00.000000" }; // 11:00
+const POST_CLOSE = { ...WHOLE, observed_at: "2026-11-10 01:30:00.000000" }; // 20:30
+const LEGACY = { ...WHOLE, observed_at: null }; // written before observed_at existed
 
 export const INPUTS: Record<string, CaseInput[]> = {
   contract: [
@@ -188,6 +197,65 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "daysToExpiry", name: "late evening in New York is still that day", args: [EXP, at("2026-10-18T03:30:00Z")] },
     { fn: "daysToExpiry", name: "expiry day is zero", args: [EXP, at("2026-11-20T15:00:00Z")] },
     { fn: "daysToExpiry", name: "after expiry is negative", args: [EXP, at("2026-11-23T15:00:00Z")] },
+    // the hours a day's sample may be taken in: each boundary from both sides, to the millisecond,
+    // because the Python reads a microsecond clock and has to land where JavaScript's does
+    { fn: "inSampleHours", name: "a millisecond before 09:30", args: [at("2026-11-09T14:29:59.999Z")] },
+    { fn: "inSampleHours", name: "09:30 exactly", args: [at("2026-11-09T14:30:00.000Z")] },
+    // 16:15 is the options' close, a quarter hour after the stocks', so 16:00 is still inside
+    { fn: "inSampleHours", name: "16:00, the stocks' close", args: [at("2026-11-09T21:00:00.000Z")] },
+    { fn: "inSampleHours", name: "16:15 exactly", args: [at("2026-11-09T21:15:00.000Z")] },
+    { fn: "inSampleHours", name: "a millisecond after 16:15", args: [at("2026-11-09T21:15:00.001Z")] },
+    // every calendar day, because the vol chain needs a row for each: these carry the last close
+    { fn: "inSampleHours", name: "Saturday noon", args: [at("2026-11-07T17:00:00Z")] },
+    { fn: "inSampleHours", name: "Sunday evening, when Global Trading Hours have begun",
+      args: [at("2026-11-09T01:30:00Z")] },
+    { fn: "inSampleHours", name: "Thanksgiving noon, a holiday with no calendar to say so",
+      args: [at("2026-11-26T17:00:00Z")] },
+    { fn: "inSampleHours", name: "a half-day after its 13:00 close", args: [at("2026-11-27T19:00:00Z")] },
+    // each 2026 clock change, on an instant a fixed offset would get wrong
+    { fn: "inSampleHours", name: "09:30 EDT, the Monday after the clocks went forward",
+      args: [at("2026-03-09T13:30:00Z")] },
+    { fn: "inSampleHours", name: "16:30 EDT, the Friday before the clocks went back",
+      args: [at("2026-10-30T20:30:00Z")] },
+    { fn: "inSampleHours", name: "09:00 EST, the Monday after the clocks went back",
+      args: [at("2026-11-02T14:00:00Z")] },
+    // an overnight mark: New York is still on Monday evening while UTC has reached Tuesday
+    { fn: "inSampleHours", name: "Monday 23:30 in New York, Tuesday in UTC",
+      args: [at("2026-11-10T04:30:00Z")] },
+    // what a sweep does with the day's row, branch by branch: Monday 9 November 2026, EST
+    { fn: "takesSample", name: "no row, before the open", args: [at("2026-11-09T05:05:00Z"), null, WHOLE] },
+    { fn: "takesSample", name: "no row, in the hours", args: [at("2026-11-09T16:00:00Z"), null, WHOLE] },
+    { fn: "takesSample", name: "no row, after the close, from a sweep missing a map",
+      args: [at("2026-11-10T01:30:00Z"), null, NO_VEGA] },
+    { fn: "takesSample", name: "a provisional row, before the open", args: [at("2026-11-09T06:00:00Z"), PROVISIONAL, WHOLE] },
+    { fn: "takesSample", name: "a legacy row, before the open", args: [at("2026-11-09T06:00:00Z"), LEGACY, WHOLE] },
+    { fn: "takesSample", name: "a provisional row in the hours is restamped, as a weekend's is",
+      args: [at("2026-11-09T16:00:00Z"), PROVISIONAL, WHOLE] },
+    { fn: "takesSample", name: "a settled row in the hours", args: [at("2026-11-09T16:00:00Z"), IN_HOURS, WHOLE] },
+    { fn: "takesSample", name: "a legacy row in the hours", args: [at("2026-11-09T16:00:00Z"), LEGACY, WHOLE] },
+    { fn: "takesSample", name: "a provisional row after the close is replaced: a missed session",
+      args: [at("2026-11-10T01:30:00Z"), PROVISIONAL, WHOLE] },
+    { fn: "takesSample", name: "a complete provisional row is not traded for readings without a vega",
+      args: [at("2026-11-10T01:30:00Z"), PROVISIONAL, NO_VEGA] },
+    { fn: "takesSample", name: "an incomplete provisional row is replaced whatever the readings",
+      args: [at("2026-11-10T01:30:00Z"), { ...PROVISIONAL, ...NO_VEGA }, NO_IV] },
+    { fn: "takesSample", name: "a row settled in the hours, after the close", args: [at("2026-11-10T01:30:00Z"), IN_HOURS, WHOLE] },
+    { fn: "takesSample", name: "a row settled after the close, up to midnight",
+      args: [at("2026-11-10T04:59:59Z"), POST_CLOSE, WHOLE] },
+    { fn: "takesSample", name: "a legacy row, after the close", args: [at("2026-11-10T01:30:00Z"), LEGACY, WHOLE] },
+    { fn: "takesSample", name: "a settled row without its vega, completed after the close",
+      args: [at("2026-11-10T01:30:00Z"), { ...IN_HOURS, ...NO_VEGA }, WHOLE] },
+    { fn: "takesSample", name: "a legacy row without its IV, completed after the close",
+      args: [at("2026-11-10T01:30:00Z"), { ...LEGACY, ...NO_IV }, WHOLE] },
+    { fn: "takesSample", name: "a sweep that would trade one missing map for another",
+      args: [at("2026-11-10T01:30:00Z"), { ...IN_HOURS, ...NO_VEGA }, NO_IV] },
+    { fn: "takesSample", name: "a millisecond after 16:15, over a settled row",
+      args: [at("2026-11-09T21:15:00.001Z"), IN_HOURS, WHOLE] },
+    // provisional is read on New York's clock: under EDT, 13:29:59Z is before the open, 13:30Z is it
+    { fn: "takesSample", name: "observed at 09:29:59 EDT is provisional",
+      args: [at("2026-10-01T15:00:00Z"), { ...WHOLE, observed_at: "2026-10-01 13:29:59.000000" }, WHOLE] },
+    { fn: "takesSample", name: "observed at 09:30 EDT is settled",
+      args: [at("2026-10-01T15:00:00Z"), { ...WHOLE, observed_at: "2026-10-01 13:30:00.000000" }, WHOLE] },
   ],
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },

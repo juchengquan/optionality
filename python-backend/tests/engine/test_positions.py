@@ -20,13 +20,16 @@ from typing import Any
 import pytest
 from harness import FakeProvider, fake_fetcher
 from optionality.contract import build_spx_code
+from optionality.vol import VolSample, vol_attribution
 from sweep import SINGLE_CODE as CODE
 from sweep import SWEEP_SETTINGS, insert_monitor, quoting
 
 from optionality_backend.db.open import create_database
+from optionality_backend.db.queries import find_position, list_position_samples
 from optionality_backend.db.values import to_sqlite_json
 from optionality_backend.engine import MonitorSweeper, SweeperDeps
 from optionality_backend.env import settings_for
+from optionality_backend.hydrate import to_position
 from optionality_backend.notify import NotifySender
 
 LOG = "optionality_backend.engine.positions"
@@ -161,6 +164,12 @@ class TestRecordingWhatAPositionWasWorth:
     book rather than defended on arithmetic — it had one confirming observation when it was chosen
     (ADR 0011). Nothing reads these yet; that is the point of starting now."""
 
+    @pytest.fixture(autouse=True)
+    def _in_the_sample_hours(self, b: Book) -> None:
+        # 11:00 in New York, the same market day as the suite's 01:00 clock: the suite's clock is the
+        # small hours, which is now when nothing is written
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)
+
     async def test_writes_one_row_per_position_with_the_cost_to_close_and_the_dashboards_dte(self, b: Book) -> None:
         id_ = b.held("held")
         await b.sweeper(b.spread(5.0, 1.0)).sweep()
@@ -179,16 +188,228 @@ class TestRecordingWhatAPositionWasWorth:
 
         assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 30, "cost_to_close": 3}]
 
-    async def test_keys_the_day_where_the_option_trades_not_where_utc_is(self, b: Book) -> None:
-        # for the hours New York is behind UTC the two dates differ, and `dte` beside it is reckoned
-        # from the market date. A sample keyed on the UTC day would pair a New York Wednesday with a
-        # Thursday's DTE.
-        b.now = datetime(2026, 10, 1, 2, 0, tzinfo=UTC)  # 22:00 on 2026-09-30 in New York
-        b.held("held")
-        await b.sweeper(b.spread(5.0, 1.0)).sweep()
+    @staticmethod
+    def pricing(short: str, sold: float, without: str | None = None) -> FakeProvider:
+        """The held spread priced at codes fixed by the caller — so moving the clock does not move the
+        contracts — with both vol readings unless `without` names one."""
 
-        assert b.samples()[0]["observed_on"] == "2026-09-30"
-        assert b.now.date().isoformat() == "2026-10-01"  # and the UTC day is not that
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "code": c,
+                    "name": c,
+                    "mid_price": sold if c == short else 1.0,
+                    **({} if without == "iv" else {"option_implied_volatility": 14.5}),
+                    **({} if without == "vega" else {"option_vega": 4.25}),
+                }
+                for c in codes
+            ]
+
+        return fetch
+
+    @staticmethod
+    def rows(b: Book) -> list[tuple[Any, ...]]:
+        return b.db.execute(
+            """select observed_on, cost_to_close, observed_at,
+                      legs_iv is not null, legs_vega is not null
+               from position_samples order by observed_on"""
+        ).fetchall()
+
+    async def test_stamps_every_write_with_the_sweeps_own_instant(self, b: Book) -> None:
+        # so a chart can tell a close from a point filled after hours (ADR 0011)
+        b.held("held")
+        await b.sweeper(b.spread(5.0, 1.0)).sweep()  # 11:00 EDT on 2026-10-01
+        assert b.column("select observed_at from position_samples") == "2026-10-01 15:00:00.000000"
+
+    async def test_never_changes_a_complete_row_outside_the_hours_however_the_mark_moves(self, b: Book) -> None:
+        # a settled close stays the close; 22:00 on a New York Thursday is Friday in UTC, and the row is
+        # still Thursday's
+        b.held("held")
+        short = b.sold()
+        await b.sweeper(self.pricing(short, 5.0)).sweep()  # 11:00 on 2026-10-01
+        b.now = datetime(2026, 10, 2, 2, 0, tzinfo=UTC)  # 22:00 on 2026-10-01 in New York, Friday in UTC
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 4, "2026-10-01 15:00:00.000000", 1, 1)]
+
+    async def test_takes_a_holdings_first_sample_whatever_the_hour_and_leaves_it_alone_after(self, b: Book) -> None:
+        # the owner records a trade in the Singapore morning, which is New York's evening after the
+        # close of the day it was put on: under the hours alone its first row would be the next day's,
+        # never its Opened day, and the vol chain would never start (takes_sample)
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 on 2026-10-01 in New York
+        id_ = b.held("recorded-late")
+        short = b.sold()
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 2, 0, 45, tzinfo=UTC)  # 20:45, a moved mark, and the row now exists
+        await b.sweeper(self.pricing(short, 4.0)).sweep()
+
+        assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 31, "cost_to_close": 4}]
+        assert self.rows(b)[0][2] == "2026-10-02 00:30:00.000000"
+
+    async def test_fills_a_day_whose_session_was_missed_whole_after_the_hours_and_marks_it(self, b: Book) -> None:
+        # a reboot waiting at the FileVault login, OpenD waiting for one: no sweep ran in the session,
+        # and a day with no row is a hole that blanks the Vol part for good (vol.py)
+        b.held("held")
+        short = b.sold()
+        await b.sweeper(self.pricing(short, 5.0)).sweep()  # 11:00 on 2026-10-01
+        b.now = datetime(2026, 10, 3, 0, 30, tzinfo=UTC)  # 20:30 on 2026-10-02: its whole session missed
+        await b.sweeper(self.pricing(short, 4.0)).sweep()
+        b.now = datetime(2026, 10, 3, 0, 45, tzinfo=UTC)
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+
+        assert self.rows(b) == [
+            ("2026-10-01", 4, "2026-10-01 15:00:00.000000", 1, 1),
+            ("2026-10-02", 3, "2026-10-03 00:30:00.000000", 1, 1),
+        ]
+
+    async def test_completes_a_row_the_feed_left_without_its_vega_after_the_hours_from_a_sweep_with_both(
+        self, b: Book
+    ) -> None:
+        # the vol chain needs an IV and a vega for every leg on every day; the row is written whole
+        b.held("held")
+        short = b.sold()
+        await b.sweeper(self.pricing(short, 5.0, "vega")).sweep()  # 11:00: the vegas withheld all session
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 the same market day
+        await b.sweeper(self.pricing(short, 4.5)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 3.5, "2026-10-02 00:30:00.000000", 1, 1)]
+
+    async def test_does_not_complete_a_row_from_a_sweep_missing_the_other_map(self, b: Book) -> None:
+        # the row is written whole, so this would trade the stored IV for the missing vega
+        b.held("held")
+        short = b.sold()
+        await b.sweeper(self.pricing(short, 5.0, "vega")).sweep()
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)
+        await b.sweeper(self.pricing(short, 4.5, "iv")).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 4, "2026-10-01 15:00:00.000000", 1, 0)]
+
+    async def test_starts_the_vol_chain_on_the_opened_day_for_a_trade_recorded_after_the_close(self, b: Book) -> None:
+        # the regression the hours alone caused, end to end: vol_attribution returns None unless the
+        # first sample is dated Opened
+        strike = "2026-10-31"
+        sold = build_spx_code(strike, "CALL", 8050)
+        id_ = "late".ljust(32, "0")
+        b.db.execute(
+            """insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'late', null, ?, 1, 2.0, ?, '2026-10-02 00:30:00.000000', '2026-10-01', null)""",
+            (id_, strike, to_sqlite_json(TWO_LEGS)),
+        )
+
+        def book(sold_iv: float) -> FakeProvider:
+            def fetch(codes: list[str]) -> list[dict[str, Any]]:
+                return [
+                    {
+                        "code": c,
+                        "name": c,
+                        "mid_price": 5.0 if c == sold else 1.0,
+                        "option_implied_volatility": sold_iv if c == sold else 11.0,
+                        "option_vega": 1.4 if c == sold else 0.9,
+                    }
+                    for c in codes
+                ]
+
+            return fetch
+
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 on the Opened day, after the close
+        await b.sweeper(book(10.5)).sweep()
+        b.now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)  # 11:00 the next day, in the session
+        await b.sweeper(book(11.5)).sweep()
+
+        chain = [
+            VolSample(
+                observed_on=s["observed_on"],
+                dte=s["dte"],
+                legs_iv=None if s["legs_iv"] is None else json.loads(s["legs_iv"]),
+                legs_vega=None if s["legs_vega"] is None else json.loads(s["legs_vega"]),
+            )
+            for s in list_position_samples(b.db, id_)
+        ]
+        found = find_position(b.db, id_)
+        assert found is not None
+        attributed = vol_attribution(chain, to_position(found))
+        assert attributed is not None
+        assert (attributed.from_, attributed.to, attributed.days) == ("2026-10-01", "2026-10-02", 1)
+
+    async def test_settles_on_the_close_a_mark_that_moves_after_1615_does_not_move_the_days_row(self, b: Book) -> None:
+        # SPXW trades again from about 20:15 in Global Trading Hours, and until this the day's row was
+        # rewritten by every overnight mark that differed, up to New York's midnight. 16:15 is the
+        # options' close, a quarter hour after the stocks'.
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 1, 20, 14, 45, tzinfo=UTC)  # 16:14:45 EDT
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 1, 20, 15, 0, tzinfo=UTC)  # 16:15:00 EDT, the close itself, still in
+        await b.sweeper(self.pricing(short, 4.5)).sweep()
+        b.now = datetime(2026, 10, 1, 20, 15, 15, tzinfo=UTC)  # the next sweep, after the close
+        await b.sweeper(self.pricing(short, 4.0)).sweep()
+        b.now = datetime(2026, 10, 2, 1, 30, tzinfo=UTC)  # 21:30, overnight trading, same market day
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 3.5, "2026-10-01 20:15:00.000000", 1, 1)]
+
+    async def test_fills_a_day_before_the_open_and_the_session_then_writes_over_it(self, b: Book) -> None:
+        # a day with no row is filled whenever it is first seen, the small hours included; inside the
+        # hours the row is written freely again, so the session's figures replace the overnight ones
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 1, 13, 29, 59, tzinfo=UTC)  # 09:29:59 EDT, no row for the day yet
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 1, 13, 30, 0, tzinfo=UTC)  # 09:30, the session
+        await b.sweeper(self.pricing(short, 4.5)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 3.5, "2026-10-01 13:30:00.000000", 1, 1)]
+
+    async def test_leaves_a_provisional_fill_alone_before_the_open(self, b: Book) -> None:
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 1, 4, 5, tzinfo=UTC)  # 00:05 EDT, the first sweep of the day
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)  # 05:00 EDT, a moved overnight mark
+        await b.sweeper(self.pricing(short, 4.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 4, "2026-10-01 04:05:00.000000", 1, 1)]
+
+    async def test_replaces_the_midnight_fill_with_the_evenings_after_a_session_missed_whole(self, b: Book) -> None:
+        # the first sweep after New York's midnight fills the day from overnight marks; the session is
+        # then missed and the service is back at 20:30 — the evening's reading is the better one
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 1, 4, 5, tzinfo=UTC)  # 00:05 EDT: the midnight fill, provisional
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 EDT the same market day
+        await b.sweeper(self.pricing(short, 4.0)).sweep()
+        b.now = datetime(2026, 10, 2, 0, 45, tzinfo=UTC)  # and now settled, so a later mark does not move it
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 3, "2026-10-02 00:30:00.000000", 1, 1)]
+
+    async def test_restamps_a_weekends_midnight_fill_in_the_hours_though_nothing_moved(self, b: Book) -> None:
+        # nothing trades on a Saturday, so the "only when something differs" check would leave the
+        # midnight fill stamped as an overnight mark for ever
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 3, 4, 5, tzinfo=UTC)  # 00:05 EDT on Saturday 3 October
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)  # 11:00 EDT, the same figures
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        restamped = self.rows(b)
+        b.now = datetime(2026, 10, 3, 16, 0, tzinfo=UTC)  # 12:00, still the same: settled, no write
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+
+        assert restamped == [("2026-10-03", 4, "2026-10-03 15:00:00.000000", 1, 1)]
+        assert self.rows(b) == restamped
+
+    async def test_leaves_a_row_settled_after_the_close_alone_up_to_midnight(self, b: Book) -> None:
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 EDT on 1 October: settled
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 2, 3, 59, 59, tzinfo=UTC)  # 23:59:59 EDT, a moved mark
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 4, "2026-10-02 00:30:00.000000", 1, 1)]
 
     async def test_records_a_position_whose_opened_nobody_has_entered_yet(self, b: Book) -> None:
         # the sample is raw: (DTE, Cost to close) means something without an Opened, and filling the
@@ -396,6 +617,54 @@ class TestRecordingWhatAPositionWasWorth:
         assert legs_iv is None
         assert cost == 4
 
+    async def test_records_each_legs_delta_which_is_the_risk_the_owner_watches(self, b: Book) -> None:
+        # short-leg delta is how this book is managed, and a chart of it over a trade's life needs it
+        # recorded on the day: like a vega, a delta is only knowable when it was observed
+        id_ = b.held("held")
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "code": c,
+                    "name": c,
+                    "mid_price": 5.0 if c == b.sold() else 1.0,
+                    "option_delta": 0.16 if c == b.sold() else 0.11,
+                }
+                for c in codes
+            ]
+
+        await b.sweeper(fetch).sweep()
+
+        legs_delta = b.column("select legs_delta from position_samples where position_id = ?", id_)
+        assert json.loads(legs_delta) == {b.sold(): 0.16, b.bought(): 0.11}
+
+    async def test_records_no_delta_at_all_rather_than_some_of_it_and_the_other_maps_regardless(self, b: Book) -> None:
+        # the same all-or-nothing per map as the IV and the vega, and gated on its own: a withheld
+        # delta makes neither the IV nor the vega reading untrue
+        id_ = b.held("held")
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "code": c,
+                    "name": c,
+                    "mid_price": 5.0 if c == b.sold() else 1.0,
+                    "option_implied_volatility": 10.5,
+                    "option_vega": 1.0,
+                    **({"option_delta": 0.16} if c == b.sold() else {}),
+                }
+                for c in codes
+            ]
+
+        await b.sweeper(fetch).sweep()
+
+        legs_delta, legs_iv, legs_vega = b.db.execute(
+            "select legs_delta, legs_iv, legs_vega from position_samples where position_id = ?", (id_,)
+        ).fetchone()
+        assert legs_delta is None
+        assert legs_iv is not None
+        assert legs_vega is not None
+
 
 class TestHowOftenTheSamplerActuallyWrites:
     """It wrote on every sweep — 5,760 times a day at a 15-second interval, to persist ONE row, and
@@ -403,7 +672,7 @@ class TestHowOftenTheSamplerActuallyWrites:
     file carried a 3.1MB write-ahead log against a 110KB database because of it."""
 
     @staticmethod
-    def quiet(b: Book, mid: float, iv: float, vega: float = 1.0) -> FakeProvider:
+    def quiet(b: Book, mid: float, iv: float, vega: float = 1.0, delta: float = 0.16) -> FakeProvider:
         def fetch(codes: list[str]) -> list[dict[str, Any]]:
             return [
                 {
@@ -412,11 +681,30 @@ class TestHowOftenTheSamplerActuallyWrites:
                     "mid_price": mid if c == b.sold() else 1.0,
                     "option_implied_volatility": iv,
                     "option_vega": vega,
+                    "option_delta": delta,
                 }
                 for c in codes
             ]
 
         return fetch
+
+    @pytest.fixture(autouse=True)
+    def _in_the_sample_hours(self, b: Book) -> None:
+        # inside the sample hours, so each sweep below is one that may write (see the suite above)
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)
+
+    async def test_writes_when_only_a_delta_moves_which_the_cost_the_iv_and_the_vega_can_all_hide(
+        self, b: Book
+    ) -> None:
+        # spot moving between two strikes changes the deltas while a mid barely does, and the delta is
+        # the figure the owner manages by
+        b.held("held")
+        await b.sweeper(self.quiet(b, 5.0, 10.5, 1.0, 0.16)).sweep()
+        after = b.writes()
+        await b.sweeper(self.quiet(b, 5.0, 10.5, 1.0, 0.21)).sweep()
+        assert b.writes() > after
+
+        assert json.loads(b.column("select legs_delta from position_samples"))[b.sold()] == 0.21
 
     async def test_writes_nothing_on_a_sweep_that_would_store_the_same_row_again(self, b: Book) -> None:
         b.held("held")
@@ -622,6 +910,7 @@ class TestWhatOnlyThePythonCanGetWrong:
     async def test_stores_the_iv_map_as_json_stringify_writes_it(self, b: Book) -> None:
         # the sampler tells a changed row by comparing this TEXT, and the other backend writes the same
         # file: 22.0 must be stored as JSON.stringify's `22`, never Python's `22.0`
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # inside the sample hours, so it writes
         id_ = b.held("held")
 
         def fetch(codes: list[str]) -> list[dict[str, Any]]:
@@ -635,6 +924,7 @@ class TestWhatOnlyThePythonCanGetWrong:
         assert stored == f'{{"{b.sold()}":22,"{b.bought()}":22}}'
 
     async def test_logs_a_failed_sample_with_its_stack(self, b: Book, caplog: pytest.LogCaptureFixture) -> None:
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # inside the sample hours, so it tries
         b.held("held")
         b.db.execute("DROP TABLE position_samples")
         with caplog.at_level(logging.ERROR, logger=LOG):

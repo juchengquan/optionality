@@ -133,7 +133,14 @@
             "US.SPXW261218C7350000": 4.25,
             "US.SPXW261218P6400000": 4.25,
             "US.SPXW261218P6350000": 4.25
-          }
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.21,
+            "US.SPXW261218C7350000": 0.15,
+            "US.SPXW261218P6400000": -0.18,
+            "US.SPXW261218P6350000": -0.12
+          },
+          "observed_at": null
         }
       ],
       "reference_securities": []
@@ -150,10 +157,12 @@
               "observed_on": "2026-11-09"
             },
             "from": {
-              "cost_to_close": 3.5
+              "cost_to_close": 3.5,
+              "observed_at": null
             },
             "to": {
-              "cost_to_close": 3.25
+              "cost_to_close": 3.25,
+              "observed_at": "2026-11-09 15:00:00.000000"
             }
           }
         ]

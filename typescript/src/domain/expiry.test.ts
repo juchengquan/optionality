@@ -13,7 +13,9 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { daysToExpiry, marketDate } from "./expiry.ts";
+import {
+  daysToExpiry, inSampleHours, marketDate, takesSample, type SampleReadings,
+} from "./expiry.ts";
 
 describe("the market date", () => {
   it("is New York's calendar day, not the viewer's", () => {
@@ -71,5 +73,127 @@ describe("days to expiry", () => {
   it("takes both spellings of the date, like the Python", () => {
     expect(daysToExpiry("20261016", at)).toBe(16);
     expect(() => daysToExpiry("2026-02-30", at)).toThrow(/invalid strike_date/);
+  });
+});
+
+const at = (iso: string) => new Date(iso);
+
+describe("inSampleHours — when a day's sample may be taken", () => {
+  // Monday 9 November 2026: New York is on EST, five hours behind UTC
+  it("opens at 09:30 New York, to the millisecond", () => {
+    expect(inSampleHours(at("2026-11-09T14:29:59.999Z"))).toBe(false);
+    expect(inSampleHours(at("2026-11-09T14:30:00.000Z"))).toBe(true);
+  });
+
+  it("closes at 16:15, the options' own close, and includes it", () => {
+    // SPX options trade until 16:15, a quarter hour after the stocks, so 16:00 is not their close
+    expect(inSampleHours(at("2026-11-09T21:00:00.000Z"))).toBe(true); // 16:00, still trading
+    expect(inSampleHours(at("2026-11-09T21:15:00.000Z"))).toBe(true);
+    expect(inSampleHours(at("2026-11-09T21:15:00.001Z"))).toBe(false);
+  });
+
+  it("refuses the overnight session, whose marks are not the day's close", () => {
+    // Global Trading Hours resume about 20:15: Monday 23:30 in New York is already Tuesday in UTC
+    expect(inSampleHours(at("2026-11-10T04:30:00Z"))).toBe(false);
+    // and the small hours before the open
+    expect(inSampleHours(at("2026-11-09T11:00:00Z"))).toBe(false); // 06:00 EST
+  });
+
+  it("is open on a weekend, because the vol chain needs a row every calendar day", () => {
+    // volAttribution steps exactly one day between samples; nothing trades in these hours on a
+    // Saturday, so its row is the Friday close carried forward
+    expect(inSampleHours(at("2026-11-07T17:00:00Z"))).toBe(true); // Saturday noon
+    // Sunday 20:30, when the overnight session has begun, is outside like any evening
+    expect(inSampleHours(at("2026-11-09T01:30:00Z"))).toBe(false);
+  });
+
+  it("reads the hours in New York's zone on both sides of each 2026 clock change", () => {
+    // Monday after the clocks went forward (8 March): EDT, so 13:30Z is 09:30 and open — a fixed
+    // five-hour offset would call it 08:30 and shut
+    expect(inSampleHours(at("2026-03-09T13:30:00Z"))).toBe(true);
+    // Friday before they went back (1 November): 20:30Z is 16:30 EDT and shut — at EST it would
+    // be 15:30 and open
+    expect(inSampleHours(at("2026-10-30T20:30:00Z"))).toBe(false);
+    // Monday after they went back: 14:00Z is 09:00 EST and shut — at EDT it would be 10:00
+    expect(inSampleHours(at("2026-11-02T14:00:00Z"))).toBe(false);
+  });
+
+  it("needs no exchange calendar: a half-day and a holiday carry their last close", () => {
+    // the Friday after Thanksgiving closes at 13:00 (options 13:15) and is static until 16:15
+    expect(inSampleHours(at("2026-11-27T19:00:00Z"))).toBe(true);
+    // Thanksgiving itself trades nothing, so its row is Wednesday's close, as a Saturday's is
+    expect(inSampleHours(at("2026-11-26T17:00:00Z"))).toBe(true);
+  });
+});
+
+describe("takesSample — whether this sweep writes the day's row, and how", () => {
+  // Monday 9 November 2026, New York on EST (UTC-5)
+  const beforeOpen = at("2026-11-09T05:05:00Z"); // 00:05, just past New York's midnight
+  const session = at("2026-11-09T16:00:00Z"); // 11:00
+  const evening = at("2026-11-10T01:30:00Z"); // 20:30, overnight trading
+  const readings = { legs_iv: "{}", legs_vega: "{}" };
+  const noVega = { legs_iv: "{}", legs_vega: null };
+  const noIv = { legs_iv: null, legs_vega: "{}" };
+  /** the day's stored row, observed at a UTC instant as the database spells it */
+  const row = (observedAt: string | null, maps: SampleReadings = readings) =>
+    ({ ...maps, observed_at: observedAt });
+  const provisional = row("2026-11-09 05:05:00.000000"); // 00:05, before its own day's open
+  const inHours = row("2026-11-09 16:00:00.000000"); // 11:00
+  const postClose = row("2026-11-10 01:30:00.000000"); // 20:30 the same market day
+  const legacy = row(null); // written before observed_at existed
+
+  it("fills a day with no row whatever the hour", () => {
+    // a trade recorded in New York's evening, a session missed whole: the vol chain needs every day
+    expect(takesSample(beforeOpen, null, readings)).toBe("yes");
+    expect(takesSample(session, null, readings)).toBe("yes");
+    expect(takesSample(evening, null, noVega)).toBe("yes");
+  });
+
+  it("before the open fills only: a row that already stands is not touched", () => {
+    expect(takesSample(beforeOpen, provisional, readings)).toBe("no");
+    expect(takesSample(beforeOpen, legacy, readings)).toBe("no");
+  });
+
+  it("inside the hours writes when the figures moved, and a PROVISIONAL row even when they did not", () => {
+    expect(takesSample(session, inHours, readings)).toBe("if-changed");
+    expect(takesSample(session, legacy, readings)).toBe("if-changed");
+    // a weekend row filled after midnight: nothing moves in the hours, so without this it would
+    // keep its 00:05 stamp and read as an overnight mark for ever
+    expect(takesSample(session, provisional, readings)).toBe("yes");
+  });
+
+  it("after the close replaces a provisional row, which is how a missed session gets its evening", () => {
+    // the first sweep after midnight filled the day from overnight marks; the session was missed;
+    // the service recovered at 20:30 — the evening's reading is the better one for that day
+    expect(takesSample(evening, provisional, readings)).toBe("yes");
+  });
+
+  it("after the close replaces a complete provisional row only with complete readings", () => {
+    // a complete midnight row traded for one without its vega would cost the day its Vol for good
+    // if no later sweep before midnight has both
+    expect(takesSample(evening, provisional, noVega)).toBe("no");
+    expect(takesSample(evening, provisional, noIv)).toBe("no");
+    // an incomplete provisional row loses nothing by being replaced
+    expect(takesSample(evening, row("2026-11-09 05:05:00.000000", noVega), noIv)).toBe("yes");
+  });
+
+  it("after the close never changes a settled row, nor a row from before observed_at existed", () => {
+    expect(takesSample(evening, inHours, readings)).toBe("no");
+    expect(takesSample(evening, postClose, readings)).toBe("no");
+    expect(takesSample(evening, legacy, readings)).toBe("no");
+  });
+
+  it("after the close completes a settled row missing its IV or vega, only from a sweep with both", () => {
+    expect(takesSample(evening, row("2026-11-09 16:00:00.000000", noVega), readings)).toBe("yes");
+    expect(takesSample(evening, row(null, noIv), readings)).toBe("yes");
+    // the row is written whole, so this would trade the stored IV for the missing vega
+    expect(takesSample(evening, row("2026-11-09 16:00:00.000000", noVega), noIv)).toBe("no");
+  });
+
+  it("calls a row provisional by New York's clock, across a change of the clocks", () => {
+    // 1 October 2026 is EDT (UTC-4): 13:29:59Z is 09:29:59, before the open; 13:30Z is the open
+    const october = at("2026-10-01T15:00:00Z"); // 11:00 EDT
+    expect(takesSample(october, row("2026-10-01 13:29:59.000000"), readings)).toBe("yes");
+    expect(takesSample(october, row("2026-10-01 13:30:00.000000"), readings)).toBe("if-changed");
   });
 });

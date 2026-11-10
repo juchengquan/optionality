@@ -20,6 +20,7 @@
  *  `shows` is how a scenario claiming the outcome must look, and is checked against every claim —
  *  a scenario cannot cover an outcome by saying so.
  */
+import { inSampleHours, marketDate } from "optionality/domain/expiry";
 import { settingsFromEnv } from "../../src/env.ts";
 import type { Change, Row, SweepScenario } from "./format.ts";
 
@@ -40,6 +41,29 @@ const moved = (s: SweepScenario, column: string, to?: unknown) =>
 const untouched = (s: SweepScenario) => Object.keys(s.expect.rows).length === 0;
 const asked = (s: SweepScenario) => Object.keys(s.expect.calls).length > 0;
 const combos = (s: SweepScenario) => s.world.tables.monitors.filter((m: Row) => m.legs !== null);
+/** Every code the tick asked for came back priced: a sample could have been written. */
+const priced = (s: SweepScenario) => asked(s) && Object.values(s.expect.calls)
+  .every((batches) => batches.every((codes) => codes.every((c) => c in s.world.provider.quotes)));
+const NEW_YORK_CLOCK = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+/** Whether a stored row was observed before its own day's 09:30 open: a fill from overnight marks. */
+const provisional = (r: Row | undefined): boolean => {
+  if (r === undefined || r.observed_at === null) return false;
+  const stamp = String(r.observed_at);
+  const at = new Date(`${stamp.slice(0, 10)}T${stamp.slice(11, 23)}Z`);
+  const part = Object.fromEntries(NEW_YORK_CLOCK.formatToParts(at).map((p) => [p.type, p.value]));
+  return Number(part.hour) * 60 + Number(part.minute) < 9 * 60 + 30;
+};
+/** Whether the clock is before 09:30 in New York, the open. */
+const beforeOpen = (s: SweepScenario): boolean => {
+  const part = Object.fromEntries(NEW_YORK_CLOCK.formatToParts(new Date(s.world.clock))
+    .map((p) => [p.type, p.value]));
+  return Number(part.hour) * 60 + Number(part.minute) < 9 * 60 + 30;
+};
+/** The stored row for the clock's market day, if the world holds one. */
+const dayRow = (s: SweepScenario): Row | undefined => s.world.tables.position_samples
+  .find((r: Row) => r.observed_on === marketDate(new Date(s.world.clock)));
 
 export const OUTCOMES: readonly Outcome[] = [
   {
@@ -177,6 +201,63 @@ export const OUTCOMES: readonly Outcome[] = [
     decision: "recordSamples",
     shows: (s) => s.world.tables.position_samples.length > 0 && asked(s)
       && s.expect.rows.position_samples === undefined,
+  },
+  {
+    // after the close a COMPLETE row is the day's close, and a mark that moved since does not reach
+    // it. Every leg of the holding was priced, so a write was possible and differed from the row:
+    // without the hours rule this tick would have rewritten it
+    name: "complete-row-left-alone-after-hours",
+    decision: "takesSample",
+    shows: (s) => {
+      const day = dayRow(s);
+      return !inSampleHours(new Date(s.world.clock)) && priced(s) && day !== undefined
+        && day.legs_iv !== null && day.legs_vega !== null && s.expect.rows.position_samples === undefined;
+    },
+  },
+  {
+    // a day with no row is filled whatever the hour: a trade recorded in New York's evening, after
+    // the close, and a session missed whole both leave one, and the vol chain needs every day
+    name: "day-filled-after-hours",
+    decision: "takesSample",
+    shows: (s) => !inSampleHours(new Date(s.world.clock)) && priced(s) && dayRow(s) === undefined
+      && (s.expect.rows.position_samples?.added ?? [])
+        .some((r) => r.observed_on === marketDate(new Date(s.world.clock))),
+  },
+  {
+    // the midnight fill, a missed session, and the service back after the close: the provisional
+    // row is replaced by the evening's reading rather than keeping its overnight mark
+    name: "provisional-row-replaced-after-hours",
+    decision: "takesSample",
+    shows: (s) => !inSampleHours(new Date(s.world.clock)) && provisional(dayRow(s))
+      && (s.expect.rows.position_samples?.changed ?? []).length > 0,
+  },
+  {
+    // before the open a sweep only fills a day with no row: one that already stands is not touched,
+    // however the overnight marks have moved since it was taken
+    name: "row-left-alone-before-the-open",
+    decision: "takesSample",
+    shows: (s) => beforeOpen(s) && priced(s) && dayRow(s) !== undefined
+      && s.expect.rows.position_samples === undefined,
+  },
+  {
+    // a weekend's midnight fill restamped in the hours though no figure moved, so it stops reading
+    // as an overnight mark
+    name: "provisional-row-restamped-in-hours",
+    decision: "takesSample",
+    shows: (s) => inSampleHours(new Date(s.world.clock)) && provisional(dayRow(s))
+      && (s.expect.rows.position_samples?.changed ?? []).some((c) => "observed_at" in c.to),
+  },
+  {
+    // a row the feed left without its IV or vega is completed after hours by a sweep that has both
+    name: "incomplete-row-completed-after-hours",
+    decision: "takesSample",
+    shows: (s) => {
+      const day = dayRow(s);
+      return !inSampleHours(new Date(s.world.clock)) && day !== undefined
+        && (day.legs_iv === null || day.legs_vega === null)
+        && (s.expect.rows.position_samples?.changed ?? [])
+          .some((c) => (c.to.legs_iv ?? day.legs_iv) !== null && (c.to.legs_vega ?? day.legs_vega) !== null);
+    },
   },
   {
     // one unpriced leg and there is no observation to make

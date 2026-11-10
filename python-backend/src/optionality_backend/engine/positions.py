@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import days_to_expiry, market_date
+from optionality.expiry import days_to_expiry, market_date, takes_sample
 from optionality.js import js_string, to_fixed
 from optionality.position import cost_to_close, leg_readings
 from optionality.quote import ByCode
@@ -109,7 +109,16 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
 
 def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByCode, at: datetime) -> None:
     """One observation per Position per market day, so the decay shape can be checked against this
-    book rather than defended on arithmetic (ADR 0011). Nothing reads these yet.
+    book rather than defended on arithmetic (ADR 0011).
+
+    Written freely only in the sample hours, 09:30 to 16:15 in New York, so the day's row is the last
+    sweep at or before the options' close. Until then it was rewritten up to New York's midnight, and
+    SPXW trades again from about 20:15 — so the row that survived could be an overnight mark under a
+    chart that calls it the close. Outside the hours a row is only ever FILLED (a day with none: a trade
+    recorded in the evening, a session missed whole) or COMPLETED (a row the feed left without its IV or
+    vega), never changed — `takes_sample` decides, and every write carries the sweep's instant in
+    `observed_at`, so a filled point is never mistaken for a close. Every calendar day, weekends
+    included, because the vol chain needs a row for each (vol.py).
 
     Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a sample is
     a nice-to-have that must never be the reason a breach went unmessaged.
@@ -143,18 +152,33 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
             vegas = leg_readings(position, by_code, "option_vega")
             legs_iv = None if ivs is None else to_sqlite_json(ivs)
             legs_vega = None if vegas is None else to_sqlite_json(vegas)
+            # The delta the same way and for the same reason as the vega: the risk the owner manages
+            # by, only knowable when observed, all or nothing, and gated on its own so a withheld delta
+            # never costs the IV or the vega reading beside it.
+            deltas = leg_readings(position, by_code, "option_delta")
+            legs_delta = None if deltas is None else to_sqlite_json(deltas)
+
+            # The day's row as it stands decides what this sweep may do with it: fill it, write it if its
+            # figures moved, restamp or replace a provisional one, complete one without its vol readings
+            # — or nothing, which is how a settled close stays the close (takes_sample).
+            stored = find_position_sample(db, row["id"], observed_on)
+            write = takes_sample(at, stored, {"legs_iv": legs_iv, "legs_vega": legs_vega})
+            if write == "no":
+                continue
 
             # Only when something actually differs. The sweep runs every 15 seconds and the day's row
             # is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
             # weekends nearly every one of those writes stored what was already there, and the IV map
-            # triples what each one carries.
-            stored = find_position_sample(db, row["id"], observed_on)
+            # triples what each one carries. `observed_at` is NOT compared: it stamps a write, so it says
+            # when the figures were last seen to change, which is when they were observed.
             if (
-                stored is not None
+                write == "if-changed"
+                and stored is not None
                 and stored["dte"] == dte
                 and stored["cost_to_close"] == cost
                 and stored["legs_iv"] == legs_iv
                 and stored["legs_vega"] == legs_vega
+                and stored["legs_delta"] == legs_delta
             ):
                 continue
 
@@ -167,6 +191,8 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                     "cost_to_close": cost,
                     "legs_iv": legs_iv,
                     "legs_vega": legs_vega,
+                    "legs_delta": legs_delta,
+                    "observed_at": to_sql_datetime(at),
                 },
             )
         except Exception:

@@ -53,6 +53,7 @@ const todays = sample({
   position_id: "pos-1", observed_on: "2026-11-09", dte: 39, cost_to_close: 3.25,
   legs_iv: { [C7300]: 14.5, [C7350]: 14.5, [P6400]: 19.25, [P6350]: 20 },
   legs_vega: { [C7300]: 4.25, [C7350]: 4.25, [P6400]: 4.25, [P6350]: 4.25 },
+  legs_delta: { [C7300]: 0.21, [C7350]: 0.15, [P6400]: -0.18, [P6350]: -0.12 },
 });
 
 export const SWEEP: readonly SweepInput[] = [
@@ -320,6 +321,117 @@ export const SWEEP: readonly SweepInput[] = [
     outcomes: ["sample-not-rewritten-when-unchanged"],
     world: world({
       tables: { positions: [position({ id: "pos-1" })], position_samples: [todays] },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // the row is the day's close: after 16:15 in New York a moved mark leaves a complete row alone,
+    // which is what stops an overnight mark from becoming what the burndown calls the close. Every
+    // leg is priced and the stored cost differs, so only the rule stands between this and a write.
+    name: "after the close a complete row is not rewritten, however the mark moved",
+    outcomes: ["complete-row-left-alone-after-hours"],
+    world: world({
+      clock: "2026-11-09T21:30:00.000Z", // 16:30 in New York, the same market day
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, cost_to_close: 3.5 }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // recorded in the Singapore morning, which is New York's evening after the close: the holding
+    // has no row for the day yet, so it gets one now, dated the market day it was put on
+    name: "a holding recorded after the close gets its first sample that evening",
+    outcomes: ["day-filled-after-hours", "sample-recorded"],
+    world: world({
+      clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
+      tables: { positions: [position({ id: "pos-1", opened_at: "2026-11-09" })] },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // a session missed whole — a reboot waiting at the FileVault login, OpenD waiting for one — is
+    // filled that evening rather than left as a hole the vol chain cannot cross
+    name: "a day whose session was missed is filled after hours",
+    outcomes: ["day-filled-after-hours", "sample-recorded"],
+    world: world({
+      clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, observed_on: "2026-11-08", dte: 40 }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // the first sweep after midnight filled the day from overnight marks; the session was then
+    // missed; the service is back at 20:30 and the evening's reading replaces that fill
+    name: "a midnight fill is replaced by the evening's reading after a missed session",
+    outcomes: ["provisional-row-replaced-after-hours", "sample-rewritten-when-it-moves"],
+    world: world({
+      clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        // filled at 00:05 that day, from marks that have moved since
+        position_samples: [{ ...todays, cost_to_close: 3.5, observed_at: "2026-11-09 05:05:00.000000" }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // a Saturday: filled just after midnight, and nothing has moved since — but the row is restamped
+    // in the hours, so it reads as that day's close carried forward rather than an overnight mark
+    name: "a weekend's midnight fill is restamped in the hours though nothing moved",
+    outcomes: ["provisional-row-restamped-in-hours"],
+    world: world({
+      clock: "2026-11-07T16:00:00.000Z", // 11:00 on Saturday 7 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [
+          { ...todays, observed_on: "2026-11-07", dte: 41, observed_at: "2026-11-07 05:05:00.000000" },
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // before the open only a missing row is filled: the midnight fill stands, though the overnight
+    // marks have moved since
+    name: "before the open a row already filled is left alone",
+    outcomes: ["row-left-alone-before-the-open"],
+    world: world({
+      clock: "2026-11-09T10:00:00.000Z", // 05:00 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, cost_to_close: 3.5, observed_at: "2026-11-09 05:05:00.000000" }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // settled at 20:30, so a mark that moves before midnight does not reach it
+    name: "a row settled after the close is left alone up to midnight",
+    outcomes: ["complete-row-left-alone-after-hours"],
+    world: world({
+      clock: "2026-11-10T04:59:00.000Z", // 23:59 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, cost_to_close: 3.5, observed_at: "2026-11-10 01:30:00.000000" }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // the feed withheld the vegas all session: the evening's sweep has them, and completes the row
+    name: "a day's row without its vegas is completed after hours",
+    outcomes: ["incomplete-row-completed-after-hours", "sample-rewritten-when-it-moves"],
+    world: world({
+      clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, legs_vega: null }],
+      },
       provider: { quotes: BOOK },
     }),
   },
