@@ -15,9 +15,11 @@ than inherited: no bot flag and no Telegram token, so a boot cannot become a sec
 consumer or send the owner a message (CLAUDE.md), and `PORT=0` by default, so the port each case takes
 first is never the live one.
 
-**The bot is not ported** (`__main__.py` says so, as a partial port must): `TestTheBotIsNotPortedYet`
-holds what the process does meanwhile, and goes when the bot lands. No test of the TypeScript's waits
-for it — `main.test.ts` never starts the bot.
+**The bot** has no boot test in the TypeScript — `main.test.ts` never starts it, because the only
+Telegram its process can reach is the real one. `TestTheBot` boots it against a fake Telegram on
+127.0.0.1 instead, with a fake token, through a script that points `telegram.API` there before `main`
+runs: what it holds is `main.ts`'s condition — the flag AND both of Telegram's settings, or no bot and
+not one call to Telegram — and that a started bot publishes its menu, drains the backlog and answers.
 
 **What only the Python can get wrong** is a process that will not stop. Node's `process.exit` ends the
 process whatever is still running; Python's exit joins every thread that is not a daemon, and a vendor
@@ -27,6 +29,8 @@ stops it mid-retry. That case is the one in this suite that runs the real SDK: a
 5737), which nothing answers, so nothing is reached, with a HOME of its own for the SDK's log files.
 """
 
+import http.server
+import json
 import os
 import re
 import signal
@@ -35,8 +39,9 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
@@ -127,20 +132,6 @@ class TestBootingTheService:
         assert "moomoo" in died.stderr, "the message must offer the names that do exist"
 
 
-class TestTheBotIsNotPortedYet:
-    """The bot is the part of `main.ts` the Python does not have yet (a partial port: ABSENT, never
-    stubbed). Running without it while the plist asks for it would be the quietest failure there is —
-    every command the owner sends unanswered, and nothing saying why — so the flag is refused, and
-    refused before anything is touched. Goes when the bot is ported."""
-
-    def test_refuses_the_bot_flag_before_it_touches_anything_and_says_the_bot_is_not_ported(self, tmp_path):
-        db = tmp_path / "never-opened.db"
-        died = boot({"OPTIONALITY_BOT": "1", "OPTIONALITY_DB_PATH": str(db)}, cwd=tmp_path)
-        assert died.returncode != 0
-        assert re.search(r"OPTIONALITY_BOT=1: the bot is not ported to the Python yet", died.stderr), died.stderr
-        assert not db.exists(), "a refused boot must not have opened the database"
-
-
 class TestTheEnvFile:
     """`--env-file=.env`, which Node reads for `main.ts` before it runs and `__main__` must read before
     anything else (`entrypoints/http/listen.py`). How the file is PARSED is `tests/test_env.py`'s."""
@@ -190,9 +181,9 @@ class TestDatabase:
 class Running:
     """The service, booted and left running: what it has said so far on each stream, as it says it."""
 
-    def __init__(self, env: dict[str, str], cwd: Path) -> None:
+    def __init__(self, env: dict[str, str], cwd: Path, command: Sequence[str] = ("-m", "optionality_backend")) -> None:
         self.process = subprocess.Popen(
-            [sys.executable, "-m", "optionality_backend"],
+            [sys.executable, *command],
             env=environment(env),
             cwd=cwd,
             stdin=subprocess.DEVNULL,
@@ -249,8 +240,8 @@ class Running:
 def running(tmp_path) -> Iterator:
     started: list[Running] = []
 
-    def start(env: dict[str, str]) -> Running:
-        service = Running(env, tmp_path)
+    def start(env: dict[str, str], command: Sequence[str] = ("-m", "optionality_backend")) -> Running:
+        service = Running(env, tmp_path, command)
         started.append(service)
         return service
 
@@ -274,7 +265,7 @@ class TestStopping:
         assert started["provider"] == "moomoo"
         assert started["every"] == "60"
         assert started["sources"] == "moomoo, yahoo", "IBKR_HOST is blank, so ibkr is absent"
-        assert started["bot"] == "not started (not ported to the Python yet)"
+        assert started["bot"] == "not started (set OPTIONALITY_BOT=1)"
         port = int(started["port"])
         assert port != 0, "the port actually bound, not the one asked for"
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=5) as answer:
@@ -302,6 +293,144 @@ class TestStopping:
 
         assert service.stop(signal.SIGTERM, timeout=5) == 0
         assert EXITING.match(service.said["stderr"][-1])["code"] == "0"
+
+
+#: `python -m optionality_backend` with Telegram's API at the address given rather than at
+#: api.telegram.org: `telegram.API` is read on every call, so replacing it before `main` runs is enough
+WITH_TELEGRAM = """
+import sys
+from optionality_backend import telegram
+telegram.API = sys.argv[1]
+from optionality_backend.__main__ import main
+main([])
+"""
+
+
+class FakeTelegram:
+    """Telegram's bot API, on 127.0.0.1, and every call a booted service made to it.
+
+    `getUpdates` answers what a real one would after a restart: one update already waiting when the
+    backlog is drained, which must never be answered, and then `/health` from the owner. After that a
+    poll waits a moment and finds nothing, as a long poll does, rather than spinning."""
+
+    TOKEN = "t"
+    CHAT = "42"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, str]]] = []
+        self.answered = threading.Event()
+        self._closing = threading.Event()
+        fake = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode()
+                params = {k: v[0] for k, v in urllib.parse.parse_qs(body, keep_blank_values=True).items()}
+                method = self.path.rsplit("/", 1)[-1]
+                fake.calls.append((method, params))
+                payload = json.dumps({"ok": True, "result": fake.result(method, params)}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, *args: object) -> None:
+                """Quiet: the calls are recorded above."""
+
+        self._server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._server.daemon_threads = True
+        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+        self.api = f"http://127.0.0.1:{self._server.server_address[1]}/bot"
+
+    def result(self, method: str, params: dict[str, str]) -> object:
+        if method == "getUpdates" and params.get("offset") == "-1":
+            return [{"update_id": 7, "message": {"chat": {"id": 42}, "text": "/unwatch everything"}}]
+        if method == "getUpdates" and params.get("offset") == "8":
+            return [{"update_id": 8, "message": {"chat": {"id": 42}, "text": "/health"}}]
+        if method == "getUpdates":
+            self._closing.wait(0.2)
+            return []
+        if method == "sendMessage":
+            self.answered.set()
+            return {}
+        return True
+
+    def methods(self) -> list[str]:
+        return [method for method, _ in self.calls]
+
+    def close(self) -> None:
+        self._closing.set()
+        self._server.shutdown()
+        self._server.server_close()
+
+
+@pytest.fixture
+def telegram() -> Iterator[FakeTelegram]:
+    fake = FakeTelegram()
+    yield fake
+    fake.close()
+
+
+class TestTheBot:
+    """`main.ts`'s condition, which the TypeScript holds with no test: the bot is started only when
+    OPTIONALITY_BOT=1 — which only the plist sets — AND Telegram has both a token and a chat, because
+    the token allows ONE getUpdates consumer (CLAUDE.md)."""
+
+    def test_starts_with_the_flag_and_telegram_configured_drains_the_backlog_and_answers_the_owner(
+        self, running, telegram, tmp_path
+    ):
+        db = tmp_path / "optionality-ts.db"
+        create_database(db).close()
+        env = {"OPTIONALITY_BOT": "1", "TELEGRAM_BOT_TOKEN": telegram.TOKEN, "TELEGRAM_CHAT_ID": telegram.CHAT}
+        service = running({"OPTIONALITY_DB_PATH": str(db), **env}, ("-c", WITH_TELEGRAM, telegram.api))
+        started = service.wait_for("stdout", STARTED)
+        assert started["bot"] == "polling"
+        assert telegram.answered.wait(10), service.transcript()
+
+        # the menu, the backlog drained, then the long poll from one past it: the waiting /unwatch is
+        # never obeyed, and the owner's /health is answered once
+        assert telegram.methods()[:4] == ["setMyCommands", "getUpdates", "getUpdates", "sendMessage"]
+        assert [p for m, p in telegram.calls if m == "getUpdates"][:2] == [
+            {"offset": "-1", "timeout": "0"},
+            {"offset": "8", "timeout": "25"},
+        ]
+        replies = [p for m, p in telegram.calls if m == "sendMessage"]
+        assert len(replies) == 1
+        assert replies[0]["chat_id"] == "42"
+        assert replies[0]["text"].startswith("Service is up.\nalarms: ")
+        assert "telegram bot polling started" in service.said["stdout"]
+
+        # mid-poll, as it always is: the stop does not wait for Telegram
+        assert service.stop(signal.SIGTERM, timeout=5) == 0
+        assert EXITING.match(service.said["stderr"][-1])["code"] == "0"
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            {"OPTIONALITY_BOT": "1"},
+            {"OPTIONALITY_BOT": "1", "TELEGRAM_BOT_TOKEN": FakeTelegram.TOKEN},
+            {"OPTIONALITY_BOT": "1", "TELEGRAM_CHAT_ID": FakeTelegram.CHAT},
+            {"TELEGRAM_BOT_TOKEN": FakeTelegram.TOKEN, "TELEGRAM_CHAT_ID": FakeTelegram.CHAT},
+            # "1" exactly, as `main.ts` compares it: a flag that is merely set is not the plist's
+            {
+                "OPTIONALITY_BOT": "true",
+                "TELEGRAM_BOT_TOKEN": FakeTelegram.TOKEN,
+                "TELEGRAM_CHAT_ID": FakeTelegram.CHAT,
+            },
+        ],
+        ids=["no-telegram", "no-chat", "no-token", "no-flag", "flag-not-1"],
+    )
+    def test_starts_none_without_the_flag_and_both_of_telegram_s_settings_and_asks_telegram_nothing(
+        self, env, running, telegram, tmp_path
+    ):
+        db = tmp_path / "optionality-ts.db"
+        create_database(db).close()
+        service = running({"OPTIONALITY_DB_PATH": str(db), **env}, ("-c", WITH_TELEGRAM, telegram.api))
+        started = service.wait_for("stdout", STARTED)
+        assert started["bot"] == "not started (set OPTIONALITY_BOT=1)"
+        assert service.stop(signal.SIGTERM) == 0
+        assert telegram.calls == [], "no menu, no drain, no poll: nothing that could take the owner's updates"
 
 
 #: a script that installs `__main__`'s loop error handler and lets something go uncaught

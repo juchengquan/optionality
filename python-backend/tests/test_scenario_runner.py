@@ -1,7 +1,7 @@
 """The scenario runner's own logic, on small worlds made here (ADR 0021, phase 2).
 
-While most of the corpus is on the backlog, the corpus can only show the runner skipping it — which a
-runner that compared nothing would also do. These cases are what show it would catch a difference:
+The corpus can only show the runner passing it, or while a scenario was on the backlog skipping it —
+and a runner that compared nothing would do both. These cases are what show it would catch a difference:
 the comparison's strictness, the row diff, the vendors' rules, the order the doors run things in, and
 the backlog's rules, each against a fake backend plugged into the seam — and, since phase 3, what the
 seam builds.
@@ -416,21 +416,6 @@ def test_the_seam_answers_an_update_with_the_real_bot_through_the_world_s_telegr
         service.handle_update({"update_id": 2, "message": {"chat": {"id": 666}, "text": "/quotes"}})
         assert w.replies == [{"chat_id": "42", "text": "Watchlist is empty. Add one with /watch."}]
         assert w.calls == {}
-    finally:
-        service.close()
-        w.close()
-
-
-def test_a_command_the_backend_does_not_have_yet_raises_rather_than_doing_nothing():
-    # the door is built, but the bot is partly ported: what `commands/service.py` answers is absent
-    # until `holdings.py` lands, and an update needing it must fail rather than pass a scenario that
-    # expects silence (see the seam's doc: "an unported door RAISES")
-    w = open_world(world(settings={"API_TOKEN": "tok", "TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "42"}))
-    service = backend.build(w)
-    try:
-        with pytest.raises(LookupError, match="commands/service.py"):
-            service.handle_update({"update_id": 1, "message": {"chat": {"id": 42}, "text": "/help"}})
-        assert w.replies == []
     finally:
         service.close()
         w.close()

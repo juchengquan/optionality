@@ -3,10 +3,11 @@
 backend/src/holdings.ts has no test of its own: its two callers' suites rely on it —
 `routes/positions.test.ts`'s `/positions/values` and "the exit schedule" (ported beside this, in
 `tests/entrypoints/http/routes/test_positions.py`), and the bot's `/holdings` tests in `bot.test.ts`
-(the bot is not ported yet). What those rely on is held here, on the module itself: one batch, asked
-for each contract once and never when nothing is held; the figures per holding in the listing's
-order; a schedule only where an Opened was declared, read with the exit policy in Settings; and a
-batch that fails raising to the caller, which decides whether that is a 502 or a sentence.
+(ported beside the bot, in `tests/entrypoints/bot/test_bot.py`). What those rely on is held here, on
+the module itself: one batch, asked for each contract once and never when nothing is held; the figures
+per holding in the listing's order; a schedule only where an Opened was declared, read with the exit
+policy in Settings; and a batch that fails raising to the caller, which decides whether that is a 502
+or a sentence.
 """
 
 import json

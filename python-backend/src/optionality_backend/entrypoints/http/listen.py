@@ -34,8 +34,7 @@ app is attached once it is ready.
    which point requests stop being answered 503.
 7. **The bot** built, the sweep started (at once and on the interval, with its stall watchdog), and
    the bot started ONLY when `OPTIONALITY_BOT=1` and Telegram is configured: one `getUpdates` consumer
-   per token, and only the plist sets the flag. (The bot is not ported yet: `__main__` refuses the flag,
-   right after the port, rather than run without it.)
+   per token, and only the plist sets the flag.
 8. **Signals and logging**, which `take_port` leaves alone: `__main__` configures where logs go, and on
    SIGTERM — how launchd stops it — stops the bot, the scheduler, `await held.close()`, the vendors and
    the database, in that order, and exits 0.

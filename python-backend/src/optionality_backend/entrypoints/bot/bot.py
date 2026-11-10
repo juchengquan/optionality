@@ -14,10 +14,6 @@ loop in it was also where `/greeks` decided how many decimals a gamma gets. Now 
 function from a context and some words to the text of a reply, the set is a table, and the table can
 be held to the "/" menu that announces it.
 
-**Partly ported**, through the table: `commands/service.py` is not ported yet, so neither is
-`UNKNOWN`, the help text an unrecognised word gets, and `dispatch` raises where the TypeScript falls
-back to it (`commands/__init__.py` says why, and `NOT_YET` what is missing).
-
 **Where the Python differs, and why.**
 
 - **An update is JSON, read as JavaScript reads it.** `update.message?.chat?.id` is `_field` down a
@@ -25,6 +21,10 @@ back to it (`commands/__init__.py` says why, and `NOT_YET` what is missing).
   id and the text are `String(…)` (`format.js_text`), so a numeric id 42 is "42"; and the text is
   trimmed and split on JavaScript's whitespace (`format.JS_WHITESPACE`), not `str.split`'s.
 - **A command may answer its text or an awaitable of it**, and only an awaitable is awaited.
+- **A name is looked up in the table alone.** The TypeScript's table is a plain object, so `/constructor`
+  and `/__proto__` find `Object.prototype`'s members there, which answer no text, and the update fails
+  in the long poll unanswered; here they are words that are no command, and get the help
+  (`commands/__init__.py`).
 - `api` is awaited — `telegram.telegram_api` in the service — and the retry after a failed poll is
   `asyncio.sleep(5)`. Every catch is `except Exception`, never wider, so cancelling the task that
   runs the loop stops it rather than being logged and retried.
@@ -44,7 +44,7 @@ from typing import Any
 
 from ...env import Settings
 from ...ports import QuoteFetcher, SweeperPort
-from .commands import COMMANDS, BotContext
+from .commands import COMMANDS, UNKNOWN, BotContext
 from .format import BOT_COMMANDS, JS_WHITESPACE, js_text
 
 log = logging.getLogger(__name__)
@@ -162,15 +162,7 @@ class TelegramBot:
         parts = _SPACES.split(text)
         first = parts[0]
         name = first.split("@")[0][1:].lower() if first.startswith("/") else ""
-        # `COMMANDS[name] ?? UNKNOWN` in the TypeScript. UNKNOWN is the help, which is
-        # `commands/service.py`'s and not ported yet, so a name the table does not hold raises here
-        # rather than being answered by a stand-in (`commands/__init__.py`).
-        command = COMMANDS.get(name)
-        if command is None:
-            raise LookupError(
-                f"nothing answers {first!r} yet: the help and /health, /help, /holdings and /snapshot "
-                "are commands/service.py's, which is not ported yet"
-            )
+        command = COMMANDS.get(name, UNKNOWN)
         reply = command(self._context(), parts[1:])
         if inspect.isawaitable(reply):
             reply = await reply
