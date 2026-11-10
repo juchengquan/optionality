@@ -1,0 +1,164 @@
+/* PROTOTYPE — throwaway. Variant C, "Price map". Everything is scoped under .vc.
+
+   Three colour families (synthesis §3.4):
+   - DIRECTION  --up / --down: the viewer's setting (data-up), green-up by default
+   - OUTCOME    --gain / --loss: follow the same setting, so green-up users see green gains
+   - ATTENTION  --alarm / --near / --fault / --opp: never flip, and differ from "down" in
+                lightness AND shape (a filled chip with a glyph), so a red market never reads
+                as an alarm. --opp is the fired ENTRY alert: good news, not danger. */
+
+.vc {
+  /* dark first: the phone at night */
+  --bg: oklch(0.17 0.012 255);
+  --panel: oklch(0.21 0.014 255);
+  --panel-2: oklch(0.25 0.016 255);
+  --ink: oklch(0.95 0.005 255);
+  --ink-2: oklch(0.72 0.012 255);
+  --ink-3: oklch(0.55 0.014 255);
+  --rule: oklch(0.32 0.016 255);
+  --grid: oklch(0.27 0.014 255);
+  --accent: oklch(0.74 0.11 250);
+  --held: oklch(0.70 0.10 250);
+  --held-fill: oklch(0.70 0.10 250 / 0.42);
+  --band: oklch(0.80 0.05 250 / 0.10);
+  --band-edge: oklch(0.80 0.05 250 / 0.30);
+  --spot: oklch(0.97 0 0);
+
+  --green: oklch(0.76 0.16 152);
+  --red: oklch(0.68 0.19 25);
+  --up: var(--green);
+  --down: var(--red);
+  --gain: var(--green);
+  --loss: var(--red);
+
+  --alarm: oklch(0.66 0.24 350);       /* magenta-crimson: not the market's red */
+  --alarm-ink: oklch(0.98 0 0);
+  --near: oklch(0.82 0.15 80);         /* amber */
+  --fault: oklch(0.72 0.15 300);       /* violet: unreadable, switched off */
+  --opp: oklch(0.82 0.13 195);         /* teal: an entry worth taking */
+  --opp-ink: oklch(0.2 0.03 195);
+
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100dvh;
+  font-family: ui-sans-serif, -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+.vc[data-up="red"] {
+  --up: var(--red);
+  --down: var(--green);
+  --gain: var(--red);
+  --loss: var(--green);
+}
+.vc[data-entry="same"] { --opp: var(--alarm); --opp-ink: var(--alarm-ink); }
+
+@media (prefers-color-scheme: light) {
+  .vc {
+    --bg: oklch(0.985 0.003 255);
+    --panel: oklch(1 0 0);
+    --panel-2: oklch(0.96 0.005 255);
+    --ink: oklch(0.22 0.015 255);
+    --ink-2: oklch(0.45 0.015 255);
+    --ink-3: oklch(0.6 0.012 255);
+    --rule: oklch(0.88 0.008 255);
+    --grid: oklch(0.93 0.006 255);
+    --accent: oklch(0.52 0.15 255);
+    --held: oklch(0.52 0.14 255);
+    --held-fill: oklch(0.52 0.14 255 / 0.28);
+    --band: oklch(0.55 0.08 255 / 0.08);
+    --band-edge: oklch(0.55 0.08 255 / 0.30);
+    --spot: oklch(0.2 0.01 255);
+    --green: oklch(0.55 0.15 152);
+    --red: oklch(0.56 0.2 25);
+    --alarm: oklch(0.55 0.24 350);
+    --near: oklch(0.66 0.15 70);
+    --fault: oklch(0.52 0.18 300);
+    --opp: oklch(0.58 0.12 200);
+    --opp-ink: oklch(0.99 0 0);
+  }
+  .vc[data-entry="same"] { --opp: var(--alarm); --opp-ink: var(--alarm-ink); }
+}
+
+.vc .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "zero" 1; }
+.vc .muted { color: var(--ink-2); }
+.vc .faint { color: var(--ink-3); }
+.vc .up { color: var(--up); }
+.vc .down { color: var(--down); }
+.vc .gain { color: var(--gain); }
+.vc .loss { color: var(--loss); }
+
+/* chips: the attention family carries a glyph AND a fill, never colour alone */
+.vc .chip {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+  padding: 3px 10px 3px 8px; font-size: 12px; font-weight: 600; line-height: 1.3; white-space: nowrap;
+  border: 1px solid var(--rule); background: var(--panel-2); color: var(--ink);
+}
+.vc .chip[data-tone="alarm"] { background: var(--alarm); border-color: var(--alarm); color: var(--alarm-ink); }
+.vc .chip[data-tone="opportunity"] { background: var(--opp); border-color: var(--opp); color: var(--opp-ink); }
+.vc .chip[data-tone="near"] { background: transparent; border-color: var(--near); color: var(--near); }
+.vc .chip[data-tone="fault"] { background: transparent; border: 1px dashed var(--fault); color: var(--fault); }
+.vc .chip[data-tone="target"] { background: transparent; border-color: var(--gain); color: var(--gain); }
+.vc .chip[data-tone="manage"] { background: transparent; border-color: var(--near); color: var(--near); }
+
+.vc button { cursor: pointer; }
+.vc .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px;
+  padding: 0 14px; border-radius: 10px; border: 1px solid var(--rule); background: var(--panel-2);
+  color: var(--ink); font-weight: 600; font-size: 13px;
+}
+.vc .btn:hover { border-color: var(--ink-3); }
+.vc .btn[data-primary] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.vc[data-phone] .btn { height: 44px; min-width: 44px; font-size: 15px; }
+
+.vc .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 10px; padding: 2px; background: var(--panel); }
+.vc .seg button { height: 30px; padding: 0 12px; border-radius: 8px; color: var(--ink-2); font-weight: 600; font-size: 13px; }
+.vc .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); }
+.vc[data-phone] .seg button { height: 40px; min-width: 44px; font-size: 15px; }
+
+.vc input, .vc select {
+  height: 36px; border-radius: 8px; border: 1px solid var(--rule); background: var(--panel);
+  color: var(--ink); padding: 0 10px; font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.vc[data-phone] input, .vc[data-phone] select { height: 44px; font-size: 16px; }
+.vc .field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); font-weight: 600; }
+
+/* the map */
+.vc .map text { font-family: inherit; font-variant-numeric: tabular-nums; }
+.vc .bar { cursor: pointer; }
+.vc .bar:focus-visible { outline: none; }
+.vc .bar:focus-visible rect.body, .vc .bar:hover rect.body { stroke-width: 2.5; }
+.vc .glow { filter: drop-shadow(0 0 6px var(--opp)); }
+@keyframes vc-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
+.vc .pulse { animation: vc-pulse 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .vc .pulse { animation: none; } .vc .glow { filter: none; } }
+
+/* drawer: docked on the desk, a bottom sheet on the phone */
+.vc .drawer { background: var(--panel); border-left: 1px solid var(--rule); }
+.vc .sheet-backdrop { position: fixed; inset: 0; background: oklch(0 0 0 / 0.5); z-index: 40; }
+.vc .sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 88dvh; overflow-y: auto;
+  background: var(--panel); border-top-left-radius: 18px; border-top-right-radius: 18px;
+  border-top: 1px solid var(--rule); padding-bottom: max(16px, env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 40px oklch(0 0 0 / 0.35);
+}
+.vc .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--rule); margin: 8px auto 4px; }
+
+.vc .toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 60;
+  background: var(--ink); color: var(--bg); border-radius: 12px; padding: 10px 16px; font-weight: 600;
+  box-shadow: 0 8px 30px oklch(0 0 0 / 0.35); white-space: nowrap;
+}
+
+.vc .hairline { border-color: var(--rule); }
+.vc .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; }
+.vc .kpi { display: grid; gap: 2px; }
+.vc .kpi .k { font-size: 11px; color: var(--ink-3); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.vc .kpi .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* fixes from the measured pass: phone targets reach 44px, and form fields fill their grid cell */
+.vc[data-phone] .seg button { height: 44px; }
+.vc[data-phone] .chip { min-height: 44px; }
+.vc label.field input, .vc label.field select { width: 100%; min-width: 0; }
+
+.vc .nowrap { white-space: nowrap; }
