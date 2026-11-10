@@ -1,10 +1,7 @@
 """The app itself: what is open, what needs a token, and what a refusal leaves in the log.
 
-Port of backend/src/entrypoints/http/app.test.ts — PARTLY, as `app.py` is: the tests that need a
-route the Python does not serve yet wait for it. Not ported yet: "names the method, the path and the
-status of a refusal it threw" and "the error shape" (a 422 from POST /positions), "names one a route
-THREW" (GET /positions/:id/vol — its path through the app is held meanwhile by `test_errors.py`) and
-"names a write that SUCCEEDED" (POST /positions).
+Port of backend/src/entrypoints/http/app.test.ts. Every test comes across; the TypeScript's spy on
+`console.error` and `console.log` is pytest's `caplog` on the app's logger, at ERROR and INFO.
 
 What only the Python can get wrong is at the end: FastAPI and Starlette answer differently from Hono
 wherever nobody told them otherwise, and those differences are invisible to a scenario that only ever
@@ -21,7 +18,7 @@ import optionality
 import pytest
 import uvicorn
 from fastapi.openapi.utils import get_openapi
-from harness import TOKEN
+from harness import TOKEN, json_body
 
 from optionality_backend.db.queries import insert_position
 
@@ -54,13 +51,8 @@ SURFACE = {
 #: empty. Holding the Python to the WHOLE surface less this is what keeps an unported route ABSENT — a
 #: half-built one would answer, and a scenario could pass by accident.
 NOT_YET = {
-    "DELETE /positions/:id",
     "GET /docs",
     "GET /openapi.json",
-    "GET /positions/:id/vol",
-    "GET /positions/values",
-    "PATCH /positions/:id",
-    "POST /positions",
 }
 
 OPEN = ("/health", "/openapi.json", "/docs")
@@ -221,8 +213,32 @@ class TestTheBearerToken:
 
 
 class TestARefusalInTheLog:
-    """A rejected write left no trace on the service at all (2026-10-19): there was no way to tell
-    from this side whether the request had even arrived."""
+    """A rejected write left no trace on the service at all.
+
+    2026-10-19: a holding would not record, and there was no way to tell from this side whether the
+    request had even arrived — `onError` formatted the {detail} body and returned it without a word,
+    and a 401 from the auth middleware never reached `onError` in the first place. The only way to
+    split "the browser never sent it" from "the service refused it" was to probe the API by hand."""
+
+    async def test_names_the_method_the_path_and_the_status_of_a_refusal_it_threw(self, start, caplog):
+        with caplog.at_level(logging.ERROR, logger=LOG):
+            await start().call("/positions", **json_body({"name": 1}))
+        lines = [m for m in caplog.messages if "422" in m]
+        assert len(lines) == 1, f"expected exactly one 422 line; saw {caplog.messages}"
+        assert "POST" in lines[0]
+        assert "/positions" in lines[0]
+        assert "detail" in lines[0], "and what was wrong with it"
+
+    async def test_names_one_a_route_threw_which_is_a_different_path_through_the_app(self, start, caplog):
+        # http_error/not_found raise an HTTPException that the app turns into the {detail} body. A
+        # mutation sweep showed the other two cases here are both RETURNED — `valid()` answers 422
+        # itself — so without this the raised path was logged by nothing and nothing noticed.
+        with caplog.at_level(logging.ERROR, logger=LOG):
+            await start().call("/positions/ghost/vol")
+        lines = [m for m in caplog.messages if "404" in m]
+        assert len(lines) == 1, f"expected exactly one 404 line; saw {caplog.messages}"
+        assert "/positions/ghost/vol" in lines[0]
+        assert "position not found" in lines[0], "and why"
 
     async def test_names_one_it_merely_returned_which_never_passes_through_on_error(self, start, caplog):
         # the auth middleware answers 401 rather than raising
@@ -238,6 +254,37 @@ class TestARefusalInTheLog:
             await start().call("/health", anonymous=True)
         assert [m for m in caplog.messages if "/health" in m] == []
 
+    async def test_names_a_write_that_succeeded_because_a_refusal_is_not_the_only_thing_worth_seeing(
+        self, start, caplog
+    ):
+        # 2026-10-19, the second half of the same incident: with refusals logged, a press to record the
+        # 11-30 spread still produced no line and no row. "The service refused nothing" and "the service
+        # was never asked" then read identically, so the log still could not say whether the browser
+        # had sent anything. A write is rare and owner-initiated — the flood the test above guards
+        # against is GETs — so every write says so, whatever its status.
+        with caplog.at_level(logging.INFO, logger=LOG):
+            resp = await start().call(
+                "/positions",
+                **json_body(
+                    {
+                        "name": "1130_BS_6950",
+                        "strike_date": "2026-11-30",
+                        "contracts": 1,
+                        "entry": 2.35,
+                        "legs": [
+                            {"side": "short", "option_type": "PUT", "strike": 6950},
+                            {"side": "long", "option_type": "PUT", "strike": 6900},
+                        ],
+                    }
+                ),
+            )
+            assert resp.status_code == 201, resp.text
+        line = next((r for r in caplog.records if "/positions" in r.getMessage()), None)
+        assert line is not None, f"nothing logged the write; saw {caplog.messages}"
+        assert "POST" in line.getMessage()
+        assert "201" in line.getMessage()
+        assert line.levelno == logging.INFO, "a write that worked is context, not a refusal"
+
     async def test_still_says_nothing_about_a_get_that_succeeded_which_is_the_flood(self, start, caplog):
         # the log is read by eye during an incident; a line per poll would bury the one that matters
         h = start()
@@ -245,6 +292,19 @@ class TestARefusalInTheLog:
             assert (await h.call("/monitors")).status_code == 200
             assert (await h.call("/health", anonymous=True)).status_code == 200
         assert caplog.messages == []
+
+
+class TestTheErrorShape:
+    async def test_is_the_detail_the_dashboard_reads_on_every_failure_path(self, start):
+        h = start()
+        # 404 from a missing row, 422 from a bad payload, 401 from a missing token — all one shape
+        missing = await h.call("/positions/ghost/vol")
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "position not found"}
+
+        bad = await h.call("/positions", **json_body({"name": 1}))
+        assert bad.status_code == 422
+        assert isinstance(bad.json()["detail"], str)
 
 
 class TestWhatOnlyThePythonCanGetWrong:

@@ -71,21 +71,6 @@ BACKLOG = [
     "bot/watch-with-too-few-words-answers-with-its-usage.json",
     "bot/watchcombo-adds-a-combo-from-signed-legs.json",
     "bot/watchcombo-with-one-leg-answers-with-its-usage.json",
-    "http/delete-positions-id-on-a-holding-that-does-not-exist.json",
-    "http/delete-positions-id-removes-the-holding-with-its-links-and-samples-and-keeps-the-rules.json",
-    "http/get-positions-id-vol-measures-vol-over-the-holding-s-own-samples.json",
-    "http/get-positions-id-vol-on-a-holding-that-does-not-exist.json",
-    "http/get-positions-id-vol-says-nothing-when-the-samples-do-not-reach-back-to-the-open.json",
-    "http/get-positions-values-answers-502-naming-the-provider-when-it-is-down.json",
-    "http/get-positions-values-values-every-holding-from-one-call.json",
-    "http/get-positions-values-with-nothing-held-asks-the-provider-nothing.json",
-    "http/patch-positions-id-on-a-holding-that-does-not-exist.json",
-    "http/patch-positions-id-records-the-entry-and-the-day-it-was-opened.json",
-    "http/patch-positions-id-refuses-an-empty-change.json",
-    "http/post-positions-records-a-holding-and-adopts-the-rule-already-watching-it.json",
-    "http/post-positions-refuses-a-holding-with-no-legs.json",
-    "http/post-positions-refuses-a-leg-the-provider-does-not-know.json",
-    "http/post-positions-refuses-a-name-already-held-without-asking-the-provider.json",
 ]
 
 

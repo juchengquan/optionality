@@ -62,7 +62,6 @@ export const BACKLOG = [
   "entrypoints/bot/commands/watchlist.ts",
   "entrypoints/bot/format.ts",
   "entrypoints/http/openapi.ts",
-  "holdings.ts",
   "main.ts",
 ];
 

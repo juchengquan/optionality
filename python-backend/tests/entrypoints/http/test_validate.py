@@ -1,8 +1,9 @@
 """Request validation that answers the way FastAPI does: a 422 whose `detail` is zod's text.
 
 backend/src/entrypoints/http/validate.ts has no test of its own: its callers' suites rely on it. So
-this holds what they rely on, on a probe route mounted on the harness's app because the routes that
-validate are not ported yet — `routes/monitors.test.ts` on a union validated by the member the body's
+this holds what they rely on, on a probe route mounted on the harness's app — written while the routes
+that validate were not ported, and kept because it holds `valid` apart from any one schema —
+`routes/monitors.test.ts` on a union validated by the member the body's
 shape names, with the member's own message; `routes/positions.test.ts` and the door scenarios on the
 422's `{"detail"}` reading exactly as zod's `prettifyError` writes it; and `app.test.ts` on that 422
 being named in the log, once. What Hono's validator does with a body that is not JSON is held too,

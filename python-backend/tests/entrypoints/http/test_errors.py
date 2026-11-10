@@ -2,8 +2,9 @@
 
 backend/src/entrypoints/http/errors.ts has no test of its own: its callers' suites rely on it —
 `app.test.ts`'s "the error shape" and "names one a route THREW", every route suite's 404 and 409, and
-the market-data routes' 502 naming the Provider. Those routes are not ported yet, so a route raising
-each error is mounted here, and the app answers it as it will answer theirs.
+the market-data routes' 502 naming the Provider. Those are ported now and hold it through the routes;
+these were written while they were not, mounting a route that raises each error, and are kept because
+they hold the shape on its own, whatever any one route does.
 """
 
 import logging
