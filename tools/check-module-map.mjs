@@ -55,7 +55,6 @@ export const PY_ONLY = {
 export const BACKLOG = [
   "entrypoints/bot/commands/service.ts",
   "entrypoints/http/openapi.ts",
-  "main.ts",
 ];
 
 const SKIP_DIRS = new Set(["node_modules", "__pycache__", ".venv", "dist"]);
