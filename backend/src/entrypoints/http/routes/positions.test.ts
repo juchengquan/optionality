@@ -902,3 +902,176 @@ describe("deleting a Position that has been sampled", () => {
     expect((await h.call(`/positions/${id}`, { method: "DELETE" })).status).toBe(204);
   });
 });
+
+describe("closing a holding keeps it (ADR 0022)", () => {
+  // the harness's clock is 2026-10-02T05:26Z, which is still 2026-10-02 in New York
+  const close = (id: string, payload: unknown = {}) =>
+    h.call(`/positions/${id}/close`, json(payload));
+  const monitorRow = (id: string) =>
+    h.db.prepare("select enabled, disabled_reason from monitors where id = ?").get(id) as
+      { enabled: number; disabled_reason: string | null } | undefined;
+  const addSample = (positionId: string, observedOn: string) =>
+    h.db.prepare(
+      "insert into position_samples (position_id, observed_on, dte, cost_to_close) values (?, ?, 30, 2.5)",
+    ).run(positionId, observedOn);
+  const sampleCount = (positionId: string) =>
+    (h.db.prepare("select count(*) as n from position_samples where position_id = ?")
+      .get(positionId) as { n: number }).n;
+  const legCode = buildSpxCode(EXPIRY, "CALL", 8050);
+
+  it("records the day and the exit, and keeps the legs, the entry and the samples", async () => {
+    start();
+    const pid = await created201(await post(condor({ contracts: 2 })));
+    addSample(pid, "2026-10-01");
+
+    const resp = await close(pid, { exit: 0.4 });
+    const data = await body(resp);
+    expect(resp.status, JSON.stringify(data)).toBe(200);
+    expect(data).toMatchObject({
+      id: pid, closed_on: "2026-10-02", exit: 0.4, entry: 3.0, legs: CONDOR_LEGS,
+      // Entry less Exit across the contracts held, in points: P&L is money and needs a quote
+      realized_points: 5.2,
+      disabled_monitors: [],
+    });
+    expect(sampleCount(pid), "the history survives the close").toBe(1);
+  });
+
+  it("closes without an exit, and then says nothing about what it made", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    const data = await body(await close(pid));
+    expect(data).toMatchObject({ closed_on: "2026-10-02", exit: null, realized_points: null });
+  });
+
+  it("takes the day it was closed when it is given, the way Opened is", async () => {
+    start();
+    const pid = await created201(await post(condor({ opened_at: "2026-09-01" })));
+    const data = await body(await close(pid, { exit: 0.4, closed_on: "20260930" }));
+    expect(data.closed_on).toBe("2026-09-30");
+  });
+
+  it("defaults to the expiry for a holding closed after it, since nothing is held past one", async () => {
+    // an iron condor that expired worthless on 09-25 and was only told to the app today
+    start();
+    const pid = await created201(await post(condor({ strike_date: "2026-09-25" })));
+    const data = await body(await close(pid, { exit: 0 }));
+    expect(data).toMatchObject({ closed_on: "2026-09-25", exit: 0, realized_points: 3 });
+  });
+
+  it("refuses a day before it was opened, and a day after its expiry", async () => {
+    start();
+    const pid = await created201(await post(condor({ opened_at: "2026-09-01" })));
+    const early = await close(pid, { closed_on: "2026-08-31" });
+    expect(early.status).toBe(422);
+    expect((await body(early)).detail).toMatch(/before it was opened/);
+    const late = await close(pid, { closed_on: "2026-12-19" });
+    expect(late.status).toBe(422);
+    expect((await body(late)).detail).toMatch(/after its expiry/);
+    const [listed] = await body(await h.call("/positions"));
+    expect(listed.closed_on, "and nothing was written").toBeNull();
+  });
+
+  it("refuses an impossible date and an exit that is not a number", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    expect((await close(pid, { closed_on: "2026-13-01" })).status).toBe(422);
+    expect((await close(pid, { exit: "0.40" })).status).toBe(422);
+  });
+
+  it("is 409 for a holding already closed, and keeps what the first close said", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    await close(pid, { exit: 0.4 });
+    const again = await close(pid, { exit: 9 });
+    expect(again.status).toBe(409);
+    expect((await body(again)).detail).toBe("position '1016_IC' is already closed");
+    const [listed] = await body(await h.call("/positions"));
+    expect(listed.exit).toBe(0.4);
+  });
+
+  it("is a 404 for a holding that was never there", async () => {
+    start();
+    expect((await close("nope", { exit: 0.4 })).status).toBe(404);
+  });
+
+  it("disables the rules watching it, says which, and keeps them", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    const leg = await makeMonitor({ strike_date: EXPIRY, option_type: "CALL", strike: 8050 });
+    const data = await body(await close(pid, { exit: 0.4 }));
+    expect(data.disabled_monitors).toEqual([{ id: leg, code: legCode }]);
+    expect(monitorRow(leg)).toEqual({ enabled: 0, disabled_reason: "holding-closed" });
+    // ...and it stops claiming the holding, so nothing alive is ever valued against a closed one
+    expect(links(leg)).toEqual([[], null]);
+  });
+
+  it("leaves a rule already off as the owner left it, and does not claim to have disabled it", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    const leg = await makeMonitor({ strike_date: EXPIRY, option_type: "CALL", strike: 8050 });
+    await h.call(`/monitors/${leg}`, { ...json({ enabled: false }), method: "PATCH" });
+    const data = await body(await close(pid, { exit: 0.4 }));
+    expect(data.disabled_monitors).toEqual([]);
+    expect(monitorRow(leg)).toEqual({ enabled: 0, disabled_reason: "manual" });
+  });
+
+  it("disables a rule spanning two holdings when EITHER closes, since it would value legs no longer held", async () => {
+    start();
+    const calls = await makePosition("1016_bs_8050", EXPIRY, CONDOR_LEGS.slice(0, 2));
+    const puts = await makePosition("1016_bp_7100", EXPIRY, CONDOR_LEGS.slice(2));
+    const both = await created201(await h.call("/monitors", json({
+      name: "1016_IC", strike_date: EXPIRY, field: "option_delta", threshold: 0.2,
+      direction: "above",
+      legs: [
+        { sign: -1, option_type: "CALL", strike: 8050 },
+        { sign: -1, option_type: "PUT", strike: 7100 },
+      ],
+    })));
+    expect(links(both)[0]).toEqual([calls, puts].sort());
+
+    await close(puts, { exit: 0.1 });
+    expect(monitorRow(both)).toEqual({ enabled: 0, disabled_reason: "holding-closed" });
+    // the link to the holding still held is kept, as deleting the other spread would keep it
+    expect(links(both)[0]).toEqual([calls]);
+  });
+
+  it("is listed with what it made, and left out of everything live", async () => {
+    let calls = 0;
+    start((codes) => { calls += 1; return pricedFetcher(codes); });
+    const pid = await created201(await post(condor()));
+    await close(pid, { exit: 0.4 });
+
+    expect(await body(await h.call("/positions"))).toMatchObject([
+      { id: pid, closed_on: "2026-10-02", exit: 0.4, realized_points: 2.6 },
+    ]);
+    calls = 0;
+    expect(await body(await h.call("/positions/values")), "nothing open is valued").toEqual([]);
+    expect(calls, "and the Provider is asked nothing").toBe(0);
+  });
+
+  it("never adopts a new rule onto a closed holding", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    await close(pid, { exit: 0.4 });
+    const leg = await makeMonitor({ strike_date: EXPIRY, option_type: "CALL", strike: 8050 });
+    expect(links(leg)).toEqual([[], null]);
+  });
+
+  it("lets the same contracts be held again, and the new holding adopts the rules", async () => {
+    start();
+    const first = await created201(await post(condor()));
+    await close(first, { exit: 0.4 });
+    const leg = await makeMonitor({ strike_date: EXPIRY, option_type: "CALL", strike: 8050 });
+    const again = await created201(await post(condor({ name: "1016_IC_again" })));
+    expect(links(leg)).toEqual([[again], "leg"]);
+  });
+
+  it("can still be deleted, for a holding recorded by mistake, and its samples go with it", async () => {
+    start();
+    const pid = await created201(await post(condor()));
+    addSample(pid, "2026-10-01");
+    await close(pid, { exit: 0.4 });
+    expect((await h.call(`/positions/${pid}`, { method: "DELETE" })).status).toBe(204);
+    expect(sampleCount(pid)).toBe(0);
+  });
+});

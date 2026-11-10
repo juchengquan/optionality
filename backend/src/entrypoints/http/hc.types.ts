@@ -85,6 +85,10 @@ async function endpoints() {
       },
     }),
     positionPatched: await client.positions[":id"].$patch({ param: id, json: { entry: 3.0 } }),
+    // a close keeps the holding (ADR 0022); the page reads what it made and which rules it took
+    positionClosed: await (await client.positions[":id"].close.$post({
+      param: id, json: { exit: 0.4 },
+    })).json(),
     positionDeleted: await client.positions[":id"].$delete({ param: id }),
     // the only route reading history. Added in #110 and missed here until a code review pointed
     // at the rule above — the one new route was the one route nothing type-checked, and renaming
@@ -164,6 +168,11 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["values"]>[number]["pnl"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["contract_size"], number | null>>,
   Checked<Known<Ok<E["values"]>[number]["greeks"]>>,
+  // a closed holding, as the Holdings panel's closed list reads it (ADR 0022)
+  Checked<Exactly<Ok<E["positions"]>[number]["closed_on"], string | null>>,
+  Checked<Exactly<Ok<E["positions"]>[number]["exit"], number | null>>,
+  Checked<Exactly<Ok<E["positions"]>[number]["realized_points"], number | null>>,
+  Checked<Exactly<Ok<E["positionClosed"]>["disabled_monitors"], { id: string; code: string }[]>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.

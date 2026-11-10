@@ -9,7 +9,7 @@ import { monitorLegCodes } from "optionality/domain/monitor";
 import { round4 } from "optionality/domain/quote";
 import { atomic } from "./db/open.ts";
 import {
-  enabledMonitors, linkMonitorToPositions, listPositions, orphanMonitors, positionsForMonitor,
+  enabledMonitors, linkMonitorToPositions, openPositions, orphanMonitors, positionsForMonitor,
   positionsForMonitors, setMonitorScope, setPositionEntry, solelyWatchedPositions,
   updateMonitorFields,
 } from "./db/queries/index.ts";
@@ -27,7 +27,9 @@ import type { Position } from "optionality/domain/position";
  *  nothing: a contract nothing holds, and a contract something holds twice.
  */
 export function linkToPositions(db: DatabaseSync, monitorId: string, contracts: string[]): void {
-  const positions = listPositions(db).map(toPosition);
+  // only what is still held: a rule watching a contract of a closed holding watches an option,
+  // not a holding anyone has any more (ADR 0022)
+  const positions = openPositions(db).map(toPosition);
   const { found, scope } = positionsHolding(positions, contracts);
   if (found.size === 0) return;
   updateMonitorFields(db, monitorId, { scope });
@@ -119,7 +121,9 @@ export async function watchlistQuotes(
 export function adoptOrphanMonitors(db: DatabaseSync): void {
   const orphans = orphanMonitors(db);
   if (orphans.length === 0) return;
-  const positions = listPositions(db).map(toPosition);
+  // never onto a closed holding: closing one is what ORPHANED the rules it took (ADR 0022), and
+  // adopting them straight back would undo the close
+  const positions = openPositions(db).map(toPosition);
   for (const row of orphans) {
     const monitor = toMonitor(row);
     const { found, scope } = positionsHolding(positions, monitorLegCodes(monitor));

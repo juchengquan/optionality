@@ -73,7 +73,7 @@ from ..db.queries import (
     delete_monitor_row,
     find_monitor,
     list_monitors,
-    list_positions,
+    open_positions,
     update_monitor_fields,
 )
 from ..db.rows import MonitorRow, PositionRow
@@ -226,9 +226,13 @@ class MonitorSweeper:
 
         # positions join the batch for the dashboard's sake, so an unreadable one costs its own figures
         # and nothing else. A holding is not a rule and cannot be quarantined; the panel shows the gap.
+        #
+        # Only those still HELD. A closed holding is kept with its history (ADR 0022), but it is not
+        # valued, sampled or told it is due a manage-by: its last sample is the record of how it ended,
+        # and a sweep writing one more would rewrite that record with a market it was no longer in.
         position_rows: list[PositionRow] = []
         position_codes: list[str] = []
-        for position in list_positions(db):
+        for position in open_positions(db):
             try:
                 position_codes.extend(position_leg_codes(to_position(position)))
                 position_rows.append(position)

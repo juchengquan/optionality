@@ -11,7 +11,7 @@ import { buildSpxCode } from "./contract.ts";
 import { comboFieldSum, type Monitor } from "./monitor.ts";
 import {
   combinedCostToClose, combinedEntry, combinedPnl, contractSize, costToClose, costToCloseOf,
-  legReadings, positionGreek, positionLegCodes, positionPnl, positionsHolding,
+  legReadings, positionGreek, positionLegCodes, positionPnl, positionsHolding, realizedPoints,
   type ByCode, type Position,
 } from "./position.ts";
 
@@ -195,6 +195,33 @@ describe("P&L", () => {
     const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
     expect(costToClose(p, byCode)).toBe(4.5); // still knows what it costs to close
     expect(positionPnl(p, byCode)).toBeNull(); // but not how that compares to entry
+  });
+});
+
+describe("what a closed holding made", () => {
+  // Points, not money: P&L is money and needs a contract size, which only a Quote carries — and a
+  // holding that is closed is no longer quoted. Entry and Exit are both per contract, in points.
+  it("is Entry less Exit across the contracts held", () => {
+    // sold for 3.00, bought back for 0.40, two contracts
+    expect(realizedPoints(condor(3.0, 2), 0.4)).toBe(5.2);
+  });
+
+  it("is negative when it cost more to close than was taken in", () => {
+    expect(realizedPoints(condor(3.0, 1), 4.5)).toBe(-1.5);
+  });
+
+  it("keeps an expiry worth nothing as the whole entry", () => {
+    expect(realizedPoints(condor(3.0, 3), 0)).toBe(9);
+  });
+
+  it("is unknown without an exit or without an entry, never a fabricated one", () => {
+    expect(realizedPoints(condor(3.0, 1), null)).toBeNull();
+    expect(realizedPoints(condor(null, 1), 0.4)).toBeNull();
+  });
+
+  it("keeps float noise out of a figure read back by a human", () => {
+    // (1.5 − 0.4) × 2 is 2.2000000000000006 in binary floating point
+    expect(realizedPoints(condor(1.5, 2), 0.4)).toBe(2.2);
   });
 });
 

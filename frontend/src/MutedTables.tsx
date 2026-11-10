@@ -15,6 +15,9 @@ export const GROUPS: [string | null, string][] = [
   ["no-figure", "Figure never arrived"],
   ["unreadable", "Could not be read"],
   ["expired", "Expired"],
+  // switched off by closing the holding they watched (ADR 0022): the owner's doing, so beside the
+  // rules muted by hand rather than among the faults
+  ["holding-closed", "Holding closed"],
   ["manual", "Muted by you"],
   [null, "Reason not recorded"],
 ];

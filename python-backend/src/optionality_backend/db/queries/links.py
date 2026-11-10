@@ -9,7 +9,7 @@ altogether (#70, #81). Every row in the live database is linked, so that is not 
 import sqlite3
 from typing import cast
 
-from ..rows import PositionRow
+from ..rows import MonitorRow, PositionRow
 from .sql import rows
 
 
@@ -49,6 +49,22 @@ def positions_for_monitors(db: sqlite3.Connection, monitor_ids: list[str]) -> di
         monitor_id = r.pop("monitor_id")
         owned.setdefault(monitor_id, []).append(cast(PositionRow, r))
     return owned
+
+
+def monitors_watching(db: sqlite3.Connection, position_id: str) -> list[MonitorRow]:
+    """The rules that watch one holding — every Monitor linked to it, in the watchlist's own order of
+    code then field, so whatever reports them reads them as the page lists them."""
+    return cast(
+        list[MonitorRow],
+        rows(
+            db,
+            """select m.* from monitor_positions mp
+               join monitors m on m.id = mp.monitor_id
+               where mp.position_id = ?
+               order by m.code, m.field""",
+            position_id,
+        ),
+    )
 
 
 def positions_for_monitor(db: sqlite3.Connection, monitor_id: str) -> list[PositionRow]:

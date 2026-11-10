@@ -34,7 +34,7 @@ from optionality.expiry import days_to_expiry
 from optionality.position import Position, cost_to_close, position_leg_codes, position_pnl
 from optionality.quote import ByCode, display_records
 
-from .db.queries import list_positions
+from .db.queries import open_positions
 from .db.rows import PositionRow
 from .env import Settings
 from .hydrate import to_position
@@ -117,12 +117,14 @@ def _value(row: PositionRow, position: Position, by_code: ByCode, now: datetime,
 async def holding_values(
     db: sqlite3.Connection, fetch_quotes: QuoteFetcher, now: datetime, settings: Settings, tz: str
 ) -> Valued:
-    """Every holding, valued from ONE batch.
+    """Every holding still held, valued from ONE batch.
 
     Raises if the batch fails: whether that is a 502 or a sentence in a Telegram reply is the caller's
     business, not this module's.
     """
-    rows = list_positions(db)
+    # what is HELD: a closed holding is kept with its history but valued no longer, and must not widen
+    # the batch for contracts nobody holds (ADR 0022)
+    rows = open_positions(db)
     if not rows:
         return Valued(by_code={}, values=[])
 

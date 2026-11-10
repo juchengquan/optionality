@@ -53,6 +53,8 @@ def hold(db, name, legs=CONDOR, **over):
             "created_at": "2026-10-01 00:00:00.000000",
             "opened_at": None,
             "manage_notified_at": None,
+            "closed_on": None,
+            "exit": None,
             **over,
         },
     )

@@ -35,13 +35,17 @@ const StrikeDate = z.string().transform((value, ctx) => {
  *  it is disabled with a notice rather than allowed to fail the sweep for everything else.
  *
  *  "unknown-contract" and "no-figure" are the two Quarantines — the service's own doing, because
- *  the rule cannot be evaluated — and "manual" is the owner's. The dashboard groups its muted
+ *  the rule cannot be evaluated — and "manual" is the owner's. "holding-closed" is the owner's too,
+ *  one step removed: closing a holding switches off the rules that watched it, because a rule left
+ *  on would go on alarming about contracts no longer held (ADR 0022). It is written by the
+ *  `/positions/{id}/close` route, never by the engine, and it sends no notice — the owner did it,
+ *  and the close's own answer says which rules it took. The dashboard groups its muted
  *  tables BY this string, and a reason it has no group for renders in no group at all: the row
  *  disappears from the page while sitting disabled in the database. So the list is published here
  *  and the dashboard is held to it.
  */
 export const DISABLED_REASONS =
-  ["unknown-contract", "no-figure", "unreadable", "expired", "manual"] as const;
+  ["unknown-contract", "no-figure", "unreadable", "expired", "manual", "holding-closed"] as const;
 export type DisabledReason = (typeof DISABLED_REASONS)[number];
 
 const Direction = z.enum(["above", "below"]);

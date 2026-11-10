@@ -23,7 +23,7 @@ export const COLUMNS = {
   positions: [
     "id", "name", "strategy", "strike_date", "contracts", "entry", "legs", "created_at",
     // appended, because ALTER TABLE adds at the end and a migrated database lists them here
-    "opened_at", "manage_notified_at",
+    "opened_at", "manage_notified_at", "closed_on", "exit",
   ],
   position_samples: [
     "position_id", "observed_on", "dte", "cost_to_close",
@@ -50,7 +50,7 @@ export const NULLABLE = {
   monitors: [
     "legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at",
   ],
-  positions: ["strategy", "entry", "opened_at", "manage_notified_at"],
+  positions: ["strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit"],
   position_samples: ["legs_iv", "legs_vega"],
   monitor_positions: [],
   reference_securities: ["label"],
@@ -76,7 +76,7 @@ export interface MonitorRow {
   /** 0 | 1 */
   enabled: number;
   /** DISABLED_REASONS, or null: "manual" | "expired" | "unknown-contract" | "no-figure"
-   *  | "unreadable". See schemas/monitor.ts, which is where the list lives. */
+   *  | "unreadable" | "holding-closed". See schemas/monitor.ts, which is where the list lives. */
   disabled_reason: string | null;
   /** 0 | 1 */
   triggered: number;
@@ -100,6 +100,12 @@ export interface PositionRow {
   opened_at: string | null;
   /** sent-once marker for the manage-by notice */
   manage_notified_at: string | null;
+  /** the New York market day it was closed, or null while it is still held. A closed holding is
+   *  KEPT, with its samples — closing is not deleting (ADR 0022) */
+  closed_on: string | null;
+  /** what was paid to close it, per contract, in points — Entry's counterpart. Null where the
+   *  owner left it blank when closing; the holding is closed either way (ADR 0022) */
+  exit: number | null;
 }
 
 /** A Reference: a Security kept on the page to read the market by (ADR 0018).

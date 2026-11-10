@@ -36,6 +36,8 @@ def db(tmp_path):
                 "created_at": "2026-11-08 00:00:00.000000",
                 "opened_at": None,
                 "manage_notified_at": None,
+                "closed_on": None,
+                "exit": None,
             },
         )
     yield d

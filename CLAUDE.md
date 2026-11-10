@@ -376,7 +376,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
-  52 of the package's 79 public functions, which is exactly the 52 of the TypeScript domain's 56
+  53 of the package's 80 public functions, which is exactly the 53 of the TypeScript domain's 57
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
   package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
   `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and
@@ -522,7 +522,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   fault: an unknown contract, or a watched figure that has not arrived for `QUARANTINE_AFTER_SILENT_SWEEPS`
   consecutive sweeps (observed, never declared — what a provider serves depends on the account, not on its
   code; 0 only logs). Expired monitors: mute with notice, auto-delete after `EXPIRED_RETENTION_DAYS`.
-  Nothing else is ever auto-deleted.
+  Nothing else is ever auto-deleted. A holding that ends is CLOSED, not deleted (ADR 0022): kept with
+  its samples, out of everything live (`openPositions` — the sweep, `/positions/values`, linking), its
+  rules disabled as `holding-closed` and unlinked, so no monitor is ever linked to a closed holding.
+  What it made is `realized_points` — points, not P&L, because a closed holding has no quote to give a
+  contract size. DELETE is for a holding recorded by mistake, and still takes the samples.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command

@@ -58,7 +58,9 @@
           ],
           "created_at": "2026-11-02 14:30:00.000000",
           "opened_at": "2026-10-12",
-          "manage_notified_at": null
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null
         }
       ],
       "monitors": [],
@@ -84,7 +86,7 @@
           "name": "moomoo",
           "ok": true
         },
-        "golden_cases": "6886db7dcbea",
+        "golden_cases": "eda9c29a9539",
         "monitor": {
           "last_sweep_at": "2026-11-09 22:59:50+08:00",
           "last_sweep_ok": true,

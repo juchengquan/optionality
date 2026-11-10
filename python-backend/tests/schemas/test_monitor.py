@@ -160,4 +160,11 @@ class TestTheRest:
 
     def test_names_every_reason_the_service_disables_a_rule_for(self):
         # the dashboard groups its muted tables by these; a reason with no group hides its row
-        assert DISABLED_REASONS == ("unknown-contract", "no-figure", "unreadable", "expired", "manual")
+        assert DISABLED_REASONS == (
+            "unknown-contract",
+            "no-figure",
+            "unreadable",
+            "expired",
+            "manual",
+            "holding-closed",
+        )
