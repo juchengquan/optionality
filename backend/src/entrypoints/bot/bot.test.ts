@@ -95,6 +95,21 @@ describe("who may command it", () => {
     expect(last()).toContain("/watch");
   });
 
+  it("answers a name every object has with the help, as it answers any other word", async () => {
+    // the table is a plain object, so a bare `COMMANDS[name]` finds what Object.prototype has: a
+    // lower-cased name reaches two of its members. `/constructor` ran `Object` as the command and
+    // its reply, an object, crashed `startsWith`; `/__proto__` called a non-function. Both crashed
+    // handleUpdate, and the owner got no reply at all. The Python's table found nothing and
+    // answered with the help, which is how the port found it.
+    const b = bot();
+    for (const name of ["/constructor", "/__proto__", "/Constructor"]) {
+      sent = [];
+      await b.handleUpdate(update(name));
+      expect(sent, name).toHaveLength(1);
+      expect(last(), name).toContain("/watch");
+    }
+  });
+
   it("takes a command addressed to it by name, as a group chat sends them", async () => {
     await bot().handleUpdate(update("/monitors@optionality_bot"));
     expect(last()).toContain("empty");

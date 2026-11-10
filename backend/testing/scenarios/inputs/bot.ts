@@ -218,6 +218,13 @@ export const BOT: readonly BotInput[] = [
     update: message("what is my delta"),
   },
   {
+    // the TypeScript's table is a plain object, so a name Object.prototype has was found there and
+    // crashed the reply; the Python's mapping never had the bug, and this holds both to the help
+    name: "a name every object has is not a command",
+    world: world(),
+    update: message("/constructor"),
+  },
+  {
     // a reply would confirm the bot exists to whoever found it
     name: "a message from any other chat gets no reply",
     world: world({ tables: held }),

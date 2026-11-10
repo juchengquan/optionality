@@ -134,7 +134,8 @@ export class TelegramBot {
     const parts = text.split(/\s+/);
     const first = parts[0] ?? "";
     const name = first.startsWith("/") ? first.split("@")[0]!.slice(1).toLowerCase() : "";
-    const command = COMMANDS[name] ?? UNKNOWN;
+    // own names only: the table is a plain object, and `/constructor` would otherwise find Object's
+    const command = Object.hasOwn(COMMANDS, name) ? COMMANDS[name]! : UNKNOWN;
     return command(this.context(), parts.slice(1));
   }
 
