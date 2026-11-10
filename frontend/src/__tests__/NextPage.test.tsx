@@ -18,6 +18,7 @@ const spread = {
   quote: null, legs: [{ sign: -1, option_type: "PUT", strike: 7150 }, { sign: 1, option_type: "PUT", strike: 7100 }],
   combo_value: 2, combo_greeks: {}, dte: 38, scope: null, positions: [], cost_to_close: null,
   entry: null, pnl: null, fill: 33, schedule: null, watched: 2, distance: 4.01, in_combos: [],
+  held: false,
 };
 const shortLeg = {
   ...spread, id: "w2", code: "US.SPXW261218P7150000", option_type: "PUT", field: "option_delta",

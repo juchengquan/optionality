@@ -16,6 +16,7 @@ function spread(id: string, date: string, short: number, long: number, over: obj
     legs: [{ sign: -1, option_type: "PUT", strike: short }, { sign: 1, option_type: "PUT", strike: long }],
     combo_value: 2.35, combo_greeks: {}, dte: 38, scope: null, positions: [], cost_to_close: null,
     entry: null, pnl: null, fill: 39, schedule: null, watched: 2.35, distance: 3.66, in_combos: [],
+    held: false,
     ...over,
   };
 }
@@ -32,7 +33,7 @@ const quotes = [
   },
   {
     ...spread("r1", "2026-12-31", 7000, 6950), code: "1231_7000P", field: "option_delta",
-    threshold: 0.3, positions: [{ id: "p1", name: "1231_7000P" }], scope: "all",
+    threshold: 0.3, positions: [{ id: "p1", name: "1231_7000P" }], scope: "all", held: true,
     watched: 0.22, distance: 0.08,
   },
 ];

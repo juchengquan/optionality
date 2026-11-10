@@ -36,10 +36,14 @@ const QUARANTINED: Record<string, string> = {
 };
 
 /** A rule on the watchlist, rather than one about something held: nothing it watches is held.
- *  The link to a holding is discovered by the service (`positions`), so this reads that and
- *  decides nothing about the contracts itself. */
+ *
+ *  The service says so (`held`, `holdsAnyOf`), and this decides nothing about contracts itself.
+ *  Not `positions`, the link to ONE holding, which is empty on a roll day — two holdings share a
+ *  contract, so it names neither — and that read a held spread's stop as good news. A candidate
+ *  sharing a strike with a holding is `held` too, so its signal reads as an alarm: the safe way to
+ *  be wrong, and how `/opt` has always read every rule. */
 export function isEntrySignal(entry: Entry): boolean {
-  return entry.positions.length === 0;
+  return !entry.held;
 }
 
 export function entryName(entry: Entry): string {

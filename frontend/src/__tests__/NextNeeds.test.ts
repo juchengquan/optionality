@@ -17,8 +17,12 @@ const health = (over: Partial<{ ok: boolean; bad: boolean }> = {}) => ({
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 }) as unknown as Health;
 
+/** `held` follows `positions` unless a test says otherwise: a rule linked to a holding watches
+ *  something held. The case where they part — a roll day — states both. */
 function entry(over: Record<string, unknown>): Entry {
+  const linked = ((over.positions as unknown[] | undefined) ?? []).length > 0;
   return {
+    held: linked,
     id: "e1", code: "1218_7150P", strike_date: "2026-12-18", option_type: "CMB",
     field: "mid_price", threshold: 6.01, direction: "above", compare: "abs", triggered: false,
     quote: null, legs: [], combo_value: 2, dte: 38, scope: null, positions: [],
@@ -84,6 +88,14 @@ describe("a fired rule on the watchlist is an entry signal, not an alarm", () =>
   it("calls a rule that watches nothing held an entry signal", () => {
     expect(isEntrySignal(entry({ positions: [] }))).toBe(true);
     expect(isEntrySignal(entry({ positions: [{ id: "p1", name: "1218_7150P" }] }))).toBe(false);
+  });
+
+  it("does not call a roll day's stop good news, though no link names its holding", () => {
+    // two open holdings share the short strike, so the service links neither — but it is held
+    const roll = entry({ code: "1218_7150P", positions: [], held: true, triggered: true });
+    expect(isEntrySignal(roll)).toBe(false);
+    expect(needsYou([roll], [], health(), null))
+      .toEqual([{ kind: "alarm", text: "1218_7150P ringing", ref: "e1" }]);
   });
 
   it("files a fired watchlist rule as an entry and a fired holding rule as an alarm", () => {
