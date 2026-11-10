@@ -90,42 +90,11 @@
       "positions": [],
       "monitors": [
         {
-          "id": "mon-calls",
-          "code": "dec-calls",
-          "strike_date": "2026-12-18",
-          "option_type": "CMB",
-          "strike": 0,
-          "field": "mid_price",
-          "threshold": 4,
-          "direction": "above",
-          "compare": "abs",
-          "legs": [
-            {
-              "sign": -1,
-              "option_type": "CALL",
-              "strike": 7300
-            },
-            {
-              "sign": 1,
-              "option_type": "CALL",
-              "strike": 7350
-            }
-          ],
-          "scope": null,
-          "enabled": 1,
-          "disabled_reason": null,
-          "triggered": 0,
-          "last_value": null,
-          "last_checked_at": null,
-          "last_alarm_at": null,
-          "created_at": "2026-11-02 14:30:00.000000"
-        },
-        {
           "id": "mon-condor",
           "code": "dec-condor",
           "strike_date": "2026-12-18",
           "option_type": "CMB",
-          "strike": 0,
+          "strike": 1,
           "field": "mid_price",
           "threshold": 4,
           "direction": "above",
@@ -251,6 +220,37 @@
           "last_checked_at": null,
           "last_alarm_at": null,
           "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-spread",
+          "code": "dec-calls",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
         }
       ],
       "monitor_positions": [],
@@ -271,7 +271,7 @@
       "status": 200,
       "body": [
         {
-          "id": "mon-calls",
+          "id": "mon-spread",
           "code": "dec-calls",
           "strike_date": "2026-12-18",
           "option_type": "CMB",
@@ -393,8 +393,8 @@
           "scope": null,
           "positions": [],
           "in_combos": [
-            "mon-calls",
-            "mon-condor"
+            "mon-condor",
+            "mon-spread"
           ],
           "cost_to_close": null,
           "schedule": null,

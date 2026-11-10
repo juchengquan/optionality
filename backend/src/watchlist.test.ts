@@ -889,6 +889,18 @@ describe("what a row's sentence reads", () => {
     const [e] = await run(quoting({ [CODE]: { option_delta: "n/a" } }));
     expect([e!.watched, e!.distance, e!.fill, e!.triggered]).toEqual([null, null, null, false]);
   });
+
+  it("serves no figure for an infinite reading, and still rings and fills on it as the sweep would", async () => {
+    // JSON has no Infinity, so in the reply it would fail the schema and take every row with it.
+    // The bar and the bell are decided on it exactly as before — the sweep alarms on it too — so
+    // this row rings with no figure to show, and a null distance says nothing either way
+    monitor({ field: "option_open_interest", threshold: 1000 });
+    for (const reading of [Infinity, "Infinity", -Infinity]) {
+      const [e] = await run(quoting({ [CODE]: { option_open_interest: reading } }));
+      expect([e!.watched, e!.distance, e!.fill, e!.triggered], String(reading))
+        .toEqual([null, null, 100, true]);
+    }
+  });
 });
 
 describe("the spreads a single Contract is a leg of", () => {

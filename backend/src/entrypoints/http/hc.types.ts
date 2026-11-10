@@ -126,6 +126,11 @@ export type HcChecks = [
     NonNullable<Ok<E["quotes"]>[number]["schedule"]>["reached"], "target" | "stop" | null>>,
   Checked<Exactly<
     NonNullable<Ok<E["quotes"]>[number]["schedule"]>["manage_by_due"], boolean>>,
+  // what a rule's sentence reads on the redesigned page (ADR 0023): the figure, how far it has to
+  // go, and the spreads a single Contract is a leg of — each one a field a schema could strip
+  Checked<Exactly<Ok<E["quotes"]>[number]["watched"], number | null>>,
+  Checked<Exactly<Ok<E["quotes"]>[number]["distance"], number | null>>,
+  Checked<Exactly<Ok<E["quotes"]>[number]["in_combos"], string[]>>,
 
   // monitors --------------------------------------------------------------------------
   Checked<Known<Ok<E["monitors"]>>>,
@@ -166,6 +171,8 @@ export type HcChecks = [
     { side: "short" | "long"; option_type: string; strike: number }[]>>,
   Checked<Exactly<Ok<E["values"]>[number]["cost_to_close"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["pnl"], number | null>>,
+  // the share of a credit captured so far, which the redesigned page shows beside the P&L
+  Checked<Exactly<Ok<E["values"]>[number]["captured"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["contract_size"], number | null>>,
   Checked<Known<Ok<E["values"]>[number]["greeks"]>>,
   // a closed holding, as the Holdings panel's closed list reads it (ADR 0022)

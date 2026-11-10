@@ -593,6 +593,26 @@ describe("/quotes", () => {
     expect([sum.watched, sum.distance, sum.triggered, sum.in_combos]).toEqual([0, -10, true, []]);
   });
 
+  it("keeps every row when one rule's reading cannot be written as JSON", async () => {
+    // a field the quote schema does not type passes through, so its Infinity reached `watched`
+    // and the reply schema refused the whole watchlist: one row's figure took down every row
+    h = harness({
+      fetchQuotes: (codes) => Promise.resolve(codes.map((code) => ({
+        code, option_delta: 0.45, option_open_interest: Infinity,
+      }))),
+    });
+    await post(single());
+    const far = (await body(await post(single({
+      strike: 6550, field: "option_open_interest", threshold: 1000,
+    })))).id;
+    const resp = await h.call("/quotes");
+    expect(resp.status).toBe(200);
+    const quotes = await body(resp);
+    expect(quotes).toHaveLength(2);
+    const row = quotes.find((q: { id: string }) => q.id === far);
+    expect([row.watched, row.distance, row.fill, row.triggered]).toEqual([null, null, 100, true]);
+  });
+
   it("answers 502 rather than 500 when the Provider call fails", async () => {
     h = harness({ fetchQuotes: echoThenFail() });
     await post(single());

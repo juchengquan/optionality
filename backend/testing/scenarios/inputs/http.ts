@@ -7,7 +7,7 @@
  */
 import type { HttpRequest, World } from "../format.ts";
 import {
-  BOOK, C7300, C7500, P6350, P6400, EXPIRY, at, combo, except, link, monitor, position, quote,
+  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, at, combo, except, link, monitor, position, quote,
   reference, request, sample, world,
 } from "./fixtures.ts";
 
@@ -188,8 +188,14 @@ export const HTTP: readonly HttpInput[] = [
           monitor({ id: "mon-short-call" }),
           monitor({ id: "mon-short-put", option_type: "PUT", strike: 6400 }),
           monitor({ id: "mon-far-call", strike: 7500 }),
-          combo({ id: "mon-calls" }),
-          combo({ id: "mon-condor", code: "dec-condor", legs: CONDOR_SIGNS }),
+          // the two combos holding the short call ARRIVE out of id order, so its list shows the
+          // sort rather than the order they came in. The watchlist orders by strike_date, legs,
+          // option_type and strike, which cannot tell two combos on one expiry apart, and a tie
+          // arrives as stored — which in a scenario is by id, because the format lists rows by
+          // key. So the condor's strike, which the API stores as 0 for a combo and nothing reads
+          // (its legs carry the strikes), is 1 here: it puts the condor second
+          combo({ id: "mon-spread" }),
+          combo({ id: "mon-condor", code: "dec-condor", strike: 1, legs: CONDOR_SIGNS }),
           combo({
             id: "mon-puts", code: "dec-puts", enabled: 0, disabled_reason: "no-figure",
             legs: [
@@ -199,6 +205,41 @@ export const HTTP: readonly HttpInput[] = [
         ],
       },
       provider: { quotes: WIDE },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a field the quote schema does not type passes through as the Provider sent it, so an
+    // infinite reading reaches the row. JSON cannot write one: it is served as no figure and no
+    // distance, the bar and the bell are decided on it as the sweep decides — full, and ringing —
+    // and every other row is answered as usual
+    name: "GET /quotes rings on an infinite reading it cannot serve, and answers every other row",
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-delta" }),
+          monitor({ id: "mon-interest", strike: 7350, field: "option_open_interest", threshold: 1000 }),
+        ],
+      },
+      provider: {
+        quotes: { ...BOOK, [C7350]: { ...BOOK[C7350], option_open_interest: "Infinity" } },
+      },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a reading that is not a number is no reading: no figure, no distance, no bar and no bell
+    name: "GET /quotes serves a reading that is not a number as no figure",
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-delta" }),
+          monitor({ id: "mon-interest", strike: 7350, field: "option_open_interest", threshold: 1000 }),
+        ],
+      },
+      provider: {
+        quotes: { ...BOOK, [C7350]: { ...BOOK[C7350], option_open_interest: "n/a" } },
+      },
     }),
     request: request("GET", "/quotes"),
   },

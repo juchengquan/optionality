@@ -299,11 +299,13 @@ const EntryOut = z.object({
   entry: z.number().nullable(),
   pnl: z.number().nullable(),
   fill: z.number().nullable(),
-  /** the figure this row is about: the one reading `fill` and `triggered` are drawn from, null
-   *  where it was not priced */
+  /** the figure this row is about: the one reading `fill` and `triggered` are drawn from, raw and
+   *  SIGNED — under compare "abs" those measure its magnitude. Null where it was not priced, or
+   *  where JSON cannot write it; an infinite reading still rings. */
   watched: z.number().nullable(),
-  /** how far `watched` has still to move to breach, in the field's own units: at or below zero
-   *  exactly when `triggered`, and negative by how far past. Null wherever `watched` is. */
+  /** how far `watched` has still to move to breach, in the field's own units: wherever it is a
+   *  number, at or below zero exactly when `triggered`, and negative by how far past. Null
+   *  wherever `watched` is, which says nothing about the bell. */
   distance: z.number().nullable(),
 });
 

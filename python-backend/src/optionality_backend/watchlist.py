@@ -18,9 +18,10 @@ old Python's routes/ui.py and reachable over no endpoint at all.
   compares code points. The two disagree only past the Basic Multilingual Plane, which no contract
   code reaches, but the order is the batch the Provider is asked for and a scenario records it. A
   row's `in_combos` is sorted the same way, for the same reason.
-- **A NaN reading is caught with `math.isnan`**, where the TypeScript asks `Number.isNaN`: the
-  watched figure is a float here whatever the quote held, because `monitor_value` reads it through
-  `optionality.js.number`, as the TypeScript's `monitorValue` reads it through `Number()`.
+- **A figure the reply cannot carry is caught with `math.isfinite`**, where the TypeScript asks
+  `Number.isFinite`: the watched figure is a float here whatever the quote held, because
+  `monitor_value` reads it through `optionality.js.number`, as the TypeScript's `monitorValue` reads
+  it through `Number()`.
 """
 
 import math
@@ -115,10 +116,13 @@ class WatchlistEntry(TypedDict):
     pnl: float | None
     fill: int | None
     #: the figure this row is about — the very reading `fill` and `triggered` are drawn from, so a
-    #: sentence built from it cannot disagree with the bar or the bell. None where it was not priced.
+    #: sentence built from it cannot disagree with the bar or the bell. The raw, SIGNED figure: under
+    #: compare "abs" the bar, the bell and `distance` all measure its magnitude. None where it was not
+    #: priced, and where JSON cannot write it (NaN, ±Infinity) — an infinite reading still rings.
     watched: float | None
-    #: how far `watched` still has to move to breach, in the field's own units: at or below zero exactly
-    #: when `triggered` (`threshold_distance`). None wherever `watched` is.
+    #: how far `watched` still has to move to breach, in the field's own units: wherever it is a number,
+    #: at or below zero exactly when `triggered` (`threshold_distance`). None wherever `watched` is, which
+    #: says nothing about the bell.
     distance: float | None
     schedule: Schedule | None
 
@@ -254,19 +258,23 @@ def _entry(
     #
     # The price cases are unchanged: under compare 'abs' the sign washes out, so a combo summing to
     # -4.00 and a 4.00 cost to close give the same bell and the same bar.
-    #
-    # A NaN is no reading: the bar and the bell already took it for none, and in the reply it would fail
-    # the schema and take every other row down with it.
-    read = combo_value if is_combo else monitor_value(m, by_code)
-    watched = None if read is None or math.isnan(read) else read
-    entry["watched"] = watched
-    entry["distance"] = threshold_distance(watched, m.threshold, m.direction, m.compare)
+    watched = combo_value if is_combo else monitor_value(m, by_code)
     entry["fill"] = threshold_fill(watched, m.threshold, m.direction, m.compare)
     # An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
     # stored state would be back, by the other door. is_breached is the ENGINE's own predicate fed the
     # ENGINE's own value, so the bell flips at the exact threshold and cannot drift from how an alarm is
-    # decided.
+    # decided. A NaN is unreadable and rings nothing, as the sweep's own comparison says.
     entry["triggered"] = watched is not None and is_breached(watched, m.threshold, m.direction, m.compare)
+    # The figure and its distance are SERVED only where JSON can write them. A NaN or an infinite reading
+    # in the reply fails its schema and takes every other row of the watchlist down with it, so it is
+    # served as no figure — a field the quote schema does not type can carry either. The bar and the bell
+    # above are still decided on it: an infinite reading rings, as the sweep alarms on it, and its row
+    # shows a bell with no figure and no distance beside it.
+    served = _servable(watched)
+    entry["watched"] = served
+    entry["distance"] = (
+        None if served is None else _servable(threshold_distance(served, m.threshold, m.direction, m.compare))
+    )
 
     # Built from THIS entry's own cost to close, so the gap is the gap against the figure the row
     # shows. Fetching /positions/values beside it on the dashboard would compute it against a different
@@ -278,6 +286,11 @@ def _entry(
         if levels is not None:
             entry["schedule"] = {"dte_at_open": opened_dte, "position_id": cast(str, held.id), **levels.model_dump()}
     return entry
+
+
+def _servable(value: float | None) -> float | None:
+    """A figure as the reply can carry it: a finite number, or None."""
+    return value if value is not None and math.isfinite(value) else None
 
 
 def _js_sorted(values: Iterable[str]) -> list[str]:

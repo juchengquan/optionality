@@ -847,6 +847,17 @@ class TestWhatARowSSentenceReads:
         [e] = await run(quoting({CODE: {"option_delta": "n/a"}}))
         assert [e["watched"], e["distance"], e["fill"], e["triggered"]] == [None, None, None, False]
 
+    async def test_serves_no_figure_for_an_infinite_reading_and_still_rings_and_fills_on_it_as_the_sweep_would(
+        self, monitor, run
+    ):
+        # JSON has no Infinity, so in the reply it would fail the schema and take every row with it. The
+        # bar and the bell are decided on it exactly as before — the sweep alarms on it too — so this row
+        # rings with no figure to show, and a null distance says nothing either way
+        monitor(field="option_open_interest", threshold=1000)
+        for reading in [math.inf, "Infinity", -math.inf]:
+            [e] = await run(quoting({CODE: {"option_open_interest": reading}}))
+            assert [e["watched"], e["distance"], e["fill"], e["triggered"]] == [None, None, 100, True], reading
+
 
 class TestTheSpreadsASingleContractIsALegOf:
     """On the redesigned page a single-Contract rule — a short leg's delta — sits under the spread it

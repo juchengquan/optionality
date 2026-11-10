@@ -56,10 +56,13 @@ export interface WatchlistEntry {
   pnl: number | null;
   fill: number | null;
   /** the figure this row is about — the very reading `fill` and `triggered` are drawn from, so a
-   *  sentence built from it cannot disagree with the bar or the bell. Null where it was not priced. */
+   *  sentence built from it cannot disagree with the bar or the bell. The raw, SIGNED figure: under
+   *  compare "abs" the bar, the bell and `distance` all measure its magnitude. Null where it was
+   *  not priced, and where JSON cannot write it (NaN, ±Infinity) — an infinite reading still rings. */
   watched: number | null;
-  /** how far `watched` still has to move to breach, in the field's own units: at or below zero
-   *  exactly when `triggered` (`thresholdDistance`). Null wherever `watched` is. */
+  /** how far `watched` still has to move to breach, in the field's own units: wherever it is a
+   *  number, at or below zero exactly when `triggered` (`thresholdDistance`). Null wherever
+   *  `watched` is, which says nothing about the bell. */
   distance: number | null;
   /** the exit schedule, or null where there is no single holding to schedule (ADR 0011).
    *
@@ -195,19 +198,24 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     //
     // A single Contract's figure was CAST rather than read through `monitorValue`, which made no
     // difference while only the bar and the bell used it — `Math.abs` and `>=` coerce as `Number()`
-    // does — and would have served text as the figure once it was served itself. A NaN is no
-    // reading: the bar and the bell already took it for none, and in the reply it would fail the
-    // schema and take every other row down with it.
+    // does — and would have served text as the figure once it was served itself.
     const read = isCombo ? comboValue : monitorValue(m, byCode);
-    const watched = read === null || read === undefined || Number.isNaN(read) ? null : read;
-    entry.watched = watched;
-    entry.distance = thresholdDistance(watched, m.threshold, m.direction, m.compare);
+    const watched = read ?? null;
     entry.fill = thresholdFill(watched, m.threshold, m.direction, m.compare);
     // An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
     // stored state would be back, by the other door. isBreached is the ENGINE's own predicate fed
     // the ENGINE's own value, so the bell flips at the exact threshold and cannot drift from how an
-    // alarm is decided.
+    // alarm is decided. A NaN is unreadable and rings nothing, as the sweep's own comparison says.
     entry.triggered = watched !== null && isBreached(watched, m.threshold, m.direction, m.compare);
+    // The figure and its distance are SERVED only where JSON can write them. A NaN or an infinite
+    // reading in the reply fails its schema and takes every other row of the watchlist down with
+    // it, so it is served as no figure — a field the quote schema does not type can carry either.
+    // The bar and the bell above are still decided on it: an infinite reading rings, as the sweep
+    // alarms on it, and its row shows a bell with no figure and no distance beside it.
+    entry.watched = servable(watched);
+    entry.distance = entry.watched === null
+      ? null
+      : servable(thresholdDistance(entry.watched, m.threshold, m.direction, m.compare));
 
     // Built from THIS entry's own cost to close, so the gap is the gap against the figure the row
     // shows. Fetching /positions/values beside it on the dashboard would compute it against a
@@ -220,6 +228,11 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     }
     return entry;
   });
+}
+
+/** A figure as the reply can carry it: a finite number, or null. */
+function servable(value: number | null): number | null {
+  return value !== null && Number.isFinite(value) ? value : null;
 }
 
 /** Every code a batch has to carry for these monitors and the positions they watch.

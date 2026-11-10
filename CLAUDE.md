@@ -393,17 +393,22 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   429, and both surface Yahoo's own field names so the mapping is the same mapping. Only `quotes.py`
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
-  fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
-  59 of the package's 86 public functions (measured 2026-11-10, with `thresholdDistance` and
-  `captured`), which is exactly the 59 of the TypeScript domain's 63
-  exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
-  package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
-  `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and
-  `js.js_string`
-  mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
-  spell the conversion out. Ten more since the IB Gateway client landed: `ibkr.contract_for` and
-  `ibkr.quotes`, held by the recorded conversations and their own tests rather than a corpus, and
-  `no_trading`'s eight, a lint held by fixture sources.
+  fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
+  Counted on 2026-11-10 — every public function a public module of the package defines, against
+  every `fn` in `testdata/golden/` — that is 59 of the package's 86, which is exactly the 59 of the
+  TypeScript domain's 63 exported ones that have cases: the four `*Policy` readers take the
+  service's Settings, so the package takes their knobs directly instead. The other 27, none of them
+  in `testdata/golden/`:
+  - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
+    five, `quotes.verify_contracts`, and `opend.quotes`, the one-shot for a script;
+  - six held to `testdata/vendors/` instead: `yahoo.to_record` and `yahoo.quotes`, and `ibkr`'s four
+    field readers (`grade`, `greek_fields`, `with_mid`, `has_figures`) against `ibkr-fields.json`;
+  - two held by the recorded IB Gateway conversations and their own tests: `ibkr.contract_for` and
+    `ibkr.quotes`;
+  - `no_trading`'s eight, a lint held by fixture sources;
+  - `research/`'s three, cased by nothing by design (ADR 0020);
+  - and `js.js_string`, which mirrors no TypeScript function — the TypeScript interpolates a number
+    where the Python must spell the conversion out.
   **`src/optionality/research/`** is the package's other half, and the only subdirectory: chains,
   historical bars, anything the service never fetches, so it mirrors no TypeScript, no golden case
   holds it and NOTHING CHECKS WHETHER IT IS RIGHT — its own `__init__.py` says so plainly rather

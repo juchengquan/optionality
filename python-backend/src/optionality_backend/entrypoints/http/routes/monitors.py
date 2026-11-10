@@ -398,11 +398,13 @@ class EntryOut(BaseModel):
     entry: float | None
     pnl: float | None
     fill: float | None
-    #: the figure this row is about: the one reading `fill` and `triggered` are drawn from, None where it
-    #: was not priced
+    #: the figure this row is about: the one reading `fill` and `triggered` are drawn from, raw and SIGNED —
+    #: under compare "abs" those measure its magnitude. None where it was not priced, or where JSON cannot
+    #: write it; an infinite reading still rings.
     watched: float | None
-    #: how far `watched` has still to move to breach, in the field's own units: at or below zero exactly
-    #: when `triggered`, and negative by how far past. None wherever `watched` is.
+    #: how far `watched` has still to move to breach, in the field's own units: wherever it is a number, at
+    #: or below zero exactly when `triggered`, and negative by how far past. None wherever `watched` is,
+    #: which says nothing about the bell.
     distance: float | None
 
 

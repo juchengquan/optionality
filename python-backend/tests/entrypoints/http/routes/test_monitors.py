@@ -5,6 +5,7 @@ does. What only the Python can get wrong is at the end.
 """
 
 import json
+import math
 import re
 
 import pytest
@@ -589,6 +590,22 @@ class TestQuotes:
         # 2.00 less 2.00 is nothing, below a threshold of 10: breached, and 10 past it
         total = next(q for q in quotes if q["id"] == spread)
         assert [total["watched"], total["distance"], total["triggered"], total["in_combos"]] == [0, -10, True, []]
+
+    async def test_keeps_every_row_when_one_rule_s_reading_cannot_be_written_as_json(self, start):
+        # a field the quote schema does not type passes through, so its Infinity reached `watched` and
+        # the response model refused the whole watchlist: one row's figure took down every row
+        async def figures(codes):
+            return [{"code": c, "option_delta": 0.45, "option_open_interest": math.inf} for c in codes]
+
+        h = start(fetch_quotes=figures)
+        await post(h, single())
+        far = (await post(h, single(strike=6550, field="option_open_interest", threshold=1000))).json()["id"]
+        resp = await h.call("/quotes")
+        assert resp.status_code == 200
+        quotes = resp.json()
+        assert len(quotes) == 2
+        row = next(q for q in quotes if q["id"] == far)
+        assert [row["watched"], row["distance"], row["fill"], row["triggered"]] == [None, None, 100, True]
 
     async def test_answers_502_rather_than_500_when_the_provider_call_fails(self, start):
         h = start(fetch_quotes=echo_then_fail())
