@@ -12,9 +12,7 @@ with the backend's own `env.settings_from_env`, as `world.ts` does, and builds a
 `create_app` on the same database with the world's id minter and sources, and the sweeper's own
 health account as the `SweeperPort` — as `runHttp` hands the app `sweeper.health`, so a `/health`
 after the earlier sweeps reads what they did; and a `TelegramBot` on the same, as `runBot` builds
-one, answering through the world's Telegram API. The bot is partly ported: a command it does not
-have yet raises from `dispatch`, so a scenario needing one stays on the backlog and its skip says
-which (`entrypoints/bot/commands/__init__.py`).
+one, answering through the world's Telegram API.
 
 This file is the one outside `src/` that reaches the engine's door, declared in
 `tests/test_seams.py` with its reason, as `doors.ts` is in `check-seams`: a sweep scenario is one tick

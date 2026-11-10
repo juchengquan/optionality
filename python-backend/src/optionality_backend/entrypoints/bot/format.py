@@ -9,11 +9,6 @@ into a tag.
 Every string here is asserted character for character in the tests, because they are read on a phone
 and a column that wraps is a table that cannot be read at all.
 
-**Partly ported**: `standing_note`, the one thing worth saying about a holding in `/holdings`' table,
-is ABSENT — only `/holdings` reads it, and `commands/service.py`, which serves that, is not ported yet.
-The help text and the menu name `/holdings` all the same: they are what the bot announces, and
-`commands/__init__.py`'s `NOT_YET` is where the gap between the two is held.
-
 **Where the Python differs, and why.**
 
 - **A cell is measured in UTF-16 code units**, as JavaScript's `.length` and `padEnd` measure it. The
@@ -25,7 +20,8 @@ The help text and the menu name `/holdings` all the same: they are what the bot 
   reimplements: the bot's figures were written by the old Python's `str()` and the TypeScript kept
   them. So here, and only here, the number is NOT `optionality.js.js_string`.
 - **`toFixed` is `fixed`**: the library's `to_fixed` answers `Number(x.toFixed(d))`, a float, and the
-  bot wants the TEXT — JavaScript's rounding, and JavaScript's spelling of -0, NaN and 1e21.
+  bot wants the TEXT — JavaScript's rounding, and JavaScript's spelling of -0, NaN and 1e21. A pace gap
+  of exactly 0.125 is "0.13" in `standing_note`, where Python's format would say "0.12".
 - **`String(value)` of a value whose type is not known is `js_text`**, so a boolean is "true" and a
   whole number "4", as JavaScript writes them.
 - `escape_html` is the standard library's `html.escape`, which is what the TypeScript's reproduces.
@@ -38,6 +34,8 @@ from dataclasses import dataclass
 
 from optionality.js import js_string, to_fixed
 from optionality.monitor import threshold_fault
+
+from ...holdings import HoldingValue
 
 HELP_TEXT = """Commands:
 /holdings — where each Position stands: cost, P&L, pace
@@ -160,6 +158,29 @@ def table(headers: list[str], rows: list[list[str]]) -> str:
         for row in escaped
     ]
     return "<pre>" + "\n".join(lines) + "</pre>"
+
+
+def standing_note(v: HoldingValue) -> str:
+    """The one thing worth saying about a holding, in a cell.
+
+    A Level reached outranks a pace gap: a Target or a Stop is a decision already made, while the gap
+    is only a reading. The gap is said in WORDS, never as a bare sign — CONTEXT.md: "behind" is bad
+    while a positive P&L is good, and a sign beside one invites reading the other. That rule is
+    PaceLine's on the dashboard, and this is its second home on purpose: forty characters cannot hold
+    the sentence that one writes.
+    """
+    s = v.schedule
+    if s is None:
+        return "—"
+    if s["reached"] == "stop":
+        return "STOP"
+    if s["reached"] == "target":
+        return "TARGET"
+    if s["manage_by_due"]:
+        return "MANAGE"
+    if s["pace_gap"] is None:
+        return "—"
+    return f"{'behind' if s['pace_gap'] > 0 else 'ahead'} {fixed(abs(s['pace_gap']), 2)}"
 
 
 def has_format(field: str) -> bool:

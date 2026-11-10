@@ -1,5 +1,4 @@
-"""The Telegram bot. Port of backend/src/entrypoints/bot/bot.test.ts — PARTLY, as the bot is: the
-commands `commands/service.py` will serve wait for it, and it is the next change.
+"""The Telegram bot. Port of backend/src/entrypoints/bot/bot.test.ts.
 
 Driven through `handle_update` with a fake API, exactly as the TypeScript's tests are — and for a
 reason that is not convenience: the token allows ONE getUpdates consumer, the live service is holding
@@ -7,11 +6,6 @@ it, and a test that reached the real API would either fail or steal the owner's 
 
 Replies are asserted character for character where the formatting is the point. They are read on a
 phone, and a column that wraps is a table that cannot be read at all.
-
-**Not ported yet**, because what they drive is `service.py`'s: "answers anything it does not recognise
-with the help" (the help is what an unrecognised word gets), the `/HEALTH` half of "takes a capitalised
-command" (its `/Monitors` half is here), the three `/holdings` tests under "the live tables", and every
-test under "/snapshot", "/health" and "/help".
 
 What only the Python can get wrong is at the end.
 """
@@ -22,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from harness import FakeProvider, fake_fetcher
+from harness import FakeProvider, FakeSweeper, fake_fetcher
 from optionality.contract import build_spx_code
 from optionality.quote import Batch
 
@@ -35,6 +29,8 @@ from optionality_backend.env import settings_for
 #: Fixed, so a date-relative expectation cannot drift into a different market day overnight.
 NOW = datetime(2026, 10, 2, 5, 0, tzinfo=UTC)
 FUTURE = "2026-11-01"
+#: 45 days before FUTURE, so a holding opened then has a schedule to speak of
+OPENED = "2026-09-17"
 YYMMDD = "261101"
 FAR = "2026-11-11"
 
@@ -116,7 +112,7 @@ def counting(asked: list[list[str]]) -> FakeProvider:
 
 
 def hold(chat: Chat, id_: str, name: str, entry: float, legs: list[dict[str, Any]], strategy: str = "credit_spread"):
-    """A Position, inserted as POST /positions would have stored it (that route is not ported yet)."""
+    """A Position, inserted as POST /positions would have stored it."""
     chat.db.execute(
         "insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at) "
         "values (?, ?, ?, ?, 1, ?, ?, '2026-10-01 00:00:00.000000')",
@@ -134,6 +130,13 @@ class TestWhoMayCommandIt:
         await chat.bot().handle_update({"update_id": 1, "message": {"chat": {"id": 42}}})
         assert chat.sent == []
 
+    async def test_answers_anything_it_does_not_recognise_with_the_help(self, chat):
+        b = chat.bot()
+        await b.handle_update(update("hello there"))
+        assert "/watch" in chat.last()
+        await b.handle_update(update("/nonsense"))
+        assert "/watch" in chat.last()
+
     async def test_takes_a_command_addressed_to_it_by_name_as_a_group_chat_sends_them(self, chat):
         await chat.bot().handle_update(update("/monitors@optionality_bot"))
         assert "empty" in chat.last()
@@ -142,11 +145,12 @@ class TestWhoMayCommandIt:
         # dispatch has lower-cased the name since it was written and nothing asked it to: a mutation
         # sweep removing the `toLowerCase()` left all 82 tests passing. On iOS the first letter of a
         # message is autocapitalised, so `/Monitors` is what actually arrives — and without this it
-        # answers the help text, which reads as the bot not knowing its own command. (The TypeScript's
-        # `/HEALTH` half waits for `service.py`.)
+        # answers the help text, which reads as the bot not knowing its own command.
         b = chat.bot()
         await b.handle_update(update("/Monitors"))
         assert "empty" in chat.last()
+        await b.handle_update(update("/HEALTH"))
+        assert "Service is up" in chat.last()
 
 
 class TestWatch:
@@ -383,6 +387,15 @@ class TestMonitors:
         assert "—" in chat.last()
 
 
+def held_since_opened(chat: Chat, id_: str, name: str) -> None:
+    """A one-leg credit of 2.00, Opened at 45 DTE, as the TypeScript's `/holdings` tests insert it."""
+    chat.db.execute(
+        "insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at, opened_at, "
+        "manage_notified_at) values (?, ?, null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)",
+        (id_, name, FUTURE, to_sqlite_json([{"side": "short", "option_type": "CALL", "strike": 8100}]), OPENED),
+    )
+
+
 def quoting_all(fields: dict[str, Any]) -> FakeProvider:
     return lambda codes: [{"code": c, **fields} for c in codes]
 
@@ -438,6 +451,48 @@ class TestTheLiveTables:
         assert "22.012" in chat.last()
         assert "22.012345" not in chat.last()
         assert "5.89" in chat.last()
+
+    async def test_holdings_says_where_each_position_stands_which_no_other_command_can(self, chat):
+        # thirteen commands and every one about rules: there was no way to ask Telegram about the thing
+        # with money in it. The figures come from holdings.py, the same function the dashboard's
+        # /positions/values asks — not a second definition of cost, P&L and the schedule.
+        b = chat.bot(quoting_all({"mid_price": 1.5, "option_contract_size": 100}))
+        await b.handle_update(update("/holdings"))
+        assert "no holdings" in chat.last().lower(), "and it says so rather than printing an empty table"
+
+        held_since_opened(chat, "p" * 32, "spread")
+
+        await b.handle_update(update("/holdings"))
+        reply = chat.last()
+        assert reply.startswith("<pre>"), "a table reply is <pre> + HTML"
+        assert chat.last_params()["parse_mode"] == "HTML"
+        assert "spread" in reply
+        assert "1.50" in reply  # cost to close, from the mid
+        assert "50" in reply  # P&L: (2.00 - 1.50) x 100
+        assert len(reply.split("\n")[0]) <= 40, "four columns inside forty characters"
+
+    async def test_holdings_says_a_pace_gap_in_words_never_as_a_bare_sign(self, chat):
+        # CONTEXT.md's Pace gap entry: said in words wherever it is shown, "because 'behind' is bad while
+        # a positive P&L is good and a bare sign beside one invites reading the other". A mutation sweep
+        # found this: swapping the words for a signed number broke nothing at all.
+        b = chat.bot(quoting_all({"mid_price": 1.8, "option_contract_size": 100}))
+        held_since_opened(chat, "r" * 32, "pacer")
+
+        await b.handle_update(update("/holdings"))
+        # opened at 45 DTE, now 30: on-pace is 2.00 x sqrt(30/45) = 1.63, and 1.80 costs more. The word
+        # and the figure asserted TOGETHER: the holding was first named "behindOne", so "behind" appeared
+        # in the name column and the assertion could not fail.
+        assert "behind 0.17" in chat.last()
+
+    async def test_holdings_names_a_level_it_has_reached_in_place_of_the_pace(self, chat):
+        # a Target is reached or not reached (CONTEXT.md: Level), and reaching one is the thing worth
+        # saying — the pace gap is what it says when no Level has been
+        b = chat.bot(quoting_all({"mid_price": 0.5, "option_contract_size": 100}))
+        held_since_opened(chat, "q" * 32, "atTarget")
+
+        await b.handle_update(update("/holdings"))
+        # 0.50 is exactly half of a 2.00 credit, which is the Target
+        assert "TARGET" in chat.last()
 
     async def test_shows_an_em_dash_per_missing_field_rather_than_failing_the_table(self, chat):
         b = chat.bot(quoting_all({}))
@@ -620,6 +675,75 @@ class TestLinkingWhichThePythonsBotDoesNotDo:
         assert row(chat.db, "select scope from monitors") == {"scope": None}
 
 
+class TestSnapshot:
+    async def test_shows_the_fields_that_matter_at_the_places_they_deserve(self, chat):
+        b = chat.bot(
+            lambda codes: [
+                {
+                    "code": codes[0],
+                    "name": "SPXW TEST",
+                    "option_delta": 0.512345,
+                    "option_implied_volatility": 21.45678,
+                    "bid_price": 1.0,
+                    "ask_price": 2.0,
+                }
+            ]
+        )
+        await b.handle_update(update(f"/snapshot {FUTURE} CALL 6500"))
+        reply = chat.last()
+        assert reply.startswith("SPXW TEST\n")
+        assert "option_delta: 0.512" in reply
+        assert "0.512345" not in reply
+        assert "option_implied_volatility: 21.457" in reply
+        assert "21.45678" not in reply
+        assert "bid_price: 1.0" in reply  # Python's str(1.0)
+        assert "parse_mode" not in chat.last_params()
+
+    async def test_says_so_when_there_is_no_data_and_when_the_arguments_are_wrong(self, chat):
+        b = chat.bot(lambda codes: [])
+        await b.handle_update(update(f"/snapshot {FUTURE} CALL 6500"))
+        assert chat.last().startswith("No data for US.SPXW")
+        for text in ["/snapshot", f"/snapshot {FUTURE} SIDEWAYS 6500", "/snapshot 18-12-2026 CALL 6500"]:
+            await b.handle_update(update(text))
+            assert "usage" in chat.last().lower(), text
+
+    async def test_says_what_failed_when_opend_does(self, chat):
+        def down(codes: list[str]) -> list[dict[str, Any]]:
+            raise RuntimeError("Client connection failed!")
+
+        await chat.bot(down).handle_update(update(f"/snapshot {FUTURE} CALL 6500"))
+        assert chat.last() == "Snapshot failed: Client connection failed!"
+
+
+class TestHealth:
+    async def test_reports_the_sweep_in_the_display_zone(self, chat):
+        sweeper = FakeSweeper()
+        sweeper.sweep_at = datetime(2026, 8, 10, 3, 35, tzinfo=UTC)
+        sweeper.label = "active"
+        b = chat.bot(echo, {"display_tz": "Asia/Singapore"}, sweeper=sweeper)
+        await b.handle_update(update("/health"))
+        assert chat.last() == "Service is up.\nalarms: active — last sweep 2026-08-10 11:35 +08"
+
+    async def test_says_only_that_it_is_up_when_nothing_else_is_wired(self, chat):
+        await chat.bot().handle_update(update("/health"))
+        assert chat.last() == "Service is up."
+
+    async def test_leaves_out_the_sweep_time_before_the_first_sweep(self, chat):
+        sweeper = FakeSweeper()
+        sweeper.label = "starting"
+        b = chat.bot(echo, {}, sweeper=sweeper)
+        await b.handle_update(update("/health"))
+        assert chat.last() == "Service is up.\nalarms: starting"
+
+
+class TestHelp:
+    async def test_is_plain_text_never_parsed_as_html(self, chat):
+        # a plain reply containing "<0.6" would lose it to a tag
+        await chat.bot().handle_update(update("/help"))
+        assert "parse_mode" not in chat.last_params()
+        assert "/watchcombo" in chat.last()
+
+
 class TestTheCommandMenu:
     async def test_publishes_every_command_each_with_a_description(self, chat):
         await chat.bot().start()
@@ -711,15 +835,14 @@ class TestWhatOnlyThePythonCanGetWrong:
         assert chat.last() == f"No monitor matches '{YYMMDD}\x1cC6500'."
         assert len(chat.monitors()) == 1
 
-    async def test_raises_for_a_command_not_ported_yet_rather_than_answering_for_it(self, chat):
-        # the help, /health, /holdings and /snapshot are `commands/service.py`'s, which is not
-        # ported yet: until it lands they are absent, and an update that needs them fails — logged by
-        # the long poll — rather than being answered by a stand-in (README, "A partial port")
-        b = chat.bot()
-        for text in ["/health", "/help", "/holdings", "/snapshot 2026-11-01 CALL 6500", "what is my delta"]:
-            with pytest.raises(LookupError, match="commands/service.py"):
-                await b.handle_update(update(text))
-        assert chat.sent == []
+    async def test_writes_a_holding_s_cost_and_p_and_l_as_to_fixed_and_math_round_write_them(self, chat):
+        # 2.125 and 12.5 are exact ties: `toFixed` and `Math.round` take them up, where Python's format
+        # and `round` take them to even — "2.12" and 12 — and `str` of a float would say "12.0"
+        hold(chat, "t" * 32, "tie", 2.25, [{"side": "short", "option_type": "CALL", "strike": 8100}])
+        await chat.bot(quoting_all({"mid_price": 2.125, "option_contract_size": 100})).handle_update(
+            update("/holdings")
+        )
+        assert chat.last() == "<pre>holding  cost  P&amp;L  note\ntie      2.13  13       —</pre>"
 
     async def test_runs_until_stopped_answering_each_update_once_and_moving_past_it(self, chat):
         b: TelegramBot

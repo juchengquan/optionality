@@ -1,12 +1,14 @@
 /** `make use`, held without launchd: nothing here runs `launchctl`, writes to ~/Library/LaunchAgents,
  *  backs up a database or reaches port 31415. Switching is driven through a scripted stand-in for
  *  the system, and the CLI only through the subcommands that touch nothing (`check`, `render` into a
- *  temporary file, `installed` with HOME pointed at one). The guard is checked twice over: against
- *  this repository as it stands, where it must refuse, and against fixture trees, where a backlog
- *  that empties and a `__main__` that appears are what let it through.
+ *  temporary file, `installed` with HOME pointed at one). The guard is checked against fixture
+ *  trees, where a backlog that empties and a `__main__` that appears are what let it through, and the
+ *  CLI against a copy of itself inside one. It was checked against this repository too, where it had
+ *  to refuse, until the port of the doors was done (2026-11-10): the backlog emptied, and those tests
+ *  were replaced by the fixture tests they guarded, as they said they would be.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -135,25 +137,6 @@ describe.skipIf(!darwin)("the plist, for each backend", () => {
 });
 
 describe("the guard: the live service never switches to a half-ported Python", () => {
-  it("refuses the Python today, counting the port and naming every door still missing", () => {
-    // Measured, not remembered: the counts below come from the corpus and from Python's own reading
-    // of the backlog, so the test holds while the parallel ports shrink it. When the port is done
-    // the backlog empties, and this test is replaced by the one it guards.
-    const lines = refusals("python", ROOT);
-    const total = DOORS.flatMap((d) => readdirSync(join(ROOT, "testdata/scenarios", d)).filter((f) => f.endsWith(".json"))).length;
-    const backlog = pythonsBacklog();
-    expect(backlog.length).toBeGreaterThan(0);
-    expect(lines[0]).toBe(`${total - backlog.length} of ${total} door scenarios ported`);
-    for (const door of DOORS) {
-      const waiting = backlog.filter((n) => n.startsWith(`${door}/`)).length;
-      if (waiting > 0) expect(lines).toContainEqual(expect.stringMatching(new RegExp(`^  ${door} +${waiting} of \\d+ still on the backlog$`)));
-    }
-    // `__main__.py` is written (the process is ported, less the bot), so the backlog alone refuses:
-    // the guard waits for every door, not for a file that can run
-    expect(existsSync(join(ROOT, "python-backend/src/optionality_backend/__main__.py"))).toBe(true);
-    expect(lines.some((l) => /__main__\.py/.test(l))).toBe(false);
-  });
-
   it("reads the backlog exactly as Python does", () => {
     // the list is Python; this reads its text. `test_scenario_runner.py` holds it to a list written
     // out, and this holds the reading to the interpreter's
@@ -281,7 +264,8 @@ describe.skipIf(!darwin)("switching", () => {
 
   it("refuses the Python before it touches launchd", async () => {
     const sys = scripted();
-    await expect(switchTo("python", options(sys, ROOT))).rejects.toThrow(/door scenarios ported/);
+    await expect(switchTo("python", options(sys, fixture({ backlog: ["bot/s1.json"] }))))
+      .rejects.toThrow(/door scenarios ported/);
     expect(sys.calls).toEqual([]);
   });
 
@@ -341,20 +325,38 @@ describe.skipIf(!darwin)("the command line, through the subcommands that touch n
     encoding: "utf8", env: { ...process.env, DRY_RUN: "", ...env },
   });
 
-  it("refuses the Python today and passes the TypeScript", () => {
-    const python = cli(["check", "python"]);
+  /** The CLI as it runs in `repo`: a copy of the script, whose ROOT is the directory above it, and of
+   *  `check-module-map.mjs`, which it imports for the guard. By its real path, because the script
+   *  runs only when `import.meta.url` is the path it was started by, and the temporary directory is
+   *  reached through a symlink on macOS. */
+  const cliIn = (repo, args, env = {}) => {
+    write(repo, "tools/check-module-map.mjs", readFileSync(join(ROOT, "tools/check-module-map.mjs"), "utf8"));
+    const script = realpathSync(write(repo, "tools/use-backend.mjs", readFileSync(SCRIPT, "utf8")));
+    return spawnSync(process.execPath, [script, ...args], { encoding: "utf8", env: { ...process.env, DRY_RUN: "", ...env } });
+  };
+
+  it("refuses a Python the tree cannot back, and passes the TypeScript", () => {
+    const repo = fixture({ backlog: ["bot/s1.json"] });
+    const python = cliIn(repo, ["check", "python"]);
     expect(python.status).toBe(1);
     expect(python.stderr).toMatch(/refusing to switch to the Python backend[\s\S]*door scenarios ported/);
     expect(python.stderr).toMatch(/make use BACKEND=ts/);
-    expect(cli(["check", "ts"]).status).toBe(0);
+    expect(cliIn(repo, ["check", "ts"]).status).toBe(0);
+  });
+
+  it("passes the Python once the port is done", () => {
+    const python = cliIn(fixture(), ["check", "python"]);
+    expect(python.status, python.stderr).toBe(0);
+    expect(python.stdout).toMatch(/ready to switch com\.optionality\.api to the Python backend/);
   });
 
   it("renders only what the guard allows, and writes nothing when it refuses", () => {
+    const repo = fixture({ backlog: ["bot/s1.json"] });
     const ts = join(dir, "ts.plist");
-    expect(cli(["render", "ts", ts]).status).toBe(0);
+    expect(cliIn(repo, ["render", "ts", ts]).status).toBe(0);
     expect(backendOf(parsed(readFileSync(ts, "utf8")).ProgramArguments)).toBe("ts");
     const python = join(dir, "python.plist");
-    expect(cli(["render", "python", python]).status).toBe(1);
+    expect(cliIn(repo, ["render", "python", python]).status).toBe(1);
     expect(existsSync(python)).toBe(false);
   });
 
@@ -368,9 +370,10 @@ describe.skipIf(!darwin)("the command line, through the subcommands that touch n
   });
 
   it("refuses to run a Python plist this tree cannot back, when deploy asks", () => {
+    const repo = fixture({ backlog: ["bot/s1.json"] });
     const home = join(dir, "home");
-    write(home, `Library/LaunchAgents/${LABEL}.plist`, render("python", ROOT));
-    const found = cli(["installed"], { HOME: home });
+    write(home, `Library/LaunchAgents/${LABEL}.plist`, render("python", repo));
+    const found = cliIn(repo, ["installed"], { HOME: home });
     expect(found.status).toBe(1);
     expect(found.stderr).toMatch(/runs the Python backend[\s\S]*door scenarios ported/);
   });

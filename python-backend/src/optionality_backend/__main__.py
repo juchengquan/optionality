@@ -1,25 +1,18 @@
 """The process: `python -m optionality_backend --env-file=.env`, which is what launchd runs when the
 Python is the live backend (`tools/use-backend.mjs`). Port of backend/src/main.ts.
 
-The whole service: the routes, the alarm engine and its sweep loop, and — once it is ported — the bot.
-It runs from the working tree, as the TypeScript does: uv installs the workspace editable, so what is
-checked out is what runs (ADR 0021).
+The whole service: the routes, the alarm engine and its sweep loop, and the bot. It runs from the
+working tree, as the TypeScript does: uv installs the workspace editable, so what is checked out is
+what runs (ADR 0021).
 
-**The bot is NOT started unless OPTIONALITY_BOT=1.** The token allows one getUpdates consumer
-(CLAUDE.md), and only the launchd plist sets the flag, so `make serve` and every other local run
-cannot become a second consumer and take a random half of the owner's commands.
-
-**Partly ported: the bot.** `entrypoints/bot/` is not ported yet, so it is ABSENT here — not built, not
-started, not stopped — rather than stubbed. And because the flag is the plist's word that this process
-owes the owner a bot, `OPTIONALITY_BOT=1` is REFUSED, before anything is touched, rather than run
-without one: a live service that silently answers no command is the quietest failure there is. So the
-startup line says the bot is not ported where the TypeScript's says how to start it, and the stop has
-nothing to stop first. `tests/test_main.py`'s `TestTheBotIsNotPortedYet` holds the refusal, and goes
-when the bot lands; `main.test.ts` has no test waiting for it.
+**The bot is NOT started unless OPTIONALITY_BOT=1** — and Telegram has both a token and a chat. The
+token allows one getUpdates consumer (CLAUDE.md), and only the launchd plist sets the flag, so `make
+serve` and every other local run cannot become a second consumer and take a random half of the owner's
+commands. It is BUILT either way, as `main.ts` builds it, and stopped first on the way out.
 
 **The order is the lock's** (`entrypoints/http/listen.py` says why each step is where it is): `.env`,
 the port, settings, the database and its migrations, the vendors, the sweep built, the app attached,
-the sweep started, the startup line.
+the bot built, the sweep started, the bot started, the startup line.
 
 **Every way out of this process says so on the way.**
 
@@ -62,8 +55,11 @@ a state nobody has reasoned about, which is worse than a restart launchd will pe
   is noted, and the stop runs once the service is up. **An error nobody caught** is Node's
   `uncaughtException` and `unhandledRejection`; asyncio's one place for both is the loop's exception
   handler, which by default only logs and carries on, so `on_loop_error` makes it fatal. A task started
-  and never awaited — `void sweeper.health.recordStall(age)` — is `unawaited`, which routes its failure
-  there rather than leaving it to the garbage collector to notice.
+  and never awaited — `void sweeper.health.recordStall(age)`, `void bot.run()` — is `unawaited`, which
+  routes its failure there rather than leaving it to the garbage collector to notice, and begins it at
+  once, as JavaScript begins it: the long poll has asked for its first updates by the startup line.
+- **The flag is read from the environment, the rest through Settings**, as `main.ts` reads them: `"1"`
+  exactly, and a token and a chat that are not blank.
 - **Logging is configured here and nowhere else** (README, "Porting a module"): bare lines, as
   `console` prints them, INFO and below to stdout and WARNING and above to stderr, as `console.log` and
   `console.error` split them. The service's own loggers speak at INFO; a library's only at WARNING,
@@ -88,9 +84,10 @@ from optionality.js import number
 from .db.migrate import migrate
 from .db.open import open_database
 from .engine import STALE_AFTER_SWEEPS, MonitorSweeper, Scheduler, SweeperDeps, SweepWatchdog
+from .entrypoints.bot.bot import BotDeps, TelegramBot
 from .entrypoints.http import Deps, create_app, take_port
 from .env import load_env_file, settings_from_env
-from .telegram import telegram_sender
+from .telegram import telegram_api, telegram_sender
 from .vendors import open_vendors
 
 log = logging.getLogger("optionality_backend.__main__")
@@ -198,16 +195,6 @@ async def _run() -> NoReturn:
         log.error("%s: stopping before the database, the vendors or Telegram are touched", err)
         exit_now(1)
 
-    # NOT PORTED: the bot. Refused here, before anything is touched, rather than run without (see the
-    # module docstring). Read straight from the environment, as `main.ts` reads the flag.
-    if os.environ.get("OPTIONALITY_BOT") == "1":
-        log.error(
-            "OPTIONALITY_BOT=1: the bot is not ported to the Python yet (ADR 0021, phase 4), and this "
-            "backend will not run as the live one without it: stopping before the database, the vendors "
-            "or Telegram are touched"
-        )
-        exit_now(1)
-
     settings = settings_from_env()
     db = open_database(settings.db_path)
 
@@ -248,7 +235,15 @@ async def _run() -> NoReturn:
     # never the LAN. Requests stop being answered 503 from here.
     held.serve(create_app(deps))
 
-    # The bot would be built here (NOT PORTED).
+    bot = TelegramBot(
+        BotDeps(
+            db=db,
+            settings=settings,
+            api=telegram_api(settings.telegram_bot_token),
+            fetch_quotes=provider.fetch_quotes,
+            sweeper=sweeper.health,
+        )
+    )
 
     # Sweep at once as well as on the interval. Without that every restart left the alarm engine quiet
     # for a whole MONITOR_INTERVAL_SECONDS — and restarts happen after every merge.
@@ -265,7 +260,13 @@ async def _run() -> NoReturn:
         ),
     )
 
-    # The bot would be started here, when OPTIONALITY_BOT=1 and Telegram is configured (NOT PORTED).
+    # one getUpdates consumer per token: only the plist sets the flag
+    bot_wanted = os.environ.get("OPTIONALITY_BOT") == "1" and bool(
+        settings.telegram_bot_token and settings.telegram_chat_id
+    )
+    if bot_wanted:
+        await bot.start()
+        unawaited(bot.run())
 
     log.info(
         "optionality backend on 127.0.0.1:%d — reading %s, sweeping every %ss, references from %s, bot %s",
@@ -274,11 +275,12 @@ async def _run() -> NoReturn:
         settings.monitor_interval_seconds,
         # every vendor that opened, so the log says which Reference sources this build actually has
         ", ".join(sorted(vendors.sources)),
-        "not started (not ported to the Python yet)",
+        "polling" if bot_wanted else "not started (set OPTIONALITY_BOT=1)",
     )
 
     await stopping.wait()
-    # in `main.ts`'s order: the bot (not ported), the scheduler, the server, the vendors, the database
+    # in `main.ts`'s order: the bot, the scheduler, the server, the vendors, the database
+    bot.stop()
     scheduler.stop_sweep()
     try:
         async with asyncio.timeout(CLOSE_SECONDS):

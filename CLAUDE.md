@@ -7,9 +7,10 @@ the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving 
 Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve table and both agents.
 
 **The service is TypeScript (ADR 0009):** `com.optionality.api` runs `backend/src/main.ts` under node,
-on `data/optionality-ts.db` — and only it, until ADR 0021's port is done: `make use BACKEND=python`
-refuses until then (below). Node runs the TypeScript directly, so what is in the working tree is what
-runs. The Python service it replaced, and the run pipeline (strategy and holdings scans), were deleted in
+on `data/optionality-ts.db` — and only it, until the owner switches it: since 2026-11-10 every door
+scenario passes, `make use BACKEND=python` is refused only for the one module not ported yet,
+`openapi.ts`, and running it once that goes is a drill (below). Node runs the TypeScript directly, so what is in the working tree is what runs. The Python
+service it replaced, and the run pipeline (strategy and holdings scans), were deleted in
 phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them. The Python's own database,
 `data/optionality.db`, was frozen at the 2026-10-02 cutover and never opened again — and no longer
 sits in `data/` at all: it went into `archive/python-era-20261017.tar.gz` in `BACKUP_DIR` on
@@ -91,7 +92,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   backup `make deploy` takes, then boot the running backend out and the chosen one in under the
   same label, and wait for `/health` to answer 200. **`BACKEND=python` is refused** until the port
   is done, printing `N of M door scenarios ported` and each door still missing, then
-  `N of M backend modules ported` and each module with no port; see Workflow & environment.
+  `N of M backend modules ported` and each module with no port. Since 2026-11-10 every door
+  scenario passes, and the one refusal left is `entrypoints/http/openapi.ts` (see Workflow &
+  environment). Never run it to "try" the Python: a drill is the owner's call.
   Never run it to "try" the Python: a drill is the owner's call.
 - TypeScript: `make test-lib` (the library's suite), `make test-api` (the backend's), `make typecheck`,
   **`make check-api`** (every module of BOTH packages loads under Node — `tsc` and vitest both accept
@@ -457,17 +460,19 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   anything.
   **How it starts**: `python -m optionality_backend --env-file=.env`, which is `__main__.py`, the
   port of `main.ts`, in the order `listen.py`'s docstring gives the lock (.env, port, settings,
-  database, vendors, sweep, app, startup line). `entrypoints/http/listen.py` takes the port first, as
-  `listen.ts` does — a socket it binds itself and hands to uvicorn, with `SO_REUSEADDR` as libuv
-  sets it (without it a restart is refused for ~30s by TIME_WAIT and reads "another backend is
-  running") and uvicorn's signal handling, logging and access log off. **Partly ported: the bot**,
-  which is absent, and `OPTIONALITY_BOT=1` is REFUSED right after the port rather than run without
-  it. Every way out is `exit_now` — the exit line, then `os._exit`, as `process.exit` leaves —
-  because the interpreter's own exit joins every non-daemon thread, and the moomoo SDK's connect
-  retries a dead OpenD for ever on one: a stop during an OpenD outage would otherwise wait for
-  launchd's SIGKILL (`tests/test_main.py` boots it against TEST-NET-1 and stops it mid-retry). Its
-  logging sends INFO to stdout and WARNING up to stderr, as `console` splits them, and holds every
-  library at WARNING: httpx2 logs each request at INFO, and Telegram's URL carries the bot token.
+  database, vendors, sweep, app, bot, startup line). `entrypoints/http/listen.py` takes the port
+  first, as `listen.ts` does — a socket it binds itself and hands to uvicorn, with `SO_REUSEADDR` as
+  libuv sets it (without it a restart is refused for ~30s by TIME_WAIT and reads "another backend
+  is running") and uvicorn's signal handling, logging and access log off. The bot is started, as
+  `main.ts` starts it, only when `OPTIONALITY_BOT=1` AND Telegram has a token and a chat, and is
+  stopped first; `tests/test_main.py` boots it against a fake Telegram on 127.0.0.1 (a script
+  points `telegram.API` there), never the real one. Every way out is `exit_now` — the exit line,
+  then `os._exit`, as `process.exit` leaves — because the interpreter's own exit joins every
+  non-daemon thread, and the moomoo SDK's connect retries a dead OpenD for ever on one: a stop
+  during an OpenD outage would otherwise wait for launchd's SIGKILL (`tests/test_main.py` boots it
+  against TEST-NET-1 and stops it mid-retry). Its logging sends INFO to stdout and WARNING up to
+  stderr, as `console` splits them, and holds every library at WARNING: httpx2 logs each request at
+  INFO, and Telegram's URL carries the bot token.
   `.env` reaches it as `--env-file=.env`, read by `env.load_env_file`: Node's own reader ported
   branch for branch and held to the real `node --env-file`, because `python-dotenv` reads the same
   file differently (a `#` inside a value, `${VAR}`).
@@ -587,7 +592,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   backends DO and reach only what a door reaches: `/docs` and `/openapi.json` are nobody's door,
   so with the scenario backlog empty `openapi.ts` would have gone live as the TypeScript's alone.
   Every road to a Python plist goes through it — `make use`, `make launchd-api-install
-  BACKEND=python` and `make deploy`'s restart — and there is no override. **A drill** — the
+  BACKEND=python` and `make deploy`'s restart — and there is no override. Since 2026-11-10 every
+  scenario passes (123 of 123), and its one refusal is the module map's last entry,
+  `entrypoints/http/openapi.ts` — why the Python serves no `/docs` and no `/openapi.json`; ADR
+  0021 leaves open whether they must match. **A drill** — the
   Python live for a while, by hand, then back — is run when the owner asks and never on a
   schedule: only a drill shows launchd, the real vendors and the switch itself working, and it
   waits for the guard. `DRY_RUN=1 node tools/use-backend.mjs switch <backend>` prints the switch

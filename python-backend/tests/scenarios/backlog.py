@@ -33,18 +33,9 @@ SOURCE = Path(__file__)
 #: Not yet ported. Frozen on 2026-11-09 with all 120 scenarios the corpus had; it may only shrink.
 #: Three joined the same day, written in by the fix that added them (POST /monitors' specific
 #: message, FLAPPING_REPEAT_SECONDS) while no Python door existed to port them to: a new scenario
-#: joins only in a diff like that one, and only while its door is still unported.
-BACKLOG = [
-    "bot/a-word-that-is-not-a-command-gets-the-help.json",
-    "bot/health-after-a-sweep-names-when-it-ran.json",
-    "bot/health-on-a-service-that-has-not-swept-yet.json",
-    "bot/help-lists-the-commands.json",
-    "bot/holdings-says-so-when-the-provider-is-down.json",
-    "bot/holdings-values-each-holding-in-a-four-column-table.json",
-    "bot/holdings-with-nothing-held.json",
-    "bot/snapshot-quotes-a-contract-nothing-watches.json",
-    "bot/snapshot-says-when-there-is-no-data.json",
-]
+#: joins only in a diff like that one, and only while its door is still unported. Empty since
+#: 2026-11-10, when the bot's last four commands were ported: every scenario passes.
+BACKLOG = []
 
 
 def findings(corpus: list[str], backlog: list[str]) -> list[str]:

@@ -1,6 +1,6 @@
 """How the bot writes things, asserted character for character (ADR 0009, phase 7). Port of
-backend/src/entrypoints/bot/format.test.ts — all of it: `standing_note`, the one part of `format.py`
-not ported yet, has no test there (`bot.test.ts`'s `/holdings` tests hold it, and they wait for it).
+backend/src/entrypoints/bot/format.test.ts. `standing_note` has no test there: `bot.test.ts`'s
+`/holdings` tests hold it, and so do their ports in `test_bot.py`.
 
 `in` is not enough here, and a mutation sweep proved it: the bot's own tests passed with the column
 padding removed, with one space between columns instead of two, with the HTML escaping applied in the
@@ -15,6 +15,7 @@ What only the Python can get wrong is at the end.
 
 import math
 import re
+from typing import Any
 
 from optionality_backend.entrypoints.bot.format import (
     BOT_COMMANDS,
@@ -26,9 +27,11 @@ from optionality_backend.entrypoints.bot.format import (
     js_text,
     py_number,
     rule_text,
+    standing_note,
     table,
     threshold_error,
 )
+from optionality_backend.holdings import HoldingValue
 
 
 class TestEscapeHtml:
@@ -223,3 +226,25 @@ class TestWhatOnlyThePythonCanGetWrong:
         # boolean included, which Python counts as an int and `typeof` does not count as a number
         assert fmt_value("anything", True) == "true"
         assert fmt_value("option_delta", "0.5") == "0.5"
+
+    def test_says_a_pace_gap_to_javascript_s_two_places(self):
+        # 0.125 is an exact tie, which `toFixed` takes away from zero and Python's format takes to even
+        assert standing(pace_gap=0.125) == "behind 0.13"
+        assert standing(pace_gap=-0.125) == "ahead 0.13"
+
+
+def standing(**schedule: Any) -> str:
+    """`standing_note` of a holding whose schedule says this, which is all of the holding it reads."""
+    full = {
+        "dte_at_open": 45,
+        "on_pace": None,
+        "pace_gap": None,
+        "target": None,
+        "stop": None,
+        "target_dte": None,
+        "manage_by_dte": 21,
+        "reached": None,
+        "manage_by_due": False,
+    }
+    value = HoldingValue(row=None, position=None, cost=None, pnl=None, schedule=full | schedule, dte=30)  # type: ignore[arg-type]
+    return standing_note(value)
