@@ -365,6 +365,50 @@ export const SWEEP: readonly SweepInput[] = [
     }),
   },
   {
+    // the first sweep after midnight filled the day from overnight marks; the session was then
+    // missed; the service is back at 20:30 and the evening's reading replaces that fill
+    name: "a midnight fill is replaced by the evening's reading after a missed session",
+    outcomes: ["provisional-row-replaced-after-hours", "sample-rewritten-when-it-moves"],
+    world: world({
+      clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        // filled at 00:05 that day, from marks that have moved since
+        position_samples: [{ ...todays, cost_to_close: 3.5, observed_at: "2026-11-09 05:05:00.000000" }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // a Saturday: filled just after midnight, and nothing has moved since — but the row is restamped
+    // in the hours, so it reads as that day's close carried forward rather than an overnight mark
+    name: "a weekend's midnight fill is restamped in the hours though nothing moved",
+    outcomes: ["provisional-row-restamped-in-hours"],
+    world: world({
+      clock: "2026-11-07T16:00:00.000Z", // 11:00 on Saturday 7 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [
+          { ...todays, observed_on: "2026-11-07", dte: 41, observed_at: "2026-11-07 05:05:00.000000" },
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // settled at 20:30, so a mark that moves before midnight does not reach it
+    name: "a row settled after the close is left alone up to midnight",
+    outcomes: ["complete-row-left-alone-after-hours"],
+    world: world({
+      clock: "2026-11-10T04:59:00.000Z", // 23:59 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, cost_to_close: 3.5, observed_at: "2026-11-10 01:30:00.000000" }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
     // the feed withheld the vegas all session: the evening's sweep has them, and completes the row
     name: "a day's row without its vegas is completed after hours",
     outcomes: ["incomplete-row-completed-after-hours", "sample-rewritten-when-it-moves"],

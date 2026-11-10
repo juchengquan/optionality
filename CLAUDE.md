@@ -541,9 +541,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 - Daily samples are the day's CLOSE: written freely only from 09:30 to 16:15 New York, the options'
   close (`inSampleHours`), so the last sweep by then stays and no overnight mark replaces it — on EVERY
   calendar day, weekends included, because the vol chain steps exactly one day (ADR 0011, amended
-  2026-11-10). Outside the hours a row is only FILLED (a day with none: a trade recorded after the
-  close, a session missed whole) or COMPLETED (missing IV or vega, from a sweep with both), never
-  changed — `takesSample` — and every write stamps `observed_at`, so an off-close point is marked.
+  2026-11-10). A day with no row is FILLED whatever the hour (a trade recorded after the close, a
+  session missed whole); a row observed before its day's 09:30 is PROVISIONAL — restamped in the hours
+  even if unchanged, replaced after the close — and a settled row is only ever COMPLETED out of hours
+  (missing IV or vega, from a sweep with both), never changed (`takesSample`). Every write stamps
+  `observed_at`, so an off-close point is marked.
   Each carries per-leg IV, vega and delta, all-or-nothing per map, each gated on its own.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed.

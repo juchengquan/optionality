@@ -158,11 +158,12 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
             deltas = leg_readings(position, by_code, "option_delta")
             legs_delta = None if deltas is None else to_sqlite_json(deltas)
 
-            # The day's row as it stands decides whether this sweep may touch it at all: freely inside
-            # the hours, and outside them only to fill a day with no row or complete one without its vol
-            # readings — never to change a settled close.
+            # The day's row as it stands decides what this sweep may do with it: fill it, write it if its
+            # figures moved, restamp or replace a provisional one, complete one without its vol readings
+            # — or nothing, which is how a settled close stays the close (takes_sample).
             stored = find_position_sample(db, row["id"], observed_on)
-            if not takes_sample(at, stored, {"legs_iv": legs_iv, "legs_vega": legs_vega}):
+            write = takes_sample(at, stored, {"legs_iv": legs_iv, "legs_vega": legs_vega})
+            if write == "no":
                 continue
 
             # Only when something actually differs. The sweep runs every 15 seconds and the day's row
@@ -171,7 +172,8 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
             # triples what each one carries. `observed_at` is NOT compared: it stamps a write, so it says
             # when the figures were last seen to change, which is when they were observed.
             if (
-                stored is not None
+                write == "if-changed"
+                and stored is not None
                 and stored["dte"] == dte
                 and stored["cost_to_close"] == cost
                 and stored["legs_iv"] == legs_iv

@@ -334,6 +334,69 @@ describe("recording what a Position was worth", () => {
     ]);
   });
 
+  it("leaves a provisional fill alone before the open: only a missing row is filled then", async () => {
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    now = new Date("2026-10-01T04:05:00Z"); // 00:05 EDT, the first sweep of the day
+    await sweeper(pricing(short, 5.0)).sweep();
+    now = new Date("2026-10-01T09:00:00Z"); // 05:00 EDT, a moved overnight mark
+    await sweeper(pricing(short, 4.0)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-01 04:05:00.000000", iv: 1, vega: 1 },
+    ]);
+  });
+
+  it("replaces the midnight fill with the evening's after a session missed whole", async () => {
+    // the first sweep after New York's midnight fills the day from overnight marks, and that row is
+    // complete; the session is then missed, and the service is back at 20:30. Without this the day
+    // would keep its 00:05 overnight mark rather than the post-close reading
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    now = new Date("2026-10-01T04:05:00Z"); // 00:05 EDT: the midnight fill, provisional
+    await sweeper(pricing(short, 5.0)).sweep();
+    now = new Date("2026-10-02T00:30:00Z"); // 20:30 EDT the same market day: the session was missed
+    await sweeper(pricing(short, 4.0)).sweep();
+    now = new Date("2026-10-02T00:45:00Z"); // and now settled, so a later mark does not move it
+    await sweeper(pricing(short, 3.0)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 3, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
+    ]);
+  });
+
+  it("restamps a weekend's midnight fill in the hours, though nothing moved", async () => {
+    // a Saturday's row is filled just after midnight and nothing trades all day, so the "only when
+    // something differs" check would skip every write and leave it stamped as an overnight mark
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    now = new Date("2026-10-03T04:05:00Z"); // 00:05 EDT on Saturday 3 October
+    await sweeper(pricing(short, 5.0)).sweep();
+    now = new Date("2026-10-03T15:00:00Z"); // 11:00 EDT, the same figures
+    await sweeper(pricing(short, 5.0)).sweep();
+    const restamped = rows();
+    now = new Date("2026-10-03T16:00:00Z"); // 12:00, still the same: settled now, so no write
+    await sweeper(pricing(short, 5.0)).sweep();
+
+    expect(restamped).toEqual([
+      { observed_on: "2026-10-03", cost_to_close: 4, observed_at: "2026-10-03 15:00:00.000000", iv: 1, vega: 1 },
+    ]);
+    expect(rows()).toEqual(restamped);
+  });
+
+  it("leaves a row settled after the close alone up to midnight", async () => {
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    now = new Date("2026-10-02T00:30:00Z"); // 20:30 EDT on 1 October: the day's first row, settled
+    await sweeper(pricing(short, 5.0)).sweep();
+    now = new Date("2026-10-02T03:59:59Z"); // 23:59:59 EDT, a moved mark
+    await sweeper(pricing(short, 3.0)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
+    ]);
+  });
+
   it("records a Position whose Opened nobody has entered yet", async () => {
     // the sample is raw: (DTE, Cost to close) means something without an Opened, and filling the
     // Opened in later makes the history it already collected interpretable. Waiting for the field

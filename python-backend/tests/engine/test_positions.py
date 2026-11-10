@@ -361,6 +361,56 @@ class TestRecordingWhatAPositionWasWorth:
 
         assert self.rows(b) == [("2026-10-01", 3.5, "2026-10-01 13:30:00.000000", 1, 1)]
 
+    async def test_leaves_a_provisional_fill_alone_before_the_open(self, b: Book) -> None:
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 1, 4, 5, tzinfo=UTC)  # 00:05 EDT, the first sweep of the day
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)  # 05:00 EDT, a moved overnight mark
+        await b.sweeper(self.pricing(short, 4.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 4, "2026-10-01 04:05:00.000000", 1, 1)]
+
+    async def test_replaces_the_midnight_fill_with_the_evenings_after_a_session_missed_whole(self, b: Book) -> None:
+        # the first sweep after New York's midnight fills the day from overnight marks; the session is
+        # then missed and the service is back at 20:30 — the evening's reading is the better one
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 1, 4, 5, tzinfo=UTC)  # 00:05 EDT: the midnight fill, provisional
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 EDT the same market day
+        await b.sweeper(self.pricing(short, 4.0)).sweep()
+        b.now = datetime(2026, 10, 2, 0, 45, tzinfo=UTC)  # and now settled, so a later mark does not move it
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 3, "2026-10-02 00:30:00.000000", 1, 1)]
+
+    async def test_restamps_a_weekends_midnight_fill_in_the_hours_though_nothing_moved(self, b: Book) -> None:
+        # nothing trades on a Saturday, so the "only when something differs" check would leave the
+        # midnight fill stamped as an overnight mark for ever
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 3, 4, 5, tzinfo=UTC)  # 00:05 EDT on Saturday 3 October
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)  # 11:00 EDT, the same figures
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        restamped = self.rows(b)
+        b.now = datetime(2026, 10, 3, 16, 0, tzinfo=UTC)  # 12:00, still the same: settled, no write
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+
+        assert restamped == [("2026-10-03", 4, "2026-10-03 15:00:00.000000", 1, 1)]
+        assert self.rows(b) == restamped
+
+    async def test_leaves_a_row_settled_after_the_close_alone_up_to_midnight(self, b: Book) -> None:
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 EDT on 1 October: settled
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 2, 3, 59, 59, tzinfo=UTC)  # 23:59:59 EDT, a moved mark
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+
+        assert self.rows(b) == [("2026-10-01", 4, "2026-10-02 00:30:00.000000", 1, 1)]
+
     async def test_records_a_position_whose_opened_nobody_has_entered_yet(self, b: Book) -> None:
         # the sample is raw: (DTE, Cost to close) means something without an Opened, and filling the
         # Opened in later makes the history it already collected interpretable

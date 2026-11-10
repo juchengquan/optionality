@@ -107,9 +107,10 @@ IV, vega and delta, and when it was observed. It is the day's CLOSE — written 
 16:15 in New York, the options' close, so the last sweep by then is the one that stays and an
 overnight mark never replaces it — on every calendar day, a weekend or a holiday carrying the last
 close forward, because the Vol part chains days exactly one apart. A day with no row is filled
-whenever it is first seen (a trade recorded in New York's evening, a session missed whole), and a
-row without its vol readings is completed after hours; those points are not closes, and their
-observed time says so. Recorded, never derived: none of it can be read again once its day has
+whenever it is first seen (a trade recorded in New York's evening, a session missed whole); a row
+filled before the open is PROVISIONAL, and the session or that evening replaces it; a row without
+its vol readings is completed after hours. Points that are not closes say so by their observed
+time. Recorded, never derived: none of it can be read again once its day has
 passed.
 _Avoid_: snapshot (moomoo's word for a quote), tick, mark
 

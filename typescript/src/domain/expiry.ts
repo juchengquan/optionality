@@ -48,12 +48,17 @@ const SAMPLE_UNTIL = (16 * 60 + 15) * 60_000;
  *  13:00, options 13:15) is static from its close to 16:15, so its row is its close too.
  */
 export function inSampleHours(now: Date = new Date()): boolean {
+  const t = sinceNewYorkMidnight(now);
+  return t >= SAMPLE_FROM && t <= SAMPLE_UNTIL;
+}
+
+/** Milliseconds since midnight in New York at `now`. */
+function sinceNewYorkMidnight(now: Date): number {
   const part = Object.fromEntries(SAMPLE_CLOCK.formatToParts(now).map((p) => [p.type, p.value]));
   // every zone New York has used is a whole number of hours from UTC, so the milliseconds are the
   // same in both and can be read straight off the instant
-  const sinceMidnight = ((Number(part.hour) * 60 + Number(part.minute)) * 60 + Number(part.second))
-    * 1000 + now.getUTCMilliseconds();
-  return sinceMidnight >= SAMPLE_FROM && sinceMidnight <= SAMPLE_UNTIL;
+  return ((Number(part.hour) * 60 + Number(part.minute)) * 60 + Number(part.second)) * 1000
+    + now.getUTCMilliseconds();
 }
 
 /** The two vol readings of a day's row, as stored: JSON text, or null where the feed withheld one. */
@@ -62,35 +67,57 @@ export interface SampleReadings {
   legs_vega: string | null;
 }
 
-/** Whether the sweep at `now` writes the day's row, given the row already stored for that market
- *  day (null if none) and what this sweep read.
+/** The day's row as stored, as far as `takesSample` reads it. */
+export interface StoredSample extends SampleReadings {
+  /** UTC, as the database spells it ("2026-11-09 16:00:00.000000"); null on rows written before
+   *  migration 0009, which are taken as settled */
+  observed_at: string | null;
+}
+
+/** What the sweep does with the day's row: leave it, write it only if its figures moved, or write
+ *  it regardless — the last so a provisional row is restamped even when nothing moved. */
+export type SampleWrite = "no" | "if-changed" | "yes";
+
+/** What the sweep at `now` does with the day's row, given the row already stored for that market
+ *  day (null if none) and the two vol readings this sweep took.
  *
- *  Inside the sample hours, always, as before (`inSampleHours`). Outside them the row is only ever
- *  FILLED or COMPLETED, never changed:
+ *  A stored row is PROVISIONAL when it was observed before its own day's 09:30 open — a fill taken
+ *  from overnight marks — and SETTLED once observed inside the hours or after the close. A row from
+ *  before `observed_at` existed counts as settled: it was written under the old rule, which never
+ *  wrote one in the small hours on purpose, and there is nothing to say otherwise.
  *
- *  - a day with no row yet gets one, whatever the hour. Two things leave a day without one. The
- *    owner records a trade in the Singapore morning, which is New York's evening after the close of
- *    the day it went on, so the holding's first row would otherwise be the next day's and never its
- *    Opened day. And a session can be missed whole — a reboot waiting at the FileVault login, OpenD
- *    waiting for one. `volAttribution` needs a row on Opened and on every day after it, so either
- *    hole blanked the holding's Vol part for good; a row from that evening keeps the chain whole.
- *  - a row the feed left without its IV or its vega is completed by a sweep that has BOTH, because
- *    the chain needs both for every leg on every day. Both, not just the missing one: the row is
- *    written whole from this sweep, so a sweep missing the other map would trade one hole for
- *    another.
- *  - a complete row is left alone: a settled close stays the close however the overnight mark
- *    moves.
+ *  - **no row yet**: written, whatever the hour. Two things leave a day without one. The owner
+ *    records trades in the Singapore morning, New York's evening after the close of the day they
+ *    went on, so the holding's first row would otherwise be the next day's and never its Opened
+ *    day. And a session can be missed whole — a reboot waiting at the FileVault login, OpenD waiting
+ *    for one. `volAttribution` needs a row on Opened and on every day after, so either hole blanked
+ *    the holding's Vol part for good.
+ *  - **before the open**: that fill and nothing else. A row that stands is not touched.
+ *  - **inside the hours (09:30–16:15)**: written whenever the figures moved, as always — and a
+ *    provisional row regardless, so it is restamped with an in-hours instant. That is a WEEKEND's
+ *    row: filled just after midnight, and never rewritten since nothing moves, it would otherwise
+ *    keep its 00:05 stamp and read for ever as an overnight mark.
+ *  - **after the close (16:15 to midnight)**: a provisional row is replaced — the first sweep after
+ *    midnight filled the day, the session was then missed, and the evening's reading is the better
+ *    one for that day. A settled row missing its IV or vega is completed by a sweep that has BOTH
+ *    (the row is written whole, so a sweep missing the other map would trade one hole for another).
+ *    A complete settled row is never changed: a close stays the close.
  *
- *  The price is that some points are not closes: an opening day recorded in the evening, a missed
- *  session filled after it. Every row carries the instant it was observed (`observed_at`), so a
- *  chart can tell those points from the closes rather than be told they are the same thing.
+ *  So some points are not closes, and every write stamps `observed_at` so a chart can say which.
  */
 export function takesSample(
-  now: Date, stored: SampleReadings | null, observed: SampleReadings,
-): boolean {
-  if (inSampleHours(now) || stored === null) return true;
+  now: Date, stored: StoredSample | null, observed: SampleReadings,
+): SampleWrite {
+  if (stored === null) return "yes";
+  const provisional = stored.observed_at !== null && sinceNewYorkMidnight(
+    new Date(`${stored.observed_at.slice(0, 10)}T${stored.observed_at.slice(11, 23)}Z`),
+  ) < SAMPLE_FROM;
+  const t = sinceNewYorkMidnight(now);
+  if (t < SAMPLE_FROM) return "no";
+  if (t <= SAMPLE_UNTIL) return provisional ? "yes" : "if-changed";
+  if (provisional) return "yes";
   const incomplete = stored.legs_iv === null || stored.legs_vega === null;
-  return incomplete && observed.legs_iv !== null && observed.legs_vega !== null;
+  return incomplete && observed.legs_iv !== null && observed.legs_vega !== null ? "yes" : "no";
 }
 
 /** Calendar days from the current MARKET date to expiry.

@@ -164,20 +164,32 @@ survived could be an overnight mark.
 the row that stays. 16:15 is the OPTIONS' close, a quarter hour after the stocks', and the one
 their own marks settle on — the same rule that puts a half-day's close at 13:15.
 
-**Outside those hours a row is only ever filled or completed, never changed** (`takesSample`):
+**Outside those hours a row is only filled, completed or replaced as provisional, never otherwise
+changed** (`takesSample`, which answers `no`, `if-changed` or `yes`). A stored row is
+**PROVISIONAL** when it was observed before its own day's 09:30 open — a fill taken from overnight
+marks — and **SETTLED** once observed inside the hours or after the close; a row from before
+`observed_at` existed counts as settled.
 
 - **A day with no row yet gets one, whatever the hour.** Two things leave a day without one. The
   owner records trades in the Singapore morning — New York's evening, after the close of the day the
   trade went on — so the holding's first row would otherwise be the next day's, and the chain above
   refuses any start but Opened. And a session can be missed whole: a reboot waiting at the FileVault
   login, OpenD waiting for one. Either hole blanked the holding's Vol part for good, because the
-  chain needs every day. A row from that evening keeps it whole. A day first seen before 09:30 is
-  filled the same way, and the session then writes over it freely.
-- **A row the feed left without its IV or its vega is completed** by a sweep that has BOTH. Both,
-  not just the missing one: the row is written whole from that sweep, so one missing the other map
-  would trade one hole for another.
-- **A complete row is left alone.** A settled close stays the close, however the overnight mark
-  moves.
+  chain needs every day.
+- **Before the open, that fill and nothing else.** The first sweep after New York's midnight fills
+  the day, and its row is provisional.
+- **Inside the hours, a provisional row is written even when no figure moved.** That is a weekend's
+  row: filled just after midnight, and since nothing trades, the "only when something differs"
+  check would otherwise leave it stamped as an overnight mark for ever.
+- **After the close, a provisional row is replaced.** The midnight fill was taken, the session was
+  then missed, and the service is back at 20:30: the evening's reading is the better one for that
+  day. Without this the missed day kept its overnight mark — the common case, since a service down
+  through the session was usually up at midnight.
+- **After the close, a settled row missing its IV or vega is completed** by a sweep that has BOTH.
+  Both, not just the missing one: the row is written whole from that sweep, so one missing the
+  other map would trade one hole for another.
+- **A complete settled row is never changed** outside the hours. A close stays the close, however
+  the overnight mark moves, up to midnight.
 
 **So some points are not closes**: an opening day recorded in the evening, a missed session filled
 after it, a row completed that night. That is the honest trade — a reading taken the evening of the

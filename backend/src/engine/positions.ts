@@ -133,18 +133,19 @@ export function recordSamples(
       const deltas = legReadings(position, byCode, "option_delta");
       const legsDelta = deltas === null ? null : toSqliteJson(deltas);
 
-      // The day's row as it stands decides whether this sweep may touch it at all: freely inside
-      // the hours, and outside them only to fill a day with no row or complete one without its vol
-      // readings — never to change a settled close.
+      // The day's row as it stands decides what this sweep may do with it: fill it, write it if
+      // its figures moved, restamp or replace a provisional one, complete one without its vol
+      // readings — or nothing, which is how a settled close stays the close (takesSample).
       const stored = findPositionSample(db, row.id, observedOn);
-      if (!takesSample(at, stored ?? null, { legs_iv: legsIv, legs_vega: legsVega })) continue;
+      const write = takesSample(at, stored ?? null, { legs_iv: legsIv, legs_vega: legsVega });
+      if (write === "no") continue;
 
       // Only when something actually differs. The sweep runs every 15 seconds and the day's row
       // is meant to settle on the close, not to be rewritten 5,760 times — overnight and at
       // weekends nearly every one of those writes stored what was already there, and the IV map
       // triples what each one carries. `observed_at` is NOT compared: it stamps a write, so it
       // says when the figures were last seen to change, which is when they were observed.
-      if (stored && stored.dte === dte && stored.cost_to_close === cost
+      if (write === "if-changed" && stored && stored.dte === dte && stored.cost_to_close === cost
         && stored.legs_iv === legsIv && stored.legs_vega === legsVega
         && stored.legs_delta === legsDelta) continue;
 

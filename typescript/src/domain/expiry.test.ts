@@ -13,7 +13,9 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { daysToExpiry, inSampleHours, marketDate, takesSample } from "./expiry.ts";
+import {
+  daysToExpiry, inSampleHours, marketDate, takesSample, type SampleReadings,
+} from "./expiry.ts";
 
 describe("the market date", () => {
   it("is New York's calendar day, not the viewer's", () => {
@@ -124,39 +126,65 @@ describe("inSampleHours — when a day's sample may be taken", () => {
   });
 });
 
-describe("takesSample — whether this sweep writes the day's row", () => {
-  const evening = at("2026-11-10T01:30:00Z"); // Monday 20:30 in New York, overnight trading
-  const session = at("2026-11-09T16:00:00Z"); // Monday 11:00 in New York
-  const whole = { legs_iv: "{}", legs_vega: "{}" };
+describe("takesSample — whether this sweep writes the day's row, and how", () => {
+  // Monday 9 November 2026, New York on EST (UTC-5)
+  const beforeOpen = at("2026-11-09T05:05:00Z"); // 00:05, just past New York's midnight
+  const session = at("2026-11-09T16:00:00Z"); // 11:00
+  const evening = at("2026-11-10T01:30:00Z"); // 20:30, overnight trading
+  const readings = { legs_iv: "{}", legs_vega: "{}" };
   const noVega = { legs_iv: "{}", legs_vega: null };
   const noIv = { legs_iv: null, legs_vega: "{}" };
+  /** the day's stored row, observed at a UTC instant as the database spells it */
+  const row = (observedAt: string | null, maps: SampleReadings = readings) =>
+    ({ ...maps, observed_at: observedAt });
+  const provisional = row("2026-11-09 05:05:00.000000"); // 00:05, before its own day's open
+  const inHours = row("2026-11-09 16:00:00.000000"); // 11:00
+  const postClose = row("2026-11-10 01:30:00.000000"); // 20:30 the same market day
+  const legacy = row(null); // written before observed_at existed
 
-  it("writes inside the sample hours whatever is stored, as it always has", () => {
-    expect(takesSample(session, null, whole)).toBe(true);
-    expect(takesSample(session, whole, whole)).toBe(true);
-    expect(takesSample(session, whole, noVega)).toBe(true);
+  it("fills a day with no row whatever the hour", () => {
+    // a trade recorded in New York's evening, a session missed whole: the vol chain needs every day
+    expect(takesSample(beforeOpen, null, readings)).toBe("yes");
+    expect(takesSample(session, null, readings)).toBe("yes");
+    expect(takesSample(evening, null, noVega)).toBe("yes");
   });
 
-  it("fills a day with no row yet whatever the hour", () => {
-    // a trade recorded in New York's evening, and a session missed whole — a reboot waiting at the
-    // FileVault login, OpenD waiting for one — both leave a day with no row, and the vol chain
-    // needs every day: a hole there blanks the Vol part for good
-    expect(takesSample(evening, null, whole)).toBe(true);
-    expect(takesSample(evening, null, noVega)).toBe(true);
+  it("before the open fills only: a row that already stands is not touched", () => {
+    expect(takesSample(beforeOpen, provisional, readings)).toBe("no");
+    expect(takesSample(beforeOpen, legacy, readings)).toBe("no");
   });
 
-  it("never changes a complete row outside the hours", () => {
-    // a settled close stays the close, however the overnight mark moves
-    expect(takesSample(evening, whole, whole)).toBe(false);
+  it("inside the hours writes when the figures moved, and a PROVISIONAL row even when they did not", () => {
+    expect(takesSample(session, inHours, readings)).toBe("if-changed");
+    expect(takesSample(session, legacy, readings)).toBe("if-changed");
+    // a weekend row filled after midnight: nothing moves in the hours, so without this it would
+    // keep its 00:05 stamp and read as an overnight mark for ever
+    expect(takesSample(session, provisional, readings)).toBe("yes");
   });
 
-  it("completes a row missing its vol readings, but only from a sweep that has both", () => {
-    // the vol chain needs an IV and a vega for every leg on every day
-    expect(takesSample(evening, noVega, whole)).toBe(true);
-    expect(takesSample(evening, noIv, whole)).toBe(true);
-    // a sweep that would trade one missing map for another is no completion: the row is replaced
-    // whole, so writing it would lose the reading the stored row had
-    expect(takesSample(evening, noVega, noIv)).toBe(false);
-    expect(takesSample(evening, noVega, noVega)).toBe(false);
+  it("after the close replaces a provisional row, which is how a missed session gets its evening", () => {
+    // the first sweep after midnight filled the day from overnight marks; the session was missed;
+    // the service recovered at 20:30 — the evening's reading is the better one for that day
+    expect(takesSample(evening, provisional, readings)).toBe("yes");
+  });
+
+  it("after the close never changes a settled row, nor a row from before observed_at existed", () => {
+    expect(takesSample(evening, inHours, readings)).toBe("no");
+    expect(takesSample(evening, postClose, readings)).toBe("no");
+    expect(takesSample(evening, legacy, readings)).toBe("no");
+  });
+
+  it("after the close completes a settled row missing its IV or vega, only from a sweep with both", () => {
+    expect(takesSample(evening, row("2026-11-09 16:00:00.000000", noVega), readings)).toBe("yes");
+    expect(takesSample(evening, row(null, noIv), readings)).toBe("yes");
+    // the row is written whole, so this would trade the stored IV for the missing vega
+    expect(takesSample(evening, row("2026-11-09 16:00:00.000000", noVega), noIv)).toBe("no");
+  });
+
+  it("calls a row provisional by New York's clock, across a change of the clocks", () => {
+    // 1 October 2026 is EDT (UTC-4): 13:29:59Z is 09:29:59, before the open; 13:30Z is the open
+    const october = at("2026-10-01T15:00:00Z"); // 11:00 EDT
+    expect(takesSample(october, row("2026-10-01 13:29:59.000000"), readings)).toBe("yes");
+    expect(takesSample(october, row("2026-10-01 13:30:00.000000"), readings)).toBe("if-changed");
   });
 });

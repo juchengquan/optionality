@@ -44,6 +44,17 @@ const combos = (s: SweepScenario) => s.world.tables.monitors.filter((m: Row) => 
 /** Every code the tick asked for came back priced: a sample could have been written. */
 const priced = (s: SweepScenario) => asked(s) && Object.values(s.expect.calls)
   .every((batches) => batches.every((codes) => codes.every((c) => c in s.world.provider.quotes)));
+const NEW_YORK_CLOCK = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+/** Whether a stored row was observed before its own day's 09:30 open: a fill from overnight marks. */
+const provisional = (r: Row | undefined): boolean => {
+  if (r === undefined || r.observed_at === null) return false;
+  const stamp = String(r.observed_at);
+  const at = new Date(`${stamp.slice(0, 10)}T${stamp.slice(11, 23)}Z`);
+  const part = Object.fromEntries(NEW_YORK_CLOCK.formatToParts(at).map((p) => [p.type, p.value]));
+  return Number(part.hour) * 60 + Number(part.minute) < 9 * 60 + 30;
+};
 /** The stored row for the clock's market day, if the world holds one. */
 const dayRow = (s: SweepScenario): Row | undefined => s.world.tables.position_samples
   .find((r: Row) => r.observed_on === marketDate(new Date(s.world.clock)));
@@ -205,6 +216,22 @@ export const OUTCOMES: readonly Outcome[] = [
     shows: (s) => !inSampleHours(new Date(s.world.clock)) && priced(s) && dayRow(s) === undefined
       && (s.expect.rows.position_samples?.added ?? [])
         .some((r) => r.observed_on === marketDate(new Date(s.world.clock))),
+  },
+  {
+    // the midnight fill, a missed session, and the service back after the close: the provisional
+    // row is replaced by the evening's reading rather than keeping its overnight mark
+    name: "provisional-row-replaced-after-hours",
+    decision: "takesSample",
+    shows: (s) => !inSampleHours(new Date(s.world.clock)) && provisional(dayRow(s))
+      && (s.expect.rows.position_samples?.changed ?? []).length > 0,
+  },
+  {
+    // a weekend's midnight fill restamped in the hours though no figure moved, so it stops reading
+    // as an overnight mark
+    name: "provisional-row-restamped-in-hours",
+    decision: "takesSample",
+    shows: (s) => inSampleHours(new Date(s.world.clock)) && provisional(dayRow(s))
+      && (s.expect.rows.position_samples?.changed ?? []).some((c) => "observed_at" in c.to),
   },
   {
     // a row the feed left without its IV or vega is completed after hours by a sweep that has both
