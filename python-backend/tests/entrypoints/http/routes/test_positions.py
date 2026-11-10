@@ -478,6 +478,27 @@ class TestPositionsValues:
         assert v["contract_size"] is None
         assert v["pnl"] is None
 
+    async def test_reports_the_share_of_a_credit_captured_so_far_and_none_for_a_debit(self, start):
+        # what the redesigned page shows beside the P&L (ADR 0023), decided here rather than divided out
+        # in the browser (ADR 0005) — and named in the response model, which drops what it does not
+        h = start_with(start)
+        await post(h, condor(entry=9.0))
+        await post(
+            h,
+            {
+                "name": "1016_C8050",
+                "strike_date": EXPIRY,
+                "entry": -6.0,
+                "legs": [{"side": "long", "option_type": "CALL", "strike": 8050}],
+            },
+        )
+        values = (await h.call("/positions/values")).json()
+        share = {v["name"]: v["captured"] for v in values}
+        # sold for 9.00 and 4.50 to close: half of it kept
+        assert share["1016_IC"] == 0.5
+        # bought for 6.00: a debit has no credit to keep a share of, as it has no Target
+        assert share["1016_C8050"] is None
+
     async def test_reports_nothing_rather_than_something_wrong_when_a_leg_goes_unpriced(self, start):
         # full quotes while creating, since the gate demands every leg exists; one dropped afterwards
         complete = True
@@ -492,6 +513,7 @@ class TestPositionsValues:
         v = (await h.call("/positions/values")).json()[0]
         assert v["cost_to_close"] is None
         assert v["pnl"] is None
+        assert v["captured"] is None
 
     async def test_is_an_empty_list_with_nothing_held_and_makes_no_call(self, start):
         calls = 0

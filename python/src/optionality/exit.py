@@ -52,6 +52,18 @@ def on_pace(entry: float | None, opened_dte: int | None, dte: int) -> float | No
     return entry * math.sqrt(dte / opened_dte)
 
 
+def captured(entry: float | None, cost: float | None) -> float | None:
+    """The share of a credit's Entry captured so far: Entry less Cost to close, as a fraction of Entry.
+
+    The Target's frame read from the other end (ADR 0023). None for a debit structure or a zero Entry,
+    which have no credit to keep a share of, as they have no Target; None where either side is unknown
+    or a reading is NaN. Never rounded."""
+    if entry is None or cost is None or entry <= 0:
+        return None
+    share = (entry - cost) / entry
+    return None if math.isnan(share) else share
+
+
 def exit_levels(
     entry: float | None,
     opened_dte: int | None,

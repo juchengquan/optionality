@@ -5,8 +5,10 @@ does. What only the Python can get wrong is at the end.
 """
 
 import json
+import math
 import re
 
+import pytest
 from harness import days_from_now, json_body, poisonable, quoting
 
 # relative to the HARNESS's clock, not the real one — see NOW in tests/harness.py
@@ -568,6 +570,53 @@ class TestQuotes:
         assert quotes[0]["quote"]["option_delta"] == 0.33
         assert quotes[0]["threshold"] == 0.6
         assert quotes[0]["dte"] == 30
+
+    async def test_carries_the_figures_a_rule_s_sentence_reads_which_the_reply_schema_would_strip(self, start):
+        # the response model drops whatever EntryOut does not list, so a figure computed in the service
+        # and left out of the model vanishes on the way out with nothing failing (ADR 0023's sentence:
+        # "spread value ≥ 6.01 — now 2.00, 4.01 away", and the spread a leg's rule sits under)
+        async def figures(codes):
+            return [{"code": c, "option_delta": 0.45, "mid_price": 2} for c in codes]
+
+        h = start(fetch_quotes=figures)
+        leg = (await post(h, single(strike=8100, threshold=0.6))).json()["id"]
+        spread = (await post(h, combo(field="mid_price"))).json()["id"]
+        quotes = (await h.call("/quotes")).json()
+
+        row = next(q for q in quotes if q["id"] == leg)
+        assert row["watched"] == 0.45
+        assert row["distance"] == pytest.approx(0.15, abs=1e-12)
+        assert row["in_combos"] == [spread]
+        # 2.00 less 2.00 is nothing, below a threshold of 10: breached, and 10 past it
+        total = next(q for q in quotes if q["id"] == spread)
+        assert [total["watched"], total["distance"], total["triggered"], total["in_combos"]] == [0, -10, True, []]
+
+    async def test_says_whether_a_rule_watches_anything_held_even_where_no_link_names_the_holding(self, start):
+        # a roll day: two holdings share the short call, so the link declines to name either — and the
+        # response model would drop `held` as it drops any field it does not list
+        h = start()
+        for id_, name in [("a" * 32, "old"), ("b" * 32, "new")]:
+            seed_position(h, id_, name, future(), 6500)
+        await post(h, single())
+        await post(h, single(strike=6550))
+        quotes = (await h.call("/quotes")).json()
+        assert [[len(q["positions"]), q["held"]] for q in quotes] == [[0, True], [0, False]]
+
+    async def test_keeps_every_row_when_one_rule_s_reading_cannot_be_written_as_json(self, start):
+        # a field the quote schema does not type passes through, so its Infinity reached `watched` and
+        # the response model refused the whole watchlist: one row's figure took down every row
+        async def figures(codes):
+            return [{"code": c, "option_delta": 0.45, "option_open_interest": math.inf} for c in codes]
+
+        h = start(fetch_quotes=figures)
+        await post(h, single())
+        far = (await post(h, single(strike=6550, field="option_open_interest", threshold=1000))).json()["id"]
+        resp = await h.call("/quotes")
+        assert resp.status_code == 200
+        quotes = resp.json()
+        assert len(quotes) == 2
+        row = next(q for q in quotes if q["id"] == far)
+        assert [row["watched"], row["distance"], row["fill"], row["triggered"]] == [None, None, 100, True]
 
     async def test_answers_502_rather_than_500_when_the_provider_call_fails(self, start):
         h = start(fetch_quotes=echo_then_fail())

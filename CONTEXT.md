@@ -143,6 +143,19 @@ The Cost to close at which you take the profit, as a fraction of Entry. Flat in 
 not change what you are willing to accept, only whether you have got it yet.
 _Avoid_: take profit, TP, goal
 
+**Captured**:
+The share of a credit's Entry kept so far: Entry less Cost to close, as a fraction of Entry. The
+Target's own frame read from the other end — a Target at half the Entry is reached when half of it
+is captured. Below zero, closing would cost more than was taken in. A debit structure has none, as
+it has no Target: there is no credit to keep a share of.
+
+It is a figure to show, never the test of the Target. Whether the Target has been reached is the
+holding's Level, `reached`, decided in the service; a client never compares Captured against the
+take fraction, because at the boundary the two can differ by float rounding — an Entry of 13 at a
+Cost to close of 4.55 under a 0.65 take has reached its Target, and has captured
+0.6499999999999999.
+_Avoid_: % of max profit, profit taken, return (that word is about money on capital)
+
 **Stop**:
 The Cost to close at which the trade is over, as a multiple of Entry. Also flat in DTE.
 _Avoid_: stop loss, SL, max loss
@@ -161,7 +174,31 @@ Where its Contracts turn out to be ones you hold, the Position is found AFTERWAR
 show what you took in. That link is discovered, not declared, and it does not make the Monitor a
 rule about your holding: a delta alarm on one Contract is about that option, and the condor it
 happens to sit inside is a separate fact.
+
+Whether a Monitor watches anything HELD is a plainer fact than that link: true when any Contract it
+names is a Leg of an open Position. It has no ambiguous case — on a roll day, when two holdings
+share a Contract, the link names neither while the Contract is still held — and it is about the
+Contracts, not about what the rule is for: a candidate that shares one Contract with a holding is
+held too. It is what tells a risk alarm on something owned from an entry signal on a candidate.
 _Avoid_: watch, rule, alert, combo monitor, "a monitor on my condor" (say which Contracts)
+
+**Distance**:
+How far the figure a Monitor watches still has to move before its threshold is breached, in that
+figure's own units, measured exactly as the breach is decided. It SHRINKS toward firing: at or below
+zero exactly when the row's own bell rings — zero AT the threshold, which is a breach — and negative
+by how far past. Said in words where it is shown: "now 2.00, 4.01 away".
+
+It agrees with the bell on its own row, which is drawn from the same live batch, and not with the
+Alarm: that is the Sweep's state and message, from a batch of its own, and the row may lead or lag
+what has been sent. Where the figure cannot be shown — not priced, not a number, infinite — there is
+no Distance, which says nothing about the bell.
+
+Not the old dashboard's "distance" reading ("distance — how close to firing", in its settings):
+that is the fill, which GROWS toward firing. The figure a row watches is served raw and SIGNED, and
+under compare `abs` the bell, the fill and the Distance all measure its magnitude — so a client
+writes such a rule as `|delta| ≥ 0.30` rather than taking an absolute value itself.
+_Avoid_: buffer, cushion, room, gap (a Pace gap is a Position's), fill (the bar that grows toward
+firing)
 
 **Quote**:
 Live market data for a contract. Always this word — moomoo's "snapshot" jargon stays out of

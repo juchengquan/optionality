@@ -211,3 +211,11 @@ def positions_holding(positions: list[Position], contracts: list[str]) -> Holdin
         all(code in watched for code in position_leg_codes(position)) for position in positions if position.id in found
     )
     return Holding(found=found, scope="all" if covered else "leg")
+
+
+def holds_any_of(positions: list[Position], contracts: list[str]) -> bool:
+    """Whether ANY of these contracts is a leg of any of these Positions — a fact about contracts, with
+    no ambiguous case: a contract held twice, which `positions_holding` declines to link, is held all the
+    same. True for a candidate that merely shares one contract with a holding. Pass the OPEN ones."""
+    named = set(contracts)
+    return any(code in named for position in positions for code in position_leg_codes(position))

@@ -34,8 +34,8 @@ afterEach(() => {
 
 let n = 0;
 const monitor = (over: Partial<{
-  code: string; strike_date: string; option_type: string; strike: number; field: string;
-  threshold: number; legs: unknown; enabled: number;
+  id: string; code: string; strike_date: string; option_type: string; strike: number;
+  field: string; threshold: number; legs: unknown; enabled: number;
 }> = {}) => {
   n += 1;
   const row = {
@@ -829,5 +829,190 @@ describe("what kind of contract a row is", () => {
     }), true);
     expect(e!.option_type).toBe("CMB");
     expect(e!.legs?.map((l) => l.option_type)).toEqual(["CALL", "CALL"]);
+  });
+});
+
+describe("what a row's sentence reads", () => {
+  /** The redesigned page writes each rule as a sentence — "spread value ≥ 6.01 — now 2.00, 4.01
+   *  away" — and no figure in it is assembled in the browser (ADR 0005, ADR 0023). `watched` is the
+   *  one reading the fill bar and the bell are drawn from and `distance` its room to the threshold,
+   *  so the sentence, the bar and the bell are one figure said three ways and cannot disagree. */
+  it("serves the figure the bar and the bell are drawn from, and how far it has to go", async () => {
+    monitor({ threshold: 0.6 });
+    const [e] = await run(quoting({ [CODE]: { option_delta: 0.45 } }));
+    expect(e!.watched).toBe(0.45);
+    expect(e!.distance).toBeCloseTo(0.15, 12);
+    expect(e!.fill).toBe(75);
+    expect(e!.triggered).toBe(false);
+  });
+
+  it("serves a combo's signed sum as its figure, and a breach as a negative distance", async () => {
+    combo({ threshold: 3 });
+    const [e] = await run(quoting({ [LEG_A]: { mid_price: 5.0 }, [LEG_B]: { mid_price: 1.0 } }), true);
+    expect(e!.watched).toBe(4);
+    expect(e!.watched).toBe(e!.combo_value);
+    expect(e!.distance, "a point past its threshold").toBe(-1);
+    expect(e!.triggered).toBe(true);
+  });
+
+  it("is at or below zero exactly when the row rings, at the threshold too", async () => {
+    monitor({ threshold: 0.6 });
+    let checked = 0;
+    for (const delta of [0.1, 0.59, 0.5999999999, 0.6, 0.6000000001, 0.61, -0.6, -0.7, 2]) {
+      const [e] = await run(quoting({ [CODE]: { option_delta: delta } }));
+      expect(e!.distance! <= 0, `delta ${delta} is ${e!.distance} away`).toBe(e!.triggered);
+      checked++;
+    }
+    expect(checked).toBe(9);
+  });
+
+  it("has no figure and no distance on a row it could not price", async () => {
+    monitor({ threshold: 0.6 });
+    const [e] = await run(quoting({}));
+    expect(e!.watched).toBeNull();
+    expect(e!.distance).toBeNull();
+  });
+
+  it("serves a figure sent as text as the number the sweep reads it as", async () => {
+    // the sweep reads a single Contract through `monitorValue`, which is `Number(v)`; a figure the
+    // Provider sent as "0.7" is served as 0.7, never as the text, which the reply schema refuses
+    monitor({ threshold: 0.6 });
+    const [e] = await run(quoting({ [CODE]: { option_delta: "0.7" } }));
+    expect(e!.watched).toBe(0.7);
+    expect(e!.triggered).toBe(true);
+  });
+
+  it("serves no figure for text that is not a number, which costs the figure and not the row", async () => {
+    // NaN is no reading: the bar and the bell already treated it as none, and a NaN in the reply
+    // would fail its schema and take every other row of the watchlist down with it
+    monitor({ threshold: 0.6 });
+    const [e] = await run(quoting({ [CODE]: { option_delta: "n/a" } }));
+    expect([e!.watched, e!.distance, e!.fill, e!.triggered]).toEqual([null, null, null, false]);
+  });
+
+  it("serves no figure for an infinite reading, and still rings and fills on it as the sweep would", async () => {
+    // JSON has no Infinity, so in the reply it would fail the schema and take every row with it.
+    // The bar and the bell are decided on it exactly as before — the sweep alarms on it too — so
+    // this row rings with no figure to show, and a null distance says nothing either way
+    monitor({ field: "option_open_interest", threshold: 1000 });
+    for (const reading of [Infinity, "Infinity", -Infinity]) {
+      const [e] = await run(quoting({ [CODE]: { option_open_interest: reading } }));
+      expect([e!.watched, e!.distance, e!.fill, e!.triggered], String(reading))
+        .toEqual([null, null, 100, true]);
+    }
+  });
+});
+
+describe("whether a rule watches anything held", () => {
+  /** The redesigned page tells a risk alarm on something owned from an entry signal on a
+   *  candidate (ADR 0023), and `positions` cannot: the link declines to name a holding wherever
+   *  naming one would be a guess, and "no link" then reads as "nothing held". `held` answers about
+   *  CONTRACTS, from every open holding, linked or not. */
+  const hold = (name: string, strikes: [number, number], closedOn: string | null = null) =>
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              closed_on)
+       values (?, ?, 'credit_spread', ?, 1, 1.0, ?, '2026-08-01 00:00:00.000000', ?)`,
+    ).run(name.padEnd(32, "0"), name, EXPIRY, toSqliteJson([
+      { side: "short", option_type: "CALL", strike: strikes[0] },
+      { side: "long", option_type: "CALL", strike: strikes[1] },
+    ]), closedOn);
+
+  it("is true on a roll day, when two holdings share the Contract and no link names either", async () => {
+    hold("old", [8100, 8150]);
+    hold("new", [8100, 8200]);
+    monitor({ code: LEG_A, strike: 8100 });
+    const [e] = await run(quoting({}));
+    expect(e!.positions, "the link declines to guess").toEqual([]);
+    expect(e!.held, "but the Contract is held").toBe(true);
+  });
+
+  it("is true for a combo when any one of its legs is held", async () => {
+    hold("upper", [8150, 8200]);
+    combo();
+    const [e] = await run(quoting({}), true);
+    expect(e!.held).toBe(true);
+  });
+
+  it("is false for a rule on Contracts nothing holds", async () => {
+    hold("spread", [8100, 8150]);
+    monitor();
+    const [e] = await run(quoting({}));
+    expect(e!.held).toBe(false);
+  });
+
+  it("counts only what is still held: a closed holding holds nothing", async () => {
+    hold("closed", [8100, 8150], "2026-08-07");
+    monitor({ code: LEG_A, strike: 8100 });
+    const [e] = await run(quoting({}));
+    expect(e!.held).toBe(false);
+  });
+
+  it("costs a holding it cannot read its own Contracts and nothing else, as the sweep does", async () => {
+    hold("spread", [8100, 8150]);
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+       values (?, 'garbled', null, ?, 1, 1.0, '{not json', '2026-08-01 00:00:00.000000')`,
+    ).run("g".padEnd(32, "0"), EXPIRY);
+    monitor({ code: LEG_A, strike: 8100 });
+    monitor();
+    const entries = await run(quoting({}));
+    expect(Object.fromEntries(entries.map((e) => [e.code, e.held]))).toEqual({
+      [LEG_A]: true, [CODE]: false,
+    });
+  });
+});
+
+describe("the spreads a single Contract is a leg of", () => {
+  /** On the redesigned page a single-Contract rule — a short leg's delta — sits under the spread
+   *  it belongs to (ADR 0023). Which spread that is is DISCOVERED, from the legs every combo in
+   *  this watchlist names, as a rule's holdings are: nothing records it. */
+  const id = (name: string) => name.padEnd(32, "0");
+  const LEG_C = buildSpxCode(EXPIRY, "CALL", 8200);
+
+  it("names every combo whose legs include this row's Contract, sorted", async () => {
+    const leg = monitor({ code: LEG_A, strike: 8100 });
+    combo({ id: id("zz"), code: "sep-calls" });
+    combo({ id: id("aa"), code: "sep-wide", legs: [
+      { sign: 1, option_type: "CALL", strike: 8100 }, { sign: -1, option_type: "CALL", strike: 8200 },
+    ] });
+    // a spread that does not hold it
+    combo({ id: id("mm"), code: "sep-upper", legs: [
+      { sign: 1, option_type: "CALL", strike: 8150 }, { sign: -1, option_type: "CALL", strike: 8200 },
+    ] });
+    const entries = await run(quoting({ [LEG_A]: { option_delta: 0.2 }, [LEG_C]: {} }), true);
+    expect(entries.find((e) => e.id === leg)!.in_combos).toEqual([id("aa"), id("zz")]);
+  });
+
+  it("is empty for a Contract no combo holds, and on a combo's own row", async () => {
+    monitor();
+    combo();
+    const entries = await run(quoting({}), true);
+    expect(Object.fromEntries(entries.map((e) => [e.code, e.in_combos]))).toEqual({
+      [CODE]: [], "sep-condor": [],
+    });
+  });
+
+  it("matches the Contract, not the strike: the same strike on another expiry is another", async () => {
+    monitor({ code: LEG_A, strike: 8100 });
+    combo({ strike_date: "2027-01-15" });
+    const entries = await run(quoting({}), true);
+    expect(entries.find((e) => e.code === LEG_A)!.in_combos).toEqual([]);
+  });
+
+  it("leaves out a combo that is switched off, which is not in the watchlist", async () => {
+    monitor({ code: LEG_A, strike: 8100 });
+    combo({ enabled: 0 });
+    const [e] = await run(quoting({}), true);
+    expect(e!.in_combos).toEqual([]);
+  });
+
+  it("knows only the combos in the same batch, so the bot's single-leg tables name none", async () => {
+    // the bot's /quotes, /greeks and /vol leave combos out and read no such field; /quotes, the
+    // route the page polls, asks for every enabled rule
+    monitor({ code: LEG_A, strike: 8100 });
+    combo();
+    const [e] = await run(quoting({}));
+    expect(e!.in_combos).toEqual([]);
   });
 });

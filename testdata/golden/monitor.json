@@ -730,6 +730,142 @@
         "signed"
       ],
       "expect": true
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "room left, above",
+      "args": [
+        2,
+        6.01,
+        "above",
+        "abs"
+      ],
+      "expect": 4.01
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "room left, below",
+      "args": [
+        4,
+        2,
+        "below",
+        "abs"
+      ],
+      "expect": 2
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "zero exactly at the threshold, above",
+      "args": [
+        0.3,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "zero exactly at the threshold, below",
+      "args": [
+        2,
+        2,
+        "below",
+        "abs"
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "negative past the threshold",
+      "args": [
+        0.31,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": -0.010000000000000009
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "abs measures the magnitude",
+      "args": [
+        -0.15,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": 0.15
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "signed measures the raw value",
+      "args": [
+        -0.15,
+        0.3,
+        "above",
+        "signed"
+      ],
+      "expect": 0.44999999999999996
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "signed below a negative threshold",
+      "args": [
+        -2.1,
+        -2,
+        "below",
+        "signed"
+      ],
+      "expect": -0.10000000000000009
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "anything not below is above",
+      "args": [
+        2,
+        6,
+        "sideways",
+        "abs"
+      ],
+      "expect": 4
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "no value",
+      "args": [
+        null,
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "a NaN reading is no distance",
+      "args": [
+        {
+          "$num": "NaN"
+        },
+        0.3,
+        "above",
+        "abs"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "thresholdDistance",
+      "name": "nor is a NaN threshold",
+      "args": [
+        1,
+        {
+          "$num": "NaN"
+        },
+        "above",
+        "abs"
+      ],
+      "expect": null
     }
   ]
 }

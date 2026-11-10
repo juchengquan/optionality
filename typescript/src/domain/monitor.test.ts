@@ -12,7 +12,10 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSpxCode } from "./contract.ts";
-import { comboFieldError, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdFault, thresholdFill, type ByCode, type Monitor } from "./monitor.ts";
+import {
+  comboFieldError, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdDistance,
+  thresholdFault, thresholdFill, type ByCode, type Monitor,
+} from "./monitor.ts";
 
 const EXPIRY = "2026-10-16";
 const code = (type: "CALL" | "PUT", strike: number) => buildSpxCode(EXPIRY, type, strike);
@@ -153,6 +156,68 @@ describe("the breach decision", () => {
     // throwing — a monitor that cannot decide is worse than one that errs toward warning
     expect(isBreached(0.6, 0.5, "sideways", "abs")).toBe(true);
     expect(isBreached(0.4, 0.5, "sideways", "abs")).toBe(false);
+  });
+});
+
+/** How far the watched figure still has to move, which a rule's sentence states: "spread value
+ *  ≥ 6.01 — now 2.00, 4.01 away" (ADR 0023). It is the breach decision said as a number, so the
+ *  one property that matters is that the two cannot disagree. */
+describe("how far the figure has still to go", () => {
+  it("is the room left before the breach, in the field's own units", () => {
+    expect(thresholdDistance(2, 6, "above", "abs")).toBe(4);
+    expect(thresholdDistance(1, 0.25, "below", "abs")).toBe(0.75);
+  });
+
+  it("goes negative past the threshold, by how far past", () => {
+    expect(thresholdDistance(7, 6, "above", "abs")).toBe(-1);
+    expect(thresholdDistance(0.25, 1, "below", "abs")).toBe(-0.75);
+  });
+
+  it("reads the figure as isBreached does: magnitude in abs mode, the raw value in signed", () => {
+    // a put's delta of -0.5 is 0.25 short of 0.75 by magnitude, and 0.75 short of 0.25 signed
+    expect(thresholdDistance(-0.5, 0.75, "above", "abs")).toBe(0.25);
+    expect(thresholdDistance(-0.5, 0.25, "above", "signed")).toBe(0.75);
+    expect(thresholdDistance(-0.5, -0.25, "below", "signed")).toBe(-0.25);
+  });
+
+  it("treats anything that is not below as above, as isBreached does", () => {
+    expect(thresholdDistance(2, 6, "sideways", "abs")).toBe(4);
+  });
+
+  it("has no figure to measure from without a reading", () => {
+    expect(thresholdDistance(null, 6, "above", "abs")).toBeNull();
+    expect(thresholdDistance(undefined, 6, "above", "abs")).toBeNull();
+    // a quote field that is not a number reads NaN through monitorValue, and NaN is no distance —
+    // nor is a NaN threshold, which nothing can be measured against
+    expect(thresholdDistance(NaN, 6, "above", "abs")).toBeNull();
+    expect(thresholdDistance(2, NaN, "above", "abs")).toBeNull();
+  });
+
+  it("is zero AT the threshold, which is breached, in both directions", () => {
+    expect(thresholdDistance(0.3, 0.3, "above", "abs")).toBe(0);
+    expect(thresholdDistance(0.3, 0.3, "below", "abs")).toBe(0);
+    expect(thresholdDistance(-2, -2, "below", "signed")).toBe(0);
+  });
+
+  it("is at or below zero exactly when isBreached says so", () => {
+    // the invariant the sentence rests on: "0.00 away" beside a quiet bell, or a bell beside
+    // "0.01 away", would be two definitions of a breach on one row. Checked either side of each
+    // threshold and on it, both directions, both compares, and signs either way.
+    const values = [-7, -6.01, -6, -5.99, -0.31, -0.3, -0.29, 0, 0.29, 0.3, 0.31, 5.99, 6, 6.01, 7];
+    let checked = 0;
+    for (const threshold of [0.3, 6, -0.3, -6]) {
+      for (const direction of ["above", "below"]) {
+        for (const compare of ["abs", "signed"]) {
+          for (const value of values) {
+            const d = thresholdDistance(value, threshold, direction, compare)!;
+            expect(d <= 0, `${value} ${direction} ${threshold} ${compare}: ${d} away`)
+              .toBe(isBreached(value, threshold, direction, compare));
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBe(4 * 2 * 2 * values.length);
   });
 });
 

@@ -14,20 +14,23 @@ old Python's routes/ui.py and reachable over no endpoint at all.
 - **`MonitorForEntry` subclasses the library's `Monitor`**, with `id` required and `scope` added, as
   the TypeScript's interface extends `Monitor`. `legs` stays the library's `MonitorLeg` models, which
   is the TypeScript's `MonitorLeg[]`; a route turns them into JSON.
-- **A single-leg row's watched figure goes through `optionality.js.number`.** The TypeScript CASTS
-  whatever the quote holds to a number, and then `Math.abs` and `>=` coerce it, which is `Number(v)`;
-  Python's `abs` would raise on a string, and its `>=` would compare one.
 - **`codes_for` sorts as JavaScript's `sort()` does**, by UTF-16 code unit, where Python's `sorted`
   compares code points. The two disagree only past the Basic Multilingual Plane, which no contract
-  code reaches, but the order is the batch the Provider is asked for and a scenario records it.
+  code reaches, but the order is the batch the Provider is asked for and a scenario records it. A
+  row's `in_combos` is sorted the same way, for the same reason.
+- **A figure the reply cannot carry is caught with `math.isfinite`**, where the TypeScript asks
+  `Number.isFinite`: the watched figure is a float here whatever the quote held, because
+  `monitor_value` reads it through `optionality.js.number`, as the TypeScript's `monitorValue` reads
+  it through `Number()`.
 """
 
+import math
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Literal, NotRequired, TypedDict, cast
+from typing import Literal, NamedTuple, NotRequired, TypedDict, cast
 
 from optionality.exit import ExitPolicy, dte_at_open, exit_levels
 from optionality.expiry import days_to_expiry
-from optionality.js import number
 from optionality.monitor import (
     COMBO_GREEK_FIELDS,
     Monitor,
@@ -36,6 +39,7 @@ from optionality.monitor import (
     is_breached,
     monitor_leg_codes,
     monitor_value,
+    threshold_distance,
     threshold_fill,
 )
 from optionality.position import (
@@ -44,6 +48,7 @@ from optionality.position import (
     combined_entry,
     combined_pnl,
     cost_to_close_of,
+    holds_any_of,
     position_leg_codes,
 )
 from optionality.quote import ByCode, Quote
@@ -102,10 +107,31 @@ class WatchlistEntry(TypedDict):
     dte: int
     scope: str | None
     positions: list[PositionRef]
+    #: whether ANY Contract this rule watches — the one, or any leg of a combo — is a Leg of an OPEN
+    #: holding, whether or not the link to one holding is ambiguous (`holds_any_of`). A fact about
+    #: Contracts, not a guess about what the rule is for: it tells a risk alarm on something owned from an
+    #: entry signal on a candidate where `positions` cannot, because the link names nothing on a roll day,
+    #: when two holdings share a Contract. It is also true for a candidate that shares one Contract with a
+    #: holding, which is a fact about that Contract (ADR 0023).
+    held: bool
+    #: the combos in this same watchlist whose legs include this row's Contract, by id and sorted: what
+    #: lets a short leg's delta rule sit under its spread (ADR 0023). A DISCOVERED link, like
+    #: `positions` — worked out from the legs each combo names, never recorded, so it is only ever as
+    #: true as those rules are now. Empty on a combo's own row, and for a Contract no enabled combo holds.
+    in_combos: list[str]
     cost_to_close: float | None
     entry: float | None
     pnl: float | None
     fill: int | None
+    #: the figure this row is about — the very reading `fill` and `triggered` are drawn from, so a
+    #: sentence built from it cannot disagree with the bar or the bell. The raw, SIGNED figure: under
+    #: compare "abs" the bar, the bell and `distance` all measure its magnitude. None where it was not
+    #: priced, and where JSON cannot write it (NaN, ±Infinity) — an infinite reading still rings.
+    watched: float | None
+    #: how far `watched` still has to move to breach, in the field's own units: wherever it is a number,
+    #: at or below zero exactly when `triggered` (`threshold_distance`). None wherever `watched` is, which
+    #: says nothing about the bell.
+    distance: float | None
     schedule: Schedule | None
 
 
@@ -125,6 +151,7 @@ def build_entries(
     by_code: ByCode,
     bad: set[str],
     owned: dict[str, list[Position]],
+    holdings: list[Position],
     policy: ExitPolicy,
     now: datetime | None = None,
 ) -> list[WatchlistEntry]:
@@ -133,13 +160,23 @@ def build_entries(
     `bad` is the codes the Provider rejected as unknown. `now` is injectable so a test can state the
     date rather than wait for it. `policy` is REQUIRED rather than optional: a schedule that silently
     does not appear because a caller forgot to pass the policy is the shape of bug this project keeps
-    finding.
+    finding. `holdings` is every OPEN holding, linked to a rule or not — what `held` is decided against —
+    and required for the same reason: a row that says "nothing held" because a caller passed nothing is
+    the very misfiling the field exists to prevent.
 
     Combo entries carry their signed sum under `combo_value` and no per-contract quote: summing other
     fields under the combo's signs would fabricate plausible-but-wrong aggregates, and IV is never
     summed at all (CLAUDE.md).
     """
-    return [_entry(m, by_code, bad, owned, policy, now) for m in monitors]
+    # every combo in this watchlist, by the Contracts its legs name: the spreads a single Contract sits
+    # in are found from these, as the holdings a rule watches are found from what is held
+    combos = [_Combo(id=m.id, codes=frozenset(monitor_leg_codes(m))) for m in monitors if m.legs]
+    return [_entry(m, by_code, bad, owned, holdings, policy, now, combos) for m in monitors]
+
+
+class _Combo(NamedTuple):
+    id: str
+    codes: frozenset[str]
 
 
 def _entry(
@@ -147,8 +184,10 @@ def _entry(
     by_code: ByCode,
     bad: set[str],
     owned: dict[str, list[Position]],
+    holdings: list[Position],
     policy: ExitPolicy,
     now: datetime | None,
+    combos: list[_Combo],
 ) -> WatchlistEntry:
     is_combo = bool(m.legs)
     positions = owned.get(m.id, [])
@@ -197,10 +236,15 @@ def _entry(
         "dte": days_to_expiry(m.strike_date, now),
         "scope": m.scope,
         "positions": [{"id": cast(str, p.id), "name": p.name} for p in positions],
+        "held": holds_any_of(holdings, monitor_leg_codes(m)),
+        "in_combos": [] if is_combo else _js_sorted(c.id for c in combos if m.code in c.codes),
         "cost_to_close": cost_to_close,
         "entry": combined_entry(whole) if whole else None,
         "pnl": combined_pnl(whole, by_code) if whole else None,
+        # these three are derived below, from the one figure this row is about
         "fill": None,
+        "watched": None,
+        "distance": None,
         # ONE holding only. Two Positions put on different days have no single DTE at entry, and a
         # blended pace line would hide that rather than say it — ADR 0004 allows a rule to span them,
         # and this declines to guess rather than averaging two trades into one.
@@ -219,25 +263,31 @@ def _entry(
     # column while every figure beside it came from this fetch, so a row could show a value past its
     # threshold with no bell, or a bell beside a value well inside it (ADR 0010).
     #
-    # It is the rule's OWN field, under the rule's own direction and compare — `monitor_value` for a
-    # combo, which is the very call the sweep evaluates it with. A held combo used to be measured on its
-    # cost to close instead, with above/abs forced: that is a PRICE, which a delta rule's threshold is
-    # not, so a delta alarm rang here for ever while the sweep stayed silent. Its cost to close is still
-    # shown, in its own column; it is not what any alarm is decided by.
+    # It is the rule's OWN field, under the rule's own direction and compare — `monitor_value`, which is
+    # the very call the sweep evaluates every rule with. A held combo used to be measured on its cost to
+    # close instead, with above/abs forced: that is a PRICE, which a delta rule's threshold is not, so a
+    # delta alarm rang here for ever while the sweep stayed silent. Its cost to close is still shown, in
+    # its own column; it is not what any alarm is decided by.
     #
     # The price cases are unchanged: under compare 'abs' the sign washes out, so a combo summing to
     # -4.00 and a 4.00 cost to close give the same bell and the same bar.
-    if is_combo:
-        watched = combo_value
-    else:
-        figure = None if quote is None else quote.get(m.field)
-        watched = None if figure is None else number(figure)
+    watched = combo_value if is_combo else monitor_value(m, by_code)
     entry["fill"] = threshold_fill(watched, m.threshold, m.direction, m.compare)
     # An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
     # stored state would be back, by the other door. is_breached is the ENGINE's own predicate fed the
     # ENGINE's own value, so the bell flips at the exact threshold and cannot drift from how an alarm is
-    # decided.
+    # decided. A NaN is unreadable and rings nothing, as the sweep's own comparison says.
     entry["triggered"] = watched is not None and is_breached(watched, m.threshold, m.direction, m.compare)
+    # The figure and its distance are SERVED only where JSON can write them. A NaN or an infinite reading
+    # in the reply fails its schema and takes every other row of the watchlist down with it, so it is
+    # served as no figure — a field the quote schema does not type can carry either. The bar and the bell
+    # above are still decided on it: an infinite reading rings, as the sweep alarms on it, and its row
+    # shows a bell with no figure and no distance beside it.
+    served = _servable(watched)
+    entry["watched"] = served
+    entry["distance"] = (
+        None if served is None else _servable(threshold_distance(served, m.threshold, m.direction, m.compare))
+    )
 
     # Built from THIS entry's own cost to close, so the gap is the gap against the figure the row
     # shows. Fetching /positions/values beside it on the dashboard would compute it against a different
@@ -251,7 +301,12 @@ def _entry(
     return entry
 
 
-def _js_sorted(values: set[str]) -> list[str]:
+def _servable(value: float | None) -> float | None:
+    """A figure as the reply can carry it: a finite number, or None."""
+    return value if value is not None and math.isfinite(value) else None
+
+
+def _js_sorted(values: Iterable[str]) -> list[str]:
     """`[...values].sort()`: by UTF-16 code unit, which is how JavaScript compares two strings."""
     return sorted(values, key=lambda s: s.encode("utf-16-be", "surrogatepass"))
 

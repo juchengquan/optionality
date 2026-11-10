@@ -1,7 +1,7 @@
 /** The exit schedule's arithmetic (ADR 0011). */
 import { describe, expect, it } from "vitest";
 
-import { dteAtOpen, exitLevels, onPace } from "./exit.ts";
+import { captured, dteAtOpen, exitLevels, onPace } from "./exit.ts";
 
 const POLICY = { takeFraction: 0.5, stopMultiple: 2, manageByDte: 21 };
 
@@ -138,5 +138,44 @@ describe("the levels", () => {
     // `opened_at` is the opt-in: no Opened, no schedule. Nothing is guessed from created_at,
     // which is the day a Position was RECORDED (ADR 0011).
     expect(exitLevels(6.86, null, 39, POLICY)).toBeNull();
+  });
+});
+
+/** The share of a credit's Entry kept so far: the frame a Target is set in, read from the other
+ *  end — a 50% Target is reached when half the credit has been captured (ADR 0023). */
+describe("the share of the credit captured", () => {
+  it("is Entry less Cost to close, as a fraction of Entry", () => {
+    expect(captured(4, 1)).toBe(0.75);
+    expect(captured(4, 4), "nothing kept yet").toBe(0);
+    expect(captured(4, 0), "all of it").toBe(1);
+  });
+
+  it("goes negative when closing would cost more than was taken in", () => {
+    expect(captured(4, 6)).toBe(-0.5);
+  });
+
+  it("is not rounded, so a client shows it at whatever precision it draws", () => {
+    expect(captured(3, 1)).toBe((3 - 1) / 3);
+  });
+
+  it("is the Target's share exactly at the Target", () => {
+    const levels = exitLevels(4, 45, 30, POLICY, 2)!;
+    expect(levels.reached).toBe("target");
+    expect(captured(4, levels.target)).toBe(POLICY.takeFraction);
+  });
+
+  it("has none for a debit structure, which has no Target either", () => {
+    // a debit's Entry is negative and its profit unbounded: there is no credit to keep a share
+    // of, which is why exitLevels leaves it without a Target
+    expect(captured(-5, -3.4)).toBeNull();
+    expect(exitLevels(-5, 45, 30, POLICY, -3.4)!.target).toBeNull();
+    expect(captured(0, 1), "a zero Entry is no credit, and no share of one").toBeNull();
+  });
+
+  it("is unknown rather than guessed where either side is", () => {
+    expect(captured(null, 1)).toBeNull();
+    expect(captured(4, null)).toBeNull();
+    // a mid that is not a number reads NaN through the cost to close; NaN is no share
+    expect(captured(4, NaN)).toBeNull();
   });
 });

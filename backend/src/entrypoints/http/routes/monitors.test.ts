@@ -571,6 +571,65 @@ describe("/quotes", () => {
     expect(quotes[0].dte).toBe(30);
   });
 
+  it("carries the figures a rule's sentence reads, which the reply schema would strip", async () => {
+    // `.parse()` drops whatever EntryOut does not list, so a figure computed in the service and
+    // left out of the schema vanishes on the way out with nothing failing (ADR 0023's sentence:
+    // "spread value ≥ 6.01 — now 2.00, 4.01 away", and the spread a leg's rule sits under)
+    h = harness({
+      fetchQuotes: (codes) => Promise.resolve(
+        codes.map((code) => ({ code, option_delta: 0.45, mid_price: 2 })),
+      ),
+    });
+    const leg = (await body(await post(single({ strike: 8100, threshold: 0.6 })))).id;
+    const spread = (await body(await post(combo({ field: "mid_price" })))).id;
+    const quotes = await body(await h.call("/quotes"));
+
+    const row = quotes.find((q: { id: string }) => q.id === leg);
+    expect(row.watched).toBe(0.45);
+    expect(row.distance).toBeCloseTo(0.15, 12);
+    expect(row.in_combos).toEqual([spread]);
+    // 2.00 less 2.00 is nothing, below a threshold of 10: breached, and 10 past it
+    const sum = quotes.find((q: { id: string }) => q.id === spread);
+    expect([sum.watched, sum.distance, sum.triggered, sum.in_combos]).toEqual([0, -10, true, []]);
+  });
+
+  it("says whether a rule watches anything held, even where no link names the holding", async () => {
+    // a roll day: two holdings share the short call, so the link declines to name either — and
+    // the reply schema would strip `held` as it strips any field it does not list
+    h = harness();
+    for (const [id, name] of [["a".repeat(32), "old"], ["b".repeat(32), "new"]]) {
+      h.db.prepare(
+        `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+         values (?, ?, 'credit_spread', ?, 1, 2.0, ?, '2026-09-24 02:58:57.456253')`,
+      ).run(id!, name!, future(), JSON.stringify([{ side: "short", option_type: "CALL", strike: 6500 }]));
+    }
+    await post(single());
+    await post(single({ strike: 6550 }));
+    const quotes = await body(await h.call("/quotes"));
+    expect(quotes.map((q: { positions: unknown[]; held: boolean }) => [q.positions.length, q.held]))
+      .toEqual([[0, true], [0, false]]);
+  });
+
+  it("keeps every row when one rule's reading cannot be written as JSON", async () => {
+    // a field the quote schema does not type passes through, so its Infinity reached `watched`
+    // and the reply schema refused the whole watchlist: one row's figure took down every row
+    h = harness({
+      fetchQuotes: (codes) => Promise.resolve(codes.map((code) => ({
+        code, option_delta: 0.45, option_open_interest: Infinity,
+      }))),
+    });
+    await post(single());
+    const far = (await body(await post(single({
+      strike: 6550, field: "option_open_interest", threshold: 1000,
+    })))).id;
+    const resp = await h.call("/quotes");
+    expect(resp.status).toBe(200);
+    const quotes = await body(resp);
+    expect(quotes).toHaveLength(2);
+    const row = quotes.find((q: { id: string }) => q.id === far);
+    expect([row.watched, row.distance, row.fill, row.triggered]).toEqual([null, null, 100, true]);
+  });
+
   it("answers 502 rather than 500 when the Provider call fails", async () => {
     h = harness({ fetchQuotes: echoThenFail() });
     await post(single());

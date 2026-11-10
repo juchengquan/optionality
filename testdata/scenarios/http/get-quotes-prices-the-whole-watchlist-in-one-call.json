@@ -228,11 +228,15 @@
               "name": "dec-condor"
             }
           ],
+          "held": true,
+          "in_combos": [],
           "cost_to_close": 1,
           "schedule": null,
           "entry": null,
           "pnl": null,
-          "fill": 25
+          "fill": 25,
+          "watched": -1,
+          "distance": 3
         },
         {
           "id": "mon-1",
@@ -267,11 +271,17 @@
               "name": "dec-condor"
             }
           ],
+          "held": true,
+          "in_combos": [
+            "mon-2"
+          ],
           "cost_to_close": null,
           "schedule": null,
           "entry": null,
           "pnl": null,
-          "fill": 70
+          "fill": 70,
+          "watched": 0.21,
+          "distance": 0.09
         }
       ]
     },

@@ -249,6 +249,89 @@
         2
       ],
       "expect": null
+    },
+    {
+      "fn": "captured",
+      "name": "a credit, a third of it kept",
+      "args": [
+        3,
+        2
+      ],
+      "expect": 0.3333333333333333
+    },
+    {
+      "fn": "captured",
+      "name": "a credit at its target",
+      "args": [
+        3,
+        1.5
+      ],
+      "expect": 0.5
+    },
+    {
+      "fn": "captured",
+      "name": "closing would cost more than was taken in",
+      "args": [
+        3,
+        6
+      ],
+      "expect": -1
+    },
+    {
+      "fn": "captured",
+      "name": "unrounded",
+      "args": [
+        6.4,
+        3.25
+      ],
+      "expect": 0.49218750000000006
+    },
+    {
+      "fn": "captured",
+      "name": "a debit has no credit to keep",
+      "args": [
+        -5,
+        8
+      ],
+      "expect": null
+    },
+    {
+      "fn": "captured",
+      "name": "nor has a zero entry",
+      "args": [
+        0,
+        1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "captured",
+      "name": "no entry",
+      "args": [
+        null,
+        1.9
+      ],
+      "expect": null
+    },
+    {
+      "fn": "captured",
+      "name": "no cost to close yet",
+      "args": [
+        3,
+        null
+      ],
+      "expect": null
+    },
+    {
+      "fn": "captured",
+      "name": "a NaN cost to close is no share",
+      "args": [
+        3,
+        {
+          "$num": "NaN"
+        }
+      ],
+      "expect": null
     }
   ]
 }
