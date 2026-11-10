@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Entry, Health, Holding, Monitor } from "../api";
-import { isEntrySignal, needsYou, sentence } from "../next/needs";
+import { isEntrySignal, needsYou, sentence, toneOf } from "../next/needs";
 
 const health = (over: Partial<{ ok: boolean; bad: boolean }> = {}) => ({
   db: true,
@@ -48,9 +48,20 @@ describe("a quarantined rule is a fault", () => {
     ], health(), null);
     expect(items.map((n) => n.kind)).toEqual(["fault", "fault", "fault"]);
     expect(items.map((n) => n.text)).toEqual([
-      "261211 6800P quarantined — its figure never arrives",
-      "1211_8300 quarantined — the provider does not know its contract",
-      "261211 6800P quarantined — its stored row cannot be read",
+      "261211 6800P delta quarantined — its figure never arrives",
+      "1211_8300 spread delta quarantined — the provider does not know its contract",
+      "261211 6800P delta quarantined — its stored row cannot be read",
+    ]);
+  });
+
+  it("tells two quarantined rules on one contract apart by what each watches", () => {
+    const items = needsYou([], [
+      monitor({ id: "a", field: "option_delta" }),
+      monitor({ id: "b", field: "mid_price" }),
+    ], health(), null);
+    expect(items.map((n) => n.text)).toEqual([
+      "261211 6800P delta quarantined — its figure never arrives",
+      "261211 6800P mid quarantined — its figure never arrives",
     ]);
   });
 
@@ -130,29 +141,54 @@ describe("holdings, when the page has them", () => {
 
 describe("a rule said as a sentence", () => {
   it("says what it watches, against what, where it is now and how far it has to go", () => {
-    expect(sentence(entry({}))).toBe("spread value ≥ 6.01 — now 2.00, 4.01 away");
+    expect(sentence(entry({ compare: "signed" }))).toBe("spread value ≥ 6.01 — now 2.00, 4.01 away");
+  });
+
+  it("marks a rule that compares the size of its figure, and shows the figure as it is", () => {
+    // a credit spread summed with the short leg negative is a negative figure; under compare abs
+    // the bell, the bar and the distance all compare its size, which the bars say without the
+    // page computing an absolute value of its own (ADR 0005)
+    expect(sentence(entry({ watched: -2, distance: 4.01 })))
+      .toBe("|spread value| ≥ 6.01 — now -2.00, 4.01 away");
   });
 
   it("names a single leg's figure and keeps the digits a delta needs", () => {
     expect(sentence(entry({ legs: undefined, field: "option_delta", threshold: 0.2,
-      watched: -0.1684, distance: 0.0316 }))).toBe("delta ≥ 0.2 — now -0.168, 0.032 away");
+      watched: -0.1684, distance: 0.0316 }))).toBe("|delta| ≥ 0.2 — now -0.168, 0.032 away");
   });
 
-  it("says a signed comparison, which an absolute one does not need to", () => {
+  it("writes a signed comparison without the bars", () => {
     expect(sentence(entry({ legs: undefined, field: "option_delta", threshold: -0.3,
       direction: "below", compare: "signed", watched: -0.25, distance: 0.05 })))
-      .toBe("delta ≤ -0.3 signed — now -0.250, 0.050 away");
+      .toBe("delta ≤ -0.3 — now -0.250, 0.050 away");
   });
 
   it("says a breached rule is past its threshold, or at it", () => {
     expect(sentence(entry({ watched: 6.2, distance: -0.19 })))
-      .toBe("spread value ≥ 6.01 — now 6.20, past it by 0.19");
+      .toBe("|spread value| ≥ 6.01 — now 6.20, past it by 0.19");
     expect(sentence(entry({ watched: 6.01, distance: 0 })))
-      .toBe("spread value ≥ 6.01 — now 6.01, at the threshold");
+      .toBe("|spread value| ≥ 6.01 — now 6.01, at the threshold");
   });
 
   it("says when there is no figure rather than printing a stale one", () => {
     expect(sentence(entry({ watched: null, distance: null })))
-      .toBe("spread value ≥ 6.01 — no figure");
+      .toBe("|spread value| ≥ 6.01 — no figure");
+  });
+});
+
+describe("the line's tone is its worst item's", () => {
+  const n = (kind: string) => ({ kind, text: kind }) as never;
+  it("is bad for a fault, a stop or an alarm", () => {
+    for (const k of ["fault", "stop", "alarm"]) expect(toneOf([n("target"), n(k)], false)).toBe("bad");
+  });
+
+  it("is a warning for a manage-by, which is a deadline and not good news", () => {
+    expect(toneOf([n("manage")], false)).toBe("warn");
+    expect(toneOf([n("target"), n("manage")], false)).toBe("warn");
+  });
+
+  it("is good for an entry signal or a Target, unless entries are to look like risk", () => {
+    expect(toneOf([n("entry"), n("target")], false)).toBe("good");
+    expect(toneOf([n("entry")], true)).toBe("bad");
   });
 });

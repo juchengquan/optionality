@@ -1,11 +1,11 @@
 /** The redesigned page at the desk, measured in a real layout engine (ADR 0008, ADR 0023).
  *  The phone is measured in `NextLayout.iphone.test.tsx`, under an iPhone profile. */
 import { cleanup, render } from "@testing-library/react";
-import { page } from "@vitest/browser/context";
+import { commands, page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { overflowsSideways, serveBook, settle } from "./nextBook";
+import { oklab, overflowsSideways, serveBook, settle, token } from "./nextBook";
 
 const root = () => document.querySelector<HTMLElement>(".nx")!;
 
@@ -18,6 +18,8 @@ async function show() {
 afterEach(async () => {
   cleanup();
   document.cookie = "ui_up=;path=/;max-age=0";
+  document.cookie = "ui_privacy=;path=/;max-age=0";
+  await commands.colorScheme("light");
   await page.viewport(1280, 900);
 });
 
@@ -52,6 +54,15 @@ describe("the arrangement is chosen by the measured width", () => {
     expect(root().dataset.arrangement).toBe("desk");
   });
 
+  for (const width of [320, 899]) {
+    it(`pushes nothing sideways at ${width}px either`, async () => {
+      await page.viewport(width, 900);
+      await show();
+      expect(root().dataset.arrangement).toBe("phone");
+      expect(overflowsSideways()).toBe(false);
+    });
+  }
+
   it("fits a wide desk too", async () => {
     await page.viewport(2560, 1200);
     await show();
@@ -62,10 +73,7 @@ describe("the arrangement is chosen by the measured width", () => {
 /** The rule the three colour families exist for: flipping which way is up moves direction and
  *  outcome together, and moves nothing that asks for attention (ADR 0023). */
 describe("the colour families", () => {
-  const tokens = (names: string[]) => {
-    const style = getComputedStyle(root());
-    return Object.fromEntries(names.map((n) => [n, style.getPropertyValue(n).trim()]));
-  };
+  const tokens = (names: string[]) => Object.fromEntries(names.map((n) => [n, token(root(), n)]));
   const ATTENTION = ["--alarm", "--warn", "--fault", "--entry", "--chip-ink"];
 
   it("swaps up and down, and gain and loss with them, when red is up", async () => {
@@ -83,14 +91,47 @@ describe("the colour families", () => {
     expect(red["--loss"]).toBe(red["--down"]);
   });
 
-  it("leaves every attention colour where it was", async () => {
+  for (const scheme of ["light", "dark"] as const) {
+    it(`leaves every attention colour where it was, in the ${scheme} scheme`, async () => {
+      await commands.colorScheme(scheme);
+      await show();
+      expect(matchMedia("(prefers-color-scheme: dark)").matches).toBe(scheme === "dark");
+      const before = tokens(ATTENTION);
+      root().dataset.up = "red";
+      expect(tokens(ATTENTION)).toEqual(before);
+    });
+
+    /** Not merely different strings: far enough apart to be told apart at a glance, and apart in
+     *  LIGHTNESS too, as ADR 0023 says — so a viewer who cannot tell the hues apart still can. */
+    it(`keeps every attention colour well away from up and from down, in the ${scheme} scheme`, async () => {
+      await commands.colorScheme(scheme);
+      await show();
+      const near: string[] = [];
+      for (const up of ["green", "red"]) {
+        root().dataset.up = up;
+        for (const direction of ["--up", "--down"]) {
+          const d = oklab(token(root(), direction));
+          for (const name of ["--alarm", "--warn", "--fault", "--entry"]) {
+            const t = oklab(token(root(), name));
+            const dE = Math.hypot(t.L - d.L, t.a - d.a, t.b - d.b);
+            if (dE < 0.15 || Math.abs(t.L - d.L) < 0.08) {
+              near.push(`${name} vs ${direction} (up ${up}): ΔE ${dE.toFixed(3)}, ΔL ${(t.L - d.L).toFixed(3)}`);
+            }
+          }
+        }
+      }
+      expect(near).toEqual([]);
+    });
+  }
+
+  it("draws the dark scheme from colours of its own", async () => {
+    await commands.colorScheme("light");
     await show();
-    const before = tokens(ATTENTION);
-    root().dataset.up = "red";
-    expect(tokens(ATTENTION)).toEqual(before);
-    // and none of them is either direction's colour, whichever way up
-    const directions = Object.values(tokens(["--up", "--down"]));
-    for (const value of Object.values(before)) expect(directions).not.toContain(value);
+    const light = tokens(ATTENTION);
+    cleanup();
+    await commands.colorScheme("dark");
+    await show();
+    expect(tokens(ATTENTION)["--alarm"]).not.toBe(light["--alarm"]);
   });
 
   it("paints a fired entry signal as an alarm only when the viewer asks for that", async () => {
@@ -100,5 +141,16 @@ describe("the colour families", () => {
     expect(getComputedStyle(chip).getPropertyValue("--chip").trim()).not.toBe(alarm);
     root().dataset.entry = "risk";
     expect(getComputedStyle(chip).getPropertyValue("--chip").trim()).toBe(alarm);
+  });
+});
+
+describe("privacy, in a real browser", () => {
+  it("leaves no money anywhere on the page, and keeps the share captured", async () => {
+    document.cookie = "ui_privacy=on;path=/";
+    await show();
+    const page = root().textContent!;
+    expect(page).not.toMatch(/\$\s*[\d,]/);
+    for (const m of document.querySelectorAll("[data-money]")) expect(m.textContent).not.toMatch(/\d/);
+    expect(page).toContain("captured 60%");
   });
 });

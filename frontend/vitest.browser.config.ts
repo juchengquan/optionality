@@ -2,7 +2,16 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { devices } from "playwright";
+import type { BrowserCommand } from "vitest/node";
 import { defineConfig } from "vitest/config";
+
+/** Switch the page between the light and the dark scheme. The redesign is read at night (ADR 0023,
+ *  "dark first"), so its colours are measured in BOTH schemes, and the browser context is the only
+ *  thing that can set `prefers-color-scheme`. A test calls it as `commands.colorScheme("dark")`. */
+const colorScheme: BrowserCommand<["light" | "dark"]> = async (context, scheme) => {
+  const { page } = context as unknown as { page: { emulateMedia: (o: object) => Promise<void> } };
+  await page.emulateMedia({ colorScheme: scheme });
+};
 
 
 /** The small suite that needs a real layout engine.
@@ -33,6 +42,7 @@ export default defineConfig({
       enabled: true,
       provider: "playwright",
       headless: true,
+      commands: { colorScheme },
       // Two instances of the one browser. The second is an iPhone as Playwright profiles it —
       // `isMobile`, touch, its user agent and its 390px width — and runs only the `.iphone.` files:
       // ADR 0023 has the redesign measured "at an iPhone profile", because a 390px desktop window

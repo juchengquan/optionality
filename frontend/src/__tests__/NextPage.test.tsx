@@ -39,14 +39,30 @@ const holding = {
   schedule: null, captured: 0.6,
 };
 
+const holdingRule = {
+  ...spread, id: "r1", code: "1231_7000P", strike_date: "2026-12-31", field: "option_delta",
+  threshold: 0.3, positions: [{ id: "p1", name: "1231_7000P" }], scope: "all", held: true,
+  watched: 0.22, distance: 0.08,
+};
+
 let calls: string[] = [];
+/** paths the fake service refuses, with a 502 as a Provider outage gives */
+let refusing = new Set<string>();
+let quotes: object[] = [spread, shortLeg];
 
 function serve() {
   calls = [];
+  refusing = new Set();
+  quotes = [spread, shortLeg];
   window.fetch = ((url: string) => {
     const path = String(url).replace(/^.*\/api/, "");
     calls.push(path);
-    const body = path === "/quotes" ? [spread, shortLeg]
+    if (refusing.has(path)) {
+      return Promise.resolve({
+        ok: false, status: 502, json: () => Promise.resolve({ detail: "moomoo call failed" }),
+      });
+    }
+    const body = path === "/quotes" ? quotes
       : path === "/monitors" ? [quarantined]
         : path === "/health" ? health
           : path === "/references" ? []
@@ -99,7 +115,88 @@ describe("what it asks for in each mode", () => {
   });
 });
 
+describe("asking again", () => {
+  it("asks for the holdings, and not the References, on switching into REVIEW", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    calls = [];
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    await waitFor(() => expect(calls).toContain("/positions/values"));
+    expect(calls).not.toContain("/references");
+  });
+
+  it("values the holdings and reads the References afresh when Settings opens, in REVIEW too", async () => {
+    at(SUNDAY);
+    await open();
+    calls = [];
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await waitFor(() => expect(calls).toContain("/positions/values"));
+    // REVIEW polls neither, and Settings is where References are kept or dropped
+    expect(calls).toContain("/references");
+    expect(screen.getByText(/holdings valued at/)).toBeTruthy();
+  });
+});
+
+describe("when part of the service fails", () => {
+  it("still says the Provider is down and what is quarantined when /quotes fails", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    window.fetch = ((url: string) => {
+      const path = String(url).replace(/^.*\/api/, "");
+      const body = path === "/health" ? { ...health, provider: { name: "moomoo", ok: false } }
+        : path === "/monitors" ? [quarantined] : [];
+      return path === "/quotes"
+        ? Promise.resolve({ ok: false, status: 502, json: () => Promise.resolve({ detail: "moomoo call failed" }) })
+        : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    }) as unknown as typeof fetch;
+    render(<Next />);
+    const line = await screen.findByRole("status", { name: "needs you" });
+    expect(line.textContent).toContain("moomoo down");
+    expect(line.textContent).toContain("quarantined");
+    expect(screen.getByRole("alert").textContent).toContain("/quotes → 502");
+  });
+
+  it("keeps a holding's rules on the page when its valuation fails", async () => {
+    at(SESSION);
+    quotes = [spread, holdingRule];
+    refusing.add("/positions/values");
+    render(<Next />);
+    await waitFor(() => expect(screen.getByText(/could not be valued/)).toBeTruthy());
+    expect(document.querySelector('[data-testid="unplaced"] [data-ref="r1"]')).toBeTruthy();
+  });
+
+  it("drops the money of a valuation that has since failed, rather than showing it as current", async () => {
+    at(SESSION);
+    await open();
+    await waitFor(() => expect(document.querySelector('[data-ref="p1"] [data-money]')).toBeTruthy());
+    refusing.add("/positions/values");
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    await waitFor(() => expect(screen.getByText(/could not be valued/)).toBeTruthy());
+    expect(document.querySelector('[data-ref="p1"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("$180");
+  });
+});
+
 describe("the mode", () => {
+  it("ends a choice when the clock's own mode next changes", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T13:00:00Z"); // Monday 08:00 New York, before the open
+    await open();
+    const root = document.querySelector(".nx")!;
+    fireEvent.click(screen.getByRole("button", { name: "Live" }));
+    expect(screen.getByText("your choice")).toBeTruthy();
+
+    vi.setSystemTime(new Date("2026-11-09T14:31:00Z")); // 09:31: the clock agrees now
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(screen.getByText("by the clock")).toBeTruthy();
+    expect(root.getAttribute("data-mode")).toBe("live");
+
+    vi.setSystemTime(new Date("2026-11-09T21:16:00Z")); // 16:16: the session is over
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(root.getAttribute("data-mode")).toBe("review");
+  });
+
   it("follows the clock until the owner picks one, and goes back to it", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(SESSION);
@@ -135,7 +232,7 @@ describe("the needs-you line", () => {
       at(now);
       await open();
       const line = screen.getByRole("status", { name: "needs you" });
-      expect(line.textContent).toContain("261211 8300C quarantined — the provider does not know its contract");
+      expect(line.textContent).toContain("261211 8300C delta quarantined — the provider does not know its contract");
       expect(line.getAttribute("data-tone")).toBe("bad");
     });
   }
@@ -157,8 +254,11 @@ describe("the book", () => {
     at(SESSION);
     await open();
     const row = document.querySelector('[data-ref="w1"]')!;
-    expect(row.textContent).toContain("spread value ≥ 6.01 — now 2.00, 4.01 away");
-    expect(row.textContent).toContain("delta ≥ 0.2 — now -0.150, 0.050 away");
+    expect(row.textContent).toContain("|spread value| ≥ 6.01 — now 2.00, 4.01 away");
+    expect(document.querySelector('[data-ref="w2"]')!.textContent)
+      .toContain("|delta| ≥ 0.2 — now -0.150, 0.050 away");
+    // nested: inside the spread's own list item, not beside it
+    expect(row.closest("li")!.contains(document.querySelector('[data-ref="w2"]'))).toBe(true);
   });
 
   it("hides the money and keeps the share captured when privacy is on", async () => {
@@ -180,7 +280,31 @@ describe("the book", () => {
   });
 });
 
+describe("a banner leads to its row", () => {
+  it("marks a rule nested under its spread", async () => {
+    at(SESSION);
+    quotes = [spread, { ...shortLeg, triggered: true }];
+    await open();
+    const banners = screen.getByRole("status", { name: "needs you" });
+    fireEvent.click(within(banners).getByRole("button", { name: /261218 7150P entry signal/ }));
+    expect(document.querySelector('[data-ref="w2"]')!.hasAttribute("data-revealed")).toBe(true);
+  });
+});
+
 describe("settings", () => {
+  it("gives its Back entry back when the desk turns into the phone with it open", async () => {
+    // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
+    const pushed = vi.spyOn(window.history, "pushState");
+    const back = vi.spyOn(window.history, "back");
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    expect(pushed).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "phone" } });
+    expect(back).toHaveBeenCalledTimes(1);
+  });
+
   it("turns the page red-up and remembers it", async () => {
     at(SESSION);
     await open();

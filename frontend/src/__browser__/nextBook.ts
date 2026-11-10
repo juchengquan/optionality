@@ -57,8 +57,21 @@ const references = [
     field: "mid_price", name: "S&P 500", error: null, last_known: false },
 ];
 
+declare module "@vitest/browser/context" {
+  interface BrowserCommands {
+    colorScheme: (scheme: "light" | "dark") => Promise<void>;
+  }
+}
+
+/** Every write is refused, as the service refuses one it will not take: a layout suite never
+ *  changes the book, and a refusal is how a toast gets onto the page to be measured. */
 export function serveBook(): void {
-  window.fetch = ((url: string) => {
+  window.fetch = ((url: string, init?: RequestInit) => {
+    if (init?.method && init.method !== "GET") {
+      return Promise.resolve({
+        ok: false, status: 409, json: () => Promise.resolve({ detail: "refused by the test service" }),
+      });
+    }
     const path = String(url).replace(/^.*\/api/, "");
     const body = path === "/quotes" ? quotes : path === "/monitors" ? monitors
       : path === "/health" ? health : path === "/references" ? references
@@ -73,4 +86,23 @@ export const settle = () => new Promise((r) => setTimeout(r, 250));
 export function overflowsSideways(): boolean {
   const root = document.documentElement;
   return root.scrollWidth > root.clientWidth;
+}
+
+/** A colour token as the page resolved it, followed through any `var()` it names. */
+export function token(el: Element, name: string): string {
+  let value = getComputedStyle(el).getPropertyValue(name).trim();
+  for (let i = 0; i < 4; i++) {
+    const ref = /^var\((--[\w-]+)\)$/.exec(value);
+    if (!ref) break;
+    value = getComputedStyle(el).getPropertyValue(ref[1]!).trim();
+  }
+  return value;
+}
+
+/** OKLCH as written in next.css, as OKLab: lightness and the two opponent axes. */
+export function oklab(value: string): { L: number; a: number; b: number } {
+  const m = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/.exec(value);
+  if (!m) throw new Error(`not an oklch() colour: "${value}"`);
+  const [L, C, h] = [Number(m[1]), Number(m[2]), Number(m[3]) * Math.PI / 180];
+  return { L, a: C * Math.cos(h), b: C * Math.sin(h) };
 }

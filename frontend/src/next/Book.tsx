@@ -16,14 +16,22 @@ import { entryName, isEntrySignal, sentence } from "./needs";
  *  - a single-leg rule whose contract is a leg of a watched spread (`in_combos`, a link the
  *    service discovers) sits under that spread, which is how a short leg's delta joins its spread.
  */
-export function Book({ quotes, holdings, holdingsError, mode, privacy }: {
+export function Book({ quotes, holdings, holdingsError, holdingsAt, mode, privacy }: {
   quotes: Entry[];
+  /** null while not valued, and after a valuation failed: the error is said INSTEAD of figures
+   *  nobody can vouch for, as at `/opt` */
   holdings: Holding[] | null;
   holdingsError: string | null;
+  /** when this screen last valued them, said in REVIEW, where they are not polled */
+  holdingsAt: string | null;
   mode: Mode;
   privacy: boolean;
 }) {
   const watchlist = quotes.filter(isEntrySignal);
+  // a rule on something held whose holding is not drawn — the valuation failed or has not arrived,
+  // or two holdings share its contract — is still a risk rule, and still shown
+  const drawn = new Set((holdings ?? []).map((h) => h.id));
+  const unplaced = quotes.filter((e) => !isEntrySignal(e) && !e.positions.some((p) => drawn.has(p.id)));
   const ids = new Set(watchlist.map((e) => e.id));
   // a leg rule that has a spread on the watchlist to sit under; one whose spreads are all held or
   // gone stands alone rather than disappearing
@@ -40,6 +48,8 @@ export function Book({ quotes, holdings, holdingsError, mode, privacy }: {
           : null}
         {holdings === null && holdingsError === null ? <p className="nx-meta">valuing…</p> : null}
         {holdings !== null && holdings.length === 0 ? <p className="nx-meta">nothing held</p> : null}
+        {mode === "review" && holdings !== null && holdingsAt
+          ? <p className="nx-meta">{`valued at ${holdingsAt}`}</p> : null}
         {byExpiry(holdings ?? []).map(([expiry, group]) => (
           <div key={expiry} className="nx-expiry">
             <h3>{expiry}</h3>
@@ -51,6 +61,17 @@ export function Book({ quotes, holdings, holdingsError, mode, privacy }: {
             </ul>
           </div>
         ))}
+        {unplaced.length > 0 ? (
+          <div className="nx-expiry" data-testid="unplaced">
+            <h3>rules on held contracts</h3>
+            <p className="nx-meta">
+              {holdings === null
+                ? "the holdings are not valued, so the rules about them are listed on their own"
+                : "each watches a held contract that no single holding owns, as on a roll day"}
+            </p>
+            <ul>{unplaced.map((e) => <li key={e.id} className="nx-item"><Rule entry={e} /></li>)}</ul>
+          </div>
+        ) : null}
       </section>
 
       <section aria-labelledby="nx-watchlist">
@@ -61,7 +82,7 @@ export function Book({ quotes, holdings, holdingsError, mode, privacy }: {
             <h3>{expiry}</h3>
             <ul>
               {group.map((e) => (
-                <li key={e.id} className="nx-item" data-ref={e.id}>
+                <li key={e.id} className="nx-item">
                   <Rule entry={e} />
                   {e.legs && under(e).length > 0 ? (
                     <ul className="nx-under">
@@ -114,7 +135,7 @@ export function Chip({ state }: { state: keyof typeof CHIP }) {
 function Rule({ entry }: { entry: Entry }) {
   const state = ruleState(entry);
   return (
-    <div className="nx-rule" data-state={state ?? "calm"}>
+    <div className="nx-rule" data-ref={entry.id} data-state={state ?? "calm"}>
       <span className="nx-name">{entryName(entry)}</span>
       {entry.legs ? <span className="nx-legs">{legSummary(entry.legs)}</span> : null}
       <span className="nx-sentence">{sentence(entry)}</span>
@@ -148,8 +169,8 @@ function HoldingItem({ holding, rules, mode, privacy }: {
   const s = holding.schedule;
   const level = s?.reached ?? null;
   return (
-    <li className="nx-item" data-ref={holding.id}>
-      <div className="nx-holding">
+    <li className="nx-item">
+      <div className="nx-holding" data-ref={holding.id}>
         <span className="nx-name">{holding.name}</span>
         <span className="nx-legs">{holdingLegs(holding)}</span>
         {mode === "live" ? (

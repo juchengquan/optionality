@@ -20,6 +20,8 @@ export interface SettingsProps {
   needs: Need[];
   /** whether the list can claim to be whole: only with every holding valued (ADR 0012) */
   complete: boolean;
+  /** when the holdings it read were valued — asked for again whenever Settings opens */
+  holdingsAt: string | null;
   references: Reference[];
   onAddReference: (body: { code: string; label?: string; source: Source }) => Promise<boolean>;
   onRemoveReference: (id: string) => void;
@@ -39,7 +41,8 @@ export function Settings(p: SettingsProps) {
         {p.needs.length === 0
           ? <p className="nx-meta">{p.complete ? "nothing needs you"
             : "nothing the page can see — the holdings are not valued, so this may be short"}</p>
-          : <ul className="nx-meta">{p.needs.map((n) => <li key={n.kind + n.text}>{n.text}</li>)}</ul>}
+          : <ul className="nx-meta">{p.needs.map((n, i) => <li key={`${i}:${n.text}`}>{n.text}</li>)}</ul>}
+        {p.holdingsAt ? <p className="nx-meta">{`holdings valued at ${p.holdingsAt}`}</p> : null}
       </section>
 
       <section data-testid="service">

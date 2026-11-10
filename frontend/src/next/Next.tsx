@@ -20,7 +20,7 @@ import { ReferenceStrip } from "../ReferenceStrip";
 import { useDismissOnBack } from "../useDismissOnBack";
 import { arrangementFor, useViewportWidth } from "./arrangement";
 import { Book } from "./Book";
-import { clockMode, useMinuteClock, type Mode } from "./mode";
+import { clockMode, useSessionClock, type Mode } from "./mode";
 import { NeedsLine } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Settings } from "./Settings";
@@ -37,11 +37,22 @@ export function Next() {
   const [privacy, setPrivacy] = useState(readPrivacy);
   const [choice, setChoice] = useState(readArrangement);
   const arrangement = arrangementFor(useViewportWidth(), choice);
+  const phone = arrangement === "phone";
 
-  // the clock's mode unless the owner chose one; choosing the mode the clock would pick anyway
-  // hands the page back to the clock, so the override never outlives its reason
-  const byClock = clockMode(useMinuteClock());
+  // On the document as well as the page: a dialog or a toast is drawn in a portal outside `.nx`,
+  // and on a phone its buttons need the same 44pt targets (next.css).
+  useEffect(() => {
+    document.documentElement.dataset.nxArrangement = arrangement;
+    return () => { delete document.documentElement.dataset.nxArrangement; };
+  }, [arrangement]);
+
+  // The clock's mode unless the owner chose one. A choice lasts until the clock's own mode next
+  // changes — LIVE picked at 08:00 New York is still LIVE at the open and becomes REVIEW at the
+  // close, rather than polling the Provider all night — and choosing what the clock would pick
+  // hands the page straight back to it.
+  const byClock = clockMode(useSessionClock());
   const [chosen, setChosen] = useState<Mode | null>(null);
+  useEffect(() => { setChosen(null); }, [byClock]);
   const mode = chosen ?? byClock;
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
@@ -49,8 +60,16 @@ export function Next() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
-  // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once in
-  // REVIEW, so in REVIEW their Levels wait for Settings, which can say how old they are
+  // Settings is the one surface that may say "nothing needs you" (ADR 0012), so opening it asks
+  // for the holdings afresh, whatever the mode — in REVIEW they are otherwise as old as the mode.
+  // And it is where References are kept or dropped, so it reads them too: REVIEW polls neither.
+  const { loadHoldings, loadReferences } = book;
+  useEffect(() => {
+    if (settingsOpen) void Promise.all([loadHoldings(), loadReferences()]);
+  }, [settingsOpen, loadHoldings, loadReferences]);
+
+  // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once
+  // in REVIEW, so in REVIEW their Levels are left to Settings, which asks again and says when
   const items = useMemo(
     () => needsYou(book.quotes, book.monitors, book.health, mode === "live" ? book.holdings : null),
     [book.quotes, book.monitors, book.health, book.holdings, mode],
@@ -69,13 +88,13 @@ export function Next() {
       refresh={book.refresh} onRefresh={(n) => { book.setRefresh(n); writeRefresh(n); }}
       health={book.health} needs={everything}
       complete={book.holdings !== null && book.holdingsError === null}
+      holdingsAt={book.holdingsAt}
       references={book.references}
       onAddReference={(body) => book.act(() => addReference(body))}
       onRemoveReference={(id) => void book.act(() => removeReference(id))}
     />
   );
 
-  const phone = arrangement === "phone";
   return (
     <div className="nx" data-arrangement={arrangement} data-mode={mode} data-up={up}
          data-entry={entryStyle}>
@@ -99,10 +118,12 @@ export function Next() {
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
                    sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
         <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} />
-        <ReferenceStrip references={book.references} />
+        {/* the market as it is now, so only in LIVE: in REVIEW nothing re-reads it, and a strip
+            frozen at the moment the mode was entered would be read as current (ADR 0018) */}
+        {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
         {phone && settingsOpen ? settings : (
           <Book quotes={book.quotes} holdings={book.holdings} holdingsError={book.holdingsError}
-                mode={mode} privacy={privacy} />
+                holdingsAt={book.holdingsAt} mode={mode} privacy={privacy} />
         )}
       </main>
 
@@ -110,9 +131,13 @@ export function Next() {
         <TabBar mode={mode} settings={settingsOpen}
                 onMode={(m) => { setSettingsOpen(false); pickMode(m); }}
                 onSettings={() => setSettingsOpen(true)} />
-      ) : (
-        <DeskSettings open={settingsOpen} onClose={closeSettings}>{settings}</DeskSettings>
-      )}
+      ) : null}
+      {/* Mounted in both arrangements and only OPEN on the desk: switching to the phone with it
+          open then closes it, and closing is what takes its history entry back off the stack.
+          Unmounted instead, the entry stayed and the next Back press did nothing. */}
+      <DeskSettings open={settingsOpen && !phone} onClose={closeSettings}>
+        {phone ? null : settings}
+      </DeskSettings>
       <Toaster />
     </div>
   );
@@ -175,10 +200,13 @@ function beingOperated(el: Element | null): boolean {
  *
  *  The LINE's inputs — the watchlist, the rules and health — are polled in both modes: REVIEW
  *  carries the needs-you line and every fault, and a line can only do that if what it reads keeps
- *  coming. The rest is market data beyond the line, the holdings' valuation and the References: in
- *  LIVE it is polled with the line, in REVIEW asked for once when the mode is entered (ADR 0023).
- *  Polling holdings in LIVE is a second batch per poll (ADR 0010), the cost of holdings leading the
- *  page; with nothing held it asks the Provider nothing.
+ *  coming. Each is read on its own, so a Provider outage that fails `/quotes` still lets health
+ *  say so and the rules' quarantines through.
+ *
+ *  Beyond the line, LIVE also polls the holdings' valuation and the References: three market-data
+ *  calls per poll where `/opt` makes two (ADR 0010), the cost of holdings leading the page; with
+ *  nothing held the valuation asks the Provider nothing. REVIEW asks for the holdings once, on
+ *  entering it, and not for the References, which it does not show.
  */
 function useBook(mode: Mode) {
   const [quotes, setQuotes] = useState<Entry[]>([]);
@@ -187,6 +215,7 @@ function useBook(mode: Mode) {
   const [references, setReferences] = useState<Reference[]>([]);
   const [holdings, setHoldings] = useState<Holding[] | null>(null);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
+  const [holdingsAt, setHoldingsAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [polledAt, setPolledAt] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
@@ -195,39 +224,57 @@ function useBook(mode: Mode) {
   const live = mode === "live";
 
   const loadLine = useCallback(async () => {
-    try {
-      const [q, m, h] = await Promise.all([fetchQuotes(), fetchMonitors(), fetchHealth()]);
-      setQuotes(q);
-      setMonitors(m);
-      setHealth(h);
+    const [q, m, h] = await Promise.allSettled([fetchQuotes(), fetchMonitors(), fetchHealth()]);
+    if (q.status === "fulfilled") setQuotes(q.value);
+    if (m.status === "fulfilled") setMonitors(m.value);
+    if (h.status === "fulfilled") setHealth(h.value);
+    const failed = [q, m, h].find((r) => r.status === "rejected");
+    if (failed) {
+      // the page still renders when the service is unhappy; this says the figures are stale and
+      // stays up until a poll succeeds
+      const why: unknown = failed.reason;
+      setError(why instanceof Error ? why.message : String(why));
+    } else {
+      // only when everything arrived: "screen updated" is a claim about the figures
       setPolledAt(clockTime(new Date()));
       setError(null);
-    } catch (e: unknown) {
-      // the page still renders when the service is unhappy; this says every figure is stale and
-      // stays up until a poll succeeds
-      setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
-  const loadRest = useCallback(async () => {
-    await Promise.all([
-      // a backdrop never blanks the page, and an empty list takes the strip away rather than
-      // leaving figures nobody can vouch for (ADR 0018)
-      fetchReferences().then(setReferences, () => setReferences([])),
-      fetchHoldings().then(
-        (h) => { setHoldings(h); setHoldingsError(null); },
-        (e: unknown) => setHoldingsError(e instanceof Error ? e.message : String(e)),
-      ),
-    ]);
+  const loadHoldings = useCallback(async () => {
+    try {
+      setHoldings(await fetchHoldings());
+      setHoldingsAt(clockTime(new Date()));
+      setHoldingsError(null);
+    } catch (e: unknown) {
+      // CLEARED, unlike `/opt`, which keeps the rows and relies on drawing the error first: here
+      // the needs-you line reads them too, and must not go on saying a Level from a valuation
+      // that has since failed
+      setHoldings(null);
+      setHoldingsError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
 
+  const loadReferences = useCallback(
+    // a backdrop never blanks the page, and an empty list takes the strip away rather than
+    // leaving figures nobody can vouch for (ADR 0018)
+    () => fetchReferences().then(setReferences, () => setReferences([])),
+    [],
+  );
+
+  /** `rest`: the market data beyond the line — the holdings, and in LIVE the References. */
   const load = useCallback(
-    (rest: boolean) => Promise.all([loadLine(), rest ? loadRest() : null]).then(() => undefined),
-    [loadLine, loadRest],
+    (rest: boolean) => Promise.all([
+      loadLine(),
+      rest ? loadHoldings() : null,
+      rest && live ? loadReferences() : null,
+    ]).then(() => undefined),
+    [loadLine, loadHoldings, loadReferences, live],
   );
 
   // everything once on opening and on every change of mode: entering REVIEW is when it asks
-  useEffect(() => { void load(true); }, [load, mode]);
+  // (`load` changes with the mode, so this runs once per mode)
+  useEffect(() => { void load(true); }, [load]);
 
   // the viewer's cadence if chosen, the service's sweep if not (prefs.readRefresh)
   useEffect(() => {
@@ -265,7 +312,7 @@ function useBook(mode: Mode) {
   }, [load]);
 
   return {
-    quotes, monitors, health, references, holdings, holdingsError, error, polledAt,
-    refresh, setRefresh, refreshing, refreshNow, act,
+    quotes, monitors, health, references, holdings, holdingsError, holdingsAt, error, polledAt,
+    refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
   };
 }

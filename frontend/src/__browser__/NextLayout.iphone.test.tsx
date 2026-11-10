@@ -18,10 +18,16 @@ async function show() {
 
 afterEach(cleanup);
 
-/** Every control on the page that a finger has to hit. */
+/** Every control a finger has to hit — on the whole document, not only inside the page: a
+ *  confirmation dialog and a toast are drawn in portals beside it. */
 function targets(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(".nx :is(button, select, input, a)")]
-    .filter((el) => el.getClientRects().length > 0);
+  return [...document.querySelectorAll<HTMLElement>("body :is(button, select, input, a)")]
+    .filter((el) => el.getClientRects().length > 0 && el.getAttribute("type") !== "hidden");
+}
+
+/** A dialog opens with a zoom from 95%, and a box measured mid-animation is 95% of its size. */
+async function animationsDone(): Promise<void> {
+  await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
 }
 
 function tooSmall(): string[] {
@@ -34,7 +40,7 @@ function tooSmall(): string[] {
 }
 
 function zooms(): string[] {
-  return [...document.querySelectorAll<HTMLElement>(".nx :is(select, input, textarea)")]
+  return [...document.querySelectorAll<HTMLElement>("body :is(select, input, textarea)")]
     .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16)
     .map((el) => `${el.id || el.tagName} ${getComputedStyle(el).fontSize}`);
 }
@@ -65,11 +71,23 @@ describe("the Live view", () => {
     expect(tooSmall()).toEqual([]);
   });
 
-  it("shows the needs-you line as banners, each leading to its row", async () => {
+  it("shows the needs-you line as banners, a list inside the status region", async () => {
     await show();
     const banners = screen.getByRole("status", { name: "needs you" });
-    expect(banners.tagName).toBe("UL");
+    expect(within(banners).getByRole("list")).toBeTruthy();
     expect(within(banners).getByText("1218_7150P entry signal")).toBeTruthy();
+  });
+
+  it("brings the row a banner is about into view when it is tapped", async () => {
+    await show();
+    window.scrollTo(0, document.body.scrollHeight);
+    const banners = screen.getByRole("status", { name: "needs you" });
+    fireEvent.click(within(banners).getByRole("button", { name: /1218_7150P entry signal/ }));
+    await new Promise((r) => setTimeout(r, 600));
+    const row = document.querySelector<HTMLElement>('[data-ref="w2"]')!;
+    const r = row.getBoundingClientRect();
+    expect(row.hasAttribute("data-revealed")).toBe(true);
+    expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);
   });
 });
 
@@ -89,6 +107,24 @@ describe("the Settings tab", () => {
   it("gives every control a 44pt target, the References form's included", async () => {
     await settings();
     expect(document.querySelectorAll(".nx select").length).toBeGreaterThanOrEqual(5);
+    expect(tooSmall()).toEqual([]);
+  });
+
+  it("gives the remove confirmation's buttons 44pt targets, though it is drawn outside the page", async () => {
+    await settings();
+    fireEvent.click(screen.getByRole("button", { name: /remove/ }));
+    const dialog = await screen.findByRole("alertdialog");
+    await animationsDone();
+    expect(within(dialog).getAllByRole("button").length).toBeGreaterThanOrEqual(2);
+    expect(tooSmall()).toEqual([]);
+  });
+
+  it("gives a refusal's toast a 44pt close button", async () => {
+    await settings();
+    fireEvent.change(screen.getByLabelText("code"), { target: { value: "US.SPY" } });
+    fireEvent.click(screen.getByRole("button", { name: "keep it" }));
+    await screen.findByText("refused by the test service");
+    await animationsDone();
     expect(tooSmall()).toEqual([]);
   });
 

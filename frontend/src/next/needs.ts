@@ -81,7 +81,10 @@ export function needsYou(
   }
   for (const m of monitors) {
     const why = !m.enabled && m.disabled_reason ? QUARANTINED[m.disabled_reason] : undefined;
-    if (why) out.push({ kind: "fault", text: `${monitorName(m)} quarantined — ${why}` });
+    // named with what it watches: a contract can carry a delta rule and a price rule, and two
+    // identical lines would say one thing twice while hiding which rule it was
+    const what = fieldWords(m.field, Boolean(m.legs));
+    if (why) out.push({ kind: "fault", text: `${monitorName(m)} ${what} quarantined — ${why}` });
   }
   const spokenFor = new Set(
     quotes.map((e) => e.schedule?.position_id).filter((id): id is string => Boolean(id)),
@@ -97,24 +100,28 @@ export function needsYou(
   return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
 }
 
-/** Whether the line as a whole is bad news. An entry signal counts as an alarm only when the viewer
- *  asked for entries to look like risk; a Target reached never does. */
-export function isBad(items: Need[], entryLooksLikeRisk: boolean): boolean {
-  return items.some((n) => n.kind === "fault" || n.kind === "stop" || n.kind === "alarm"
+/** The line's tone is its worst item's. Bad: a fault, a stop, an alarm — and an entry signal
+ *  when the viewer asked for entries to look like risk. A warning: a manage-by, which is a
+ *  deadline rather than good news. Good: an entry signal or a Target reached. */
+export type Tone = "bad" | "warn" | "good";
+
+export function toneOf(items: Need[], entryLooksLikeRisk: boolean): Tone {
+  const bad = items.some((n) => n.kind === "fault" || n.kind === "stop" || n.kind === "alarm"
     || (entryLooksLikeRisk && n.kind === "entry"));
+  if (bad) return "bad";
+  return items.some((n) => n.kind === "manage") ? "warn" : "good";
 }
 
 /** What a rule watches, in words: a combo's figure is the spread's, a leg's is the contract's. */
-function fieldWords(entry: Entry): string {
-  const combo = Boolean(entry.legs);
-  switch (entry.field) {
+export function fieldWords(field: string, combo: boolean): string {
+  switch (field) {
     case "mid_price": return combo ? "spread value" : "mid";
     case "option_delta": return combo ? "spread delta" : "delta";
     case "option_gamma": return combo ? "spread gamma" : "gamma";
     case "option_theta": return combo ? "spread theta" : "theta";
     case "option_vega": return combo ? "spread vega" : "vega";
     case "option_implied_volatility": return "IV";
-    default: return entry.field;
+    default: return field;
   }
 }
 
@@ -122,15 +129,20 @@ function fieldWords(entry: Entry): string {
  *  away does not read "0.00 away", and gamma to four rather than the six a table once showed. */
 const PLACES: Record<string, number> = { option_delta: 3, option_gamma: 4 };
 
-/** "spread value ≥ 6.01 — now 2.00, 4.01 away".
+/** "|spread value| ≥ 6.01 — now -2.00, 4.01 away".
  *
  *  Every figure in it is the service's: `watched` is the very figure the bell and the fill bar were
  *  drawn from, and `distance` is the domain's `thresholdDistance` (ADR 0005 — nothing is assembled
- *  here). The threshold is printed as the owner typed it. */
+ *  here). The threshold is printed as the owner typed it.
+ *
+ *  Under compare `abs` the rule compares the figure's SIZE, and the bars say so: a credit spread
+ *  summed with its short leg negative is a negative figure, and a short put's delta is negative,
+ *  so "now -2.00, 4.01 away" reads true beside `|spread value| ≥ 6.01` where it would not beside a
+ *  bare "spread value ≥ 6.01". The figure itself is shown as served, never made absolute here. */
 export function sentence(entry: Entry): string {
   const sign = entry.direction === "below" ? "≤" : "≥";
-  const signed = entry.compare === "signed" ? " signed" : "";
-  const rule = `${fieldWords(entry)} ${sign} ${entry.threshold}${signed}`;
+  const words = fieldWords(entry.field, Boolean(entry.legs));
+  const rule = `${entry.compare === "abs" ? `|${words}|` : words} ${sign} ${entry.threshold}`;
   if (entry.watched === null) return `${rule} — no figure`;
   const places = PLACES[entry.field] ?? 2;
   const now = `now ${entry.watched.toFixed(places)}`;

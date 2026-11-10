@@ -35,15 +35,17 @@ describe("the clock chooses the mode", () => {
     // Monday 2026-11-09, EST (UTC-5)
     expect(inSession(at("2026-11-09T14:29:59Z"))).toBe(false);
     expect(inSession(at("2026-11-09T14:30:00Z"))).toBe(true);
-    expect(inSession(at("2026-11-09T21:15:59Z"))).toBe(true);
-    expect(inSession(at("2026-11-09T21:16:00Z"))).toBe(false);
+    // 16:15:00 is in, as the daily sample's window has it; a second later is not
+    expect(inSession(at("2026-11-09T21:15:00Z"))).toBe(true);
+    expect(inSession(at("2026-11-09T21:15:01Z"))).toBe(false);
   });
 
   it("moves with New York's summer time, not with the viewer's", () => {
     // Monday 2026-07-06, EDT (UTC-4): the same wall clock an hour earlier in UTC
     expect(inSession(at("2026-07-06T13:29:59Z"))).toBe(false);
     expect(inSession(at("2026-07-06T13:30:00Z"))).toBe(true);
-    expect(inSession(at("2026-07-06T20:15:59Z"))).toBe(true);
+    expect(inSession(at("2026-07-06T20:15:00Z"))).toBe(true);
+    expect(inSession(at("2026-07-06T20:15:01Z"))).toBe(false);
   });
 
   it("crosses the November clock change without slipping an hour", () => {
