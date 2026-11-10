@@ -201,6 +201,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
+  The browser suite runs as TWO vitest instances of Chromium: the desktop one runs every
+  `src/__browser__/*.test.tsx`, and `iphone` — Playwright's iPhone 13 profile, `isMobile` and
+  touch — runs only `*.iphone.test.tsx`. Each instance names its own files and the suite-wide
+  `include` is EMPTY on purpose: vitest merges an instance's list into that one rather than
+  replacing it, so anything there runs in both.
 - **Schema change:** add a `.sql` file to
   `schema/migrations/` AND put the same shape in `schema/schema.sql`, then update
   `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `backend/src/db/rows.ts` — the
@@ -315,6 +320,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
+  **Two pages in one build until the swap (ADR 0023):** today's (`index.html`, `src/`) and the
+  redesign at `/opt/next` (`next/index.html`, `src/next/`), built beside it slice by slice (#287
+  onward). They share the hashed assets, the API and the deploy; Caddy serves `/next` as a
+  directory (`try_files {path}/index.html`) so it needs no redirect. The swap (#301) deletes the old.
 - `entrypoints/http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
   so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
   end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole

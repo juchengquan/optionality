@@ -1,0 +1,142 @@
+import type { Entry, Health, Holding, Monitor } from "../api";
+import { shortContract, shortDate } from "../format";
+
+/** What needs you, for the redesigned page (ADR 0012, amended by ADR 0023).
+ *
+ *  The rule is ADR 0012's and unchanged: built only from what the page already polls, it appears
+ *  when something needs you and says nothing otherwise, and that silence is not an all-clear. Two
+ *  inputs are new. A QUARANTINED rule is a fault, because the service switched it off itself and
+ *  nothing now watches what it watched. And a fired rule on the WATCHLIST is an entry signal —
+ *  a spread worth selling — which is good news and must not be filed as an alarm.
+ *
+ *  This is a second `needs()` beside `TopLine.tsx`'s, for as long as both pages exist: `/opt` must
+ *  behave exactly as before while this one is built, and that one has neither input. The swap
+ *  (#301) deletes the old.
+ */
+export type NeedKind = "fault" | "stop" | "alarm" | "entry" | "target" | "manage";
+
+export interface Need {
+  kind: NeedKind;
+  text: string;
+  /** the row it is about — a watchlist entry's id or a holding's — so a banner can lead to it */
+  ref?: string;
+}
+
+/** Faults lead because they qualify everything after them; then what is bad about something held;
+ *  then the good news, an entry signal before a Target because it is the one that will not wait. */
+const ORDER: NeedKind[] = ["fault", "stop", "alarm", "entry", "target", "manage"];
+
+/** The three quarantines (CONTEXT.md: Quarantine), each said as the fact about the data it is.
+ *  The other reasons a rule is off — muted by hand, expired, its holding closed — are somebody's
+ *  choice or the calendar, and are not news. */
+const QUARANTINED: Record<string, string> = {
+  "unknown-contract": "the provider does not know its contract",
+  "no-figure": "its figure never arrives",
+  unreadable: "its stored row cannot be read",
+};
+
+/** A rule on the watchlist, rather than one about something held: nothing it watches is held.
+ *  The link to a holding is discovered by the service (`positions`), so this reads that and
+ *  decides nothing about the contracts itself. */
+export function isEntrySignal(entry: Entry): boolean {
+  return entry.positions.length === 0;
+}
+
+export function entryName(entry: Entry): string {
+  return entry.legs ? entry.code : shortContract(entry.quote?.name ?? entry.code);
+}
+
+/** A rule as `/monitors` gives it, which carries no quote: a combo by its name, a single leg as
+ *  the contract names it everywhere else on the page (`261211 6800P`). */
+export function monitorName(monitor: Monitor): string {
+  if (monitor.legs) return monitor.code;
+  return `${shortDate(monitor.strike_date)} ${monitor.strike}${monitor.option_type[0]}`;
+}
+
+/** @param holdings what the page has valued, or null where it has not asked: in LIVE they are
+ *  polled with the watchlist, so their Levels are already paid for; in REVIEW nothing is. */
+export function needsYou(
+  quotes: Entry[], monitors: Monitor[], health: Health | null, holdings: Holding[] | null,
+): Need[] {
+  const out: Need[] = [];
+  if (health && !health.provider.ok) {
+    out.push({ kind: "fault", text: `${health.provider.name} down — the figures are stale` });
+  }
+  if (health?.monitor.alarms.bad) {
+    out.push({ kind: "fault", text: `alarms ${health.monitor.alarms.label}` });
+  }
+  for (const e of quotes) {
+    const name = entryName(e);
+    if (e.error) out.push({ kind: "fault", text: `${name} — ${e.error}`, ref: e.id });
+    if (e.schedule?.reached === "stop") out.push({ kind: "stop", text: `${name} at stop`, ref: e.id });
+    if (e.triggered) {
+      out.push(isEntrySignal(e)
+        ? { kind: "entry", text: `${name} entry signal`, ref: e.id }
+        : { kind: "alarm", text: `${name} ringing`, ref: e.id });
+    }
+    if (e.schedule?.reached === "target") out.push({ kind: "target", text: `${name} at target`, ref: e.id });
+    if (e.schedule?.manage_by_due) {
+      out.push({ kind: "manage", text: `${name} at its manage-by`, ref: e.id });
+    }
+  }
+  for (const m of monitors) {
+    const why = !m.enabled && m.disabled_reason ? QUARANTINED[m.disabled_reason] : undefined;
+    if (why) out.push({ kind: "fault", text: `${monitorName(m)} quarantined — ${why}` });
+  }
+  const spokenFor = new Set(
+    quotes.map((e) => e.schedule?.position_id).filter((id): id is string => Boolean(id)),
+  );
+  for (const h of holdings ?? []) {
+    if (spokenFor.has(h.id)) continue;
+    if (h.schedule?.reached === "stop") out.push({ kind: "stop", text: `${h.name} at stop`, ref: h.id });
+    if (h.schedule?.reached === "target") out.push({ kind: "target", text: `${h.name} at target`, ref: h.id });
+    if (h.schedule?.manage_by_due) {
+      out.push({ kind: "manage", text: `${h.name} at its manage-by`, ref: h.id });
+    }
+  }
+  return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
+}
+
+/** Whether the line as a whole is bad news. An entry signal counts as an alarm only when the viewer
+ *  asked for entries to look like risk; a Target reached never does. */
+export function isBad(items: Need[], entryLooksLikeRisk: boolean): boolean {
+  return items.some((n) => n.kind === "fault" || n.kind === "stop" || n.kind === "alarm"
+    || (entryLooksLikeRisk && n.kind === "entry"));
+}
+
+/** What a rule watches, in words: a combo's figure is the spread's, a leg's is the contract's. */
+function fieldWords(entry: Entry): string {
+  const combo = Boolean(entry.legs);
+  switch (entry.field) {
+    case "mid_price": return combo ? "spread value" : "mid";
+    case "option_delta": return combo ? "spread delta" : "delta";
+    case "option_gamma": return combo ? "spread gamma" : "gamma";
+    case "option_theta": return combo ? "spread theta" : "theta";
+    case "option_vega": return combo ? "spread vega" : "vega";
+    case "option_implied_volatility": return "IV";
+    default: return entry.field;
+  }
+}
+
+/** Fixed places per field (ADR 0023): a price to the cent, a delta to three places so a rule 0.004
+ *  away does not read "0.00 away", and gamma to four rather than the six a table once showed. */
+const PLACES: Record<string, number> = { option_delta: 3, option_gamma: 4 };
+
+/** "spread value ≥ 6.01 — now 2.00, 4.01 away".
+ *
+ *  Every figure in it is the service's: `watched` is the very figure the bell and the fill bar were
+ *  drawn from, and `distance` is the domain's `thresholdDistance` (ADR 0005 — nothing is assembled
+ *  here). The threshold is printed as the owner typed it. */
+export function sentence(entry: Entry): string {
+  const sign = entry.direction === "below" ? "≤" : "≥";
+  const signed = entry.compare === "signed" ? " signed" : "";
+  const rule = `${fieldWords(entry)} ${sign} ${entry.threshold}${signed}`;
+  if (entry.watched === null) return `${rule} — no figure`;
+  const places = PLACES[entry.field] ?? 2;
+  const now = `now ${entry.watched.toFixed(places)}`;
+  const d = entry.distance;
+  if (d === null) return `${rule} — ${now}`;
+  const where = d > 0 ? `${d.toFixed(places)} away`
+    : d === 0 ? "at the threshold" : `past it by ${(-d).toFixed(places)}`;
+  return `${rule} — ${now}, ${where}`;
+}
