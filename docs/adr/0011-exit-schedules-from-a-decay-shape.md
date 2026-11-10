@@ -170,12 +170,21 @@ have, and no exchange calendar is needed. A half-day (13:00, options 13:15) is s
 to 16:00, so its row is its close too. The owner's brief said weekdays only; this file's chain is
 the reason it is every day instead.
 
-Two consequences for the chain. **A date absent now means the service was down for the whole of
-that day's sample hours**, not the whole day — a shorter outage than before makes a hole, which is
-the honest reading, since a row from outside the hours is not that day's close. And **a Position
-put on in the evening session** (after 16:00 New York) has no sample on its Opened day, because
-the hours had passed before it existed; its chain starts the next day, so its Vol part stays absent
-unless Opened is set to that next market day.
+**A holding's FIRST sample is the one exception** (`takesSample`): it is taken at the next sweep
+whatever the hour, dated the market day like every row, and once it exists the hours rule holds for
+it too, so no later overnight mark rewrites it. The owner records trades in the Singapore morning —
+New York's evening, after the close of the day the trade was put on. Under the hours alone that
+holding's first row would be the next day's, never its Opened day, and the chain above refuses any
+start but Opened: the Vol part would have stayed blank for every holding entered that way, which
+is all of them. So **the opening day's point may be a post-close or overnight mark** rather than
+that day's close. That is the honest trade: a baseline taken the evening the trade went on is still
+that day's reading of the vol it was sold at, where no baseline at all is no answer.
+
+**A date absent now means the service was down for the whole of that day's sample hours**, not
+the whole day — a shorter outage than before makes a hole, which is the honest reading, since a
+row from outside the hours is not that day's close. A holding recorded after New York's MIDNIGHT
+(13:00 in Singapore, or later) gets its first row dated the next market day, and its Opened has to
+say that day for the chain to start, as before.
 
 **Each leg's delta is recorded beside its IV and vega** (`legs_delta`, migration 0009): the risk the
 owner manages by, only knowable when observed, all or nothing per map and gated on its own, exactly

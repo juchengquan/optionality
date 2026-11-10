@@ -15,7 +15,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildSpxCode } from "optionality/domain/contract";
+import { volAttribution, type VolSample } from "optionality/domain/vol";
 import { createDatabase } from "../db/open.ts";
+import { findPosition, listPositionSamples } from "../db/queries/index.ts";
+import { toPosition } from "../hydrate.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { settingsFor, type Settings } from "../env.ts";
 import type { QuoteRecord } from "optionality/quotes";
@@ -161,17 +164,71 @@ describe("recording what a Position was worth", () => {
     ]);
   });
 
-  it("writes nothing outside the sample hours — the evening, where UTC and New York disagree", async () => {
+  it("writes nothing in the evening once a holding has a sample, where UTC and New York disagree", async () => {
     // the hazard the sweeper's own expiry comment names: for the hours New York is behind UTC the
     // two dates differ. Those hours are all evening or night in New York, and since the row became
-    // the day's CLOSE (09:30–16:00, inSampleHours) none of them writes, so a sample can no longer
-    // pair a New York Wednesday with a Thursday's DTE at all. The row is still keyed by
-    // `marketDate`, which inside the sample hours is always the UTC date too.
-    now = new Date("2026-10-01T02:00:00Z"); // 22:00 on 2026-09-30 in New York
-    held("held");
-    await sweeper(spread(5.0, 1.0)).sweep();
+    // the day's CLOSE (09:30–16:00, inSampleHours) none of them writes for a holding that has a
+    // sample. The row is keyed by `marketDate` either way, so a New York Thursday evening is still
+    // Thursday's row even though UTC has reached Friday.
+    const id = held("held");
+    await sweeper(spread(5.0, 1.0)).sweep(); // 11:00 on 2026-10-01
+    now = new Date("2026-10-02T02:00:00Z"); // 22:00 on 2026-10-01 in New York, Friday in UTC
+    await sweeper(spread(3.0, 1.0)).sweep();
 
-    expect(samples()).toEqual([]);
+    expect(samples()).toEqual([
+      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 4 },
+    ]);
+  });
+
+  it("takes a holding's FIRST sample whatever the hour, and leaves it alone after", async () => {
+    // the owner records a trade in the Singapore morning, which is New York's evening after the
+    // close of the day it was put on. Under the hours alone its first row would be the next day's,
+    // never its Opened day, and the vol chain — which must start on Opened — would never start
+    // (takesSample). The evening's row is dated the market day, as every row is.
+    now = new Date("2026-10-02T00:30:00Z"); // 20:30 on 2026-10-01 in New York
+    const id = held("recorded-late");
+    await sweeper(spread(5.0, 1.0)).sweep();
+    now = new Date("2026-10-02T00:45:00Z"); // 20:45, a moved mark, and the row now exists
+    await sweeper(spread(4.0, 1.0)).sweep();
+
+    expect(samples()).toEqual([
+      { position_id: id, observed_on: "2026-10-01", dte: 31, cost_to_close: 4 },
+    ]);
+  });
+
+  it("starts the vol chain on the Opened day for a trade recorded after the close", async () => {
+    // the regression the hours alone caused, end to end: volAttribution returns null unless the
+    // first sample is dated Opened. Recorded at 20:30 on its Opened day, the holding has that row,
+    // and the next day's session row completes a chain the Vol part can be read from.
+    const strike = "2026-10-31";
+    const sold = buildSpxCode(strike, "CALL", 8050);
+    const id = "late".padEnd(32, "0");
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'late', null, ?, 1, 2.0, ?, '2026-10-02 00:30:00.000000', '2026-10-01', null)`,
+    ).run(id, strike, toSqliteJson([
+      { side: "short", option_type: "CALL", strike: 8050 },
+      { side: "long", option_type: "CALL", strike: 8075 },
+    ]));
+    const book = (soldIv: number): FakeProvider => (codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === sold ? 5.0 : 1.0,
+      option_implied_volatility: c === sold ? soldIv : 11.0, option_vega: c === sold ? 1.4 : 0.9,
+    })));
+
+    now = new Date("2026-10-02T00:30:00Z"); // 20:30 on the Opened day, after the close
+    await sweeper(book(10.5)).sweep();
+    now = new Date("2026-10-02T15:00:00Z"); // 11:00 the next day, in the session
+    await sweeper(book(11.5)).sweep();
+
+    const chain: VolSample[] = listPositionSamples(db, id).map((s) => ({
+      observed_on: s.observed_on, dte: s.dte,
+      legs_iv: s.legs_iv === null ? null : JSON.parse(s.legs_iv),
+      legs_vega: s.legs_vega === null ? null : JSON.parse(s.legs_vega),
+    }));
+    const attributed = volAttribution(chain, toPosition(findPosition(db, id)!));
+    expect(attributed).not.toBeNull();
+    expect(attributed).toMatchObject({ from: "2026-10-01", to: "2026-10-02", days: 1 });
   });
 
   it("settles on the close: a mark that moves after 16:00 does not move the day's row", async () => {
@@ -196,10 +253,13 @@ describe("recording what a Position was worth", () => {
   it("writes no row from the morning's overnight marks before 09:30", async () => {
     // a service that slept through a whole session writes nothing for it, rather than a row made
     // of the marks Global Trading Hours left before the open
-    now = new Date("2026-10-01T13:29:59Z"); // 09:29:59 EDT
-    held("held");
+    const id = held("held");
+    await sweeper(spread(5.0, 1.0)).sweep(); // 11:00 on 2026-10-01, the holding's first row
+    now = new Date("2026-10-02T13:29:59Z"); // 09:29:59 EDT the next day
     await sweeper(spread(5.0, 1.0)).sweep();
-    expect(samples()).toEqual([]);
+    expect(samples()).toEqual([
+      { position_id: id, observed_on: "2026-10-01", dte: 30, cost_to_close: 4 },
+    ]);
   });
 
   it("records a Position whose Opened nobody has entered yet", async () => {

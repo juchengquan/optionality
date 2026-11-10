@@ -338,6 +338,17 @@ export const SWEEP: readonly SweepInput[] = [
     }),
   },
   {
+    // recorded in the Singapore morning, which is New York's evening after the close: the holding
+    // has no sample yet, so it gets one now, dated the market day it was put on
+    name: "a holding recorded after the close gets its first sample that evening",
+    outcomes: ["first-sample-taken-outside-the-sample-hours", "sample-recorded"],
+    world: world({
+      clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
+      tables: { positions: [position({ id: "pos-1", opened_at: "2026-11-09" })] },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
     name: "no sample is recorded while a leg is unpriced",
     outcomes: ["sample-skipped-for-an-unpriced-leg"],
     world: world({

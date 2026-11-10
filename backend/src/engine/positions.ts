@@ -13,11 +13,11 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { daysToExpiry, inSampleHours, marketDate } from "optionality/domain/expiry";
+import { daysToExpiry, marketDate, takesSample } from "optionality/domain/expiry";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
 import { costToClose, legReadings } from "optionality/domain/position";
 import {
-  findPositionSample, recordPositionSample, stampManageNotified,
+  findPositionSample, listPositionSamples, recordPositionSample, stampManageNotified,
 } from "../db/queries/index.ts";
 import type { PositionRow } from "../db/rows.ts";
 import { toSqlDatetime } from "../db/time.ts";
@@ -90,7 +90,9 @@ export async function noticeManageBy(
  *  is the last sweep at or before the close and nothing after it moves the row. Until then it was
  *  rewritten up to New York's midnight, and SPXW trades again from about 20:15 — so the row that
  *  survived could be an overnight mark under a chart that calls it the close. Every calendar day,
- *  weekends included, because the vol chain needs a row for each (vol.ts).
+ *  weekends included, because the vol chain needs a row for each (vol.ts). A holding's FIRST row is
+ *  the one exception (`takesSample`): taken at the next sweep whatever the hour, because the owner
+ *  records trades in New York's evening and the chain must start on the Opened day.
  *
  *  Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a
  *  sample is a nice-to-have that must never be the reason a breach went unmessaged.
@@ -101,10 +103,12 @@ export async function noticeManageBy(
 export function recordSamples(
   db: DatabaseSync, rows: PositionRow[], byCode: Record<string, QuoteRecord>, at: Date,
 ): void {
-  if (!inSampleHours(at)) return;
   const observedOn = marketDate(at);
   for (const row of rows) {
     try {
+      // whether it has any sample at all, which only matters outside the hours — but asked every
+      // time, so the decision stays the domain's one function rather than half of it here
+      if (!takesSample(at, listPositionSamples(db, row.id).length > 0)) continue;
       const dte = daysToExpiry(row.strike_date, at);
       if (dte < 0) continue;
       const position = toPosition(row);

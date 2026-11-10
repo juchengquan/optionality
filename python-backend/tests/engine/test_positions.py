@@ -20,13 +20,16 @@ from typing import Any
 import pytest
 from harness import FakeProvider, fake_fetcher
 from optionality.contract import build_spx_code
+from optionality.vol import VolSample, vol_attribution
 from sweep import SINGLE_CODE as CODE
 from sweep import SWEEP_SETTINGS, insert_monitor, quoting
 
 from optionality_backend.db.open import create_database
+from optionality_backend.db.queries import find_position, list_position_samples
 from optionality_backend.db.values import to_sqlite_json
 from optionality_backend.engine import MonitorSweeper, SweeperDeps
 from optionality_backend.env import settings_for
+from optionality_backend.hydrate import to_position
 from optionality_backend.notify import NotifySender
 
 LOG = "optionality_backend.engine.positions"
@@ -185,18 +188,79 @@ class TestRecordingWhatAPositionWasWorth:
 
         assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 30, "cost_to_close": 3}]
 
-    async def test_writes_nothing_outside_the_sample_hours_the_evening_where_utc_and_new_york_disagree(
+    async def test_writes_nothing_in_the_evening_once_a_holding_has_a_sample_where_utc_and_new_york_disagree(
         self, b: Book
     ) -> None:
         # for the hours New York is behind UTC the two dates differ. Those hours are all evening or
         # night in New York, and since the row became the day's CLOSE (09:30–16:00, in_sample_hours)
-        # none of them writes, so a sample can no longer pair a New York Wednesday with a Thursday's
-        # DTE at all. The row is still keyed by `market_date`, which inside the hours is the UTC date.
-        b.now = datetime(2026, 10, 1, 2, 0, tzinfo=UTC)  # 22:00 on 2026-09-30 in New York
-        b.held("held")
-        await b.sweeper(b.spread(5.0, 1.0)).sweep()
+        # none of them writes for a holding that has a sample. The row is keyed by `market_date`
+        # either way, so a New York Thursday evening is still Thursday's row though UTC is on Friday.
+        id_ = b.held("held")
+        await b.sweeper(b.spread(5.0, 1.0)).sweep()  # 11:00 on 2026-10-01
+        b.now = datetime(2026, 10, 2, 2, 0, tzinfo=UTC)  # 22:00 on 2026-10-01 in New York
+        await b.sweeper(b.spread(3.0, 1.0)).sweep()
 
-        assert b.samples() == []
+        assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 30, "cost_to_close": 4}]
+
+    async def test_takes_a_holdings_first_sample_whatever_the_hour_and_leaves_it_alone_after(self, b: Book) -> None:
+        # the owner records a trade in the Singapore morning, which is New York's evening after the
+        # close of the day it was put on: under the hours alone its first row would be the next day's,
+        # never its Opened day, and the vol chain would never start (takes_sample)
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 on 2026-10-01 in New York
+        id_ = b.held("recorded-late")
+        await b.sweeper(b.spread(5.0, 1.0)).sweep()
+        b.now = datetime(2026, 10, 2, 0, 45, tzinfo=UTC)  # 20:45, a moved mark, and the row now exists
+        await b.sweeper(b.spread(4.0, 1.0)).sweep()
+
+        assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 31, "cost_to_close": 4}]
+
+    async def test_starts_the_vol_chain_on_the_opened_day_for_a_trade_recorded_after_the_close(self, b: Book) -> None:
+        # the regression the hours alone caused, end to end: vol_attribution returns None unless the
+        # first sample is dated Opened
+        strike = "2026-10-31"
+        sold = build_spx_code(strike, "CALL", 8050)
+        id_ = "late".ljust(32, "0")
+        b.db.execute(
+            """insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'late', null, ?, 1, 2.0, ?, '2026-10-02 00:30:00.000000', '2026-10-01', null)""",
+            (id_, strike, to_sqlite_json(TWO_LEGS)),
+        )
+
+        def book(sold_iv: float) -> FakeProvider:
+            def fetch(codes: list[str]) -> list[dict[str, Any]]:
+                return [
+                    {
+                        "code": c,
+                        "name": c,
+                        "mid_price": 5.0 if c == sold else 1.0,
+                        "option_implied_volatility": sold_iv if c == sold else 11.0,
+                        "option_vega": 1.4 if c == sold else 0.9,
+                    }
+                    for c in codes
+                ]
+
+            return fetch
+
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 on the Opened day, after the close
+        await b.sweeper(book(10.5)).sweep()
+        b.now = datetime(2026, 10, 2, 15, 0, tzinfo=UTC)  # 11:00 the next day, in the session
+        await b.sweeper(book(11.5)).sweep()
+
+        chain = [
+            VolSample(
+                observed_on=s["observed_on"],
+                dte=s["dte"],
+                legs_iv=None if s["legs_iv"] is None else json.loads(s["legs_iv"]),
+                legs_vega=None if s["legs_vega"] is None else json.loads(s["legs_vega"]),
+            )
+            for s in list_position_samples(b.db, id_)
+        ]
+        found = find_position(b.db, id_)
+        assert found is not None
+        attributed = vol_attribution(chain, to_position(found))
+        assert attributed is not None
+        assert (attributed.from_, attributed.to, attributed.days) == ("2026-10-01", "2026-10-02", 1)
 
     async def test_settles_on_the_close_a_mark_that_moves_after_16_does_not_move_the_days_row(self, b: Book) -> None:
         # SPXW trades again from about 20:15 in Global Trading Hours, and until this the day's row was
@@ -216,10 +280,11 @@ class TestRecordingWhatAPositionWasWorth:
     async def test_writes_no_row_from_the_mornings_overnight_marks_before_0930(self, b: Book) -> None:
         # a service that slept through a whole session writes nothing for it, rather than a row made of
         # the marks Global Trading Hours left before the open
-        b.now = datetime(2026, 10, 1, 13, 29, 59, tzinfo=UTC)  # 09:29:59 EDT
-        b.held("held")
+        id_ = b.held("held")
+        await b.sweeper(b.spread(5.0, 1.0)).sweep()  # 11:00 on 2026-10-01, the holding's first row
+        b.now = datetime(2026, 10, 2, 13, 29, 59, tzinfo=UTC)  # 09:29:59 EDT the next day
         await b.sweeper(b.spread(5.0, 1.0)).sweep()
-        assert b.samples() == []
+        assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 30, "cost_to_close": 4}]
 
     async def test_records_a_position_whose_opened_nobody_has_entered_yet(self, b: Book) -> None:
         # the sample is raw: (DTE, Cost to close) means something without an Opened, and filling the

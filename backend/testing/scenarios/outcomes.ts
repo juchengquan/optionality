@@ -183,9 +183,17 @@ export const OUTCOMES: readonly Outcome[] = [
     // after 16:00 in New York the day's row is its close, and a mark that moved since does not
     // reach it: a stored sample the batch differs from, and no write
     name: "sample-left-alone-outside-the-sample-hours",
-    decision: "inSampleHours",
+    decision: "takesSample",
     shows: (s) => !inSampleHours(new Date(s.world.clock)) && s.world.tables.position_samples.length > 0
       && asked(s) && s.expect.rows.position_samples === undefined,
+  },
+  {
+    // a holding's first row is taken whatever the hour: a trade recorded in New York's evening,
+    // after the close, still gets a row dated its own market day, which the vol chain starts from
+    name: "first-sample-taken-outside-the-sample-hours",
+    decision: "takesSample",
+    shows: (s) => !inSampleHours(new Date(s.world.clock)) && s.world.tables.position_samples.length === 0
+      && (s.expect.rows.position_samples?.added ?? []).length > 0,
   },
   {
     // one unpriced leg and there is no observation to make

@@ -55,6 +55,25 @@ export function inSampleHours(now: Date = new Date()): boolean {
   return sinceMidnight >= SAMPLE_FROM && sinceMidnight <= SAMPLE_UNTIL;
 }
 
+/** Whether the sweep at `now` writes a holding's daily sample, given whether it has any yet.
+ *
+ *  Inside the sample hours, always (`inSampleHours`). Outside them, only for a holding with NO
+ *  sample at all: its first row is taken at the next sweep whatever the hour, dated the market day
+ *  as every row is, and once it exists the hours rule holds for it too, so no later overnight mark
+ *  rewrites it.
+ *
+ *  The exception exists because of when trades are RECORDED. The owner enters a trade in the
+ *  Singapore morning, which is New York's evening, after the close of the day it was put on. Under
+ *  the hours alone, that holding's first row would be the next day's, never its Opened day — and
+ *  `volAttribution` refuses any chain that does not start on Opened, so the Vol part would stay
+ *  blank for every holding entered that way. The price is that the opening day's point can be a
+ *  post-close or overnight mark rather than the close; a baseline from that evening is still that
+ *  day's, which the chain needs, where no baseline at all is no answer.
+ */
+export function takesSample(now: Date, sampled: boolean): boolean {
+  return inSampleHours(now) || !sampled;
+}
+
 /** Calendar days from the current MARKET date to expiry.
  *
  *  Market date, not DISPLAY_TZ: at 09:40 in Singapore it is still the previous afternoon in New

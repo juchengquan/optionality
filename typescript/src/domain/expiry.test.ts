@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { daysToExpiry, inSampleHours, marketDate } from "./expiry.ts";
+import { daysToExpiry, inSampleHours, marketDate, takesSample } from "./expiry.ts";
 
 describe("the market date", () => {
   it("is New York's calendar day, not the viewer's", () => {
@@ -119,5 +119,26 @@ describe("inSampleHours — when a day's sample may be taken", () => {
     expect(inSampleHours(at("2026-11-27T19:00:00Z"))).toBe(true);
     // Thanksgiving itself trades nothing, so its row is Wednesday's close, as a Saturday's is
     expect(inSampleHours(at("2026-11-26T17:00:00Z"))).toBe(true);
+  });
+});
+
+describe("takesSample — whether this sweep writes a holding's sample", () => {
+  const evening = at("2026-11-10T01:30:00Z"); // Monday 20:30 in New York, overnight trading
+  const session = at("2026-11-09T16:00:00Z"); // Monday 11:00 in New York
+
+  it("takes a holding's FIRST sample whatever the hour", () => {
+    // the owner records a trade in the Singapore morning, after New York's close: without this the
+    // holding's first row is the next day's, never its Opened day, and the vol chain never starts
+    expect(takesSample(evening, false)).toBe(true);
+  });
+
+  it("leaves a holding that has a sample alone outside the sample hours", () => {
+    // so that first row, once written, is never rewritten by a later overnight mark either
+    expect(takesSample(evening, true)).toBe(false);
+  });
+
+  it("writes inside the sample hours whether or not there is a sample yet", () => {
+    expect(takesSample(session, true)).toBe(true);
+    expect(takesSample(session, false)).toBe(true);
   });
 });

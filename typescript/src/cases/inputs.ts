@@ -211,6 +211,15 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // an overnight mark: New York is still on Monday evening while UTC has reached Tuesday
     { fn: "inSampleHours", name: "Monday 23:30 in New York, Tuesday in UTC",
       args: [at("2026-11-10T04:30:00Z")] },
+    // a holding's first sample is taken whatever the hour, and after that only in the hours
+    { fn: "takesSample", name: "a first sample in the evening, as a trade recorded after the close",
+      args: [at("2026-11-10T01:30:00Z"), false] },
+    { fn: "takesSample", name: "not again that evening once one exists",
+      args: [at("2026-11-10T01:30:00Z"), true] },
+    { fn: "takesSample", name: "in the hours with samples already", args: [at("2026-11-09T16:00:00Z"), true] },
+    { fn: "takesSample", name: "in the hours with none yet", args: [at("2026-11-09T16:00:00Z"), false] },
+    { fn: "takesSample", name: "a millisecond after 16:00 with samples already",
+      args: [at("2026-11-09T21:00:00.001Z"), true] },
   ],
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },

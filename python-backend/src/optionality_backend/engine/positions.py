@@ -29,12 +29,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import days_to_expiry, in_sample_hours, market_date
+from optionality.expiry import days_to_expiry, market_date, takes_sample
 from optionality.js import js_string, to_fixed
 from optionality.position import cost_to_close, leg_readings
 from optionality.quote import ByCode
 
-from ..db.queries import find_position_sample, record_position_sample, stamp_manage_notified
+from ..db.queries import find_position_sample, list_position_samples, record_position_sample, stamp_manage_notified
 from ..db.rows import PositionRow
 from ..db.time import to_sql_datetime
 from ..db.values import to_sqlite_json
@@ -115,7 +115,9 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
     the last sweep at or before the close and nothing after it moves the row. Until then it was
     rewritten up to New York's midnight, and SPXW trades again from about 20:15 — so the row that
     survived could be an overnight mark under a chart that calls it the close. Every calendar day,
-    weekends included, because the vol chain needs a row for each (vol.py).
+    weekends included, because the vol chain needs a row for each (vol.py). A holding's FIRST row is the
+    one exception (`takes_sample`): taken at the next sweep whatever the hour, because the owner records
+    trades in New York's evening and the chain must start on the Opened day.
 
     Guarded per Position, like the telegram send is: the sweep exists to raise alarms, and a sample is
     a nice-to-have that must never be the reason a breach went unmessaged.
@@ -124,11 +126,13 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
     Deliberately not the sweeper's `_utc_date` — that is the expiry reckoning, and the two differ for
     the hours New York is behind UTC, which would pair a New York Wednesday with Thursday's DTE.
     """
-    if not in_sample_hours(at):
-        return
     observed_on = market_date(at)
     for row in rows:
         try:
+            # whether it has any sample at all, which only matters outside the hours — but asked every
+            # time, so the decision stays the domain's one function rather than half of it here
+            if not takes_sample(at, len(list_position_samples(db, row["id"])) > 0):
+                continue
             dte = days_to_expiry(row["strike_date"], at)
             if dte < 0:
                 continue

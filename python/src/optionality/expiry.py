@@ -41,6 +41,17 @@ def in_sample_hours(now: datetime | None = None) -> bool:
     return _SAMPLE_FROM <= since_midnight <= _SAMPLE_UNTIL
 
 
+def takes_sample(now: datetime, sampled: bool) -> bool:
+    """Whether the sweep at `now` writes a holding's daily sample, given whether it has any yet.
+
+    Inside the sample hours, always. Outside them, only for a holding with NO sample: its first row
+    is taken whatever the hour, because the owner records trades in New York's evening and the vol
+    chain must start on the Opened day. Once it exists the hours rule holds for it too. Mirrors
+    `expiry.ts`.
+    """
+    return in_sample_hours(now) or not sampled
+
+
 def days_to_expiry(strike_date: str, now: datetime | None = None) -> int:
     """DTE: expiry day less New York's today. Zero on the day, negative after."""
     expiry = date.fromisoformat(normalize_strike_date(strike_date))

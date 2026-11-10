@@ -106,8 +106,10 @@ One observation of a held Position per New York calendar day: its DTE, Cost to c
 leg's IV, vega and delta. It is the day's CLOSE — taken only from 09:30 to 16:00 in New York, so
 the last sweep at or before 16:00 is the one that stays and an overnight mark never replaces it —
 and it is taken on every calendar day, a weekend or a holiday carrying the last close forward,
-because the Vol part chains days exactly one apart. Recorded, never derived: none of it can be
-read again once its day has passed.
+because the Vol part chains days exactly one apart. A holding's first one is taken whenever it is
+first seen, so a trade recorded in New York's evening still has a row on its Opened day — which
+can make that one point a post-close mark. Recorded, never derived: none of it can be read again
+once its day has passed.
 _Avoid_: snapshot (moomoo's word for a quote), tick, mark
 
 **Pace gap**:
