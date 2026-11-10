@@ -66,7 +66,17 @@ declare module "@vitest/browser/context" {
 
 /** Every write is refused, as the service refuses one it will not take: a layout suite never
  *  changes the book, and a refusal is how a toast gets onto the page to be measured. */
-export function serveBook(): void {
+/** Spreads on later expiries, so the page is longer than a phone's screen; the last one has fired,
+ *  so its banner leads to a row that starts out of view. */
+export function longBook(n: number): object[] {
+  const rows = Array.from({ length: n }, (_, i) =>
+    spread(`f${i}`, `2027-0${1 + (i % 6)}-${String(10 + i).padStart(2, "0")}`, 6000 + i * 10, 5950 + i * 10));
+  rows.push(spread("late", "2027-09-17", 5800, 5750, { triggered: true, watched: 6.2, distance: -0.19 }));
+  return rows;
+}
+
+export function serveBook(extra: object[] = []): void {
+  const book = [...quotes, ...extra];
   window.fetch = ((url: string, init?: RequestInit) => {
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({
@@ -74,7 +84,7 @@ export function serveBook(): void {
       });
     }
     const path = String(url).replace(/^.*\/api/, "");
-    const body = path === "/quotes" ? quotes : path === "/monitors" ? monitors
+    const body = path === "/quotes" ? book : path === "/monitors" ? monitors
       : path === "/health" ? health : path === "/references" ? references
         : path === "/positions/values" ? holdings : [];
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
@@ -106,4 +116,22 @@ export function oklab(value: string): { L: number; a: number; b: number } {
   if (!m) throw new Error(`not an oklch() colour: "${value}"`);
   const [L, C, h] = [Number(m[1]), Number(m[2]), Number(m[3]) * Math.PI / 180];
   return { L, a: C * Math.cos(h), b: C * Math.sin(h) };
+}
+
+/** WCAG relative luminance of an oklch() colour, through OKLab and linear sRGB. */
+export function luminance(value: string): number {
+  const { L, a, b } = oklab(value);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const clamp = (x: number) => Math.min(1, Math.max(0, x));
+  const R = clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
+  const G = clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
+  const B = clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
+  return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+}
+
+export function contrast(x: string, y: string): number {
+  const [hi, lo] = [luminance(x), luminance(y)].sort((p, q) => q - p);
+  return (hi! + 0.05) / (lo! + 0.05);
 }

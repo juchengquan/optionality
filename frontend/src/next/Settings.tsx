@@ -4,6 +4,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { ArrangementChoice, EntryStyle, UpColour } from "../prefs";
 import { References } from "../References";
+import { Glyph } from "./NeedsLine";
 import type { Need } from "./needs";
 
 /** The cadences offered, as the Service panel at `/opt` offers them. */
@@ -38,10 +39,15 @@ export function Settings(p: SettingsProps) {
     <div className="nx-settings">
       <section data-testid="needs">
         <h3>needs you</h3>
+        {/* the claim of a whole list is withdrawn whenever the holdings are not valued, items
+            or none: a holding at its Level that no rule watches is the one need only they show */}
+        {p.complete ? null
+          : <p className="nx-meta">the holdings are not valued, so this may be short</p>}
         {p.needs.length === 0
-          ? <p className="nx-meta">{p.complete ? "nothing needs you"
-            : "nothing the page can see — the holdings are not valued, so this may be short"}</p>
-          : <ul className="nx-meta">{p.needs.map((n, i) => <li key={`${i}:${n.text}`}>{n.text}</li>)}</ul>}
+          ? (p.complete ? <p className="nx-meta">nothing needs you</p> : null)
+          : <ul className="nx-meta">{p.needs.map((n, i) => (
+            <li key={`${i}:${n.text}`} data-kind={n.kind}><Glyph kind={n.kind} />{n.text}</li>
+          ))}</ul>}
         {p.holdingsAt ? <p className="nx-meta">{`holdings valued at ${p.holdingsAt}`}</p> : null}
       </section>
 

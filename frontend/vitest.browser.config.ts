@@ -32,6 +32,11 @@ export default defineConfig({
   // markup — which looks like passing tests and is worth nothing
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  // Vite pre-bundles the dependencies it finds by scanning the suite's entry files, and it finds
+  // those through `include` — which is empty below on purpose. Without naming them here nothing was
+  // pre-bundled, every dependency was discovered mid-run, and the reload that follows failed ten
+  // files on every run from a cold cache (measured 2026-11-10, twice; main's config: no reload).
+  optimizeDeps: { entries: ["src/__browser__/**/*.test.tsx"] },
   test: {
     // EMPTY, deliberately: each instance below names its own files. An instance's list is merged
     // INTO this one, not put in its place — with the suite's pattern here every desktop test ran

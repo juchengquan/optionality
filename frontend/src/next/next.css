@@ -14,10 +14,11 @@ body { margin: 0; }
      hue: it differs in lightness and in shape too — a filled chip with a glyph. The old palette
      made a ringing row and an error message the same red, and a red-up viewer would have read
      both as the market rising.
-   So alarm, fault and entry sit a clear step DARKER than both direction colours in the light
-   scheme and a clear step darker in the dark one too, on hues away from red (27°) and green
-   (150°): magenta, violet, blue. The browser suite holds each of them at least 0.15 apart in
-   OKLab from both direction colours, and 0.08 apart in lightness, in both schemes. */
+   So alarm, fault and entry sit a clear step DARKER than both direction colours, in both schemes,
+   on hues away from red (27°) and green (150°): magenta, violet, blue. Warning is a dark ochre on
+   the light ground and a pale amber on the dark one. The browser suite holds every one of them at
+   least 0.15 apart in OKLab from both direction colours and 0.08 apart in lightness, a chip's
+   text at 4.5:1 against its fill, and a glyph at 3:1 against the page, in both schemes. */
 .nx {
   --green: oklch(0.55 0.15 150);
   --red: oklch(0.56 0.19 27);
@@ -27,11 +28,11 @@ body { margin: 0; }
   --loss: var(--down);
 
   --alarm: oklch(0.45 0.2 340);
-  --warn: oklch(0.72 0.15 75);
+  --warn: oklch(0.42 0.09 70);
   --fault: oklch(0.42 0.17 300);
   --entry: oklch(0.45 0.11 230);
   --chip-ink: oklch(0.99 0 0);
-  --warn-ink: oklch(0.2 0.02 75);
+  --warn-ink: oklch(0.99 0 0);
 
   --nx-gutter: 1.5rem;
   min-height: 100dvh;
@@ -44,10 +45,11 @@ body { margin: 0; }
   .nx {
     --green: oklch(0.76 0.15 152);
     --red: oklch(0.7 0.17 27);
-    --alarm: oklch(0.58 0.21 340);
+    --alarm: oklch(0.54 0.2 340);
     --warn: oklch(0.86 0.14 80);
-    --fault: oklch(0.56 0.17 300);
-    --entry: oklch(0.58 0.11 230);
+    --fault: oklch(0.54 0.17 300);
+    --entry: oklch(0.52 0.11 230);
+    --warn-ink: oklch(0.2 0.02 75);
   }
 }
 .nx[data-up="red"] { --up: var(--red); --down: var(--green); }
@@ -71,6 +73,8 @@ body { margin: 0; }
   font-size: 0.75rem; font-weight: 600; white-space: nowrap;
 }
 .nx-chip svg { width: 0.85rem; height: 0.85rem; }
+/* inside a chip the glyph is drawn in the chip's ink, not in the fill it sits on */
+.nx-chip .nx-glyph { color: inherit; margin-right: 0; }
 
 /* every needs-you item carries its kind's glyph, in its kind's colour */
 .nx-glyph {
@@ -135,9 +139,6 @@ body { margin: 0; }
 .nx-legs { color: var(--muted-foreground); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem; }
 .nx-sentence, .nx-figures, [data-money] { font-variant-numeric: tabular-nums; }
 .nx-under { margin: 0.25rem 0 0 0.75rem; padding-left: 0.75rem; border-left: 2px solid var(--border); }
-.nx-level { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
-.nx-level[data-level="stop"] { color: var(--alarm); }
-.nx-level[data-level="target"] { color: var(--entry); }
 
 .nx-settings { display: flex; flex-direction: column; gap: 1.25rem; }
 .nx-settings h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }

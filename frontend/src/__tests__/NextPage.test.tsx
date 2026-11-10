@@ -46,29 +46,50 @@ const holdingRule = {
   watched: 0.22, distance: 0.08,
 };
 
+const reference = {
+  id: "ref1", code: "US..SPX", label: "S&P 500", source: "moomoo", figure: 7612.25, change: 0.0042,
+  field: "mid_price", name: "S&P 500", error: null, last_known: false,
+};
+
+/** the GETs the page made, by path; writes are kept apart in `writes` */
 let calls: string[] = [];
+let writes: string[] = [];
 /** paths the fake service refuses, with a 502 as a Provider outage gives */
 let refusing = new Set<string>();
 let quotes: object[] = [spread, shortLeg];
+/** when set, every valuation waits for the test to settle it, in the order asked */
+let held: { settle: (ok: boolean, body?: unknown) => void }[] | null = null;
+
+const reply = (ok: boolean, body: unknown) => Promise.resolve(ok
+  ? { ok: true, status: 200, json: () => Promise.resolve(body) }
+  : { ok: false, status: 502, json: () => Promise.resolve({ detail: "moomoo call failed" }) });
 
 function serve() {
   calls = [];
+  writes = [];
   refusing = new Set();
   quotes = [spread, shortLeg];
-  window.fetch = ((url: string) => {
+  held = null;
+  window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
+    if (init?.method && init.method !== "GET") {
+      writes.push(`${init.method} ${path}`);
+      return reply(true, {});
+    }
     calls.push(path);
-    if (refusing.has(path)) {
-      return Promise.resolve({
-        ok: false, status: 502, json: () => Promise.resolve({ detail: "moomoo call failed" }),
+    if (path === "/positions/values" && held) {
+      const queue = held;
+      return new Promise((resolve) => {
+        queue.push({ settle: (ok, body = [holding]) => resolve(reply(ok, body)) });
       });
     }
+    if (refusing.has(path)) return reply(false, null);
     const body = path === "/quotes" ? quotes
       : path === "/monitors" ? [quarantined]
         : path === "/health" ? health
-          : path === "/references" ? []
+          : path === "/references" ? [reference]
             : path === "/positions/values" ? [holding] : null;
-    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    return reply(true, body);
   }) as unknown as typeof fetch;
 }
 
@@ -139,6 +160,89 @@ describe("asking again", () => {
   });
 });
 
+describe("what is read again, and when", () => {
+  it("reads the References again after one is kept from Settings, in REVIEW too", async () => {
+    at(SUNDAY);
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await waitFor(() => expect(calls).toContain("/references"));
+    calls = [];
+    fireEvent.change(screen.getByLabelText("code"), { target: { value: "US.QQQ" } });
+    fireEvent.click(screen.getByRole("button", { name: "keep it" }));
+    await waitFor(() => expect(writes).toContain("POST /references"));
+    await waitFor(() => expect(calls).toContain("/references"));
+  });
+
+  it("does not ask again on opening Settings in LIVE, which polls both already", async () => {
+    at(SESSION);
+    await open();
+    calls = [];
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(calls).toEqual([]);
+  });
+
+  it("keeps the newer valuation when an older one lands after the switch to REVIEW", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
+    held = [];
+    await act(async () => { vi.advanceTimersByTime(15_000); }); // LIVE's poll asks: #0
+    await waitFor(() => expect(held!.length).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "Review" })); // REVIEW asks: #1
+    await waitFor(() => expect(held!.length).toBe(2));
+    await act(async () => { held![1]!.settle(true); });
+    await act(async () => { held![0]!.settle(false); }); // the older one fails, late
+    await act(async () => { await Promise.resolve(); });
+    expect(document.querySelector('[data-ref="p1"]')).toBeTruthy();
+    expect(screen.queryByText(/could not be valued/)).toBeNull();
+  });
+
+  it("keeps the newer figures when an older valuation succeeds late", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
+    held = [];
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    await waitFor(() => expect(held!.length).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    await waitFor(() => expect(held!.length).toBe(2));
+    await act(async () => { held![1]!.settle(true, [{ ...holding, pnl: 180 }]); });
+    await act(async () => { held![0]!.settle(true, [{ ...holding, pnl: 999 }]); });
+    await act(async () => { await Promise.resolve(); });
+    expect(document.querySelector('[data-ref="p1"] [data-money]')!.textContent).toBe("+$180");
+  });
+
+  it("forgets when the holdings were valued once a valuation fails", async () => {
+    at(SUNDAY);
+    await open();
+    refusing.add("/positions/values");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await waitFor(() => expect(screen.getByText(/not valued/)).toBeTruthy());
+    expect(screen.queryByText(/holdings valued at/)).toBeNull();
+  });
+});
+
+describe("REVIEW and LIVE draw different things", () => {
+  it("shows the References strip in LIVE only", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    await waitFor(() => expect(document.querySelector(".references")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(document.querySelector(".references")).toBeNull();
+  });
+
+  it("says when the holdings were valued, in REVIEW, where nothing re-values them", async () => {
+    at(SUNDAY);
+    await open();
+    await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
+    expect(document.querySelector(".nx-book")!.textContent).toMatch(/valued at \d\d:\d\d:\d\d/);
+  });
+});
+
 describe("when part of the service fails", () => {
   it("still says the Provider is down and what is quarantined when /quotes fails", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
@@ -196,6 +300,33 @@ describe("the mode", () => {
     vi.setSystemTime(new Date("2026-11-09T21:16:00Z")); // 16:16: the session is over
     await act(async () => { vi.advanceTimersByTime(15_000); });
     expect(root.getAttribute("data-mode")).toBe("review");
+  });
+
+  it("reads the clock again when the page comes back into view, without waiting for its timer", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T14:29:00Z"); // 09:29 New York
+    await open();
+    const root = document.querySelector(".nx")!;
+    expect(root.getAttribute("data-mode")).toBe("review");
+    vi.setSystemTime(new Date("2026-11-09T14:31:00Z")); // a phone woken at 09:31
+    const visible = Object.getOwnPropertyDescriptor(Document.prototype, "visibilityState");
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    try {
+      await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    } finally {
+      delete (document as unknown as { visibilityState?: unknown }).visibilityState;
+      if (visible) Object.defineProperty(Document.prototype, "visibilityState", visible);
+    }
+    expect(root.getAttribute("data-mode")).toBe("live");
+  });
+
+  it("reads the clock again when the window takes focus", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T14:29:00Z");
+    await open();
+    vi.setSystemTime(new Date("2026-11-09T14:31:00Z"));
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    expect(document.querySelector(".nx")!.getAttribute("data-mode")).toBe("live");
   });
 
   it("follows the clock until the owner picks one, and goes back to it", async () => {
@@ -288,7 +419,44 @@ describe("a banner leads to its row", () => {
     await open();
     const banners = screen.getByRole("status", { name: "needs you" });
     fireEvent.click(within(banners).getByRole("button", { name: /261218 7150P entry signal/ }));
-    expect(document.querySelector('[data-ref="w2"]')!.hasAttribute("data-revealed")).toBe(true);
+    await waitFor(() =>
+      expect(document.querySelector('[data-ref="w2"]')!.hasAttribute("data-revealed")).toBe(true));
+  });
+
+  it("leaves the Settings tab for the book, where the row is", async () => {
+    at(SESSION);
+    quotes = [spread, { ...shortLeg, triggered: true }];
+    await open();
+    const tabs = screen.getByRole("navigation", { name: "views" });
+    fireEvent.click(within(tabs).getByRole("button", { name: "Settings" }));
+    expect(document.querySelector('[data-ref="w2"]')).toBeNull();
+    const banners = screen.getByRole("status", { name: "needs you" });
+    fireEvent.click(within(banners).getByRole("button", { name: /261218 7150P entry signal/ }));
+    await waitFor(() =>
+      expect(document.querySelector('[data-ref="w2"]')?.hasAttribute("data-revealed")).toBe(true));
+  });
+});
+
+describe("every item that needs you carries its glyph", () => {
+  it("on the line, in the banners and in Settings' full list", async () => {
+    for (const where of ["desk", "phone"]) {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(SESSION);
+      quotes = [spread, { ...shortLeg, triggered: true }];
+      await open();
+      const line = screen.getByRole("status", { name: "needs you" });
+      const items = [...line.querySelectorAll("[data-kind]")];
+      expect(items.length).toBeGreaterThan(0);
+      for (const item of items) expect(item.querySelector("svg.nx-glyph")).toBeTruthy();
+      cleanup();
+      vi.useRealTimers();
+    }
+    at(SESSION);
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const full = [...screen.getByTestId("needs").querySelectorAll("li")];
+    expect(full.length).toBeGreaterThan(0);
+    for (const item of full) expect(item.querySelector("svg.nx-glyph")).toBeTruthy();
   });
 });
 

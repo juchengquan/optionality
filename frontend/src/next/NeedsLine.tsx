@@ -16,7 +16,9 @@ const GLYPH: Record<NeedKind, typeof BellRing> = {
 
 export function Glyph({ kind }: { kind: NeedKind }) {
   const Icon = GLYPH[kind];
-  return <Icon className="nx-glyph" data-kind={kind} aria-hidden="true" />;
+  // its colour comes from the item it sits in (`[data-kind]` sets --chip there), so the glyph
+  // carries no kind of its own
+  return <Icon className="nx-glyph" aria-hidden="true" />;
 }
 
 /** The needs-you line: one line on the desk, a banner per item on the phone (ADR 0023).
@@ -25,10 +27,13 @@ export function Glyph({ kind }: { kind: NeedKind }) {
  *  almost always the same becomes furniture and stops being read. So with nothing to say it is not
  *  drawn at all — and that is not an all-clear, which only Settings' full list can give.
  */
-export function NeedsLine({ items, arrangement, entryStyle }: {
+export function NeedsLine({ items, arrangement, entryStyle, onReveal = reveal }: {
   items: Need[];
   arrangement: Arrangement;
   entryStyle: EntryStyle;
+  /** what a tapped banner does with the row it is about; the page passes one that first leaves
+   *  Settings, where the book is not drawn */
+  onReveal?: (ref: string) => void;
 }) {
   if (items.length === 0) return null;
   const tone = toneOf(items, entryStyle === "risk");
@@ -42,7 +47,7 @@ export function NeedsLine({ items, arrangement, entryStyle }: {
           {items.map((n, i) => (
             <li key={key(n, i)} data-kind={n.kind}>
               {n.ref ? (
-                <button type="button" onClick={() => reveal(n.ref!)}>
+                <button type="button" onClick={() => onReveal(n.ref!)}>
                   <Glyph kind={n.kind} />{n.text}
                 </button>
               ) : <span><Glyph kind={n.kind} />{n.text}</span>}
@@ -71,7 +76,7 @@ export function NeedsLine({ items, arrangement, entryStyle }: {
 
 /** Bring the row a banner is about into view, and mark it for a moment. Every rule and every
  *  holding on the page carries its `data-ref`, nested ones included. */
-function reveal(ref: string): void {
+export function reveal(ref: string): void {
   // matched on the dataset rather than through a selector, so an id needs no escaping
   const row = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === ref);
   if (!row) return;

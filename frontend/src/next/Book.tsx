@@ -3,6 +3,7 @@ import { BellRing, OctagonAlert, Sparkles } from "lucide-react";
 import type { Entry, Holding } from "../api";
 import { DASH, legSummary } from "../format";
 import type { Mode } from "./mode";
+import { Glyph } from "./NeedsLine";
 import { entryName, isEntrySignal, sentence } from "./needs";
 
 /** The book as a plain list: holdings first, each with the rules about it, then the watchlist,
@@ -188,7 +189,13 @@ function HoldingItem({ holding, rules, mode, privacy }: {
               : ` · ${holding.dte} DTE · no schedule (Opened not recorded)`}
           </span>
         )}
-        {level ? <span className="nx-level" data-level={level}>{`at ${level}`}</span> : null}
+        {/* a Level reached is attention, so it is drawn as attention is: a filled chip with a
+            glyph — text in the alarm colour on the dark ground fell below 4.5:1 */}
+        {level ? (
+          <span className="nx-chip" data-kind={level === "stop" ? "stop" : "target"}>
+            <Glyph kind={level === "stop" ? "stop" : "target"} />{`at ${level}`}
+          </span>
+        ) : null}
       </div>
       {rules.length > 0 ? (
         <ul className="nx-under">

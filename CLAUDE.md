@@ -205,7 +205,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `src/__browser__/*.test.tsx`, and `iphone` — Playwright's iPhone 13 profile, `isMobile` and
   touch — runs only `*.iphone.test.tsx`. Each instance names its own files and the suite-wide
   `include` is EMPTY on purpose: vitest merges an instance's list into that one rather than
-  replacing it, so anything there runs in both.
+  replacing it, so anything there runs in both. And because Vite finds the files to pre-bundle
+  dependencies from through that same list, `optimizeDeps.entries` names the test files instead —
+  without it nothing was pre-bundled, and the mid-run reload failed ten files on every cold cache.
 - **Schema change:** add a `.sql` file to
   `schema/migrations/` AND put the same shape in `schema/schema.sql`, then update
   `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `backend/src/db/rows.ts` — the

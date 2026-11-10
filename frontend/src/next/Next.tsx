@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Settings2 } from "lucide-react";
 
 import "./next.css";
@@ -21,7 +21,7 @@ import { useDismissOnBack } from "../useDismissOnBack";
 import { arrangementFor, useViewportWidth } from "./arrangement";
 import { Book } from "./Book";
 import { clockMode, useSessionClock, type Mode } from "./mode";
-import { NeedsLine } from "./NeedsLine";
+import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Settings } from "./Settings";
 
@@ -47,9 +47,10 @@ export function Next() {
   }, [arrangement]);
 
   // The clock's mode unless the owner chose one. A choice lasts until the clock's own mode next
-  // changes — LIVE picked at 08:00 New York is still LIVE at the open and becomes REVIEW at the
-  // close, rather than polling the Provider all night — and choosing what the clock would pick
-  // hands the page straight back to it.
+  // changes: LIVE picked at 08:00 New York becomes the clock's at the open and REVIEW at the close,
+  // rather than polling the Provider all night. LIVE picked AFTER a close therefore lasts until
+  // the next open — over a weekend, until Monday — polling as LIVE does. Choosing what the clock
+  // would pick hands the page straight back to it.
   const byClock = clockMode(useSessionClock());
   const [chosen, setChosen] = useState<Mode | null>(null);
   useEffect(() => { setChosen(null); }, [byClock]);
@@ -60,13 +61,23 @@ export function Next() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
 
-  // Settings is the one surface that may say "nothing needs you" (ADR 0012), so opening it asks
-  // for the holdings afresh, whatever the mode — in REVIEW they are otherwise as old as the mode.
-  // And it is where References are kept or dropped, so it reads them too: REVIEW polls neither.
+  // Settings is the one surface that may say "nothing needs you" (ADR 0012), and where References
+  // are kept or dropped. LIVE polls both already; REVIEW polls neither, so opening Settings there
+  // asks for them afresh — otherwise they are as old as the mode. The mode is read through a ref:
+  // a switch of mode with Settings open asks for them anyway, and must not ask twice.
   const { loadHoldings, loadReferences } = book;
+  const modeNow = useRef(mode);
+  modeNow.current = mode;
   useEffect(() => {
-    if (settingsOpen) void Promise.all([loadHoldings(), loadReferences()]);
+    if (settingsOpen && modeNow.current === "review") void Promise.all([loadHoldings(), loadReferences()]);
   }, [settingsOpen, loadHoldings, loadReferences]);
+
+  // A banner tapped from the phone's Settings tab leads to a row that is not drawn there: back to
+  // the book first, then to the row once it is.
+  const revealRow = useCallback((ref: string) => {
+    setSettingsOpen(false);
+    setTimeout(() => reveal(ref), 0);
+  }, []);
 
   // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once
   // in REVIEW, so in REVIEW their Levels are left to Settings, which asks again and says when
@@ -117,7 +128,7 @@ export function Next() {
         {book.error ? <div className="nx-banner" role="alert">{book.error}</div> : null}
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
                    sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
-        <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} />
+        <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={revealRow} />
         {/* the market as it is now, so only in LIVE: in REVIEW nothing re-reads it, and a strip
             frozen at the moment the mode was entered would be read as current (ADR 0018) */}
         {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
@@ -241,16 +252,25 @@ function useBook(mode: Mode) {
     }
   }, []);
 
+  // The LATEST ask wins. A valuation asked for by a LIVE poll can land after the switch to
+  // REVIEW, which asks again; the older answer — a success or a failure — must not replace the
+  // newer one, or REVIEW, which does not poll, keeps the wrong one for good.
+  const asked = useRef(0);
   const loadHoldings = useCallback(async () => {
+    const mine = ++asked.current;
     try {
-      setHoldings(await fetchHoldings());
+      const valued = await fetchHoldings();
+      if (mine !== asked.current) return;
+      setHoldings(valued);
       setHoldingsAt(clockTime(new Date()));
       setHoldingsError(null);
     } catch (e: unknown) {
+      if (mine !== asked.current) return;
       // CLEARED, unlike `/opt`, which keeps the rows and relies on drawing the error first: here
       // the needs-you line reads them too, and must not go on saying a Level from a valuation
-      // that has since failed
+      // that has since failed — nor a time it was valued at
       setHoldings(null);
+      setHoldingsAt(null);
       setHoldingsError(e instanceof Error ? e.message : String(e));
     }
   }, []);
@@ -262,12 +282,14 @@ function useBook(mode: Mode) {
     [],
   );
 
-  /** `rest`: the market data beyond the line — the holdings, and in LIVE the References. */
+  /** `rest`: the market data beyond the line, the holdings; `references` with them, which is
+   *  LIVE's poll, and any change the owner made — a Reference kept or dropped in Settings must be
+   *  seen to have been, in REVIEW too. */
   const load = useCallback(
-    (rest: boolean) => Promise.all([
+    (rest: boolean, references: boolean = rest && live) => Promise.all([
       loadLine(),
       rest ? loadHoldings() : null,
-      rest && live ? loadReferences() : null,
+      references ? loadReferences() : null,
     ]).then(() => undefined),
     [loadLine, loadHoldings, loadReferences, live],
   );
@@ -303,7 +325,7 @@ function useBook(mode: Mode) {
   const act = useCallback(async (fn: () => Promise<void>) => {
     try {
       await fn();
-      await load(true);
+      await load(true, true);
       return true;
     } catch (e: unknown) {
       toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });

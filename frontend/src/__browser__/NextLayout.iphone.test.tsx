@@ -8,7 +8,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { overflowsSideways, serveBook, settle } from "./nextBook";
+import { longBook, overflowsSideways, serveBook, settle } from "./nextBook";
 
 async function show() {
   serveBook();
@@ -79,12 +79,16 @@ describe("the Live view", () => {
   });
 
   it("brings the row a banner is about into view when it is tapped", async () => {
-    await show();
-    window.scrollTo(0, document.body.scrollHeight);
+    serveBook(longBook(24));
+    render(<Next />);
+    await settle();
+    window.scrollTo(0, 0);
+    const row = document.querySelector<HTMLElement>('[data-ref="late"]')!;
+    // the precondition the test is worth nothing without: the row starts well out of view
+    expect(row.getBoundingClientRect().top).toBeGreaterThan(window.innerHeight);
     const banners = screen.getByRole("status", { name: "needs you" });
-    fireEvent.click(within(banners).getByRole("button", { name: /1218_7150P entry signal/ }));
-    await new Promise((r) => setTimeout(r, 600));
-    const row = document.querySelector<HTMLElement>('[data-ref="w2"]')!;
+    fireEvent.click(within(banners).getByRole("button", { name: /0917_5800P entry signal/ }));
+    await new Promise((r) => setTimeout(r, 900));
     const r = row.getBoundingClientRect();
     expect(row.hasAttribute("data-revealed")).toBe(true);
     expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);

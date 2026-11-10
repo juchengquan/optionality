@@ -5,7 +5,7 @@ import { commands, page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { oklab, overflowsSideways, serveBook, settle, token } from "./nextBook";
+import { contrast, oklab, overflowsSideways, serveBook, settle, token } from "./nextBook";
 
 const root = () => document.querySelector<HTMLElement>(".nx")!;
 
@@ -121,6 +121,25 @@ describe("the colour families", () => {
         }
       }
       expect(near).toEqual([]);
+    });
+  }
+
+  for (const scheme of ["light", "dark"] as const) {
+    /** Readable, not merely distinct: a chip's text against its fill at the 4.5:1 that small text
+     *  needs, and a glyph or a border against the page at the 3:1 a graphic needs (WCAG 2.2). */
+    it(`keeps every chip readable and every glyph visible, in the ${scheme} scheme`, async () => {
+      await commands.colorScheme(scheme);
+      await show();
+      const page = token(root(), "--background");
+      const weak: string[] = [];
+      for (const [fill, ink] of [["--alarm", "--chip-ink"], ["--fault", "--chip-ink"],
+        ["--entry", "--chip-ink"], ["--warn", "--warn-ink"]]) {
+        const text = contrast(token(root(), fill!), token(root(), ink!));
+        if (text < 4.5) weak.push(`${ink} on ${fill}: ${text.toFixed(2)}:1`);
+        const glyph = contrast(token(root(), fill!), page);
+        if (glyph < 3) weak.push(`${fill} on the page: ${glyph.toFixed(2)}:1`);
+      }
+      expect(weak).toEqual([]);
     });
   }
 
