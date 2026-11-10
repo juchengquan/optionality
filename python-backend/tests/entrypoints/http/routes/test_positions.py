@@ -453,6 +453,31 @@ class TestPositionsValues:
         assert v["greeks"]["option_delta"] == 0
         assert v["fetched_at"].endswith("+08:00")
 
+    async def test_takes_the_contract_size_from_the_quotes_rather_than_assuming_100(self, start):
+        # every other test prices at 100, so a route answering a constant 100 passed them all; only a
+        # size no constant would guess tells the quotes' figure from an assumption
+        async def fetch(codes):
+            return [{**r, "option_contract_size": 10} for r in (await priced_fetcher(codes)).records]
+
+        h = start_with(start, fetch)
+        await post(h, condor(entry=3.0, contracts=2))
+        v = (await h.call("/positions/values")).json()[0]
+        assert v["contract_size"] == 10
+        assert v["pnl"] == (3.0 - 4.5) * 2 * 10
+
+    async def test_reports_no_contract_size_and_so_no_p_l_when_no_quote_carries_one(self, start):
+        # the cost to close is points and needs no size; P&L is money and is never priced at a guess
+        async def fetch(codes):
+            records = (await priced_fetcher(codes)).records
+            return [{k: x for k, x in r.items() if k != "option_contract_size"} for r in records]
+
+        h = start_with(start, fetch)
+        await post(h, condor(entry=3.0, contracts=2))
+        v = (await h.call("/positions/values")).json()[0]
+        assert v["cost_to_close"] == 4.5
+        assert v["contract_size"] is None
+        assert v["pnl"] is None
+
     async def test_reports_nothing_rather_than_something_wrong_when_a_leg_goes_unpriced(self, start):
         # full quotes while creating, since the gate demands every leg exists; one dropped afterwards
         complete = True
