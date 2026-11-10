@@ -226,7 +226,9 @@ def test_every_new_figure_restarts_the_quiet_so_a_late_one_is_late_rather_than_l
 
 def test_the_snapshots_end_finishes_an_ask_greeks_or_none() -> None:
     """The one delimiter the protocol has: nothing more is coming, so an option whose model never
-    answers is finished there, with the figures it did send, rather than by the timeout."""
+    answers is finished there, with the figures it did send — when the end comes before the timeout.
+    Here it does (0.55s against 5s, paced); live it comes at eleven seconds, after the default eight,
+    so there the timeout finishes such an option."""
 
     def without_the_model(exchange: dict[str, Any]) -> None:
         keep = [not (m[0] == "21" and m[2] == "13") for m in exchange["replies"]]

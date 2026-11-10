@@ -223,7 +223,9 @@ describe("when an ask is finished (#257)", () => {
 
   it("finishes when the gateway says the snapshot has ended, greeks or none", async () => {
     // the one delimiter the protocol has: nothing more is coming, so an option whose model never
-    // answers is finished there, with the figures it did send, rather than by the timeout
+    // answers is finished there, with the figures it did send — when the end comes before the
+    // timeout. Here it does (0.55s against 5s, paced); live it comes at eleven seconds, after the
+    // default eight, so there the timeout finishes such an option
     const noModel = edited("normal-with-greeks", { symbol: "SPX", secType: "OPT" }, (e) => {
       const keep = e.replies.map((m) => !(m[0] === "21" && m[2] === "13"));
       return {

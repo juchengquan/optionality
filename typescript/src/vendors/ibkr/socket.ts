@@ -199,13 +199,13 @@ export class TwsSocket {
       throw new Error("not connected to IB Gateway");
     }
     this.queued.push(payload);
-    this.flush();
+    // while a drain is due the window is full, so the message waits its turn behind the others
+    if (this.drain === null) this.flush();
   }
 
-  /** As many queued messages as the window allows, and a timer for the rest when the oldest
-   *  message in the window ages out of it. */
+  /** As many queued messages as the window allows, and ONE timer for the rest, due when the
+   *  oldest message in the window ages out of it. */
   private flush(): void {
-    this.drain = null;
     const socket = this.socket;
     if (!socket) return;
     const now = performance.now();
@@ -215,7 +215,10 @@ export class TwsSocket {
       this.sentAt.push(now);
     }
     if (this.queued.length > 0 && this.drain === null) {
-      this.drain = setTimeout(() => this.flush(), this.sentAt[0]! + PACE_WINDOW_MS - now);
+      this.drain = setTimeout(() => {
+        this.drain = null;
+        this.flush();
+      }, this.sentAt[0]! + PACE_WINDOW_MS - now);
     }
   }
 
