@@ -14,7 +14,6 @@ import { dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { BACKLOG as MODULE_BACKLOG } from "./check-module-map.mjs";
 
 import {
   LABEL, PORT, backendOf, drySystem, readBacklog, refusals, renderPlist, switchTo, systemFor,
@@ -171,11 +170,11 @@ describe("the guard: the live service never switches to a half-ported Python", (
       .toEqual([expect.stringMatching(/no TypeScript backend modules under backend\/src/)]);
   });
 
-  it("refuses the Python today for every module the module map has not seen ported", () => {
-    // measured like the scenario count above, so it holds while the ports shrink the list, and
-    // goes when it is empty
+  it("finds every backend module of this tree ported", () => {
+    // the first port finished on 2026-11-10 with openapi.ts; from here a module with no port is a
+    // TypeScript change that landed without its Python, which `make check-module-map` refuses too
     const lines = refusals("python", ROOT);
-    for (const m of MODULE_BACKLOG) expect(lines).toContainEqual(expect.stringMatching(new RegExp(`^  ${m.replaceAll(".", "\\.")} has no port at `)));
+    expect(lines.filter((l) => /backend modules|has no port at/.test(l))).toEqual([]);
   });
 
   it("refuses without __main__, even with the backlog empty", () => {

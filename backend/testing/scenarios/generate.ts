@@ -1,6 +1,7 @@
 /** `make scenarios` writes `testdata/scenarios/{http,bot,sweep}/*.json` from the inputs beside this
  *  file; `make check-scenarios` (`--check`) only compares, and fails on any file that is missing,
- *  stale, or left over from an input that is gone (ADR 0021, Decision 4).
+ *  stale, or left over from an input that is gone (ADR 0021, Decision 4). It writes the HTTP
+ *  door's description of itself too, `schema/api/` (`describe` below), checked the same way.
  *
  *  Each file is its input's world and event, run through the TypeScript, with what happened
  *  written beside them. Never edited by hand: a scenario that should say something else is an
@@ -14,15 +15,16 @@
  *  to prove Node can load it, and a generator that ran on import would rewrite the corpus as a
  *  side effect of `make check-api`.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { SCENARIOS, scenarioFiles } from "./corpus.ts";
+import { API, API_FILES, SCENARIOS, scenarioFiles } from "./corpus.ts";
 import { runBot, runHttp, runSweep } from "./doors.ts";
 import {
   DOORS, type Door, type Provider, type Vendor, type World, render, slug,
 } from "./format.ts";
 import { BOT } from "./inputs/bot.ts";
+import { request, world } from "./inputs/fixtures.ts";
 import { HTTP } from "./inputs/http.ts";
 import { SWEEP } from "./inputs/sweep.ts";
 import { dumpTables, openWorld } from "./world.ts";
@@ -90,6 +92,23 @@ export async function build(): Promise<Record<Door, Record<string, string>>> {
   return out;
 }
 
+/** `schema/api/`'s files: what the TypeScript answers to `/openapi.json` and `/docs` with
+ *  `ROOT_PATH` blank, asked through the door exactly as a scenario asks. The description is
+ *  written as every scenario is, two-space JSON in the order the TypeScript builds it, so a PR
+ *  that changes a route shows the change line by line; the page is the text it was, unaltered. */
+export async function describe(): Promise<Record<(typeof API_FILES)[number], string>> {
+  const get = async (path: string): Promise<unknown> => {
+    const { response } = await runHttp({
+      world: written(world()), request: request("GET", path, null, { anonymous: true }),
+    });
+    if (response.status !== 200) throw new Error(`GET ${path} answered ${response.status}`);
+    return response.body;
+  };
+  const page = await get("/docs");
+  if (typeof page !== "string") throw new Error("GET /docs answered something other than text");
+  return { "openapi.json": render(await get("/openapi.json")), "docs.html": page };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const check = process.argv.includes("--check");
   // `--root` writes somewhere else, so the generator can be tried without touching the corpus
@@ -113,6 +132,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       else rmSync(join(dir, file));
     }
   }
+  // under `--root`, the description goes beside the doors, in `api/`
+  const api = rootArg === -1 ? API : join(root, "api");
+  if (!check) mkdirSync(api, { recursive: true });
+  const described = await describe();
+  for (const [file, text] of Object.entries(described)) {
+    const path = join(api, file);
+    if (existsSync(path) && readFileSync(path, "utf8") === text) continue;
+    if (check) stale.push(`schema/api/${file}`);
+    else writeFileSync(path, text);
+  }
+  for (const file of existsSync(api) ? readdirSync(api).filter((f) => !(f in described)) : []) {
+    if (check) stale.push(`schema/api/${file} (nothing writes it)`);
+    else rmSync(join(api, file));
+  }
   if (DOORS.some((door) => scenarioFiles(door, root).length === 0) && check) {
     stale.push("a door with no scenarios at all");
   }
@@ -122,6 +155,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
   console.log(check
-    ? `door scenarios match the TypeScript (${count})`
-    : `wrote ${count} door scenarios to ${root}`);
+    ? `door scenarios and schema/api/ match the TypeScript (${count})`
+    : `wrote ${count} door scenarios to ${root}, and the API's description to ${api}`);
 }

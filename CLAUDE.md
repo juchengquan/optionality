@@ -8,8 +8,9 @@ Same origin, so no CORS. `~/recovery.sh` rebuilds the whole tailscale serve tabl
 
 **The service is TypeScript (ADR 0009):** `com.optionality.api` runs `backend/src/main.ts` under node,
 on `data/optionality-ts.db` — and only it, until the owner switches it: since 2026-11-10 every door
-scenario passes, `make use BACKEND=python` is refused only for the one module not ported yet,
-`openapi.ts`, and running it once that goes is a drill (below). Node runs the TypeScript directly, so what is in the working tree is what runs. The Python
+scenario passes and every backend module is ported, so `make use BACKEND=python` passes its guard,
+and running it is a drill (below), the owner's call. Node runs the TypeScript directly, so what is
+in the working tree is what runs. The Python
 service it replaced, and the run pipeline (strategy and holdings scans), were deleted in
 phase 10 (ADR 0014); the `python-before-phase-10` tag keeps them. The Python's own database,
 `data/optionality.db`, was frozen at the 2026-10-02 cutover and never opened again — and no longer
@@ -60,8 +61,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   outside its `engine/` reaches past that package's door (`check-seams`' engine rule, which reads
   no Python).
   `check-module-map` holds the same backend module for module: every TypeScript backend module has
-  its Python port, a reason in the tool's table, or a place on a backlog frozen on 2026-11-09 that
-  may only shrink (ADR 0021). The first:
+  its Python port or a reason in the tool's table, landed in the same change (lockstep, ADR 0021);
+  the first port's backlog emptied on 2026-11-10 and was deleted. The first:
   no package imports another's source tree, only its package.json `exports` (`backend` for `AppType`,
   `backend/schemas` for the input schemas, `optionality/...` for the library; ADR 0014) — and its
   `DEPENDS` says which may import which BY NAME at all: the library nothing, the backend the library,
@@ -90,11 +91,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   is how the dashboard and the API drift apart.
 - `make use BACKEND=ts|python` — **switch the live backend** (ADR 0021, Decision 3): the guard, the
   backup `make deploy` takes, then boot the running backend out and the chosen one in under the
-  same label, and wait for `/health` to answer 200. **`BACKEND=python` is refused** until the port
-  is done, printing `N of M door scenarios ported` and each door still missing, then
-  `N of M backend modules ported` and each module with no port. Since 2026-11-10 every door
-  scenario passes, and the one refusal left is `entrypoints/http/openapi.ts` (see Workflow &
-  environment). Never run it to "try" the Python: a drill is the owner's call.
+  same label, and wait for `/health` to answer 200. **`BACKEND=python` is refused** while the port
+  is incomplete, printing `N of M door scenarios ported` and each door still missing, then
+  `N of M backend modules ported` and each module with no port. Since 2026-11-10 it refuses
+  nothing: every door scenario passes and every module is ported (see Workflow & environment).
   Never run it to "try" the Python: a drill is the owner's call.
 - TypeScript: `make test-lib` (the library's suite), `make test-api` (the backend's), `make typecheck`,
   **`make check-api`** (every module of BOTH packages loads under Node — `tsc` and vitest both accept
@@ -155,12 +155,17 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `outcomes.ts` — whose own list is held to the decisions the engine imports and the
   `disabled_reason`s it writes. Ids and the clock are INJECTED (`Deps.newId`, `BotDeps.newId`), not
   scrubbed. `testdata/scenarios/README.md` is the format, for a runner in another language.
+  **`make scenarios` also writes `schema/api/`** — `openapi.json` and `docs.html`, what the
+  TypeScript answers to `/openapi.json` and `/docs` with `ROOT_PATH` blank — and `check-scenarios`
+  fails when either is stale. The Python SERVES them (`entrypoints/http/openapi.py`) with its own
+  root path put in, because the owner decided on 2026-11-10 that its description is the
+  TypeScript's word for word, where FastAPI would write one of its own. Four HTTP scenarios hold
+  both pages, with the root path blank and set.
   **The Python's runner** (phase 2) is `python-backend/tests/scenarios/`, module for module with
   `backend/testing/scenarios/`, and `make test` replays every file through it. While the first port
   lasts, a scenario on its BACKLOG (`scenarios/backlog.py`) is skipped with its reason, and the
-  suite's last line counts the port: "door scenarios: N of 120 ported". The backlog was frozen on
-  2026-11-09 with all 120 and may only shrink — the same rules and wording as
-  `tools/check-module-map.mjs`'s.
+  suite's last line counts the port: "door scenarios: N of M ported". The backlog was frozen on
+  2026-11-09 with all 120, may only shrink, and has been empty since 2026-11-10.
 - **`make ibkr-fake-gateway`** — a stub IB Gateway speaking the SOCKET protocol, for driving the
   `ibkr/` client by hand (`ARGS="--conversation link-down"` picks what it replays). It says nothing
   of its own: it replays one conversation from `testdata/vendors/ibkr-gateway/` (above), the same
@@ -323,7 +328,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   schema either backend builds a database from, and the migrations either applies to the live
   file (ADR 0021). Shared ground, declared beside `testdata/` in `check-boundaries`, and moved out
   of `backend/src/db/` for exactly that reason: from there the Python could have read it only by
-  reaching into another package's source.
+  reaching into another package's source. Beside them, `api/`: the HTTP door's description of
+  itself, which the TypeScript generates and the Python serves (see **Door scenarios**).
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
   generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
   Gateway conversations (inputs) beside the batches `make cases` generates from them.
@@ -421,7 +427,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `optionality.api.agrees()` asks a running service whether the port is still current; it never
   runs on import, and answers "no service" rather than raising.
 - `python-backend/` — `optionality_backend` (ADR 0021): the Python backend that will be able to run
-  the whole service, one backend at a time. Being ported module by module, bottom up (phase 4):
+  the whole service, one backend at a time. Ported module by module, bottom up (phase 4, every
+  module since 2026-11-10):
   **read its README's "Porting a module" before porting one** — the path, the docstring, which
   JavaScript behaviours go through `optionality.js`, async on one loop, names, and how the tests
   are ported. Its suite also holds the three lines `check-py-backend` runs —
@@ -590,17 +597,16 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   **The guard** refuses the Python while `python-backend/tests/scenarios/backlog.py` names any
   scenario (it prints `N of M door scenarios ported` and each door still missing), while any
   TypeScript backend module has no Python port (`N of M backend modules ported`, each one named —
-  measured from the TREE by `check-module-map.mjs`'s `unported`, not read off its `BACKLOG`, which
-  `make check` holds equal to it and which is deleted when the port is done), while
+  measured from the TREE by `check-module-map.mjs`'s `unported`), while
   `python-backend/src/optionality_backend/__main__.py` does not exist, or while `.venv/bin/python`
   is not installed. The modules as well as the scenarios, because the scenarios hold what the two
-  backends DO and reach only what a door reaches: `/docs` and `/openapi.json` are nobody's door,
-  so with the scenario backlog empty `openapi.ts` would have gone live as the TypeScript's alone.
+  backends DO and reach only what a door reaches: `openapi.ts` was the last module ported, and until
+  its scenarios came with it `/docs` and `/openapi.json` were nobody's door.
   Every road to a Python plist goes through it — `make use`, `make launchd-api-install
-  BACKEND=python` and `make deploy`'s restart — and there is no override. Since 2026-11-10 every
-  scenario passes (123 of 123), and its one refusal is the module map's last entry,
-  `entrypoints/http/openapi.ts` — why the Python serves no `/docs` and no `/openapi.json`; ADR
-  0021 leaves open whether they must match. **A drill** — the
+  BACKEND=python` and `make deploy`'s restart — and there is no override. Since 2026-11-10 it
+  refuses nothing — every scenario passes (143 of 143) and every module is ported — and it stays,
+  because a TypeScript change that lands without its Python is a tree it must refuse.
+  **A drill** — the
   Python live for a while, by hand, then back — is run when the owner asks and never on a
   schedule: only a drill shows launchd, the real vendors and the switch itself working, and it
   waits for the guard. `DRY_RUN=1 node tools/use-backend.mjs switch <backend>` prints the switch

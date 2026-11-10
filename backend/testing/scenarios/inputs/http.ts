@@ -586,4 +586,29 @@ export const HTTP: readonly HttpInput[] = [
     world: world({ tables: references }),
     request: request("DELETE", "/references/ref-9"),
   },
+  // --- /openapi.json and /docs --------------------------------------------------------------
+  // The service's description of itself, held word for word (decided 2026-11-10): the Python
+  // serves what `make scenarios` writes to schema/api/, with its own root path put in. Asked
+  // without the token, which every world here has: the page cannot hand one to its own fetch.
+  {
+    name: "GET /openapi.json describes every route, without a token",
+    world: world(),
+    request: request("GET", "/openapi.json", null, { anonymous: true }),
+  },
+  {
+    // behind the path-stripping proxy the browser sees /opt/api/...: "Try it" has to be told
+    name: "GET /openapi.json names the path the browser sees behind the proxy",
+    world: world({ settings: { ROOT_PATH: "/opt/api" } }),
+    request: request("GET", "/openapi.json", null, { anonymous: true }),
+  },
+  {
+    name: "GET /docs is the reference page, without a token",
+    world: world(),
+    request: request("GET", "/docs", null, { anonymous: true }),
+  },
+  {
+    name: "GET /docs loads the description from the path the browser sees behind the proxy",
+    world: world({ settings: { ROOT_PATH: "/opt/api" } }),
+    request: request("GET", "/docs", null, { anonymous: true }),
+  },
 ];

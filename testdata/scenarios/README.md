@@ -102,5 +102,8 @@ numbers compare as IEEE doubles — exactly, with no tolerance. `1` and `1.0` ar
 `3.1000000000000005` and `3.1` are not, and the inputs are priced in quarters so a reader rarely
 meets the difference.
 
-Not held here, on purpose: the bodies of `/openapi.json` and `/docs`, which ADR 0021 leaves open,
-and the service's own log lines.
+`/openapi.json` and `/docs` are held like any other answer, word for word (decided 2026-11-10):
+a second backend serves the TypeScript's description rather than writing its own. `make
+scenarios` writes the two for a blank `ROOT_PATH` to `schema/api/`, and a backend serves them with
+its own root path in the description's `servers` (`[{"url": <root path, or "/">}]`) and in the
+page's `"url"` (`<root path>/openapi.json`). Not held here, on purpose: the service's own log lines.

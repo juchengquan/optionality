@@ -8,19 +8,19 @@
  *  It lives in `tools/` because it reads two packages' trees, which `check-boundaries` refuses to
  *  any package and allows only to a repo-wide tool — the reason `check-loads.ts` lives here too.
  *
- *  The table is four parts:
+ *  The table is three parts:
  *
  *  - **`TS_ONLY`**: TypeScript with no Python counterpart, each with the reason. Printed when it
  *    is wrong, for the reason `check-seams` prints its own: a guard that only says "refused"
  *    teaches the next person to delete it.
  *  - **`RENAMED`**: where the Python name is not the TypeScript name translated.
  *  - **`PY_ONLY`**: the other direction, with reasons. Empty, and meant to stay small.
- *  - **`BACKLOG`**: what is not ported yet. ADR 0021 allows a backlog only during the first port,
- *    and only one that SHRINKS. A test cannot read history, so the shrinking is held the other
- *    way round: a ported module still listed fails, and a NEW TypeScript module cannot join the
- *    backlog without someone writing it in here — in a diff, against a list frozen on 2026-11-09.
- *    Outside the first port that is lockstep: a TypeScript module and its port land together.
- *    When the backlog is empty the port is done, and this constant should be deleted with it.
+ *
+ *  There is no fourth. ADR 0021's first port had a `BACKLOG`, frozen on 2026-11-09 with every
+ *  module the backend had and allowed only to shrink; it emptied on 2026-11-10 with
+ *  `entrypoints/http/openapi.ts` and was deleted, as it said it would be. What is left is lockstep:
+ *  a TypeScript module and its port land in the same change, or the module says in `TS_ONLY` why
+ *  it has none.
  */
 import { readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -50,11 +50,6 @@ export const PY_ONLY = {
     + "answers with z.prettifyError's text, the dashboard prints it verbatim, and pydantic says other "
     + "things, and in places refuses other values",
 };
-
-/** Not yet ported. Frozen on 2026-11-09 with everything the backend had; it may only shrink. */
-export const BACKLOG = [
-  "entrypoints/http/openapi.ts",
-];
 
 const SKIP_DIRS = new Set(["node_modules", "__pycache__", ".venv", "dist"]);
 
@@ -90,9 +85,8 @@ export function pythonFor(tsPath, renamed = RENAMED) {
 /** Every TypeScript backend module that is not TypeScript-only and has no Python file where its
  *  port belongs, and how many such modules there are: `{ portable, missing: [{ ts, py }] }`.
  *
- *  Measured from the TREE, not read off `BACKLOG`. `findings` holds the two equal in `make check`,
- *  but `make use`'s guard (`use-backend.mjs`) asks on whatever tree is checked out, and the list is
- *  to be deleted when the port is done — a guard that read it would then have nothing to read. */
+ *  `make use`'s guard (`use-backend.mjs`) asks this on whatever tree is checked out, which
+ *  `make check` may never have seen. */
 export function unported(repo = ROOT, table = { tsOnly: TS_ONLY, renamed: RENAMED }) {
   const { tsOnly, renamed } = table;
   const py = new Set(files(join(repo, PY_ROOT), (n) => n.endsWith(".py")));
@@ -111,13 +105,12 @@ function tsModules(repo) {
 
 /** What is wrong, one line each; empty when the two backends have the same parts. */
 export function findings(repo = ROOT, table = {
-  tsOnly: TS_ONLY, renamed: RENAMED, pyOnly: PY_ONLY, backlog: BACKLOG,
+  tsOnly: TS_ONLY, renamed: RENAMED, pyOnly: PY_ONLY,
 }) {
-  const { tsOnly, renamed, pyOnly, backlog } = table;
+  const { tsOnly, renamed, pyOnly } = table;
   const ts = tsModules(repo);
   const py = new Set(files(join(repo, PY_ROOT), (n) => n.endsWith(".py")));
   const tsSet = new Set(ts);
-  const queued = new Set(backlog);
   const out = [];
 
   for (const [name, entries] of [["TS_ONLY", Object.keys(tsOnly)], ["RENAMED", Object.keys(renamed)]]) {
@@ -125,19 +118,13 @@ export function findings(repo = ROOT, table = {
       if (!tsSet.has(m)) out.push(`${name} names ${m}, which is not in ${TS_ROOT}/ any more`);
     }
   }
-  for (const m of backlog) {
-    if (!tsSet.has(m)) out.push(`the backlog names ${m}, which is not in ${TS_ROOT}/ any more`);
-    if (m in tsOnly) out.push(`${m} is both TypeScript-only and on the backlog`);
-  }
 
   const counterparts = new Set();
   for (const m of ts) {
     if (m in tsOnly) continue;
     const target = pythonFor(m, renamed);
     counterparts.add(target);
-    if (py.has(target) && queued.has(m)) {
-      out.push(`${m} is ported (${PY_ROOT}/${target}): take it off the backlog`);
-    } else if (!py.has(target) && !queued.has(m)) {
+    if (!py.has(target)) {
       out.push(`${m} has no Python counterpart at ${PY_ROOT}/${target}: port it in the same `
         + "change (lockstep, ADR 0021), or say in TS_ONLY why it has none");
     }
@@ -164,6 +151,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const ts = tsModules(ROOT).length;
   const portable = ts - Object.keys(TS_ONLY).length;
-  console.log(`module map holds: ${portable - BACKLOG.length} of ${portable} backend modules ported, `
-    + `${BACKLOG.length} on the backlog, ${Object.keys(TS_ONLY).length} TypeScript-only`);
+  console.log(`module map holds: all ${portable} backend modules ported, `
+    + `${Object.keys(TS_ONLY).length} TypeScript-only`);
 }

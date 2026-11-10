@@ -16,9 +16,12 @@
  *  while a TypeScript backend module has no Python port (`check-module-map.mjs`'s `unported`,
  *  measured from the tree), while `__main__.py` does not exist, and while the interpreter launchd
  *  would run is not installed. The scenarios hold what the two DO; the module map holds what they
- *  are MADE of, and reaches what no scenario does — `/docs` and `/openapi.json` are nobody's door.
- *  There is no override: a drill — the Python live for a while, by hand, on the owner's request and
- *  never on a schedule — happens once the port is done and the guard is satisfied.
+ *  are MADE of, and so reaches a module no scenario does — which is how `/docs` and
+ *  `/openapi.json` were held until their own scenarios came with their port. The first port
+ *  finished on 2026-11-10 and today's tree passes, but the guard stays: a TypeScript change that
+ *  lands without its Python (lockstep, ADR 0021) is a tree it must refuse. There is no override:
+ *  a drill — the Python live for a while, by hand, on the owner's request and never on a
+ *  schedule — happens only when the guard is satisfied.
  *
  *  A script rather than a recipe because the guard is the point of the target and must be readable
  *  and tested (`use-backend.test.mjs`), as `py-release.mjs`'s refusals are. It lives in `tools/`
@@ -164,9 +167,9 @@ export function refusals(backend, repo = ROOT) {
       if (waiting(d) > 0) out.push(`  ${d.padEnd(5)}  ${waiting(d)} of ${corpus[d].length} still on the backlog`);
     }
   }
-  // the PARTS, as well as the behaviour: a module no scenario reaches (/docs and /openapi.json are
-  // nobody's door) would otherwise go live as the TypeScript's alone. `main.ts` is left to the line
-  // after this one, which says the same thing in the words a missing process deserves.
+  // the PARTS, as well as the behaviour: a module no scenario reaches would otherwise go live as
+  // the TypeScript's alone, as `openapi.ts` nearly did before its scenarios. `main.ts` is left to
+  // the line after this one, which says the same thing in the words a missing process deserves.
   const modules = unported(repo);
   const parts = modules.missing.filter((m) => m.ts !== "main.ts");
   if (modules.portable === 0) {
@@ -192,7 +195,8 @@ function refuse(backend, repo) {
   throw new Refused([
     `refusing to switch to ${NAMES[backend]}: the port is not done (ADR 0021)`,
     ...lines.map((l) => `  ${l}`),
-    `The backlogs are ${BACKLOG} and tools/check-module-map.mjs; both are empty when the port is done.`,
+    `The scenario backlog is ${BACKLOG}, and may only shrink; a module with no port needs one, `
+      + "written in the same change as the TypeScript (lockstep; tools/check-module-map.mjs).",
     "Until then the live service stays on the TypeScript: `make use BACKEND=ts`.",
   ].join("\n"));
 }

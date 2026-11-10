@@ -8,6 +8,12 @@
  *  (openapi.test.ts holds the "only way"). The 422 every validated route can answer
  *  is derived here, not declared, because it follows from validation rather than from the route.
  *
+ *  The Python serves what this builds rather than building its own (decided 2026-11-10): `make
+ *  scenarios` writes both answers, for a blank root path, to `schema/api/`, and four door
+ *  scenarios hold the Python's to them. So `build` and the `Scalar` call must keep the root path
+ *  where they put it today, the description's `servers` and the page's `url`, or the Python's
+ *  `entrypoints/http/openapi.py` must follow.
+ *
  *  One dependency fact matters more than it looks. hono-openapi converts through
  *  `import("zod/v4/core")`, which resolves from the WORKSPACE root, not from the backend — and
  *  shadcn's zod 3 used to be hoisted there. Converted by zod 3.25, 6 of the 11 request schemas

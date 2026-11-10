@@ -2,13 +2,14 @@
 
 The optionality service in Python: the standby beside the TypeScript backend, able to run the whole
 service — the sweep and its alarms, the database, the API the dashboard calls and the bot — so that
-either can be the live one, one at a time (ADR 0021). It is being ported module by module, bottom up
-(phase 4), and `make check-module-map` says how far it has got.
+either can be the live one, one at a time (ADR 0021). It was ported module by module, bottom up
+(phase 4, done 2026-11-10), and `make check-module-map` holds it there.
 
 **It is never released.** It runs from the working tree, as `backend/` does, under the launchd agent
 that `make deploy` restarts — so what is checked out is what runs, and there is no version anybody
-pins. `make use BACKEND=python` puts it there, and refuses to until the port is done: the door
-backlog empty and `__main__.py` written (`tools/use-backend.mjs`). The library beside it, `python/`, is the opposite: released by git tag (ADR 0016) and installed
+pins. `make use BACKEND=python` puts it there, and refuses to while the port is incomplete: a
+scenario on the door backlog, a module with no port, or no `__main__.py` (`tools/use-backend.mjs`).
+The library beside it, `python/`, is the opposite: released by git tag (ADR 0016) and installed
 by notebooks from its subdirectory. The two share one uv workspace, rooted at the repository's
 `pyproject.toml`, with one `uv.lock`.
 
@@ -35,7 +36,7 @@ It is held to the TypeScript at the service's three doors (ADR 0021, Decision 4)
 `tests/scenarios/`, the Python's half of the replay. The one place the backend plugs in is
 `tests/scenarios/backend.py`'s `build`. Until a scenario passes it stays on
 `tests/scenarios/backlog.py`, skipped with its reason; the suite ends by counting the port —
-"door scenarios: N of 120 ported" — and the list may only shrink.
+"door scenarios: N of M ported" — and the list may only shrink. It has been empty since 2026-11-10.
 
 ## Porting a module
 
@@ -48,8 +49,9 @@ port.
 
 **One module for one.** `backend/src/<path>.ts` becomes the file `pythonFor()` in
 `tools/check-module-map.mjs` names: the same path, `snake_case`, and a directory's `index.ts` its
-`__init__.py`. The same change takes it off `BACKLOG`, and `make check-module-map` fails until it
-does. A directory with no `index.ts` gets no `__init__.py` (`db/`): Python 3 needs none, and the
+`__init__.py`. It lands in the same change as the TypeScript module (lockstep), and
+`make check-module-map` fails until it does. A directory with no `index.ts` gets no `__init__.py`
+(`db/`): Python 3 needs none, and the
 TypeScript has no door there.
 
 **The docstring** opens with what the module is, then says `Port of backend/src/<path>.ts.`, and
@@ -87,9 +89,10 @@ backlog — a route module whose other routes need `holdings`, a door that re-ex
 five. Its docstring says **Partly ported** and names what is missing; what is missing is ABSENT,
 never stubbed, so a caller fails at import and a request gets the 404, and every scenario that needs
 it fails rather than passing on a stand-in. `make check-module-map` counts the file as ported, so the
-docstring is the only record — and for routes, `tests/entrypoints/http/test_app.py`'s `NOT_YET`,
-which holds the app to the whole surface less what it names and may only shrink. The test module
-says which of the TypeScript's tests wait for the missing part.
+docstring is the only record. The test module says which of the TypeScript's tests wait for the
+missing part. A ROUTE cannot be ported in part any more: `tests/entrypoints/http/test_app.py`
+holds the app to the TypeScript's whole surface. Its `NOT_YET`, which allowed it during the first
+port, emptied on 2026-11-10 and was deleted.
 
 **Async.** `async` in the TypeScript is `async def`, and everything runs on ONE asyncio loop (ADR
 0021, Decision 6), so there are no threads — except a vendor client that blocks, the moomoo SDK

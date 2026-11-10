@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { BACKLOG, PY_ONLY, RENAMED, TS_ONLY, findings, pythonFor, unported } from "./check-module-map.mjs";
+import { PY_ONLY, RENAMED, TS_ONLY, findings, pythonFor, unported } from "./check-module-map.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -23,7 +23,7 @@ const ts = (rel) => write(`backend/src/${rel}`, "export {};\n");
 const py = (rel) => write(`python-backend/src/optionality_backend/${rel}`, '"""a port."""\n');
 
 /** An empty table, with whatever a case needs laid over it. */
-const table = (over = {}) => ({ tsOnly: {}, renamed: {}, pyOnly: {}, backlog: [], ...over });
+const table = (over = {}) => ({ tsOnly: {}, renamed: {}, pyOnly: {}, ...over });
 const found = (over) => findings(repo, table(over));
 
 describe("the Python name for a TypeScript module", () => {
@@ -41,37 +41,20 @@ describe("the Python name for a TypeScript module", () => {
 });
 
 describe("every TypeScript backend module has a Python counterpart, or says why not", () => {
-  it("refuses a TypeScript module with no port that is not on the backlog: lockstep", () => {
+  it("refuses a TypeScript module with no port: lockstep", () => {
     ts("holdings.ts");
     expect(found()).toEqual([expect.stringMatching(/holdings\.ts has no Python counterpart.*lockstep/)]);
   });
 
-  it("accepts a module the backlog names and nothing has ported yet", () => {
-    ts("holdings.ts");
-    expect(found({ backlog: ["holdings.ts"] })).toEqual([]);
-  });
-
-  it("accepts a ported module off the backlog", () => {
+  it("accepts a ported module", () => {
     ts("db/queries/index.ts"); py("db/queries/__init__.py");
     expect(found()).toEqual([]);
   });
 
-  it("refuses a ported module still on the backlog, so the list shrinks as the port lands", () => {
-    ts("holdings.ts"); py("holdings.py");
-    expect(found({ backlog: ["holdings.ts"] }))
-      .toEqual([expect.stringMatching(/holdings\.ts is ported.*take it off the backlog/)]);
-  });
-
-  it("refuses a backlog entry for a module that no longer exists", () => {
-    expect(found({ backlog: ["gone.ts"] })).toEqual([expect.stringMatching(/backlog names gone\.ts/)]);
-  });
-
-  it("accepts a TypeScript-only module, and refuses one that is also on the backlog", () => {
+  it("accepts a TypeScript-only module", () => {
     ts("entrypoints/http/hc.types.ts");
     const tsOnly = { "entrypoints/http/hc.types.ts": "a compile-time check" };
     expect(found({ tsOnly })).toEqual([]);
-    expect(found({ tsOnly, backlog: ["entrypoints/http/hc.types.ts"] }))
-      .toEqual([expect.stringMatching(/both TypeScript-only and on the backlog/)]);
   });
 
   it("refuses a TypeScript-only entry or a rename for a module that no longer exists", () => {
@@ -128,11 +111,6 @@ describe("what has no port yet, measured from the tree rather than read off the 
     expect(missing()).toEqual({ portable: 2, missing: [{ ts: "holdings.ts", py: "holdings.py" }] });
   });
 
-  it("counts a module whatever the backlog says, which is what makes it the tree's answer", () => {
-    ts("holdings.ts");
-    expect(missing().missing).toEqual([{ ts: "holdings.ts", py: "holdings.py" }]);
-  });
-
   it("leaves out what is TypeScript-only, and finds a renamed port under its own name", () => {
     // a rename the repository's own table does not have, so a default table cannot pass for this one
     ts("hc.types.ts"); ts("entry.ts"); py("__main__.py");
@@ -145,15 +123,14 @@ describe("what has no port yet, measured from the tree rather than read off the 
     expect(missing()).toEqual({ portable: 0, missing: [] });
   });
 
-  it("agrees with the backlog in this repository", () => {
-    expect(unported(ROOT).missing.map((m) => m.ts)).toEqual([...BACKLOG].sort());
+  it("finds nothing unported in this repository: the first port is done", () => {
+    expect(unported(ROOT).missing).toEqual([]);
   });
 });
 
 describe("this repository", () => {
   it("passes, with every table entry naming a module that exists", () => {
-    expect(findings(ROOT, { tsOnly: TS_ONLY, renamed: RENAMED, pyOnly: PY_ONLY, backlog: BACKLOG }))
-      .toEqual([]);
+    expect(findings(ROOT, { tsOnly: TS_ONLY, renamed: RENAMED, pyOnly: PY_ONLY })).toEqual([]);
   });
 
   it("states a reason for every TypeScript-only and Python-only module", () => {
