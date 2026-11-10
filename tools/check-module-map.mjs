@@ -88,13 +88,34 @@ export function pythonFor(tsPath, renamed = RENAMED) {
   return dir === "." ? py : `${dir}/${py}`;
 }
 
+/** Every TypeScript backend module that is not TypeScript-only and has no Python file where its
+ *  port belongs, and how many such modules there are: `{ portable, missing: [{ ts, py }] }`.
+ *
+ *  Measured from the TREE, not read off `BACKLOG`. `findings` holds the two equal in `make check`,
+ *  but `make use`'s guard (`use-backend.mjs`) asks on whatever tree is checked out, and the list is
+ *  to be deleted when the port is done — a guard that read it would then have nothing to read. */
+export function unported(repo = ROOT, table = { tsOnly: TS_ONLY, renamed: RENAMED }) {
+  const { tsOnly, renamed } = table;
+  const py = new Set(files(join(repo, PY_ROOT), (n) => n.endsWith(".py")));
+  const portable = tsModules(repo).filter((m) => !(m in tsOnly));
+  const missing = portable
+    .map((m) => ({ ts: m, py: pythonFor(m, renamed) }))
+    .filter(({ py: target }) => !py.has(target));
+  return { portable: portable.length, missing };
+}
+
+/** The TypeScript backend's modules: every `.ts` under `backend/src/`, less tests and declarations. */
+function tsModules(repo) {
+  return files(join(repo, TS_ROOT),
+    (n) => n.endsWith(".ts") && !n.endsWith(".test.ts") && !n.endsWith(".d.ts"));
+}
+
 /** What is wrong, one line each; empty when the two backends have the same parts. */
 export function findings(repo = ROOT, table = {
   tsOnly: TS_ONLY, renamed: RENAMED, pyOnly: PY_ONLY, backlog: BACKLOG,
 }) {
   const { tsOnly, renamed, pyOnly, backlog } = table;
-  const ts = files(join(repo, TS_ROOT),
-    (n) => n.endsWith(".ts") && !n.endsWith(".test.ts") && !n.endsWith(".d.ts"));
+  const ts = tsModules(repo);
   const py = new Set(files(join(repo, PY_ROOT), (n) => n.endsWith(".py")));
   const tsSet = new Set(ts);
   const queued = new Set(backlog);
@@ -142,8 +163,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const line of found) console.error(`  ${line}`);
     process.exit(1);
   }
-  const ts = files(join(ROOT, TS_ROOT),
-    (n) => n.endsWith(".ts") && !n.endsWith(".test.ts") && !n.endsWith(".d.ts")).length;
+  const ts = tsModules(ROOT).length;
   const portable = ts - Object.keys(TS_ONLY).length;
   console.log(`module map holds: ${portable - BACKLOG.length} of ${portable} backend modules ported, `
     + `${BACKLOG.length} on the backlog, ${Object.keys(TS_ONLY).length} TypeScript-only`);

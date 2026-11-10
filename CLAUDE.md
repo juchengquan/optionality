@@ -90,8 +90,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 - `make use BACKEND=ts|python` — **switch the live backend** (ADR 0021, Decision 3): the guard, the
   backup `make deploy` takes, then boot the running backend out and the chosen one in under the
   same label, and wait for `/health` to answer 200. **`BACKEND=python` is refused** until the port
-  is done, printing `N of M door scenarios ported` and each door still missing; see Workflow &
-  environment. Never run it to "try" the Python: a drill is the owner's call.
+  is done, printing `N of M door scenarios ported` and each door still missing, then
+  `N of M backend modules ported` and each module with no port; see Workflow & environment.
+  Never run it to "try" the Python: a drill is the owner's call.
 - TypeScript: `make test-lib` (the library's suite), `make test-api` (the backend's), `make typecheck`,
   **`make check-api`** (every module of BOTH packages loads under Node — `tsc` and vitest both accept
   syntax Node refuses to run, and two classes reached main unable to load at all. It is
@@ -577,14 +578,20 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   because launchd's PATH is minimal, running the working tree because uv installs the workspace
   editable, plus `PYTHONUNBUFFERED=1` because the log is the only witness of a boot that failed.
   **The guard** refuses the Python while `python-backend/tests/scenarios/backlog.py` names any
-  scenario (it prints `N of M door scenarios ported` and each door still missing), while
+  scenario (it prints `N of M door scenarios ported` and each door still missing), while any
+  TypeScript backend module has no Python port (`N of M backend modules ported`, each one named —
+  measured from the TREE by `check-module-map.mjs`'s `unported`, not read off its `BACKLOG`, which
+  `make check` holds equal to it and which is deleted when the port is done), while
   `python-backend/src/optionality_backend/__main__.py` does not exist, or while `.venv/bin/python`
-  is not installed. Every road to a Python plist goes through it — `make use`,
-  `make launchd-api-install BACKEND=python` and `make deploy`'s restart — and there is no
-  override. **A drill** — the Python live for a while, by hand, then back — is run when the owner
-  asks and never on a schedule: only a drill shows launchd, the real vendors and the switch itself
-  working, and it waits for the guard. `DRY_RUN=1 node tools/use-backend.mjs switch <backend>`
-  prints the switch without doing any of it.
+  is not installed. The modules as well as the scenarios, because the scenarios hold what the two
+  backends DO and reach only what a door reaches: `/docs` and `/openapi.json` are nobody's door,
+  so with the scenario backlog empty `openapi.ts` would have gone live as the TypeScript's alone.
+  Every road to a Python plist goes through it — `make use`, `make launchd-api-install
+  BACKEND=python` and `make deploy`'s restart — and there is no override. **A drill** — the
+  Python live for a while, by hand, then back — is run when the owner asks and never on a
+  schedule: only a drill shows launchd, the real vendors and the switch itself working, and it
+  waits for the guard. `DRY_RUN=1 node tools/use-backend.mjs switch <backend>` prints the switch
+  without doing any of it.
 - **`com.optionality.opend`** (`make launchd-opend-install`) watches OpenD, which everything else
   depends on and nothing was watching: it exited cleanly after 23 days up on 2026-11-08 and the
   sweep failed 646 times over 2h42m. A TIMER every 60s calling `~/openD.sh ensure`, not KeepAlive,

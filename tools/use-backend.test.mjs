@@ -12,6 +12,8 @@ import { dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { BACKLOG as MODULE_BACKLOG } from "./check-module-map.mjs";
+
 import {
   LABEL, PORT, backendOf, drySystem, readBacklog, refusals, renderPlist, switchTo, systemFor,
 } from "./use-backend.mjs";
@@ -35,9 +37,15 @@ function write(root, path, text = "") {
 }
 
 /** A repository with just what the guard and the renderer read. By default the port is DONE: the
- *  backlog empty, `__main__` there, the interpreter installed. */
-function fixture({ backlog = [], main = true, interpreter = true, corpus = true, backlogText } = {}) {
+ *  backlog empty, every backend module ported, `__main__` there, the interpreter installed. */
+function fixture({
+  backlog = [], main = true, interpreter = true, corpus = true, backlogText, modules = ["sweeper.ts"], unported = [],
+} = {}) {
   const repo = join(dir, "repo");
+  for (const m of modules) write(repo, `backend/src/${m}`, "export {};\n");
+  for (const m of modules.filter((x) => !unported.includes(x))) {
+    write(repo, `python-backend/src/optionality_backend/${m.replace(/\.ts$/, ".py")}`, '"""a port."""\n');
+  }
   write(repo, TEMPLATE, readFileSync(join(ROOT, TEMPLATE), "utf8"));
   if (corpus) for (const door of DOORS) for (const n of [1, 2]) write(repo, `testdata/scenarios/${door}/s${n}.json`, "{}");
   if (backlog !== null) {
@@ -163,6 +171,28 @@ describe("the guard: the live service never switches to a half-ported Python", (
       "5 of 6 door scenarios ported",
       "  sweep  1 of 2 still on the backlog",
     ]);
+  });
+
+  it("refuses while a backend module has no port, naming it, even with every scenario passing", () => {
+    // the doors say whether the two BEHAVE alike; a module no scenario reaches (/docs, /openapi.json)
+    // is still the TypeScript's alone, and the switch waits for the parts as well as the behaviour
+    const lines = refusals("python", fixture({ modules: ["sweeper.ts", "openapi.ts"], unported: ["openapi.ts"] }));
+    expect(lines).toEqual([
+      "1 of 2 backend modules ported",
+      "  openapi.ts has no port at python-backend/src/optionality_backend/openapi.py",
+    ]);
+  });
+
+  it("refuses when it finds no backend modules at all, rather than passing on nothing", () => {
+    expect(refusals("python", fixture({ modules: [] })))
+      .toEqual([expect.stringMatching(/no TypeScript backend modules under backend\/src/)]);
+  });
+
+  it("refuses the Python today for every module the module map has not seen ported", () => {
+    // measured like the scenario count above, so it holds while the ports shrink the list, and
+    // goes when it is empty
+    const lines = refusals("python", ROOT);
+    for (const m of MODULE_BACKLOG) expect(lines).toContainEqual(expect.stringMatching(new RegExp(`^  ${m.replaceAll(".", "\\.")} has no port at `)));
   });
 
   it("refuses without __main__, even with the backlog empty", () => {

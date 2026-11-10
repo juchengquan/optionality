@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { BACKLOG, PY_ONLY, RENAMED, TS_ONLY, findings, pythonFor } from "./check-module-map.mjs";
+import { BACKLOG, PY_ONLY, RENAMED, TS_ONLY, findings, pythonFor, unported } from "./check-module-map.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -115,6 +115,38 @@ describe("every Python backend module has a TypeScript counterpart, or says why 
   it("ignores caches", () => {
     write("python-backend/src/optionality_backend/__pycache__/holdings.cpython-312.pyc");
     expect(found()).toEqual([]);
+  });
+});
+
+describe("what has no port yet, measured from the tree rather than read off the list", () => {
+  // `make use`'s guard asks this: the list is held to the tree by `findings`, in `make check`, but a
+  // switch runs on whatever tree is checked out, and the list is to be deleted when the port is done
+  const missing = (over = {}) => unported(repo, { tsOnly: {}, renamed: {}, ...over });
+
+  it("names each TypeScript module with no Python file, and where the port would be", () => {
+    ts("holdings.ts"); ts("db/queries/index.ts"); py("db/queries/__init__.py");
+    expect(missing()).toEqual({ portable: 2, missing: [{ ts: "holdings.ts", py: "holdings.py" }] });
+  });
+
+  it("counts a module whatever the backlog says, which is what makes it the tree's answer", () => {
+    ts("holdings.ts");
+    expect(missing().missing).toEqual([{ ts: "holdings.ts", py: "holdings.py" }]);
+  });
+
+  it("leaves out what is TypeScript-only, and finds a renamed port under its own name", () => {
+    // a rename the repository's own table does not have, so a default table cannot pass for this one
+    ts("hc.types.ts"); ts("entry.ts"); py("__main__.py");
+    expect(missing({ tsOnly: { "hc.types.ts": "why" }, renamed: { "entry.ts": "__main__.py" } }))
+      .toEqual({ portable: 1, missing: [] });
+  });
+
+  it("never counts a test or a declaration file as a module", () => {
+    ts("holdings.test.ts"); ts("types.d.ts");
+    expect(missing()).toEqual({ portable: 0, missing: [] });
+  });
+
+  it("agrees with the backlog in this repository", () => {
+    expect(unported(ROOT).missing.map((m) => m.ts)).toEqual([...BACKLOG].sort());
   });
 });
 
