@@ -174,6 +174,12 @@ Where its Contracts turn out to be ones you hold, the Position is found AFTERWAR
 show what you took in. That link is discovered, not declared, and it does not make the Monitor a
 rule about your holding: a delta alarm on one Contract is about that option, and the condor it
 happens to sit inside is a separate fact.
+
+Whether a Monitor watches anything HELD is a plainer fact than that link: true when any Contract it
+names is a Leg of an open Position. It has no ambiguous case — on a roll day, when two holdings
+share a Contract, the link names neither while the Contract is still held — and it is about the
+Contracts, not about what the rule is for: a candidate that shares one Contract with a holding is
+held too. It is what tells a risk alarm on something owned from an entry signal on a candidate.
 _Avoid_: watch, rule, alert, combo monitor, "a monitor on my condor" (say which Contracts)
 
 **Distance**:

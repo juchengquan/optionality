@@ -320,3 +320,21 @@ export function positionsHolding(
     .every((p) => positionLegCodes(p).every((code) => watched.has(code)));
   return { found, scope: covered ? "all" : "leg" };
 }
+
+/** Whether ANY of these Contracts is a Leg of any of these Positions.
+ *
+ *  A fact about Contracts, not a guess about what a rule is for. `positionsHolding` above declines
+ *  to LINK where linking would be a guess — a contract held twice, which is a roll day — and its
+ *  "nothing found" then reads, wrongly, as "nothing held". This asks the plainer question, which
+ *  has no ambiguous case: is one of them held at all. The redesigned page reads it to tell a risk
+ *  alarm on something owned from an entry signal on a candidate (ADR 0023).
+ *
+ *  ANY, not all: a combo with one held leg watches something owned. So it is also true for a
+ *  candidate spread that merely shares one Contract with a held one, which is a fact about that
+ *  Contract and says nothing about what the rule was set up to do. Pass the OPEN Positions: a
+ *  closed one holds nothing any more (ADR 0022).
+ */
+export function holdsAnyOf(positions: Position[], contracts: string[]): boolean {
+  const named = new Set(contracts);
+  return positions.some((p) => positionLegCodes(p).some((code) => named.has(code)));
+}

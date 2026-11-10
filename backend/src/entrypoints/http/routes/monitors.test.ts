@@ -593,6 +593,23 @@ describe("/quotes", () => {
     expect([sum.watched, sum.distance, sum.triggered, sum.in_combos]).toEqual([0, -10, true, []]);
   });
 
+  it("says whether a rule watches anything held, even where no link names the holding", async () => {
+    // a roll day: two holdings share the short call, so the link declines to name either — and
+    // the reply schema would strip `held` as it strips any field it does not list
+    h = harness();
+    for (const [id, name] of [["a".repeat(32), "old"], ["b".repeat(32), "new"]]) {
+      h.db.prepare(
+        `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+         values (?, ?, 'credit_spread', ?, 1, 2.0, ?, '2026-09-24 02:58:57.456253')`,
+      ).run(id!, name!, future(), JSON.stringify([{ side: "short", option_type: "CALL", strike: 6500 }]));
+    }
+    await post(single());
+    await post(single({ strike: 6550 }));
+    const quotes = await body(await h.call("/quotes"));
+    expect(quotes.map((q: { positions: unknown[]; held: boolean }) => [q.positions.length, q.held]))
+      .toEqual([[0, true], [0, false]]);
+  });
+
   it("keeps every row when one rule's reading cannot be written as JSON", async () => {
     // a field the quote schema does not type passes through, so its Infinity reached `watched`
     // and the reply schema refused the whole watchlist: one row's figure took down every row

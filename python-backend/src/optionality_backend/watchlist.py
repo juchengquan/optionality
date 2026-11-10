@@ -48,6 +48,7 @@ from optionality.position import (
     combined_entry,
     combined_pnl,
     cost_to_close_of,
+    holds_any_of,
     position_leg_codes,
 )
 from optionality.quote import ByCode, Quote
@@ -106,6 +107,13 @@ class WatchlistEntry(TypedDict):
     dte: int
     scope: str | None
     positions: list[PositionRef]
+    #: whether ANY Contract this rule watches — the one, or any leg of a combo — is a Leg of an OPEN
+    #: holding, whether or not the link to one holding is ambiguous (`holds_any_of`). A fact about
+    #: Contracts, not a guess about what the rule is for: it tells a risk alarm on something owned from an
+    #: entry signal on a candidate where `positions` cannot, because the link names nothing on a roll day,
+    #: when two holdings share a Contract. It is also true for a candidate that shares one Contract with a
+    #: holding, which is a fact about that Contract (ADR 0023).
+    held: bool
     #: the combos in this same watchlist whose legs include this row's Contract, by id and sorted: what
     #: lets a short leg's delta rule sit under its spread (ADR 0023). A DISCOVERED link, like
     #: `positions` — worked out from the legs each combo names, never recorded, so it is only ever as
@@ -143,6 +151,7 @@ def build_entries(
     by_code: ByCode,
     bad: set[str],
     owned: dict[str, list[Position]],
+    holdings: list[Position],
     policy: ExitPolicy,
     now: datetime | None = None,
 ) -> list[WatchlistEntry]:
@@ -151,7 +160,9 @@ def build_entries(
     `bad` is the codes the Provider rejected as unknown. `now` is injectable so a test can state the
     date rather than wait for it. `policy` is REQUIRED rather than optional: a schedule that silently
     does not appear because a caller forgot to pass the policy is the shape of bug this project keeps
-    finding.
+    finding. `holdings` is every OPEN holding, linked to a rule or not — what `held` is decided against —
+    and required for the same reason: a row that says "nothing held" because a caller passed nothing is
+    the very misfiling the field exists to prevent.
 
     Combo entries carry their signed sum under `combo_value` and no per-contract quote: summing other
     fields under the combo's signs would fabricate plausible-but-wrong aggregates, and IV is never
@@ -160,7 +171,7 @@ def build_entries(
     # every combo in this watchlist, by the Contracts its legs name: the spreads a single Contract sits
     # in are found from these, as the holdings a rule watches are found from what is held
     combos = [_Combo(id=m.id, codes=frozenset(monitor_leg_codes(m))) for m in monitors if m.legs]
-    return [_entry(m, by_code, bad, owned, policy, now, combos) for m in monitors]
+    return [_entry(m, by_code, bad, owned, holdings, policy, now, combos) for m in monitors]
 
 
 class _Combo(NamedTuple):
@@ -173,6 +184,7 @@ def _entry(
     by_code: ByCode,
     bad: set[str],
     owned: dict[str, list[Position]],
+    holdings: list[Position],
     policy: ExitPolicy,
     now: datetime | None,
     combos: list[_Combo],
@@ -224,6 +236,7 @@ def _entry(
         "dte": days_to_expiry(m.strike_date, now),
         "scope": m.scope,
         "positions": [{"id": cast(str, p.id), "name": p.name} for p in positions],
+        "held": holds_any_of(holdings, monitor_leg_codes(m)),
         "in_combos": [] if is_combo else _js_sorted(c.id for c in combos if m.code in c.codes),
         "cost_to_close": cost_to_close,
         "entry": combined_entry(whole) if whole else None,

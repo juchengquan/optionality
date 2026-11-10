@@ -903,6 +903,66 @@ describe("what a row's sentence reads", () => {
   });
 });
 
+describe("whether a rule watches anything held", () => {
+  /** The redesigned page tells a risk alarm on something owned from an entry signal on a
+   *  candidate (ADR 0023), and `positions` cannot: the link declines to name a holding wherever
+   *  naming one would be a guess, and "no link" then reads as "nothing held". `held` answers about
+   *  CONTRACTS, from every open holding, linked or not. */
+  const hold = (name: string, strikes: [number, number], closedOn: string | null = null) =>
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              closed_on)
+       values (?, ?, 'credit_spread', ?, 1, 1.0, ?, '2026-08-01 00:00:00.000000', ?)`,
+    ).run(name.padEnd(32, "0"), name, EXPIRY, toSqliteJson([
+      { side: "short", option_type: "CALL", strike: strikes[0] },
+      { side: "long", option_type: "CALL", strike: strikes[1] },
+    ]), closedOn);
+
+  it("is true on a roll day, when two holdings share the Contract and no link names either", async () => {
+    hold("old", [8100, 8150]);
+    hold("new", [8100, 8200]);
+    monitor({ code: LEG_A, strike: 8100 });
+    const [e] = await run(quoting({}));
+    expect(e!.positions, "the link declines to guess").toEqual([]);
+    expect(e!.held, "but the Contract is held").toBe(true);
+  });
+
+  it("is true for a combo when any one of its legs is held", async () => {
+    hold("upper", [8150, 8200]);
+    combo();
+    const [e] = await run(quoting({}), true);
+    expect(e!.held).toBe(true);
+  });
+
+  it("is false for a rule on Contracts nothing holds", async () => {
+    hold("spread", [8100, 8150]);
+    monitor();
+    const [e] = await run(quoting({}));
+    expect(e!.held).toBe(false);
+  });
+
+  it("counts only what is still held: a closed holding holds nothing", async () => {
+    hold("closed", [8100, 8150], "2026-08-07");
+    monitor({ code: LEG_A, strike: 8100 });
+    const [e] = await run(quoting({}));
+    expect(e!.held).toBe(false);
+  });
+
+  it("costs a holding it cannot read its own Contracts and nothing else, as the sweep does", async () => {
+    hold("spread", [8100, 8150]);
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+       values (?, 'garbled', null, ?, 1, 1.0, '{not json', '2026-08-01 00:00:00.000000')`,
+    ).run("g".padEnd(32, "0"), EXPIRY);
+    monitor({ code: LEG_A, strike: 8100 });
+    monitor();
+    const entries = await run(quoting({}));
+    expect(Object.fromEntries(entries.map((e) => [e.code, e.held]))).toEqual({
+      [LEG_A]: true, [CODE]: false,
+    });
+  });
+});
+
 describe("the spreads a single Contract is a leg of", () => {
   /** On the redesigned page a single-Contract rule — a short leg's delta — sits under the spread
    *  it belongs to (ADR 0023). Which spread that is is DISCOVERED, from the legs every combo in

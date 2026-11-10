@@ -209,6 +209,46 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/quotes"),
   },
   {
+    // whether a rule watches anything held, which tells a risk alarm from an entry signal (ADR
+    // 0023). On a roll day two open holdings share the short call, so no link names either and
+    // `positions` is empty — but the Contract is held. A candidate nothing holds is not, and
+    // neither is a Contract only a CLOSED holding had
+    name: "GET /quotes says a rule is held on a roll day, when no link names the holding",
+    world: world({
+      tables: {
+        positions: [
+          position({
+            id: "pos-old", name: "dec-call-spread", strategy: "call spread", entry: 2,
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7300 },
+              { side: "long", option_type: "CALL", strike: 7350 },
+            ],
+          }),
+          position({
+            id: "pos-rolled", name: "dec-call-spread-wide", strategy: "call spread", entry: 2.5,
+            opened_at: "2026-11-09",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7300 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+          position({
+            id: "pos-closed", name: "dec-short-put", strategy: "short put", entry: 4,
+            closed_on: "2026-11-06", exit: 3.5,
+            legs: [{ side: "short", option_type: "PUT", strike: 6400 }],
+          }),
+        ],
+        monitors: [
+          monitor({ id: "mon-short-call" }),
+          monitor({ id: "mon-candidate", option_type: "PUT", strike: 6350 }),
+          monitor({ id: "mon-closed-put", option_type: "PUT", strike: 6400 }),
+        ],
+      },
+      provider: { quotes: WIDE },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
     // a field the quote schema does not type passes through as the Provider sent it, so an
     // infinite reading reaches the row. JSON cannot write one: it is served as no figure and no
     // distance, the bar and the bell are decided on it as the sweep decides — full, and ringing —

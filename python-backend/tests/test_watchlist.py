@@ -859,6 +859,75 @@ class TestWhatARowSSentenceReads:
             assert [e["watched"], e["distance"], e["fill"], e["triggered"]] == [None, None, 100, True], reading
 
 
+class TestWhetherARuleWatchesAnythingHeld:
+    """The redesigned page tells a risk alarm on something owned from an entry signal on a candidate
+    (ADR 0023), and `positions` cannot: the link declines to name a holding wherever naming one would be
+    a guess, and "no link" then reads as "nothing held". `held` answers about CONTRACTS, from every open
+    holding, linked or not."""
+
+    @staticmethod
+    def hold(db, name, strikes, closed_on=None):
+        db.execute(
+            """insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                                      closed_on)
+             values (?, ?, 'credit_spread', ?, 1, 1.0, ?, '2026-08-01 00:00:00.000000', ?)""",
+            (
+                name.ljust(32, "0"),
+                name,
+                EXPIRY,
+                to_sqlite_json(
+                    [
+                        {"side": "short", "option_type": "CALL", "strike": strikes[0]},
+                        {"side": "long", "option_type": "CALL", "strike": strikes[1]},
+                    ]
+                ),
+                closed_on,
+            ),
+        )
+
+    async def test_is_true_on_a_roll_day_when_two_holdings_share_the_contract_and_no_link_names_either(
+        self, db, monitor, run
+    ):
+        self.hold(db, "old", (8100, 8150))
+        self.hold(db, "new", (8100, 8200))
+        monitor(code=LEG_A, strike=8100)
+        [e] = await run(quoting({}))
+        assert e["positions"] == [], "the link declines to guess"
+        assert e["held"] is True, "but the Contract is held"
+
+    async def test_is_true_for_a_combo_when_any_one_of_its_legs_is_held(self, db, combo, run):
+        self.hold(db, "upper", (8150, 8200))
+        combo()
+        [e] = await run(quoting({}), True)
+        assert e["held"] is True
+
+    async def test_is_false_for_a_rule_on_contracts_nothing_holds(self, db, monitor, run):
+        self.hold(db, "spread", (8100, 8150))
+        monitor()
+        [e] = await run(quoting({}))
+        assert e["held"] is False
+
+    async def test_counts_only_what_is_still_held_a_closed_holding_holds_nothing(self, db, monitor, run):
+        self.hold(db, "closed", (8100, 8150), "2026-08-07")
+        monitor(code=LEG_A, strike=8100)
+        [e] = await run(quoting({}))
+        assert e["held"] is False
+
+    async def test_costs_a_holding_it_cannot_read_its_own_contracts_and_nothing_else_as_the_sweep_does(
+        self, db, monitor, run
+    ):
+        self.hold(db, "spread", (8100, 8150))
+        db.execute(
+            """insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+             values (?, 'garbled', null, ?, 1, 1.0, '{not json', '2026-08-01 00:00:00.000000')""",
+            ("g".ljust(32, "0"), EXPIRY),
+        )
+        monitor(code=LEG_A, strike=8100)
+        monitor()
+        entries = await run(quoting({}))
+        assert {e["code"]: e["held"] for e in entries} == {LEG_A: True, CODE: False}
+
+
 class TestTheSpreadsASingleContractIsALegOf:
     """On the redesigned page a single-Contract rule — a short leg's delta — sits under the spread it
     belongs to (ADR 0023). Which spread that is is DISCOVERED, from the legs every combo in this

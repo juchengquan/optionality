@@ -389,6 +389,10 @@ class EntryOut(BaseModel):
     dte: float
     scope: str | None
     positions: list[PositionRefOut]
+    #: whether any Contract this rule watches is a Leg of an OPEN holding, linked or not — a fact about
+    #: Contracts, true on a roll day where `positions` names nothing, and true for a candidate sharing one
+    #: Contract with a holding. What tells a risk alarm from an entry signal (ADR 0023).
+    held: bool
     #: the ids of the combos in this watchlist whose legs include this row's Contract, sorted; empty on a
     #: combo's row. DISCOVERED from the legs each combo names, as `positions` is from what is held, and
     #: recorded nowhere: it is what sits a short leg's rule under its spread (ADR 0023).

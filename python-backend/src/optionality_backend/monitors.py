@@ -12,6 +12,7 @@ The non-sweeper half of the old Python's monitor.py; the sweeper itself is the e
 - `watchlist_quotes`' options are keyword arguments, and `now` defaults to None, which means now.
 """
 
+import logging
 import sqlite3
 from datetime import UTC, datetime
 
@@ -37,6 +38,8 @@ from .db.rows import MonitorRow
 from .hydrate import to_monitor, to_position
 from .ports import QuoteFetcher
 from .watchlist import MonitorForEntry, WatchlistEntry, build_entries, codes_for
+
+log = logging.getLogger(__name__)
 
 
 def link_to_positions(db: sqlite3.Connection, monitor_id: str, contracts: list[str]) -> None:
@@ -128,9 +131,25 @@ async def watchlist_quotes(
         by_code=display_records(batch.records, display_tz, at),
         bad=set(batch.unknown),
         owned=owned,
+        holdings=_readable_open_positions(db),
         now=at,
         policy=policy,
     )
+
+
+def _readable_open_positions(db: sqlite3.Connection) -> list[Position]:
+    """Every OPEN holding that can be read, for whether a rule watches anything held.
+
+    It joins no batch — holding a Contract needs no quote — but it reads holdings no rule is linked to,
+    so one that cannot be read costs its own Contracts and nothing else, as it does in the sweep: a
+    watchlist that failed over a holding it never shows would be the larger harm."""
+    readable: list[Position] = []
+    for row in open_positions(db):
+        try:
+            readable.append(to_position(row))
+        except Exception:
+            log.warning("cannot read position %s:", row["name"], exc_info=True)
+    return readable
 
 
 def adopt_orphan_monitors(db: sqlite3.Connection) -> None:

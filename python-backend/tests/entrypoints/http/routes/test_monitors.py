@@ -591,6 +591,17 @@ class TestQuotes:
         total = next(q for q in quotes if q["id"] == spread)
         assert [total["watched"], total["distance"], total["triggered"], total["in_combos"]] == [0, -10, True, []]
 
+    async def test_says_whether_a_rule_watches_anything_held_even_where_no_link_names_the_holding(self, start):
+        # a roll day: two holdings share the short call, so the link declines to name either — and the
+        # response model would drop `held` as it drops any field it does not list
+        h = start()
+        for id_, name in [("a" * 32, "old"), ("b" * 32, "new")]:
+            seed_position(h, id_, name, future(), 6500)
+        await post(h, single())
+        await post(h, single(strike=6550))
+        quotes = (await h.call("/quotes")).json()
+        assert [[len(q["positions"]), q["held"]] for q in quotes] == [[0, True], [0, False]]
+
     async def test_keeps_every_row_when_one_rule_s_reading_cannot_be_written_as_json(self, start):
         # a field the quote schema does not type passes through, so its Infinity reached `watched` and
         # the response model refused the whole watchlist: one row's figure took down every row

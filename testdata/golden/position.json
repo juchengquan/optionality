@@ -3047,6 +3047,282 @@
         },
         "scope": "all"
       }
+    },
+    {
+      "fn": "holdsAnyOf",
+      "name": "a held contract",
+      "args": [
+        [
+          {
+            "id": "p1",
+            "name": "1120_IC",
+            "strike_date": "2026-11-20",
+            "contracts": 2,
+            "entry": 3,
+            "strategy": "iron condor",
+            "opened_at": "2026-10-06",
+            "legs": [
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              },
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        [
+          "US.SPXW261120P6500000"
+        ]
+      ],
+      "expect": true
+    },
+    {
+      "fn": "holdsAnyOf",
+      "name": "a contract held twice, as on a roll day",
+      "args": [
+        [
+          {
+            "id": "p1",
+            "name": "1120_IC",
+            "strike_date": "2026-11-20",
+            "contracts": 2,
+            "entry": 3,
+            "strategy": "iron condor",
+            "opened_at": "2026-10-06",
+            "legs": [
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              },
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          },
+          {
+            "id": "p3",
+            "name": "1120_PS",
+            "strike_date": "2026-11-20",
+            "contracts": 1,
+            "entry": 1.6,
+            "legs": [
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              }
+            ]
+          }
+        ],
+        [
+          "US.SPXW261120P6500000"
+        ]
+      ],
+      "expect": true
+    },
+    {
+      "fn": "holdsAnyOf",
+      "name": "one leg of a combo held is enough",
+      "args": [
+        [
+          {
+            "id": "p2",
+            "name": "1120_CS",
+            "strike_date": "2026-11-20",
+            "contracts": 1,
+            "entry": 1.4,
+            "legs": [
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        [
+          "US.SPXW261120C7150000",
+          "US.SPXW261120C7200000"
+        ]
+      ],
+      "expect": true
+    },
+    {
+      "fn": "holdsAnyOf",
+      "name": "nothing held",
+      "args": [
+        [
+          {
+            "id": "p1",
+            "name": "1120_IC",
+            "strike_date": "2026-11-20",
+            "contracts": 2,
+            "entry": 3,
+            "strategy": "iron condor",
+            "opened_at": "2026-10-06",
+            "legs": [
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              },
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        [
+          "US.SPXW261120P6000000",
+          "US.SPXW261120C7200000"
+        ]
+      ],
+      "expect": false
+    },
+    {
+      "fn": "holdsAnyOf",
+      "name": "the same strike on another expiry is another contract",
+      "args": [
+        [
+          {
+            "id": "p1",
+            "name": "1120_IC",
+            "strike_date": "2026-11-20",
+            "contracts": 2,
+            "entry": 3,
+            "strategy": "iron condor",
+            "opened_at": "2026-10-06",
+            "legs": [
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              },
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        [
+          "US.SPXW261218P6500000"
+        ]
+      ],
+      "expect": false
+    },
+    {
+      "fn": "holdsAnyOf",
+      "name": "no holdings",
+      "args": [
+        [],
+        [
+          "US.SPXW261120P6500000"
+        ]
+      ],
+      "expect": false
+    },
+    {
+      "fn": "holdsAnyOf",
+      "name": "no contracts",
+      "args": [
+        [
+          {
+            "id": "p1",
+            "name": "1120_IC",
+            "strike_date": "2026-11-20",
+            "contracts": 2,
+            "entry": 3,
+            "strategy": "iron condor",
+            "opened_at": "2026-10-06",
+            "legs": [
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6450
+              },
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6500
+              },
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7100
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7150
+              }
+            ]
+          }
+        ],
+        []
+      ],
+      "expect": false
     }
   ]
 }

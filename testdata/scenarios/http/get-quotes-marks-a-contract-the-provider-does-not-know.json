@@ -218,6 +218,7 @@
               "name": "dec-condor"
             }
           ],
+          "held": true,
           "in_combos": [],
           "cost_to_close": null,
           "schedule": null,
@@ -247,6 +248,7 @@
               "name": "dec-condor"
             }
           ],
+          "held": true,
           "in_combos": [
             "mon-2"
           ],

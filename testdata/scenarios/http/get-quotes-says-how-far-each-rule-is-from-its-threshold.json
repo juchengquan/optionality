@@ -238,6 +238,7 @@
           "dte": 39,
           "scope": null,
           "positions": [],
+          "held": false,
           "in_combos": [],
           "cost_to_close": null,
           "schedule": null,
@@ -275,6 +276,7 @@
           "dte": 39,
           "scope": null,
           "positions": [],
+          "held": false,
           "in_combos": [
             "mon-calls"
           ],
@@ -314,6 +316,7 @@
           "dte": 39,
           "scope": null,
           "positions": [],
+          "held": false,
           "in_combos": [
             "mon-calls"
           ],
@@ -339,6 +342,7 @@
           "dte": 39,
           "scope": null,
           "positions": [],
+          "held": false,
           "in_combos": [],
           "cost_to_close": null,
           "schedule": null,
@@ -376,6 +380,7 @@
           "dte": 39,
           "scope": null,
           "positions": [],
+          "held": false,
           "in_combos": [],
           "cost_to_close": null,
           "schedule": null,

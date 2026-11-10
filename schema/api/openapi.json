@@ -352,6 +352,9 @@
                           ]
                         }
                       },
+                      "held": {
+                        "type": "boolean"
+                      },
                       "in_combos": {
                         "type": "array",
                         "items": {
@@ -489,6 +492,7 @@
                       "dte",
                       "scope",
                       "positions",
+                      "held",
                       "in_combos",
                       "cost_to_close",
                       "schedule",

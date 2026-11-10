@@ -11,7 +11,8 @@ import { buildSpxCode } from "./contract.ts";
 import { comboFieldSum, type Monitor } from "./monitor.ts";
 import {
   combinedCostToClose, combinedEntry, combinedPnl, contractSize, costToClose, costToCloseOf,
-  legReadings, positionGreek, positionLegCodes, positionPnl, positionsHolding, realizedPoints,
+  holdsAnyOf, legReadings, positionGreek, positionLegCodes, positionPnl, positionsHolding,
+  realizedPoints,
   type ByCode, type Position,
 } from "./position.ts";
 
@@ -418,6 +419,52 @@ describe("which positions a monitor is watching", () => {
     const b = spread("b", [8050, 8100]);
     const { found } = positionsHolding([a, b], [positionLegCodes(a)[0]!, positionLegCodes(b)[1]!]);
     expect([...found]).toEqual([]);
+  });
+});
+
+/** Whether a rule watches anything held at all — the plainer question beside the link above.
+ *
+ *  The redesigned page tells a risk alarm on something owned from an entry signal on a candidate
+ *  (ADR 0023), and a rule's `positions` cannot answer that: the link declines to name a holding in
+ *  the cases above where naming one would be a guess, and "no link" then reads as "nothing held".
+ *  This answers about CONTRACTS, so it has no ambiguous case to decline.
+ */
+describe("whether anything held includes these contracts", () => {
+  const spread = (id: string, strikes: [number, number], type: "CALL" | "PUT" = "CALL"): Position & { id: string } => ({
+    id, name: id, strike_date: future(), contracts: 1, entry: 1.0,
+    legs: [
+      { side: "short", option_type: type, strike: strikes[0] },
+      { side: "long", option_type: type, strike: strikes[1] },
+    ],
+  });
+  const call = (strike: number, date = future()) => buildSpxCode(date, "CALL", strike);
+
+  it("is true for a contract that is a leg of a holding", () => {
+    expect(holdsAnyOf([spread("a", [8050, 8075])], [call(8050)])).toBe(true);
+  });
+
+  it("is true when ANY of a combo's contracts is held, not only when all are", () => {
+    expect(holdsAnyOf([spread("a", [8050, 8075])], [call(8075), call(8100)])).toBe(true);
+  });
+
+  it("is true on a roll day, when two holdings share the contract and the link names neither", () => {
+    const old = spread("old", [8050, 8075]);
+    const rolled = spread("new", [8050, 8100]);
+    expect(positionsHolding([old, rolled], [call(8050)]).found.size, "no link").toBe(0);
+    expect(holdsAnyOf([old, rolled], [call(8050)]), "but it is held").toBe(true);
+  });
+
+  it("is false for contracts nothing holds", () => {
+    expect(holdsAnyOf([spread("a", [8050, 8075])], [call(8100), call(8125)])).toBe(false);
+  });
+
+  it("matches the contract, not the strike: the same strike on another expiry is another", () => {
+    expect(holdsAnyOf([spread("a", [8050, 8075])], [call(8050, "2031-01-17")])).toBe(false);
+  });
+
+  it("is false with nothing held, and for no contracts at all", () => {
+    expect(holdsAnyOf([], [call(8050)])).toBe(false);
+    expect(holdsAnyOf([spread("a", [8050, 8075])], [])).toBe(false);
   });
 });
 

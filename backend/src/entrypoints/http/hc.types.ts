@@ -131,6 +131,8 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["quotes"]>[number]["watched"], number | null>>,
   Checked<Exactly<Ok<E["quotes"]>[number]["distance"], number | null>>,
   Checked<Exactly<Ok<E["quotes"]>[number]["in_combos"], string[]>>,
+  // risk on something owned, or an entry signal on a candidate: the page files every rule by it
+  Checked<Exactly<Ok<E["quotes"]>[number]["held"], boolean>>,
 
   // monitors --------------------------------------------------------------------------
   Checked<Known<Ok<E["monitors"]>>>,

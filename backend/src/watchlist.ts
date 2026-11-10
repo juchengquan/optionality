@@ -12,7 +12,7 @@ import {
 import { dteAtOpen, exitLevels, type ExitLevels, type ExitPolicy } from "optionality/domain/exit";
 import { daysToExpiry } from "optionality/domain/expiry";
 import {
-  combinedCostToClose, combinedEntry, combinedPnl, costToCloseOf, positionLegCodes,
+  combinedCostToClose, combinedEntry, combinedPnl, costToCloseOf, holdsAnyOf, positionLegCodes,
 } from "optionality/domain/position";
 import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
 import type { Position } from "optionality/domain/position";
@@ -45,6 +45,13 @@ export interface WatchlistEntry {
   dte: number;
   scope: string | null;
   positions: { id: string; name: string }[];
+  /** whether ANY Contract this rule watches — the one, or any leg of a combo — is a Leg of an OPEN
+   *  holding, whether or not the link to one holding is ambiguous (`holdsAnyOf`). A fact about
+   *  Contracts, not a guess about what the rule is for: it tells a risk alarm on something owned
+   *  from an entry signal on a candidate where `positions` cannot, because the link names nothing
+   *  on a roll day, when two holdings share a Contract. It is also true for a candidate that shares
+   *  one Contract with a holding, which is a fact about that Contract (ADR 0023). */
+  held: boolean;
   /** the combos in this same watchlist whose legs include this row's Contract, by id and sorted:
    *  what lets a short leg's delta rule sit under its spread (ADR 0023). A DISCOVERED link, like
    *  `positions` — worked out from the legs each combo names, never recorded, so it is only ever
@@ -88,6 +95,10 @@ interface EntryInputs {
   /** codes OpenD rejected as unknown */
   bad: Set<string>;
   owned: Record<string, (Position & { id: string })[]>;
+  /** every OPEN holding, linked to a rule or not — what `held` is decided against. Required for
+   *  the reason `policy` is: a row that says "nothing held" because a caller passed nothing is the
+   *  very misfiling the field exists to prevent. */
+  holdings: Position[];
   /** injectable so a test can state the date rather than wait for it */
   now?: Date;
   /** REQUIRED rather than optional: a schedule that silently does not appear because a caller
@@ -103,7 +114,7 @@ interface EntryInputs {
  *  never summed at all (CLAUDE.md).
  */
 export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
-  const { monitors, byCode, bad, owned, now, policy } = inputs;
+  const { monitors, byCode, bad, owned, holdings, now, policy } = inputs;
   // every combo in this watchlist, by the Contracts its legs name: the spreads a single Contract
   // sits in are found from these, as the holdings a rule watches are found from what is held
   const combos = monitors
@@ -159,6 +170,7 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       dte: daysToExpiry(m.strike_date, now),
       scope: m.scope,
       positions: positions.map((p) => ({ id: p.id, name: p.name })),
+      held: holdsAnyOf(holdings, monitorLegCodes(m)),
       in_combos: isCombo ? [] : combos.filter((c) => c.codes.has(m.code)).map((c) => c.id).sort(),
       cost_to_close: costToClose,
       entry: whole.length > 0 ? combinedEntry(whole) : null,

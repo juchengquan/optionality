@@ -101,9 +101,27 @@ export async function watchlistQuotes(
     byCode: displayRecords(records, displayTz, now),
     bad: new Set(unknown),
     owned,
+    holdings: readableOpenPositions(db),
     now,
     policy: options.policy,
   });
+}
+
+/** Every OPEN holding that can be read, for whether a rule watches anything held.
+ *
+ *  It joins no batch — holding a Contract needs no quote — but it reads holdings no rule is
+ *  linked to, so one that cannot be read costs its own Contracts and nothing else, as it does in
+ *  the sweep: a watchlist that failed over a holding it never shows would be the larger harm. */
+function readableOpenPositions(db: DatabaseSync): Position[] {
+  const readable: Position[] = [];
+  for (const row of openPositions(db)) {
+    try {
+      readable.push(toPosition(row));
+    } catch (err) {
+      console.warn(`cannot read position ${row.name}:`, err);
+    }
+  }
+  return readable;
 }
 
 /** Link monitors that watch something now held, and never unlink anything.

@@ -450,6 +450,16 @@ export const INPUTS: Record<string, CaseInput[]> = {
       fn: "positionsHolding", name: "more named than is held",
       args: [[callSpread], [SC, LC, code("CALL", 7200)]],
     },
+    // whether anything held includes them: a fact about contracts, with no ambiguous case — so a
+    // contract held twice, which positionsHolding declines to link, is held all the same
+    { fn: "holdsAnyOf", name: "a held contract", args: [[condor], [SP]] },
+    { fn: "holdsAnyOf", name: "a contract held twice, as on a roll day", args: [[condor, putSpread], [SP]] },
+    { fn: "holdsAnyOf", name: "one leg of a combo held is enough", args: [[callSpread], [LC, code("CALL", 7200)]] },
+    { fn: "holdsAnyOf", name: "nothing held", args: [[condor], [code("PUT", 6000), code("CALL", 7200)]] },
+    { fn: "holdsAnyOf", name: "the same strike on another expiry is another contract",
+      args: [[condor], [buildSpxCode("2026-12-18", "PUT", 6500)]] },
+    { fn: "holdsAnyOf", name: "no holdings", args: [[], [SP]] },
+    { fn: "holdsAnyOf", name: "no contracts", args: [[condor], []] },
   ],
   flapping: [
     // A provider that keeps dropping and recovering, which no consecutive count can see. Written
