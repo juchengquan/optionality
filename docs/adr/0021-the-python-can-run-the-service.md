@@ -222,6 +222,7 @@ TypeScript, whose client would need order messages before the Python could trade
 - **Readiness is shown only by drills.** The gates show the Python behaves like the TypeScript; only
   a drill shows it can run. Drills happen when the owner asks.
 - **Left open, on purpose**: which side writes trading first; when the shared spec takes over;
-  whether `/openapi.json` and `/docs` must match, since the scenarios hold response bodies and
-  nothing yet holds the generated description; a neutral name for `data/optionality-ts.db`; and
-  saving real alarms and quarantines as candidate scenarios.
+  a neutral name for `data/optionality-ts.db`; and saving real alarms and quarantines as
+  candidate scenarios. Whether `/openapi.json` and `/docs` must match was open too, and was
+  settled by the owner on 2026-11-10: word for word. The TypeScript writes both to `schema/api/`,
+  the Python serves them with its own root path, and four door scenarios hold the two.

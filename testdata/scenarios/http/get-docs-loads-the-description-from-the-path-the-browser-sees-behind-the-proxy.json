@@ -1,0 +1,46 @@
+{
+  "name": "GET /docs loads the description from the path the browser sees behind the proxy",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "ROOT_PATH": "/opt/api",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/docs",
+    "headers": {},
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": "<!doctype html>\n<html>\n  <head>\n    <title>optionality API</title>\n    <meta charset=\"utf-8\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1\" />\n    <style type=\"text/css\">\n      /* Custom Theme */\n      \n      \n      .dark-mode {\n        color-scheme: dark;\n        --scalar-color-1: rgba(255, 255, 245, .86);\n        --scalar-color-2: rgba(255, 255, 245, .6);\n        --scalar-color-3: rgba(255, 255, 245, .38);\n        --scalar-color-disabled: rgba(255, 255, 245, .25);\n        --scalar-color-ghost: rgba(255, 255, 245, .25);\n        --scalar-color-accent: #e36002;\n        --scalar-background-1: #1e1e20;\n        --scalar-background-2: #2a2a2a;\n        --scalar-background-3: #505053;\n        --scalar-background-4: rgba(255, 255, 255, 0.06);\n        --scalar-background-accent: #e360021f;\n      \n        --scalar-border-color: rgba(255, 255, 255, 0.1);\n        --scalar-scrollbar-color: rgba(255, 255, 255, 0.24);\n        --scalar-scrollbar-color-active: rgba(255, 255, 255, 0.48);\n        --scalar-lifted-brightness: 1.45;\n        --scalar-backdrop-brightness: 0.5;\n      \n        --scalar-shadow-1: 0 1px 3px 0 rgb(0, 0, 0, 0.1);\n        --scalar-shadow-2: rgba(15, 15, 15, 0.2) 0px 3px 6px,\n          rgba(15, 15, 15, 0.4) 0px 9px 24px, 0 0 0 1px rgba(255, 255, 255, 0.1);\n      \n        --scalar-button-1: #f6f6f6;\n        --scalar-button-1-color: #000;\n        --scalar-button-1-hover: #e7e7e7;\n      \n        --scalar-color-green: #3dd68c;\n        --scalar-color-red: #f66f81;\n        --scalar-color-yellow: #f9b44e;\n        --scalar-color-blue: #5c73e7;\n        --scalar-color-orange: #ff8d4d;\n        --scalar-color-purple: #b191f9;\n      }\n      /* Sidebar */\n      .dark-mode .sidebar {\n        --scalar-sidebar-background-1: #161618;\n        --scalar-sidebar-item-hover-color: var(--scalar-color-accent);\n        --scalar-sidebar-item-hover-background: transparent;\n        --scalar-sidebar-item-active-background: transparent;\n        --scalar-sidebar-border-color: transparent;\n        --scalar-sidebar-color-1: var(--scalar-color-1);\n        --scalar-sidebar-color-2: var(--scalar-color-2);\n        --scalar-sidebar-color-active: var(--scalar-color-accent);\n        --scalar-sidebar-search-background: #252529;\n        --scalar-sidebar-search-border-color: transparent;\n        --scalar-sidebar-search-color: var(--scalar-color-3);\n      }\n      \n    </style>\n  </head>\n  <body>\n    <div id=\"app\"></div>\n    <!-- Load the Script -->\n    <script src=\"https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.1\"></script>\n\n    <!-- Initialize the Scalar API Reference -->\n    <script type=\"text/javascript\">\n      Scalar.createApiReference('#app', {\n        \"_integration\": \"hono\",\n        \"url\": \"/opt/api/openapi.json\"\n      })\n    </script>\n  </body>\n</html>"
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

@@ -32,6 +32,11 @@ function endpointOf(path: string, templates: string[]): string | undefined {
   return matching.sort((a, b) => (a.match(/\{/g) ?? []).length - (b.match(/\{/g) ?? []).length)[0];
 }
 
+/** The two routes the description does not list, because they ARE the description (`mountDocs`:
+ *  for people, not for `hc`). Their scenarios hold the Python to the TypeScript's words; the last
+ *  test below holds each to one, so naming a route here is no way round the guard. */
+const DESCRIPTION = ["GET /openapi.json", "GET /docs"];
+
 /** The command a message names, the way the bot reads it: `/Watch@thebot` is `watch`. */
 function commandOf(text: string): string | undefined {
   const first = text.trim().split(/\s+/)[0] ?? "";
@@ -71,6 +76,7 @@ describe("the HTTP door's coverage", () => {
     const answers = await documented();
     const templates = [...new Set(answers.map((a) => a.path))];
     const astray = all<HttpScenario>("http")
+      .filter(({ scenario: { request: r } }) => !DESCRIPTION.includes(`${r.method} ${r.path}`))
       .filter(({ scenario }) => {
         const path = endpointOf(scenario.request.path, templates);
         return path === undefined
@@ -78,6 +84,17 @@ describe("the HTTP door's coverage", () => {
       })
       .map(({ file }) => file);
     expect(astray, "these requests reach no documented endpoint").toEqual([]);
+  });
+
+  it("has a scenario for each of the description's own routes, which it does not list", async () => {
+    const listed = new Set((await documented()).map(({ method, path }) => `${method} ${path}`));
+    const scenarios = all<HttpScenario>("http").map((s) => s.scenario);
+    for (const route of DESCRIPTION) {
+      expect(listed.has(route), `${route} is listed after all: take it out of DESCRIPTION`)
+        .toBe(false);
+      expect(scenarios.some((s) => `${s.request.method} ${s.request.path}` === route
+        && s.expect.response.status === 200), `no scenario answers ${route}`).toBe(true);
+    }
   });
 
   it("reads a concrete path as the endpoint it is", () => {

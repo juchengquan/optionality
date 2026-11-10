@@ -1,0 +1,2837 @@
+{
+  "name": "GET /openapi.json names the path the browser sees behind the proxy",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "ROOT_PATH": "/opt/api",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/openapi.json",
+    "headers": {},
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "openapi": "3.1.0",
+        "info": {
+          "title": "optionality",
+          "description": "SPX options monitoring: watchlist, alarms, positions.",
+          "version": "1"
+        },
+        "servers": [
+          {
+            "url": "/opt/api"
+          }
+        ],
+        "components": {
+          "securitySchemes": {
+            "bearer": {
+              "type": "http",
+              "scheme": "bearer"
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "paths": {
+          "/health": {
+            "get": {
+              "operationId": "getHealth",
+              "summary": "Service health; needs no token",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "db": {
+                            "type": "boolean"
+                          },
+                          "provider": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "ok": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "ok"
+                            ]
+                          },
+                          "golden_cases": {
+                            "type": "string"
+                          },
+                          "monitor": {
+                            "type": "object",
+                            "properties": {
+                              "last_sweep_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "last_sweep_ok": {
+                                "type": "boolean"
+                              },
+                              "consecutive_failures": {
+                                "type": "number"
+                              },
+                              "alarms": {
+                                "type": "object",
+                                "properties": {
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "bad": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "label",
+                                  "bad"
+                                ]
+                              },
+                              "fetched_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "last_sweep_at",
+                              "last_sweep_ok",
+                              "consecutive_failures",
+                              "alarms",
+                              "fetched_at"
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {
+                              "manage_by_dte": {
+                                "type": "number"
+                              },
+                              "sweep_seconds": {
+                                "type": "number"
+                              },
+                              "expired_retention_days": {
+                                "type": "number"
+                              },
+                              "display_tz": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "manage_by_dte",
+                              "sweep_seconds",
+                              "expired_retention_days",
+                              "display_tz"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "db",
+                          "provider",
+                          "golden_cases",
+                          "monitor",
+                          "settings"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "health"
+              ],
+              "security": []
+            }
+          },
+          "/quotes": {
+            "get": {
+              "operationId": "getQuotes",
+              "summary": "Live quotes for the whole watchlist",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "strike_date": {
+                              "type": "string"
+                            },
+                            "option_type": {
+                              "type": "string"
+                            },
+                            "field": {
+                              "type": "string"
+                            },
+                            "threshold": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            },
+                            "compare": {
+                              "type": "string"
+                            },
+                            "triggered": {
+                              "type": "boolean"
+                            },
+                            "quote": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "update_time": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "fetched_at": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "mid_price": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "bid_price": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "ask_price": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "last_price": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "option_delta": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "option_gamma": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "option_theta": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "option_vega": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "option_implied_volatility": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "option_contract_size": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "legs": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sign": {
+                                    "type": "number"
+                                  },
+                                  "option_type": {
+                                    "type": "string"
+                                  },
+                                  "strike": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "sign",
+                                  "option_type",
+                                  "strike"
+                                ]
+                              }
+                            },
+                            "combo_value": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "combo_greeks": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "error": {
+                              "type": "string"
+                            },
+                            "dte": {
+                              "type": "number"
+                            },
+                            "scope": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "positions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ]
+                              }
+                            },
+                            "cost_to_close": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "schedule": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "dte_at_open": {
+                                      "type": "number"
+                                    },
+                                    "position_id": {
+                                      "type": "string"
+                                    },
+                                    "on_pace": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "pace_gap": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "target": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "stop": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "target_dte": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "manage_by_dte": {
+                                      "type": "number"
+                                    },
+                                    "reached": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "target",
+                                            "stop"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "manage_by_due": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "dte_at_open",
+                                    "position_id",
+                                    "on_pace",
+                                    "pace_gap",
+                                    "target",
+                                    "stop",
+                                    "target_dte",
+                                    "manage_by_dte",
+                                    "reached",
+                                    "manage_by_due"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "entry": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "pnl": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "fill": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "code",
+                            "strike_date",
+                            "option_type",
+                            "field",
+                            "threshold",
+                            "direction",
+                            "compare",
+                            "triggered",
+                            "quote",
+                            "dte",
+                            "scope",
+                            "positions",
+                            "cost_to_close",
+                            "schedule",
+                            "entry",
+                            "pnl",
+                            "fill"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "the OpenD call failed",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "quotes"
+              ]
+            }
+          },
+          "/monitors": {
+            "get": {
+              "operationId": "getMonitors",
+              "summary": "List monitors",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "strike_date": {
+                              "type": "string"
+                            },
+                            "option_type": {
+                              "type": "string"
+                            },
+                            "strike": {
+                              "type": "number"
+                            },
+                            "field": {
+                              "type": "string"
+                            },
+                            "threshold": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            },
+                            "compare": {
+                              "type": "string"
+                            },
+                            "legs": {
+                              "anyOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "sign": {
+                                        "type": "number"
+                                      },
+                                      "option_type": {
+                                        "type": "string"
+                                      },
+                                      "strike": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "sign",
+                                      "option_type",
+                                      "strike"
+                                    ]
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "scope": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "positions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ]
+                              }
+                            },
+                            "disabled_reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "triggered": {
+                              "type": "boolean"
+                            },
+                            "last_value": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "last_checked_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "created_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "code",
+                            "strike_date",
+                            "option_type",
+                            "strike",
+                            "field",
+                            "threshold",
+                            "direction",
+                            "compare",
+                            "legs",
+                            "enabled",
+                            "scope",
+                            "positions",
+                            "disabled_reason",
+                            "triggered",
+                            "last_value",
+                            "last_checked_at",
+                            "created_at"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "monitors"
+              ]
+            },
+            "post": {
+              "operationId": "postMonitors",
+              "summary": "Create a monitor, single or combo",
+              "responses": {
+                "201": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "strike_date": {
+                            "type": "string"
+                          },
+                          "option_type": {
+                            "type": "string"
+                          },
+                          "strike": {
+                            "type": "number"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "threshold": {
+                            "type": "number"
+                          },
+                          "direction": {
+                            "type": "string"
+                          },
+                          "compare": {
+                            "type": "string"
+                          },
+                          "legs": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sign": {
+                                      "type": "number"
+                                    },
+                                    "option_type": {
+                                      "type": "string"
+                                    },
+                                    "strike": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "sign",
+                                    "option_type",
+                                    "strike"
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "scope": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "positions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ]
+                            }
+                          },
+                          "disabled_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "triggered": {
+                            "type": "boolean"
+                          },
+                          "last_value": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "last_checked_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "created_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "code",
+                          "strike_date",
+                          "option_type",
+                          "strike",
+                          "field",
+                          "threshold",
+                          "direction",
+                          "compare",
+                          "legs",
+                          "enabled",
+                          "scope",
+                          "positions",
+                          "disabled_reason",
+                          "triggered",
+                          "last_value",
+                          "last_checked_at",
+                          "created_at"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "would duplicate an existing record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "strike_date": {
+                              "type": "string"
+                            },
+                            "legs": {
+                              "minItems": 2,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sign": {
+                                    "type": "number",
+                                    "enum": [
+                                      1,
+                                      -1
+                                    ]
+                                  },
+                                  "option_type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "CALL",
+                                      "PUT"
+                                    ]
+                                  },
+                                  "strike": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "sign",
+                                  "option_type",
+                                  "strike"
+                                ]
+                              }
+                            },
+                            "field": {
+                              "type": "string"
+                            },
+                            "threshold": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string",
+                              "enum": [
+                                "above",
+                                "below"
+                              ]
+                            },
+                            "compare": {
+                              "type": "string",
+                              "enum": [
+                                "abs",
+                                "signed"
+                              ]
+                            },
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "strike_date",
+                            "legs",
+                            "threshold"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "strike_date": {
+                              "type": "string"
+                            },
+                            "option_type": {
+                              "type": "string",
+                              "enum": [
+                                "CALL",
+                                "PUT"
+                              ]
+                            },
+                            "strike": {
+                              "type": "number"
+                            },
+                            "field": {
+                              "type": "string"
+                            },
+                            "threshold": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string",
+                              "enum": [
+                                "above",
+                                "below"
+                              ]
+                            },
+                            "compare": {
+                              "type": "string",
+                              "enum": [
+                                "abs",
+                                "signed"
+                              ]
+                            },
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "strike_date",
+                            "option_type",
+                            "strike",
+                            "threshold"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "monitors"
+              ]
+            }
+          },
+          "/monitors/{id}": {
+            "patch": {
+              "operationId": "patchMonitorsById",
+              "summary": "Update a monitor",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "strike_date": {
+                            "type": "string"
+                          },
+                          "option_type": {
+                            "type": "string"
+                          },
+                          "strike": {
+                            "type": "number"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "threshold": {
+                            "type": "number"
+                          },
+                          "direction": {
+                            "type": "string"
+                          },
+                          "compare": {
+                            "type": "string"
+                          },
+                          "legs": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sign": {
+                                      "type": "number"
+                                    },
+                                    "option_type": {
+                                      "type": "string"
+                                    },
+                                    "strike": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "sign",
+                                    "option_type",
+                                    "strike"
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "scope": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "positions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ]
+                            }
+                          },
+                          "disabled_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "triggered": {
+                            "type": "boolean"
+                          },
+                          "last_value": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "last_checked_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "created_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "code",
+                          "strike_date",
+                          "option_type",
+                          "strike",
+                          "field",
+                          "threshold",
+                          "direction",
+                          "compare",
+                          "legs",
+                          "enabled",
+                          "scope",
+                          "positions",
+                          "disabled_reason",
+                          "triggered",
+                          "last_value",
+                          "last_checked_at",
+                          "created_at"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "would duplicate an existing record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "threshold": {
+                          "type": "number"
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "above",
+                            "below"
+                          ]
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "compare": {
+                          "type": "string",
+                          "enum": [
+                            "abs",
+                            "signed"
+                          ]
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "monitors"
+              ]
+            },
+            "delete": {
+              "operationId": "deleteMonitorsById",
+              "summary": "Delete a monitor",
+              "responses": {
+                "204": {
+                  "description": "no content"
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "monitors"
+              ]
+            }
+          },
+          "/monitors/{id}/total-entry": {
+            "post": {
+              "operationId": "postMonitorsByIdTotalEntry",
+              "summary": "Spread a total entry across the holding",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "ok": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "ok"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "entry": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "entry"
+                      ]
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "monitors"
+              ]
+            }
+          },
+          "/positions": {
+            "get": {
+              "operationId": "getPositions",
+              "summary": "List positions",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "strategy": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "strike_date": {
+                              "type": "string"
+                            },
+                            "contracts": {
+                              "type": "number"
+                            },
+                            "entry": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "legs": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "side": {
+                                    "type": "string",
+                                    "enum": [
+                                      "short",
+                                      "long"
+                                    ]
+                                  },
+                                  "option_type": {
+                                    "type": "string"
+                                  },
+                                  "strike": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "side",
+                                  "option_type",
+                                  "strike"
+                                ]
+                              }
+                            },
+                            "created_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "opened_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "closed_on": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "exit": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "realized_points": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "strategy",
+                            "strike_date",
+                            "contracts",
+                            "entry",
+                            "legs",
+                            "created_at",
+                            "opened_at",
+                            "closed_on",
+                            "exit",
+                            "realized_points"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "positions"
+              ]
+            },
+            "post": {
+              "operationId": "postPositions",
+              "summary": "Create a position",
+              "responses": {
+                "201": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "strategy": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "strike_date": {
+                            "type": "string"
+                          },
+                          "contracts": {
+                            "type": "number"
+                          },
+                          "entry": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "legs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "side": {
+                                  "type": "string",
+                                  "enum": [
+                                    "short",
+                                    "long"
+                                  ]
+                                },
+                                "option_type": {
+                                  "type": "string"
+                                },
+                                "strike": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "side",
+                                "option_type",
+                                "strike"
+                              ]
+                            }
+                          },
+                          "created_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "opened_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "closed_on": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "exit": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "realized_points": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "strategy",
+                          "strike_date",
+                          "contracts",
+                          "entry",
+                          "legs",
+                          "created_at",
+                          "opened_at",
+                          "closed_on",
+                          "exit",
+                          "realized_points"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "would duplicate an existing record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "strike_date": {
+                          "type": "string"
+                        },
+                        "legs": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "short",
+                                  "long"
+                                ]
+                              },
+                              "option_type": {
+                                "type": "string",
+                                "enum": [
+                                  "CALL",
+                                  "PUT"
+                                ]
+                              },
+                              "strike": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "side",
+                              "option_type",
+                              "strike"
+                            ]
+                          }
+                        },
+                        "entry": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "contracts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "strategy": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "opened_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "strike_date",
+                        "legs"
+                      ]
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "positions"
+              ]
+            }
+          },
+          "/positions/values": {
+            "get": {
+              "operationId": "getPositionsValues",
+              "summary": "Live value, P&L and exit schedule of every position",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "strategy": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "strike_date": {
+                              "type": "string"
+                            },
+                            "contracts": {
+                              "type": "number"
+                            },
+                            "entry": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "legs": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "side": {
+                                    "type": "string",
+                                    "enum": [
+                                      "short",
+                                      "long"
+                                    ]
+                                  },
+                                  "option_type": {
+                                    "type": "string"
+                                  },
+                                  "strike": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "side",
+                                  "option_type",
+                                  "strike"
+                                ]
+                              }
+                            },
+                            "created_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "opened_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "closed_on": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "exit": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "realized_points": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "cost_to_close": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "pnl": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "contract_size": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "greeks": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "fetched_at": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "dte": {
+                              "type": "number"
+                            },
+                            "schedule": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "dte_at_open": {
+                                      "type": "number"
+                                    },
+                                    "on_pace": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "pace_gap": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "target": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "stop": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "target_dte": {
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "manage_by_dte": {
+                                      "type": "number"
+                                    },
+                                    "reached": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "target",
+                                            "stop"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "manage_by_due": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "dte_at_open",
+                                    "on_pace",
+                                    "pace_gap",
+                                    "target",
+                                    "stop",
+                                    "target_dte",
+                                    "manage_by_dte",
+                                    "reached",
+                                    "manage_by_due"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "strategy",
+                            "strike_date",
+                            "contracts",
+                            "entry",
+                            "legs",
+                            "created_at",
+                            "opened_at",
+                            "closed_on",
+                            "exit",
+                            "realized_points",
+                            "cost_to_close",
+                            "pnl",
+                            "contract_size",
+                            "greeks",
+                            "fetched_at",
+                            "dte",
+                            "schedule"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "the OpenD call failed",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "positions"
+              ]
+            }
+          },
+          "/positions/{id}/vol": {
+            "get": {
+              "operationId": "getPositionsByIdVol",
+              "summary": "How much of the pace gap vol accounts for",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "vol": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "from": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "to": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "days": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "vol",
+                          "from",
+                          "to",
+                          "days"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "positions"
+              ]
+            }
+          },
+          "/positions/{id}": {
+            "patch": {
+              "operationId": "patchPositionsById",
+              "summary": "Update a position",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "strategy": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "strike_date": {
+                            "type": "string"
+                          },
+                          "contracts": {
+                            "type": "number"
+                          },
+                          "entry": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "legs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "side": {
+                                  "type": "string",
+                                  "enum": [
+                                    "short",
+                                    "long"
+                                  ]
+                                },
+                                "option_type": {
+                                  "type": "string"
+                                },
+                                "strike": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "side",
+                                "option_type",
+                                "strike"
+                              ]
+                            }
+                          },
+                          "created_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "opened_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "closed_on": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "exit": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "realized_points": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "strategy",
+                          "strike_date",
+                          "contracts",
+                          "entry",
+                          "legs",
+                          "created_at",
+                          "opened_at",
+                          "closed_on",
+                          "exit",
+                          "realized_points"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "entry": {
+                          "type": "number"
+                        },
+                        "contracts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "strategy": {
+                          "type": "string"
+                        },
+                        "opened_at": {
+                          "type": "string"
+                        },
+                        "exit": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "closed_on": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "positions"
+              ]
+            },
+            "delete": {
+              "operationId": "deletePositionsById",
+              "summary": "Delete a position",
+              "responses": {
+                "204": {
+                  "description": "no content"
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "positions"
+              ]
+            }
+          },
+          "/positions/{id}/close": {
+            "post": {
+              "operationId": "postPositionsByIdClose",
+              "summary": "Close a position, keeping it and its history",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "strategy": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "strike_date": {
+                            "type": "string"
+                          },
+                          "contracts": {
+                            "type": "number"
+                          },
+                          "entry": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "legs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "side": {
+                                  "type": "string",
+                                  "enum": [
+                                    "short",
+                                    "long"
+                                  ]
+                                },
+                                "option_type": {
+                                  "type": "string"
+                                },
+                                "strike": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "side",
+                                "option_type",
+                                "strike"
+                              ]
+                            }
+                          },
+                          "created_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "opened_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "closed_on": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "exit": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "realized_points": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "disabled_monitors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "strategy",
+                          "strike_date",
+                          "contracts",
+                          "entry",
+                          "legs",
+                          "created_at",
+                          "opened_at",
+                          "closed_on",
+                          "exit",
+                          "realized_points",
+                          "disabled_monitors"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "would duplicate an existing record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "exit": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "closed_on": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "positions"
+              ]
+            }
+          },
+          "/references": {
+            "get": {
+              "operationId": "getReferences",
+              "summary": "Live figures for every Reference",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "figure": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "field": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "change": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "error": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "delayed": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "last_known": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "delayed_by_minutes": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "code",
+                            "label",
+                            "source",
+                            "name",
+                            "figure",
+                            "field",
+                            "change",
+                            "error",
+                            "delayed",
+                            "last_known",
+                            "delayed_by_minutes"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "references"
+              ]
+            },
+            "post": {
+              "operationId": "postReferences",
+              "summary": "Keep a Security on the page",
+              "responses": {
+                "201": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "code",
+                          "label",
+                          "source",
+                          "created_at"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "would duplicate an existing record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "moomoo",
+                            "ibkr",
+                            "yahoo"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "source"
+                      ]
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "references"
+              ]
+            }
+          },
+          "/references/{id}": {
+            "delete": {
+              "operationId": "deleteReferencesById",
+              "summary": "Stop keeping a Security on the page",
+              "responses": {
+                "204": {
+                  "description": "no content"
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "references"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}
