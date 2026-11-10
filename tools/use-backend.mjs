@@ -13,7 +13,10 @@
  *  live service to a backend that answers half the doors must be impossible by accident, so every
  *  road to a Python plist goes through `refusals` — `check`, `render` and `switch` alike. It refuses
  *  while the door-scenario backlog (`python-backend/tests/scenarios/backlog.py`) names anything,
- *  while `__main__.py` does not exist, and while the interpreter launchd would run is not installed.
+ *  while a TypeScript backend module has no Python port (`check-module-map.mjs`'s `unported`,
+ *  measured from the tree), while `__main__.py` does not exist, and while the interpreter launchd
+ *  would run is not installed. The scenarios hold what the two DO; the module map holds what they
+ *  are MADE of, and reaches what no scenario does — `/docs` and `/openapi.json` are nobody's door.
  *  There is no override: a drill — the Python live for a while, by hand, on the owner's request and
  *  never on a schedule — happens once the port is done and the guard is satisfied.
  *
@@ -30,6 +33,8 @@ import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync
 import { connect } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
+
+import { PY_ROOT, TS_ROOT, unported } from "./check-module-map.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
@@ -159,6 +164,17 @@ export function refusals(backend, repo = ROOT) {
       if (waiting(d) > 0) out.push(`  ${d.padEnd(5)}  ${waiting(d)} of ${corpus[d].length} still on the backlog`);
     }
   }
+  // the PARTS, as well as the behaviour: a module no scenario reaches (/docs and /openapi.json are
+  // nobody's door) would otherwise go live as the TypeScript's alone. `main.ts` is left to the line
+  // after this one, which says the same thing in the words a missing process deserves.
+  const modules = unported(repo);
+  const parts = modules.missing.filter((m) => m.ts !== "main.ts");
+  if (modules.portable === 0) {
+    out.push(`no TypeScript backend modules under ${TS_ROOT}/: nothing to hold the Python's parts to`);
+  } else if (parts.length > 0) {
+    out.push(`${modules.portable - modules.missing.length} of ${modules.portable} backend modules ported`);
+    for (const m of parts) out.push(`  ${m.ts} has no port at ${PY_ROOT}/${m.py}`);
+  }
   if (!existsSync(join(repo, MAIN))) out.push(`${MAIN} does not exist: main.ts is not ported yet`);
   try {
     accessSync(join(repo, INTERPRETER), constants.X_OK);
@@ -176,7 +192,7 @@ function refuse(backend, repo) {
   throw new Refused([
     `refusing to switch to ${NAMES[backend]}: the port is not done (ADR 0021)`,
     ...lines.map((l) => `  ${l}`),
-    `The backlog is ${BACKLOG}; it is empty when the port is done.`,
+    `The backlogs are ${BACKLOG} and tools/check-module-map.mjs; both are empty when the port is done.`,
     "Until then the live service stays on the TypeScript: `make use BACKEND=ts`.",
   ].join("\n"));
 }
