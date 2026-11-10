@@ -1,24 +1,25 @@
 {
   "conversation": "not-subscribed",
-  "summary": "The control, then INDU, the Dow on CME, which the account can resolve and is not subscribed to: the lookup answers and the market-data request is refused with 354.",
+  "summary": "The control, then INDU, the Dow on CME, which the account can resolve and is not subscribed to: the lookup answers, and the market-data request, a stream as IbkrClient asks for every index, is refused with 354.",
   "provenance": {
     "kind": "recorded",
-    "at": "2026-11-09T11:21:38Z",
-    "gateway": "IB Gateway 10.52 (build 10521) on the owner's machine, port 4002, logged in to a paper account, with the Read-Only API switch on",
+    "at": "2026-11-10T16:32:43Z",
+    "gateway": "IB Gateway 10.52 on the owner's machine, port 4002, logged in to a paper account, with the Read-Only API switch on",
     "protocol": 157,
-    "how": "Asked with the library's own encoders (handshake.ts, messages.ts) on client id 9201, the same messages in the same order as IbkrClient: the greeting, startApi, reqMarketDataType(4), then per code reqContractDetails, reqMktData as a snapshot and cancelMktData, with no market data asked for a code whose lookup found nothing. Every frame was logged in both directions before anything decoded it. One difference from IbkrClient, on purpose: each market-data request was listened to until the gateway's snapshot end (57) rather than for IbkrClient's 250ms of quiet, so the replies are the gateway's whole answer rather than what one client's window caught.",
-    "market": "Monday 2026-11-09, around 06:15 New York. SPXW options were trading in Cboe's global trading hours, so the gateway served the LIVE grade (1) although DELAYED_FROZEN (4) was asked; the cash index was not being calculated.",
+    "how": "Asked with the library's own encoders (handshake.ts, messages.ts) on client id 9187, the messages IbkrClient sends: the greeting, startApi, reqMarketDataType(4), then per code reqContractDetails, reqMktData and cancelMktData. The option was asked as a snapshot and listened to until the gateway's snapshot end (57); INDU, an index, was asked as a stream, listened to for three seconds, and cancelled. Every frame was logged in both directions before anything decoded it.",
+    "market": "Tuesday 2026-11-10, 11:32 New York, in the cash session. The gateway served the option the LIVE grade (1) although DELAYED_FROZEN (4) was asked.",
     "altered": [
       "handshake.onStartApi[0]: the managed account, replaced by DU0000000, which has its shape (DU and seven characters) and is not it. The number is the owner's and this file is committed."
     ],
     "timing": "atMs is each reply's arrival, in milliseconds after its request was sent. A replay ignores it; it is kept because it is evidence (see notes).",
     "notes": [
+      "Re-recorded on 2026-11-10 because IbkrClient now asks an index as a stream (#257), and a stub answers a market-data request only with an exchange that carries the same snapshot flag. The recording it replaced asked INDU as a snapshot on 2026-11-09 and was refused the same way: 354 against the request, 1.8 seconds after it.",
       "Two unsolicited farm notices (usfuture connecting, then OK) arrived inside the INDU market-data exchange, against request id -1, and are kept where they arrived."
     ]
   },
   "ask": ["US.SPXW261218C8100000", "INDU"],
   "handshake": {
-    "greeting": ["157", "20261109 19:21:37 SGT"],
+    "greeting": ["157", "20261111 00:32:43 SGT"],
     "onStartApi": [
       ["15", "1", "DU0000000"],
       ["9", "1", "1"],
@@ -43,10 +44,10 @@
       },
       "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
       "replies": [
-        ["10", "8", "$reqId", "SPX", "OPT", "20261218 15:00 US/Central", "8100", "C", "SMART", "USD", "SPXW  261218C08100000", "SPXW", "SPXW", "902390015", "0.05", "1", "100", "ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,DIS,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NGCOMB,NONALGO,OCA,OPENCLOSE,PEGMIDVOL,PEGMKTVOL,PEGPRMVOL,PEGSRFVOL,POSTONLY,PRICECHK,REL,RELPCTOFS,RELSTK,RTH,SCALE,SCALERST,SIZECHK,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF", "SMART,CBOE,IBUSOPT", "1", "416904", "S&P 500 Stock Index", "", "202612", "Indices", "Broad Range Equity Index", "*", "US/Central", "20261108:1915-20261109:0825;20261109:0830-20261109:1600;20261109:1915-20261110:0825;20261110:0830-20261110:1600;20261110:1915-20261111:0825;20261111:0830-20261111:1600;20261111:1915-20261112:0825;20261112:0830-20261112:1600;20261112:1915-20261113:0825;20261113:0830-20261113:1600", "20261109:0830-20261109:1515;20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "", "", "0", "2", "SPX", "IND", "110,110,110", "20261218", ""],
+        ["10", "8", "$reqId", "SPX", "OPT", "20261218 15:00 US/Central", "8100", "C", "SMART", "USD", "SPXW  261218C08100000", "SPXW", "SPXW", "902390015", "0.05", "1", "100", "ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,DIS,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NGCOMB,NONALGO,OCA,OPENCLOSE,PEGMIDVOL,PEGMKTVOL,PEGPRMVOL,PEGSRFVOL,POSTONLY,PRICECHK,REL,RELPCTOFS,RELSTK,RTH,SCALE,SCALERST,SIZECHK,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF", "SMART,CBOE,IBUSOPT", "1", "416904", "S&P 500 Stock Index", "", "202612", "Indices", "Broad Range Equity Index", "*", "US/Central", "20261109:1915-20261110:0825;20261110:0830-20261110:1600;20261110:1915-20261111:0825;20261111:0830-20261111:1600;20261111:1915-20261112:0825;20261112:0830-20261112:1600;20261112:1915-20261113:0825;20261113:0830-20261113:1600;20261114:CLOSED;20261115:1915-20261116:0825;20261116:0830-20261116:1600", "20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515;20261114:CLOSED;20261115:1915-20261116:0825;20261116:0830-20261116:1600", "", "", "0", "2", "SPX", "IND", "110,110,110", "20261218", ""],
         ["52", "1", "$reqId"]
       ],
-      "atMs": [86, 86]
+      "atMs": [142, 142]
     },
     {
       "request": "reqMktData",
@@ -63,19 +64,19 @@
       "replies": [
         ["81", "$reqId", "0.05", "c70003", "3"],
         ["58", "1", "$reqId", "1"],
-        ["1", "6", "$reqId", "1", "4.20", "183", "0"],
-        ["1", "6", "$reqId", "2", "4.60", "54", "0"],
-        ["2", "6", "$reqId", "8", "0"],
-        ["1", "6", "$reqId", "9", "3.65", "0", "0"],
-        ["21", "$reqId", "10", "0", "0.13581063860717796", "0.032009750422941026", "4.199999809265137", "13.815378082166315", "2.1697027833707692E-4", "1.7491549110068492", "-0.3290866344230407", "7429.21875"],
+        ["1", "6", "$reqId", "1", "4.20", "71", "0"],
+        ["1", "6", "$reqId", "2", "4.50", "317", "0"],
+        ["2", "6", "$reqId", "8", "2"],
+        ["1", "6", "$reqId", "9", "7.20", "0", "0"],
+        ["21", "$reqId", "10", "0", "0.12497046278237635", "0.03433309944514106", "4.199999809265137", "13.779084151292583", "2.513824110978599E-4", "1.8414415227762584", "-0.33133725769998357", "7498.9501953125"],
+        ["21", "$reqId", "11", "0", "0.12654922221278808", "0.03613692070911254", "4.5", "13.779084151292583", "2.588961625071347E-4", "1.920440073811491", "-0.34980093924757166", "7498.9501953125"],
         ["46", "6", "$reqId", "32", "C"],
         ["46", "6", "$reqId", "33", "C"],
-        ["21", "$reqId", "13", "0", "0.13635320870155307", "0.03284209377294264", "4.2134216408451834", "13.815378082166315", "2.2067750166468217E-4", "2.016363996552286", "-0.3307472642579796", "7429.21875"],
-        ["21", "$reqId", "11", "0", "0.13798691298085872", "0.034218132427142965", "4.599999904632568", "13.815378082166315", "2.256148883507985E-4", "1.847991407904686", "-0.3531172469224301", "7429.21923828125"],
-        ["21", "$reqId", "12", "0", "-1", "-2", "-1", "13.815378082166315", "-2", "-2", "-2", "7427.951171875"],
+        ["21", "$reqId", "13", "0", "0.12633759255450056", "0.03764682724397263", "4.525148655592261", "13.779084151292583", "2.690308032405195E-4", "2.2448073466039205", "-0.3537385013887615", "7498.9501953125"],
+        ["21", "$reqId", "12", "0", "-1", "-2", "-1", "13.779084151292583", "-2", "-2", "-2", "7505.27"],
         ["57", "1", "$reqId"]
       ],
-      "atMs": [46, 335, 336, 336, 558, 558, 859, 863, 863, 1124, 1908, 11114, 11114],
+      "atMs": [45, 266, 266, 267, 525, 525, 744, 744, 746, 746, 1290, 11114, 11114],
       "onCancel": [
         ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
       ]
@@ -93,10 +94,10 @@
       },
       "sent": ["9", "8", "$reqId", "0", "INDU", "IND", "", "0.0", "", "", "CME", "", "USD", "", "", "0", "", ""],
       "replies": [
-        ["10", "8", "$reqId", "INDU", "IND", "", "0", "", "CME", "USD", "DJI", "", "", "1935181", "0.1", "1", "", "ACTIVETIM,AD,ADJUST,ALERT,ALLOC,BASKET,BENCHPX,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,GAT,GTC,GTD,GTT,HID,LMT,NONALGO,OCA,SCALE,SCALERST,WHATIF", "CME", "1", "0", "Dow Jones Industrial Average", "", "", "", "", "", "US/Central", "20261109:0830-20261109:1515;20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "20261109:0830-20261109:1515;20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "", "", "0", "2147483647", "", "", "36", "", ""],
+        ["10", "8", "$reqId", "INDU", "IND", "", "0", "", "CME", "USD", "DJI", "", "", "1935181", "0.1", "1", "", "ACTIVETIM,AD,ADJUST,ALERT,ALLOC,BASKET,BENCHPX,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,GAT,GTC,GTD,GTT,HID,LMT,NONALGO,OCA,SCALE,SCALERST,WHATIF", "CME", "1", "0", "Dow Jones Industrial Average", "", "", "", "", "", "US/Central", "20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515", "", "", "0", "2147483647", "", "", "36", "", ""],
         ["52", "1", "$reqId"]
       ],
-      "atMs": [47, 47]
+      "atMs": [94, 94]
     },
     {
       "request": "reqMktData",
@@ -109,13 +110,13 @@
         "exchange": "CME",
         "tradingClass": ""
       },
-      "sent": ["1", "11", "$reqId", "0", "INDU", "IND", "", "0.0", "", "", "CME", "", "USD", "", "", "0", "", "1", "0", ""],
+      "sent": ["1", "11", "$reqId", "0", "INDU", "IND", "", "0.0", "", "", "CME", "", "USD", "", "", "0", "", "0", "0", ""],
       "replies": [
         ["4", "2", "-1", "2119", "Market data farm is connecting:usfuture"],
         ["4", "2", "-1", "2104", "Market data farm connection is OK:usfuture"],
         ["4", "2", "$reqId", "354", "Requested market data is not subscribed. Check API status by selecting the Account menu then under Management choose Market Data Subscription Manager and/or availability of delayed data.INDU Dow Jones Industrial Average (DJI) /TOP/ALL"]
       ],
-      "atMs": [465, 1541, 1840],
+      "atMs": [46, 1540, 1846],
       "onCancel": [
         ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
       ]

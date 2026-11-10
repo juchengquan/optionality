@@ -171,10 +171,11 @@ describe("asking", () => {
   });
 
   it("delivers a data request the account may not read as an error with no figures", async () => {
-    // INDU resolves and is then refused with 354, recorded 2026-11-09. "Not subscribed" is NOT
-    // a contract that does not exist, and the difference is what `hasFigures` keeps (ADR 0015)
+    // INDU resolves and its stream is then refused with 354, recorded 2026-11-10 (as its snapshot
+    // was on 2026-11-09). "Not subscribed" is NOT a contract that does not exist, and the
+    // difference is what `hasFigures` keeps (ADR 0015)
     const { socket, seen } = await connected({ conversation: "not-subscribed" });
-    socket.send(reqMktData(7, INDU, true));
+    socket.send(reqMktData(7, INDU, false));
     await waitFor(() => seen.some((m) => m.kind === "error" && m.reqId === 7));
     expect(seen.find((m) => m.kind === "error" && m.reqId === 7)).toMatchObject({ code: 354 });
     expect(seen.some((m) => m.kind === "price" || m.kind === "greeks")).toBe(false);

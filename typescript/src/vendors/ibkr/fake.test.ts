@@ -34,8 +34,12 @@ afterEach(async () => {
   gateway = null;
 });
 
-async function connected(conversation?: string): Promise<{ socket: TwsSocket; seen: Incoming[] }> {
-  gateway = await startFakeGateway(0, conversation ? { conversation } : {});
+async function connected(
+  conversation?: string, pace?: number,
+): Promise<{ socket: TwsSocket; seen: Incoming[] }> {
+  gateway = await startFakeGateway(0, {
+    ...(conversation ? { conversation } : {}), ...(pace === undefined ? {} : { pace }),
+  });
   const seen: Incoming[] = [];
   const socket = new TwsSocket({ host: "127.0.0.1", port: gateway.port, clientId: 31419 });
   client = socket;
@@ -111,6 +115,60 @@ describe("replaying a recording", () => {
       .toEqual([4, 5]);
     // the stub answers in the order it is asked, so anything for 2 or 3 would be here by now
     expect(seen.filter((m) => "reqId" in m && (m.reqId === 2 || m.reqId === 3))).toEqual([]);
+  });
+
+  it("answers a market-data request only with an exchange that asked the same way", async () => {
+    // a snapshot and a stream of one contract are two questions with two different answers — a
+    // snapshot of SPX carries no price at all and its stream does — so a recording of one never
+    // stands in for the other. normal-with-greeks holds the option as a snapshot.
+    const { socket, seen } = await connected();
+    socket.send(reqMktData(7, SPXW, false));
+    socket.send(reqMktData(8, SPXW, true));
+    await waitFor(() => seen.some((m) => m.kind === "snapshotEnd" && m.reqId === 8));
+    expect(seen.filter((m) => "reqId" in m && m.reqId === 7)).toEqual([]);
+  });
+
+  it("keeps every message a client sent after its greeting, in order", async () => {
+    // so a test can hold a client to what it sends, as the Python stub's `received` does
+    const { socket } = await connected();
+    const before = gateway!.received.length;
+    socket.send(reqContractDetails(3, SPXW));
+    socket.send(cancelMktData(4));
+    await waitFor(() => gateway!.received.length >= before + 2);
+    expect(gateway!.received[0]![0]).toBe("71");            // startApi, sent as the socket connects
+    expect(gateway!.received.slice(before).map((m) => [m[0], m[2]]))
+      .toEqual([["9", "3"], ["2", "4"]]);
+  });
+
+  it("sends each reply at its recorded time, scaled, when told to pace", async () => {
+    // when a figure arrives is what a client's completion rule is about, and a replay that
+    // delivers everything at once cannot show it. Normal-with-greeks' model greeks came 1945ms
+    // after the request and the snapshot's end 11104ms after; at a tenth, 195ms and 1110ms.
+    const { socket, seen } = await connected(undefined, 0.1);
+    const asked = Date.now();
+    const at: Record<string, number> = {};
+    socket.send(reqMktData(7, SPXW, true));
+    await waitFor(() => {
+      for (const m of seen) {
+        const key = m.kind === "greeks" ? `greeks ${m.tickType}` : m.kind;
+        at[key] ??= Date.now() - asked;
+      }
+      return seen.some((m) => m.kind === "snapshotEnd");
+    }, 3000);
+    expect(at["greeks 13"]).toBeGreaterThanOrEqual(150);
+    expect(at["snapshotEnd"]).toBeGreaterThanOrEqual(1000);
+    expect(at["dataType"]).toBeLessThan(at["greeks 13"]!);
+  });
+
+  it("stops pacing a request once it is cancelled, as the gateway stops a cancelled one", async () => {
+    const { socket, seen } = await connected(undefined, 0.1);
+    socket.send(reqMktData(7, SPXW, true));
+    await waitFor(() => seen.some((m) => m.kind === "price"));
+    socket.send(cancelMktData(7));
+    await new Promise((r) => setTimeout(r, 1300));
+    // the cancel's own answer came; the snapshot's end, due at 1110ms, never did
+    expect(seen.some((m) => m.kind === "error" && m.code === 300)).toBe(true);
+    expect(seen.some((m) => m.kind === "snapshotEnd")).toBe(false);
   });
 
   it("replays a conversation given as data, not only by name", async () => {

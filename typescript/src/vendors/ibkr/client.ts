@@ -5,38 +5,41 @@
  *  logged-in provider accepted a request and never answered it, and a promise that never settled
  *  stopped the alarm engine dead on 2026-10-16.
  *
- *  ## When an ask is finished
+ *  ## When an ask is finished (#257)
  *
- *  IB Gateway does say, but late. A snapshot ends with its own marker, message 57 (`snapshotEnd`
- *  in `messages.ts`): in the captures of 2026-11-09 under `testdata/vendors/ibkr-gateway/`, every
- *  market-data request the gateway served ends with one, 11.1 to 11.5 seconds after the request,
- *  where the book arrives within half a second and the model's greeks within two. A request it
- *  REFUSED (`not-subscribed`, 354) gets none. This note once said no such marker exists,
- *  "measured, not assumed"; the recordings show it does.
+ *  The protocol never says how many figures a contract will produce — that depends on the account
+ *  rather than on the code — and its one delimiter, the snapshot's end (message 57), comes 11.1 to
+ *  11.5 seconds after the request in every capture, where the book arrives within half a second
+ *  and an option's model greeks within two. So an ask is finished by whichever comes first of:
  *
- *  The client does not wait for it yet. Eleven seconds is longer than `requestTimeoutMs` allows
- *  a whole contract (8 seconds by default), and the contracts are asked one after another, so
- *  waiting for the marker would time every contract out — or, with the timeout raised, make a
- *  batch of N cost about 11·N seconds. Whether to wait for it, and whether to ask the contracts
- *  side by side so that the wait is paid once per batch, is a design question of its own rather
- *  than this file's to settle in passing. Until it is settled the rule below stands.
+ *  - **the snapshot's end**, where the gateway sends one: nothing more is coming, and an option
+ *    whose model never answers is finished there rather than by the timeout;
+ *  - **every figure the contract's kind is waited for, then a brief QUIET**: a figure at all —
+ *    `hasFigures`, which keeps the distinction ADR 0015 named, between "subscribed, nothing yet"
+ *    and a contract that does not exist — and for an OPTION its model greeks too (tick 13, or 53
+ *    delayed), computed or not. The quiet is restarted by every NEW figure, so one that arrives
+ *    late is late rather than lost, and not by a repeat: a stream keeps sending what it has
+ *    already sent, and a repeat is the running board rather than more of the answer;
+ *  - **the timeout**, `requestTimeoutMs`, which keeps whatever arrived.
  *
- *  The rule settled in design was "resolve as soon as the contract has produced a figure that was
- *  asked for", and building it showed that is wrong: the figures arrive as SEPARATE messages, so
- *  stopping at the first one answers with a bid and throws the ask and the greeks away. Caught by
- *  the first test written against it.
+ *  The greeks are waited for because the quiet alone lost them: across six live captures of an
+ *  option on 2026-11-09 they came 0.3 to 1.7 seconds after the book, and in five a pause longer
+ *  than the 250ms window came first (#257). The quiet window is still an invented number, and it
+ *  is invented because nothing better can be waited for: it is bounded twice over, by itself and
+ *  by the timeout.
  *
- *  So it is two conditions, not one. A figure must have arrived — `hasFigures`, which keeps the
- *  distinction ADR 0015 named, between "subscribed, nothing yet" and a contract that does not
- *  exist — and then a brief QUIET must follow it. The quiet window is an invented number, which
- *  the design deliberately avoided, and it is invented here because the protocol offers nothing
- *  better that can be waited for: its one delimiter comes too late (above), and the gateway never
- *  says how many figures a contract will produce, a count that depends on the account rather than
- *  on the code. It is bounded twice over — by itself and by `requestTimeoutMs` — and a figure
- *  that arrives late is late, not lost, because the window restarts on every message. It is also
- *  shorter than the gaps the gateway really leaves: the captures of 2026-11-09 show the model's
- *  greeks 0.3 to 1.7 seconds after the book, so the live client can finish without them, as
- *  `normal-with-greeks`' provenance records.
+ *  **Every contract is asked side by side**, so a batch costs its slowest contract — about two
+ *  seconds when an option's greeks are slow — where one after another it cost the sum, and the
+ *  wait for greeks would be paid again for every option.
+ *
+ *  **An index is asked as a STREAM**, and cancelled once read. A snapshot of SPX or VIX carries no
+ *  figure at any hour: its high, low and close come with their price fields EMPTY, then the
+ *  snapshot's end eleven seconds later, because the account has no snapshot permission for an
+ *  index — the gateway's own parameters message says 0, where an option's says 3 (recorded in
+ *  the session on 2026-11-10, `index-in-the-session`). A stream sends every figure it holds in one
+ *  burst, half a second after the request, and the quiet after it ends the ask. It is still one
+ *  ask and one answer: the stream is cancelled when the ask finishes, so no running board of
+ *  prices outlives it to make a dead session look like a calm market.
  *
  *  ## Why the grade is read rather than assumed
  *
@@ -67,7 +70,7 @@ export interface IbkrConfig extends TwsSocketConfig {
   requestTimeoutMs?: number;
   /** How long to wait after a figure arrives, in case more is coming. See the note above on why
    *  this number exists at all: the gateway's own end marker comes about eleven seconds late, so
-   *  SOMETHING sooner has to say "that was all of them". Restarted by every message. */
+   *  SOMETHING sooner has to say "that was all of them". Restarted by every new figure. */
   quietMs?: number;
 }
 
@@ -151,25 +154,31 @@ export class IbkrClient {
     }
     if (named.size === 0) return { records: [], unknown };
 
+    // Side by side: a batch costs its slowest contract rather than the sum of them (#257)
+    const outcomes = await Promise.all([...named].map(async ([code, shape]) => {
+      const found = await this.conid(socket, code, shape!);
+      const data = found.silent || found.conId === null
+        ? null : await this.figures(socket, code, shape!);
+      return { code, found, data };
+    }));
+
     const records: Quote[] = [];
     // Who answered, counted in THIS ask. A conid from the cache is not an answer: it is what the
     // gateway said on an earlier ask, before its link had any chance to drop.
     let asked = 0;                                // contracts whose market data was asked for
     let answered = 0;                             // of those, the ones that sent anything back
     let refused = 0;                              // lookups answered "no such contract"
-    for (const [code, shape] of named) {
-      const found = await this.conid(socket, code, shape!);
+    for (const { code, found, data } of outcomes) {
       if (found.silent) continue;                 // counted below, not reported as unknown
-      if (found.conId === null) {
+      if (data === null) {                        // the lookup said "no such contract"
         refused += 1;
         unknown.push(code);
         continue;
       }
       asked += 1;
-      const { record, silent } = await this.figures(socket, code, shape!);
-      if (silent) continue;
+      if (data.silent) continue;
       answered += 1;
-      records.push(record);
+      records.push(data.record);
     }
 
     // Decision 4 of ADR 0019's design, and the reason it is load-bearing: a gateway whose link to
@@ -232,16 +241,24 @@ export class IbkrClient {
     return { conId: answer, silent: !heard };
   }
 
-  /** One contract's figures, under the service's field names. */
+  /** One contract's figures, under the service's field names: an option's as a snapshot, an
+   *  index's as a stream, and either finished as the note at the top says. */
   private async figures(
     socket: TwsSocket, code: string, shape: NonNullable<ReturnType<typeof contractFor>>,
   ): Promise<{ record: Quote; silent: boolean }> {
     const id = this.nextId++;
     const record: Quote = { code };
+    const option = shape.contract.secType === "OPT";
     let heard = false;
+    let modelled = false;                         // the model's greeks arrived, computed or not
+    const complete = () => hasFigures(record) && (!option || modelled);
     await this.collect<Quote>(
-      socket, id, reqMktData(id, shape.contract, true), (message, _done, settle) => {
+      socket, id, reqMktData(id, shape.contract, option), (message, done, settle) => {
         heard = true;
+        // the gateway says nothing more is coming
+        if (message.kind === "snapshotEnd") return done(record);
+        const held = Object.keys(record).length;
+        const wasComplete = complete();
         if (message.kind === "dataType") {
           const grades = grade(message.type);
           if (grades) Object.assign(record, grades);
@@ -251,13 +268,13 @@ export class IbkrClient {
           if (field) record[field] = message.price;
         }
         if (message.kind === "greeks" && GREEK_TICKS.has(message.tickType)) {
+          modelled = true;
           Object.assign(record, greekFields(message.figures));
         }
-        // the gateway's end marker comes about eleven seconds late and is not waited for (see the
-        // note at the top), so a figure having arrived starts a short clock rather than finishing
-        // the ask: every message restarts it, and the quiet is what says "that was all of them".
-        // The outer timeout finishes the contracts that never answer.
-        if (hasFigures(record)) settle(record);
+        // complete, or a new figure since it was: start the quiet again. A figure already held
+        // is a stream repeating itself, and restarting on that would hold a busy stream open
+        // until the timeout
+        if (complete() && (!wasComplete || Object.keys(record).length > held)) settle(record);
       },
     );
     socket.send(cancelMktData(id));
@@ -286,8 +303,9 @@ export class IbkrClient {
         this.waiting.delete(id);
         resolve(value);
       };
-      // enough has arrived; wait a moment in case more is on its way, and restart that wait every
-      // time something is. A figure that arrives late is late rather than lost.
+      // enough has arrived; wait a moment in case more is on its way, and restart that wait
+      // whenever the reader says something new has. A figure that arrives late is late rather
+      // than lost.
       const settle = (value: T) => {
         if (quiet) clearTimeout(quiet);
         quiet = setTimeout(() => finish(value), quietMs);

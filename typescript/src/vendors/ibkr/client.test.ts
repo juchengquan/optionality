@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { IbkrClient } from "./client.ts";
-import { type FakeGateway, startFakeGateway } from "./fake.ts";
+import { type FakeGateway, type FakeOptions, startFakeGateway } from "./fake.ts";
+import { type Conversation, type Exchange, loadConversation } from "./recordings.ts";
 
 /** The bounded ask, over a real loopback socket against the recorded stub.
  *
@@ -32,12 +33,48 @@ afterEach(async () => {
   gateway = null;
 });
 
-async function connected(options: { conversation?: string } = {}): Promise<IbkrClient> {
+async function connected(
+  options: FakeOptions = {}, requestTimeoutMs = 1500,
+): Promise<IbkrClient> {
   gateway = await startFakeGateway(0, options);
-  client = new IbkrClient({
-    host: "127.0.0.1", port: gateway.port, clientId: 31419, requestTimeoutMs: 1500,
-  });
+  client = new IbkrClient({ host: "127.0.0.1", port: gateway.port, clientId: 31419, requestTimeoutMs });
   return client;
+}
+
+/** How long an ask took, and what it came to. */
+async function timed(c: IbkrClient, codes: string[]) {
+  const started = Date.now();
+  const batch = await c.fetchQuotes(codes);
+  return { batch, ms: Date.now() - started };
+}
+
+/** A recording with one market-data exchange's replies changed, for a claim no capture shows. */
+function edited(
+  name: string, contract: { symbol: string; secType: string },
+  change: (e: Exchange) => Pick<Exchange, "replies" | "atMs">,
+): Conversation {
+  const recorded = loadConversation(name);
+  const named = (e: Exchange) => e.request === "reqMktData"
+    && e.contract.symbol === contract.symbol && e.contract.secType === contract.secType;
+  return {
+    ...recorded, conversation: `${name}, edited`,
+    exchanges: recorded.exchanges.map((e) => named(e) ? { ...e, ...change(e) } : e),
+  };
+}
+
+/** What the client sent, by message id, from the `from`th message on, once `count` have arrived. */
+async function sent(from: number, count: number): Promise<string[]> {
+  await waitFor(() => gateway!.received.length >= from + count);
+  return gateway!.received.slice(from).map((m) => m[0]!);
+}
+
+async function waitFor(done: () => boolean, ms = 2000): Promise<void> {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (done()) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error("timed out waiting for the stub");
 }
 
 describe("one bounded ask", () => {
@@ -78,18 +115,104 @@ describe("one bounded ask", () => {
     expect(q!.last_known).toBe(false);
   });
 
-  it("reports an index's empty close as no figure, never as a close of zero", async () => {
-    // SPX before the cash session, recorded 2026-11-09: granted, graded, and its one price tick
-    // carries an empty field. A close of 0 on the strip would be a reading nobody sent.
-    const c = await connected({ conversation: "index-before-the-open" });
-    const batch = await c.fetchQuotes([OPTION, "SPX"]);
-    expect(batch.records.find((r) => r.code === "SPX"))
-      .toEqual({ code: "SPX", delayed: false, last_known: false });
+  it("asks an index as a STREAM, and answers the figures its first burst carries", async () => {
+    // A snapshot of SPX or VIX carries no figure at any hour: its high, low and close come with
+    // their prices EMPTY, then the snapshot's end eleven seconds later, because the account has
+    // no snapshot permission for an index (the gateway's parameters say 0, the option's 3).
+    // Recorded in the session on 2026-11-10, with the stream that does answer, in one burst.
+    const c = await connected({ conversation: "index-in-the-session" });
+    const batch = await c.fetchQuotes([OPTION, "SPX", "VIX"]);
+    expect(batch.unknown).toEqual([]);
+    // a replay delivers the whole three seconds at once, so SPX's last is its last update's
+    expect(batch.records.find((r) => r.code === "SPX")).toEqual({
+      code: "SPX", delayed: false, last_known: false, last_price: 7499.46, prev_close_price: 7549.94,
+    });
+    expect(batch.records.find((r) => r.code === "VIX")).toEqual({
+      code: "VIX", delayed: false, last_known: false, last_price: 20.49, prev_close_price: 19.92,
+    });
+  });
+
+  it("cancels every stream it opens, so no subscription outlives the ask", async () => {
+    // a stream left running is a running board of prices, which would make a dead session look
+    // like a calm market — and holds one of the account's market-data lines for ever
+    const c = await connected({ conversation: "index-in-the-session" });
+    await c.fetchQuotes(["SPX", "VIX"]);
+    await waitFor(() => gateway!.received.filter((m) => m[0] === "2").length >= 2);
+    const streams = gateway!.received.filter((m) => m[0] === "1").map((m) => [m[2], m[17]]);
+    expect(streams.map(([, snapshot]) => snapshot)).toEqual(["0", "0"]);
+    expect(gateway!.received.filter((m) => m[0] === "2").map((m) => m[2]).sort())
+      .toEqual(streams.map(([id]) => id).sort());
   });
 
   it("asks nothing at all for an empty list", async () => {
     const c = await connected();
     expect(await c.fetchQuotes([])).toEqual({ records: [], unknown: [] });
+  });
+});
+
+describe("when an ask is finished (#257)", () => {
+  // The replies are PACED here, each sent at its recorded time scaled down, because when a
+  // figure arrives is the whole question; the corpus replays everything at once.
+
+  it("waits for an option's greeks through a pause longer than the quiet window", async () => {
+    // the model's greeks come 0.3 to 1.7 seconds after the book, and in five of six live captures
+    // a pause longer than the 250ms window came first, so the client finished without them. At a
+    // quarter of the recorded times the pause before them is still 364ms.
+    const c = await connected({ pace: 0.25 }, 5000);
+    const { batch, ms } = await timed(c, [OPTION]);
+    expect(batch.records[0]!.option_delta).toBe(MODEL.delta);
+    // and on the greeks and the quiet after them: the snapshot's end is 2.8s away at this pace
+    expect(ms).toBeLessThan(2000);
+  });
+
+  it("finishes when the gateway says the snapshot has ended, greeks or none", async () => {
+    // the one delimiter the protocol has: nothing more is coming, so an option whose model never
+    // answers is finished there, with the figures it did send, rather than by the timeout
+    const noModel = edited("normal-with-greeks", { symbol: "SPX", secType: "OPT" }, (e) => {
+      const keep = e.replies.map((m) => !(m[0] === "21" && m[2] === "13"));
+      return {
+        replies: e.replies.filter((_, i) => keep[i]), atMs: e.atMs.filter((_, i) => keep[i]),
+      };
+    });
+    const c = await connected({ conversation: noModel, pace: 0.05 }, 5000);
+    const { batch, ms } = await timed(c, [OPTION]);
+    expect(batch.records[0]).toMatchObject({ bid_price: 4.1, ask_price: 4.5, prev_close_price: 3.65 });
+    expect(batch.records[0]!.option_delta).toBeUndefined();
+    expect(ms).toBeLessThan(2500);
+  });
+
+  it("is not held open by a stream repeating figures it has already sent", async () => {
+    // A stream keeps sending, and a repeat is the running board rather than more of the answer,
+    // so the quiet is measured from the last NEW figure. SPX's recorded update, sent every 100ms
+    // for three seconds: busier than any window, and every message would restart one.
+    const busy = edited("index-in-the-session", { symbol: "SPX", secType: "IND" }, (e) => {
+      const burst = e.atMs.filter((t) => t === e.atMs[0]).length;
+      const update = e.replies.slice(burst, burst + 4);
+      const replies = [...e.replies.slice(0, burst)];
+      const atMs = [...e.atMs.slice(0, burst)];
+      for (let t = 600; t <= 3600; t += 100) {
+        replies.push(...update);
+        atMs.push(t, t, t, t);
+      }
+      return { replies, atMs };
+    });
+    const c = await connected({ conversation: busy, pace: 1 }, 5000);
+    const { batch, ms } = await timed(c, ["SPX"]);
+    expect(batch.records[0]).toMatchObject({ last_price: 7499.44, prev_close_price: 7549.94 });
+    // the burst at 0.5s and a quarter-second of quiet, not the 3.6s the updates last
+    expect(ms).toBeLessThan(2000);
+  });
+
+  it("asks every contract side by side, so a batch costs its slowest contract", async () => {
+    // one after another, every option's wait for its greeks would be paid again; side by side it
+    // is paid once. Every market-data request goes out before any is cancelled, which is to say
+    // before any is finished. On a warm cache, so no lookup's timing can interleave.
+    const c = await connected({ conversation: "index-in-the-session" });
+    await c.fetchQuotes([OPTION, "SPX", "VIX"]);
+    await waitFor(() => gateway!.received.filter((m) => m[0] === "2").length >= 3);
+    const from = gateway!.received.length;
+    await c.fetchQuotes([OPTION, "SPX", "VIX"]);
+    expect(await sent(from, 6)).toEqual(["1", "1", "1", "2", "2", "2"]);
   });
 });
 

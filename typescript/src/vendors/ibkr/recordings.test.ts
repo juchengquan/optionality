@@ -45,6 +45,19 @@ describe("the conversations", () => {
     }
   });
 
+  it("refuses a market-data exchange that does not say whether it asked for a snapshot", () => {
+    // a stub answers a snapshot only with a snapshot and a stream only with a stream, so a file
+    // that does not say which would answer neither, or both
+    const text = readFileSync(join(RECORDINGS, "normal-with-greeks.json"), "utf8");
+    const file = JSON.parse(text) as { exchanges: { request: string; sent: string[] }[] };
+    const data = file.exchanges.find((e) => e.request === "reqMktData")!;
+    for (const flag of ["", "true", undefined]) {
+      data.sent = data.sent.slice(0, 17).concat(flag === undefined ? [] : [flag, "0", ""]);
+      expect(() => parseConversation("normal-with-greeks", file), String(flag))
+        .toThrow(/sent\[17\] must say whether it asked for a snapshot/);
+    }
+  });
+
   it("keeps every field as the text the wire carried, never a number", () => {
     // "4.10" and 4.1 are different bytes, and so are "2.1E-4" and 0.00021. A recording that let
     // JSON reformat a field would replay something the gateway never sent.

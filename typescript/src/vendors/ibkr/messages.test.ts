@@ -188,9 +188,10 @@ describe("reading everything else", () => {
   });
 
   it("reads an EMPTY price as no price, not as a price of zero", () => {
-    // Recorded on 2026-11-09 (`index-before-the-open`): SPX before the cash session sent its
-    // previous close (tick 9) with the price field empty. `Number("")` is 0 and passes a
-    // finiteness check, so that close read as 0.00, a figure the gateway never sent.
+    // Recorded on 2026-11-09 and again on 2026-11-10 (`index-in-the-session`'s notes): a
+    // SNAPSHOT of SPX sends its previous close (tick 9) with the price field empty, before the
+    // open and in the session alike. `Number("")` is 0 and passes a finiteness check, so that
+    // close read as 0.00, a figure the gateway never sent.
     expect(readMessage(msg(1, 6, 100, 9, "", 0, 0)))
       .toEqual({ kind: "price", reqId: 100, tickType: 9, price: null });
   });

@@ -37,7 +37,8 @@ skips a price tick whose price is empty, before any callback, and converts every
 `float()`, so one empty field drops the whole computation with a logged traceback. The TypeScript
 reads a field at a time (`messages.ts`' `reading`): an empty price is no figure but still the
 gateway ANSWERING, which is what separates "subscribed, nothing yet" from silence — recorded on
-2026-11-09 as SPX before the open (`index-before-the-open`). So `_FigureDecoder` reads ticks 1 and
+2026-11-09 and 2026-11-10 from a SNAPSHOT of SPX, whose high, low and close all come with their
+prices empty (`index-in-the-session`'s notes). So `_FigureDecoder` reads ticks 1 and
 21 from their fields, at the positions `ib_async`'s own decoder reads them at every version it
 speaks, and leaves every other message to `ib_async`.
 
@@ -319,7 +320,7 @@ def _not_computed(what: str, value: float) -> bool:
 def _reading(fields: list[str], at: int) -> float | None:
     """A FIGURE, or None where the field carries none. Not `float` alone: an empty field is the
     gateway declining to answer that one, kept so nothing after it shifts, and read as a number it
-    becomes a figure nobody sent — SPX before the open sent its close with an empty price."""
+    becomes a figure nobody sent — a snapshot of SPX sends its close with an empty price."""
     if at >= len(fields) or not fields[at].strip():
         return None
     try:
@@ -556,7 +557,8 @@ MARKET_DATA_DELAYED_FROZEN = 4
 CONNECT_TIMEOUT_MS = 10_000
 #: bounds each request: a logged-in gateway can accept one and never answer, the 2026-10-16 shape
 REQUEST_TIMEOUT_MS = 8_000
-#: how long to wait after a figure arrives, in case more is coming; restarted by every message
+#: how long to wait after the figures a contract is waited for, in case more are coming;
+#: restarted by every NEW figure, and not by a stream repeating one it already sent
 QUIET_MS = 250
 
 
@@ -571,13 +573,15 @@ class IbkrClient:
     The shape of `client.ts`, deliberately: hold the connection, bound every wait, tear it down on
     any failure so the next ask reconnects.
 
-    **When an ask is finished.** A figure must have arrived — `has_figures`, which keeps "subscribed,
-    nothing yet" apart from a contract that does not exist — and then a brief quiet must follow,
-    `quiet_ms`, restarted by every message, so a figure that arrives late is late and not lost. The
-    gateway's own end marker (message 57) comes about eleven seconds after the request in the
-    captures of 2026-11-09, longer than a whole request may take, so it is not waited for; whether
-    it should be is #257's question, and this port does what the TypeScript does until it is
-    answered there.
+    **When an ask is finished** (#257): at the snapshot's end, where the gateway sends one; or
+    once every figure the contract's kind is waited for has arrived — a figure at all
+    (`has_figures`, which keeps "subscribed, nothing yet" apart from a contract that does not
+    exist), and for an option its model greeks too, computed or not — and a brief quiet has
+    followed, `quiet_ms`, restarted by every NEW figure and not by a stream repeating one it
+    already sent; or at `request_timeout_ms`, keeping whatever arrived. Every contract is asked side
+    by side, so a batch costs its slowest contract, and an index is asked as a STREAM and cancelled
+    once read, because a snapshot of one carries no figure at any hour (the account has no
+    snapshot permission for an index). `client.ts` says why each, and what was measured.
 
     **Silence is a failure, not an answer.** A gateway whose link to IBKR has dropped keeps its own
     socket open and answers nothing. Reporting those contracts as unknown would read as "none of
@@ -724,22 +728,31 @@ class IbkrClient:
         if not named:
             return Batch(records=[], unknown=unknown)
 
+        # side by side: a batch costs its slowest contract rather than the sum of them (#257)
+        asks = [asyncio.ensure_future(self._one(client, code, shape)) for code, shape in named.items()]
+        try:
+            outcomes = await asyncio.gather(*asks)
+        except BaseException:
+            # one failed (the socket went): the rest are abandoned with it, as `fetch_quotes` is
+            for ask in asks:
+                ask.cancel()
+            raise
+
         records: list[Quote] = []
         # Who answered, counted in THIS ask. A conid from the cache is not an answer: it is what
         # the gateway said on an earlier ask, before its link had any chance to drop.
         asked = 0  # contracts whose market data was asked for
         answered = 0  # of those, the ones that sent anything back
         refused = 0  # lookups answered "no such contract"
-        for code, shape in named.items():
-            found = await self._conid(client, code, shape)
+        for code, found, data in outcomes:
             if found.silent:
                 continue  # counted below, not reported as unknown
-            if found.con_id is None:
+            if data is None:  # the lookup said "no such contract"
                 refused += 1
                 unknown.append(code)
                 continue
             asked += 1
-            record, silent = await self._figures(client, code, shape)
+            record, silent = data
             if silent:
                 continue
             answered += 1
@@ -756,6 +769,12 @@ class IbkrClient:
                 "while its own socket is still open"
             )
         return Batch(records=records, unknown=unknown)
+
+    async def _one(self, client: "Client", code: str, shape: Named) -> tuple[str, _Found, tuple[Quote, bool] | None]:
+        """One contract's lookup and, where it found one, its figures."""
+        found = await self._conid(client, code, shape)
+        data = None if found.silent or found.con_id is None else await self._figures(client, code, shape)
+        return code, found, data
 
     async def _conid(self, client: "Client", code: str, shape: Named) -> _Found:
         """A conid, "the gateway does not carry this" (None), or SILENCE — nothing came back at all,
@@ -785,14 +804,24 @@ class IbkrClient:
         return _Found(answer, silent=not heard)
 
     async def _figures(self, client: "Client", code: str, shape: Named) -> tuple[Quote, bool]:
-        """One contract's figures, under the service's names, and whether it was silent."""
+        """One contract's figures, under the service's names, and whether it was silent: an
+        option's as a snapshot, an index's as a stream, and either finished as the class says."""
         req_id = self._id()
         record: Quote = {"code": code}
+        option = shape.contract.sec_type == "OPT"
         heard = False
+        modelled = False  # the model's greeks arrived, computed or not
 
-        def read(message: _Incoming, _done: Callable[[Quote | None], None], settle: Callable[[Quote], None]) -> None:
-            nonlocal heard
+        def complete() -> bool:
+            return has_figures(record) and (not option or modelled)
+
+        def read(message: _Incoming, done: Callable[[Quote | None], None], settle: Callable[[Quote], None]) -> None:
+            nonlocal heard, modelled
             heard = True
+            if isinstance(message, _SnapshotEnd):
+                done(record)  # the gateway says nothing more is coming
+                return
+            held, was_complete = len(record), complete()
             match message:
                 case _DataType(type_=type_):
                     # the grade the gateway SERVED, which contradicted the one asked for on
@@ -805,14 +834,16 @@ class IbkrClient:
                     if field is not None:
                         record[field] = price
                 case _GreeksTick(tick_type=tick_type, figures=figures) if tick_type in GREEK_TICKS:
+                    modelled = True
                     record.update(greek_fields(figures))
-            # a figure having arrived starts a short clock rather than finishing the ask: every
-            # message restarts it, and the quiet is what says "that was all of them"
-            if has_figures(record):
+            # complete, or a new figure since it was: start the quiet again. A figure already held
+            # is a stream repeating itself, and restarting on that would hold a busy stream open
+            # until the timeout
+            if complete() and (not was_complete or len(record) > held):
                 settle(record)
 
         contract = _ib_contract(shape.contract)
-        await self._collect(client, req_id, lambda: client.reqMktData(req_id, contract, "", True, False, []), read)
+        await self._collect(client, req_id, lambda: client.reqMktData(req_id, contract, "", option, False, []), read)
         _send(client, lambda: client.cancelMktData(req_id))
         return with_mid(record), not heard
 
@@ -844,7 +875,7 @@ class IbkrClient:
 
         def settle(value: T) -> None:
             # enough has arrived; wait a moment in case more is on its way, and restart that wait
-            # every time something is
+            # whenever the reader says something new has
             nonlocal quiet
             if quiet is not None:
                 quiet.cancel()

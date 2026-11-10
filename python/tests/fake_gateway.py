@@ -48,6 +48,12 @@ AT = {
     "tradingClass": 14,
 }
 
+#: where a market-data request says whether it asks for a snapshot ("1") or a stream ("0"): field 17
+#: of reqMktData version 11, from both clients at protocol 157. A stub matches on it as well as on the
+#: contract, because the two are different questions — a snapshot of SPX carries no price at all,
+#: and its stream does (`index-in-the-session`); `recordings.ts`' `SNAPSHOT_AT`
+SNAPSHOT_AT = 17
+
 #: the message ids the stub reads; everything else a client sends is accepted and never answered
 START_API, REQ_MKT_DATA, CANCEL_MKT_DATA, REQ_CONTRACT_DATA = "71", "1", "2", "9"
 
@@ -109,7 +115,12 @@ def read_frames(buffer: bytes) -> tuple[list[Message], bytes]:
 
 def names(exchange: dict[str, Any], fields: Message) -> bool:
     """Whether a request names this exchange's contract: the strike by value, because "8100.0" and
-    "8100" are one double to the gateway, and the rest as exact text."""
+    "8100" are one double to the gateway, and the rest as exact text. A market-data request must
+    also ask the way the recording did, a snapshot or a stream."""
+    if exchange["request"] == "reqMktData":
+        asked = fields[SNAPSHOT_AT] if SNAPSHOT_AT < len(fields) else ""
+        if asked != exchange["sent"][SNAPSHOT_AT]:
+            return False
     for key in CONTRACT_KEYS:
         sent = fields[AT[key]] if AT[key] < len(fields) else ""
         recorded = exchange["contract"][key]
@@ -131,11 +142,18 @@ class FakeGateway:
 
     `server_version` claims a protocol other than the recording's, so a client's refusal of an old
     gateway can be tested — a number rather than a reply, as in the TypeScript's stub.
+
+    `pace` sends each reply at its recorded `atMs` times `pace` after the request, rather than every
+    reply at once, and a cancel stops what is still to come for that request, as the gateway stops a
+    cancelled one. The corpus is replayed at once; pacing is for a client test whose claim is WHEN.
     """
 
-    def __init__(self, conversation: dict[str, Any], server_version: str | None = None) -> None:
+    def __init__(
+        self, conversation: dict[str, Any], server_version: str | None = None, pace: float | None = None
+    ) -> None:
         self.conversation = conversation
         self.server_version = server_version
+        self.pace = pace
         self.port = 0
         #: contract lookups asked, over the stub's life — so a test can see the conid cache save one
         self.lookups = 0
@@ -171,10 +189,32 @@ class FakeGateway:
         greeted = False
         #: market-data requests answered on THIS connection, by id, for what a cancel is told
         answered: dict[str, dict[str, Any]] = {}
+        #: replies still to be sent, by request id, when pacing
+        pending: dict[str, list[asyncio.TimerHandle]] = {}
+        loop = asyncio.get_running_loop()
+
+        def write(message: Message, req_id: str | None = None) -> None:
+            if not writer.is_closing():
+                writer.write(frame(message if req_id is None else fill(message, req_id)))
 
         def send(messages: list[Message], req_id: str | None = None) -> None:
             for message in messages:
-                writer.write(frame(message if req_id is None else fill(message, req_id)))
+                write(message, req_id)
+
+        def reply(exchange: dict[str, Any], req_id: str) -> None:
+            if self.pace is None or not exchange["atMs"]:
+                send(exchange["replies"], req_id)
+                return
+            timers = [
+                loop.call_later(at * self.pace / 1000, write, message, req_id)
+                for message, at in zip(exchange["replies"], exchange["atMs"], strict=True)
+            ]
+            pending.setdefault(req_id, []).extend(timers)
+
+        def stop(req_id: str | None = None) -> None:
+            for key in [k for k in pending if req_id is None or k == req_id]:
+                for timer in pending.pop(key):
+                    timer.cancel()
 
         try:
             while chunk := await reader.read(65536):
@@ -190,15 +230,16 @@ class FakeGateway:
                         send([[self.server_version or version, *clock]])
                         continue
                     self.received.append(fields)
-                    self._answer(fields, answered, send)
+                    self._answer(fields, answered, send, reply, stop)
                 await writer.drain()
         except (ConnectionError, asyncio.IncompleteReadError):
             pass  # a client closing its end is not a fault
         finally:
+            stop()
             self._open.discard(writer)
             writer.close()
 
-    def _answer(self, fields: Message, answered: dict[str, dict[str, Any]], send: Any) -> None:
+    def _answer(self, fields: Message, answered: dict[str, dict[str, Any]], send: Any, reply: Any, stop: Any) -> None:
         message_id = fields[0] if fields else ""
         req_id = fields[2] if len(fields) > 2 else ""
         if message_id == START_API:
@@ -223,14 +264,19 @@ class FakeGateway:
             _, exchange = recorded[min(turn, len(recorded) - 1)]
             if request == "reqMktData":
                 answered[req_id] = exchange
-            send(exchange["replies"], req_id)
+            reply(exchange, req_id)
             return
         if message_id == CANCEL_MKT_DATA:
             # rule 5: what the gateway said to that cancel, if anything
+            stop(req_id)
             exchange = answered.pop(req_id, None)
             send(exchange.get("onCancel", []) if exchange else [], req_id)
         # reqMarketDataType, and anything else, gets no answer, as from the real gateway
 
 
-async def start_fake_gateway(name: str, server_version: str | None = None) -> FakeGateway:
-    return await FakeGateway(load_conversation(name), server_version).start()
+async def start_fake_gateway(
+    conversation: str | dict[str, Any], server_version: str | None = None, pace: float | None = None
+) -> FakeGateway:
+    """A stub replaying a conversation, by name or as data."""
+    data = load_conversation(conversation) if isinstance(conversation, str) else conversation
+    return await FakeGateway(data, server_version, pace).start()
