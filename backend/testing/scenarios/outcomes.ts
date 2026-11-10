@@ -55,6 +55,12 @@ const provisional = (r: Row | undefined): boolean => {
   const part = Object.fromEntries(NEW_YORK_CLOCK.formatToParts(at).map((p) => [p.type, p.value]));
   return Number(part.hour) * 60 + Number(part.minute) < 9 * 60 + 30;
 };
+/** Whether the clock is before 09:30 in New York, the open. */
+const beforeOpen = (s: SweepScenario): boolean => {
+  const part = Object.fromEntries(NEW_YORK_CLOCK.formatToParts(new Date(s.world.clock))
+    .map((p) => [p.type, p.value]));
+  return Number(part.hour) * 60 + Number(part.minute) < 9 * 60 + 30;
+};
 /** The stored row for the clock's market day, if the world holds one. */
 const dayRow = (s: SweepScenario): Row | undefined => s.world.tables.position_samples
   .find((r: Row) => r.observed_on === marketDate(new Date(s.world.clock)));
@@ -224,6 +230,14 @@ export const OUTCOMES: readonly Outcome[] = [
     decision: "takesSample",
     shows: (s) => !inSampleHours(new Date(s.world.clock)) && provisional(dayRow(s))
       && (s.expect.rows.position_samples?.changed ?? []).length > 0,
+  },
+  {
+    // before the open a sweep only fills a day with no row: one that already stands is not touched,
+    // however the overnight marks have moved since it was taken
+    name: "row-left-alone-before-the-open",
+    decision: "takesSample",
+    shows: (s) => beforeOpen(s) && priced(s) && dayRow(s) !== undefined
+      && s.expect.rows.position_samples === undefined,
   },
   {
     // a weekend's midnight fill restamped in the hours though no figure moved, so it stops reading

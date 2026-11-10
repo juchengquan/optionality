@@ -74,7 +74,7 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
     the hours or after the close; a row without `observed_at` is settled. No row: written, whatever the
     hour. Before the open: only that fill. In the hours: written when the figures moved, and a
     provisional row regardless (a weekend's, restamped). After the close: a provisional row replaced (a
-    missed session's evening), a settled row missing its IV or vega completed by a sweep with BOTH, a
+    missed session's evening) — a complete one only by complete readings — a settled row missing its IV or vega completed by a sweep with BOTH, a
     complete settled row never changed. Mirrors `expiry.ts`.
     """
     if stored is None:
@@ -89,10 +89,12 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
         return "no"
     if t <= _SAMPLE_UNTIL:
         return "yes" if provisional else "if-changed"
-    if provisional:
-        return "yes"
     incomplete = stored["legs_iv"] is None or stored["legs_vega"] is None
-    return "yes" if incomplete and observed["legs_iv"] is not None and observed["legs_vega"] is not None else "no"
+    complete = observed["legs_iv"] is not None and observed["legs_vega"] is not None
+    if provisional:
+        # a complete provisional row only by complete readings, or the day could lose its Vol for good
+        return "yes" if incomplete or complete else "no"
+    return "yes" if incomplete and complete else "no"
 
 
 def days_to_expiry(strike_date: str, now: datetime | None = None) -> int:

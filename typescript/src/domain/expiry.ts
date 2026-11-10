@@ -99,7 +99,9 @@ export type SampleWrite = "no" | "if-changed" | "yes";
  *    keep its 00:05 stamp and read for ever as an overnight mark.
  *  - **after the close (16:15 to midnight)**: a provisional row is replaced — the first sweep after
  *    midnight filled the day, the session was then missed, and the evening's reading is the better
- *    one for that day. A settled row missing its IV or vega is completed by a sweep that has BOTH
+ *    one for that day — but a COMPLETE provisional row only by complete readings: traded for one
+ *    without its IV or vega, the day would lose its Vol for good unless a later sweep before
+ *    midnight had both. An incomplete provisional row loses nothing by being replaced. A settled row missing its IV or vega is completed by a sweep that has BOTH
  *    (the row is written whole, so a sweep missing the other map would trade one hole for another).
  *    A complete settled row is never changed: a close stays the close.
  *
@@ -115,9 +117,10 @@ export function takesSample(
   const t = sinceNewYorkMidnight(now);
   if (t < SAMPLE_FROM) return "no";
   if (t <= SAMPLE_UNTIL) return provisional ? "yes" : "if-changed";
-  if (provisional) return "yes";
   const incomplete = stored.legs_iv === null || stored.legs_vega === null;
-  return incomplete && observed.legs_iv !== null && observed.legs_vega !== null ? "yes" : "no";
+  const complete = observed.legs_iv !== null && observed.legs_vega !== null;
+  if (provisional) return incomplete || complete ? "yes" : "no";
+  return incomplete && complete ? "yes" : "no";
 }
 
 /** Calendar days from the current MARKET date to expiry.

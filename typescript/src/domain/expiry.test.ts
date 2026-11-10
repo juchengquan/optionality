@@ -168,6 +168,15 @@ describe("takesSample — whether this sweep writes the day's row, and how", () 
     expect(takesSample(evening, provisional, readings)).toBe("yes");
   });
 
+  it("after the close replaces a complete provisional row only with complete readings", () => {
+    // a complete midnight row traded for one without its vega would cost the day its Vol for good
+    // if no later sweep before midnight has both
+    expect(takesSample(evening, provisional, noVega)).toBe("no");
+    expect(takesSample(evening, provisional, noIv)).toBe("no");
+    // an incomplete provisional row loses nothing by being replaced
+    expect(takesSample(evening, row("2026-11-09 05:05:00.000000", noVega), noIv)).toBe("yes");
+  });
+
   it("after the close never changes a settled row, nor a row from before observed_at existed", () => {
     expect(takesSample(evening, inHours, readings)).toBe("no");
     expect(takesSample(evening, postClose, readings)).toBe("no");

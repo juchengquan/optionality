@@ -396,6 +396,20 @@ export const SWEEP: readonly SweepInput[] = [
     }),
   },
   {
+    // before the open only a missing row is filled: the midnight fill stands, though the overnight
+    // marks have moved since
+    name: "before the open a row already filled is left alone",
+    outcomes: ["row-left-alone-before-the-open"],
+    world: world({
+      clock: "2026-11-09T10:00:00.000Z", // 05:00 on Monday 9 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, cost_to_close: 3.5, observed_at: "2026-11-09 05:05:00.000000" }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
     // settled at 20:30, so a mark that moves before midnight does not reach it
     name: "a row settled after the close is left alone up to midnight",
     outcomes: ["complete-row-left-alone-after-hours"],
