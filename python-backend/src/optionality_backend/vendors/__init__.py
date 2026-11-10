@@ -129,6 +129,19 @@ from .ibkr.vendor import ibkr_vendor
 from .opend.vendor import moomoo_vendor
 from .yahoo.vendor import yahoo_vendor
 
+# What the door hands out, and all it hands out: `tests/test_seams.py` lets nothing else through it.
+# The descriptors and `Worker` stay inside, as they do in `index.ts`.
+__all__ = [
+    "PROVIDERS",
+    "VENDORS",
+    "OpenVendors",
+    "ProviderVendor",
+    "ReferenceVendor",
+    "Vendor",
+    "make_provider",
+    "open_vendors",
+]
+
 #: Every vendor this build carries. Adding one is a line here and a descriptor beside this file.
 #:
 #: Held to `schemas/reference.ts`'s `SOURCES` by a test: a name a Reference may be created with and no
