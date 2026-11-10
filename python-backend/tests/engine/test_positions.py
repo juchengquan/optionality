@@ -324,6 +324,33 @@ class TestRecordingWhatAPositionWasWorth:
         assert legs_vega is None
         assert json.loads(legs_iv) == {b.sold(): 10.5, b.bought(): 22.1}
 
+    async def test_still_records_the_vega_map_when_only_the_ivs_are_missing(self, b: Book) -> None:
+        # the other direction of the same independence, which nothing held: making the vega map wait
+        # for the IV map passed every test above, because each one that withheld an IV withheld the
+        # vegas too. "Per map" and "gated separately" are the rule, and a vega is only knowable when
+        # it was observed (ADR 0011), so a feed that withheld the IVs has not made the vegas untrue —
+        # dropping them would lose a reading no later sweep can take, to keep a column company.
+        id_ = b.held("held")
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "code": c,
+                    "name": c,
+                    "mid_price": 5.0 if c == b.sold() else 1.0,
+                    "option_vega": 1.4 if c == b.sold() else 0.9,
+                }
+                for c in codes
+            ]
+
+        await b.sweeper(fetch).sweep()
+
+        legs_iv, legs_vega = b.db.execute(
+            "select legs_iv, legs_vega from position_samples where position_id = ?", (id_,)
+        ).fetchone()
+        assert legs_iv is None
+        assert json.loads(legs_vega) == {b.sold(): 1.4, b.bought(): 0.9}
+
     async def test_records_no_iv_at_all_rather_than_some_of_it(self, b: Book) -> None:
         # a vol adjustment needs every leg: with one missing you cannot say what the structure's vol
         # did. The cost to close is still recorded — that is a different all-or-nothing, and it has

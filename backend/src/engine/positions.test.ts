@@ -308,6 +308,27 @@ describe("recording what a Position was worth", () => {
     });
   });
 
+  it("still records the vega map when only the IVs are missing", async () => {
+    // the other direction of the same independence, which nothing held: making the vega map wait
+    // for the IV map passed every test above, because each one that withheld an IV withheld the
+    // vegas too. "Per map" and "gated separately" are the rule, and a vega is only knowable when
+    // it was observed (ADR 0011), so a feed that withheld the IVs has not made the vegas untrue —
+    // dropping them would lose a reading no later sweep can take, to keep a column company.
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_vega: c === buildSpxCode(future(), "CALL", 8050) ? 1.4 : 0.9,
+    })))).sweep();
+
+    const row = db.prepare("select legs_iv, legs_vega from position_samples where position_id = ?")
+      .get(id) as { legs_iv: string | null; legs_vega: string | null };
+    expect(row.legs_iv).toBeNull();
+    expect(JSON.parse(row.legs_vega!)).toEqual({
+      [buildSpxCode(future(), "CALL", 8050)]: 1.4,
+      [buildSpxCode(future(), "CALL", 8075)]: 0.9,
+    });
+  });
+
   it("records no IV at all rather than some of it", async () => {
     // a vol adjustment needs every leg: with one missing you cannot say what the structure's vol
     // did, and a partial map would invite an answer computed from half a structure. The cost to
