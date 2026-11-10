@@ -260,9 +260,16 @@ class MonitorSweeper:
         refused = await self._evaluate(surviving, by_code)
         # Both are about POSITIONS, not about alarms. They live here only because this is where the
         # batch is, so they take it as an argument instead (positions.py).
-        record_samples(db, position_rows, by_code, at)
+        #
+        # The holdings were read BEFORE the call, and a close can land while it is in flight. The rules are
+        # checked again by now (a rule muted mid-fetch is not alarmed on); the holdings are too, so a holding
+        # closed during the fetch gets no sample dated after it ended and no manage-by notice about a trade
+        # that is over (ADR 0022).
+        still_open = {p["id"] for p in open_positions(db)}
+        held_rows = [p for p in position_rows if p["id"] in still_open]
+        record_samples(db, held_rows, by_code, at)
         await notice_manage_by(
-            PositionSweepDeps(db=db, settings=self._deps.settings, notify=self._notify), position_rows, by_code, at
+            PositionSweepDeps(db=db, settings=self._deps.settings, notify=self._notify), held_rows, by_code, at
         )
         # A watchlist evaluated in part is not a swept watchlist. The rules that COULD be evaluated have
         # been, which is what the containment in `_evaluate` buys; saying so here is what stops the

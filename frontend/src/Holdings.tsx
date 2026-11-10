@@ -6,7 +6,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import { OpenedField } from "./OpenedField";
 import { NumberField } from "@/components/ui/number-field";
@@ -16,7 +17,7 @@ import {
   type Recorded,
 } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
-import { fmt } from "./format";
+import { fmt, marketDay } from "./format";
 import { PaceLine } from "./PaceLine";
 
 /** What you actually HOLD, as distinct from what is watched.
@@ -76,7 +77,7 @@ export function Holdings({ reloadKey, rows, error, load, act }: {
                           onClosed={() => { void load(); setCloses((n) => n + 1); }} />
             )}
           />
-          <ClosedHoldings reloadKey={`${reloadKey}-${closes}`} />
+          <ClosedHoldings reloadKey={`${reloadKey}-${closes}`} act={act} />
         </div>
       )}
     </section>
@@ -89,10 +90,15 @@ export function Holdings({ reloadKey, rows, error, load, act }: {
  *  no market call, but nothing else on the page needs it, and a list that only grows has no place
  *  above the holdings that need watching. The result is in POINTS, as the service says it: P&L is
  *  money and needs a contract size, which only a quote carries, and a closed holding has none. */
-function ClosedHoldings({ reloadKey }: { reloadKey: string }) {
+function ClosedHoldings({ reloadKey, act }: {
+  reloadKey: string;
+  act: (fn: () => Promise<void>) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Recorded[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // bumped by a correction or a delete here, so the list re-reads what the service now says
+  const [edits, setEdits] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -107,7 +113,7 @@ function ClosedHoldings({ reloadKey }: { reloadKey: string }) {
       (e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); },
     );
     return () => { live = false; };
-  }, [open, reloadKey]);
+  }, [open, reloadKey, edits]);
 
   return (
     <div className="border-t pt-2">
@@ -121,16 +127,104 @@ function ClosedHoldings({ reloadKey }: { reloadKey: string }) {
             : rows === null ? <p className="meta">loading…</p>
             : rows.length === 0 ? <p className="meta">Nothing closed yet.</p>
             : rows.map((p) => (
-              <p key={p.id} data-testid={`closed-${p.id}`} className="py-1">
-                <strong>{p.name}</strong>
-                {` · closed ${p.closed_on} · entry ${fmt(p.entry, "mid")} → exit ${fmt(p.exit, "mid")} · `}
-                {p.realized_points === null
-                  ? <span className="meta">result unknown</span>
-                  : `${fmt(p.realized_points, "mid")} pts`}
-              </p>
+              <ClosedRow key={p.id} holding={p} act={act} onSaved={() => setEdits((n) => n + 1)} />
             ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The exit, with its sign said out loud.
+ *
+ *  Exit is the Cost to close actually got, signed the way the Cost to close column is: positive
+ *  when closing cost you (a credit structure bought back), negative when it paid you (a long
+ *  sold). A positive sale price typed for a long reads as a large LOSS, so the field says which
+ *  way round it goes rather than leaving the sign to be guessed — and the prefill, taken from the
+ *  Cost to close, already has it. */
+function ExitField({ id, value, onChange }: {
+  id: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>exit — the cost to close you got, per contract</FieldLabel>
+      <NumberField id={id} value={value} onValueChange={onChange} />
+      <FieldDescription>
+        signed like the cost to close: positive when closing cost you, negative when it paid you.
+        Blank if you do not know it.
+      </FieldDescription>
+    </Field>
+  );
+}
+
+/** One closed holding: what it made, and the two things a mistyped close needs — correcting it,
+ *  which keeps the history, and deleting it, for a holding that should never have been recorded. */
+function ClosedRow({ holding, act, onSaved }: {
+  holding: Recorded;
+  act: (fn: () => Promise<void>) => void;
+  onSaved: () => void;
+}) {
+  const [exit, setExit] = useState<number | null>(holding.exit);
+  const [closedOn, setClosedOn] = useState(holding.closed_on ?? "");
+  const [why, setWhy] = useState<string | null>(null);
+  return (
+    <div data-testid={`closed-${holding.id}`} className="border-t py-2">
+      <p>
+        <strong>{holding.name}</strong>
+        {` · closed ${holding.closed_on} · entry ${fmt(holding.entry, "mid")} → exit ${fmt(holding.exit, "mid")} · `}
+        {holding.realized_points === null
+          ? <span className="meta">result unknown</span>
+          : `${fmt(holding.realized_points, "mid")} pts`}
+      </p>
+      <form
+        className="mt-2 flex min-w-0 flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          // each field sent only when it says something; a blank exit is left as it was, because
+          // the service takes a number here and an exit is cleared nowhere but the close itself
+          const body: Record<string, unknown> = {};
+          if (exit !== null) body.exit = exit;
+          if (closedOn !== "") body.closed_on = closedOn;
+          if (Object.keys(body).length === 0) {
+            setWhy("Type the exit or the day it closed.");
+            return;
+          }
+          setWhy(null);
+          act(async () => {
+            await patchPosition(holding.id, body);
+            onSaved();
+          });
+        }}
+      >
+        <Field className="w-28">
+          <FieldLabel htmlFor={`c-exit-${holding.id}`}>exit</FieldLabel>
+          <NumberField id={`c-exit-${holding.id}`} value={exit} onValueChange={setExit} />
+        </Field>
+        <Field className="w-44">
+          <FieldLabel htmlFor={`c-closed-${holding.id}`}>closed on</FieldLabel>
+          <Input id={`c-closed-${holding.id}`} type="date" value={closedOn}
+                 onChange={(e) => setClosedOn(e.target.value)} />
+        </Field>
+        <Button type="submit" variant="outline" size="sm" className="pointer-coarse:min-h-11">set</Button>
+        <ConfirmDelete
+          name={holding.name}
+          what="holding"
+          description={
+            <>
+              This removes the closed holding for good, with its recorded history — the daily cost
+              to close and the per-leg volatility and vega, which nothing can rebuild. Correcting
+              the exit or the day keeps all of it.
+            </>
+          }
+          onConfirm={() => act(async () => {
+            await deletePosition(holding.id);
+            onSaved();
+          })}
+        />
+        {why ? <p className="meta w-full" role="alert">{why}</p> : null}
+      </form>
     </div>
   );
 }
@@ -146,10 +240,21 @@ function CloseHolding({ holding, act, onClosed }: {
   act: (fn: () => Promise<void>) => void;
   onClosed: () => void;
 }) {
+  // The day is offered, not left blank as Opened is: a close is recorded the day it happens far
+  // more often than not, and a wrong one is correctable on the closed list. It is the New York
+  // TRADING day, the calendar the service keys a close on — or the expiry, if that came first,
+  // since nothing is held past one and the service would refuse a later day.
+  const offered = () => {
+    const trading = marketDay();
+    return holding.strike_date < trading ? holding.strike_date : trading;
+  };
   const [exit, setExit] = useState<number | null>(holding.cost_to_close);
+  const [closedOn, setClosedOn] = useState(offered);
   const id = `p-exit-${holding.id}`;
   return (
-    <AlertDialog onOpenChange={(open) => { if (open) setExit(holding.cost_to_close); }}>
+    <AlertDialog onOpenChange={(open) => {
+      if (open) { setExit(holding.cost_to_close); setClosedOn(offered()); }
+    }}>
       {/* 44px on a touch screen, where a finger is the pointer (Apple's minimum), and the row's
           own density at a desk, where the delete beside it is 28px */}
       <AlertDialogTrigger
@@ -169,14 +274,19 @@ function CloseHolding({ holding, act, onClosed }: {
             rules.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <ExitField id={id} value={exit} onChange={setExit} />
         <Field>
-          <FieldLabel htmlFor={id}>exit — what you paid to close, per contract</FieldLabel>
-          <NumberField id={id} value={exit} onValueChange={setExit} />
+          <FieldLabel htmlFor={`p-closed-${holding.id}`}>closed on (New York day)</FieldLabel>
+          <Input id={`p-closed-${holding.id}`} type="date" value={closedOn}
+                 onChange={(e) => setClosedOn(e.target.value)} />
         </Field>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={() => act(async () => {
-            const closed = await closePosition(holding.id, exit);
+            // a cleared day is left to the service, which takes today's (or the expiry)
+            const closed = await closePosition(
+              holding.id, closedOn === "" ? { exit } : { exit, closed_on: closedOn },
+            );
             const off = closed.disabled_monitors.map((m) => m.code);
             toast.add({
               title: off.length === 0

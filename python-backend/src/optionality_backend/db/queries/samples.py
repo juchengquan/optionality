@@ -14,10 +14,23 @@ from .sql import row, rows
 
 
 def list_position_samples(db: sqlite3.Connection, id_: str) -> list[PositionSampleRow]:
-    """Every sample for one Position, oldest first — the order a day-by-day measurement needs."""
+    """Every sample for one Position, oldest first — the order a day-by-day measurement needs — and none
+    from after the day it CLOSED.
+
+    A close can be backdated: the sweep sampled the holding on the 7th and 8th, and the owner then
+    recorded that it was sold on the 6th. What it was worth after it was sold is not its history, so
+    every reader is spared those rows here, in the one query that reads history — and they are ignored,
+    never deleted: the close day may yet be corrected (ADR 0022)."""
     return cast(
         list[PositionSampleRow],
-        rows(db, "select * from position_samples where position_id = ? order by observed_on", id_),
+        rows(
+            db,
+            """select s.* from position_samples s
+               join positions p on p.id = s.position_id
+               where s.position_id = ? and (p.closed_on is null or s.observed_on <= p.closed_on)
+               order by s.observed_on""",
+            id_,
+        ),
     )
 
 

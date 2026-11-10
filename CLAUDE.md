@@ -346,7 +346,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   unknown — inside the provider, where `opend/client.ts` has it (ADR 0015, #168), not above the port;
   `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
   loads Positions, Monitors and References from the live service (`OPTIONALITY_API` for its
-  URL) — but NOT quotes: `GET /quotes` takes no parameters, so it cannot price a contract the
+  URL) — `positions()` only what is still HELD, `closed_positions()` the closed ones as
+  `ClosedPosition` (ADR 0022) — but NOT quotes: `GET /quotes` takes no parameters, so it cannot price a contract the
   service does not already watch, and a notebook wanting an arbitrary code wants a Provider.
   `ibkr.py` is the third PORT: IB Gateway's field mapping (held to `testdata/vendors/ibkr-fields.json`),
   `contract_for` (a code as the contract the gateway wants, `contract.ts`) and `IbkrClient`
@@ -377,7 +378,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
-  53 of the package's 80 public functions, which is exactly the 53 of the TypeScript domain's 57
+  53 of the package's 81 public functions, which is exactly the 53 of the TypeScript domain's 57
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
   package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
   `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and
@@ -525,9 +526,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   code; 0 only logs). Expired monitors: mute with notice, auto-delete after `EXPIRED_RETENTION_DAYS`.
   Nothing else is ever auto-deleted. A holding that ends is CLOSED, not deleted (ADR 0022): kept with
   its samples, out of everything live (`openPositions` — the sweep, `/positions/values`, linking), its
-  rules disabled as `holding-closed` and unlinked, so no monitor is ever linked to a closed holding.
-  What it made is `realized_points` — points, not P&L, because a closed holding has no quote to give a
-  contract size. DELETE is for a holding recorded by mistake, and still takes the samples.
+  rules unlinked — handed first to any open holding still holding their contracts (a roll), and
+  disabled as `holding-closed` only when nothing open does — so no monitor is ever linked to a closed
+  holding. What it made is `realized_points` — points, not P&L, because a closed holding has no quote
+  to give a contract size; its Exit is signed like Cost to close (a long's sale is NEGATIVE). A
+  backdated close hides later samples from every reader and deletes none. A mistyped close is
+  corrected by PATCH (`exit`, `closed_on`); DELETE is for a holding recorded by mistake, and still
+  takes the samples.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command

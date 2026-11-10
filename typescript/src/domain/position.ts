@@ -202,6 +202,11 @@ export function positionPnl(p: Position, byCode: ByCode): number | null {
 
 /** What a closed Position made: Entry less Exit, across the contracts held, in POINTS.
  *
+ *  Exit is the Cost to close actually got, SIGNED LIKE Cost to close: positive when closing cost
+ *  you (a credit structure bought back), negative when it paid you (a long sold). Entry is signed
+ *  the other way round — a credit received is positive — so the same subtraction serves both: a
+ *  long put bought for 5.00 (Entry −5) and sold for 7.00 (Exit −7) made 2.
+ *
  *  Not P&L, and deliberately not called it. P&L is money (CONTEXT.md), and money needs a contract
  *  size that only a Quote carries (`contractSize`, never assumed to be 100) — while a Position that
  *  has been closed is no longer quoted, and one closed after its expiry never can be again. Points

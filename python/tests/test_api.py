@@ -76,21 +76,46 @@ COMBO = {
 #: that treated `delayed_by_minutes` as always present would pass on one row and fail on the other
 #: (ADR 0019).
 GSPC = {
-    "id": "d" * 32, "code": "^GSPC", "label": "SPX", "source": "yahoo",
-    "name": "S&P 500", "figure": 7376.86, "field": "last_price",
-    "change": 0.0031453425676493574, "error": None,
-    "delayed": False, "last_known": True, "delayed_by_minutes": None,
+    "id": "d" * 32,
+    "code": "^GSPC",
+    "label": "SPX",
+    "source": "yahoo",
+    "name": "S&P 500",
+    "figure": 7376.86,
+    "field": "last_price",
+    "change": 0.0031453425676493574,
+    "error": None,
+    "delayed": False,
+    "last_known": True,
+    "delayed_by_minutes": None,
 }
 SPX_IBKR = {
-    "id": "e" * 32, "code": "SPX", "label": "SPX", "source": "ibkr",
-    "name": None, "figure": 7374.85, "field": "last_price",
-    "change": 0.002872011890564489, "error": None,
-    "delayed": True, "last_known": False, "delayed_by_minutes": None,
+    "id": "e" * 32,
+    "code": "SPX",
+    "label": "SPX",
+    "source": "ibkr",
+    "name": None,
+    "figure": 7374.85,
+    "field": "last_price",
+    "change": 0.002872011890564489,
+    "error": None,
+    "delayed": True,
+    "last_known": False,
+    "delayed_by_minutes": None,
 }
 #: a vendor that is wholly down: rows still come back, each with its own reason (ADR 0018)
-DASHED = {**GSPC, "id": "f" * 32, "figure": None, "field": None, "change": None,
-          "name": None, "error": "yahoo unreachable", "delayed": None,
-          "last_known": None, "delayed_by_minutes": None}
+DASHED = {
+    **GSPC,
+    "id": "f" * 32,
+    "figure": None,
+    "field": None,
+    "change": None,
+    "name": None,
+    "error": "yahoo unreachable",
+    "delayed": None,
+    "last_known": None,
+    "delayed_by_minutes": None,
+}
 
 
 class Service:
@@ -147,6 +172,36 @@ def test_positions_come_back_as_the_package_s_own_type(service):
         )
     }
     assert cost_to_close(held[0], quotes) == 4.5
+
+
+CLOSED = {
+    **CONDOR,
+    "id": "d" * 32,
+    "name": "1016_IC",
+    "closed_on": "2026-10-09",
+    "exit": 0.4,
+    "realized_points": 5.2,
+}
+
+
+def test_positions_are_only_what_is_still_held(service):
+    # The service keeps a closed holding (ADR 0022) and `GET /positions` lists both. `positions()`
+    # promises what the service HOLDS, and a notebook values what it returns against live quotes —
+    # a finished trade there would be priced as though it were still on.
+    service.routes = {
+        "/positions": (200, [{**CONDOR, "closed_on": None, "exit": None, "realized_points": None}, CLOSED])
+    }
+    assert [p.name for p in api.positions(service.url)] == ["1120_IC"]
+
+
+def test_closed_positions_carry_how_they_ended(service):
+    service.routes = {
+        "/positions": (200, [{**CONDOR, "closed_on": None, "exit": None, "realized_points": None}, CLOSED])
+    }
+    [closed] = api.closed_positions(service.url)
+    assert isinstance(closed, api.ClosedPosition)
+    assert isinstance(closed, Position), "still usable with the maths, for what it was"
+    assert (closed.name, closed.closed_on, closed.exit, closed.realized_points) == ("1016_IC", "2026-10-09", 0.4, 5.2)
 
 
 def test_monitors_come_back_single_and_combo(service):
@@ -231,6 +286,7 @@ def test_refuses_a_holding_that_lost_its_opened_date(service):
 def test_still_takes_a_row_that_has_every_key(service):
     assert [m.code for m in api.monitors(service.url)] == [SINGLE["code"], COMBO["code"]]
     assert [p.name for p in api.positions(service.url)] == [CONDOR["name"]]
+
 
 def test_references_come_back_with_both_vendors_freshness_claims(service):
     rows = api.references(service.url)

@@ -2259,7 +2259,7 @@
     },
     {
       "fn": "realizedPoints",
-      "name": "a long put's debit",
+      "name": "a long put sold for more than it cost",
       "args": [
         {
           "id": "p4",
@@ -2275,9 +2275,31 @@
             }
           ]
         },
-        0.4
+        -7
       ],
-      "expect": -5.4
+      "expect": 2
+    },
+    {
+      "fn": "realizedPoints",
+      "name": "a long put sold for less than it cost",
+      "args": [
+        {
+          "id": "p4",
+          "name": "1120_P6000",
+          "strike_date": "2026-11-20",
+          "contracts": 1,
+          "entry": -5,
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6000
+            }
+          ]
+        },
+        -3
+      ],
+      "expect": -2
     },
     {
       "fn": "combinedCostToClose",

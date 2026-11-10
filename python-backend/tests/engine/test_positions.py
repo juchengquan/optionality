@@ -219,6 +219,26 @@ class TestRecordingWhatAPositionWasWorth:
         await b.sweeper(b.spread(5.0, 1.0)).sweep()
         assert b.samples() == []
 
+    async def test_records_nothing_for_a_holding_that_has_been_closed_adr_0022(self, b: Book) -> None:
+        id_ = b.held("closed")
+        b.db.execute("update positions set closed_on = '2026-08-02', exit = 0.5 where id = ?", (id_,))
+        await b.sweeper(b.spread(5.0, 1.0)).sweep()
+        assert b.samples() == []
+
+    async def test_records_nothing_for_a_holding_closed_while_the_sweeps_call_was_in_flight(self, b: Book) -> None:
+        # The holdings are read before the provider call and written after it. The rules are checked again
+        # at that point (a rule muted mid-fetch is not alarmed on); the holdings were not, so a close that
+        # landed during the fetch got one more sample, dated after it ended.
+        id_ = b.held("closing")
+        priced = b.spread(5.0, 1.0)
+
+        def closing_mid_fetch(codes: list[str]) -> list[dict[str, Any]]:
+            b.db.execute("update positions set closed_on = '2026-08-02', exit = 0.5 where id = ?", (id_,))
+            return priced(codes)
+
+        await b.sweeper(closing_mid_fetch).sweep()
+        assert b.samples() == []
+
     async def test_records_each_legs_iv_beside_the_cost_which_is_what_a_vol_adjustment_needs(self, b: Book) -> None:
         # The √T shape silently assumes IV has not moved: time value scales with σ√T and only √T is
         # used. Fixing that needs a baseline, and nothing recorded one, so this starts.

@@ -1,7 +1,8 @@
 """Positions and Monitors from the live optionality service, as this package's own types.
 
     from optionality import api
-    held = api.positions()            # list[Position]
+    held = api.positions()            # list[Position], what is still held
+    done = api.closed_positions()     # list[ClosedPosition], kept after closing (ADR 0022)
     rules = api.monitors()            # list[Monitor]
 
 The address defaults to `http://127.0.0.1:31415`, the service on the machine it runs on. From
@@ -135,9 +136,43 @@ class Reference(BaseModel):
     delayed_by_minutes: float | None
 
 
+class ClosedPosition(Position):
+    """A Position no longer held, as `GET /positions` sends it: the service keeps a closed holding with its
+    history rather than deleting it (ADR 0022).
+
+    A type of its own, and a call of its own (`closed_positions`), rather than three fields on `Position`.
+    `Position` is the domain's type, held to the TypeScript's by the golden cases, and a notebook values
+    whatever `positions()` returns against live quotes — so a closed trade there, told apart only by a
+    field nobody checked, would be priced as though it were still on.
+
+    `exit` is the Cost to close actually got, signed like Cost to close: positive when closing cost you,
+    negative when it paid you. `realized_points` is Entry less Exit across the contracts held — points,
+    not P&L, which is money and needs a contract size only a quote carries."""
+
+    #: the New York market day it was closed
+    closed_on: str
+    exit: float | None
+    realized_points: float | None
+
+
+def _split(body: Any, *, closed: bool) -> Any:
+    """The rows on one side of the close. Anything but a list of objects is passed through untouched, so
+    `_rows` refuses it in its own words."""
+    if not isinstance(body, list):
+        return body
+    return [r for r in body if not isinstance(r, dict) or (r.get("closed_on") is not None) == closed]
+
+
 def positions(base_url: str | None = None, token: str | None = None) -> list[Position]:
-    """Every Position the service holds (`GET /positions`)."""
-    return _rows(Position, _get("/positions", base_url, token), "/positions")
+    """Every Position the service still HOLDS (`GET /positions`, less the closed ones — `closed_positions`
+    has those)."""
+    return _rows(Position, _split(_get("/positions", base_url, token), closed=False), "/positions")
+
+
+def closed_positions(base_url: str | None = None, token: str | None = None) -> list[ClosedPosition]:
+    """Every Position the service has kept after it was CLOSED, with the day, the exit and what it made
+    (`GET /positions`, ADR 0022)."""
+    return _rows(ClosedPosition, _split(_get("/positions", base_url, token), closed=True), "/positions")
 
 
 def monitors(base_url: str | None = None, token: str | None = None) -> list[Monitor]:

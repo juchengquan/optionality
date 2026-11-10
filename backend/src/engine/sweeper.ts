@@ -220,10 +220,17 @@ export class MonitorSweeper {
     const refused = await this.evaluate(surviving, byCode);
     // Both are about POSITIONS, not about alarms. They live here only because this is where the
     // batch is, so they take it as an argument instead (positions.ts).
-    recordSamples(db, positionRows, byCode, at);
+    //
+    // The holdings were read BEFORE the call, and a close can land while it is in flight. The
+    // rules are checked again by now (a rule muted mid-fetch is not alarmed on); the holdings are
+    // too, so a holding closed during the fetch gets no sample dated after it ended and no
+    // manage-by notice about a trade that is over (ADR 0022).
+    const stillOpen = new Set(openPositions(db).map((p) => p.id));
+    const heldRows = positionRows.filter((p) => stillOpen.has(p.id));
+    recordSamples(db, heldRows, byCode, at);
     await noticeManageBy(
       { db, settings: this.deps.settings, notify: (text) => this.notify(text) },
-      positionRows, byCode, at,
+      heldRows, byCode, at,
     );
     // A watchlist evaluated in part is not a swept watchlist. The rules that COULD be evaluated
     // have been, which is what the containment in `evaluate` buys; saying so here is what stops
