@@ -64,9 +64,7 @@ def _since(when: datetime | None, now: datetime) -> float:
     return (now - when).total_seconds()
 
 
-def flapping_verdict(
-    state: FlappingState, policy: FlappingPolicy, now: datetime
-) -> FlappingVerdict:
+def flapping_verdict(state: FlappingState, policy: FlappingPolicy, now: datetime) -> FlappingVerdict:
     """Whether to say the provider is unreliable, and what."""
     if not policy.after_failures:
         return SILENT
@@ -82,10 +80,7 @@ def flapping_verdict(
         return SILENT
 
     told = state.last_notice_at is not None
-    if told and (
-        not policy.repeat_seconds
-        or _since(state.last_notice_at, now) < policy.repeat_seconds
-    ):
+    if told and (not policy.repeat_seconds or _since(state.last_notice_at, now) < policy.repeat_seconds):
         return SILENT
 
     return FlappingVerdict(

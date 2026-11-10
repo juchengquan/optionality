@@ -195,8 +195,7 @@ def test_the_extra_the_message_names_actually_exists(monkeypatch: pytest.MonkeyP
         yahoo.expirations("^SPX")
     named = re.findall(r"optionality\[([a-z,]+)\]", str(err.value))
     assert named, f"the message names no extra at all: {err.value}"
-    pyproject = tomllib.loads(
-        (pathlib.Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+    pyproject = tomllib.loads((pathlib.Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
     declared = set(pyproject["project"]["optional-dependencies"])
     for group in named:
         for name in group.split(","):

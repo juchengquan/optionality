@@ -34,9 +34,13 @@ UI_BASE ?= /opt/
 #
 # Both Python packages are members of ONE uv workspace (the root pyproject.toml, ADR 0021), so each
 # `uv run --directory` below shares the root's .venv and uv.lock and reads its own [tool.ruff].
+# `format --check` because nothing ran it: the library drifted eleven files from `make format`
+# while every gate stayed green. `make format` fixes what it reports.
 lint: check-boundaries check-test-support check-seams check-module-map check-make-targets check-served-root check-py-backend
 	uv run --directory python ruff check .
+	uv run --directory python ruff format --check .
 	uv run --directory python-backend ruff check .
+	uv run --directory python-backend ruff format --check .
 
 check-boundaries:
 	node tools/check-boundaries.mjs

@@ -62,10 +62,7 @@ def unreadable_notice(code: str) -> str:
     A notice rather than a verdict, because there is nothing to decide: a row that cannot be
     hydrated cannot be evaluated, so it is always quarantined. What varies is only the sentence.
     """
-    return (
-        f"⚠️ monitor {code} disabled: its row could not be read "
-        "(corrupt legs, or a strike date this service refuses)"
-    )
+    return f"⚠️ monitor {code} disabled: its row could not be read (corrupt legs, or a strike date this service refuses)"
 
 
 class UnknownContractVerdict(BaseModel):
@@ -92,10 +89,7 @@ def unknown_contract_verdict(monitor: Monitor, unknown: set[str]) -> UnknownCont
     return UnknownContractVerdict(
         hits=hits,
         quarantine=True,
-        notice=(
-            f"⚠️ monitor {monitor.code} disabled: unknown contract {', '.join(hits)} "
-            "(delisted or never existed)"
-        ),
+        notice=(f"⚠️ monitor {monitor.code} disabled: unknown contract {', '.join(hits)} (delisted or never existed)"),
     )
 
 

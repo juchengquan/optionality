@@ -233,7 +233,10 @@ def test_an_index_becomes_an_ind_contract_on_the_exchange_that_calculates_it() -
     )
     # measured 2026-11-08: INDU resolved only on CME after NYSE, CBOE and SMART had refused it
     assert {s: contract_for(s).contract.exchange for s in ("VIX", "NDX", "COMP", "INDU")} == {  # type: ignore[union-attr]
-        "VIX": "CBOE", "NDX": "NASDAQ", "COMP": "NASDAQ", "INDU": "CME",
+        "VIX": "CBOE",
+        "NDX": "NASDAQ",
+        "COMP": "NASDAQ",
+        "INDU": "CME",
     }
     # the whole VIX term structure, which no other vendor will quote
     assert all(INDEX_EXCHANGE[s] == "CBOE" for s in ("VIX9D", "VIX3M", "VIX6M", "VVIX"))
@@ -281,7 +284,26 @@ async def _replies(reader: asyncio.StreamReader, wanted: int, within: float = 2.
 
 
 def _lookup(req_id: str, strike: str) -> list[str]:
-    return ["9", "8", req_id, "0", "SPX", "OPT", "20261218", strike, "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""]
+    return [
+        "9",
+        "8",
+        req_id,
+        "0",
+        "SPX",
+        "OPT",
+        "20261218",
+        strike,
+        "C",
+        "100",
+        "SMART",
+        "",
+        "USD",
+        "",
+        "SPXW",
+        "0",
+        "",
+        "",
+    ]
 
 
 def test_the_stub_greets_with_the_recording_and_answers_by_contract() -> None:

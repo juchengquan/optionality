@@ -63,8 +63,7 @@ def _price(value: object) -> float | None:
 
 
 def reference_figure(quote: Quote | None) -> ReferenceReading:
-    """One Reference's reading, or nothing at all.
-    """
+    """One Reference's reading, or nothing at all."""
     if not quote:
         return NOTHING
     for field in FIELDS:

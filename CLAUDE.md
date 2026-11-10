@@ -52,7 +52,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   documented SET is complete, so a target added to the `check` rule is nobody's job to write down
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
   alone is only the Python (every golden case, reproduced exactly, then `python-backend/`'s suite).
-  `make lint` is ruff over both Python packages plus six scripts — `check-boundaries`,
+  `make lint` is ruff over both Python packages (`check`, and `format --check`: `make format` is
+  what fixes it) plus six scripts — `check-boundaries`,
   `check-test-support`, `check-seams` (four seams: the backend's `vendors/` and the library's,
   `engine/`, `entrypoints/`), `check-module-map`, `check-make-targets`, `check-served-root` — and
   `check-py-backend`, the Python backend's three lines (ADR 0021): it imports only the library's

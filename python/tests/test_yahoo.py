@@ -68,8 +68,10 @@ def test_a_code_yahoo_does_not_carry_is_unknown(monkeypatch: pytest.MonkeyPatch)
     """Unknown, not missing. The sweep quarantines an unknown contract and counts a silent one, so
     which of the two this is decides whether a rule gets disabled (ADR 0015)."""
     monkeypatch.setattr(
-        yahoo, "_fetch_rows",
-        lambda codes: {"^GSPC": {"regularMarketPrice": 7376.86}, "^NOPE": {"shortName": "nothing"}})
+        yahoo,
+        "_fetch_rows",
+        lambda codes: {"^GSPC": {"regularMarketPrice": 7376.86}, "^NOPE": {"shortName": "nothing"}},
+    )
     batch = yahoo.quotes(["^GSPC", "^NOPE", "^ABSENT"])
     assert [r["code"] for r in batch.records] == ["^GSPC"]
     # one answered with no price at all, one was not answered for

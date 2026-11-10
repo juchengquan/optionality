@@ -81,9 +81,7 @@ FORBIDDEN_ROOTS = {"moomoo", "yfinance", "ib_async", "urllib", "http", "requests
 
 
 def pure_modules() -> list[str]:
-    names = sorted(
-        p.stem for p in PACKAGE.glob("*.py") if p.stem not in IMPURE | NOT_A_MODULE
-    )
+    names = sorted(p.stem for p in PACKAGE.glob("*.py") if p.stem not in IMPURE | NOT_A_MODULE)
     # there IS something to check: an empty list would pass every assertion below
     assert len(names) >= 14, f"only {len(names)} pure modules found in {PACKAGE}"
     return names
@@ -134,8 +132,7 @@ def test_a_pure_module_reaches_nothing_outside_itself(module: str) -> None:
             offences.append(f"{module}.py:{line} imports {name}")
     assert offences == [], (
         "a pure module reached the SDK, the network or an impure module — this breaks "
-        "`import optionality` for anyone who installed without the `opend` extra: "
-        + "; ".join(offences)
+        "`import optionality` for anyone who installed without the `opend` extra: " + "; ".join(offences)
     )
 
 
@@ -162,8 +159,7 @@ def test_a_port_does_not_reach_the_uncased_half(module: str) -> None:
     offences = reaches_research(PACKAGE / f"{module}.py")
     assert offences == [], (
         "a port reached optionality.research. A port is held to the TypeScript vendor it mirrors "
-        "by recorded fixtures, and an answer routed through unheld code is not held at all: "
-        + "; ".join(offences)
+        "by recorded fixtures, and an answer routed through unheld code is not held at all: " + "; ".join(offences)
     )
 
 
@@ -300,11 +296,13 @@ def test_the_maths_imports_and_computes_with_no_sdk_and_no_service(
     }
     done = subprocess.run(
         [sys.executable, "-s", str(script)],
-        capture_output=True, text=True, env=env, timeout=60, check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+        check=False,
     )
-    assert done.returncode == 0, (
-        f"the package does not stand alone:\n{done.stdout}\n{done.stderr}"
-    )
+    assert done.returncode == 0, f"the package does not stand alone:\n{done.stdout}\n{done.stderr}"
     assert done.stdout.strip().endswith("OK"), done.stdout
 
 
