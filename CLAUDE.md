@@ -331,6 +331,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   of `backend/src/db/` for exactly that reason: from there the Python could have read it only by
   reaching into another package's source. Beside them, `api/`: the HTTP door's description of
   itself, which the TypeScript generates and the Python serves (see **Door scenarios**).
+- `tools/guards.test.mjs` — every tree-walking guard skips the same directories. `SKIP_DIRS` is
+  copied in FIVE files, each with its own `walk`, which is why `.claude` was missing from all five
+  at once: `.claude/worktrees/<agent>` is a checkout of this repository on another branch, live and
+  registered with git, so walking into one lints that branch against this one's rules and `make
+  check` goes red on a clean main. The real fix is one shared walk; until then this holds each list
+  to a floor.
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
   generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
   Gateway conversations (inputs) beside the batches `make cases` generates from them.

@@ -26,7 +26,23 @@ const ROOT = resolve(new URL("..", import.meta.url).pathname);
 // clients and the case builder out of `backend/src`, comments naming `make cases` and all.
 const SCAN_DIRS = ["typescript/src", "backend/src", "backend/tools", "frontend/src", "tools"];
 const SCAN_FILES = ["CLAUDE.md", "README.md", ".env.example"];
-const SKIP_DIRS = new Set(["node_modules", "dist", ".venv", "__pycache__", ".out"]);
+/** Directories no guard walks into.
+ *
+ *  Exported so `guards.test.mjs` can hold every guard's list to one floor: this constant is
+ *  copied in five files, which is why `.claude` was missing from all five at once.
+ */
+export const SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  ".venv",
+  "__pycache__",
+  ".out",
+  // `.claude` holds agent WORKTREES — `.claude/worktrees/<agent>` is a checkout of this same
+  // repository on another branch, registered with git and live. Walking into one lints that
+  // branch's code against THIS branch's rules, which fails for everybody: on 2026-11-10 a
+  // leftover worktree on `feat/redesign-figures` made `make check` red on a clean main.
+  ".claude",
+]);
 const TEXT = /\.(ts|tsx|mts|js|mjs|jsx|md|sql|example)$/;
 // a backticked command, with whatever arguments follow it: `make check`, `make restore FROM=<f>`
 const INVOCATION = /`make\s+([a-z][a-z0-9-]*)(?:\s[^`]*)?`/g;
