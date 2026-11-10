@@ -143,6 +143,13 @@ The Cost to close at which you take the profit, as a fraction of Entry. Flat in 
 not change what you are willing to accept, only whether you have got it yet.
 _Avoid_: take profit, TP, goal
 
+**Captured**:
+The share of a credit's Entry kept so far: Entry less Cost to close, as a fraction of Entry. The
+Target's own frame read from the other end — a Target at half the Entry is reached when half of it
+is captured. Below zero, closing would cost more than was taken in. A debit structure has none, as
+it has no Target: there is no credit to keep a share of.
+_Avoid_: % of max profit, profit taken, return (that word is about money on capital)
+
 **Stop**:
 The Cost to close at which the trade is over, as a multiple of Entry. Also flat in DTE.
 _Avoid_: stop loss, SL, max loss
@@ -162,6 +169,13 @@ show what you took in. That link is discovered, not declared, and it does not ma
 rule about your holding: a delta alarm on one Contract is about that option, and the condor it
 happens to sit inside is a separate fact.
 _Avoid_: watch, rule, alert, combo monitor, "a monitor on my condor" (say which Contracts)
+
+**Distance**:
+How far the figure a Monitor watches still has to move before its threshold is breached, in that
+figure's own units, read exactly as the breach is decided. At or below zero exactly when the
+threshold is breached — zero AT it, which is a breach — and negative by how far past, so it can
+never disagree with the Alarm. Said in words where it is shown: "now 2.00, 4.01 away".
+_Avoid_: buffer, cushion, room, gap (a Pace gap is a Position's)
 
 **Quote**:
 Live market data for a contract. Always this word — moomoo's "snapshot" jargon stays out of

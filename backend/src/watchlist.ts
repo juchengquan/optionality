@@ -6,7 +6,8 @@
  *  over no endpoint at all.
  */
 import {
-  COMBO_GREEK_FIELDS, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdFill,
+  COMBO_GREEK_FIELDS, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdDistance,
+  thresholdFill,
 } from "optionality/domain/monitor";
 import { dteAtOpen, exitLevels, type ExitLevels, type ExitPolicy } from "optionality/domain/exit";
 import { daysToExpiry } from "optionality/domain/expiry";
@@ -44,10 +45,22 @@ export interface WatchlistEntry {
   dte: number;
   scope: string | null;
   positions: { id: string; name: string }[];
+  /** the combos in this same watchlist whose legs include this row's Contract, by id and sorted:
+   *  what lets a short leg's delta rule sit under its spread (ADR 0023). A DISCOVERED link, like
+   *  `positions` — worked out from the legs each combo names, never recorded, so it is only ever
+   *  as true as those rules are now. Empty on a combo's own row, and for a Contract no enabled
+   *  combo holds. */
+  in_combos: string[];
   cost_to_close: number | null;
   entry: number | null;
   pnl: number | null;
   fill: number | null;
+  /** the figure this row is about — the very reading `fill` and `triggered` are drawn from, so a
+   *  sentence built from it cannot disagree with the bar or the bell. Null where it was not priced. */
+  watched: number | null;
+  /** how far `watched` still has to move to breach, in the field's own units: at or below zero
+   *  exactly when `triggered` (`thresholdDistance`). Null wherever `watched` is. */
+  distance: number | null;
   /** the exit schedule, or null where there is no single holding to schedule (ADR 0011).
    *
    *  `position_id` names the holding it is FOR. `positions` happens to hold exactly that one
@@ -88,6 +101,11 @@ interface EntryInputs {
  */
 export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
   const { monitors, byCode, bad, owned, now, policy } = inputs;
+  // every combo in this watchlist, by the Contracts its legs name: the spreads a single Contract
+  // sits in are found from these, as the holdings a rule watches are found from what is held
+  const combos = monitors
+    .filter((m) => m.legs && m.legs.length > 0)
+    .map((m) => ({ id: m.id, codes: new Set(monitorLegCodes(m)) }));
   return monitors.map((m) => {
     const isCombo = Boolean(m.legs && m.legs.length > 0);
     const positions = owned[m.id] ?? [];
@@ -138,10 +156,14 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       dte: daysToExpiry(m.strike_date, now),
       scope: m.scope,
       positions: positions.map((p) => ({ id: p.id, name: p.name })),
+      in_combos: isCombo ? [] : combos.filter((c) => c.codes.has(m.code)).map((c) => c.id).sort(),
       cost_to_close: costToClose,
       entry: whole.length > 0 ? combinedEntry(whole) : null,
       pnl: whole.length > 0 ? combinedPnl(whole, byCode) : null,
+      // these three are derived below, from the one figure this row is about
       fill: null,
+      watched: null,
+      distance: null,
       // ONE holding only. Two Positions put on different days have no single DTE at entry, and a
       // blended pace line would hide that rather than say it — ADR 0004 allows a rule to span
       // them, and this declines to guess rather than averaging two trades into one.
@@ -162,17 +184,24 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     // sweep's stored column while every figure beside it came from this fetch, so a row could show
     // a value past its threshold with no bell, or a bell beside a value well inside it (ADR 0010).
     //
-    // It is the rule's OWN field, under the rule's own direction and compare — `monitorValue` for a
-    // combo, which is the very call the sweep evaluates it with. A held combo used to be measured
+    // It is the rule's OWN field, under the rule's own direction and compare — `monitorValue`,
+    // which is the very call the sweep evaluates every rule with. A held combo used to be measured
     // on its cost to close instead, with above/abs forced: that is a PRICE, which a delta rule's
     // threshold is not, so a delta alarm rang here for ever while the sweep stayed silent. Its cost
     // to close is still shown, in its own column; it is not what any alarm is decided by.
     //
     // The price cases are unchanged: under compare 'abs' the sign washes out, so a combo summing to
     // -4.00 and a 4.00 cost to close give the same bell and the same bar.
-    const watched = isCombo
-      ? (comboValue ?? null)
-      : ((quote?.[m.field] ?? null) as number | null);
+    //
+    // A single Contract's figure was CAST rather than read through `monitorValue`, which made no
+    // difference while only the bar and the bell used it — `Math.abs` and `>=` coerce as `Number()`
+    // does — and would have served text as the figure once it was served itself. A NaN is no
+    // reading: the bar and the bell already took it for none, and in the reply it would fail the
+    // schema and take every other row down with it.
+    const read = isCombo ? comboValue : monitorValue(m, byCode);
+    const watched = read === null || read === undefined || Number.isNaN(read) ? null : read;
+    entry.watched = watched;
+    entry.distance = thresholdDistance(watched, m.threshold, m.direction, m.compare);
     entry.fill = thresholdFill(watched, m.threshold, m.direction, m.compare);
     // An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
     // stored state would be back, by the other door. isBreached is the ENGINE's own predicate fed

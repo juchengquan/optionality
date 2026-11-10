@@ -389,11 +389,21 @@ class EntryOut(BaseModel):
     dte: float
     scope: str | None
     positions: list[PositionRefOut]
+    #: the ids of the combos in this watchlist whose legs include this row's Contract, sorted; empty on a
+    #: combo's row. DISCOVERED from the legs each combo names, as `positions` is from what is held, and
+    #: recorded nowhere: it is what sits a short leg's rule under its spread (ADR 0023).
+    in_combos: list[str]
     cost_to_close: float | None
     schedule: ScheduleOut | None
     entry: float | None
     pnl: float | None
     fill: float | None
+    #: the figure this row is about: the one reading `fill` and `triggered` are drawn from, None where it
+    #: was not priced
+    watched: float | None
+    #: how far `watched` has still to move to breach, in the field's own units: at or below zero exactly
+    #: when `triggered`, and negative by how far past. None wherever `watched` is.
+    distance: float | None
 
 
 _ENTRIES = TypeAdapter(list[EntryOut])

@@ -89,6 +89,10 @@ const ScheduleOut = z.object({
 const PositionValues = PositionOut.extend({
   cost_to_close: z.number().nullable(),
   pnl: z.number().nullable(),
+  /** the share of the credit's Entry captured so far, (Entry − Cost to close) / Entry, unrounded:
+   *  1 is all of it kept and below 0 costs more to close than was taken in. Null for a debit,
+   *  which has no credit to keep and no Target, and wherever either side is unknown (ADR 0023). */
+  captured: z.number().nullable(),
   contract_size: z.number().nullable(),
   greeks: z.record(z.string(), z.number().nullable()),
   fetched_at: z.string().nullable(),
@@ -216,6 +220,7 @@ export function positionRoutes(deps: Deps) {
         ...out(v.row),
         cost_to_close: v.cost,
         pnl: v.pnl,
+        captured: v.captured,
         contract_size: contractSize(byCode),
         greeks: Object.fromEntries(
           POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(v.position, byCode, f)]),

@@ -438,6 +438,25 @@ describe("/positions/values", () => {
     expect(v.pnl).toBeNull();
   });
 
+  it("reports the share of a credit captured so far, and none for a debit", async () => {
+    // what the redesigned page shows beside the P&L (ADR 0023), decided here rather than divided
+    // out in the browser (ADR 0005) — and named in the reply schema, which strips what it does not
+    start();
+    await post(condor({ entry: 9.0 }));
+    await post({
+      name: "1016_C8050", strike_date: EXPIRY, entry: -6.0,
+      legs: [{ side: "long", option_type: "CALL", strike: 8050 }],
+    });
+    const values = await body(await h.call("/positions/values"));
+    const share = Object.fromEntries(
+      values.map((v: { name: string; captured: unknown }) => [v.name, v.captured]),
+    );
+    // sold for 9.00 and 4.50 to close: half of it kept
+    expect(share["1016_IC"]).toBe(0.5);
+    // bought for 6.00: a debit has no credit to keep a share of, as it has no Target
+    expect(share["1016_C8050"]).toBeNull();
+  });
+
   it("reports nothing rather than something wrong when a leg goes unpriced", async () => {
     // full quotes while creating, since the gate demands every leg exists; one dropped afterwards
     let complete = true;
@@ -450,6 +469,7 @@ describe("/positions/values", () => {
     const v = (await body(await h.call("/positions/values")))[0];
     expect(v.cost_to_close).toBeNull();
     expect(v.pnl).toBeNull();
+    expect(v.captured).toBeNull();
   });
 
   it("is an empty list with nothing held, and makes no call", async () => {

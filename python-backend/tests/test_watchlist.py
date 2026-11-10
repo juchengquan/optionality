@@ -793,6 +793,126 @@ class TestWhatKindOfContractARowIs:
         assert [leg.option_type for leg in e["legs"]] == ["CALL", "CALL"]
 
 
+class TestWhatARowSSentenceReads:
+    """The redesigned page writes each rule as a sentence — "spread value ≥ 6.01 — now 2.00, 4.01
+    away" — and no figure in it is assembled in the browser (ADR 0005, ADR 0023). `watched` is the one
+    reading the fill bar and the bell are drawn from and `distance` its room to the threshold, so the
+    sentence, the bar and the bell are one figure said three ways and cannot disagree."""
+
+    async def test_serves_the_figure_the_bar_and_the_bell_are_drawn_from_and_how_far_it_has_to_go(self, monitor, run):
+        monitor(threshold=0.6)
+        [e] = await run(quoting({CODE: {"option_delta": 0.45}}))
+        assert e["watched"] == 0.45
+        assert e["distance"] == pytest.approx(0.15, abs=1e-12)
+        assert e["fill"] == 75
+        assert e["triggered"] is False
+
+    async def test_serves_a_combo_s_signed_sum_as_its_figure_and_a_breach_as_a_negative_distance(self, combo, run):
+        combo(threshold=3)
+        [e] = await run(quoting({LEG_A: {"mid_price": 5.0}, LEG_B: {"mid_price": 1.0}}), True)
+        assert e["watched"] == 4
+        assert e["watched"] == e["combo_value"]
+        assert e["distance"] == -1, "a point past its threshold"
+        assert e["triggered"] is True
+
+    async def test_is_at_or_below_zero_exactly_when_the_row_rings_at_the_threshold_too(self, monitor, run):
+        monitor(threshold=0.6)
+        checked = 0
+        for delta in [0.1, 0.59, 0.5999999999, 0.6, 0.6000000001, 0.61, -0.6, -0.7, 2]:
+            [e] = await run(quoting({CODE: {"option_delta": delta}}))
+            assert (e["distance"] <= 0) is e["triggered"], f"delta {delta} is {e['distance']} away"
+            checked += 1
+        assert checked == 9
+
+    async def test_has_no_figure_and_no_distance_on_a_row_it_could_not_price(self, monitor, run):
+        monitor(threshold=0.6)
+        [e] = await run(quoting({}))
+        assert e["watched"] is None
+        assert e["distance"] is None
+
+    async def test_serves_a_figure_sent_as_text_as_the_number_the_sweep_reads_it_as(self, monitor, run):
+        # the sweep reads a single Contract through `monitor_value`, which is `Number(v)`; a figure the
+        # Provider sent as "0.7" is served as 0.7, never as the text, which the reply schema refuses
+        monitor(threshold=0.6)
+        [e] = await run(quoting({CODE: {"option_delta": "0.7"}}))
+        assert e["watched"] == 0.7
+        assert e["triggered"] is True
+
+    async def test_serves_no_figure_for_text_that_is_not_a_number_which_costs_the_figure_and_not_the_row(
+        self, monitor, run
+    ):
+        # NaN is no reading: the bar and the bell already treated it as none, and a NaN in the reply
+        # would fail its schema and take every other row of the watchlist down with it
+        monitor(threshold=0.6)
+        [e] = await run(quoting({CODE: {"option_delta": "n/a"}}))
+        assert [e["watched"], e["distance"], e["fill"], e["triggered"]] == [None, None, None, False]
+
+
+class TestTheSpreadsASingleContractIsALegOf:
+    """On the redesigned page a single-Contract rule — a short leg's delta — sits under the spread it
+    belongs to (ADR 0023). Which spread that is is DISCOVERED, from the legs every combo in this
+    watchlist names, as a rule's holdings are: nothing records it."""
+
+    LEG_C = build_spx_code(EXPIRY, "CALL", 8200)
+
+    @staticmethod
+    def id_(name: str) -> str:
+        return name.ljust(32, "0")
+
+    async def test_names_every_combo_whose_legs_include_this_row_s_contract_sorted(self, monitor, combo, run):
+        leg = monitor(code=LEG_A, strike=8100)
+        combo(id=self.id_("zz"), code="sep-calls")
+        combo(
+            id=self.id_("aa"),
+            code="sep-wide",
+            legs=[
+                {"sign": 1, "option_type": "CALL", "strike": 8100},
+                {"sign": -1, "option_type": "CALL", "strike": 8200},
+            ],
+        )
+        # a spread that does not hold it
+        combo(
+            id=self.id_("mm"),
+            code="sep-upper",
+            legs=[
+                {"sign": 1, "option_type": "CALL", "strike": 8150},
+                {"sign": -1, "option_type": "CALL", "strike": 8200},
+            ],
+        )
+        entries = await run(quoting({LEG_A: {"option_delta": 0.2}, self.LEG_C: {}}), True)
+        assert next(e for e in entries if e["id"] == leg)["in_combos"] == [self.id_("aa"), self.id_("zz")]
+
+    async def test_is_empty_for_a_contract_no_combo_holds_and_on_a_combo_s_own_row(self, monitor, combo, run):
+        monitor()
+        combo()
+        entries = await run(quoting({}), True)
+        assert {e["code"]: e["in_combos"] for e in entries} == {CODE: [], "sep-condor": []}
+
+    async def test_matches_the_contract_not_the_strike_the_same_strike_on_another_expiry_is_another(
+        self, monitor, combo, run
+    ):
+        monitor(code=LEG_A, strike=8100)
+        combo(strike_date="2027-01-15")
+        entries = await run(quoting({}), True)
+        assert next(e for e in entries if e["code"] == LEG_A)["in_combos"] == []
+
+    async def test_leaves_out_a_combo_that_is_switched_off_which_is_not_in_the_watchlist(self, monitor, combo, run):
+        monitor(code=LEG_A, strike=8100)
+        combo(enabled=0)
+        [e] = await run(quoting({}), True)
+        assert e["in_combos"] == []
+
+    async def test_knows_only_the_combos_in_the_same_batch_so_the_bot_s_single_leg_tables_name_none(
+        self, monitor, combo, run
+    ):
+        # the bot's /quotes, /greeks and /vol leave combos out and read no such field; /quotes, the route
+        # the page polls, asks for every enabled rule
+        monitor(code=LEG_A, strike=8100)
+        combo()
+        [e] = await run(quoting({}))
+        assert e["in_combos"] == []
+
+
 class TestWhatOnlyThePythonCanGetWrong:
     async def test_leaves_the_four_combo_keys_off_a_single_leg_entry_rather_than_setting_them_to_none(
         self, monitor, combo, run
@@ -810,8 +930,8 @@ class TestWhatOnlyThePythonCanGetWrong:
         assert "error" not in held
 
     async def test_reads_a_watched_figure_sent_as_text_as_javascript_does(self, monitor, run):
-        # the TypeScript casts whatever the quote holds and lets `Math.abs` and `>=` coerce it, which is
-        # `Number(v)`; Python's `abs` would raise on a string
+        # the TypeScript reads it through `monitorValue`, which is `Number(v)`; Python's `abs` would
+        # raise on a string, and its `>=` would compare one
         monitor(threshold=0.6)
         [entry] = await run(quoting({CODE: {"option_delta": "0.7"}}))
         assert (entry["triggered"], entry["fill"]) == (True, 100)
@@ -835,3 +955,11 @@ class TestWhatOnlyThePythonCanGetWrong:
 
         await watchlist_quotes(db, TZ, fake_fetcher(fetch), now=NOW, policy=POLICY)
         assert asked == [["\U0001f600", "\uffff"]]
+
+    async def test_names_the_combos_a_contract_is_a_leg_of_in_javascript_s_sort_order(self, monitor, combo, run):
+        # `.sort()` again, on the combos' ids: by UTF-16 code unit, not by code point
+        monitor(code=LEG_A, strike=8100)
+        combo(id="\uffff", code="sep-a")
+        combo(id="\U0001f600", code="sep-b")
+        entries = await run(quoting({}), True)
+        assert next(e for e in entries if e["code"] == LEG_A)["in_combos"] == ["\U0001f600", "\uffff"]

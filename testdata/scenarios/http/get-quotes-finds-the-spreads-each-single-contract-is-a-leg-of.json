@@ -1,0 +1,498 @@
+{
+  "name": "GET /quotes finds the spreads each single Contract is a leg of",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218C7300000": {
+          "name": "SPXW 261218 7300C",
+          "mid_price": 2.75,
+          "bid_price": 2.7,
+          "ask_price": 2.8,
+          "last_price": 2.75,
+          "option_delta": 0.21,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218C7350000": {
+          "name": "SPXW 261218 7350C",
+          "mid_price": 1.75,
+          "bid_price": 1.7,
+          "ask_price": 1.8,
+          "last_price": 1.75,
+          "option_delta": 0.15,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218C7500000": {
+          "name": "SPXW 261218 7500C",
+          "mid_price": 0.5,
+          "bid_price": 0.45,
+          "ask_price": 0.55,
+          "last_price": 0.5,
+          "option_delta": 0.06,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6350000": {
+          "name": "SPXW 261218 6350P",
+          "mid_price": 2.25,
+          "bid_price": 2.2,
+          "ask_price": 2.3,
+          "last_price": 2.25,
+          "option_delta": -0.12,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 20,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6400000": {
+          "name": "SPXW 261218 6400P",
+          "mid_price": 4.5,
+          "bid_price": 4.45,
+          "ask_price": 4.55,
+          "last_price": 4.5,
+          "option_delta": -0.18,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 19.25,
+          "option_contract_size": 100
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [
+        {
+          "id": "mon-calls",
+          "code": "dec-calls",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-condor",
+          "code": "dec-condor",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-far-call",
+          "code": "US.SPXW261218C7500000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7500,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-puts",
+          "code": "dec-puts",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "scope": null,
+          "enabled": 0,
+          "disabled_reason": "no-figure",
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-short-call",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-short-put",
+          "code": "US.SPXW261218P6400000",
+          "strike_date": "2026-12-18",
+          "option_type": "PUT",
+          "strike": 6400,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/quotes",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": [
+        {
+          "id": "mon-calls",
+          "code": "dec-calls",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "triggered": false,
+          "quote": null,
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "combo_value": -1,
+          "combo_greeks": {
+            "option_delta": -0.06,
+            "option_gamma": 0,
+            "option_theta": 0,
+            "option_vega": 0
+          },
+          "dte": 39,
+          "scope": null,
+          "positions": [],
+          "in_combos": [],
+          "cost_to_close": null,
+          "schedule": null,
+          "entry": null,
+          "pnl": null,
+          "fill": 25,
+          "watched": -1,
+          "distance": 3
+        },
+        {
+          "id": "mon-condor",
+          "code": "dec-condor",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "triggered": false,
+          "quote": null,
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "combo_value": -3.25,
+          "combo_greeks": {
+            "option_delta": 0,
+            "option_gamma": 0,
+            "option_theta": 0,
+            "option_vega": 0
+          },
+          "dte": 39,
+          "scope": null,
+          "positions": [],
+          "in_combos": [],
+          "cost_to_close": null,
+          "schedule": null,
+          "entry": null,
+          "pnl": null,
+          "fill": 81,
+          "watched": -3.25,
+          "distance": 0.75
+        },
+        {
+          "id": "mon-short-call",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "triggered": false,
+          "quote": {
+            "code": "US.SPXW261218C7300000",
+            "name": "SPXW 261218 7300C",
+            "fetched_at": "2026-11-09 23:00:00+08:00",
+            "mid_price": 2.75,
+            "bid_price": 2.7,
+            "ask_price": 2.8,
+            "last_price": 2.75,
+            "option_delta": 0.21,
+            "option_gamma": 0.00012,
+            "option_theta": -0.85,
+            "option_vega": 4.25,
+            "option_implied_volatility": 14.5,
+            "option_contract_size": 100
+          },
+          "dte": 39,
+          "scope": null,
+          "positions": [],
+          "in_combos": [
+            "mon-calls",
+            "mon-condor"
+          ],
+          "cost_to_close": null,
+          "schedule": null,
+          "entry": null,
+          "pnl": null,
+          "fill": 70,
+          "watched": 0.21,
+          "distance": 0.09
+        },
+        {
+          "id": "mon-far-call",
+          "code": "US.SPXW261218C7500000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "triggered": false,
+          "quote": {
+            "code": "US.SPXW261218C7500000",
+            "name": "SPXW 261218 7500C",
+            "fetched_at": "2026-11-09 23:00:00+08:00",
+            "mid_price": 0.5,
+            "bid_price": 0.45,
+            "ask_price": 0.55,
+            "last_price": 0.5,
+            "option_delta": 0.06,
+            "option_gamma": 0.00012,
+            "option_theta": -0.85,
+            "option_vega": 4.25,
+            "option_implied_volatility": 14.5,
+            "option_contract_size": 100
+          },
+          "dte": 39,
+          "scope": null,
+          "positions": [],
+          "in_combos": [],
+          "cost_to_close": null,
+          "schedule": null,
+          "entry": null,
+          "pnl": null,
+          "fill": 20,
+          "watched": 0.06,
+          "distance": 0.24
+        },
+        {
+          "id": "mon-short-put",
+          "code": "US.SPXW261218P6400000",
+          "strike_date": "2026-12-18",
+          "option_type": "PUT",
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "triggered": false,
+          "quote": {
+            "code": "US.SPXW261218P6400000",
+            "name": "SPXW 261218 6400P",
+            "fetched_at": "2026-11-09 23:00:00+08:00",
+            "mid_price": 4.5,
+            "bid_price": 4.45,
+            "ask_price": 4.55,
+            "last_price": 4.5,
+            "option_delta": -0.18,
+            "option_gamma": 0.00012,
+            "option_theta": -0.85,
+            "option_vega": 4.25,
+            "option_implied_volatility": 19.25,
+            "option_contract_size": 100
+          },
+          "dte": 39,
+          "scope": null,
+          "positions": [],
+          "in_combos": [
+            "mon-condor"
+          ],
+          "cost_to_close": null,
+          "schedule": null,
+          "entry": null,
+          "pnl": null,
+          "fill": 60,
+          "watched": -0.18,
+          "distance": 0.12
+        }
+      ]
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000",
+          "US.SPXW261218C7350000",
+          "US.SPXW261218C7500000",
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}

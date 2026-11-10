@@ -8,7 +8,9 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { costToClose, positionLegCodes, positionPnl, type Position } from "optionality/domain/position";
-import { dteAtOpen, exitLevels, exitPolicy, type ExitLevels } from "optionality/domain/exit";
+import {
+  captured, dteAtOpen, exitLevels, exitPolicy, type ExitLevels,
+} from "optionality/domain/exit";
 import { daysToExpiry } from "optionality/domain/expiry";
 import { openPositions } from "./db/queries/index.ts";
 import type { PositionRow } from "./db/rows.ts";
@@ -23,6 +25,9 @@ export interface HoldingValue {
   cost: number | null;
   /** Entry less cost to close, in money. Null where either is unknown. */
   pnl: number | null;
+  /** the share of a credit's Entry kept so far, from this same cost (`captured`): null for a
+   *  debit, which has no credit to keep, and wherever either side is unknown (ADR 0023) */
+  captured: number | null;
   /** Null for a Position whose Opened nobody declared: nothing is inferred from created_at, so
    *  there is no DTE at entry and therefore no schedule (ADR 0011). */
   schedule: (ExitLevels & { dte_at_open: number }) | null;
@@ -71,6 +76,7 @@ export async function holdingValues(
         position,
         cost,
         pnl: positionPnl(position, byCode),
+        captured: captured(position.entry, cost),
         schedule: scheduleOf(row, cost, now, settings),
         dte: daysToExpiry(row.strike_date, now),
       };

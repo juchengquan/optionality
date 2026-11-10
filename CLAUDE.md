@@ -394,7 +394,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
-  53 of the package's 81 public functions, which is exactly the 53 of the TypeScript domain's 57
+  59 of the package's 86 public functions (measured 2026-11-10, with `thresholdDistance` and
+  `captured`), which is exactly the 59 of the TypeScript domain's 63
   exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
   package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
   `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and

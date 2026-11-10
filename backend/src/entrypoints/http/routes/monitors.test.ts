@@ -571,6 +571,28 @@ describe("/quotes", () => {
     expect(quotes[0].dte).toBe(30);
   });
 
+  it("carries the figures a rule's sentence reads, which the reply schema would strip", async () => {
+    // `.parse()` drops whatever EntryOut does not list, so a figure computed in the service and
+    // left out of the schema vanishes on the way out with nothing failing (ADR 0023's sentence:
+    // "spread value ≥ 6.01 — now 2.00, 4.01 away", and the spread a leg's rule sits under)
+    h = harness({
+      fetchQuotes: (codes) => Promise.resolve(
+        codes.map((code) => ({ code, option_delta: 0.45, mid_price: 2 })),
+      ),
+    });
+    const leg = (await body(await post(single({ strike: 8100, threshold: 0.6 })))).id;
+    const spread = (await body(await post(combo({ field: "mid_price" })))).id;
+    const quotes = await body(await h.call("/quotes"));
+
+    const row = quotes.find((q: { id: string }) => q.id === leg);
+    expect(row.watched).toBe(0.45);
+    expect(row.distance).toBeCloseTo(0.15, 12);
+    expect(row.in_combos).toEqual([spread]);
+    // 2.00 less 2.00 is nothing, below a threshold of 10: breached, and 10 past it
+    const sum = quotes.find((q: { id: string }) => q.id === spread);
+    expect([sum.watched, sum.distance, sum.triggered, sum.in_combos]).toEqual([0, -10, true, []]);
+  });
+
   it("answers 502 rather than 500 when the Provider call fails", async () => {
     h = harness({ fetchQuotes: echoThenFail() });
     await post(single());

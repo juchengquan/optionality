@@ -276,6 +276,10 @@ const EntryOut = z.object({
   dte: z.number(),
   scope: z.string().nullable(),
   positions: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** the ids of the combos in this watchlist whose legs include this row's Contract, sorted; empty
+   *  on a combo's row. DISCOVERED from the legs each combo names, as `positions` is from what is
+   *  held, and recorded nowhere: it is what sits a short leg's rule under its spread (ADR 0023). */
+  in_combos: z.array(z.string()),
   cost_to_close: z.number().nullable(),
   /** the exit schedule, null where there is no single declared holding to schedule (ADR 0011) */
   schedule: z.object({
@@ -295,6 +299,12 @@ const EntryOut = z.object({
   entry: z.number().nullable(),
   pnl: z.number().nullable(),
   fill: z.number().nullable(),
+  /** the figure this row is about: the one reading `fill` and `triggered` are drawn from, null
+   *  where it was not priced */
+  watched: z.number().nullable(),
+  /** how far `watched` has still to move to breach, in the field's own units: at or below zero
+   *  exactly when `triggered`, and negative by how far past. Null wherever `watched` is. */
+  distance: z.number().nullable(),
 });
 
 const quotes = documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]);

@@ -121,7 +121,15 @@ class TestEachHolding:
             return (await priced_fetcher(codes)).records[:-1]
 
         [v] = (await holding_values(db, fake_fetcher(short_one), NOW, settings_for(), TZ)).values
-        assert (v.cost, v.pnl) == (None, None)
+        assert (v.cost, v.pnl, v.captured) == (None, None, None)
+
+    async def test_captures_a_share_of_a_credit_from_the_same_cost_and_none_of_a_debit(self, db):
+        # the route serves it beside the cost it was divided from, so it must be THAT cost (ADR 0023)
+        hold(db, "credit", CONDOR, entry=9.0)
+        hold(db, "debit", CONDOR[:1], entry=-6.0)
+        credit, debit = (await holding_values(db, fake_fetcher(priced_fetcher), NOW, settings_for(), TZ)).values
+        assert (credit.cost, credit.captured) == (4.5, 0.5)
+        assert debit.captured is None
 
 
 class TestTheSchedule:

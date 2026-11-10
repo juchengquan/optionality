@@ -7,8 +7,8 @@
  */
 import type { HttpRequest, World } from "../format.ts";
 import {
-  BOOK, C7300, C7500, P6350, P6400, EXPIRY, at, combo, except, link, monitor, position, reference,
-  request, sample, world,
+  BOOK, C7300, C7500, P6350, P6400, EXPIRY, at, combo, except, link, monitor, position, quote,
+  reference, request, sample, world,
 } from "./fixtures.ts";
 
 export interface HttpInput {
@@ -88,6 +88,14 @@ const condorBody = {
   ],
 };
 
+/** The book with a far call priced too, which nothing holds and no combo names. */
+const WIDE = { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) };
+
+const CONDOR_SIGNS = [
+  { sign: -1, option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7350 },
+  { sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 },
+];
+
 const SPY = { name: "SPDR S&P 500 ETF", mid_price: 689.45, last_price: 689.4, prev_close_price: 685.2 };
 const VIX = {
   name: "CBOE Volatility Index", last_price: 16.82, prev_close_price: 17.4, delayed: true,
@@ -138,6 +146,59 @@ export const HTTP: readonly HttpInput[] = [
     world: world({
       tables: held,
       provider: { quotes: except(BOOK, C7300), unknown: [C7300] },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // what a rule's sentence reads after "now" (ADR 0023): how far each figure is from its
+    // threshold in the field's own units — negative past it, zero AT it, where the bell rings as
+    // well, signed for a signed rule, and nothing where nothing was priced
+    name: "GET /quotes says how far each rule is from its threshold",
+    world: world({
+      tables: {
+        monitors: [
+          // 2.75 against 2.50: a quarter past
+          monitor({ id: "mon-past", field: "mid_price", threshold: 2.5 }),
+          // 1.75 against 1.75: exactly at it, which is breached
+          monitor({ id: "mon-at", strike: 7350, field: "mid_price", threshold: 1.75 }),
+          // 4.50 waiting to fall to 1.50: three points to go
+          monitor({
+            id: "mon-inside", option_type: "PUT", strike: 6400, field: "mid_price", threshold: 1.5,
+            direction: "below",
+          }),
+          // nothing quoted for it
+          monitor({ id: "mon-unpriced", strike: 7500 }),
+          // -2.75 + 1.75 = -1.00, signed, below -0.75: a quarter past
+          combo({ id: "mon-calls", threshold: -0.75, direction: "below", compare: "signed" }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a single Contract's rule names every ENABLED combo whose legs hold that Contract, which is
+    // what sits a short leg's delta rule under its spread on the page (ADR 0023). A combo that
+    // was switched off is not in the watchlist and is not named; a Contract no combo holds, and
+    // a combo's own row, name none
+    name: "GET /quotes finds the spreads each single Contract is a leg of",
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-short-call" }),
+          monitor({ id: "mon-short-put", option_type: "PUT", strike: 6400 }),
+          monitor({ id: "mon-far-call", strike: 7500 }),
+          combo({ id: "mon-calls" }),
+          combo({ id: "mon-condor", code: "dec-condor", legs: CONDOR_SIGNS }),
+          combo({
+            id: "mon-puts", code: "dec-puts", enabled: 0, disabled_reason: "no-figure",
+            legs: [
+              { sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 },
+            ],
+          }),
+        ],
+      },
+      provider: { quotes: WIDE },
     }),
     request: request("GET", "/quotes"),
   },
@@ -317,6 +378,38 @@ export const HTTP: readonly HttpInput[] = [
   {
     name: "GET /positions/values values every holding from one call",
     world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // the share of a credit captured so far, (Entry − Cost to close) / Entry: the call spread was
+    // sold for 2.00 and costs 1.00 to close, so half is kept. A debit has no credit to keep a
+    // share of, and an Entry nobody recorded has no share either
+    name: "GET /positions/values gives a credit the share it has captured, and a debit none",
+    world: world({
+      tables: {
+        positions: [
+          position({
+            id: "pos-calls", name: "dec-call-spread", strategy: "call spread", entry: 2,
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7300 },
+              { side: "long", option_type: "CALL", strike: 7350 },
+            ],
+          }),
+          position({
+            id: "pos-puts", name: "dec-put-spread", strategy: "put spread", entry: null,
+            legs: [
+              { side: "short", option_type: "PUT", strike: 6400 },
+              { side: "long", option_type: "PUT", strike: 6350 },
+            ],
+          }),
+          position({
+            id: "pos-long", name: "dec-long-call", strategy: "long call", entry: -0.75,
+            legs: [{ side: "long", option_type: "CALL", strike: 7500 }],
+          }),
+        ],
+      },
+      provider: { quotes: WIDE },
+    }),
     request: request("GET", "/positions/values"),
   },
   {

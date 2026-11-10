@@ -392,6 +392,12 @@
                                 ]
                               }
                             },
+                            "in_combos": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "cost_to_close": {
                               "type": [
                                 "number",
@@ -495,6 +501,18 @@
                                 "number",
                                 "null"
                               ]
+                            },
+                            "watched": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "distance": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
                             }
                           },
                           "required": [
@@ -511,11 +529,14 @@
                             "dte",
                             "scope",
                             "positions",
+                            "in_combos",
                             "cost_to_close",
                             "schedule",
                             "entry",
                             "pnl",
-                            "fill"
+                            "fill",
+                            "watched",
+                            "distance"
                           ]
                         }
                       }
@@ -1869,6 +1890,12 @@
                                 "null"
                               ]
                             },
+                            "captured": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
                             "contract_size": {
                               "type": [
                                 "number",
@@ -1988,6 +2015,7 @@
                             "realized_points",
                             "cost_to_close",
                             "pnl",
+                            "captured",
                             "contract_size",
                             "greeks",
                             "fetched_at",

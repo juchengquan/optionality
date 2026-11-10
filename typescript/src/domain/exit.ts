@@ -90,6 +90,24 @@ export function onPace(
   return entry * Math.sqrt(dte / openedDte);
 }
 
+/** The share of a credit's Entry captured so far: Entry less Cost to close, as a fraction of Entry.
+ *
+ *  The frame the Target is set in, read from the other end — a Target at half the Entry is
+ *  reached when half the credit is captured — so a holding's progress toward it is one figure the
+ *  service decides rather than one the dashboard assembles (ADR 0005, ADR 0023). 1 is all of it
+ *  kept, 0 nothing yet, and below 0 means closing would cost more than was taken in.
+ *
+ *  Null for a debit structure, as its Target is: a long's Entry is negative and its profit
+ *  unbounded, so there is no credit to keep a share of — and a zero Entry is no credit either.
+ *  Null where either side is unknown, and where a reading is not a number. Never rounded: a share
+ *  is drawn at whatever precision the surface shows it.
+ */
+export function captured(entry: number | null, cost: number | null): number | null {
+  if (entry === null || cost === null || entry <= 0) return null;
+  const share = (entry - cost) / entry;
+  return Number.isNaN(share) ? null : share;
+}
+
 /** The whole schedule for one Position, or null if it was never declared Opened.
  *
  *  `opened_at` is the opt-in: without it there is no DTE at entry, and nothing is inferred from

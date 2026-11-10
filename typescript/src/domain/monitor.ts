@@ -147,3 +147,25 @@ export function isBreached(
   // anything that is not "below" is above, matching the Python's `direction != "below"`
   return direction === "below" ? metric <= threshold : metric >= threshold;
 }
+
+/** How far the watched figure still has to move to breach, in the field's own units — what a
+ *  rule's sentence says after "now": "spread value ≥ 6.01 — now 2.00, 4.01 away" (ADR 0023).
+ *
+ *  `isBreached` said as a number, read exactly as it reads the figure: magnitude under abs, the
+ *  raw value under signed, and anything not "below" taken as above. So the distance is at or below
+ *  zero EXACTLY when `isBreached` is true — at the threshold itself too, where it is 0 and the bell
+ *  rings — and past the threshold it is negative by how far past. A client never compares it to
+ *  anything but zero to say which side it is on, and needs no second definition of a breach.
+ *
+ *  Null where there is no figure to measure: no reading, or a NaN one (a quote field that is not a
+ *  number, through `monitorValue`), or a NaN threshold. No figure is the honest answer, as it is
+ *  for `thresholdFill`, and it keeps the invariant: `isBreached` is false for a NaN too.
+ */
+export function thresholdDistance(
+  value: number | null | undefined, threshold: number, direction: string, compare: string,
+): number | null {
+  if (value === null || value === undefined) return null;
+  const metric = compare === "signed" ? value : Math.abs(value);
+  const distance = direction === "below" ? metric - threshold : threshold - metric;
+  return Number.isNaN(distance) ? null : distance;
+}
