@@ -53,14 +53,7 @@ export const PY_ONLY = {
 
 /** Not yet ported. Frozen on 2026-11-09 with everything the backend had; it may only shrink. */
 export const BACKLOG = [
-  "entrypoints/bot/bot.ts",
-  "entrypoints/bot/commands/context.ts",
-  "entrypoints/bot/commands/create.ts",
-  "entrypoints/bot/commands/edit.ts",
-  "entrypoints/bot/commands/index.ts",
   "entrypoints/bot/commands/service.ts",
-  "entrypoints/bot/commands/watchlist.ts",
-  "entrypoints/bot/format.ts",
   "entrypoints/http/openapi.ts",
   "main.ts",
 ];

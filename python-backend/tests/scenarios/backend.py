@@ -6,14 +6,15 @@ Python runner asks for all three at once, through `build`: the backend construct
 world, with only the vendors, Telegram, the clock and the id minter faked — the real routes, the
 real bot, the real engine.
 
-**What is built so far** (phase 4): the sweep door and the HTTP door. `build` reads Settings from
-the world's `.env` lines with the backend's own `env.settings_from_env`, as `world.ts` does, and
-builds a `MonitorSweeper` on `world.db` with the world's clock, its Provider and its Telegram, as
-`doors.ts`'s `open` does; then `create_app` on the same database with the world's id minter and
-sources, and the sweeper's own health account as the `SweeperPort` — as `runHttp` hands the app
-`sweeper.health`, so a `/health` after the earlier sweeps reads what they did. The bot door raises
-`NotPorted` from its own method until the bot lands, so a scenario needing it stays on the backlog
-and its skip says which.
+**What is built** (phase 4): all three doors. `build` reads Settings from the world's `.env` lines
+with the backend's own `env.settings_from_env`, as `world.ts` does, and builds a `MonitorSweeper` on
+`world.db` with the world's clock, its Provider and its Telegram, as `doors.ts`'s `open` does; then
+`create_app` on the same database with the world's id minter and sources, and the sweeper's own
+health account as the `SweeperPort` — as `runHttp` hands the app `sweeper.health`, so a `/health`
+after the earlier sweeps reads what they did; and a `TelegramBot` on the same, as `runBot` builds
+one, answering through the world's Telegram API. The bot is partly ported: a command it does not
+have yet raises from `dispatch`, so a scenario needing one stays on the backlog and its skip says
+which (`entrypoints/bot/commands/__init__.py`).
 
 This file is the one outside `src/` that reaches the engine's door, declared in
 `tests/test_seams.py` with its reason, as `doors.ts` is in `check-seams`: a sweep scenario is one tick
@@ -24,13 +25,14 @@ of the REAL engine on a stated world, so the file that builds it must build a `M
 `bot/a-message-from-any-other-chat-gets-no-reply.json` and
 `sweep/an-empty-book-is-swept-without-asking-the-provider-anything.json` — and a backend whose
 methods are empty passes both. Measured, by plugging one in here: the backlog's rule then failed
-them with "take it off the backlog", which is the rule working and the stub lying.
+them with "take it off the backlog", which is the rule working and the stub lying. Every door is
+built now, and `NotPorted` stays for the next one a backend grows.
 
 **One loop, the caller's thread.** The service runs on ONE asyncio loop (ADR 0021, Decision 6), and
 its database connection refuses any thread but the one that opened it — `world.db`, opened in the
 runner's. So a `Service` owns an `asyncio.Runner` for its whole life, in the caller's thread, and
 every door runs on it: a request goes through `httpx2.ASGITransport` there, a sweep is the engine's
-coroutine run there, and the bot will join them. FastAPI's `TestClient` cannot be used: it runs the
+coroutine run there, and so is the bot's update handler. FastAPI's `TestClient` cannot be used: it runs the
 app on a loop in a thread of its own, where the first query fails with sqlite3's "objects created in
 a thread can only be used in that same thread" (measured). The runner itself stays synchronous, so
 it never grows an event loop of its own to keep in step with the backend's; `close` ends the loop,
@@ -47,6 +49,7 @@ from optionality.quote import Batch
 from optionality.quotes import QuoteFetcher as LibraryFetcher
 
 from optionality_backend.engine import MonitorSweeper, SweeperDeps
+from optionality_backend.entrypoints.bot.bot import BotDeps, TelegramApi, TelegramBot
 from optionality_backend.entrypoints.http import Deps, create_app
 from optionality_backend.env import settings_from_env
 from optionality_backend.ports import QuoteFetcher
@@ -94,6 +97,15 @@ def _awaited(fetch: LibraryFetcher) -> QuoteFetcher:
         return fetch(codes)
 
     return fetch_quotes
+
+
+def _telegram(api: Callable[[str, dict[str, Any]], Any]) -> TelegramApi:
+    """A world's Telegram API, which answers at once, as the awaitable one the bot calls."""
+
+    async def call(method: str, params: dict[str, str]) -> Any:
+        return api(method, params)
+
+    return call
 
 
 @dataclass(frozen=True)
@@ -144,12 +156,24 @@ class _Backend:
         self._client = httpx2.AsyncClient(
             transport=httpx2.ASGITransport(app=create_app(deps)), base_url="http://scenario"
         )
+        # as `runBot` builds it: the Provider, the sweeper's own health, the world's clock and ids
+        self._bot = TelegramBot(
+            BotDeps(
+                db=world.db,
+                settings=settings,
+                api=_telegram(world.api),
+                fetch_quotes=provider.fetch_quotes,
+                sweeper=self._sweeper.health,
+                now=lambda: world.clock.now,
+                new_id=world.new_id,
+            )
+        )
 
     def sweep(self) -> None:
         self._loop.run(self._sweeper.sweep())
 
     def handle_update(self, update: dict[str, Any]) -> None:
-        raise NotPorted("the bot is not ported yet (ADR 0021, phase 4)")
+        self._loop.run(self._bot.handle_update(update))
 
     def request(self, method: str, path: str, headers: dict[str, str], body: str | None) -> Response:
         answer = self._loop.run(self._client.request(method, path, headers=headers, content=body))
