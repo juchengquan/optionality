@@ -408,6 +408,36 @@ describe("/positions/values", () => {
     expect(v.fetched_at).toMatch(/\+08:00$/);
   });
 
+  it("takes the contract size from the quotes rather than assuming 100", async () => {
+    // every other test prices at 100, so a route answering a constant 100 passed them all; only a
+    // size no constant would guess tells the quotes' figure from an assumption
+    start(async (codes) => {
+      const { records } = await pricedFetcher(codes);
+      return records.map((r) => ({ ...r, option_contract_size: 10 }));
+    });
+    await post(condor({ entry: 3.0, contracts: 2 }));
+    const v = (await body(await h.call("/positions/values")))[0];
+    expect(v.contract_size).toBe(10);
+    expect(v.pnl).toBe((3.0 - 4.5) * 2 * 10);
+  });
+
+  it("reports no contract size, and so no P&L, when no quote carries one", async () => {
+    // the cost to close is points and needs no size; P&L is money and is never priced at a guess
+    start(async (codes) => {
+      const { records } = await pricedFetcher(codes);
+      return records.map((r) => {
+        const unsized = { ...r };
+        delete unsized.option_contract_size;
+        return unsized;
+      });
+    });
+    await post(condor({ entry: 3.0, contracts: 2 }));
+    const v = (await body(await h.call("/positions/values")))[0];
+    expect(v.cost_to_close).toBe(4.5);
+    expect(v.contract_size).toBeNull();
+    expect(v.pnl).toBeNull();
+  });
+
   it("reports nothing rather than something wrong when a leg goes unpriced", async () => {
     // full quotes while creating, since the gate demands every leg exists; one dropped afterwards
     let complete = true;
