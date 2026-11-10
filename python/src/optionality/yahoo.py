@@ -129,7 +129,7 @@ def _rows_from_yahoo(codes: list[str]) -> dict[str, dict[str, Any]]:
     for code in codes:
         ticker = tickers.tickers.get(code)
         if ticker is None:
-            continue                            # yfinance made no ticker for it: nothing to ask
+            continue  # yfinance made no ticker for it: nothing to ask
         row = _info_or_none(ticker)
         if row is not None:
             rows[code] = row

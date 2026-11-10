@@ -73,9 +73,7 @@ def _since(when: datetime | None, now: datetime) -> float:
     return (now - when).total_seconds()
 
 
-def degraded_verdict(
-    state: DegradedState, policy: DegradedPolicy, reason: str, now: datetime
-) -> DegradedVerdict:
+def degraded_verdict(state: DegradedState, policy: DegradedPolicy, reason: str, now: datetime) -> DegradedVerdict:
     """Whether to say anything about a failed sweep, and what.
 
     `reason` comes from the caller and names no vendor: the Provider is whichever one the deployment
@@ -101,14 +99,10 @@ def degraded_verdict(
     # Past the threshold with nothing sent yet means the first notice never got out — a failed
     # send, or a service that started up already broken. The owner hears the FIRST wording rather
     # than a reminder, because "still degraded" implies an earlier message.
-    return DegradedVerdict(
-        notice=f"⚠️ monitoring degraded: {failures} consecutive sweep failures ({reason})"
-    )
+    return DegradedVerdict(notice=f"⚠️ monitoring degraded: {failures} consecutive sweep failures ({reason})")
 
 
-def recovered_notice(
-    state: DegradedState, policy: DegradedPolicy, now: datetime
-) -> str | None:
+def recovered_notice(state: DegradedState, policy: DegradedPolicy, now: datetime) -> str | None:
     """What to say when it comes back, or None when the owner was never told it was broken.
 
     Announcing a recovery from a problem nobody heard about is noise, and noise is what teaches

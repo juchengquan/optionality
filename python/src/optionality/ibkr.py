@@ -84,8 +84,14 @@ if TYPE_CHECKING:
 #: request by the gateway (see `grade`) rather than inferred from the ids, because the gateway
 #: contradicted a request once — asked for delayed, it granted live.
 PRICE_TICKS: dict[int, str] = {
-    1: "bid_price", 2: "ask_price", 4: "last_price", 9: "prev_close_price",
-    66: "bid_price", 67: "ask_price", 68: "last_price", 75: "prev_close_price",
+    1: "bid_price",
+    2: "ask_price",
+    4: "last_price",
+    9: "prev_close_price",
+    66: "bid_price",
+    67: "ask_price",
+    68: "last_price",
+    75: "prev_close_price",
 }
 
 #: the greeks message's ids: the model computation, live and delayed. Nothing else is read — a bid-
@@ -194,10 +200,21 @@ def _is_number(value: object) -> bool:
 #: first is ours to prevent. `DJX` and `INDU` are both the Dow, and neither serves a figure without
 #: a subscription; they are listed because resolving is what this table is for.
 INDEX_EXCHANGE: dict[str, str] = {
-    "SPX": "CBOE", "VIX": "CBOE", "VIX9D": "CBOE", "VIX3M": "CBOE", "VIX6M": "CBOE", "VVIX": "CBOE",
-    "SKEW": "CBOE", "SPOTVOL": "CBOE", "LTV": "CBOE", "OEX": "CBOE", "PUT": "CBOE", "BXM": "CBOE",
+    "SPX": "CBOE",
+    "VIX": "CBOE",
+    "VIX9D": "CBOE",
+    "VIX3M": "CBOE",
+    "VIX6M": "CBOE",
+    "VVIX": "CBOE",
+    "SKEW": "CBOE",
+    "SPOTVOL": "CBOE",
+    "LTV": "CBOE",
+    "OEX": "CBOE",
+    "PUT": "CBOE",
+    "BXM": "CBOE",
     "DJX": "CBOE",
-    "NDX": "NASDAQ", "COMP": "NASDAQ",
+    "NDX": "NASDAQ",
+    "COMP": "NASDAQ",
     "INDU": "CME",
 }
 
@@ -282,7 +299,13 @@ def contract_for(code: str) -> Named | None:
 #: makes them dangerous: -2 is a perfectly good double and would print as a delta. Implied
 #: volatility cannot be negative, so ANY negative is absent (`_not_computed`).
 SENTINEL: dict[str, float] = {
-    "delta": -2, "gamma": -2, "vega": -2, "theta": -2, "optPrice": -1, "undPrice": -1, "pvDividend": -1,
+    "delta": -2,
+    "gamma": -2,
+    "vega": -2,
+    "theta": -2,
+    "optPrice": -1,
+    "undPrice": -1,
+    "pvDividend": -1,
 }
 
 

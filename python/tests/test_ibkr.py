@@ -49,9 +49,15 @@ def _call(fn: str, args: list[Any]) -> Any:
     func = getattr(ibkr, name)
     if fn == "greekFields":
         row = args[0]
-        return func(ibkr.Greeks(
-            implied_vol=row["impliedVol"], delta=row["delta"], gamma=row["gamma"],
-            vega=row["vega"], theta=row["theta"]))
+        return func(
+            ibkr.Greeks(
+                implied_vol=row["impliedVol"],
+                delta=row["delta"],
+                gamma=row["gamma"],
+                vega=row["vega"],
+                theta=row["theta"],
+            )
+        )
     return func(*args)
 
 
