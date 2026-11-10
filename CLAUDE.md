@@ -185,7 +185,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   with the sweep at an hour and the Telegram variables blanked, because the live service is always up
   here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
   unset (only the plist sets it); blanking the token additionally stops a local sweep from messaging
-  you. Port 31417, not 31415.
+  you. Port 31417, not 31415, and IB client id 31417 for the same reason: the gateway allows one
+  connection per client id, and a local run on the live service's would displace it in silence.
 - `make build-ui` / `check-ui` / `test-ui` for the frontend;
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
