@@ -1,0 +1,140 @@
+/* The phone's cards (ADR 0023, arrangement B). Every colour is a token from next.css — the three
+   families are decided there, once — and everything here is scoped under .nxp-, so nothing can
+   reach the desk's table or the page at /opt. */
+
+.nxp-book { display: flex; flex-direction: column; gap: 1.5rem; }
+.nxp-book h2 { font-size: 1.0625rem; font-weight: 650; margin-bottom: 0.25rem; }
+.nxp-meta { color: var(--muted-foreground); font-size: 0.875rem; }
+
+.nxp-expiry { margin-top: 0.75rem; }
+.nxp-expiry h3, .nxp-expiry-head {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  font-size: 0.9375rem; font-weight: 650; margin: 0 0.25rem 0.5rem;
+}
+.nxp-expiry-head .nxp-meta { font-weight: 400; }
+.nxp-cards { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
+
+/* ---- a card: ONE target, a tap anywhere opens its sheet ---- */
+.nxp-card {
+  position: relative; min-width: 0;
+  padding: 0.875rem 1rem 0.75rem;
+  background: var(--card); color: var(--card-foreground);
+  border: 1px solid var(--border); border-radius: 1rem;
+  overflow-wrap: anywhere;
+}
+/* the button lies over the whole card; the card's text sits above it and lets every tap through */
+.nxp-open {
+  position: absolute; inset: 0; z-index: 0;
+  border-radius: inherit; background: transparent; cursor: pointer;
+}
+.nxp-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.nxp-card > :not(.nxp-open) { position: relative; z-index: 1; pointer-events: none; }
+/* attention borders: the card's state, in its attention colour; a fired entry is the entry
+   colour unless the viewer asked for entries to look like risk */
+.nxp-card[data-state="alarm"] { border-color: var(--alarm); box-shadow: 0 0 0 1px var(--alarm); }
+.nxp-card[data-state="entry"] {
+  border-color: var(--entry); box-shadow: 0 0 0 1px var(--entry);
+  background: color-mix(in oklch, var(--entry) 10%, var(--card));
+}
+.nx[data-entry="risk"] .nxp-card[data-state="entry"] {
+  border-color: var(--alarm); box-shadow: 0 0 0 1px var(--alarm); background: var(--card);
+}
+.nxp-card[data-state="fault"], .nxp-card[data-state="quarantined"] {
+  border-color: var(--fault); border-style: dashed;
+}
+.nxp-card[data-state="muted"] { opacity: 0.7; border-style: dashed; }
+
+.nxp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+.nxp-name { font-weight: 650; font-size: 1rem; }
+.nxp-legs {
+  color: var(--muted-foreground); font-size: 0.8125rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.nxp-pill {
+  margin-left: auto; padding: 0.125rem 0.5rem; border-radius: 999px;
+  background: var(--muted); color: var(--muted-foreground);
+  font-size: 0.8125rem; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* the large P&L: what a card is read for at 2 a.m. */
+.nxp-hero { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.625rem; margin: 0.375rem 0 0.25rem; }
+.nxp-hero [data-money] {
+  font-size: 2rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.nxp-hero-sub { color: var(--muted-foreground); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+
+.nxp-facts {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem 0.75rem;
+  margin: 0.375rem 0;
+}
+.nxp-facts dt { color: var(--muted-foreground); font-size: 0.75rem; }
+.nxp-facts dd { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.nxp-sentence { font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.nxp-error { color: var(--fault); font-size: 0.8125rem; }
+.nxp-h { font-size: 0.875rem; font-weight: 650; margin: 1rem 0 0.375rem; }
+
+.nxp-rules { display: flex; flex-direction: column; gap: 0.375rem; margin-top: 0.5rem;
+  padding-top: 0.5rem; border-top: 1px solid var(--border); }
+.nxp-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 0.125rem 0.5rem; }
+.nxp-rule-name { font-weight: 600; font-size: 0.8125rem; }
+
+/* progress toward the threshold: how near a candidate is to its entry */
+.nxp-progress {
+  height: 6px; margin: 0.5rem 0 0.375rem; border-radius: 999px;
+  background: var(--muted); overflow: hidden;
+}
+.nxp-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--muted-foreground); }
+/* the bar carries its rule's state itself, so it is coloured the same on a card and in the sheet,
+   which is drawn in a portal where no card is its ancestor */
+.nxp-progress[data-state="entry"] > span { background: var(--entry); }
+:is(.nx, .nx-tokens)[data-entry="risk"] .nxp-progress[data-state="entry"] > span,
+.nxp-progress[data-state="alarm"] > span { background: var(--alarm); }
+.nxp-progress[data-state="fault"] > span { background: var(--fault); }
+
+/* a condor's two cards, together, under their summed P&L */
+.nxp-condor {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  padding: 0.5rem; border-radius: 1.25rem;
+  border: 1px solid var(--border); background: color-mix(in oklch, var(--muted) 50%, transparent);
+}
+.nxp-condor-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0 0.5rem; font-size: 0.8125rem; color: var(--muted-foreground);
+}
+.nxp-condor-head [data-money] { font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* ---- switched off ---- */
+.nxp-off { display: flex; flex-direction: column; gap: 0.5rem; }
+.nxp-off .nxp-card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+
+/* ---- REVIEW: one holding per screen ---- */
+/* the track runs to the screen's edges, out through the page's gutter, and pages snap to it */
+.nxp-pager { margin: 0 calc(-1 * var(--nx-gutter)); }
+.nxp-track {
+  display: flex; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory; scrollbar-width: none;
+}
+.nxp-track::-webkit-scrollbar { display: none; }
+.nxp-page { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; padding: 0 var(--nx-gutter); }
+.nxp-page .nxp-card > * { pointer-events: auto; }
+.nxp-pager-nav { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 0.5rem; }
+.nxp-pager-nav button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 999px; background: var(--muted);
+}
+.nxp-pager-nav button:disabled { opacity: 0.35; }
+.nxp-more {
+  width: 100%; margin-top: 0.75rem; min-height: 44px; border-radius: 0.75rem;
+  border: 1px solid var(--border); font-size: 0.9375rem; font-weight: 600;
+}
+
+/* ---- the detail sheet: from the bottom, never taller than the screen, scrolling inside ---- */
+.nxp-sheet {
+  max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain;
+  border-radius: 1.25rem 1.25rem 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nxp-sheet-body { padding: 0 1rem 1.25rem; min-width: 0; overflow-wrap: anywhere; }
+.nxp-sheet .nxp-progress { margin-top: 0.75rem; }
