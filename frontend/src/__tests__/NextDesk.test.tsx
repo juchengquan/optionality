@@ -117,6 +117,18 @@ describe("what each row says", () => {
     expect(cellText("h-ic", "delta")).toBe("-0.250");
   });
 
+  it("prefers the served delta to a rule's on the same leg", () => {
+    // both come from the Provider; the order #318 asks for is served first
+    const leg: Entry = {
+      ...QUOTES.find((q) => q.id === "w-dec18-delta")!, id: "r-leg", code: "US.SPXW261218C7300000",
+      option_type: "CALL", held: true, scope: "leg", in_combos: [],
+      positions: [{ id: "h-calls", name: "1218_C7300" }],
+      quote: { name: "SPXW 261218 7300.00C", option_delta: 0.214 } as Entry["quote"], watched: 0.214,
+    };
+    render(<DeskBook {...props({ quotes: [...QUOTES, leg] })} />);
+    expect(cellText("h-calls", "delta")).toBe("0.330");
+  });
+
   it("falls back to the rule watching the leg where the service sent no deltas, then to a dash", () => {
     const leg: Entry = {
       ...QUOTES.find((q) => q.id === "w-dec18-delta")!, id: "r-leg", code: "US.SPXW261218C7300000",

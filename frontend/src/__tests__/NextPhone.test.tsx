@@ -81,6 +81,12 @@ describe("the Live cards, on the owner's book", () => {
     expect(within(card("h-puts")).getByText("short Δ").nextSibling!.textContent).toBe("—");
   });
 
+  it("prefer the served delta to a rule's on the same leg", () => {
+    // both come from the Provider; the order #318 asks for is served first
+    draw({ quotes: [...QUOTES, SHORT_LEG], monitors: [...MONITORS, SHORT_LEG_RULE] });
+    expect(within(card("h-calls")).getByText("short Δ").nextSibling!.textContent).toBe("0.330");
+  });
+
   it("give each held spread its short leg's delta as the service serves it, with no rule on the leg", () => {
     // #318: each leg's own delta comes with the holding; the fixture has no rule on any held leg
     draw();

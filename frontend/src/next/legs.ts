@@ -3,10 +3,11 @@ import type { Holding } from "../api";
 
 type Leg = Holding["legs"][number];
 
-/** moomoo's code for a leg: `US.SPXW261218P7150000`, as the service builds it (`buildSpxCode`). */
+/** moomoo's code for a leg: `US.SPXW261218P7150000`, as the service builds it (`buildSpxCode`):
+ *  the whole strike then 000, so a fraction is dropped there and must be dropped here. */
 export function legCode(strikeDate: string, leg: Pick<Leg, "option_type" | "strike">): string {
   const yymmdd = strikeDate.slice(2).replaceAll("-", "");
-  return `US.SPXW${yymmdd}${leg.option_type === "CALL" ? "C" : "P"}${Math.round(leg.strike * 1000)}`;
+  return `US.SPXW${yymmdd}${leg.option_type === "CALL" ? "C" : "P"}${Math.trunc(leg.strike)}000`;
 }
 
 /** The leg's OWN delta as `/positions/values` serves it, or null where the service sent none (its

@@ -9,6 +9,11 @@ describe("a leg's code", () => {
     expect(legCode("2026-12-18", { option_type: "PUT", strike: 7150 })).toBe("US.SPXW261218P7150000");
     expect(legCode("2027-01-15", { option_type: "CALL", strike: 8000 })).toBe("US.SPXW270115C8000000");
   });
+
+  it("drops a strike's fraction as the service does, so a decimal strike still finds its delta", () => {
+    // buildSpxCode writes the whole strike then 000: 7150.5 is keyed P7150000, not P7150500
+    expect(legCode("2026-12-18", { option_type: "PUT", strike: 7150.5 })).toBe("US.SPXW261218P7150000");
+  });
 });
 
 describe("a leg's served delta", () => {
