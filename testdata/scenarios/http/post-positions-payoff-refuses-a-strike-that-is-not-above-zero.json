@@ -1,0 +1,58 @@
+{
+  "name": "POST /positions/payoff refuses a strike that is not above zero",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/positions/payoff",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "legs": [
+        {
+          "side": "short",
+          "option_type": "PUT",
+          "strike": 0
+        }
+      ],
+      "entry": 1
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "✖ Too small: expected number to be >0\n  → at legs[0].strike"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

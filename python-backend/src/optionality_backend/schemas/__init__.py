@@ -20,7 +20,7 @@ from .monitor import (
     MonitorPatch,
     TotalEntryIn,
 )
-from .position import ClosePositionIn, LegIn, PositionIn, PositionPatch
+from .position import ClosePositionIn, LegIn, PayoffIn, PositionIn, PositionPatch
 from .reference import SOURCES, ReferenceIn, Source
 
 __all__ = [
@@ -33,6 +33,7 @@ __all__ = [
     "MonitorCreateIn",
     "MonitorIn",
     "MonitorPatch",
+    "PayoffIn",
     "PositionIn",
     "PositionPatch",
     "ReferenceIn",

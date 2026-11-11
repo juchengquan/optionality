@@ -9,6 +9,7 @@ import { DASH, legSummary } from "../../format";
 import { readUp, type EntryStyle } from "../../prefs";
 import { useDismissOnBack } from "../../useDismissOnBack";
 import { Chip, Money } from "../Book";
+import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { entryName, fieldWords, sentence } from "../needs";
 import { LevelChip, Progress, RuleLine } from "./Cards";
 import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
@@ -80,6 +81,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
           <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
           <LevelChip holding={holding} />
         </div>
+        <HoldingPayoff holding={holding} privacy={privacy} />
         <dl className="nxp-facts">
           <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
           <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
@@ -124,6 +126,7 @@ function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
         <Progress entry={entry} />
         <p className="nxp-sentence">{sentence(entry)}</p>
         {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
+        {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
         <dl className="nxp-facts">
           <div><dt>watches</dt><dd>{fieldWords(entry.field, Boolean(entry.legs))}</dd></div>
           <div><dt>compare</dt><dd>{entry.compare === "abs" ? "its size" : "signed"}</dd></div>

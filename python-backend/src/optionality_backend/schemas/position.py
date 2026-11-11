@@ -48,6 +48,25 @@ class PositionIn(Shape):
     opened_at: Annotated[str | None, _StrikeDate.nullish()] = None
 
 
+class PayoffLegIn(LegIn):
+    """A Position's leg with a strike above zero: the payoff's left end is SPX at zero, and a strike
+    there is no contract. PayoffIn's own rule, so PositionIn's legs are untouched."""
+
+    strike: Annotated[float, Number(positive=True)]
+
+
+class PayoffIn(Shape):
+    """Draft legs and an Entry, for the payoff at expiry they would have (#291): what the add form previews
+    before anything is saved, and what a watched spread is drawn with at its current value. A Position's
+    legs and count without a name or an expiry, and an Entry that is REQUIRED: a curve is drawn at a
+    credit and there is no other."""
+
+    legs: Annotated[list[PayoffLegIn], Array(min=1)]
+    #: points per contract, signed as a Position's: a credit received positive, a debit negative
+    entry: Annotated[float, Number()]
+    contracts: Annotated[int | None, Int(min=1)] = None
+
+
 class PositionPatch(Shape):
     """Legs are never edited here — a different structure is a different holding."""
 

@@ -40,6 +40,20 @@ export const PositionIn = z.object({
   opened_at: StrikeDate.nullish(),
 });
 
+/** Draft legs and an Entry, for the payoff at expiry they would have (#291): what the add form
+ *  previews before anything is saved, and what a watched spread is drawn with at its current value.
+ *  A Position's legs and count, without a name or an expiry — the payoff at expiry needs neither —
+ *  and an Entry that is REQUIRED, because a curve is drawn at a credit and there is no other. */
+export const PayoffIn = z.object({
+  /** a Position's legs, with a strike above zero: the payoff's left end is SPX at zero, and a
+   *  strike there is no contract. Its own rule, so PositionIn's legs are untouched — those are
+   *  probed against the Provider, which refuses a strike that does not exist anyway. */
+  legs: z.array(LegIn.extend({ strike: z.number().positive() })).min(1),
+  /** points per contract, signed as a Position's: a credit received positive, a debit negative */
+  entry: z.number(),
+  contracts: z.int().min(1).optional(),
+});
+
 /** Legs are never edited here — a different structure is a different holding. */
 export const PositionPatch = z.object({
   entry: z.number().optional(),

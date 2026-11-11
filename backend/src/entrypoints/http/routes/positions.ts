@@ -19,6 +19,7 @@ import {
   updatePositionFields,
 } from "../../../db/queries/index.ts";
 import { monitorLegCodes } from "optionality/domain/monitor";
+import { payoffAtExpiry } from "optionality/domain/payoff";
 import { derivedSpx } from "optionality/domain/quote";
 import { atomic } from "../../../db/open.ts";
 import { holdingValues } from "../../../holdings.ts";
@@ -32,7 +33,7 @@ import { adoptOrphanMonitors } from "../../../monitors.ts";
 import { verifyContracts } from "optionality/quotes";
 import type { DisabledReason } from "../../../schemas/monitor.ts";
 import {
-  ClosePositionIn, DEFAULT_CONTRACTS, PositionIn, PositionPatch,
+  ClosePositionIn, DEFAULT_CONTRACTS, PayoffIn, PositionIn, PositionPatch,
 } from "../../../schemas/position.ts";
 import { displayStored } from "../../../db/time.ts";
 import { displayTime } from "optionality/domain/timefmt";
@@ -121,9 +122,26 @@ const VolOut = z.object({
   days: z.number().nullable(),
 });
 
+/** The payoff at expiry, in POINTS across the contracts (`payoffAtExpiry`, #291): the P&L at each
+ *  strike and the slope beyond the outer two, which is the whole of a curve that bends only at the
+ *  strikes, its breakevens and its maximums. At expiry only (ADR 0023): no T+0 curve and no
+ *  probability, because there is no pricing model to draw them with. */
+const PayoffOut = z.object({
+  at_strikes: z.array(z.object({ spx: z.number(), pnl: z.number() })),
+  slope_below: z.number(),
+  slope_above: z.number(),
+  breakevens: z.array(z.number()),
+  /** the highest P&L, or null where it has no ceiling */
+  max_profit: z.number().nullable(),
+  /** the LOWEST P&L, signed (a loss is negative), or null where it has no floor */
+  max_loss: z.number().nullable(),
+});
+
 const list = documented("List positions", { 200: z.array(PositionOut) });
 const values = documented("Live value, P&L and exit schedule of every position", { 200: z.array(PositionValues) }, [502]);
 const vol = documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]);
+const payoff = documented("A holding's payoff at expiry", { 200: PayoffOut }, [404, 422]);
+const draft = documented("The payoff at expiry of draft legs, saving nothing and asking no Provider", { 200: PayoffOut });
 const create = documented("Create a position", { 201: PositionOut }, [409]);
 const update = documented("Update a position", { 200: PositionOut }, [404]);
 const close = documented("Close a position, keeping it and its history", { 200: ClosedOut }, [404, 409]);
@@ -269,6 +287,31 @@ export function positionRoutes(deps: Deps) {
       }));
       const a = volAttribution(samples, toPosition(row));
       return vol.reply(c, 200, a ?? { vol: null, from: null, to: null, days: null });
+    })
+
+    /** A holding's payoff at expiry, from its legs, its Entry and its count — and nothing else: no
+     *  quote, so no Provider call, which is why this is not on CLAUDE.md's list of market-data calls
+     *  and why a closed holding answers as well as an open one. Asked for when a holding is opened,
+     *  never polled, because none of it moves. */
+    .get("/:id/payoff", payoff, (c) => {
+      const row = findPosition(db, c.req.param("id"));
+      if (!row) throw notFound("position");
+      // a curve is drawn at a credit; without one there is nothing honest to draw, and a holding's
+      // live value is not its Entry (a watched spread's is drawn that way, and labelled so)
+      if (row.entry === null) {
+        throw httpError(422, `position '${row.name}' has no entry: record what was taken in to draw its payoff`);
+      }
+      const position = toPosition(row);
+      return payoff.reply(c, 200, payoffAtExpiry(position.legs, row.entry, row.contracts));
+    })
+
+    /** The payoff at expiry of legs nobody holds yet (#291): the add form's preview, which catches a
+     *  wrong leg sign before anything is saved (ADR 0023), and a watched spread drawn at its current
+     *  value. A POST only because legs do not fit a query string: it writes NOTHING and asks the
+     *  Provider NOTHING — a door scenario holds both, with a Provider that is down. */
+    .post("/payoff", draft, valid("json", PayoffIn), (c) => {
+      const p = c.req.valid("json");
+      return draft.reply(c, 200, payoffAtExpiry(p.legs, p.entry, p.contracts ?? DEFAULT_CONTRACTS));
     })
 
     .post("/", create, valid("json", PositionIn), async (c) => {

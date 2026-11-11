@@ -94,6 +94,12 @@ async function endpoints() {
     // at the rule above — the one new route was the one route nothing type-checked, and renaming
     // `days` would have compiled on both sides and landed as a missing line in the sheet.
     vol: await (await client.positions[":id"].vol.$get({ param: id })).json(),
+    // the payoff at expiry (#291): a holding's, and draft legs' — the add form's preview and a
+    // watched spread drawn at its current value
+    payoff: await (await client.positions[":id"].payoff.$get({ param: id })).json(),
+    draftPayoff: await client.positions.payoff.$post({
+      json: { legs: [{ side: "short", option_type: "PUT", strike: 7100 }], entry: 1.5 },
+    }),
   };
 }
 
@@ -189,6 +195,15 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["positions"]>[number]["exit"], number | null>>,
   Checked<Exactly<Ok<E["positions"]>[number]["realized_points"], number | null>>,
   Checked<Exactly<Ok<E["positionClosed"]>["disabled_monitors"], { id: string; code: string }[]>>,
+  // the payoff at expiry, as the chart draws it: the corners, the slopes past them, the breakevens
+  // and the two maximums, null where the curve has no ceiling or no floor
+  Checked<Exactly<Ok<E["payoff"]>["at_strikes"], { spx: number; pnl: number }[]>>,
+  Checked<Exactly<Ok<E["payoff"]>["slope_below"], number>>,
+  Checked<Exactly<Ok<E["payoff"]>["slope_above"], number>>,
+  Checked<Exactly<Ok<E["payoff"]>["breakevens"], number[]>>,
+  Checked<Exactly<Ok<E["payoff"]>["max_profit"], number | null>>,
+  Checked<Exactly<Ok<E["payoff"]>["max_loss"], number | null>>,
+  Checked<Exactly<Ok<Awaited<ReturnType<E["draftPayoff"]["json"]>>>["max_loss"], number | null>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.
@@ -209,6 +224,7 @@ export type StatusChecks = [
   Checked<Exactly<E["positionDeleted"]["status"], 204>>,
   Checked<Exactly<E["referenceCreated"]["status"], 201 | 422>>,
   Checked<Exactly<E["referenceDeleted"]["status"], 204>>,
+  Checked<Exactly<E["draftPayoff"]["status"], 200 | 422>>,
 
   // {detail} is IN the union wherever a route VALIDATES its input, so the dashboard cannot read
   // rows without saying what it does when the request was refused. That is the bug class that used
@@ -236,4 +252,5 @@ export type StatusChecks = [
   Checked<ErrorBody extends Awaited<ReturnType<E["monitorCreated"]["json"]>> ? true : false>,
   Checked<ErrorBody extends Awaited<ReturnType<E["positionCreated"]["json"]>> ? true : false>,
   Checked<ErrorBody extends Awaited<ReturnType<E["referenceCreated"]["json"]>> ? true : false>,
+  Checked<ErrorBody extends Awaited<ReturnType<E["draftPayoff"]["json"]>> ? true : false>,
 ];

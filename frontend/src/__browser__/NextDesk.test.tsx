@@ -9,7 +9,7 @@ import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 /* The owner-shaped book the desk's acceptance criteria name, served to the page. Here and not in a
@@ -27,10 +27,13 @@ const scheduled = HOLDINGS.map((h) => ({
     target_dte: 11, manage_by_dte: 21, reached: null, manage_by_due: false },
 }));
 
-/** Every write refused: a layout suite never changes the book. */
+/** Every write refused: a layout suite never changes the book. The payoff's POST is a read, and is
+ *  answered (#291). */
 function serveOwnerBook(extra: object[] = []): void {
   const quotes = [...QUOTES, ...extra];
   window.fetch = ((url: string, init?: RequestInit) => {
+    const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
+    if (payoff) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
     }
@@ -114,6 +117,60 @@ describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => 
       });
     }
   }
+});
+
+describe("the payoff at expiry fits in the inspector (#291)", () => {
+  /** Its chart is drawn at the inspector's measured width: every piece of it inside the inspector's
+   *  own box, and the inspector scrolling nothing sideways, from the narrowest desk to a wide one. */
+  function outside(insp: HTMLElement): string[] {
+    const box = insp.getBoundingClientRect();
+    return [...insp.querySelectorAll<Element>(".nx-payoff, .nx-payoff *")]
+      .filter((el) => el.getClientRects().length > 0)
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5;
+      })
+      .map((el) => `${el.tagName.toLowerCase()} ${el.getAttribute("class") ?? ""} ${el.textContent?.slice(0, 20)}`);
+  }
+
+  /** Every label drawn past the chart's own edge, where the SVG clips it: inside the inspector
+   *  and still cut, which the box test above cannot see. */
+  function clipped(svg: SVGSVGElement): string[] {
+    const box = svg.getBoundingClientRect();
+    return [...svg.querySelectorAll("text")]
+      .filter((t) => {
+        const r = t.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5 || r.top < box.top - 0.5 || r.bottom > box.bottom + 0.5;
+      })
+      .map((t) => t.textContent ?? "");
+  }
+
+  for (const width of [900, 1280, 2560]) {
+    for (const [id, what] of [["h-ic", "a held condor"], ["w-dec18", "a watched spread"]] as const) {
+      it(`${what}'s, at ${width}px`, async () => {
+        await show("live", width);
+        await inspect(id);
+        const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
+        const svg = insp.querySelector<SVGSVGElement>(".nx-payoff svg");
+        // worth nothing unless the chart is there to be measured, at a usable size
+        expect(svg).toBeTruthy();
+        expect(svg!.getBoundingClientRect().width).toBeGreaterThan(200);
+        expect(insp.querySelector("[data-marker='spx']")).toBeTruthy();
+        expect(outside(insp)).toEqual([]);
+        expect(clipped(svg!)).toEqual([]);
+        expect(insp.scrollWidth).toBeLessThanOrEqual(insp.clientWidth);
+        expect(overflowsSideways()).toBe(false);
+        expect(misfits()).toEqual([]);
+      });
+    }
+  }
+
+  it("keeps its text its own size in the narrowest inspector, rather than shrinking it to fit", async () => {
+    await show("live", 900);
+    await inspect("h-ic");
+    const label = document.querySelector<SVGTextElement>(".nxd-inspector [data-breakeven] text")!;
+    expect(label.getBoundingClientRect().height).toBeGreaterThanOrEqual(10);
+  });
 });
 
 describe("columns are dropped as measured (ADR 0008)", () => {

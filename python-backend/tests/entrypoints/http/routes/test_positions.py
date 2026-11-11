@@ -186,6 +186,106 @@ FAR_PUT_SPREAD = [
 ]
 
 
+class TestThePayoffAtExpiry:
+    """At expiry only, so it needs the legs, the Entry and the count and nothing else (ADR 0023): neither
+    form may ask the Provider anything. The Provider here prices what a creation probe asks, and is then
+    told to refuse, so a payoff that reached it would fail rather than pass (#291)."""
+
+    @staticmethod
+    def watching():
+        state = {"open": True, "asked": []}
+
+        async def fetch(codes):
+            if not state["open"]:
+                state["asked"].append(codes)
+                raise RuntimeError("the payoff asked the Provider")
+            return [{"code": c} for c in codes]
+
+        return state, fetch
+
+    async def test_draws_a_holdings_from_its_legs_its_entry_and_its_count_asking_the_provider_nothing(self, start):
+        state, fetch = self.watching()
+        h = start_with(start, fetch)
+        id_ = created201(await post(h, condor(entry=3, contracts=2)))
+        state["open"] = False
+        resp = await h.call(f"/positions/{id_}/payoff")
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "at_strikes": [
+                {"spx": 7075, "pnl": -44},
+                {"spx": 7100, "pnl": 6},
+                {"spx": 8050, "pnl": 6},
+                {"spx": 8075, "pnl": -44},
+            ],
+            "slope_below": 0,
+            "slope_above": 0,
+            "breakevens": [7097, 8053],
+            "max_profit": 6,
+            "max_loss": -44,
+        }
+        assert state["asked"] == []
+
+    async def test_draws_a_closed_holdings_too(self, start):
+        state, fetch = self.watching()
+        h = start_with(start, fetch)
+        id_ = created201(await post(h, condor()))
+        assert (await h.call(f"/positions/{id_}/close", **json_body({"exit": 1}))).status_code == 200
+        state["open"] = False
+        assert (await h.call(f"/positions/{id_}/payoff")).status_code == 200
+
+    async def test_is_404_for_a_holding_that_does_not_exist(self, start):
+        h = start_with(start)
+        assert (await h.call("/positions/nope/payoff")).status_code == 404
+
+    async def test_refuses_a_holding_with_no_entry(self, start):
+        state, fetch = self.watching()
+        h = start_with(start, fetch)
+        id_ = created201(await post(h, condor(entry=None)))
+        state["open"] = False
+        resp = await h.call(f"/positions/{id_}/payoff")
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "position '1016_IC' has no entry: record what was taken in to draw its payoff"
+
+    async def test_draws_draft_legs_for_an_entry_writing_nothing_and_asking_the_provider_nothing(self, start):
+        state, fetch = self.watching()
+        h = start_with(start, fetch)
+        state["open"] = False
+        before = h.db.execute("select count(*) from positions").fetchone()[0]
+        resp = await h.call("/positions/payoff", **json_body({"legs": PUT_SPREAD, "entry": 1.5}))
+        assert resp.status_code == 200
+        # one contract when the count is not given, as a holding is
+        assert resp.json() == {
+            "at_strikes": [{"spx": 7075, "pnl": -23.5}, {"spx": 7100, "pnl": 1.5}],
+            "slope_below": 0,
+            "slope_above": 0,
+            "breakevens": [7098.5],
+            "max_profit": 1.5,
+            "max_loss": -23.5,
+        }
+        assert h.db.execute("select count(*) from positions").fetchone()[0] == before
+        assert state["asked"] == []
+
+    async def test_counts_draft_legs_across_the_contracts_given(self, start):
+        h = start_with(start)
+        resp = await h.call("/positions/payoff", **json_body({"legs": PUT_SPREAD, "entry": 1.5, "contracts": 3}))
+        assert resp.json()["max_profit"] == 4.5
+
+    @pytest.mark.parametrize("strike", [0, -7100])
+    async def test_refuses_a_draft_leg_whose_strike_is_not_above_zero_in_zods_words(self, start, strike):
+        h = start_with(start)
+        legs = [{"side": "short", "option_type": "PUT", "strike": strike}]
+        resp = await h.call("/positions/payoff", **json_body({"legs": legs, "entry": 1}))
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "✖ Too small: expected number to be >0\n  → at legs[0].strike"
+
+    async def test_refuses_draft_legs_with_no_entry_or_none_at_all(self, start):
+        h = start_with(start)
+        assert (await h.call("/positions/payoff", **json_body({"legs": PUT_SPREAD}))).status_code == 422
+        assert (await h.call("/positions/payoff", **json_body({"legs": [], "entry": 1}))).status_code == 422
+        sold = [{"side": "sold", "option_type": "PUT", "strike": 7100}]
+        assert (await h.call("/positions/payoff", **json_body({"legs": sold, "entry": 1}))).status_code == 422
+
+
 class TestDeletingAHoldingFreesTheRulesItsContractsWereBlocking:
     """Reported from the live dashboard: adding an entry answered `409 position '1120_BS_7100' already
     exists`, on a rule whose row showed no positions at all beside a holding that had an entry and an

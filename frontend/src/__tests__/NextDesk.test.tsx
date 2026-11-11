@@ -15,7 +15,7 @@ import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, type DeskRow } from 
 import { Next } from "../next/Next";
 import { placeBook } from "../next/placement";
 import { readHidden } from "../prefs";
-import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
 
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
@@ -363,7 +363,8 @@ describe("with the inspector open, the table stays live", () => {
     window.fetch = ((url: string) => {
       const path = String(url).replace(/^.*\/api/, "");
       const body = path === "/quotes" ? QUOTES : path === "/monitors" ? MONITORS
-        : path === "/health" ? health : path === "/positions/values" ? holdings : [];
+        : path === "/health" ? health : path === "/positions/values" ? holdings
+          : payoffAnswer(path) ?? [];
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
     }) as unknown as typeof fetch;
     render(<Next />);

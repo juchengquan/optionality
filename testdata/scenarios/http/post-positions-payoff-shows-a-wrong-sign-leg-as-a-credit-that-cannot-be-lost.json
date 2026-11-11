@@ -1,0 +1,77 @@
+{
+  "name": "POST /positions/payoff shows a wrong-sign leg as a credit that cannot be lost",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/positions/payoff",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "legs": [
+        {
+          "side": "long",
+          "option_type": "PUT",
+          "strike": 6400
+        },
+        {
+          "side": "short",
+          "option_type": "PUT",
+          "strike": 6350
+        }
+      ],
+      "entry": 1.85
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "at_strikes": [
+          {
+            "spx": 6350,
+            "pnl": 51.85
+          },
+          {
+            "spx": 6400,
+            "pnl": 1.85
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [],
+        "max_profit": 51.85,
+        "max_loss": 1.85
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

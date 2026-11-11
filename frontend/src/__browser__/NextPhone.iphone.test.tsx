@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { overflowsSideways, settle } from "./nextBook";
-import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
 
 afterEach(cleanup);
 
@@ -30,6 +30,9 @@ const health = {
 
 function serveOwnerBook(quotes: object[] = QUOTES): void {
   window.fetch = ((url: string, init?: RequestInit) => {
+    // the payoff's POST is a read, and is answered (#291)
+    const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
+    if (payoff) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({
         ok: false, status: 409, json: () => Promise.resolve({ detail: "refused by the test service" }),
@@ -145,6 +148,30 @@ describe("the detail sheet", () => {
     expect(overflowsSideways()).toBe(false);
     expect(pastTheEdge(sheet)).toEqual([]);
   });
+
+  for (const [ref, what] of [["h-ic", "a held condor"], ["w-dec18", "a watched spread"]] as const) {
+    it(`draws ${what}'s payoff at expiry inside the screen, scrolling nothing sideways (#291)`, async () => {
+      const sheet = await openSheet(ref);
+      const payoff = await within(sheet).findByRole("group", { name: "payoff at expiry" });
+      const svg = await waitFor(() => {
+        const found = payoff.querySelector<SVGSVGElement>("svg");
+        if (!found) throw new Error("no chart yet");
+        return found;
+      });
+      // drawn across the sheet's width, not a thumbnail of it
+      expect(svg.getBoundingClientRect().width).toBeGreaterThan(300);
+      expect(payoff.querySelector("[data-marker='spx']")).toBeTruthy();
+      expect(pastTheEdge(sheet)).toEqual([]);
+      // and no label cut by the chart's own edge, which clips rather than overflows
+      const box = svg.getBoundingClientRect();
+      expect([...svg.querySelectorAll("text")].filter((t) => {
+        const r = t.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5 || r.top < box.top - 0.5 || r.bottom > box.bottom + 0.5;
+      }).map((t) => t.textContent)).toEqual([]);
+      expect(sheet.scrollWidth).toBeLessThanOrEqual(sheet.clientWidth);
+      expect(overflowsSideways()).toBe(false);
+    });
+  }
 
   it("colours a fired entry's progress bar as the card does, though it is drawn outside the page", async () => {
     const sheet = await openSheet("w-dec04");

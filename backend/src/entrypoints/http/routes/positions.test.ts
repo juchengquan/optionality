@@ -151,6 +151,102 @@ describe("what vol did to a holding, over its own samples", () => {
   });
 });
 
+describe("the payoff at expiry (#291)", () => {
+  /** At expiry only, so it needs the legs, the Entry and the count and nothing else (ADR 0023):
+   *  neither form may ask the Provider anything. The Provider here prices what a creation probe
+   *  asks, and is then told to refuse, so a payoff that reached it would fail rather than pass. */
+  let asked: string[][] = [];
+  let open = true;
+  const watching: FakeProvider = async (codes) => {
+    if (!open) asked.push(codes);
+    if (!open) throw new Error("the payoff asked the Provider");
+    return codes.map((code) => ({ code }));
+  };
+  const startWatching = () => { asked = []; open = true; start(watching); };
+  const PUT_SPREAD = [
+    { side: "short", option_type: "PUT", strike: 7100 }, { side: "long", option_type: "PUT", strike: 7075 },
+  ];
+
+  it("draws a holding's from its legs, its Entry and its count, asking the Provider nothing", async () => {
+    startWatching();
+    const id = await created201(await post(condor({ entry: 3, contracts: 2 })));
+    open = false;
+    const resp = await h.call(`/positions/${id}/payoff`);
+    expect(resp.status).toBe(200);
+    expect(await body(resp)).toEqual({
+      at_strikes: [
+        { spx: 7075, pnl: -44 }, { spx: 7100, pnl: 6 }, { spx: 8050, pnl: 6 }, { spx: 8075, pnl: -44 },
+      ],
+      slope_below: 0, slope_above: 0, breakevens: [7097, 8053], max_profit: 6, max_loss: -44,
+    });
+    expect(asked).toEqual([]);
+  });
+
+  it("draws a closed holding's too: its legs and its Entry are kept (ADR 0022)", async () => {
+    startWatching();
+    const id = await created201(await post(condor()));
+    expect((await h.call(`/positions/${id}/close`, json({ exit: 1 }))).status).toBe(200);
+    open = false;
+    expect((await h.call(`/positions/${id}/payoff`)).status).toBe(200);
+  });
+
+  it("is 404 for a holding that does not exist", async () => {
+    startWatching();
+    const resp = await h.call("/positions/nope/payoff");
+    expect(resp.status).toBe(404);
+  });
+
+  it("refuses a holding with no Entry, rather than drawing a curve at a credit nobody took", async () => {
+    startWatching();
+    const id = await created201(await post(condor({ name: "1016_IC", entry: null })));
+    open = false;
+    const resp = await h.call(`/positions/${id}/payoff`);
+    expect(resp.status).toBe(422);
+    expect((await body(resp)).detail).toBe("position '1016_IC' has no entry: record what was taken in to draw its payoff");
+  });
+
+  it("draws draft legs for an Entry, writing nothing and asking the Provider nothing", async () => {
+    startWatching();
+    open = false;
+    const before = h.db.prepare("select count(*) as n from positions").get() as { n: number };
+    const resp = await h.call("/positions/payoff", json({ legs: PUT_SPREAD, entry: 1.5 }));
+    expect(resp.status).toBe(200);
+    // one contract when the count is not given, as a holding is
+    expect(await body(resp)).toEqual({
+      at_strikes: [{ spx: 7075, pnl: -23.5 }, { spx: 7100, pnl: 1.5 }],
+      slope_below: 0, slope_above: 0, breakevens: [7098.5], max_profit: 1.5, max_loss: -23.5,
+    });
+    expect(h.db.prepare("select count(*) as n from positions").get()).toEqual(before);
+    expect(asked).toEqual([]);
+  });
+
+  it("counts draft legs across the contracts given", async () => {
+    startWatching();
+    const resp = await h.call("/positions/payoff", json({ legs: PUT_SPREAD, entry: 1.5, contracts: 3 }));
+    expect((await body(resp)).max_profit).toBe(4.5);
+  });
+
+  it("refuses a draft leg whose strike is not above zero, in zod's words", async () => {
+    startWatching();
+    for (const strike of [0, -7100]) {
+      const resp = await h.call("/positions/payoff", json({
+        legs: [{ side: "short", option_type: "PUT", strike }], entry: 1,
+      }));
+      expect(resp.status).toBe(422);
+      expect((await body(resp)).detail).toBe("✖ Too small: expected number to be >0\n  → at legs[0].strike");
+    }
+  });
+
+  it("refuses draft legs with no Entry, or none at all", async () => {
+    startWatching();
+    expect((await h.call("/positions/payoff", json({ legs: PUT_SPREAD }))).status).toBe(422);
+    expect((await h.call("/positions/payoff", json({ legs: [], entry: 1 }))).status).toBe(422);
+    expect((await h.call("/positions/payoff", json({
+      legs: [{ side: "sold", option_type: "PUT", strike: 7100 }], entry: 1,
+    }))).status).toBe(422);
+  });
+});
+
 describe("deleting a holding frees the rules its contracts were blocking", () => {
   /** Reported from the live dashboard: adding an entry answered `409 position '1120_BS_7100'
    *  already exists`, on a rule whose row showed no positions at all beside a holding that had

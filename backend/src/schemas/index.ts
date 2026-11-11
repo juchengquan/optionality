@@ -16,7 +16,7 @@ export {
   ComboMonitorIn, DISABLED_REASONS, type DisabledReason, MonitorCreateIn, MonitorIn, MonitorPatch,
   TotalEntryIn,
 } from "./monitor.ts";
-export { ClosePositionIn, LegIn, PositionIn, PositionPatch } from "./position.ts";
+export { ClosePositionIn, LegIn, PayoffIn, PositionIn, PositionPatch } from "./position.ts";
 export { ReferenceIn, type Source, SOURCES } from "./reference.ts";
 // and `backend/schemas/sources` publishes that list ALONE, which is what the dashboard's box
 // imports: this entry carries the schemas and therefore zod, which a page must not pay for.
