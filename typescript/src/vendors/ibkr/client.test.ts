@@ -108,10 +108,11 @@ describe("one bounded ask", () => {
   });
 
   it("carries the grade the gateway SERVED, not the one it asked for", async () => {
-    // asked for DELAYED_FROZEN (4); the real gateway served LIVE (1) on 2026-11-09, because SPXW
-    // was trading in global hours. Read rather than assumed — a configured guess would have
-    // labelled a live figure delayed. What each grade means is cased in
-    // testdata/vendors/ibkr-fields.json, grade 4's two facts included.
+    // the capture asked for DELAYED_FROZEN (4), the grade the client asked for then; the real
+    // gateway served LIVE (1) on 2026-11-09, because SPXW was trading in global hours. Read
+    // rather than assumed — a configured guess would have labelled a live figure delayed. What
+    // each grade means is cased in testdata/vendors/ibkr-fields.json, grade 4's two facts
+    // included.
     const c = await connected();
     const [q] = (await c.fetchQuotes([OPTION])).records;
     expect(q!.delayed).toBe(false);

@@ -136,7 +136,8 @@ describe("asking", () => {
   });
 
   it("reads which grade of data was granted, rather than assuming what was asked", async () => {
-    // the client asked for DELAYED_FROZEN (4); in global trading hours the gateway served LIVE
+    // the capture asked for DELAYED_FROZEN (4), which is what the client asked then; in global
+    // trading hours the gateway served LIVE, and that is the point here: the grade is READ
     const { socket, seen } = await connected();
     socket.send(reqMktData(7, SPXW, true));
     await waitFor(() => seen.some((m) => m.kind === "dataType"));

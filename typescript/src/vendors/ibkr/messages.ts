@@ -35,23 +35,45 @@ const IN = {
 
 /** How the market data a request gets is graded, and which grade this service asks for.
  *
- *  DELAYED_FROZEN, not FROZEN, and the difference is not subtle: for an instrument the account is
- *  not subscribed to, asking for FROZEN delivers NOTHING. Measured twice on 2026-11-08, same
- *  index, same session:
+ *  FROZEN (2) — and this constant has been both grades, because the right ask follows the
+ *  ACCOUNT'S ENTITLEMENT rather than a reading of what the four names mean, and the entitlement
+ *  changed under it.
+ *
+ *  With no index subscription, measured twice on 2026-11-08, same index, same session:
  *
  *      reqMarketDataType(2)  SPX → `354 not subscribed`, no figures at all
  *      reqMarketDataType(4)  SPX → last 7374.85
  *
  *  Found by adding a real Reference and watching it read a dash while Yahoo's read 7376.86 beside
- *  it. FROZEN was the obvious choice and the wrong one — it means "the last live-entitled figure",
- *  so it has nothing to serve where there is no entitlement.
+ *  it. FROZEN means "the last live-entitled figure", so it had nothing to serve where there was no
+ *  entitlement, and DELAYED_FROZEN was what answered.
  *
- *  Asking for the delayed grade does NOT give up live data where it is entitled: measured the same
- *  day, a request for grade 3 on a subscribed option was granted grade 1. The gateway falls back
- *  rather than downgrades, and it reports which grade it actually served — which is why the
- *  freshness marks on the strip come from its answer rather than from this constant.
+ *  With the CBOE index subscription on the account, measured 2026-11-10 — all four asks, each on
+ *  a fresh connection, with the market shut and again with it open at 09:34 New York:
+ *
+ *      asked 1 (live)            → nothing
+ *      asked 2 (frozen)          → last 7500.92, then 7503.31, then 7503.51, seconds apart
+ *      asked 3 (delayed)         → nothing
+ *      asked 4 (delayed-frozen)  → nothing
+ *
+ *  Six measurements over two days and both market states, every one of them saying that 2 is now
+ *  the only ask that answers — and that what it answers MOVES, with Yahoo reading 7497.77 beside
+ *  it. So "frozen" here is not a stale figure; it is the live one, and the row says so because the
+ *  grade is read rather than assumed.
+ *
+ *  One thing in that is NOT understood, and is stated rather than explained away: the gateway
+ *  reported the granted grade as 1 for all four asks, the three that delivered nothing included.
+ *  What changes the outcome is the ask; the grade it reports back does not distinguish them. So
+ *  this constant is held by measurement and not by a model of the gateway, and a future change to
+ *  it wants the same four asks run again rather than an argument about the names.
+ *
+ *  Asking for one grade does NOT give up live data where it is entitled, which is what makes a
+ *  single constant safe either way: measured on 2026-11-08, a request for grade 3 on a subscribed
+ *  option was granted grade 1. The gateway falls back rather than downgrades, and it reports which
+ *  grade it actually served — which is why the freshness marks on the strip come from its answer
+ *  (`grade`, in `fields.ts`) rather than from this constant.
  */
-export const MARKET_DATA_DELAYED_FROZEN = 4;
+export const MARKET_DATA_FROZEN = 2;
 
 /** One option, named the way IB Gateway names them rather than the way the service does.
  *  `contract.ts`'s `parseSpxCode` is what turns a service code into this. */

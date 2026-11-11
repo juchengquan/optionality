@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MARKET_DATA_DELAYED_FROZEN, type TwsContract, cancelMktData, readMessage,
+  MARKET_DATA_FROZEN, type TwsContract, cancelMktData, readMessage,
   reqContractDetails,
   reqMarketDataType, reqMktData,
 } from "./messages.ts";
@@ -65,13 +65,13 @@ describe("asking for figures", () => {
     expect(data).toEqual(lookup);
   });
 
-  it("asks for delayed-frozen, which is the only grade an unsubscribed index answers", () => {
-    // FROZEN (2) was the obvious choice and delivered NOTHING for an index this account is not
-    // subscribed to: measured 2026-11-08, grade 2 gave `354 not subscribed` and grade 4 gave
-    // 7374.85 for the same index in the same session. It does not give up live data where there
-    // IS an entitlement — a request for the delayed grade on a subscribed option was granted
-    // grade 1 the same day.
-    expect(readFields(reqMarketDataType(MARKET_DATA_DELAYED_FROZEN))).toEqual(["59", "1", "4"]);
+  it("asks for frozen, which is the only grade the subscribed index answers", () => {
+    // It has been both. With no index subscription (2026-11-08) grade 2 gave `354 not subscribed`
+    // and grade 4 gave 7374.85; with the CBOE subscription on the account (2026-11-10) grades 1,
+    // 3 and 4 each gave NOTHING and grade 2 gave a figure that moved tick by tick — six
+    // measurements over two days and both market states. See the constant for the part of them
+    // that is NOT explained: the gateway reported the granted grade as 1 for all four asks.
+    expect(readFields(reqMarketDataType(MARKET_DATA_FROZEN))).toEqual(["59", "1", "2"]);
   });
 
   it("cancels by request id", () => {

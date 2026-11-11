@@ -549,11 +549,14 @@ def _transport() -> tuple[Any, Any, Any]:
 # --- the client (`client.ts`) -------------------------------------------------------------------
 
 DEFAULT_HOST = "127.0.0.1"
-#: How the market data a request gets is graded, and which grade this asks for: DELAYED_FROZEN,
-#: not FROZEN — for an instrument the account is not subscribed to, FROZEN delivers NOTHING
-#: (measured twice on 2026-11-08), and asking for delayed does not give up live data where it is
+#: How the market data a request gets is graded, and which grade this asks for: FROZEN — which
+#: follows the account's entitlement and has been both grades. With no index subscription FROZEN
+#: delivered NOTHING and DELAYED_FROZEN answered (measured twice on 2026-11-08); with the CBOE
+#: subscription on the account, grades 1, 3 and 4 each deliver nothing and 2 delivers a figure that
+#: moves (2026-11-10, market shut and open). `messages.ts` carries the six measurements and the one
+#: part of them nobody has explained. Asking for a grade does not give up live data where it is
 #: entitled: the gateway falls back rather than downgrades, and says which grade it served.
-MARKET_DATA_DELAYED_FROZEN = 4
+MARKET_DATA_FROZEN = 2
 #: bounds the handshake: a port that accepts is not a gateway that answers
 CONNECT_TIMEOUT_MS = 10_000
 #: bounds each request: a logged-in gateway can accept one and never answer, the 2026-10-16 shape
@@ -661,7 +664,7 @@ class IbkrClient:
             self._client = None
         client = await self._open()
         self._client = client
-        client.reqMarketDataType(MARKET_DATA_DELAYED_FROZEN)
+        client.reqMarketDataType(MARKET_DATA_FROZEN)
         return client
 
     async def _open(self) -> "Client":
