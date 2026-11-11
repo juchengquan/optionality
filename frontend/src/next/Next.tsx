@@ -19,7 +19,9 @@ import {
 import { ReferenceStrip } from "../ReferenceStrip";
 import { useDismissOnBack } from "../useDismissOnBack";
 import { arrangementFor, useViewportWidth } from "./arrangement";
-import { Book } from "./Book";
+import type { BookProps } from "./Book";
+import { DeskBook } from "./desk/DeskBook";
+import { PhoneBook } from "./phone/PhoneBook";
 import { clockMode, useSessionClock, type Mode } from "./mode";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
@@ -90,6 +92,12 @@ export function Next() {
     [book.quotes, book.monitors, book.health, book.holdings],
   );
 
+  // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
+  const bookProps: BookProps = {
+    quotes: book.quotes, monitors: book.monitors, holdings: book.holdings,
+    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, mode, privacy, entryStyle,
+  };
+
   const settings = (
     <Settings
       up={up} onUp={(v) => { setUp(v); writeUp(v); }}
@@ -132,10 +140,7 @@ export function Next() {
         {/* the market as it is now, so only in LIVE: in REVIEW nothing re-reads it, and a strip
             frozen at the moment the mode was entered would be read as current (ADR 0018) */}
         {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
-        {phone && settingsOpen ? settings : (
-          <Book quotes={book.quotes} holdings={book.holdings} holdingsError={book.holdingsError}
-                holdingsAt={book.holdingsAt} mode={mode} privacy={privacy} />
-        )}
+        {phone && settingsOpen ? settings : phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} />}
       </main>
 
       {phone ? (
