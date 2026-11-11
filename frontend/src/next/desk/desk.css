@@ -1,0 +1,167 @@
+/* The desk's terminal (ADR 0023, #289): one dense table beside a non-modal inspector. Everything
+   is scoped under .nxd and reads the page's colour tokens from next.css (:is(.nx, .nx-tokens)), so
+   the three colour families and the entry-style setting reach it unchanged. */
+
+.nxd {
+  --nxd-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --nxd-line: var(--border);
+  --nxd-row: 1.875rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 1rem;
+  align-items: start;
+}
+/* the inspector sits BESIDE the table and takes its width from it; the table re-measures and drops
+   what no longer fits (useDeskFit), so nothing is pushed sideways */
+.nxd[data-inspecting] { grid-template-columns: minmax(0, 1fr) clamp(17rem, 28vw, 28rem); }
+
+.nxd-table {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--nxd-mono);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+/* what useDeskFit measures one character with: the table's own font, and nothing else */
+.nxd-probe { position: absolute; visibility: hidden; white-space: pre; }
+
+.nxd-grid {
+  display: grid;
+  grid-template-columns: var(--nxd-cols);
+  align-items: center;
+  position: relative;
+}
+.nxd-grid > [data-col] {
+  min-width: 0;
+  padding: 0 0.75ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+.nxd-grid > [data-align="left"] { text-align: left; }
+
+.nxd-head {
+  position: sticky; top: 0; z-index: 2;
+  height: 1.75rem;
+  background: var(--background);
+  border-bottom: 1px solid var(--nxd-line);
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.nxd-picker { margin-left: auto; }
+.nxd-picker button { height: 1.5rem; width: 1.5rem; padding: 0; }
+
+.nxd-section h2 { font: inherit; }
+.nxd-section {
+  display: flex; align-items: center;
+  margin: 0.75rem 0 0;
+  padding: 0.25rem 0.75ch;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  border-bottom: 1px solid var(--nxd-line);
+}
+.nxd-group {
+  padding: 0.5rem 0.75ch 0.125rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
+}
+.nxd-note { padding: 0.25rem 0.75ch; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+
+.nxd-row {
+  min-height: var(--nxd-row);
+  border-bottom: 1px solid var(--nxd-line);
+  cursor: default;
+}
+.nxd-row:hover { background: color-mix(in oklch, var(--foreground) 4%, transparent); }
+.nxd-row[aria-selected="true"] {
+  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--foreground);
+}
+/* a row that asks for attention is tinted in its state's colour, faintly: the chip says it */
+.nxd-row[data-state="entry"] { --chip: var(--entry); }
+.nxd-row[data-state="alarm"], .nxd-row[data-state="stop"] { --chip: var(--alarm); }
+.nxd-row[data-state="fault"] { --chip: var(--fault); }
+.nxd-row[data-state="target"] { --chip: var(--entry); }
+.nxd-row[data-state="manage"] { --chip: var(--warn); }
+.nx[data-entry="risk"] .nxd-row[data-state="entry"] { --chip: var(--alarm); }
+.nxd-row:not([data-state="calm"]) {
+  background: color-mix(in oklch, var(--chip) 10%, var(--background));
+  box-shadow: inset 3px 0 0 var(--chip);
+}
+.nxd-row[data-state="fault"] .nxd-name { text-decoration: line-through; text-decoration-color: var(--fault); }
+
+.nxd-name {
+  font: inherit; font-weight: 600; color: inherit;
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+}
+.nxd-name:hover { text-decoration: underline; }
+.nxd-row [data-col="name"] { display: flex; align-items: center; gap: 0.5ch; }
+.nxd-row[data-nested] [data-col="name"] { padding-left: 2.75ch; }
+.nxd-row[data-nested] [data-col="name"]::before {
+  content: ""; position: absolute; left: 1.25ch; top: 0; bottom: 50%; width: 0.9ch;
+  border-left: 1px solid var(--nxd-line); border-bottom: 1px solid var(--nxd-line);
+}
+.nxd-row[data-nested] .nxd-name { font-weight: 400; }
+.nxd-row .nx-chip { font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; font-size: 0.6875rem; flex: none; }
+.nxd-row [data-col="alarm"] { display: flex; align-items: center; gap: 1ch; }
+.nxd-row [data-col="alarm"] .nxd-v { overflow: hidden; text-overflow: ellipsis; }
+
+/* the bracket joining a condor's two held spreads */
+[data-bracket] { position: relative; }
+.nxd-bracket {
+  position: absolute; left: 0.1rem; top: calc(var(--nxd-row) / 2); bottom: calc(var(--nxd-row) / 2);
+  width: 0.4rem; z-index: 1;
+  border: 2px solid color-mix(in oklch, var(--foreground) 55%, var(--background));
+  border-right: 0; border-radius: 3px 0 0 3px;
+  pointer-events: none;
+}
+[data-bracket] .nxd-row[data-kind="holding"] [data-col="name"] { padding-left: 1.5ch; }
+
+.nxd-fill {
+  position: relative; flex: none; width: 4ch; height: 0.3rem; border-radius: 999px; overflow: hidden;
+  background: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
+}
+.nxd-fill i { position: absolute; inset: 0 auto 0 0; background: var(--muted-foreground); border-radius: 999px; }
+.nxd-row:not([data-state="calm"]) .nxd-fill i, .nxd-monitor:not([data-state="calm"]) .nxd-fill i { background: var(--chip); }
+
+.nxd-muted { margin-top: 1rem; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; font-size: 0.8125rem; }
+.nxd-muted summary { cursor: pointer; padding: 0.25rem 0.75ch; color: var(--muted-foreground); }
+.nxd-muted li {
+  display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; padding: 0.25rem 0.75ch 0.25rem 2.75ch;
+  border-bottom: 1px solid var(--nxd-line); color: var(--muted-foreground);
+}
+.nxd-muted .nxd-name { cursor: default; font-family: var(--nxd-mono); }
+
+/* ---- the inspector: a region beside the table, never over it */
+.nxd-inspector {
+  position: sticky; top: 0.75rem;
+  max-height: calc(100dvh - 1.5rem); overflow: auto;
+  min-width: 0;
+  display: flex; flex-direction: column; gap: 0.75rem;
+  padding: 0.75rem 1rem 1rem;
+  border: 1px solid var(--nxd-line); border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--foreground) 2%, var(--background));
+  font-size: 0.8125rem;
+}
+.nxd-insp-head { display: flex; align-items: center; gap: 0.5rem; }
+.nxd-insp-head h3 { flex: 1; font-family: var(--nxd-mono); font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+.nxd-close { display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: var(--radius-md); }
+.nxd-close:hover { background: color-mix(in oklch, var(--foreground) 8%, transparent); }
+.nxd-close svg { width: 1rem; height: 1rem; }
+.nxd-link { align-self: flex-start; text-decoration: underline; text-underline-offset: 2px; }
+.nxd-legs { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-family: var(--nxd-mono); }
+.nxd-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0.5rem 1rem; }
+.nxd-kv div { min-width: 0; }
+.nxd-kv dt { color: var(--muted-foreground); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.nxd-kv dd { font-family: var(--nxd-mono); font-variant-numeric: tabular-nums; font-size: 0.9375rem; white-space: nowrap; }
+.nxd-monitors h4 { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); margin-bottom: 0.25rem; }
+.nxd-monitor { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; padding: 0.375rem 0; border-bottom: 1px dashed var(--nxd-line); font-variant-numeric: tabular-nums; }
+.nxd-monitor[data-state="entry"] { --chip: var(--entry); }
+.nxd-monitor[data-state="alarm"] { --chip: var(--alarm); }
+.nxd-monitor[data-state="fault"] { --chip: var(--fault); }
+.nx[data-entry="risk"] .nxd-monitor[data-state="entry"] { --chip: var(--alarm); }
+.nxd-why { color: var(--fault); }

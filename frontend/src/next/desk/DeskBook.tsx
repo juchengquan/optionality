@@ -1,8 +1,467 @@
-import { Book, type BookProps } from "../Book";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 
-/** The desk's book, arrangement A: the terminal table, its inspector and REVIEW's columns (#289).
- *  A stub until then — the plain list — so the two arrangements can be built side by side, each in
- *  its own directory. */
+import type { Entry, Holding, Monitor } from "../../api";
+import { ColumnPicker } from "../../ColumnPickers";
+import type { Column } from "../../columns";
+import { shortDate } from "../../format";
+import { GROUPS } from "../../MutedTables";
+import { readHidden, writeHidden } from "../../prefs";
+import { Chip, Money, type BookProps } from "../Book";
+import type { Mode } from "../mode";
+import { Glyph } from "../NeedsLine";
+import { monitorName, fieldWords } from "../needs";
+import { placeBook, type BookModel } from "../placement";
+import {
+  ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, type DeskColumn, type DeskRow,
+} from "./columns";
+import { useDeskFit } from "./useDeskFit";
+import "./desk.css";
+
+/** The desk's book, arrangement A (ADR 0023, #289): ONE dense table, holdings first and then the
+ *  watchlist, each grouped by expiry, beside a NON-MODAL inspector.
+ *
+ *  - Which rule sits where is `placeBook`'s, shared with the phone's cards; this only draws it.
+ *  - A condor held as two spreads is one bracket; a 4-leg holding is one row.
+ *  - The inspector is a region beside the table, never a dialog over it: the table keeps polling
+ *    and stays operable while one row is studied. What it shows is read from the CURRENT props on
+ *    every render — only the selected id is kept — so it is as live as the row it describes.
+ *  - The columns are fitted to the room by measurement (ADR 0008), and the viewer's column choice
+ *    is `/opt`'s combo-table cookie, so a choice made there holds here.
+ */
 export function DeskBook(props: BookProps) {
-  return <Book {...props} />;
+  const { quotes, monitors, holdings, mode, privacy } = props;
+  const placed = useMemo(() => placeBook(quotes, holdings, monitors), [quotes, holdings, monitors]);
+  const rows = useMemo(() => tableRows(placed), [placed]);
+  const partners = useMemo(() => new Map(placed.holdings.flatMap((g) => g.rows)
+    .filter((b) => b.length === 2)
+    .flatMap(([a, b]) => [[a!.holding.id, b!.holding], [b!.holding.id, a!.holding]] as [string, Holding][])),
+  [placed]);
+
+  const [hidden, setHidden] = useState(() => readHidden("combo"));
+  const fit = useDeskFit(mode, rows, hidden, privacy);
+  const onToggle = useCallback((_: "single" | "combo", key: string, shown: boolean) => {
+    setHidden((h) => {
+      const next = new Set(h);
+      if (shown) next.delete(key); else next.add(key);
+      writeHidden("combo", next);
+      return next;
+    });
+  }, []);
+  const onReset = useCallback(() => {
+    const none = new Set<string>();
+    writeHidden("combo", none);
+    setHidden(none);
+  }, []);
+
+  const [selected, setSelected] = useState<string | null>(null);
+  const current = selected === null ? null : rows.find((r) => rowId(r) === selected) ?? null;
+  const close = useCallback(() => setSelected(null), []);
+  useEffect(() => {
+    if (!current) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [current, close]);
+
+  const ctx: Ctx = { columns: fit.columns, privacy, selected: current ? rowId(current) : null, select: setSelected };
+  const pickable = COLUMNS[mode].filter((c) => c.key !== "name" && (fit.offered.has(c.key) || hidden.has(c.key)));
+
+  return (
+    <div className="nx-book nxd" data-inspecting={current ? "" : undefined}>
+      <div className="nxd-table" ref={fit.ref} style={{ "--nxd-cols": fit.template } as React.CSSProperties}>
+        <div className="nxd-head nxd-grid">
+          {fit.columns.map((c) => (
+            <span key={c.key} data-col={c.key} data-align={c.align}>{c.label}</span>
+          ))}
+        </div>
+
+        <Holdings {...props} placed={placed} ctx={ctx} picker={
+          // on the first section's line, at its end: over the header it sat on top of a label
+          <ColumnPicker table="combo" label="book" hidden={hidden} onToggle={onToggle} onReset={onReset}
+                        all={pickable.map(asPickable)} />
+        } />
+        <Watchlist placed={placed} ctx={ctx} />
+        <Muted monitors={placed.muted} />
+      </div>
+
+      {current ? <Inspector row={current} mode={mode} privacy={privacy} rows={rows} partners={partners}
+                            onSelect={setSelected} onClose={close} /> : null}
+    </div>
+  );
 }
+
+interface Ctx {
+  columns: DeskColumn[];
+  privacy: boolean;
+  selected: string | null;
+  select: (id: string) => void;
+}
+
+/** Every row the table can draw, in the order it draws them: the fitting measures exactly these,
+ *  and the inspector finds its row among them. */
+function tableRows(placed: BookModel): DeskRow[] {
+  const out: DeskRow[] = [];
+  for (const g of placed.holdings) {
+    for (const p of g.rows.flat()) {
+      out.push({ kind: "holding", holding: p.holding, rules: p.rules });
+      for (const entry of p.rules) out.push({ kind: "rule", entry, nested: true });
+    }
+  }
+  for (const entry of placed.unplaced) out.push({ kind: "rule", entry, nested: false });
+  for (const g of placed.watchlist) {
+    for (const i of g.items) {
+      out.push({ kind: "rule", entry: i.entry, nested: false });
+      for (const entry of i.under) out.push({ kind: "rule", entry, nested: true });
+    }
+  }
+  for (const monitor of placed.quarantined) out.push({ kind: "quarantined", monitor });
+  return out;
+}
+
+/** The picker draws a label and a key; the rest of `/opt`'s column descriptor is its table's. */
+const asPickable = (c: DeskColumn): Column => ({ key: c.key, label: c.label, estimate: 0, text: () => "" });
+
+// ---- the sections
+
+function Holdings({ placed, holdings, holdingsError, holdingsAt, mode, ctx, picker }: BookProps & {
+  placed: BookModel; ctx: Ctx; picker: React.ReactNode;
+}) {
+  return (
+    <section aria-labelledby="nxd-holdings">
+      <div className="nxd-section">
+        <h2 id="nxd-holdings">Holdings</h2>
+        <span className="nxd-picker">{picker}</span>
+      </div>
+      {holdingsError !== null
+        ? <p className="nx-meta nxd-note">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
+      {holdings === null && holdingsError === null ? <p className="nx-meta nxd-note">valuing…</p> : null}
+      {holdings !== null && holdings.length === 0 ? <p className="nx-meta nxd-note">nothing held</p> : null}
+      {mode === "review" && holdings !== null && holdingsAt
+        ? <p className="nx-meta nxd-note">{`valued at ${holdingsAt}`}</p> : null}
+      {placed.holdings.map(({ expiry, rows }) => (
+        <div key={expiry} className="nxd-expiry">
+          <h3 className="nxd-group">{`${shortDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`}</h3>
+          <ul>
+            {rows.map((bracket) => (
+              <li key={bracket.map((p) => p.holding.id).join("+")}
+                  data-bracket={bracket.length === 2 ? "condor" : undefined}>
+                {bracket.length === 2 ? <span className="nxd-bracket" aria-hidden="true" /> : null}
+                <ul>
+                  {bracket.map(({ holding, rules }) => (
+                    <li key={holding.id}>
+                      <Row row={{ kind: "holding", holding, rules }} ctx={ctx} />
+                      {rules.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {placed.unplaced.length > 0 ? (
+        <div className="nxd-expiry" data-testid="unplaced">
+          <h3 className="nxd-group">rules on held contracts</h3>
+          <p className="nx-meta nxd-note">
+            {holdings === null
+              ? "the holdings are not valued, so the rules about them are listed on their own"
+              : "each watches a held contract that no single holding owns, as on a roll day"}
+          </p>
+          <ul>
+            {placed.unplaced.map((e) => (
+              <li key={e.id}><Row row={{ kind: "rule", entry: e, nested: false }} ctx={ctx} /></li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
+  const empty = placed.watchlist.length === 0 && placed.quarantined.length === 0;
+  return (
+    <section aria-labelledby="nxd-watchlist">
+      <div className="nxd-section"><h2 id="nxd-watchlist">Watchlist</h2></div>
+      {empty ? <p className="nx-meta nxd-note">nothing watched</p> : null}
+      {placed.watchlist.map(({ expiry, items }) => (
+        <div key={expiry} className="nxd-expiry">
+          <h3 className="nxd-group">{`${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`}</h3>
+          <ul>
+            {items.map(({ entry, under }) => (
+              <li key={entry.id}>
+                <Row row={{ kind: "rule", entry, nested: false }} ctx={ctx} />
+                {under.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {placed.quarantined.length > 0 ? (
+        <div className="nxd-quarantined">
+          {/* a fault, so never collapsed: nothing watches what these watched (ADR 0023) */}
+          <h3 className="nxd-group">quarantined — switched off by the service</h3>
+          <ul>
+            {placed.quarantined.map((m) => (
+              <li key={m.id}><Row row={{ kind: "quarantined", monitor: m }} ctx={ctx} /></li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/** Muted by hand, expired, or off with their holding: not news, so folded away, as `/opt`'s muted
+ *  tables are — with `/opt`'s words for why each is off. */
+function Muted({ monitors }: { monitors: Monitor[] }) {
+  if (monitors.length === 0) return null;
+  const reason = (m: Monitor) =>
+    GROUPS.find(([r]) => r === (m.disabled_reason ?? null))?.[1] ?? "Reason not recorded";
+  return (
+    <details className="nxd-muted">
+      <summary>{`Muted and expired · ${monitors.length}`}</summary>
+      <ul>
+        {monitors.map((m) => (
+          <li key={m.id} data-ref={m.id}>
+            <span className="nxd-name">{monitorName(m)}</span>
+            <span>{`${fieldWords(m.field, Boolean(m.legs))} ${m.direction === "below" ? "≤" : "≥"} ${m.threshold}`}</span>
+            <span className="nx-meta">{reason(m)}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+// ---- a row
+
+/** The state a row is drawn in, which the row's tint and its chip answer to. */
+function stateOf(row: DeskRow): string {
+  const a = attentionOf(row);
+  return a ?? "calm";
+}
+
+function Row({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
+  const id = rowId(row);
+  const shown = new Set(ctx.columns.map((c) => c.key));
+  const isRule = row.kind === "rule";
+  // the fill bar sits beside the sentence, and falls back to the name when the sentence drops
+  const barIn = shown.has("alarm") ? "alarm" : "name";
+  return (
+    <div className="nxd-row nxd-grid" data-ref={id} data-kind={row.kind} data-state={stateOf(row)}
+         data-nested={isRule && row.nested ? "" : undefined}
+         aria-selected={ctx.selected === id ? "true" : undefined}
+         onClick={() => ctx.select(id)}>
+      {ctx.columns.map((c) => (
+        <span key={c.key} data-col={c.key} data-align={c.align}>
+          {c.key === "name" ? <NameCell row={row} ctx={ctx} /> : <Cell row={row} column={c} privacy={ctx.privacy} />}
+          {barIn === c.key && row.kind === "rule" ? <Fill entry={row.entry} /> : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
+  const a = attentionOf(row);
+  return (
+    <>
+      <button type="button" className="nxd-name" aria-expanded={ctx.selected === rowId(row)}
+              onClick={(e) => { e.stopPropagation(); ctx.select(rowId(row)); }}>
+        {rowName(row)}
+      </button>
+      {a ? <AttentionChip kind={a} /> : null}
+    </>
+  );
+}
+
+/** A rule's state is the attention family's chip (Book.tsx's `Chip`); a holding's Level and its
+ *  Manage-by are drawn as the needs-you line draws them, with their kinds' glyphs. */
+function AttentionChip({ kind }: { kind: NonNullable<ReturnType<typeof attentionOf>> }) {
+  if (kind === "fault" || kind === "entry" || kind === "alarm") return <Chip state={kind} />;
+  return (
+    <span className="nx-chip" data-kind={kind}>
+      <Glyph kind={kind} />{ATTENTION_WORDS[kind]}
+    </span>
+  );
+}
+
+/** One figure. The visually hidden label says which figure it is to a reader that does not see
+ *  the header above it — the rows are a grid of spans, not a `<table>`. */
+function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; privacy: boolean }) {
+  const text = column.text(row, privacy);
+  if (text === "") return null;
+  const label = column.key === "value" && row.kind === "holding" ? "cost to close" : column.label;
+  if (column.key === "pnl" && row.kind === "holding") {
+    return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Money value={row.holding.pnl} privacy={privacy} /></span></>;
+  }
+  const outcome = column.key === "pace_gap" && row.kind === "holding" && row.holding.schedule?.pace_gap
+    // positive is BEHIND the plan: costing more to close than it should by now
+    ? (row.holding.schedule.pace_gap > 0 ? "loss" : "gain") : undefined;
+  return (
+    <>
+      <span className="sr-only">{`${label} `}</span>
+      <span className="nxd-v" data-outcome={outcome}>{text}</span>
+    </>
+  );
+}
+
+/** How far the watched figure has come toward its threshold, as the service measured it. */
+function Fill({ entry }: { entry: Entry }) {
+  if (entry.fill === null || entry.error) return null;
+  const fill = Math.max(0, Math.min(100, entry.fill));
+  return (
+    <span className="nxd-fill" data-fill={String(entry.fill)} role="meter" aria-valuenow={fill}
+          aria-valuemin={0} aria-valuemax={100} aria-label="toward its threshold">
+      <i style={{ width: `${fill}%` }} />
+    </span>
+  );
+}
+
+// ---- the inspector
+
+function Inspector({ row, mode, privacy, rows, partners, onSelect, onClose }: {
+  row: DeskRow; mode: Mode; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
+  onSelect: (id: string) => void; onClose: () => void;
+}) {
+  const name = rowName(row);
+  return (
+    <aside className="nxd-inspector" aria-label={`inspector: ${name}`}>
+      <div className="nxd-insp-head">
+        <h3>{name}</h3>
+        <button type="button" className="nxd-close" aria-label="close the inspector" onClick={onClose}>
+          <X aria-hidden="true" />
+        </button>
+      </div>
+      {row.kind === "holding" ? <HoldingDetail row={row} privacy={privacy} partners={partners} onSelect={onSelect} />
+        : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} privacy={privacy} />
+          : <QuarantinedDetail row={row} />}
+      <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
+    </aside>
+  );
+}
+
+/** Every column's figure for this row, in both modes, whether the table drew it or not. */
+function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean; extra?: [string, React.ReactNode][] }) {
+  const seen = new Set<string>();
+  const items: [string, React.ReactNode][] = [];
+  for (const c of [...COLUMNS.live, ...COLUMNS.review]) {
+    if (c.key === "name" || c.key === "alarm" || c.key === "legs" || seen.has(c.key)) continue;
+    seen.add(c.key);
+    const text = c.text(row, privacy);
+    if (text === "") continue;
+    const label = c.key === "value" && row.kind === "holding" ? "cost to close"
+      : c.key === "delta" && row.kind === "holding" ? "short leg Δ" : c.label;
+    items.push([label, c.key === "pnl" && row.kind === "holding"
+      ? <Money value={row.holding.pnl} privacy={privacy} /> : text]);
+  }
+  items.push(...extra);
+  return (
+    <dl className="nxd-kv">
+      {items.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+    </dl>
+  );
+}
+
+function HoldingDetail({ row, privacy, partners, onSelect }: {
+  row: Extract<DeskRow, { kind: "holding" }>; privacy: boolean; partners: Map<string, Holding>;
+  onSelect: (id: string) => void;
+}) {
+  const h: Holding = row.holding;
+  const s = h.schedule;
+  const g = h.greeks;
+  const greek = (k: string, places: number) => (g[k] === null || g[k] === undefined ? "—" : g[k]!.toFixed(places));
+  const extra: [string, React.ReactNode][] = [
+    ["entry", h.entry === null ? "—" : h.entry.toFixed(2)],
+    ["contracts", `×${h.contracts}`],
+    ["position Δ", greek("option_delta", 3)],
+    ["position θ", greek("option_theta", 2)],
+    ["position vega", greek("option_vega", 2)],
+  ];
+  if (s) {
+    extra.push(["target", s.target === null ? "—" : s.target.toFixed(2)]);
+    extra.push(["stop", s.stop === null ? "—" : s.stop.toFixed(2)]);
+  }
+  // the condor's other spread, when placement bracketed the two
+  const partner = partners.get(h.id) ?? null;
+  return (
+    <>
+      <p className="nx-meta">
+        {`${h.strike_date} · ${h.dte} DTE${h.opened_at ? ` · opened ${h.opened_at}` : " · Opened not recorded"}`}
+      </p>
+      {partner ? (
+        <button type="button" className="nxd-link" onClick={() => onSelect(partner.id)}>
+          {`condor with ${partner.name} →`}
+        </button>
+      ) : null}
+      <Legs legs={h.legs.map((l) => `${l.side} ${l.option_type} ${l.strike}`)} />
+      <Figures row={row} privacy={privacy} extra={extra} />
+      <Monitors entries={row.rules} />
+    </>
+  );
+}
+
+function RuleDetail({ entry, rows, privacy }: { entry: Entry; rows: DeskRow[]; privacy: boolean }) {
+  const self = rows.find((r) => r.kind === "rule" && r.entry.id === entry.id)!;
+  const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
+    r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
+  return (
+    <>
+      <p className="nx-meta">
+        {`${entry.strike_date} · ${entry.dte} DTE · ${entry.held ? "on something held" : "watch only"}`}
+      </p>
+      {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"} ${l.option_type} ${l.strike}`)} /> : null}
+      <Figures row={self} privacy={privacy} />
+      {entry.error ? <p className="nxd-why">{entry.error}</p> : null}
+      <Monitors entries={[entry, ...under.map((r) => r.entry)]} />
+    </>
+  );
+}
+
+function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined" }> }) {
+  const m = row.monitor;
+  const text = COLUMNS.live.find((c) => c.key === "alarm")!.text(row, false);
+  return (
+    <>
+      <p className="nx-meta">{`${m.strike_date} · ${m.code}`}</p>
+      <div className="nxd-monitor" data-state="fault">
+        <AttentionChip kind="fault" />
+        <span>{text}</span>
+      </div>
+      <p className="nx-meta">Nothing watches what this rule watched until it is fixed or removed.</p>
+    </>
+  );
+}
+
+function Legs({ legs }: { legs: string[] }) {
+  return (
+    <ul className="nxd-legs" aria-label="legs">
+      {legs.map((l, i) => <li key={`${i}:${l}`}>{l}</li>)}
+    </ul>
+  );
+}
+
+function Monitors({ entries }: { entries: Entry[] }) {
+  if (entries.length === 0) return <p className="nx-meta">No Monitors on it.</p>;
+  return (
+    <div className="nxd-monitors">
+      <h4>Monitors</h4>
+      <ul>
+        {entries.map((e) => {
+          const row: DeskRow = { kind: "rule", entry: e, nested: false };
+          const a = attentionOf(row);
+          return (
+            <li key={e.id} className="nxd-monitor" data-state={a ?? "calm"}>
+              {a ? <AttentionChip kind={a} /> : null}
+              <span>{COLUMNS.live.find((c) => c.key === "alarm")!.text(row, false)}</span>
+              <Fill entry={e} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
