@@ -112,7 +112,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   **A SECOND corpus**, `testdata/vendors/`, records what each vendor's `fields.ts` computes — pure,
   canonical logic that the guard above cannot reach, because it holds its module list to the
   `domain/` DIRECTORY and these are not in it. Same shape, same `make cases`, same staleness check,
-  its own coverage guard (`cases/vendors.test.ts`), inputs in `cases/vendors.ts`. Deliberately NOT
+  its own coverage guard (`cases/vendors.test.ts`), inputs in `cases/vendors.ts`. It records each
+  module's exported CONSTANTS as well as its cases, which is why `MARKET_DATA_DELAYED_FROZEN` — the
+  grade `ibkr/client.ts` asks the gateway for — lives in `ibkr/fields.ts` beside the `grade` that
+  reads the answer, rather than beside the message that carries it: nothing else could hold it. The
+  fake gateway answers `reqMarketDataType` with nothing, as the real one does, so no replay can see
+  which grade was asked, and changing the Python port's copy of that number left all 688 of its
+  tests passing. Recorded here, `test_ibkr.py` compares it like any other shared number, in both
+  directions — a constant the corpus states and the port lacks fails too. Deliberately NOT
   part of the `GOLDEN_CASES` fingerprint: that answers "does this port reproduce the DOMAIN", and
   the Python package has no vendor ports yet — folding these in would make `py-2026.11.9`, tagged
   and answering "agrees" today, report disagreement over code it does not contain. Every

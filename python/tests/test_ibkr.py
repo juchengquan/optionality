@@ -84,19 +84,36 @@ def test_the_corpus_covers_every_function_this_module_ports() -> None:
         assert callable(getattr(ibkr, py, None)), f"{ts} maps to {py}, which does not exist"
 
 
-def test_the_tick_tables_match_the_corpus() -> None:
-    """The constants, which the case list cannot see.
+#: The corpus writes the TypeScript's shapes, and three of them differ here: a JS `Record` with
+#: number keys arrives with string ones, a JS `Set` arrives as the generator's `{"$set": [...]}`,
+#: and a frozenset is not a set literal. A constant with no entry is compared AS IT STANDS — which
+#: is what a number needs — so a constant added to `ibkr/fields.ts` is held here the moment
+#: `make cases` records it, rather than when somebody remembers to add a line.
+SHAPES: dict[str, Any] = {
+    "PRICE_TICKS": lambda recorded: {int(k): v for k, v in recorded.items()},
+    "GREEK_TICKS": lambda recorded: decode(recorded),
+}
+MINE: dict[str, Any] = {"GREEK_TICKS": set}
+
+
+@pytest.mark.parametrize("name", sorted(corpus()["constants"]))
+def test_the_constants_match_the_corpus(name: str) -> None:
+    """Every constant the corpus states, which the case list cannot see.
 
     `PRICE_TICKS` is the whole translation for prices: a delayed id mapped to the wrong field would
-    show a bid as a last, plausibly and wrongly.
+    show a bid as a last, plausibly and wrongly. `MARKET_DATA_DELAYED_FROZEN` is the grade this
+    client ASKS the gateway for, and it is here because nothing else could hold it: the fake
+    gateway answers `reqMarketDataType` with nothing, as the real one does, so no replay can see
+    which grade was asked and the two clients could ask for different data in silence.
     """
-    constants = corpus()["constants"]
-    # JSON object keys are strings; the TypeScript's are numbers
-    assert {int(k): v for k, v in constants["PRICE_TICKS"].items()} == ibkr.PRICE_TICKS
-    # a JS Set is written `{"$set": [...]}` by the generator's encoder, which `test_cases.py`
-    # decodes the same way — the corpus's own convention, not this test's invention
-    assert decode(constants["GREEK_TICKS"]) == set(ibkr.GREEK_TICKS)
-    # and the delayed ids land on the same fields as the live ones, which is the point of the table
+    recorded = SHAPES.get(name, lambda v: v)(corpus()["constants"][name])
+    mine = getattr(ibkr, name, None)
+    assert mine is not None, f"the corpus states {name}, which this port does not define"
+    assert MINE.get(name, lambda v: v)(mine) == recorded
+
+
+def test_the_delayed_ids_land_where_the_live_ones_do() -> None:
+    """Which is the point of the price table, and the one thing comparing it cannot say."""
     for live, delayed in ((1, 66), (2, 67), (4, 68), (9, 75)):
         assert ibkr.PRICE_TICKS[delayed] == ibkr.PRICE_TICKS[live]
 

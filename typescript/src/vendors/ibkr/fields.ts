@@ -40,6 +40,35 @@ export const PRICE_TICKS: Record<number, string> = {
  *  for SPXW, so no capture holds a delayed option's greeks. */
 export const GREEK_TICKS = new Set([13, 83]);
 
+/** How the market data a request gets is graded, and which grade this service asks for.
+ *
+ *  DELAYED_FROZEN, not FROZEN, and the difference is not subtle: for an instrument the account is
+ *  not subscribed to, asking for FROZEN delivers NOTHING. Measured twice on 2026-11-08, same
+ *  index, same session:
+ *
+ *      reqMarketDataType(2)  SPX → `354 not subscribed`, no figures at all
+ *      reqMarketDataType(4)  SPX → last 7374.85
+ *
+ *  Found by adding a real Reference and watching it read a dash while Yahoo's read 7376.86 beside
+ *  it. FROZEN was the obvious choice and the wrong one — it means "the last live-entitled figure",
+ *  so it has nothing to serve where there is no entitlement.
+ *
+ *  Asking for the delayed grade does NOT give up live data where it is entitled: measured the same
+ *  day, a request for grade 3 on a subscribed option was granted grade 1. The gateway falls back
+ *  rather than downgrades, and it reports which grade it actually served — which is why the
+ *  freshness marks on the strip come from its answer rather than from this constant.
+ *
+ *  It lives HERE, beside the `grade` that reads the gateway's answer, rather than beside the
+ *  message that carries it — because this file is what `testdata/vendors/` records. The fake
+ *  gateway answers `reqMarketDataType` with nothing, as the real one does, so no replay can see
+ *  which grade a client asked for: before the move, changing the Python port's copy of this
+ *  number left all 688 of its tests passing, and the two clients could ask for different data in
+ *  silence. `make cases` now writes it into `ibkr-fields.json`'s constants and the Python's
+ *  `test_ibkr.py` compares it, which is how every other shared number here is held. The Python
+ *  already keeps the ask and the reading in one module, so this is also the closer mirror.
+ */
+export const MARKET_DATA_DELAYED_FROZEN = 4;
+
 /** The grades IB Gateway reports, as the two independent facts they really are.
  *
  *  Four grades are two questions, not one scale: whether the figure came from the delayed TIER,
