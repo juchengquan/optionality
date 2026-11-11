@@ -274,7 +274,9 @@
           "pnl": null,
           "fill": 70,
           "watched": 0.21,
-          "distance": 0.09
+          "distance": 0.09,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-candidate",
@@ -312,7 +314,9 @@
           "pnl": null,
           "fill": 40,
           "watched": -0.12,
-          "distance": 0.18
+          "distance": 0.18,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-closed-put",
@@ -350,7 +354,9 @@
           "pnl": null,
           "fill": 60,
           "watched": -0.18,
-          "distance": 0.12
+          "distance": 0.12,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         }
       ]
     },

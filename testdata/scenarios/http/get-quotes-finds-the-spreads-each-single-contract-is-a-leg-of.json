@@ -311,7 +311,9 @@
           "pnl": null,
           "fill": 25,
           "watched": -1,
-          "distance": 3
+          "distance": 3,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-condor",
@@ -364,7 +366,9 @@
           "pnl": null,
           "fill": 81,
           "watched": -3.25,
-          "distance": 0.75
+          "distance": 0.75,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-short-call",
@@ -405,7 +409,9 @@
           "pnl": null,
           "fill": 70,
           "watched": 0.21,
-          "distance": 0.09
+          "distance": 0.09,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-far-call",
@@ -443,7 +449,9 @@
           "pnl": null,
           "fill": 20,
           "watched": 0.06,
-          "distance": 0.24
+          "distance": 0.24,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-short-put",
@@ -483,7 +491,9 @@
           "pnl": null,
           "fill": 60,
           "watched": -0.18,
-          "distance": 0.12
+          "distance": 0.12,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         }
       ]
     },

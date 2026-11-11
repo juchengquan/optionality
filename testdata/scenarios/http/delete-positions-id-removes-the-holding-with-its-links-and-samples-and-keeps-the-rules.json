@@ -130,7 +130,8 @@
           "legs_iv": null,
           "legs_vega": null,
           "legs_delta": null,
-          "observed_at": null
+          "observed_at": null,
+          "spx": null
         }
       ],
       "reference_securities": []

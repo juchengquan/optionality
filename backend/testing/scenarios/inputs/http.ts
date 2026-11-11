@@ -7,7 +7,8 @@
  */
 import type { HttpRequest, World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, at, combo, except, link, monitor, position, quote,
+  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, PREMIUM_BOOK, at, combo, except, link, monitor,
+  position, quote,
   reference, request, sample, world,
 } from "./fixtures.ts";
 
@@ -455,6 +456,53 @@ export const HTTP: readonly HttpInput[] = [
     name: "POST /positions refuses a holding with no legs",
     world: world(),
     request: request("POST", "/positions", { ...condorBody, legs: [] }),
+  },
+  {
+    // SPX's price, derived from the premiums of the options this one batch priced (ADR 0024): the
+    // median of each option's inversion, on every row, as each row was priced by the same batch
+    name: "GET /quotes derives SPX's price from the batch's option premiums",
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-1" }),
+          monitor({ id: "mon-2", option_type: "PUT", strike: 6400 }),
+          combo({ id: "mon-3" }),
+        ],
+      },
+      provider: { quotes: PREMIUM_BOOK },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a Provider with no premium (IB Gateway serves none) leaves a dash and says why. A Reference
+    // naming SPX is on the page and is NOT what fills it: a Reference is a figure nothing derives
+    // from (ADR 0018), and /quotes does not ask the Reference path at all
+    name: "GET /quotes gives no SPX price without premiums, and never a Reference's",
+    world: world({
+      tables: {
+        monitors: [monitor({ id: "mon-1" })],
+        reference_securities: [reference({ id: "ref-1", code: "^GSPC", source: "yahoo", label: "SPX" })],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // premiums, but no last trade beside any of them (before the open, say): nothing to invert,
+    // and the reason says that rather than blaming the Provider
+    name: "GET /quotes gives no SPX price where no option has a last trade",
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { quotes: { [C7300]: { ...PREMIUM_BOOK[C7300], last_price: null } } },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // the holdings' own batch gives their SPX, so a held spread's strikes are placed against the
+    // index of the instant its own cost to close was read (ADR 0010)
+    name: "GET /positions/values derives SPX's price from the holdings' own batch",
+    world: world({ tables: held, provider: { quotes: PREMIUM_BOOK } }),
+    request: request("GET", "/positions/values"),
   },
   {
     name: "GET /positions/values values every holding from one call",

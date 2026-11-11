@@ -993,6 +993,35 @@ class TestTheSpreadsASingleContractIsALegOf:
         assert e["in_combos"] == []
 
 
+class TestSpxSPriceOnEveryRow:
+    """#288: SPX's price, derived once from the batch's premiums (ADR 0024)."""
+
+    async def test_is_derived_once_from_the_batch_the_same_on_every_row_legs_included(self, monitor, combo, run):
+        monitor()
+        combo()
+        # CODE is a call at 6500 and the legs calls at 8100 and 8150: each inverts to its own level,
+        # and the batch's figure is their median, put on every row as the contract size is
+        fetch = quoting(
+            {
+                CODE: {"mid_price": 26.4, "last_price": 1000, "option_premium": -6.0},
+                LEG_A: {"mid_price": 1, "last_price": 2, "option_premium": 7.0},
+                LEG_B: {"mid_price": 1, "last_price": 1, "option_premium": 8.0},
+            }
+        )
+        quotes = await run(fetch, True)
+        levels = sorted([7500 / 0.94, 8102 / 1.07, 8151 / 1.08])
+        assert len(quotes) == 2
+        for q in quotes:
+            assert q["spx"] == round(levels[1], 2)
+            assert q["spx_reason"] is None
+
+    async def test_is_a_dash_with_its_reason_where_the_provider_gives_no_premium(self, monitor, run):
+        monitor()
+        [e] = await run(quoting({CODE: {"mid_price": 26.4, "last_price": 26}}))
+        assert e["spx"] is None
+        assert e["spx_reason"] == "the Provider gives no option premium to derive it from"
+
+
 class TestWhatOnlyThePythonCanGetWrong:
     async def test_leaves_the_four_combo_keys_off_a_single_leg_entry_rather_than_setting_them_to_none(
         self, monitor, combo, run

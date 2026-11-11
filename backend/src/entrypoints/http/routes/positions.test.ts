@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildSpxCode } from "optionality/domain/contract";
+import { buildSpxCode, parseSpxCode } from "optionality/domain/contract";
 import {
   type FakeProvider, type Harness, body, harness, json, pricedFetcher,
 } from "../../../../testing/harness.ts";
@@ -455,6 +455,29 @@ describe("/positions/values", () => {
     expect(share["1016_IC"]).toBe(0.5);
     // bought for 6.00: a debit has no credit to keep a share of, as it has no Target
     expect(share["1016_C8050"]).toBeNull();
+  });
+
+  it("reports SPX's price from its own batch's premiums, and why not where there are none", async () => {
+    // every leg's premium is set so that it inverts to 7000, whatever its side: the figure is the
+    // index the holdings were valued against (ADR 0024), on each holding as the contract size is
+    let premiums = true;
+    start(async (codes) => {
+      const { records } = await pricedFetcher(codes);
+      return records.map((r) => {
+        const c = parseSpxCode(String(r.code))!;
+        const premium = c.option_type === "CALL" ? ((c.strike + 10) / 7000 - 1) * 100
+          : (1 - (c.strike - 10) / 7000) * 100;
+        return premiums ? { ...r, last_price: 10, option_premium: premium } : r;
+      });
+    });
+    await post(condor());
+    const v = (await body(await h.call("/positions/values")))[0];
+    expect(v.spx).toBe(7000);
+    expect(v.spx_reason).toBeNull();
+    premiums = false;
+    const bare = (await body(await h.call("/positions/values")))[0];
+    expect(bare.spx).toBeNull();
+    expect(bare.spx_reason).toBe("the Provider gives no option premium to derive it from");
   });
 
   it("reports nothing rather than something wrong when a leg goes unpriced", async () => {

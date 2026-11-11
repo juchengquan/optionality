@@ -400,6 +400,7 @@ def test_the_seam_runs_a_tick_of_the_real_engine_on_the_world():
                 "legs_delta": None,
                 # the sweep's own instant, the world's clock as the database stores it
                 "observed_at": "2026-11-09 15:00:00.000000",
+                "spx": None,
             }
         ]
         assert w.sent == []

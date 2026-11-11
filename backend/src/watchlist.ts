@@ -16,6 +16,7 @@ import {
 } from "optionality/domain/position";
 import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
 import type { Position } from "optionality/domain/position";
+import { derivedSpx } from "optionality/domain/quote";
 import type { QuoteRecord } from "optionality/quotes";
 
 export interface WatchlistEntry {
@@ -78,6 +79,13 @@ export interface WatchlistEntry {
    *  that read `positions[0]` would be relying on that coincidence, and the next change to either
    *  condition would move the figure onto the wrong holding in silence. */
   schedule: (ExitLevels & { dte_at_open: number; position_id: string }) | null;
+  /** SPX's price as THIS batch implies it, from its options' premiums (`derivedSpx`, ADR 0024):
+   *  the same on every row, because every row came from the one batch, and on the row so a strike
+   *  can be placed against the index of the same instant as its own figures (ADR 0010). Null where
+   *  the batch cannot give it; never a Reference's figure (ADR 0018). */
+  spx: number | null;
+  /** why `spx` is null, in words; null when there is a figure */
+  spx_reason: string | null;
 }
 
 /** What buildEntries needs, and deliberately no more: the engine's `triggered` and `last_value`
@@ -120,6 +128,8 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
   const combos = monitors
     .filter((m) => m.legs && m.legs.length > 0)
     .map((m) => ({ id: m.id, codes: new Set(monitorLegCodes(m)) }));
+  // once for the batch: every row was priced by it, so every row carries the same index level
+  const spx = derivedSpx(Object.values(byCode));
   return monitors.map((m) => {
     const isCombo = Boolean(m.legs && m.legs.length > 0);
     const positions = owned[m.id] ?? [];
@@ -183,6 +193,8 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       // blended pace line would hide that rather than say it — ADR 0004 allows a rule to span
       // them, and this declines to guess rather than averaging two trades into one.
       schedule: null,
+      spx: spx.price,
+      spx_reason: spx.reason,
     };
 
     if (isCombo) {

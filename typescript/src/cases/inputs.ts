@@ -329,6 +329,51 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "verifyVerdict", name: "nothing asked for is nothing wrong",
       args: [[], { records: [], unknown: [] }] },
 
+    // --- SPX's price from the options' premiums (#288, ADR 0024): 2026-11-10's session figures ---
+    { fn: "derivedSpx", name: "a call: (strike + last) / (1 + premium)",
+      args: [[{ code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 }]] },
+    { fn: "derivedSpx", name: "a put: (strike - last) / (1 - premium)",
+      args: [[{ code: "US.SPXW261218P7525000", last_price: 160.24, option_premium: 2 }]] },
+    { fn: "derivedSpx", name: "a negative premium is taken as it comes",
+      args: [[{ code: "US.SPXW261113P7625000", last_price: 111.9, option_premium: -0.266 }]] },
+    { fn: "derivedSpx", name: "the median of three, in any order",
+      args: [[
+        { code: "US.SPXW261218P7525000", last_price: 160.24, option_premium: 2 },
+        { code: "US.SPXW261204C7500000", last_price: 120, option_premium: 1.5 },
+        { code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 },
+      ]] },
+    { fn: "derivedSpx", name: "two: the middle pair averaged before rounding",
+      args: [[
+        { code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 },
+        { code: "US.SPXW261218P7525000", last_price: 160.24, option_premium: 2 },
+      ]] },
+    // the check found the same error for a last 13 hours old as for one a minute old
+    { fn: "derivedSpx", name: "a stale last stays in",
+      args: [[{ code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547,
+                update_time: "2026-11-09 20:15:00" }]] },
+    { fn: "derivedSpx", name: "the mid is never inverted",
+      args: [[{ code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547, mid_price: 81.4 }]] },
+    { fn: "derivedSpx", name: "what cannot be inverted is left out",
+      args: [[
+        { code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 },
+        { code: "US..SPX", last_price: 7600, option_premium: 0 },
+        { code: "US.SPXW261113C7500000", last_price: 60 },
+        { code: "US.SPXW261113C7575000", last_price: 0, option_premium: 0.9 },
+        { code: "US.SPXW261113C7600000", last_price: "12.5", option_premium: 0.9 },
+        { code: "US.SPXW261113C7625000", last_price: 10, option_premium: true },
+        { code: "US.SPXW261113P7500000", last_price: 10, option_premium: 100 },
+      ]] },
+    { fn: "derivedSpx", name: "no SPX option in the batch", args: [[]] },
+    // String() would read an array holding a code as that code; a code that is not a string is none
+    { fn: "derivedSpx", name: "a code that is not a string is no option",
+      args: [[{ code: ["US.SPXW261113C7475000"], last_price: 79.2, option_premium: 0.547 }]] },
+    // IB Gateway serves no premium at all
+    { fn: "derivedSpx", name: "a missing premium",
+      args: [[{ code: "US.SPXW261113C7475000", last_price: 79.2 },
+              { code: "US.SPXW261218P7525000", last_price: 160.24, option_premium: null }]] },
+    { fn: "derivedSpx", name: "a premium with no last trade",
+      args: [[{ code: "US.SPXW261113C7475000", last_price: null, option_premium: 0.547 }]] },
+
     { fn: "round4", name: "four places", args: [1.23456] },
     { fn: "round4", name: "a decimal half that is not one in binary", args: [1.00005] },
     { fn: "round4", name: "2.675", args: [2.675] },

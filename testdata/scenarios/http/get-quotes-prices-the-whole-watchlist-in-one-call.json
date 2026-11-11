@@ -236,7 +236,9 @@
           "pnl": null,
           "fill": 25,
           "watched": -1,
-          "distance": 3
+          "distance": 3,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-1",
@@ -281,7 +283,9 @@
           "pnl": null,
           "fill": 70,
           "watched": 0.21,
-          "distance": 0.09
+          "distance": 0.09,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         }
       ]
     },

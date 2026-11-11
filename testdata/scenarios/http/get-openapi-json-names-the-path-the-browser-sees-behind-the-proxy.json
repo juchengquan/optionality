@@ -516,6 +516,18 @@
                                 "number",
                                 "null"
                               ]
+                            },
+                            "spx": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "spx_reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
                             }
                           },
                           "required": [
@@ -540,7 +552,9 @@
                             "pnl",
                             "fill",
                             "watched",
-                            "distance"
+                            "distance",
+                            "spx",
+                            "spx_reason"
                           ]
                         }
                       }
@@ -1906,6 +1920,18 @@
                                 "null"
                               ]
                             },
+                            "spx": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "spx_reason": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
                             "greeks": {
                               "type": "object",
                               "propertyNames": {
@@ -2021,6 +2047,8 @@
                             "pnl",
                             "captured",
                             "contract_size",
+                            "spx",
+                            "spx_reason",
                             "greeks",
                             "fetched_at",
                             "dte",

@@ -5,6 +5,8 @@
  *  reads a field coerces it explicitly, which is also what the Python does: `total += sign * value`
  *  on a bool gives 1 there as `Number(true)` does here.
  */
+import { parseSpxCode } from "./contract.ts";
+import { toFixed } from "./js.ts";
 import { displayTime, marketTimeToDisplay } from "./timefmt.ts";
 
 export type Quote = Record<string, unknown>;
@@ -100,4 +102,76 @@ export function verifyVerdict(codes: string[], batch: Batch): string | null {
     return `contract does not exist: ${missing.join(", ")} — check strike and expiry`;
   }
   return null;
+}
+
+/** SPX's price as the batch implies it, or null and the reason there is none (#288, ADR 0024). */
+export interface DerivedSpx {
+  /** points, to two places; null where nothing in the batch can give it */
+  price: number | null;
+  /** why `price` is null, in words a dash can sit beside; null when there is a price */
+  reason: string | null;
+}
+
+/** A figure from the wire, or null for anything that is not a finite number. `typeof` because
+ *  moomoo has no published schema: a field can arrive as a string or a boolean. */
+function finite(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** SPX's price, worked out from the option quotes a batch already holds (#288, ADR 0024).
+ *
+ *  moomoo serves each option's `option_premium`: how far the index has to move for the option to
+ *  break even at expiry, as a percentage of the index, worked out from the option's LAST price
+ *  against the index as moomoo quotes it at that moment. Inverting it with that same last gives
+ *  that index level back, with p = premium / 100:
+ *
+ *    call  S = (K + last) / (1 + p)        put  S = (K − last) / (1 − p)
+ *
+ *  The batch's figure is the MEDIAN over every SPX option carrying both, rounded to two places.
+ *  Measured across the 2026-11-10 session against ^GSPC: median 0.05 points, p95 0.64.
+ *
+ *  - **No staleness filter.** moomoo recomputes the premium against the live index whatever the
+ *    last's age, so a contract that last traded thirteen hours ago inverts as well as one that
+ *    traded a minute ago — the check found the same error for both. A filter would only throw away
+ *    contracts.
+ *  - **Never the mid.** The premium was not worked out from it: inverted with the mid the error
+ *    was 2.6 points at the median and 29 at the p95.
+ *  - **Never a Reference.** A Reference is a figure nothing derives from (ADR 0018); this reads
+ *    only the options' own records, so there is nothing for one to fill.
+ *
+ *  A last of zero or less is no trade, and is left out: an option that never traded has no price
+ *  for the premium to have been worked out from. A premium may be negative (a deep put trading
+ *  below its intrinsic value) and is taken as it comes. An inversion that is not a positive finite
+ *  number — a put whose premium is 100% — is left out rather than allowed to move the median.
+ */
+export function derivedSpx(records: Quote[]): DerivedSpx {
+  let options = 0;
+  let premiums = 0;
+  const levels: number[] = [];
+  for (const record of records) {
+    // a code that is not a string is no code: `String([code])` would read an array as one
+    const contract = typeof record.code === "string" ? parseSpxCode(record.code) : null;
+    if (!contract) continue;
+    options += 1;
+    const premium = finite(record.option_premium);
+    if (premium === null) continue;
+    premiums += 1;
+    const last = finite(record.last_price);
+    if (last === null || last <= 0) continue;
+    const p = premium / 100;
+    const level = contract.option_type === "CALL"
+      ? (contract.strike + last) / (1 + p)
+      : (contract.strike - last) / (1 - p);
+    if (Number.isFinite(level) && level > 0) levels.push(level);
+  }
+  if (levels.length === 0) {
+    const reason = options === 0 ? "no SPX option in the batch to derive it from"
+      : premiums === 0 ? "the Provider gives no option premium to derive it from"
+        : "no option in the batch has both a last trade and a premium";
+    return { price: null, reason };
+  }
+  levels.sort((a, b) => a - b);
+  const mid = Math.floor(levels.length / 2);
+  const median = levels.length % 2 === 1 ? levels[mid]! : (levels[mid - 1]! + levels[mid]!) / 2;
+  return { price: toFixed(median, 2), reason: null };
 }

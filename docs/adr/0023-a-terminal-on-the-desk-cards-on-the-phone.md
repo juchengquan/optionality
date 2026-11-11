@@ -153,7 +153,7 @@ From the backend map; each slice says which it needs.
   - the payoff at expiry (legs and entry);
   - the per-leg delta, IV and vega of every sample (ADR 0011).
 - **Exists but not served:** the daily samples. The burndown and IV charts need one read-only route.
-- **Pending:** SPX's price, live and in each sample (PR 3b). It is derived from the batch's
+- **Decided by ADR 0024:** SPX's price, live and in each sample (PR 3b, #288). It is derived from the batch's
   `option_premium`, and waits on a market-hours check against an independent price. The strike
   strip, the price map and the payoff's spot marker depend on it. They do NOT borrow the Reference
   strip's SPX, because a Reference is a figure nothing derives from (ADR 0018), and a dot placed

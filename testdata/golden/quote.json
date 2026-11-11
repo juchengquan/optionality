@@ -225,6 +225,256 @@
       "expect": null
     },
     {
+      "fn": "derivedSpx",
+      "name": "a call: (strike + last) / (1 + premium)",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": 79.2,
+            "option_premium": 0.547
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7513.1,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "a put: (strike - last) / (1 - premium)",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261218P7525000",
+            "last_price": 160.24,
+            "option_premium": 2
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7515.06,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "a negative premium is taken as it comes",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113P7625000",
+            "last_price": 111.9,
+            "option_premium": -0.266
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7493.17,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "the median of three, in any order",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261218P7525000",
+            "last_price": 160.24,
+            "option_premium": 2
+          },
+          {
+            "code": "US.SPXW261204C7500000",
+            "last_price": 120,
+            "option_premium": 1.5
+          },
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": 79.2,
+            "option_premium": 0.547
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7513.1,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "two: the middle pair averaged before rounding",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": 79.2,
+            "option_premium": 0.547
+          },
+          {
+            "code": "US.SPXW261218P7525000",
+            "last_price": 160.24,
+            "option_premium": 2
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7514.08,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "a stale last stays in",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": 79.2,
+            "option_premium": 0.547,
+            "update_time": "2026-11-09 20:15:00"
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7513.1,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "the mid is never inverted",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": 79.2,
+            "option_premium": 0.547,
+            "mid_price": 81.4
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7513.1,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "what cannot be inverted is left out",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": 79.2,
+            "option_premium": 0.547
+          },
+          {
+            "code": "US..SPX",
+            "last_price": 7600,
+            "option_premium": 0
+          },
+          {
+            "code": "US.SPXW261113C7500000",
+            "last_price": 60
+          },
+          {
+            "code": "US.SPXW261113C7575000",
+            "last_price": 0,
+            "option_premium": 0.9
+          },
+          {
+            "code": "US.SPXW261113C7600000",
+            "last_price": "12.5",
+            "option_premium": 0.9
+          },
+          {
+            "code": "US.SPXW261113C7625000",
+            "last_price": 10,
+            "option_premium": true
+          },
+          {
+            "code": "US.SPXW261113P7500000",
+            "last_price": 10,
+            "option_premium": 100
+          }
+        ]
+      ],
+      "expect": {
+        "price": 7513.1,
+        "reason": null
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "no SPX option in the batch",
+      "args": [
+        []
+      ],
+      "expect": {
+        "price": null,
+        "reason": "no SPX option in the batch to derive it from"
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "a code that is not a string is no option",
+      "args": [
+        [
+          {
+            "code": [
+              "US.SPXW261113C7475000"
+            ],
+            "last_price": 79.2,
+            "option_premium": 0.547
+          }
+        ]
+      ],
+      "expect": {
+        "price": null,
+        "reason": "no SPX option in the batch to derive it from"
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "a missing premium",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": 79.2
+          },
+          {
+            "code": "US.SPXW261218P7525000",
+            "last_price": 160.24,
+            "option_premium": null
+          }
+        ]
+      ],
+      "expect": {
+        "price": null,
+        "reason": "the Provider gives no option premium to derive it from"
+      }
+    },
+    {
+      "fn": "derivedSpx",
+      "name": "a premium with no last trade",
+      "args": [
+        [
+          {
+            "code": "US.SPXW261113C7475000",
+            "last_price": null,
+            "option_premium": 0.547
+          }
+        ]
+      ],
+      "expect": {
+        "price": null,
+        "reason": "no option in the batch has both a last trade and a premium"
+      }
+    },
+    {
       "fn": "round4",
       "name": "four places",
       "args": [

@@ -171,7 +171,9 @@
           "pnl": null,
           "fill": 70,
           "watched": 0.21,
-          "distance": 0.09
+          "distance": 0.09,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-interest",
@@ -210,7 +212,9 @@
           "pnl": null,
           "fill": null,
           "watched": null,
-          "distance": null
+          "distance": null,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         }
       ]
     },

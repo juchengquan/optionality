@@ -29,6 +29,7 @@ still in force. Git holds the full history of each.
 | [21](0021-the-python-can-run-the-service.md) | The Python can run the service, one backend at a time | accepted, not built; six phases |
 | [22](0022-a-closed-holding-is-kept.md) | A closed holding is kept | built, in both backends |
 | [23](0023-a-terminal-on-the-desk-cards-on-the-phone.md) | A terminal on the desk, cards on the phone | accepted, not built; amends 3, 7, 8 and 12 |
+| [24](0024-spx-is-derived-from-the-premiums.md) | SPX's price is derived from the options' premiums | built, in both backends; amends 11 |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained
 in force. A new decision takes the next number, and numbers are never reused.
