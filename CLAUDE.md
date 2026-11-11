@@ -649,6 +649,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   schedule: only a drill shows launchd, the real vendors and the switch itself working, and it
   waits for the guard. `DRY_RUN=1 node tools/use-backend.mjs switch <backend>` prints the switch
   without doing any of it.
+- **OpenD's config is outside the repo and an OpenD upgrade resets it.** The service reaches OpenD
+  only over its websocket (`MOOMOO_WS_PORT`, 33333), authenticated by `MOOMOO_WS_KEY` — a secret
+  we make up, held in `.env` in clear and in `~/_workspace/OpenD/OpenD.xml` as its MD5
+  (`.env.example` shows the lines). OpenD's console `update` rewrites `OpenD.xml` with the stock
+  file, which comments out the websocket and the telnet console: on 2026-11-11 the sweep then failed
+  for an hour with "OpenD login timed out" while OpenD said "Login successful". After any OpenD
+  upgrade, check that something listens on 33333.
 - **`com.optionality.opend`** (`make launchd-opend-install`) watches OpenD, which everything else
   depends on and nothing was watching: it exited cleanly after 23 days up on 2026-11-08 and the
   sweep failed 646 times over 2h42m. A TIMER every 60s calling `~/openD.sh ensure`, not KeepAlive,
