@@ -404,6 +404,9 @@ export const INPUTS: Record<string, CaseInput[]> = {
       { "US.SPXW261218P6400000": { option_delta: -0.21, option_implied_volatility: 18.5 } }, 6900.5, 0] },
     { fn: "strikeDistances", name: "a code that names no SPX option is left out",
       args: [["US..SPX", "US.SPXW261218P6400000"], {}, 6900.5, 37] },
+    // the points round to -0, and σ from -0 is a negative zero that toFixed serves as +0
+    { fn: "strikeDistances", name: "SPX a hair past the strike: a zero sigma is a positive zero",
+      args: [["US.SPXW261218C7300000"], { "US.SPXW261218C7300000": { option_implied_volatility: 12 } }, 7300.004, 37] },
     { fn: "strikeDistances", name: "float noise in the points is rounded away",
       args: [["US.SPXW261218P6400000"], {}, 6900.1 + 0.2, 37] },
 
@@ -717,6 +720,10 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "toFixed", name: "a negative exact half", args: [-0.03125, 4] },
     { fn: "toFixed", name: "no decimals at all", args: [2.5, 0] },
     { fn: "toFixed", name: "NaN survives", args: [NaN, 2] },
+    // `(-0).toFixed(2)` is "0.00", so the number back is +0; a negative that rounds to zero is
+    // "-0.00", which is -0: two zeros a plain JSON comparison cannot tell apart (#297's review)
+    { fn: "toFixed", name: "a negative zero comes back positive", args: [-0, 2] },
+    { fn: "toFixed", name: "a negative that rounds to zero keeps its sign", args: [-0.004, 2] },
     // ten decimals of a large double: `quantize` raised past the default context precision, which
     // the >= 1e21 guard covered only while digits <= 7 — true of every call site in the package,
     // so it was correct because its callers were disciplined (review 2026-11-01)

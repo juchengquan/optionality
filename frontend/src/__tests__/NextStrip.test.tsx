@@ -18,6 +18,12 @@ import { HOLDINGS, MONITORS, QUOTES, served } from "../testing/ownerBook";
 
 afterEach(cleanup);
 
+/** a lone long put held as a hedge: a holding, and no spread — no short strike for SPX to near */
+const HEDGE: Holding = {
+  ...HOLDINGS[0]!, id: "h-hedge", name: "1218_P6000L", legs: [{ side: "long", option_type: "PUT", strike: 6000 }],
+  legs_delta: { "US.SPXW261218P6000000": -0.05 }, short_strikes: [],
+};
+
 const holding = (id: string) => HOLDINGS.find((h) => h.id === id)!;
 const quote = (id: string) => QUOTES.find((q) => q.id === id)!;
 
@@ -33,10 +39,14 @@ function bare<T extends Entry | Holding>(row: T): T {
 
 describe("what a strip is made of", () => {
   it("takes a holding's short strikes as served and its long strikes from its legs", () => {
-    const s = stripOfHolding(holding("h-puts"));
+    const s = stripOfHolding(holding("h-puts"))!;
     expect(s.shorts.map((k) => [k.strike, k.delta, k.points])).toEqual([[6400, -0.21, 500.5]]);
     expect(s.longs).toEqual([{ option_type: "PUT", strike: 6350 }]);
     expect([s.spx, s.reason]).toEqual([6900.5, null]);
+  });
+
+  it("draws none for a holding with no short leg, as for a single contract: there is no short strike to place", () => {
+    expect(stripOfHolding(HEDGE)).toBeNull();
   });
 
   it("takes a watched spread's long strikes from its plus legs, and draws none for a single contract", () => {
@@ -47,18 +57,18 @@ describe("what a strip is made of", () => {
   });
 
   it("joins a condor held as two spreads into one strip", () => {
-    const s = joinStrips(stripOfHolding(holding("h-calls")), stripOfHolding(holding("h-puts")));
+    const s = joinStrips(stripOfHolding(holding("h-calls"))!, stripOfHolding(holding("h-puts"))!);
     expect(s.shorts.map((k) => k.strike)).toEqual([7300, 6400]);
     expect(s.longs.map((k) => k.strike)).toEqual([7350, 6350]);
   });
 
   it("names the short strike SPX is nearest by the served points, a strike already passed first", () => {
     // the 4-leg condor: the call at 7400 is 499.50 away, the put at 6300 600.50
-    expect(nearest(stripOfHolding(holding("h-ic")))!.strike).toBe(7400);
-    const past = { ...stripOfHolding(holding("h-ic")),
+    expect(nearest(stripOfHolding(holding("h-ic"))!)!.strike).toBe(7400);
+    const past = { ...stripOfHolding(holding("h-ic"))!,
       shorts: [served("2026-12-31", "CALL", 7400, 0.12, 38), served("2026-12-31", "PUT", 6950, -0.6, 38)] };
     expect(nearest(past)!.strike).toBe(6950);
-    expect(nearest(stripOfHolding(bare(holding("h-ic"))))).toBeNull();
+    expect(nearest(stripOfHolding(bare(holding("h-ic")))!)).toBeNull();
   });
 
   it("says a distance in points and σ, away or past it, and a dash without one", () => {
@@ -66,12 +76,14 @@ describe("what a strip is made of", () => {
     expect(distanceWords(served("2026-12-18", "PUT", 7150, -0.6, 38))).toBe("249.50 pts · 0.62σ past it");
     expect(distanceWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), sigma: null })).toBe("500.50 pts away");
     expect(distanceWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), points: null, sigma: null })).toBe("—");
-    expect(cellWords(stripOfHolding(holding("h-puts")))).toBe("500.50 pts · 1.25σ");
-    expect(cellWords(stripOfHolding(bare(holding("h-puts"))))).toBe("—");
+    expect(cellWords(stripOfHolding(holding("h-puts"))!)).toBe("500.50 pts · 1.25σ");
+    // already past its strike: the row's words carry the minus, as the served points do
+    expect(cellWords(stripOfEntry(quote("w-dec18"))!)).toBe("−249.50 pts · −0.62σ");
+    expect(cellWords(stripOfHolding(bare(holding("h-puts")))!)).toBe("—");
   });
 
   it("places every strike and SPX inside the scale, in order", () => {
-    const s = stripOfHolding(holding("h-ic"));
+    const s = stripOfHolding(holding("h-ic"))!;
     const at = scaleOf(s);
     const xs = [6250, 6300, 6900.5, 7400, 7450].map(at);
     expect([...xs].sort((a, b) => a - b)).toEqual(xs);
@@ -83,7 +95,7 @@ describe("the strip as drawn", () => {
   const text = () => document.querySelector(".nxs")!.textContent;
 
   it("draws SPX as a dot, each short strike with its Δ, each long strike, and says the distance", () => {
-    render(<StrikeStrip strip={stripOfHolding(holding("h-ic"))} />);
+    render(<StrikeStrip strip={stripOfHolding(holding("h-ic"))!} />);
     const fig = screen.getByRole("figure", { name: "strike strip" });
     expect(fig.querySelectorAll(".nxs-spx")).toHaveLength(1);
     expect([...fig.querySelectorAll<HTMLElement>(".nxs-k[data-side=short]")].map((k) => k.textContent))
@@ -96,7 +108,7 @@ describe("the strip as drawn", () => {
   });
 
   it("with no derived price, still draws the strikes and Δ, and shows a dash with its reason", () => {
-    render(<StrikeStrip strip={stripOfHolding(bare(holding("h-puts")))} />);
+    render(<StrikeStrip strip={stripOfHolding(bare(holding("h-puts")))!} />);
     expect(document.querySelector(".nxs-spx")).toBeNull();
     expect(document.querySelector(".nxs-k[data-side=short]")!.textContent).toBe("6400Δ −0.210");
     expect(document.querySelector(".nxs-k[data-side=long]")!.textContent).toBe("6350");
@@ -111,7 +123,7 @@ describe("the strip as drawn", () => {
   });
 
   it("is a bare scale in a row, with the distance said beside it", () => {
-    render(<StrikeStrip strip={stripOfHolding(holding("h-puts"))} compact />);
+    render(<StrikeStrip strip={stripOfHolding(holding("h-puts"))!} compact />);
     expect(document.querySelector(".nxs")!.hasAttribute("data-compact")).toBe(true);
     expect(document.querySelector(".nxs-k[data-side=short]")!.textContent).toBe("");
     expect(document.querySelector(".nxs-spx")).toBeTruthy();
@@ -141,6 +153,15 @@ describe("on the desk (arrangement A)", () => {
     for (const id of ["w-lone", "w-dec18-delta", "r-calls", "r-ic"]) {
       expect(deskRow(id).querySelector("[data-col=strip] .nxs"), id).toBeNull();
     }
+  });
+
+  it("leaves a holding with no short leg without a strip: no scale, and no dash to explain", () => {
+    render(<DeskBook {...deskProps({ holdings: [...HOLDINGS, HEDGE] })} />);
+    const cell = deskRow("h-hedge").querySelector<HTMLElement>("[data-col=strip]")!;
+    expect(cell.querySelector(".nxs")).toBeNull();
+    expect(cell.textContent).toBe("");
+    fireEvent.click(within(deskRow("h-hedge")).getByRole("button", { name: "1218_P6000L" }));
+    expect(within(screen.getByRole("complementary", { name: /inspector/ })).queryByRole("figure")).toBeNull();
   });
 
   it("says a dash in the row without a derived price, with the reason to a pointer and a reader", () => {
@@ -186,6 +207,13 @@ describe("on the phone (arrangement B)", () => {
       expect(within(card(id)).getByRole("figure", { name: "strike strip" }), id).toBeTruthy();
     }
     expect(within(card("w-lone")).queryByRole("figure")).toBeNull();
+  });
+
+  it("draws no strip on the card or in the sheet of a holding with no short leg", async () => {
+    render(<PhoneBook {...deskProps({ holdings: [...HOLDINGS, HEDGE] })} />);
+    expect(within(card("h-hedge")).queryByRole("figure")).toBeNull();
+    fireEvent.click(within(card("h-hedge")).getByRole("button", { name: "details of 1218_P6000L" }));
+    expect(within(await screen.findByRole("dialog")).queryByRole("figure")).toBeNull();
   });
 
   it("draws the strip in the detail sheet", async () => {

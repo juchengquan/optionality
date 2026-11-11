@@ -12,8 +12,8 @@ import { entryName, fieldWords, monitorName, QUARANTINED, sentence } from "../ne
 import type { PlacedHolding } from "../placement";
 import { holdingLegs, mutedWords, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
-import { StrikeStrip } from "../StrikeStrip";
-import { stripOfEntry, stripOfHolding } from "../strip";
+import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
+import { stripOfEntry } from "../strip";
 
 /** The button that makes a whole card one target. It is drawn over the card, so the card's text
  *  stays text to a screen reader and the button says what a tap does. */
@@ -69,7 +69,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, onOpen }: {
         <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
         <div><dt>short Δ</dt><dd>{shortDeltaWords(shortDeltas(holding, quotes, monitors))}</dd></div>
       </dl>
-      <StrikeStrip strip={stripOfHolding(holding)} />
+      <HoldingStrip holding={holding} />
       {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}
     </article>
   );

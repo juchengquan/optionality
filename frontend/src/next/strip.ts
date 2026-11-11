@@ -26,7 +26,10 @@ export interface Strip {
   reason: string | null;
 }
 
-export function stripOfHolding(h: Holding): Strip {
+/** A holding's strip; null for one with no short leg — a lone long held as a hedge — which has no
+ *  short strike for SPX to near, as `stripOfEntry` draws none for a single contract. */
+export function stripOfHolding(h: Holding): Strip | null {
+  if (!h.legs.some((l) => l.side === "short")) return null;
   return {
     // `?? []`: a payload from before the field was served draws no short strikes rather than failing
     shorts: h.short_strikes ?? [],

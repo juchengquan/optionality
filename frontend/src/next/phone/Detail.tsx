@@ -14,8 +14,8 @@ import { entryName, fieldWords, sentence } from "../needs";
 import { LevelChip, Progress, RuleLine } from "./Cards";
 import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
-import { StrikeStrip } from "../StrikeStrip";
-import { stripOfEntry, stripOfHolding } from "../strip";
+import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
+import { stripOfEntry } from "../strip";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
@@ -83,7 +83,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
           <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
           <LevelChip holding={holding} />
         </div>
-        <StrikeStrip strip={stripOfHolding(holding)} />
+        <HoldingStrip holding={holding} />
         <HoldingPayoff holding={holding} privacy={privacy} />
         <dl className="nxp-facts">
           <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>

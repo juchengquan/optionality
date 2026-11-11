@@ -13,7 +13,8 @@
  *  measured under the iPhone profile at a 24px text size.
  */
 import { DASH } from "../format";
-import { deltaWords, distanceWords, scaleOf, strikeName, type Strip } from "./strip";
+import type { Holding } from "../api";
+import { deltaWords, distanceWords, scaleOf, strikeName, stripOfHolding, type Strip } from "./strip";
 import "./StrikeStrip.css";
 
 export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?: boolean }) {
@@ -64,4 +65,10 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
       </figcaption>
     </figure>
   );
+}
+
+/** A holding's strip, or nothing for a holding with no short leg (`stripOfHolding`). */
+export function HoldingStrip({ holding }: { holding: Holding }) {
+  const strip = stripOfHolding(holding);
+  return strip ? <StrikeStrip strip={strip} /> : null;
 }

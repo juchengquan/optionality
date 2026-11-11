@@ -120,6 +120,28 @@
     },
     {
       "fn": "toFixed",
+      "name": "a negative zero comes back positive",
+      "args": [
+        {
+          "$num": "-0"
+        },
+        2
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "toFixed",
+      "name": "a negative that rounds to zero keeps its sign",
+      "args": [
+        -0.004,
+        2
+      ],
+      "expect": {
+        "$num": "-0"
+      }
+    },
+    {
+      "fn": "toFixed",
       "name": "ten decimals of a very large value",
       "args": [
         1000000000000000000,

@@ -781,6 +781,34 @@
     },
     {
       "fn": "strikeDistances",
+      "name": "SPX a hair past the strike: a zero sigma is a positive zero",
+      "args": [
+        [
+          "US.SPXW261218C7300000"
+        ],
+        {
+          "US.SPXW261218C7300000": {
+            "option_implied_volatility": 12
+          }
+        },
+        7300.004,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218C7300000",
+          "option_type": "CALL",
+          "strike": 7300,
+          "delta": null,
+          "points": {
+            "$num": "-0"
+          },
+          "sigma": 0
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
       "name": "float noise in the points is rounded away",
       "args": [
         [

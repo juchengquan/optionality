@@ -458,12 +458,21 @@ function HoldingDetail({ row, privacy, partners, onSelect }: {
         </button>
       ) : null}
       <Legs legs={h.legs.map((l) => `${l.side} ${l.option_type} ${l.strike}`)} />
-      <StrikeStrip strip={partner ? joinStrips(stripOfHolding(h), stripOfHolding(partner)) : stripOfHolding(h)} />
+      <InspectorStrip holding={h} partner={partner} />
       <HoldingPayoff holding={h} privacy={privacy} />
       <Figures row={row} privacy={privacy} extra={extra} />
       <Monitors entries={row.rules} />
     </>
   );
+}
+
+/** A holding's strike strip, its bracketed partner's strikes on the same scale; none for a holding
+ *  with no short leg. */
+function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holding | null }) {
+  const own = stripOfHolding(holding);
+  const other = partner ? stripOfHolding(partner) : null;
+  const strip = own && other ? joinStrips(own, other) : own;
+  return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
 function RuleDetail({ entry, rows, privacy }: { entry: Entry; rows: DeskRow[]; privacy: boolean }) {
