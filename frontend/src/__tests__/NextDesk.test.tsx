@@ -5,6 +5,7 @@
  *  under `__browser__/`.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding, Monitor } from "../api";
@@ -13,6 +14,7 @@ import { DeskBook } from "../next/desk/DeskBook";
 import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, type DeskRow } from "../next/desk/columns";
 import { Next } from "../next/Next";
 import { placeBook } from "../next/placement";
+import { readHidden } from "../prefs";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 function props(over: Partial<BookProps> = {}): BookProps {
@@ -121,6 +123,17 @@ describe("what each row says", () => {
     expect(row("h-calls").closest("li")!.contains(row("r-leg"))).toBe(true);
   });
 
+  it("gives a 4-leg holding the larger of its two short legs' deltas, in size", () => {
+    const leg = (id: string, code: string, type: string, d: number): Entry => ({
+      ...QUOTES.find((q) => q.id === "w-lone")!, id, code, option_type: type, held: true, scope: "leg",
+      in_combos: [], positions: [{ id: "h-ic", name: "1231_IC" }],
+      quote: { name: id, option_delta: d } as Entry["quote"], watched: d,
+    });
+    render(<DeskBook {...props({ quotes: [...QUOTES,
+      leg("r-c", "US.SPXW261231C7400000", "CALL", 0.12), leg("r-p", "US.SPXW261231P6300000", "PUT", -0.25)] })} />);
+    expect(cellText("h-ic", "delta")).toBe("-0.250");
+  });
+
   it("says a Level reached with a chip in the name cell, which never drops", () => {
     const holdings = HOLDINGS.map((h) => h.id === "h-calls"
       ? { ...h, schedule: { dte_at_open: 45, on_pace: 1.5, pace_gap: 2.9, target: 1, stop: 4,
@@ -198,7 +211,7 @@ describe("the inspector", () => {
     // the condor's other spread is one step away
     fireEvent.click(within(insp).getByRole("button", { name: /condor with 1218_P6400/ }));
     expect(screen.getByRole("complementary", { name: "inspector: 1218_P6400" })).toBeTruthy();
-    expect(row("h-puts").getAttribute("aria-selected")).toBe("true");
+    expect(row("h-puts").dataset.selected).toBe("");
   });
 
   it("is not modal: the table stays in the page, operable, and Escape or close shuts it", () => {
@@ -232,6 +245,74 @@ describe("the inspector", () => {
     fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
     rerender(<DeskBook {...props({ holdings: HOLDINGS.filter((h) => h.id !== "h-calls") })} />);
     expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull();
+  });
+
+  it("stays shut when the row comes back, as after one failed valuation", () => {
+    const { rerender } = render(<DeskBook {...props()} />);
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    rerender(<DeskBook {...props({ holdings: null, holdingsError: "/positions/values → 502" })} />);
+    expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull();
+    rerender(<DeskBook {...props()} />);
+    expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull();
+  });
+
+  it("leaves an Escape that closes the column picker to the picker", async () => {
+    render(<DeskBook {...props()} />);
+    await userEvent.click(within(row("w-dec18")).getByRole("button", { name: "1218_P7150" }));
+    await userEvent.click(screen.getByRole("button", { name: "book columns" }));
+    await screen.findByRole("group", { name: "book columns" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("group", { name: "book columns" })).toBeNull());
+    expect(screen.getByRole("complementary", { name: "inspector: 1218_P7150" })).toBeTruthy();
+    // and the next Escape, from the table, is the inspector's
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull();
+  });
+
+  it("leaves an Escape inside a dialog drawn outside the desk, as Settings is, to that dialog", async () => {
+    render(<><DeskBook {...props()} /><div role="dialog" aria-label="Settings"><input aria-label="code" /></div></>);
+    await userEvent.click(within(row("w-dec18")).getByRole("button", { name: "1218_P7150" }));
+    await userEvent.click(screen.getByLabelText("code"));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("complementary", { name: "inspector: 1218_P7150" })).toBeTruthy();
+  });
+
+  it("takes the focus when it opens and gives it back to the row when it closes", async () => {
+    render(<DeskBook {...props()} />);
+    const name = within(row("h-calls")).getByRole("button", { name: "1218_C7300" });
+    expect(name.getAttribute("aria-controls")).toBeNull();
+    await userEvent.click(name);
+    const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
+    expect(name.getAttribute("aria-expanded")).toBe("true");
+    expect(name.getAttribute("aria-controls")).toBe(insp.id);
+    expect(insp.contains(document.activeElement)).toBe(true);
+    await userEvent.click(within(insp).getByRole("button", { name: "close the inspector" }));
+    expect(document.activeElement).toBe(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    // and by Escape
+    await userEvent.click(within(row("w-dec31")).getByRole("button", { name: "1231_C7600" }));
+    await userEvent.keyboard("{Escape}");
+    expect(document.activeElement).toBe(within(row("w-dec31")).getByRole("button", { name: "1231_C7600" }));
+  });
+
+  it("puts no ARIA state on a row that has no role to carry it", () => {
+    render(<DeskBook {...props()} />);
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    for (const r of document.querySelectorAll(".nxd-row")) {
+      if (!r.getAttribute("role")) expect(r.getAttribute("aria-selected")).toBeNull();
+    }
+  });
+
+  it("says how many contracts, and hides the count under privacy, which would give the size away", () => {
+    render(<DeskBook {...props()} />);
+    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+    let insp = screen.getByRole("complementary", { name: /inspector/ });
+    expect(within(insp).getByText("contracts").nextElementSibling!.textContent).toBe("×1");
+    cleanup();
+    render(<DeskBook {...props({ privacy: true })} />);
+    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+    insp = screen.getByRole("complementary", { name: /inspector/ });
+    expect(within(insp).getByText("contracts").nextElementSibling!.textContent).not.toMatch(/\d/);
+    expect(document.querySelector(".nxd")!.textContent).not.toMatch(/×\d/);
   });
 });
 
@@ -346,6 +427,28 @@ describe("the columns", () => {
       // and every column but the pinned name is in the order exactly once
       expect([...order].sort()).toEqual(COLUMNS[mode].map((c) => c.key).filter((k) => k !== "name").sort());
     }
+  });
+});
+
+describe("the column choice is shared with /opt, and only the desk's part of it is changed", () => {
+  it("puts back only the columns the desk offers on show all", async () => {
+    document.cookie = "ui_cols_combo=expiry.gamma.pnl.theta.vega;path=/";
+    render(<DeskBook {...props()} />);
+    await userEvent.click(screen.getByRole("button", { name: "book columns" }));
+    const picker = await screen.findByRole("group", { name: "book columns" });
+    await userEvent.click(within(picker).getByText("show all"));
+    expect([...readHidden("combo")].sort()).toEqual(["expiry", "gamma", "theta", "vega"]);
+    expect(headers()).toContain("pnl");
+  });
+
+  it("keeps a choice another tab made since this one read the cookie", async () => {
+    document.cookie = "ui_cols_combo=pnl;path=/";
+    render(<DeskBook {...props()} />);
+    document.cookie = "ui_cols_combo=gamma.pnl;path=/";
+    await userEvent.click(screen.getByRole("button", { name: "book columns" }));
+    const picker = await screen.findByRole("group", { name: "book columns" });
+    await userEvent.click(within(picker).getByRole("checkbox", { name: "Δ" }));
+    expect([...readHidden("combo")].sort()).toEqual(["delta", "gamma", "pnl"]);
   });
 });
 

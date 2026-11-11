@@ -17,7 +17,9 @@
 
 .nxd-table {
   min-width: 0;
-  overflow: hidden;
+  /* clip, not hidden: hidden makes the table a scroll container, and its sticky header then sticks
+     to the table rather than to the page */
+  overflow-x: clip;
   font-family: var(--nxd-mono);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
@@ -77,7 +79,7 @@
   cursor: default;
 }
 .nxd-row:hover { background: color-mix(in oklch, var(--foreground) 4%, transparent); }
-.nxd-row[aria-selected="true"] {
+.nxd-row[data-selected] {
   background: color-mix(in oklch, var(--foreground) 8%, transparent);
   box-shadow: inset 2px 0 0 var(--foreground);
 }
@@ -110,15 +112,16 @@
 .nxd-row [data-col="alarm"] { display: flex; align-items: center; gap: 1ch; }
 .nxd-row [data-col="alarm"] .nxd-v { overflow: hidden; text-overflow: ellipsis; }
 
-/* the bracket joining a condor's two held spreads */
-[data-bracket] { position: relative; }
+/* the bracket joining a condor's two held spreads: one piece on each row it passes, so it runs from
+   the first holding's row to the second's whatever rules sit under either */
 .nxd-bracket {
-  position: absolute; left: 0.1rem; top: calc(var(--nxd-row) / 2); bottom: calc(var(--nxd-row) / 2);
-  width: 0.4rem; z-index: 1;
-  border: 2px solid color-mix(in oklch, var(--foreground) 55%, var(--background));
-  border-right: 0; border-radius: 3px 0 0 3px;
-  pointer-events: none;
+  --nxd-bracket: color-mix(in oklch, var(--foreground) 55%, var(--background));
+  position: absolute; left: 0.1rem; width: 0.4rem; z-index: 1; pointer-events: none;
+  border-left: 2px solid var(--nxd-bracket);
 }
+.nxd-bracket[data-part="top"] { top: 50%; bottom: -1px; border-top: 2px solid var(--nxd-bracket); border-top-left-radius: 3px; }
+.nxd-bracket[data-part="through"] { top: -1px; bottom: -1px; }
+.nxd-bracket[data-part="bottom"] { top: -1px; bottom: 50%; border-bottom: 2px solid var(--nxd-bracket); border-bottom-left-radius: 3px; }
 [data-bracket] .nxd-row[data-kind="holding"] [data-col="name"] { padding-left: 1.5ch; }
 
 .nxd-fill {

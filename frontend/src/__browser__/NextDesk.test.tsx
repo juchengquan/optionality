@@ -28,13 +28,14 @@ const scheduled = HOLDINGS.map((h) => ({
 }));
 
 /** Every write refused: a layout suite never changes the book. */
-function serveOwnerBook(): void {
+function serveOwnerBook(extra: object[] = []): void {
+  const quotes = [...QUOTES, ...extra];
   window.fetch = ((url: string, init?: RequestInit) => {
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
     }
     const path = String(url).replace(/^.*\/api/, "");
-    const body = path === "/quotes" ? QUOTES : path === "/monitors" ? MONITORS
+    const body = path === "/quotes" ? quotes : path === "/monitors" ? MONITORS
       : path === "/health" ? health : path === "/positions/values" ? scheduled : [];
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
@@ -46,9 +47,9 @@ const rowOf = (id: string) =>
 const shown = () => [...document.querySelectorAll<HTMLElement>(".nxd-head [data-col]")].map((c) => c.dataset.col!);
 
 /** The page in the mode asked for: the clock picks one, and the switch overrides it. */
-async function show(mode: "live" | "review", width: number) {
-  await page.viewport(width, 900);
-  serveOwnerBook();
+async function show(mode: "live" | "review", width: number, extra: object[] = [], height = 900) {
+  await page.viewport(width, height);
+  serveOwnerBook(extra);
   render(<Next />);
   await settle();
   fireEvent.click(screen.getByRole("button", { name: mode === "live" ? "Live" : "Review" }));
@@ -160,15 +161,46 @@ describe("columns are dropped as measured (ADR 0008)", () => {
   });
 });
 
-describe("the bracket and the attention colours, as drawn", () => {
-  it("joins the condor's two rows and no others", async () => {
-    await show("live", 1280);
-    const bracket = document.querySelector<HTMLElement>(".nxd-bracket")!.getBoundingClientRect();
-    const mid = (id: string) => { const r = rowOf(id).getBoundingClientRect(); return r.top + r.height / 2; };
-    expect(Math.abs(bracket.top - mid("h-calls"))).toBeLessThan(2);
-    expect(Math.abs(bracket.bottom - mid("h-puts"))).toBeLessThan(2);
-    expect(bracket.height).toBeGreaterThan(0);
+describe("the header row", () => {
+  it("stays at the top of the page while a long book scrolls under it", async () => {
+    const more = Array.from({ length: 40 }, (_, i) => ({
+      ...QUOTES.find((q) => q.id === "w-dec31")!, id: `more-${i}`, code: `0115_C${7000 + i * 10}`,
+      strike_date: "2027-01-15",
+    }));
+    await show("live", 1280, more, 700);
+    const head = document.querySelector<HTMLElement>(".nxd-head")!;
+    expect(document.documentElement.scrollHeight).toBeGreaterThan(1400);
+    window.scrollTo(0, 600);
+    await settle();
+    expect(Math.abs(head.getBoundingClientRect().top)).toBeLessThan(1);
+    window.scrollTo(0, 0);
   });
+});
+
+describe("the bracket and the attention colours, as drawn", () => {
+  /** The owner's usual setup: a delta rule under each held spread's short leg. */
+  const legRule = (id: string, holding: string, code: string, type: string) => ({
+    ...QUOTES.find((q) => q.id === "w-lone")!, id, code, option_type: type, strike_date: "2026-12-18",
+    held: true, scope: "leg", in_combos: [], positions: [{ id: holding, name: holding }],
+  });
+  const underBoth = [
+    legRule("r-call-leg", "h-calls", "US.SPXW261218C7300000", "CALL"),
+    legRule("r-put-leg", "h-puts", "US.SPXW261218P6400000", "PUT"),
+  ];
+
+  for (const [what, extra] of [["with the fixture's rules", []], ["with rules under both spreads", underBoth]] as const) {
+    it(`joins exactly the condor's two holding rows, ${what}`, async () => {
+      await show("live", 1280, [...extra]);
+      const parts = [...document.querySelectorAll<HTMLElement>(".nxd-bracket")]
+        .map((b) => b.getBoundingClientRect()).sort((a, b) => a.top - b.top);
+      expect(parts.length).toBeGreaterThan(0);
+      const mid = (id: string) => { const r = rowOf(id).getBoundingClientRect(); return r.top + r.height / 2; };
+      expect(Math.abs(parts[0]!.top - mid("h-calls"))).toBeLessThan(2);
+      expect(Math.abs(parts[parts.length - 1]!.bottom - mid("h-puts"))).toBeLessThan(2);
+      // one unbroken line, whatever rows lie between
+      for (let i = 1; i < parts.length; i++) expect(parts[i]!.top).toBeLessThanOrEqual(parts[i - 1]!.bottom + 1);
+    });
+  }
 
   it("recolours only the fired entry row when entries are set to look like risk", async () => {
     const paint = () => Object.fromEntries(["w-dec04", "r-calls", "q-unknown", "w-dec18"].map((id) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../../api";
@@ -38,37 +38,64 @@ export function DeskBook(props: BookProps) {
     .flatMap(([a, b]) => [[a!.holding.id, b!.holding], [b!.holding.id, a!.holding]] as [string, Holding][])),
   [placed]);
 
+  // The cookie is `/opt`'s combo table's too, and it hides columns the desk never offers (gamma,
+  // expiry…). So every change is made to the cookie as it stands NOW — another tab may have written
+  // it since this one read it — and touches only the desk's own keys.
   const [hidden, setHidden] = useState(() => readHidden("combo"));
   const fit = useDeskFit(mode, rows, hidden, privacy);
   const onToggle = useCallback((_: "single" | "combo", key: string, shown: boolean) => {
-    setHidden((h) => {
-      const next = new Set(h);
-      if (shown) next.delete(key); else next.add(key);
-      writeHidden("combo", next);
-      return next;
-    });
+    const next = readHidden("combo");
+    if (shown) next.delete(key); else next.add(key);
+    writeHidden("combo", next);
+    setHidden(next);
   }, []);
   const onReset = useCallback(() => {
-    const none = new Set<string>();
-    writeHidden("combo", none);
-    setHidden(none);
+    const next = readHidden("combo");
+    for (const key of DESK_KEYS) next.delete(key);
+    writeHidden("combo", next);
+    setHidden(next);
   }, []);
 
   const [selected, setSelected] = useState<string | null>(null);
   const current = selected === null ? null : rows.find((r) => rowId(r) === selected) ?? null;
-  const close = useCallback(() => setSelected(null), []);
+  // a row that leaves the book takes the selection with it: kept, it reopened the inspector by
+  // itself when the row came back, as on the poll after one failed valuation
+  useEffect(() => { if (selected !== null && !current) setSelected(null); }, [selected, current]);
+
+  // closing by hand hands the focus back to the row's button, which the close button took with it
+  const root = useRef<HTMLDivElement>(null);
+  const returnTo = useRef<string | null>(null);
+  const close = useCallback(() => setSelected((id) => { returnTo.current = id; return null; }), []);
+  useEffect(() => {
+    if (current || returnTo.current === null) return;
+    const id = returnTo.current;
+    returnTo.current = null;
+    [...(root.current?.querySelectorAll<HTMLElement>(".nxd-row[data-ref]") ?? [])]
+      .find((r) => r.dataset.ref === id)?.querySelector<HTMLElement>(".nxd-name")?.focus();
+  }, [current]);
+
+  // Escape is the inspector's only when nothing else took it: not one a popover or a dialog
+  // handled, and not one pressed inside a surface drawn outside the desk (Settings is a portal)
   useEffect(() => {
     if (!current) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const t = e.target;
+      if (t instanceof Node && t !== document && t !== document.body && !root.current?.contains(t)) return;
+      close();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [current, close]);
 
-  const ctx: Ctx = { columns: fit.columns, privacy, selected: current ? rowId(current) : null, select: setSelected };
+  const inspectorId = useId();
+  const ctx: Ctx = {
+    columns: fit.columns, privacy, selected: current ? rowId(current) : null, select: setSelected, inspectorId,
+  };
   const pickable = COLUMNS[mode].filter((c) => c.key !== "name" && (fit.offered.has(c.key) || hidden.has(c.key)));
 
   return (
-    <div className="nx-book nxd" data-inspecting={current ? "" : undefined}>
+    <div className="nx-book nxd" ref={root} data-inspecting={current ? "" : undefined}>
       <div className="nxd-table" ref={fit.ref} style={{ "--nxd-cols": fit.template } as React.CSSProperties}>
         <div className="nxd-head nxd-grid">
           {fit.columns.map((c) => (
@@ -85,7 +112,7 @@ export function DeskBook(props: BookProps) {
         <Muted monitors={placed.muted} />
       </div>
 
-      {current ? <Inspector row={current} mode={mode} privacy={privacy} rows={rows} partners={partners}
+      {current ? <Inspector id={inspectorId} row={current} mode={mode} privacy={privacy} rows={rows} partners={partners}
                             onSelect={setSelected} onClose={close} /> : null}
     </div>
   );
@@ -96,7 +123,11 @@ interface Ctx {
   privacy: boolean;
   selected: string | null;
   select: (id: string) => void;
+  inspectorId: string;
 }
+
+/** Every key the desk draws: all it may change in the column cookie it shares with `/opt`. */
+const DESK_KEYS = new Set([...COLUMNS.live, ...COLUMNS.review].map((c) => c.key));
 
 /** Every row the table can draw, in the order it draws them: the fitting measures exactly these,
  *  and the inspector finds its row among them. */
@@ -146,14 +177,20 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, mode, ctx, pick
             {rows.map((bracket) => (
               <li key={bracket.map((p) => p.holding.id).join("+")}
                   data-bracket={bracket.length === 2 ? "condor" : undefined}>
-                {bracket.length === 2 ? <span className="nxd-bracket" aria-hidden="true" /> : null}
                 <ul>
-                  {bracket.map(({ holding, rules }) => (
-                    <li key={holding.id}>
-                      <Row row={{ kind: "holding", holding, rules }} ctx={ctx} />
-                      {rules.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
-                    </li>
-                  ))}
+                  {bracket.map(({ holding, rules }, i) => {
+                    // drawn in pieces on the rows it passes, so it runs from the first holding's
+                    // row to the second's whatever rules sit under either
+                    const paired = bracket.length === 2;
+                    return (
+                      <li key={holding.id}>
+                        <Row row={{ kind: "holding", holding, rules }} ctx={ctx}
+                             bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} />
+                        {rules.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}
+                                               bracket={paired && i === 0 ? "through" : undefined} />)}
+                      </li>
+                    );
+                  })}
                 </ul>
               </li>
             ))}
@@ -243,7 +280,7 @@ function stateOf(row: DeskRow): string {
   return a ?? "calm";
 }
 
-function Row({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
+function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | "through" | "bottom" }) {
   const id = rowId(row);
   const shown = new Set(ctx.columns.map((c) => c.key));
   const isRule = row.kind === "rule";
@@ -252,8 +289,9 @@ function Row({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
   return (
     <div className="nxd-row nxd-grid" data-ref={id} data-kind={row.kind} data-state={stateOf(row)}
          data-nested={isRule && row.nested ? "" : undefined}
-         aria-selected={ctx.selected === id ? "true" : undefined}
+         data-selected={ctx.selected === id ? "" : undefined}
          onClick={() => ctx.select(id)}>
+      {bracket ? <span className="nxd-bracket" data-part={bracket} aria-hidden="true" /> : null}
       {ctx.columns.map((c) => (
         <span key={c.key} data-col={c.key} data-align={c.align}>
           {c.key === "name" ? <NameCell row={row} ctx={ctx} /> : <Cell row={row} column={c} privacy={ctx.privacy} />}
@@ -269,6 +307,7 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
   return (
     <>
       <button type="button" className="nxd-name" aria-expanded={ctx.selected === rowId(row)}
+              aria-controls={ctx.selected === rowId(row) ? ctx.inspectorId : undefined}
               onClick={(e) => { e.stopPropagation(); ctx.select(rowId(row)); }}>
         {rowName(row)}
       </button>
@@ -322,15 +361,19 @@ function Fill({ entry }: { entry: Entry }) {
 
 // ---- the inspector
 
-function Inspector({ row, mode, privacy, rows, partners, onSelect, onClose }: {
-  row: DeskRow; mode: Mode; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
+function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose }: {
+  id: string; row: DeskRow; mode: Mode; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
   onSelect: (id: string) => void; onClose: () => void;
 }) {
   const name = rowName(row);
+  // the focus follows what was opened, so a keyboard reader lands on it
+  const heading = useRef<HTMLHeadingElement>(null);
+  const subject = rowId(row);
+  useEffect(() => { heading.current?.focus(); }, [subject]);
   return (
-    <aside className="nxd-inspector" aria-label={`inspector: ${name}`}>
+    <aside id={id} className="nxd-inspector" aria-label={`inspector: ${name}`}>
       <div className="nxd-insp-head">
-        <h3>{name}</h3>
+        <h3 ref={heading} tabIndex={-1}>{name}</h3>
         <button type="button" className="nxd-close" aria-label="close the inspector" onClick={onClose}>
           <X aria-hidden="true" />
         </button>
@@ -375,7 +418,8 @@ function HoldingDetail({ row, privacy, partners, onSelect }: {
   const greek = (k: string, places: number) => (g[k] === null || g[k] === undefined ? "—" : g[k]!.toFixed(places));
   const extra: [string, React.ReactNode][] = [
     ["entry", h.entry === null ? "—" : h.entry.toFixed(2)],
-    ["contracts", `×${h.contracts}`],
+    // privacy hides the count too: contracts × points × the contract size is the money it hides
+    ["contracts", privacy ? "×•••" : `×${h.contracts}`],
     ["position Δ", greek("option_delta", 3)],
     ["position θ", greek("option_theta", 2)],
     ["position vega", greek("option_vega", 2)],
