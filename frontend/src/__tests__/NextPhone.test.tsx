@@ -67,7 +67,8 @@ describe("the Live cards, on the owner's book", () => {
   });
 
   it("give a held spread a large P&L, its Cost to close, short-leg Δ, DTE and the Level reached", () => {
-    const stopped: Holding[] = HOLDINGS.map((h) => h.id === "h-calls"
+    // the deltas withheld, so the short call's is its rule's (the fallback, #318)
+    const stopped: Holding[] = HOLDINGS.map((h) => ({ ...h, legs_delta: null })).map((h) => h.id === "h-calls"
       ? { ...h, schedule: { ...SCHEDULE, reached: "stop" } } as Holding : h);
     draw({ holdings: stopped, quotes: [...QUOTES, SHORT_LEG], monitors: [...MONITORS, SHORT_LEG_RULE] });
     const c = card("h-calls");
@@ -76,8 +77,24 @@ describe("the Live cards, on the owner's book", () => {
     expect(within(c).getByText("0.231")).toBeTruthy();        // the short call's Δ, from its rule
     expect(within(c).getByText("38 DTE")).toBeTruthy();
     expect(within(c).getByText("at stop")).toBeTruthy();
-    // a holding with no rule on its short leg has no figure to show, and says so with a dash
+    // no served delta and no rule on its short leg: no figure to show, and it says so with a dash
     expect(within(card("h-puts")).getByText("short Δ").nextSibling!.textContent).toBe("—");
+  });
+
+  it("prefer the served delta to a rule's on the same leg", () => {
+    // both come from the Provider; the order #318 asks for is served first
+    draw({ quotes: [...QUOTES, SHORT_LEG], monitors: [...MONITORS, SHORT_LEG_RULE] });
+    expect(within(card("h-calls")).getByText("short Δ").nextSibling!.textContent).toBe("0.330");
+  });
+
+  it("give each held spread its short leg's delta as the service serves it, with no rule on the leg", () => {
+    // #318: each leg's own delta comes with the holding; the fixture has no rule on any held leg
+    draw();
+    const short = (id: string) => within(card(id)).getByText("short Δ").nextSibling!.textContent;
+    expect(short("h-calls")).toBe("0.330");
+    expect(short("h-puts")).toBe("-0.210");
+    // a 4-leg holding lists each short leg
+    expect(short("h-ic")).toBe("C7400 0.120 · P6300 -0.250");
   });
 
   it("show a candidate's progress toward its threshold and each Monitor's sentence", () => {

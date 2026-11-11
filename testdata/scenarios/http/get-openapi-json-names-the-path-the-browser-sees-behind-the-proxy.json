@@ -1944,6 +1944,22 @@
                                 ]
                               }
                             },
+                            "legs_delta": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {
+                                    "type": "number"
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "fetched_at": {
                               "type": [
                                 "string",
@@ -2050,6 +2066,7 @@
                             "spx",
                             "spx_reason",
                             "greeks",
+                            "legs_delta",
                             "fetched_at",
                             "dte",
                             "schedule"

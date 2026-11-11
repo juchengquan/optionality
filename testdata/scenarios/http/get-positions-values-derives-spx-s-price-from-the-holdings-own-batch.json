@@ -240,6 +240,12 @@
             "option_theta": 0,
             "option_vega": 0
           },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.21,
+            "US.SPXW261218C7350000": 0.15,
+            "US.SPXW261218P6400000": -0.18,
+            "US.SPXW261218P6350000": -0.12
+          },
           "fetched_at": "2026-11-09 23:00:00+08:00",
           "dte": 39,
           "schedule": {

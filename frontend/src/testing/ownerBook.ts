@@ -58,8 +58,8 @@ function holding(id: string, over: Partial<Holding> & { strike_date: string; leg
   return {
     id, name: id, strategy: null, contracts: 1, entry: 2, created_at: null, opened_at: "2026-11-03",
     closed_on: null, exit: null, realized_points: null, cost_to_close: 1, pnl: 100, captured: 0.5,
-    contract_size: 100, spx: 6900.5, spx_reason: null, greeks: {}, fetched_at: "x", dte: 38,
-    schedule: null, ...over,
+    contract_size: 100, spx: 6900.5, spx_reason: null, greeks: {}, legs_delta: null, fetched_at: "x",
+    dte: 38, schedule: null, ...over,
   } as Holding;
 }
 
@@ -69,13 +69,18 @@ const side = (s: "short" | "long", option_type: "CALL" | "PUT", strike: number) 
 export const HOLDINGS: Holding[] = [
   // a condor held as two spreads, put side first so the pairing does not lean on arrival order
   holding("h-puts", { name: "1218_P6400", strike_date: "2026-12-18",
-    legs: [side("short", "PUT", 6400), side("long", "PUT", 6350)] }),
+    legs: [side("short", "PUT", 6400), side("long", "PUT", 6350)],
+    // each leg's own delta, as /positions/values serves it (#318); no rule watches either leg
+    legs_delta: { "US.SPXW261218P6400000": -0.21, "US.SPXW261218P6350000": -0.15 } }),
   holding("h-calls", { name: "1218_C7300", strike_date: "2026-12-18",
-    legs: [side("short", "CALL", 7300), side("long", "CALL", 7350)], cost_to_close: 4.4, pnl: -240 }),
+    legs: [side("short", "CALL", 7300), side("long", "CALL", 7350)], cost_to_close: 4.4, pnl: -240,
+    legs_delta: { "US.SPXW261218C7300000": 0.33, "US.SPXW261218C7350000": 0.24 } }),
   // a 4-leg condor held as one: one row, never split
   holding("h-ic", { name: "1231_IC", strike_date: "2026-12-31", entry: 5,
     legs: [side("short", "CALL", 7400), side("long", "CALL", 7450),
-           side("short", "PUT", 6300), side("long", "PUT", 6250)] }),
+           side("short", "PUT", 6300), side("long", "PUT", 6250)],
+    legs_delta: { "US.SPXW261231C7400000": 0.12, "US.SPXW261231C7450000": 0.08,
+                  "US.SPXW261231P6300000": -0.25, "US.SPXW261231P6250000": -0.18 } }),
 ];
 
 function monitor(id: string, over: Partial<Monitor>): Monitor {

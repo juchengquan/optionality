@@ -181,6 +181,8 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["values"]>[number]["contract_size"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["spx"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["spx_reason"], string | null>>,
+  // each leg's own delta: where a short leg's Δ comes from (#318)
+  Checked<Exactly<Ok<E["values"]>[number]["legs_delta"], Record<string, number> | null>>,
   Checked<Known<Ok<E["values"]>[number]["greeks"]>>,
   // a closed holding, as the Holdings panel's closed list reads it (ADR 0022)
   Checked<Exactly<Ok<E["positions"]>[number]["closed_on"], string | null>>,
