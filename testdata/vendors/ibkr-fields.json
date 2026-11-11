@@ -4,7 +4,7 @@
     "GREEK_TICKS": {
       "$set": [
         13,
-        53
+        83
       ]
     },
     "PRICE_TICKS": {

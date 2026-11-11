@@ -246,5 +246,5 @@ def standing(**schedule: Any) -> str:
         "reached": None,
         "manage_by_due": False,
     }
-    value = HoldingValue(row=None, position=None, cost=None, pnl=None, schedule=full | schedule, dte=30)  # type: ignore[arg-type]
+    value = HoldingValue(row=None, position=None, cost=None, pnl=None, captured=None, schedule=full | schedule, dte=30)  # type: ignore[arg-type]
     return standing_note(value)

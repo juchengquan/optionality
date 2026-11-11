@@ -11,11 +11,15 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_BAND } from "../columns";
 import {
-  readBand, readGrouping, readHidden, readRefresh, readSignal, writeBand, writeGrouping,
-  writeHidden, writeRefresh, writeSignal,
+  readArrangement, readBand, readEntryStyle, readGrouping, readHidden, readPrivacy, readRefresh,
+  readSignal, readUp, writeArrangement, writeBand, writeEntryStyle, writeGrouping, writeHidden,
+  writePrivacy, writeRefresh, writeSignal, writeUp,
 } from "../prefs";
 
-const NAMES = ["ui_cols_single", "ui_cols_combo", "ui_signal", "ui_band", "ui_group", "ui_refresh"];
+const NAMES = [
+  "ui_cols_single", "ui_cols_combo", "ui_signal", "ui_band", "ui_group", "ui_refresh",
+  "ui_up", "ui_entry", "ui_privacy", "ui_arrangement",
+];
 const clear = () => { for (const n of NAMES) document.cookie = `${n}=;path=/`; };
 afterEach(clear);
 
@@ -71,6 +75,10 @@ describe("every preference is written to outlive the tab", () => {
     ["the grouping", () => writeGrouping("type")],
     ["the hidden columns", () => writeHidden("combo", new Set(["legs"]))],
     ["the cadence", () => writeRefresh(30)],
+    ["which way is up", () => writeUp("red")],
+    ["how a fired entry rule looks", () => writeEntryStyle("risk")],
+    ["privacy", () => writePrivacy(true)],
+    ["the arrangement", () => writeArrangement("phone")],
   ];
 
   for (const [what, write] of writes) {
@@ -150,5 +158,47 @@ describe("a preference that cannot be honoured", () => {
   it("reads an unknown signal as the distance", () => {
     document.cookie = "ui_signal=vibes;path=/";
     expect(readSignal()).toBe("distance");
+  });
+});
+
+/** The redesigned page's four (ADR 0023). Each is read where nothing has been chosen, and each has
+ *  a default that is the design's, not the browser's: green-up, an entry rule that fires looks like
+ *  the good news it is, figures shown, and the width deciding the arrangement. */
+describe("the redesigned page's preferences", () => {
+  it("defaults to green-up, and remembers red-up", () => {
+    expect(readUp()).toBe("green");
+    writeUp("red");
+    expect(readUp()).toBe("red");
+  });
+
+  it("defaults a fired entry rule to its own style, and remembers the risk style", () => {
+    expect(readEntryStyle()).toBe("opportunity");
+    writeEntryStyle("risk");
+    expect(readEntryStyle()).toBe("risk");
+  });
+
+  it("shows the figures until privacy is switched on, and switches it off again", () => {
+    expect(readPrivacy()).toBe(false);
+    writePrivacy(true);
+    expect(readPrivacy()).toBe(true);
+    writePrivacy(false);
+    expect(readPrivacy()).toBe(false);
+  });
+
+  it("lets the width decide until an arrangement is forced", () => {
+    expect(readArrangement()).toBe("auto");
+    writeArrangement("desk");
+    expect(readArrangement()).toBe("desk");
+    writeArrangement("auto");
+    expect(readArrangement()).toBe("auto");
+  });
+
+  it("reads a hand-edited value it does not know as the default", () => {
+    document.cookie = "ui_up=blue;path=/";
+    document.cookie = "ui_entry=loud;path=/";
+    document.cookie = "ui_privacy=yes;path=/";
+    document.cookie = "ui_arrangement=tablet;path=/";
+    expect([readUp(), readEntryStyle(), readPrivacy(), readArrangement()])
+      .toEqual(["green", "opportunity", false, "auto"]);
   });
 });

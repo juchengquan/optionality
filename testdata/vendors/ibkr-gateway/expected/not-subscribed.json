@@ -19,14 +19,14 @@
         "delayed": false,
         "last_known": false,
         "bid_price": 4.2,
-        "ask_price": 4.6,
-        "prev_close_price": 3.65,
-        "option_delta": 0.03284209377294264,
-        "option_gamma": 0.00022067750166468217,
-        "option_vega": 2.016363996552286,
-        "option_theta": -0.3307472642579796,
-        "option_implied_volatility": 13.635320870155306,
-        "mid_price": 4.4
+        "ask_price": 4.5,
+        "prev_close_price": 7.2,
+        "option_delta": 0.03764682724397263,
+        "option_gamma": 0.0002690308032405195,
+        "option_vega": 2.2448073466039205,
+        "option_theta": -0.3537385013887615,
+        "option_implied_volatility": 12.633759255450055,
+        "mid_price": 4.35
       },
       {
         "code": "INDU"

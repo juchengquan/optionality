@@ -106,9 +106,13 @@ export function reqContractDetails(reqId: number, c: TwsContract): string {
   ]);
 }
 
-/** Ask for one contract's figures. `snapshot` true is the one-shot form (ADR: one ask, one
- *  answer); the streaming form is deliberately unused, because a running board of prices would
- *  make a dead session look like a calm market. */
+/** Ask for one contract's figures, as a snapshot (`snapshot` true) or a stream.
+ *
+ *  `client.ts` asks an option for a snapshot and an INDEX for a stream, because a snapshot of an
+ *  index carries no figure at any hour: the account has no snapshot permission for one (#257,
+ *  `index-in-the-session`). It is still one ask and one answer: the stream is cancelled when the
+ *  ask finishes, so no running board of prices outlives it to make a dead session look like a
+ *  calm market. */
 export function reqMktData(reqId: number, c: TwsContract, snapshot: boolean): string {
   const VERSION = 11;
   return toFields([

@@ -119,3 +119,16 @@ def is_breached(value: float, threshold: float, direction: str, compare: str) ->
     """Whether the value has breached, at the threshold exactly. Anything not "below" is above."""
     metric = value if compare == "signed" else abs(value)
     return metric <= threshold if direction == "below" else metric >= threshold
+
+
+def threshold_distance(value: float | None, threshold: float, direction: str, compare: str) -> float | None:
+    """How far the watched figure still has to move to breach, in the field's own units (ADR 0023).
+
+    `is_breached` said as a number, reading the figure as it does, so the distance is at or below zero
+    EXACTLY when `is_breached` is true — 0 at the threshold itself — and negative by how far past it.
+    None where there is no figure to measure: no reading, a NaN one, or a NaN threshold."""
+    if value is None:
+        return None
+    metric = value if compare == "signed" else abs(value)
+    distance = metric - threshold if direction == "below" else threshold - metric
+    return None if math.isnan(distance) else distance

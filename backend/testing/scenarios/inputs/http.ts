@@ -7,8 +7,8 @@
  */
 import type { HttpRequest, World } from "../format.ts";
 import {
-  BOOK, C7300, C7500, P6350, P6400, EXPIRY, at, combo, except, link, monitor, position, reference,
-  request, sample, world,
+  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, at, combo, except, link, monitor, position, quote,
+  reference, request, sample, world,
 } from "./fixtures.ts";
 
 export interface HttpInput {
@@ -88,6 +88,14 @@ const condorBody = {
   ],
 };
 
+/** The book with a far call priced too, which nothing holds and no combo names. */
+const WIDE = { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) };
+
+const CONDOR_SIGNS = [
+  { sign: -1, option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7350 },
+  { sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 },
+];
+
 const SPY = { name: "SPDR S&P 500 ETF", mid_price: 689.45, last_price: 689.4, prev_close_price: 685.2 };
 const VIX = {
   name: "CBOE Volatility Index", last_price: 16.82, prev_close_price: 17.4, delayed: true,
@@ -138,6 +146,140 @@ export const HTTP: readonly HttpInput[] = [
     world: world({
       tables: held,
       provider: { quotes: except(BOOK, C7300), unknown: [C7300] },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // what a rule's sentence reads after "now" (ADR 0023): how far each figure is from its
+    // threshold in the field's own units — negative past it, zero AT it, where the bell rings as
+    // well, signed for a signed rule, and nothing where nothing was priced
+    name: "GET /quotes says how far each rule is from its threshold",
+    world: world({
+      tables: {
+        monitors: [
+          // 2.75 against 2.50: a quarter past
+          monitor({ id: "mon-past", field: "mid_price", threshold: 2.5 }),
+          // 1.75 against 1.75: exactly at it, which is breached
+          monitor({ id: "mon-at", strike: 7350, field: "mid_price", threshold: 1.75 }),
+          // 4.50 waiting to fall to 1.50: three points to go
+          monitor({
+            id: "mon-inside", option_type: "PUT", strike: 6400, field: "mid_price", threshold: 1.5,
+            direction: "below",
+          }),
+          // nothing quoted for it
+          monitor({ id: "mon-unpriced", strike: 7500 }),
+          // -2.75 + 1.75 = -1.00, signed, below -0.75: a quarter past
+          combo({ id: "mon-calls", threshold: -0.75, direction: "below", compare: "signed" }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a single Contract's rule names every ENABLED combo whose legs hold that Contract, which is
+    // what sits a short leg's delta rule under its spread on the page (ADR 0023). A combo that
+    // was switched off is not in the watchlist and is not named; a Contract no combo holds, and
+    // a combo's own row, name none
+    name: "GET /quotes finds the spreads each single Contract is a leg of",
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-short-call" }),
+          monitor({ id: "mon-short-put", option_type: "PUT", strike: 6400 }),
+          monitor({ id: "mon-far-call", strike: 7500 }),
+          // the two combos holding the short call ARRIVE out of id order, so its list shows the
+          // sort rather than the order they came in. The watchlist orders by strike_date, legs,
+          // option_type and strike, which cannot tell two combos on one expiry apart, and a tie
+          // arrives as stored — which in a scenario is by id, because the format lists rows by
+          // key. So the condor's strike, which the API stores as 0 for a combo and nothing reads
+          // (its legs carry the strikes), is 1 here: it puts the condor second
+          combo({ id: "mon-spread" }),
+          combo({ id: "mon-condor", code: "dec-condor", strike: 1, legs: CONDOR_SIGNS }),
+          combo({
+            id: "mon-puts", code: "dec-puts", enabled: 0, disabled_reason: "no-figure",
+            legs: [
+              { sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 },
+            ],
+          }),
+        ],
+      },
+      provider: { quotes: WIDE },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // whether a rule watches anything held, which tells a risk alarm from an entry signal (ADR
+    // 0023). On a roll day two open holdings share the short call, so no link names either and
+    // `positions` is empty — but the Contract is held. A candidate nothing holds is not, and
+    // neither is a Contract only a CLOSED holding had
+    name: "GET /quotes says a rule is held on a roll day, when no link names the holding",
+    world: world({
+      tables: {
+        positions: [
+          position({
+            id: "pos-old", name: "dec-call-spread", strategy: "call spread", entry: 2,
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7300 },
+              { side: "long", option_type: "CALL", strike: 7350 },
+            ],
+          }),
+          position({
+            id: "pos-rolled", name: "dec-call-spread-wide", strategy: "call spread", entry: 2.5,
+            opened_at: "2026-11-09",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7300 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+          position({
+            id: "pos-closed", name: "dec-short-put", strategy: "short put", entry: 4,
+            closed_on: "2026-11-06", exit: 3.5,
+            legs: [{ side: "short", option_type: "PUT", strike: 6400 }],
+          }),
+        ],
+        monitors: [
+          monitor({ id: "mon-short-call" }),
+          monitor({ id: "mon-candidate", option_type: "PUT", strike: 6350 }),
+          monitor({ id: "mon-closed-put", option_type: "PUT", strike: 6400 }),
+        ],
+      },
+      provider: { quotes: WIDE },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a field the quote schema does not type passes through as the Provider sent it, so an
+    // infinite reading reaches the row. JSON cannot write one: it is served as no figure and no
+    // distance, the bar and the bell are decided on it as the sweep decides — full, and ringing —
+    // and every other row is answered as usual
+    name: "GET /quotes rings on an infinite reading it cannot serve, and answers every other row",
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-delta" }),
+          monitor({ id: "mon-interest", strike: 7350, field: "option_open_interest", threshold: 1000 }),
+        ],
+      },
+      provider: {
+        quotes: { ...BOOK, [C7350]: { ...BOOK[C7350], option_open_interest: "Infinity" } },
+      },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a reading that is not a number is no reading: no figure, no distance, no bar and no bell
+    name: "GET /quotes serves a reading that is not a number as no figure",
+    world: world({
+      tables: {
+        monitors: [
+          monitor({ id: "mon-delta" }),
+          monitor({ id: "mon-interest", strike: 7350, field: "option_open_interest", threshold: 1000 }),
+        ],
+      },
+      provider: {
+        quotes: { ...BOOK, [C7350]: { ...BOOK[C7350], option_open_interest: "n/a" } },
+      },
     }),
     request: request("GET", "/quotes"),
   },
@@ -317,6 +459,38 @@ export const HTTP: readonly HttpInput[] = [
   {
     name: "GET /positions/values values every holding from one call",
     world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // the share of a credit captured so far, (Entry − Cost to close) / Entry: the call spread was
+    // sold for 2.00 and costs 1.00 to close, so half is kept. A debit has no credit to keep a
+    // share of, and an Entry nobody recorded has no share either
+    name: "GET /positions/values gives a credit the share it has captured, and a debit none",
+    world: world({
+      tables: {
+        positions: [
+          position({
+            id: "pos-calls", name: "dec-call-spread", strategy: "call spread", entry: 2,
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7300 },
+              { side: "long", option_type: "CALL", strike: 7350 },
+            ],
+          }),
+          position({
+            id: "pos-puts", name: "dec-put-spread", strategy: "put spread", entry: null,
+            legs: [
+              { side: "short", option_type: "PUT", strike: 6400 },
+              { side: "long", option_type: "PUT", strike: 6350 },
+            ],
+          }),
+          position({
+            id: "pos-long", name: "dec-long-call", strategy: "long call", entry: -0.75,
+            legs: [{ side: "long", option_type: "CALL", strike: 7500 }],
+          }),
+        ],
+      },
+      provider: { quotes: WIDE },
+    }),
     request: request("GET", "/positions/values"),
   },
   {

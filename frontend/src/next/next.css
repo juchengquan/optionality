@@ -1,0 +1,171 @@
+/* The redesigned page's own look (ADR 0023), over the same base as `/opt`: app.css brings
+   Tailwind, shadcn's tokens and the shared pieces this page reuses (the freshness line, the
+   References strip). Everything this page decides is scoped under .nx, so nothing here can leak
+   into the page at /opt, which never loads this file. */
+@import "../app.css";
+
+/* app.css gives the old page a margin; this one draws edge to edge and pads its own regions */
+body { margin: 0; }
+
+/* THREE COLOUR FAMILIES, and the rule between them.
+   - DIRECTION (up/down) follows the viewer's setting, green-up by default.
+   - OUTCOME (P&L) follows the same setting.
+   - ATTENTION (alarm, warning, fault, entry signal) NEVER flips, and never shares the "down"
+     hue: it differs in lightness and in shape too — a filled chip with a glyph. The old palette
+     made a ringing row and an error message the same red, and a red-up viewer would have read
+     both as the market rising.
+   So alarm, fault and entry sit a clear step DARKER than both direction colours, in both schemes,
+   on hues away from red (27°) and green (150°): magenta, violet, blue. Warning is a dark ochre on
+   the light ground and a pale amber on the dark one. The browser suite holds every one of them at
+   least 0.15 apart in OKLab from both direction colours and 0.08 apart in lightness, a chip's
+   text at 4.5:1 against its fill, and a glyph at 3:1 against the page, in both schemes. */
+/* `.nx-tokens` is a surface drawn in a portal outside the page — the desk's Settings panel — and
+   carries the same tokens, so its glyphs are in their kinds' colours too */
+:is(.nx, .nx-tokens) {
+  --green: oklch(0.55 0.15 150);
+  --red: oklch(0.56 0.19 27);
+  --up: var(--green);
+  --down: var(--red);
+  --gain: var(--up);
+  --loss: var(--down);
+
+  --alarm: oklch(0.45 0.2 340);
+  --warn: oklch(0.42 0.09 70);
+  --fault: oklch(0.42 0.17 300);
+  --entry: oklch(0.45 0.11 230);
+  --chip-ink: oklch(0.99 0 0);
+  --warn-ink: oklch(0.99 0 0);
+}
+.nx {
+  --nx-gutter: 1.5rem;
+  min-height: 100dvh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+}
+/* the dark ground is the one this is read on, at night, in the US session */
+@media (prefers-color-scheme: dark) {
+  :is(.nx, .nx-tokens) {
+    --green: oklch(0.76 0.15 152);
+    --red: oklch(0.7 0.17 27);
+    --alarm: oklch(0.54 0.2 340);
+    --warn: oklch(0.86 0.14 80);
+    --fault: oklch(0.54 0.17 300);
+    --entry: oklch(0.52 0.11 230);
+    --warn-ink: oklch(0.2 0.02 75);
+  }
+}
+:is(.nx, .nx-tokens)[data-up="red"] { --up: var(--red); --down: var(--green); }
+
+[data-outcome="gain"] { color: var(--gain); }
+[data-outcome="loss"] { color: var(--loss); }
+
+/* attention: each state names its colour once, and a fired entry signal borrows the alarm's only
+   when the viewer asked for entries to look like risk */
+[data-attention="alarm"], [data-kind="alarm"], [data-kind="stop"] { --chip: var(--alarm); }
+[data-attention="fault"], [data-kind="fault"] { --chip: var(--fault); }
+[data-attention="entry"], [data-kind="entry"], [data-kind="target"] { --chip: var(--entry); }
+[data-kind="manage"] { --chip: var(--warn); }
+[data-kind="manage"] .nx-chip, .nx-chip[data-attention="warn"] { color: var(--warn-ink); }
+:is(.nx, .nx-tokens)[data-entry="risk"] :is([data-attention="entry"], [data-kind="entry"]) { --chip: var(--alarm); }
+
+.nx-chip {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.05rem 0.45rem; border-radius: 999px;
+  background: var(--chip); color: var(--chip-ink);
+  font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+}
+.nx-chip svg { width: 0.85rem; height: 0.85rem; }
+/* inside a chip the glyph is drawn in the chip's ink, not in the fill it sits on */
+.nx-chip .nx-glyph { color: inherit; margin-right: 0; }
+
+/* every needs-you item carries its kind's glyph, in its kind's colour */
+.nx-glyph {
+  display: inline-block; width: 1em; height: 1em; margin-right: 0.3em;
+  vertical-align: -0.15em; color: var(--chip);
+}
+
+/* ---- regions ---- */
+.nx-head {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.75rem var(--nx-gutter);
+  border-bottom: 1px solid var(--border);
+}
+.nx-head h1 { font-size: 1.125rem; font-weight: 650; letter-spacing: -0.01em; }
+.nx-spacer { flex: 1; }
+.nx-main { padding: 0.75rem var(--nx-gutter) 1.5rem; }
+.nx-meta { color: var(--muted-foreground); font-size: 0.875rem; }
+.nx-banner {
+  margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
+  border: 1px solid var(--fault);
+  background: color-mix(in oklch, var(--fault) 14%, var(--background));
+}
+
+.nx-mode { display: inline-flex; align-items: center; gap: 0.25rem; }
+.nx-mode button {
+  padding: 0.25rem 0.75rem; border-radius: var(--radius-md);
+  border: 1px solid var(--border); font-size: 0.875rem;
+}
+.nx-mode button[aria-pressed="true"] { background: var(--foreground); color: var(--background); }
+.nx-mode .nx-meta { margin-left: 0.25rem; font-size: 0.75rem; }
+
+/* the needs-you line: its tone is its worst item's, and each item carries its own colour */
+.nx-needs {
+  margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
+  border-left: 4px solid var(--chip);
+  background: color-mix(in oklch, var(--chip) 14%, var(--background));
+}
+.nx-needs[data-tone="bad"] { --chip: var(--alarm); }
+.nx-needs[data-tone="warn"] { --chip: var(--warn); }
+.nx-needs[data-tone="good"] { --chip: var(--entry); }
+/* the line's own --chip is its tone; each item's glyph takes its item's colour */
+.nx-need[data-kind] .nx-glyph, .nx-banners li[data-kind] .nx-glyph { color: var(--chip); }
+.nx-banners ul { display: flex; flex-direction: column; gap: 0.375rem; margin-bottom: 0.75rem; }
+.nx-banners li > * {
+  display: flex; align-items: center; width: 100%; text-align: left;
+  padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
+  border-left: 4px solid var(--chip);
+  background: color-mix(in oklch, var(--chip) 16%, var(--background));
+}
+
+/* ---- the plain list ---- */
+.nx-book { display: flex; flex-direction: column; gap: 1.25rem; }
+.nx-book h2 { font-size: 1rem; font-weight: 650; margin-bottom: 0.25rem; }
+.nx-expiry h3 {
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted-foreground); margin: 0.5rem 0 0.25rem;
+}
+.nx-item { padding: 0.375rem 0; border-bottom: 1px solid var(--border); }
+[data-ref][data-revealed] { outline: 2px solid var(--entry); outline-offset: 2px; border-radius: 2px; }
+.nx-rule, .nx-holding { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; }
+.nx-name { font-weight: 600; }
+.nx-legs { color: var(--muted-foreground); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8125rem; }
+.nx-sentence, .nx-figures, [data-money] { font-variant-numeric: tabular-nums; }
+.nx-under { margin: 0.25rem 0 0 0.75rem; padding-left: 0.75rem; border-left: 2px solid var(--border); }
+
+.nx-settings { display: flex; flex-direction: column; gap: 1.25rem; }
+.nx-settings h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
+
+/* ---- the phone ---- */
+.nx[data-arrangement="phone"] { --nx-gutter: 16px; }
+/* a landscape iPhone is still the phone (844px), and viewport-fit=cover puts the notch's side
+   inside the page: the gutter grows to clear it */
+.nx[data-arrangement="phone"] :is(.nx-head, .nx-main) {
+  padding-left: max(var(--nx-gutter), env(safe-area-inset-left));
+  padding-right: max(var(--nx-gutter), env(safe-area-inset-right));
+}
+.nx[data-arrangement="phone"] .nx-main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+/* 44pt targets and 16px text in every box, or iOS zooms the page on focus (ADR 0023). On the
+   DOCUMENT, not on .nx: a confirmation dialog and a toast are drawn in portals outside the page,
+   and their buttons are targets too. Unlayered, so it wins over the components' own sizes, which
+   are Tailwind utilities in a layer. */
+html[data-nx-arrangement="phone"] :is(button, select, input, a) { min-height: 44px; min-width: 44px; }
+html[data-nx-arrangement="phone"] :is(select, input, textarea) { font-size: 16px; }
+.nx-tabs {
+  position: fixed; inset: auto 0 0 0; z-index: 10;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--background); border-top: 1px solid var(--border);
+}
+.nx-tabs button { min-height: 52px; font-size: 0.9375rem; color: var(--muted-foreground); }
+.nx-tabs button[aria-current="page"] { color: var(--foreground); font-weight: 650; }

@@ -450,6 +450,16 @@ export const INPUTS: Record<string, CaseInput[]> = {
       fn: "positionsHolding", name: "more named than is held",
       args: [[callSpread], [SC, LC, code("CALL", 7200)]],
     },
+    // whether anything held includes them: a fact about contracts, with no ambiguous case — so a
+    // contract held twice, which positionsHolding declines to link, is held all the same
+    { fn: "holdsAnyOf", name: "a held contract", args: [[condor], [SP]] },
+    { fn: "holdsAnyOf", name: "a contract held twice, as on a roll day", args: [[condor, putSpread], [SP]] },
+    { fn: "holdsAnyOf", name: "one leg of a combo held is enough", args: [[callSpread], [LC, code("CALL", 7200)]] },
+    { fn: "holdsAnyOf", name: "nothing held", args: [[condor], [code("PUT", 6000), code("CALL", 7200)]] },
+    { fn: "holdsAnyOf", name: "the same strike on another expiry is another contract",
+      args: [[condor], [buildSpxCode("2026-12-18", "PUT", 6500)]] },
+    { fn: "holdsAnyOf", name: "no holdings", args: [[], [SP]] },
+    { fn: "holdsAnyOf", name: "no contracts", args: [[condor], []] },
   ],
   flapping: [
     // A provider that keeps dropping and recovering, which no consecutive count can see. Written
@@ -791,6 +801,20 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "isBreached", name: "exactly at the threshold, below", args: [2, 2, "below", "abs"] },
     { fn: "isBreached", name: "abs ignores the sign", args: [-0.31, 0.3, "above", "abs"] },
     { fn: "isBreached", name: "signed below a negative threshold", args: [-2.1, -2, "below", "signed"] },
+    // isBreached said as a number: at or below zero exactly when it breaches, at the threshold too
+    { fn: "thresholdDistance", name: "room left, above", args: [2, 6.01, "above", "abs"] },
+    { fn: "thresholdDistance", name: "room left, below", args: [4, 2, "below", "abs"] },
+    { fn: "thresholdDistance", name: "zero exactly at the threshold, above", args: [0.3, 0.3, "above", "abs"] },
+    { fn: "thresholdDistance", name: "zero exactly at the threshold, below", args: [2, 2, "below", "abs"] },
+    { fn: "thresholdDistance", name: "negative past the threshold", args: [0.31, 0.3, "above", "abs"] },
+    { fn: "thresholdDistance", name: "abs measures the magnitude", args: [-0.15, 0.3, "above", "abs"] },
+    { fn: "thresholdDistance", name: "signed measures the raw value", args: [-0.15, 0.3, "above", "signed"] },
+    { fn: "thresholdDistance", name: "signed below a negative threshold",
+      args: [-2.1, -2, "below", "signed"] },
+    { fn: "thresholdDistance", name: "anything not below is above", args: [2, 6, "sideways", "abs"] },
+    { fn: "thresholdDistance", name: "no value", args: [null, 0.3, "above", "abs"] },
+    { fn: "thresholdDistance", name: "a NaN reading is no distance", args: [NaN, 0.3, "above", "abs"] },
+    { fn: "thresholdDistance", name: "nor is a NaN threshold", args: [1, NaN, "above", "abs"] },
   ],
   exit: [
     { fn: "dteAtOpen", name: "45 DTE", args: [EXP, "2026-10-06"] },
@@ -811,6 +835,15 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "exitLevels", name: "target DTE 12.5 rounds up, as Math.round does", args: [3, 50, 30, policy, null] },
     { fn: "exitLevels", name: "manage-by is inclusive", args: [3, 45, 21, policy, 2] },
     { fn: "exitLevels", name: "never declared opened", args: [3, null, 30, policy, 2] },
+    { fn: "captured", name: "a credit, a third of it kept", args: [3, 2] },
+    { fn: "captured", name: "a credit at its target", args: [3, 1.5] },
+    { fn: "captured", name: "closing would cost more than was taken in", args: [3, 6] },
+    { fn: "captured", name: "unrounded", args: [6.4, 3.25] },
+    { fn: "captured", name: "a debit has no credit to keep", args: [-5, 8] },
+    { fn: "captured", name: "nor has a zero entry", args: [0, 1] },
+    { fn: "captured", name: "no entry", args: [null, 1.9] },
+    { fn: "captured", name: "no cost to close yet", args: [3, null] },
+    { fn: "captured", name: "a NaN cost to close is no share", args: [3, NaN] },
   ],
   vol: [
     { fn: "volAttribution", name: "three days from the day it was opened", args: [chain, condor] },

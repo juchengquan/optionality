@@ -154,6 +154,10 @@ class ScheduleOut(BaseModel):
 class PositionValues(PositionOut):
     cost_to_close: float | None
     pnl: float | None
+    #: the share of the credit's Entry captured so far, (Entry − Cost to close) / Entry, unrounded: 1 is
+    #: all of it kept and below 0 costs more to close than was taken in. None for a debit, which has no
+    #: credit to keep and no Target, and wherever either side is unknown (ADR 0023).
+    captured: float | None
     contract_size: float | None
     greeks: dict[str, float | None]
     fetched_at: str | None
@@ -292,6 +296,7 @@ def position_routes(deps: Deps) -> APIRouter:
                 **out(v.row),
                 "cost_to_close": v.cost,
                 "pnl": v.pnl,
+                "captured": v.captured,
                 "contract_size": contract_size(by_code),
                 "greeks": {f: position_greek(v.position, by_code, f) for f in POSITION_GREEK_FIELDS},
                 "fetched_at": fetched,

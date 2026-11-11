@@ -201,6 +201,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
+  The browser suite runs as TWO vitest instances of Chromium: the desktop one runs every
+  `src/__browser__/*.test.tsx`, and `iphone` — Playwright's iPhone 13 profile, `isMobile` and
+  touch — runs only `*.iphone.test.tsx`. Each instance names its own files and the suite-wide
+  `include` is EMPTY on purpose: vitest merges an instance's list into that one rather than
+  replacing it, so anything there runs in both. And because Vite finds the files to pre-bundle
+  dependencies from through that same list, `optimizeDeps.entries` names the test files instead —
+  without it nothing was pre-bundled, and the mid-run reload failed ten files on every cold cache.
 - **Schema change:** add a `.sql` file to
   `schema/migrations/` AND put the same shape in `schema/schema.sql`, then update
   `COLUMNS`, `NULLABLE`, the row interface and `SchemaChecks` in `backend/src/db/rows.ts` — the
@@ -315,6 +322,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
+  **Two pages in one build until the swap (ADR 0023):** today's (`index.html`, `src/`) and the
+  redesign at `/opt/next` (`next/index.html`, `src/next/`), built beside it slice by slice (#287
+  onward). They share the hashed assets, the API and the deploy; Caddy serves `/next` as a
+  directory (`try_files {path}/index.html`) so it needs no redirect. The swap (#301) deletes the old.
 - `entrypoints/http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
   so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
   end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole
@@ -393,16 +404,22 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   429, and both surface Yahoo's own field names so the mapping is the same mapping. Only `quotes.py`
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
-  fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included —
-  53 of the package's 81 public functions, which is exactly the 53 of the TypeScript domain's 57
-  exported ones that have cases: the four `*Policy` readers take the service's Settings, so the
-  package takes their knobs directly instead. Eleven uncased rather than six: `yahoo.to_record` and `yahoo.quotes` are cased against
-  `testdata/vendors/` instead, `research/` is cased by nothing by design (ADR 0020), and
-  `js.js_string`
-  mirrors no TypeScript function either — the TypeScript interpolates a number where the Python must
-  spell the conversion out. Ten more since the IB Gateway client landed: `ibkr.contract_for` and
-  `ibkr.quotes`, held by the recorded conversations and their own tests rather than a corpus, and
-  `no_trading`'s eight, a lint held by fixture sources.
+  fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
+  Counted on 2026-11-10 — every public function a public module of the package defines, against
+  every `fn` in `testdata/golden/` — that is 60 of the package's 87, which is exactly the 60 of the
+  TypeScript domain's 64 exported ones that have cases: the four `*Policy` readers take the
+  service's Settings, so the package takes their knobs directly instead. The other 27, none of them
+  in `testdata/golden/`:
+  - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
+    five, `quotes.verify_contracts`, and `opend.quotes`, the one-shot for a script;
+  - six held to `testdata/vendors/` instead: `yahoo.to_record` and `yahoo.quotes`, and `ibkr`'s four
+    field readers (`grade`, `greek_fields`, `with_mid`, `has_figures`) against `ibkr-fields.json`;
+  - two held by the recorded IB Gateway conversations and their own tests: `ibkr.contract_for` and
+    `ibkr.quotes`;
+  - `no_trading`'s eight, a lint held by fixture sources;
+  - `research/`'s three, cased by nothing by design (ADR 0020);
+  - and `js.js_string`, which mirrors no TypeScript function — the TypeScript interpolates a number
+    where the Python must spell the conversion out.
   **`src/optionality/research/`** is the package's other half, and the only subdirectory: chains,
   historical bars, anything the service never fetches, so it mirrors no TypeScript, no golden case
   holds it and NOTHING CHECKS WHETHER IT IS RIGHT — its own `__init__.py` says so plainly rather

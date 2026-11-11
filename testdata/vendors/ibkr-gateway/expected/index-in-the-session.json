@@ -1,0 +1,49 @@
+{
+  "conversation": "index-in-the-session",
+  "provenance": "recorded",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [
+    "US.SPXW261218C8100000",
+    "SPX",
+    "VIX"
+  ],
+  "expect": {
+    "records": [
+      {
+        "code": "US.SPXW261218C8100000",
+        "delayed": false,
+        "last_known": false,
+        "prev_close_price": 7.2,
+        "bid_price": 4.2,
+        "ask_price": 4.5,
+        "option_delta": 0.03596544525967343,
+        "option_gamma": 0.0002593823963978756,
+        "option_vega": 2.166912854393047,
+        "option_theta": -0.34004054031385067,
+        "option_implied_volatility": 12.57734345565974,
+        "mid_price": 4.35
+      },
+      {
+        "code": "SPX",
+        "delayed": false,
+        "last_known": false,
+        "prev_close_price": 7549.94,
+        "last_price": 7499.46
+      },
+      {
+        "code": "VIX",
+        "delayed": false,
+        "last_known": false,
+        "prev_close_price": 19.92,
+        "last_price": 20.49
+      }
+    ],
+    "unknown": []
+  }
+}

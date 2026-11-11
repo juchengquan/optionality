@@ -226,6 +226,7 @@
           "realized_points": null,
           "cost_to_close": 3.25,
           "pnl": 315,
+          "captured": 0.49218750000000006,
           "contract_size": 100,
           "greeks": {
             "option_delta": 0,

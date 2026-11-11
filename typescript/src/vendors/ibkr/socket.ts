@@ -31,12 +31,26 @@ export interface TwsSocketConfig {
 
 export type OnMessage = (message: Incoming) => void;
 
+/** At most this many messages in any `PACE_WINDOW_MS`, the rest queued in order: `ib_async`'s own
+ *  throttle (`Client.MaxRequests` 45 per `RequestsInterval` 1s), copied so that the two clients put
+ *  the same messages on the wire at the same moments. IB Gateway's documented limit is 50 messages
+ *  a second. While the client asked one contract at a time it paced itself; side by side (#257) a
+ *  cold batch is two messages per contract at once, which a Provider's watchlist could push past
+ *  the limit. As in `ib_async`, startApi counts and the version greeting does not, and a request's
+ *  own timer runs while it waits in the queue. */
+export const PACE_MESSAGES = 45;
+export const PACE_WINDOW_MS = 1000;
+
 export class TwsSocket {
   private socket: Socket | null = null;
   private buffer: Buffer = Buffer.alloc(0);
   private listener: OnMessage | null = null;
   /** The gateway's protocol version, once it has said. Null means no session. */
   serverVersion: number | null = null;
+  /** when each of the messages in the current window went, and the ones still waiting their turn */
+  private sentAt: number[] = [];
+  private queued: string[] = [];
+  private drain: ReturnType<typeof setTimeout> | null = null;
 
   private readonly config: TwsSocketConfig;
 
@@ -128,7 +142,8 @@ export class TwsSocket {
             const { serverVersion } = readGreeting(readFields(payload));
             this.serverVersion = serverVersion;
             greeted = true;
-            socket.write(frame(startApi(clientId)));
+            this.queued.push(startApi(clientId));
+            this.flush();
             continue;
           }
           const message = readMessage(payload);
@@ -178,11 +193,33 @@ export class TwsSocket {
     }
   }
 
+  /** Sent now, or queued behind the messages already waiting if the window is full. */
   send(payload: string): void {
     if (!this.socket || this.serverVersion === null) {
       throw new Error("not connected to IB Gateway");
     }
-    this.socket.write(frame(payload));
+    this.queued.push(payload);
+    // while a drain is due the window is full, so the message waits its turn behind the others
+    if (this.drain === null) this.flush();
+  }
+
+  /** As many queued messages as the window allows, and ONE timer for the rest, due when the
+   *  oldest message in the window ages out of it. */
+  private flush(): void {
+    const socket = this.socket;
+    if (!socket) return;
+    const now = performance.now();
+    while (this.sentAt.length > 0 && now - this.sentAt[0]! >= PACE_WINDOW_MS) this.sentAt.shift();
+    while (this.queued.length > 0 && this.sentAt.length < PACE_MESSAGES) {
+      socket.write(frame(this.queued.shift()!));
+      this.sentAt.push(now);
+    }
+    if (this.queued.length > 0 && this.drain === null) {
+      this.drain = setTimeout(() => {
+        this.drain = null;
+        this.flush();
+      }, this.sentAt[0]! + PACE_WINDOW_MS - now);
+    }
   }
 
   /** Idempotent, because every failure path calls it and some of them race. */
@@ -191,6 +228,11 @@ export class TwsSocket {
     this.socket = null;
     this.serverVersion = null;
     this.buffer = Buffer.alloc(0);
+    // what was waiting goes with the connection, as `ib_async`'s reset drops its queue
+    if (this.drain !== null) clearTimeout(this.drain);
+    this.drain = null;
+    this.queued = [];
+    this.sentAt = [];
     if (socket) {
       socket.removeAllListeners();
       socket.destroy();

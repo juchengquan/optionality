@@ -2,7 +2,8 @@ import { DEFAULT_BAND, isPinned, type Grouping, type Signal } from "./columns";
 
 /** What the browser remembers for this viewer, and nothing else.
  *
- *  Six preferences: which reading earns the second colour and the band it must clear, how the rows
+ *  Six preferences for the dashboard at `/opt`, and four more for the redesigned one at `/opt/next`
+ *  (ADR 0023), at the end. The six: which reading earns the second colour and the band it must clear, how the rows
  *  are divided, which columns each table hides, and how often the screen polls. They are here
  *  rather than in `columns.ts` because only two of them are about columns at all — the other four
  *  sat in that module for company, between the column definitions and the fitting arithmetic, and
@@ -101,4 +102,50 @@ export function readRefresh(fallback: number): number {
 
 export function writeRefresh(seconds: number): void {
   writeCookie("ui_refresh", String(seconds));
+}
+
+/** Which way is up. Green-up is the default; red-up is how much of Asia reads a screen (ADR 0023).
+ *  It flips the DIRECTION and OUTCOME colours only: an alarm, a fault and a fired entry rule keep
+ *  theirs whichever way this is set, or a red-up viewer would read a ringing row as a rising market. */
+export type UpColour = "green" | "red";
+
+export function readUp(): UpColour {
+  return readCookie("ui_up") === "red" ? "red" : "green";
+}
+
+export function writeUp(up: UpColour): void {
+  writeCookie("ui_up", up);
+}
+
+/** How a fired ENTRY rule looks: a rule on the watchlist saying a spread is worth selling, which is
+ *  good news and gets a style of its own by default. The other choice paints it as a risk alarm. */
+export type EntryStyle = "opportunity" | "risk";
+
+export function readEntryStyle(): EntryStyle {
+  return readCookie("ui_entry") === "risk" ? "risk" : "opportunity";
+}
+
+export function writeEntryStyle(style: EntryStyle): void {
+  writeCookie("ui_entry", style);
+}
+
+/** Hides the money on screen and keeps %, Δ and DTE, for a screen somebody else can see. */
+export function readPrivacy(): boolean {
+  return readCookie("ui_privacy") === "on";
+}
+
+export function writePrivacy(on: boolean): void {
+  writeCookie("ui_privacy", on ? "on" : "off");
+}
+
+/** The measured width chooses desk or phone (`auto`); a device can force either. */
+export type ArrangementChoice = "auto" | "desk" | "phone";
+
+export function readArrangement(): ArrangementChoice {
+  const raw = readCookie("ui_arrangement");
+  return raw === "desk" || raw === "phone" ? raw : "auto";
+}
+
+export function writeArrangement(choice: ArrangementChoice): void {
+  writeCookie("ui_arrangement", choice);
 }

@@ -39,6 +39,12 @@ export const CONTRACT_KEYS = [
 ] as const;
 export type ContractKey = (typeof CONTRACT_KEYS)[number];
 
+/** Where a market-data request says whether it asks for a snapshot ("1") or a stream ("0"): field
+ *  17 of reqMktData version 11, from this client and from `ib_async` alike at protocol 157. A
+ *  stub matches on it as well as on the contract, because the two are different questions — a
+ *  snapshot of SPX carries no price at all, and its stream does (`index-in-the-session`). */
+export const SNAPSHOT_AT = 17;
+
 /** One request and everything the gateway sent because of it.
  *
  *  Several exchanges for the same request and contract answer in TURN, the last one every request
@@ -48,7 +54,8 @@ export type ContractKey = (typeof CONTRACT_KEYS)[number];
 export interface Exchange {
   request: "reqContractDetails" | "reqMktData";
   contract: Record<ContractKey, string>;
-  /** what the recording session sent, for the reader: a replay matches on `contract`, not this */
+  /** What the recording session sent, for the reader. A replay matches on `contract`, and for
+   *  market data on one field of this too: `SNAPSHOT_AT`, a snapshot or a stream. */
   sent: Message;
   /** in the order they arrived; empty is a request accepted and never answered */
   replies: Message[];
@@ -175,10 +182,14 @@ export function parseConversation(name: string, value: unknown): Conversation {
       if (atMs.length !== 0 && atMs.length !== replies.length) {
         fail(`${where}.atMs must time every reply or none`);
       }
+      const sent = message(x.sent, `${where}.sent`);
+      if (x.request === "reqMktData" && sent[SNAPSHOT_AT] !== "0" && sent[SNAPSHOT_AT] !== "1") {
+        fail(`${where}.sent[${SNAPSHOT_AT}] must say whether it asked for a snapshot, "1" or "0"`);
+      }
       return {
         request: x.request as Exchange["request"],
         contract: contract as Record<ContractKey, string>,
-        sent: message(x.sent, `${where}.sent`),
+        sent,
         replies, atMs,
         ...(x.onCancel === undefined ? {} : { onCancel: messages(x.onCancel, `${where}.onCancel`) }),
       };

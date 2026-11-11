@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, TypedDict, cast
 
-from optionality.exit import ExitPolicy, dte_at_open, exit_levels
+from optionality.exit import ExitPolicy, captured, dte_at_open, exit_levels
 from optionality.expiry import days_to_expiry
 from optionality.position import Position, cost_to_close, position_leg_codes, position_pnl
 from optionality.quote import ByCode, display_records
@@ -63,6 +63,9 @@ class HoldingValue:
     cost: float | None
     #: Entry less cost to close, in money. None where either is unknown.
     pnl: float | None
+    #: the share of a credit's Entry kept so far, from this same cost (`captured`): None for a debit,
+    #: which has no credit to keep, and wherever either side is unknown (ADR 0023)
+    captured: float | None
     #: None for a Position whose Opened nobody declared: nothing is inferred from created_at, so there
     #: is no DTE at entry and therefore no schedule (ADR 0011).
     schedule: Schedule | None
@@ -109,6 +112,7 @@ def _value(row: PositionRow, position: Position, by_code: ByCode, now: datetime,
         position=position,
         cost=cost,
         pnl=position_pnl(position, by_code),
+        captured=captured(position.entry, cost),
         schedule=_schedule_of(row, cost, now, settings),
         dte=days_to_expiry(row["strike_date"], now),
     )

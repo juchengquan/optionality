@@ -19,5 +19,18 @@ export default defineConfig({
   // Built assets are still COMMITTED, now to frontend/dist and served by Caddy. Keeping node
   // off the deploy path mattered when one process served both; it matters more now, because
   // a failed build would leave Caddy with nothing at all to serve.
-  build: { outDir: "dist", emptyOutDir: true },
+  //
+  // TWO pages in one build (ADR 0023): today's dashboard at `/opt` and the redesign at `/opt/next`,
+  // beside it until the swap. One build rather than two, so they share the hashed assets, the API
+  // base and the deploy — and `next/index.html`, not `next.html`, so the page is a directory Caddy
+  // serves at `/next` without a redirect (deploy/Caddyfile says why a redirect cannot work here).
+  build: {
+    outDir: "dist", emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        next: fileURLToPath(new URL("./next/index.html", import.meta.url)),
+      },
+    },
+  },
 });

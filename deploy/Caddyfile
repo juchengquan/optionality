@@ -19,7 +19,12 @@
 	# the root here. Unknown paths fall through to the app rather than 404ing: /opt/app was
 	# a real URL once, and a redirect could not fix it — tailscale does not rewrite Location
 	# headers, so any redirect we issue would land the browser on the tailnet root.
-	try_files {path} /index.html
+	#
+	# `{path}/index.html` is the redesigned page (ADR 0023): `/next` is a directory in the bundle,
+	# and without this entry a request for it would fall through to the old page's index.html
+	# instead. It is tried as a FILE, so `/next` is served without the trailing-slash redirect
+	# file_server would otherwise issue — the redirect the paragraph above says cannot work.
+	try_files {path} {path}/index.html /index.html
 	file_server
 
 	# filenames carry a content hash, so they can never go stale...

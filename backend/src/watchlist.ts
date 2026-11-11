@@ -6,12 +6,13 @@
  *  over no endpoint at all.
  */
 import {
-  COMBO_GREEK_FIELDS, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdFill,
+  COMBO_GREEK_FIELDS, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdDistance,
+  thresholdFill,
 } from "optionality/domain/monitor";
 import { dteAtOpen, exitLevels, type ExitLevels, type ExitPolicy } from "optionality/domain/exit";
 import { daysToExpiry } from "optionality/domain/expiry";
 import {
-  combinedCostToClose, combinedEntry, combinedPnl, costToCloseOf, positionLegCodes,
+  combinedCostToClose, combinedEntry, combinedPnl, costToCloseOf, holdsAnyOf, positionLegCodes,
 } from "optionality/domain/position";
 import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
 import type { Position } from "optionality/domain/position";
@@ -44,10 +45,32 @@ export interface WatchlistEntry {
   dte: number;
   scope: string | null;
   positions: { id: string; name: string }[];
+  /** whether ANY Contract this rule watches — the one, or any leg of a combo — is a Leg of an OPEN
+   *  holding, whether or not the link to one holding is ambiguous (`holdsAnyOf`). A fact about
+   *  Contracts, not a guess about what the rule is for: it tells a risk alarm on something owned
+   *  from an entry signal on a candidate where `positions` cannot, because the link names nothing
+   *  on a roll day, when two holdings share a Contract. It is also true for a candidate that shares
+   *  one Contract with a holding, which is a fact about that Contract (ADR 0023). */
+  held: boolean;
+  /** the combos in this same watchlist whose legs include this row's Contract, by id and sorted:
+   *  what lets a short leg's delta rule sit under its spread (ADR 0023). A DISCOVERED link, like
+   *  `positions` — worked out from the legs each combo names, never recorded, so it is only ever
+   *  as true as those rules are now. Empty on a combo's own row, and for a Contract no enabled
+   *  combo holds. */
+  in_combos: string[];
   cost_to_close: number | null;
   entry: number | null;
   pnl: number | null;
   fill: number | null;
+  /** the figure this row is about — the very reading `fill` and `triggered` are drawn from, so a
+   *  sentence built from it cannot disagree with the bar or the bell. The raw, SIGNED figure: under
+   *  compare "abs" the bar, the bell and `distance` all measure its magnitude. Null where it was
+   *  not priced, and where JSON cannot write it (NaN, ±Infinity) — an infinite reading still rings. */
+  watched: number | null;
+  /** how far `watched` still has to move to breach, in the field's own units: wherever it is a
+   *  number, at or below zero exactly when `triggered` (`thresholdDistance`). Null wherever
+   *  `watched` is, which says nothing about the bell. */
+  distance: number | null;
   /** the exit schedule, or null where there is no single holding to schedule (ADR 0011).
    *
    *  `position_id` names the holding it is FOR. `positions` happens to hold exactly that one
@@ -72,6 +95,10 @@ interface EntryInputs {
   /** codes OpenD rejected as unknown */
   bad: Set<string>;
   owned: Record<string, (Position & { id: string })[]>;
+  /** every OPEN holding, linked to a rule or not — what `held` is decided against. Required for
+   *  the reason `policy` is: a row that says "nothing held" because a caller passed nothing is the
+   *  very misfiling the field exists to prevent. */
+  holdings: Position[];
   /** injectable so a test can state the date rather than wait for it */
   now?: Date;
   /** REQUIRED rather than optional: a schedule that silently does not appear because a caller
@@ -87,7 +114,12 @@ interface EntryInputs {
  *  never summed at all (CLAUDE.md).
  */
 export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
-  const { monitors, byCode, bad, owned, now, policy } = inputs;
+  const { monitors, byCode, bad, owned, holdings, now, policy } = inputs;
+  // every combo in this watchlist, by the Contracts its legs name: the spreads a single Contract
+  // sits in are found from these, as the holdings a rule watches are found from what is held
+  const combos = monitors
+    .filter((m) => m.legs && m.legs.length > 0)
+    .map((m) => ({ id: m.id, codes: new Set(monitorLegCodes(m)) }));
   return monitors.map((m) => {
     const isCombo = Boolean(m.legs && m.legs.length > 0);
     const positions = owned[m.id] ?? [];
@@ -138,10 +170,15 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       dte: daysToExpiry(m.strike_date, now),
       scope: m.scope,
       positions: positions.map((p) => ({ id: p.id, name: p.name })),
+      held: holdsAnyOf(holdings, monitorLegCodes(m)),
+      in_combos: isCombo ? [] : combos.filter((c) => c.codes.has(m.code)).map((c) => c.id).sort(),
       cost_to_close: costToClose,
       entry: whole.length > 0 ? combinedEntry(whole) : null,
       pnl: whole.length > 0 ? combinedPnl(whole, byCode) : null,
+      // these three are derived below, from the one figure this row is about
       fill: null,
+      watched: null,
+      distance: null,
       // ONE holding only. Two Positions put on different days have no single DTE at entry, and a
       // blended pace line would hide that rather than say it — ADR 0004 allows a rule to span
       // them, and this declines to guess rather than averaging two trades into one.
@@ -162,23 +199,35 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     // sweep's stored column while every figure beside it came from this fetch, so a row could show
     // a value past its threshold with no bell, or a bell beside a value well inside it (ADR 0010).
     //
-    // It is the rule's OWN field, under the rule's own direction and compare — `monitorValue` for a
-    // combo, which is the very call the sweep evaluates it with. A held combo used to be measured
+    // It is the rule's OWN field, under the rule's own direction and compare — `monitorValue`,
+    // which is the very call the sweep evaluates every rule with. A held combo used to be measured
     // on its cost to close instead, with above/abs forced: that is a PRICE, which a delta rule's
     // threshold is not, so a delta alarm rang here for ever while the sweep stayed silent. Its cost
     // to close is still shown, in its own column; it is not what any alarm is decided by.
     //
     // The price cases are unchanged: under compare 'abs' the sign washes out, so a combo summing to
     // -4.00 and a 4.00 cost to close give the same bell and the same bar.
-    const watched = isCombo
-      ? (comboValue ?? null)
-      : ((quote?.[m.field] ?? null) as number | null);
+    //
+    // A single Contract's figure was CAST rather than read through `monitorValue`, which made no
+    // difference while only the bar and the bell used it — `Math.abs` and `>=` coerce as `Number()`
+    // does — and would have served text as the figure once it was served itself.
+    const read = isCombo ? comboValue : monitorValue(m, byCode);
+    const watched = read ?? null;
     entry.fill = thresholdFill(watched, m.threshold, m.direction, m.compare);
     // An unreadable figure is neither calm nor breaching, so no bell beside a dash — otherwise the
     // stored state would be back, by the other door. isBreached is the ENGINE's own predicate fed
     // the ENGINE's own value, so the bell flips at the exact threshold and cannot drift from how an
-    // alarm is decided.
+    // alarm is decided. A NaN is unreadable and rings nothing, as the sweep's own comparison says.
     entry.triggered = watched !== null && isBreached(watched, m.threshold, m.direction, m.compare);
+    // The figure and its distance are SERVED only where JSON can write them. A NaN or an infinite
+    // reading in the reply fails its schema and takes every other row of the watchlist down with
+    // it, so it is served as no figure — a field the quote schema does not type can carry either.
+    // The bar and the bell above are still decided on it: an infinite reading rings, as the sweep
+    // alarms on it, and its row shows a bell with no figure and no distance beside it.
+    entry.watched = servable(watched);
+    entry.distance = entry.watched === null
+      ? null
+      : servable(thresholdDistance(entry.watched, m.threshold, m.direction, m.compare));
 
     // Built from THIS entry's own cost to close, so the gap is the gap against the figure the row
     // shows. Fetching /positions/values beside it on the dashboard would compute it against a
@@ -191,6 +240,11 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
     }
     return entry;
   });
+}
+
+/** A figure as the reply can carry it: a finite number, or null. */
+function servable(value: number | null): number | null {
+  return value !== null && Number.isFinite(value) ? value : null;
 }
 
 /** Every code a batch has to carry for these monitors and the positions they watch.
