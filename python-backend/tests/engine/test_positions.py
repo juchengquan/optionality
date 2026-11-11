@@ -638,6 +638,42 @@ class TestRecordingWhatAPositionWasWorth:
         legs_delta = b.column("select legs_delta from position_samples where position_id = ?", id_)
         assert json.loads(legs_delta) == {b.sold(): 0.16, b.bought(): 0.11}
 
+    async def test_records_spx_s_price_derived_from_the_sweep_s_own_batch(self, b: Book) -> None:
+        # the index the day's row was observed against (ADR 0024), from the whole batch as /quotes has
+        # it, inverted from each leg's premium and last
+        id_ = b.held("held")
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "code": c,
+                    "name": c,
+                    "mid_price": 5.0 if c == b.sold() else 1.0,
+                    "last_price": 5.0 if c == b.sold() else 1.0,
+                    "option_premium": 15,
+                }
+                for c in codes
+            ]
+
+        await b.sweeper(fetch).sweep()
+
+        spx = b.column("select spx from position_samples where position_id = ?", id_)
+        assert spx == round(((8055 + 8076) / 2) / 1.15, 2)
+
+    async def test_records_no_spx_price_where_the_batch_cannot_give_one_and_the_sample_regardless(
+        self, b: Book
+    ) -> None:
+        # a sample is the cost to close first: an index the Provider cannot imply costs it nothing
+        id_ = b.held("held")
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [{"code": c, "name": c, "mid_price": 1.0, "last_price": 1.0} for c in codes]
+
+        await b.sweeper(fetch).sweep()
+
+        assert b.column("select spx from position_samples where position_id = ?", id_) is None
+        assert b.column("select cost_to_close from position_samples where position_id = ?", id_) == 0
+
     async def test_records_no_delta_at_all_rather_than_some_of_it_and_the_other_maps_regardless(self, b: Book) -> None:
         # the same all-or-nothing per map as the IV and the vega, and gated on its own: a withheld
         # delta makes neither the IV nor the vega reading untrue
@@ -692,6 +728,35 @@ class TestHowOftenTheSamplerActuallyWrites:
     def _in_the_sample_hours(self, b: Book) -> None:
         # inside the sample hours, so each sweep below is one that may write (see the suite above)
         b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)
+
+    async def test_writes_when_only_spx_moves_so_the_day_s_row_keeps_the_index_of_its_close(self, b: Book) -> None:
+        # the index moves on a sweep where every mark sits still, and the row should say where it was
+        b.held("held")
+
+        def at(premium: float):
+            def fetch(codes: list[str]) -> list[dict[str, Any]]:
+                return [
+                    {
+                        "code": c,
+                        "name": c,
+                        "mid_price": 5.0 if c == b.sold() else 1.0,
+                        "option_implied_volatility": 10.5,
+                        "option_vega": 1.0,
+                        "option_delta": 0.16,
+                        "last_price": 1.0,
+                        "option_premium": premium,
+                    }
+                    for c in codes
+                ]
+
+            return fetch
+
+        await b.sweeper(at(15)).sweep()
+        after = b.writes()
+        await b.sweeper(at(14)).sweep()
+        assert b.writes() > after
+
+        assert b.column("select spx from position_samples") == round(((8051 + 8076) / 2) / 1.14, 2)
 
     async def test_writes_when_only_a_delta_moves_which_the_cost_the_iv_and_the_vega_can_all_hide(
         self, b: Book

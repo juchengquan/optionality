@@ -1,0 +1,13 @@
+-- SPX's price on each sample: the index the day's row was observed against (ADR 0024, #288).
+--
+-- The redesigned dashboard places a holding's strikes against the index over the trade's life,
+-- and like a delta, the index at a sample's instant is only knowable at that instant: no later
+-- sweep can say where SPX stood on a day that has passed. So it is recorded from the first day it
+-- can be. It is DERIVED from the same batch the row's other figures came from — every option's
+-- premium inverted with its last trade, the median across the batch — and never taken from a
+-- Reference, which is a figure nothing derives from (ADR 0018).
+--
+-- Nullable with no default, so ADD COLUMN suffices and every existing row reads as having none,
+-- which is the truth. A row written while the Provider serves no premium (IB Gateway) has none
+-- either; its other figures are unaffected.
+ALTER TABLE position_samples ADD COLUMN spx FLOAT;

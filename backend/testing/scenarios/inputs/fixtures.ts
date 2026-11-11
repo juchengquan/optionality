@@ -138,7 +138,7 @@ export const link = (monitorId: string, positionId: string): Row =>
 
 export function sample(over: Row & { position_id: string; observed_on: string }): Row {
   return { dte: 39, cost_to_close: 3.1, legs_iv: null, legs_vega: null, legs_delta: null, observed_at: null,
-    ...over };
+    spx: null, ...over };
 }
 
 export function reference(over: Row & { id: string; code: string }): Row {
@@ -168,6 +168,16 @@ export const BOOK: Record<string, Row> = {
   [C7350]: quote("SPXW 261218 7350C", 1.75, 0.15),
   [P6400]: quote("SPXW 261218 6400P", 4.5, -0.18, { option_implied_volatility: 19.25 }),
   [P6350]: quote("SPXW 261218 6350P", 2.25, -0.12, { option_implied_volatility: 20 }),
+};
+
+/** BOOK as moomoo serves it: each option's last trade and its `option_premium`, set so that every
+ *  one inverts to about 6900.50 — what SPX's price is derived from (ADR 0024). The other vendors
+ *  serve no premium, which is BOOK as it stands. */
+export const PREMIUM_BOOK: Record<string, Row> = {
+  [C7300]: { ...BOOK[C7300], last_price: 2.8, option_premium: 5.83 },
+  [C7350]: { ...BOOK[C7350], last_price: 1.7, option_premium: 6.54 },
+  [P6400]: { ...BOOK[P6400], last_price: 4.4, option_premium: 7.32 },
+  [P6350]: { ...BOOK[P6350], last_price: 2.3, option_premium: 8.01 },
 };
 
 /** A table of quotes without some of its codes: what a vendor answers when it prices the rest. */

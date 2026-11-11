@@ -410,6 +410,11 @@ class EntryOut(BaseModel):
     #: or below zero exactly when `triggered`, and negative by how far past. None wherever `watched` is,
     #: which says nothing about the bell.
     distance: float | None
+    #: SPX's price as this response's one batch implies it, from its options' premiums (ADR 0024): the
+    #: same on every row. None where the batch cannot give it, never a Reference's figure.
+    spx: float | None
+    #: why `spx` is None, in words; None when there is a figure
+    spx_reason: str | None
 
 
 _ENTRIES = TypeAdapter(list[EntryOut])

@@ -190,6 +190,13 @@ export const OUTCOMES: readonly Outcome[] = [
     shows: (s) => (s.expect.rows.position_samples?.added ?? []).length > 0,
   },
   {
+    // the index the day's row was observed against, derived from the sweep's batch (ADR 0024)
+    name: "sample-records-spx",
+    decision: "derivedSpx",
+    shows: (s) => (s.expect.rows.position_samples?.added ?? [])
+      .some((r) => typeof (r as { spx?: unknown }).spx === "number"),
+  },
+  {
     // the day's row converges on the latest mark
     name: "sample-rewritten-when-it-moves",
     decision: "recordSamples",

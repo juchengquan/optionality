@@ -16,6 +16,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { daysToExpiry, marketDate, takesSample } from "optionality/domain/expiry";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
 import { costToClose, legReadings } from "optionality/domain/position";
+import { derivedSpx } from "optionality/domain/quote";
 import {
   findPositionSample, recordPositionSample, stampManageNotified,
 } from "../db/queries/index.ts";
@@ -105,6 +106,10 @@ export function recordSamples(
   db: DatabaseSync, rows: PositionRow[], byCode: Record<string, QuoteRecord>, at: Date,
 ): void {
   const observedOn = marketDate(at);
+  // SPX's price as this sweep's batch implies it, once for every row: each was valued against the
+  // same index. Never a Reference's figure (ADR 0018, 0024); null where the batch cannot give it,
+  // which costs the sample nothing else.
+  const spx = derivedSpx(Object.values(byCode)).price;
   for (const row of rows) {
     try {
       const dte = daysToExpiry(row.strike_date, at);
@@ -147,11 +152,12 @@ export function recordSamples(
       // says when the figures were last seen to change, which is when they were observed.
       if (write === "if-changed" && stored && stored.dte === dte && stored.cost_to_close === cost
         && stored.legs_iv === legsIv && stored.legs_vega === legsVega
-        && stored.legs_delta === legsDelta) continue;
+        && stored.legs_delta === legsDelta && stored.spx === spx) continue;
 
       recordPositionSample(db, {
         position_id: row.id, observed_on: observedOn, dte, cost_to_close: cost,
         legs_iv: legsIv, legs_vega: legsVega, legs_delta: legsDelta, observed_at: toSqlDatetime(at),
+        spx,
       });
     } catch (err) {
       console.error(`recording a sample for ${row.name} failed:`, err);

@@ -32,7 +32,7 @@ from optionality.exit import dte_at_open, on_pace
 from optionality.expiry import days_to_expiry, market_date, takes_sample
 from optionality.js import js_string, to_fixed
 from optionality.position import cost_to_close, leg_readings
-from optionality.quote import ByCode
+from optionality.quote import ByCode, derived_spx
 
 from ..db.queries import find_position_sample, record_position_sample, stamp_manage_notified
 from ..db.rows import PositionRow
@@ -128,6 +128,10 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
     the hours New York is behind UTC, which would pair a New York Wednesday with Thursday's DTE.
     """
     observed_on = market_date(at)
+    # SPX's price as this sweep's batch implies it, once for every row: each was valued against the
+    # same index. Never a Reference's figure (ADR 0018, 0024); None where the batch cannot give it,
+    # which costs the sample nothing else.
+    spx = derived_spx(list(by_code.values())).price
     for row in rows:
         try:
             dte = days_to_expiry(row["strike_date"], at)
@@ -179,6 +183,7 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                 and stored["legs_iv"] == legs_iv
                 and stored["legs_vega"] == legs_vega
                 and stored["legs_delta"] == legs_delta
+                and stored["spx"] == spx
             ):
                 continue
 
@@ -193,6 +198,7 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                     "legs_vega": legs_vega,
                     "legs_delta": legs_delta,
                     "observed_at": to_sql_datetime(at),
+                    "spx": spx,
                 },
             )
         except Exception:

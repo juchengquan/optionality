@@ -48,6 +48,7 @@ from optionality.position import (
     position_leg_codes,
     realized_points,
 )
+from optionality.quote import derived_spx
 from optionality.timefmt import display_time
 from optionality.vol import VolSample, vol_attribution
 from pydantic import BaseModel, ConfigDict, Field
@@ -159,6 +160,12 @@ class PositionValues(PositionOut):
     #: credit to keep and no Target, and wherever either side is unknown (ADR 0023).
     captured: float | None
     contract_size: float | None
+    #: SPX's price as this response's one batch implies it, from its options' premiums (ADR 0024): the
+    #: same on every holding, as `contract_size` is. None where the batch cannot give it, never a
+    #: Reference's figure.
+    spx: float | None
+    #: why `spx` is None, in words; None when there is a figure
+    spx_reason: str | None
     greeks: dict[str, float | None]
     fetched_at: str | None
     #: days left where the option trades, the same reckoning the dashboard's column uses
@@ -291,6 +298,7 @@ def position_routes(deps: Deps) -> APIRouter:
         if not held:
             return []
         fetched = display_time(now, tz)
+        spx = derived_spx(list(by_code.values()))
         return [
             {
                 **out(v.row),
@@ -298,6 +306,8 @@ def position_routes(deps: Deps) -> APIRouter:
                 "pnl": v.pnl,
                 "captured": v.captured,
                 "contract_size": contract_size(by_code),
+                "spx": spx.price,
+                "spx_reason": spx.reason,
                 "greeks": {f: position_greek(v.position, by_code, f) for f in POSITION_GREEK_FIELDS},
                 "fetched_at": fetched,
                 "dte": v.dte,

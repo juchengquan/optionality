@@ -51,7 +51,7 @@ from optionality.position import (
     holds_any_of,
     position_leg_codes,
 )
-from optionality.quote import ByCode, Quote
+from optionality.quote import ByCode, Quote, derived_spx
 
 
 class PositionRef(TypedDict):
@@ -133,6 +133,13 @@ class WatchlistEntry(TypedDict):
     #: says nothing about the bell.
     distance: float | None
     schedule: Schedule | None
+    #: SPX's price as THIS batch implies it, from its options' premiums (`derived_spx`, ADR 0024): the
+    #: same on every row, because every row came from the one batch, and on the row so a strike can be
+    #: placed against the index of the same instant as its own figures (ADR 0010). None where the batch
+    #: cannot give it; never a Reference's figure (ADR 0018).
+    spx: float | None
+    #: why `spx` is None, in words; None when there is a figure
+    spx_reason: str | None
 
 
 class MonitorForEntry(Monitor):
@@ -171,7 +178,9 @@ def build_entries(
     # every combo in this watchlist, by the Contracts its legs name: the spreads a single Contract sits
     # in are found from these, as the holdings a rule watches are found from what is held
     combos = [_Combo(id=m.id, codes=frozenset(monitor_leg_codes(m))) for m in monitors if m.legs]
-    return [_entry(m, by_code, bad, owned, holdings, policy, now, combos) for m in monitors]
+    # once for the batch: every row was priced by it, so every row carries the same index level
+    spx = derived_spx(list(by_code.values()))
+    return [_entry(m, by_code, bad, owned, holdings, policy, now, combos, spx.price, spx.reason) for m in monitors]
 
 
 class _Combo(NamedTuple):
@@ -188,6 +197,8 @@ def _entry(
     policy: ExitPolicy,
     now: datetime | None,
     combos: list[_Combo],
+    spx: float | None,
+    spx_reason: str | None,
 ) -> WatchlistEntry:
     is_combo = bool(m.legs)
     positions = owned.get(m.id, [])
@@ -249,6 +260,8 @@ def _entry(
         # blended pace line would hide that rather than say it — ADR 0004 allows a rule to span them,
         # and this declines to guess rather than averaging two trades into one.
         "schedule": None,
+        "spx": spx,
+        "spx_reason": spx_reason,
     }
 
     if is_combo:

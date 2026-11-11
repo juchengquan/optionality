@@ -246,7 +246,9 @@
           "pnl": null,
           "fill": null,
           "watched": -1,
-          "distance": -0.25
+          "distance": -0.25,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-past",
@@ -286,7 +288,9 @@
           "pnl": null,
           "fill": 100,
           "watched": 2.75,
-          "distance": -0.25
+          "distance": -0.25,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-at",
@@ -326,7 +330,9 @@
           "pnl": null,
           "fill": 100,
           "watched": 1.75,
-          "distance": 0
+          "distance": 0,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-unpriced",
@@ -350,7 +356,9 @@
           "pnl": null,
           "fill": null,
           "watched": null,
-          "distance": null
+          "distance": null,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         },
         {
           "id": "mon-inside",
@@ -388,7 +396,9 @@
           "pnl": null,
           "fill": 33,
           "watched": 4.5,
-          "distance": 3
+          "distance": 3,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from"
         }
       ]
     },

@@ -19,6 +19,7 @@ import {
   updatePositionFields,
 } from "../../../db/queries/index.ts";
 import { monitorLegCodes } from "optionality/domain/monitor";
+import { derivedSpx } from "optionality/domain/quote";
 import { atomic } from "../../../db/open.ts";
 import { holdingValues } from "../../../holdings.ts";
 import type { MonitorRow, PositionRow } from "../../../db/rows.ts";
@@ -94,6 +95,12 @@ const PositionValues = PositionOut.extend({
    *  which has no credit to keep and no Target, and wherever either side is unknown (ADR 0023). */
   captured: z.number().nullable(),
   contract_size: z.number().nullable(),
+  /** SPX's price as this response's one batch implies it, from its options' premiums (ADR 0024):
+   *  the same on every holding, as `contract_size` is. Null where the batch cannot give it,
+   *  never a Reference's figure. */
+  spx: z.number().nullable(),
+  /** why `spx` is null, in words; null when there is a figure */
+  spx_reason: z.string().nullable(),
   greeks: z.record(z.string(), z.number().nullable()),
   fetched_at: z.string().nullable(),
   /** days left where the option trades, the same reckoning the dashboard's column uses */
@@ -216,12 +223,15 @@ export function positionRoutes(deps: Deps) {
       const { byCode, values: held } = valued;
       if (held.length === 0) return values.reply(c, 200, []);
       const fetched = displayTime(now, tz);
+      const spx = derivedSpx(Object.values(byCode));
       return values.reply(c, 200, held.map((v) => ({
         ...out(v.row),
         cost_to_close: v.cost,
         pnl: v.pnl,
         captured: v.captured,
         contract_size: contractSize(byCode),
+        spx: spx.price,
+        spx_reason: spx.reason,
         greeks: Object.fromEntries(
           POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(v.position, byCode, f)]),
         ),

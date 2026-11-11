@@ -1016,3 +1016,32 @@ describe("the spreads a single Contract is a leg of", () => {
     expect(e!.in_combos).toEqual([]);
   });
 });
+
+describe("SPX's price on every row (#288)", () => {
+  it("is derived once from the batch's premiums, the same on every row, legs included", async () => {
+    monitor();
+    combo();
+    // CODE is a call at 6500 and the legs calls at 8100 and 8150: each inverts to its own level,
+    // and the batch's figure is their median, put on every row as the contract size is
+    const fetch = quoting({
+      [CODE]: { mid_price: 26.4, last_price: 1000, option_premium: -6.0 },
+      [LEG_A]: { mid_price: 1, last_price: 2, option_premium: 7.0 },
+      [LEG_B]: { mid_price: 1, last_price: 1, option_premium: 8.0 },
+    });
+    const quotes = await run(fetch, true);
+    // (6500 + 1000) / 0.94, (8100 + 2) / 1.07, (8150 + 1) / 1.08: the middle one is 7547.22
+    const levels = [7500 / 0.94, 8102 / 1.07, 8151 / 1.08].sort((a, b) => a - b);
+    expect(quotes).toHaveLength(2);
+    for (const q of quotes) {
+      expect(q.spx).toBe(Number(levels[1]!.toFixed(2)));
+      expect(q.spx_reason).toBeNull();
+    }
+  });
+
+  it("is a dash with its reason where the Provider gives no premium, and never a guess", async () => {
+    monitor();
+    const quotes = await run(quoting({ [CODE]: { mid_price: 26.4, last_price: 26 } }));
+    expect(quotes[0]!.spx).toBeNull();
+    expect(quotes[0]!.spx_reason).toBe("the Provider gives no option premium to derive it from");
+  });
+});

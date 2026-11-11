@@ -71,6 +71,7 @@ CREATE TABLE position_samples (
 	legs_vega TEXT,
 	legs_delta TEXT,
 	observed_at DATETIME,
+	spx FLOAT,
 	PRIMARY KEY (position_id, observed_on),
 	FOREIGN KEY(position_id) REFERENCES positions (id)
 );

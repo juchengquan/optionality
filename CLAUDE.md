@@ -406,8 +406,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
   Counted on 2026-11-10 — every public function a public module of the package defines, against
-  every `fn` in `testdata/golden/` — that is 60 of the package's 87, which is exactly the 60 of the
-  TypeScript domain's 64 exported ones that have cases: the four `*Policy` readers take the
+  every `fn` in `testdata/golden/` — that is 61 of the package's 88, which is exactly the 61 of the
+  TypeScript domain's 65 exported ones that have cases: the four `*Policy` readers take the
   service's Settings, so the package takes their knobs directly instead. The other 27, none of them
   in `testdata/golden/`:
   - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
@@ -583,6 +583,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   (missing IV or vega, from a sweep with both), never changed (`takesSample`). Every write stamps
   `observed_at`, so an off-close point is marked.
   Each carries per-leg IV, vega and delta, all-or-nothing per map, each gated on its own.
+  And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
+  it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command

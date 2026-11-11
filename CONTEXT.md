@@ -225,6 +225,14 @@ here: that is a Monitor the service disabled because it cannot be EVALUATED, and
 evaluates nothing.
 _Avoid_: watchlist (that is the Monitors), index, underlying, benchmark, ticker
 
+**SPX's price**:
+The index level a batch implies, worked out from its own options: each option's premium, inverted
+with its last trade, and the median taken across the batch (ADR 0024). It belongs to the batch it
+came from, so a strike is placed against the index of the same instant as its own figures, and it
+is never a Reference's figure — a Reference is the one thing nothing derives from. Where the batch
+cannot give it (a Provider that serves no premium) it is a dash with its reason, never a guess.
+_Avoid_: spot (unqualified), underlying price, SPX quote, the Reference's SPX
+
 **Quarantine**:
 A Monitor the service has disabled itself because it cannot be evaluated — its Contract is unknown
 to the Provider, or the figure it watches never arrives. Always with a notice, and never deleted:

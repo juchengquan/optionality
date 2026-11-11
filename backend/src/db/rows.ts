@@ -28,7 +28,7 @@ export const COLUMNS = {
   position_samples: [
     "position_id", "observed_on", "dte", "cost_to_close",
     // appended, because ALTER TABLE adds at the end
-    "legs_iv", "legs_vega", "legs_delta", "observed_at",
+    "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx",
   ],
   monitor_positions: ["monitor_id", "position_id"],
   reference_securities: ["id", "code", "label", "source", "created_at"],
@@ -51,7 +51,7 @@ export const NULLABLE = {
     "legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at",
   ],
   positions: ["strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit"],
-  position_samples: ["legs_iv", "legs_vega", "legs_delta", "observed_at"],
+  position_samples: ["legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"],
   monitor_positions: [],
   reference_securities: ["label"],
   schema_migrations: [],
@@ -155,6 +155,9 @@ export interface PositionSampleRow {
    *  it; outside them the row filled a day that had none, and a chart should say so (ADR 0011).
    *  Null on every row written before migration 0009. */
   observed_at: string | null;
+  /** SPX's price as the writing sweep's batch implied it (`derivedSpx`, ADR 0024). Null where the
+   *  batch could not give one, and on every row written before migration 0010. */
+  spx: number | null;
 }
 
 export interface MonitorPositionRow {

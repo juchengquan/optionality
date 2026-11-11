@@ -8,7 +8,7 @@
 import { buildSpxCode } from "optionality/domain/contract";
 import type { World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, EXPIRED, P6350, P6400, at, combo, except, link, monitor, position, quote,
+  BOOK, C7300, C7350, EXPIRED, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
   sample, stored, world,
 } from "./fixtures.ts";
 
@@ -294,6 +294,12 @@ export const SWEEP: readonly SweepInput[] = [
     name: "the day's sample is recorded for a holding nothing watches",
     outcomes: ["sample-recorded"],
     world: world({ tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: BOOK } }),
+  },
+  {
+    // the index the day's row was observed against, derived from the sweep's own batch (ADR 0024)
+    name: "the day's sample records SPX's price from the batch's premiums",
+    outcomes: ["sample-recorded", "sample-records-spx"],
+    world: world({ tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: PREMIUM_BOOK } }),
   },
   {
     // ADR 0022: closed is kept, not held — its last sample is how it ended, and nothing more is

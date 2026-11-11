@@ -133,6 +133,9 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["quotes"]>[number]["in_combos"], string[]>>,
   // risk on something owned, or an entry signal on a candidate: the page files every rule by it
   Checked<Exactly<Ok<E["quotes"]>[number]["held"], boolean>>,
+  // SPX's price as the batch implies it, and why not (ADR 0024): what a strike is placed against
+  Checked<Exactly<Ok<E["quotes"]>[number]["spx"], number | null>>,
+  Checked<Exactly<Ok<E["quotes"]>[number]["spx_reason"], string | null>>,
 
   // monitors --------------------------------------------------------------------------
   Checked<Known<Ok<E["monitors"]>>>,
@@ -176,6 +179,8 @@ export type HcChecks = [
   // the share of a credit captured so far, which the redesigned page shows beside the P&L
   Checked<Exactly<Ok<E["values"]>[number]["captured"], number | null>>,
   Checked<Exactly<Ok<E["values"]>[number]["contract_size"], number | null>>,
+  Checked<Exactly<Ok<E["values"]>[number]["spx"], number | null>>,
+  Checked<Exactly<Ok<E["values"]>[number]["spx_reason"], string | null>>,
   Checked<Known<Ok<E["values"]>[number]["greeks"]>>,
   // a closed holding, as the Holdings panel's closed list reads it (ADR 0022)
   Checked<Exactly<Ok<E["positions"]>[number]["closed_on"], string | null>>,

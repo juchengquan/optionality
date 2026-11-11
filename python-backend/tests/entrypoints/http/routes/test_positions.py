@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 from harness import json_body, priced_fetcher
-from optionality.contract import build_spx_code
+from optionality.contract import build_spx_code, parse_spx_code
 from optionality.quote import Batch
 
 from optionality_backend.db.queries import insert_position
@@ -477,6 +477,34 @@ class TestPositionsValues:
         assert v["cost_to_close"] == 4.5
         assert v["contract_size"] is None
         assert v["pnl"] is None
+
+    async def test_reports_spx_s_price_from_its_own_batch_and_why_not_where_there_are_none(self, start):
+        # every leg's premium is set so that it inverts to 7000, whatever its side: the figure is the
+        # index the holdings were valued against (ADR 0024), on each holding as the contract size is
+        premiums = True
+
+        def premium(code: str) -> float:
+            c = parse_spx_code(code)
+            assert c is not None
+            if c.option_type == "CALL":
+                return ((c.strike + 10) / 7000 - 1) * 100
+            return (1 - (c.strike - 10) / 7000) * 100
+
+        async def fetch(codes):
+            records = (await priced_fetcher(codes)).records
+            if not premiums:
+                return records
+            return [{**r, "last_price": 10, "option_premium": premium(r["code"])} for r in records]
+
+        h = start_with(start, fetch)
+        await post(h, condor())
+        v = (await h.call("/positions/values")).json()[0]
+        assert v["spx"] == 7000
+        assert v["spx_reason"] is None
+        premiums = False
+        bare = (await h.call("/positions/values")).json()[0]
+        assert bare["spx"] is None
+        assert bare["spx_reason"] == "the Provider gives no option premium to derive it from"
 
     async def test_reports_the_share_of_a_credit_captured_so_far_and_none_for_a_debit(self, start):
         # what the redesigned page shows beside the P&L (ADR 0023), decided here rather than divided out

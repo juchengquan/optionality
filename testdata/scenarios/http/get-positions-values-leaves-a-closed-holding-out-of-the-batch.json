@@ -192,6 +192,8 @@
           "pnl": 315,
           "captured": 0.49218750000000006,
           "contract_size": 100,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from",
           "greeks": {
             "option_delta": 0,
             "option_gamma": 0,

@@ -311,6 +311,11 @@ const EntryOut = z.object({
    *  number, at or below zero exactly when `triggered`, and negative by how far past. Null
    *  wherever `watched` is, which says nothing about the bell. */
   distance: z.number().nullable(),
+  /** SPX's price as this response's one batch implies it, from its options' premiums (ADR 0024):
+   *  the same on every row. Null where the batch cannot give it, never a Reference's figure. */
+  spx: z.number().nullable(),
+  /** why `spx` is null, in words; null when there is a figure */
+  spx_reason: z.string().nullable(),
 });
 
 const quotes = documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]);

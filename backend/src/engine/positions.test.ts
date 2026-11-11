@@ -611,6 +611,34 @@ describe("recording what a Position was worth", () => {
     });
   });
 
+  it("records SPX's price, derived from the sweep's own batch (ADR 0024)", async () => {
+    // the index the day's row was observed against, so a chart can place it beside the strikes;
+    // from the whole batch, as /quotes has it, and inverted from each leg's premium and last
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      // (8050 + 5) / 1.15 and (8075 + 1) / 1.15: averaged, 7011.30…
+      last_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0, option_premium: 15,
+    })))).sweep();
+
+    const row = db.prepare("select spx from position_samples where position_id = ?").get(id) as
+      { spx: number | null };
+    expect(row.spx).toBe(Number((((8055 + 8076) / 2) / 1.15).toFixed(2)));
+  });
+
+  it("records no SPX price where the batch cannot give one, and the sample regardless", async () => {
+    // a sample is the cost to close first: an index the Provider cannot imply costs it nothing
+    const id = held("held");
+    await sweeper((codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: 1.0, last_price: 1.0,
+    })))).sweep();
+
+    const row = db.prepare("select spx, cost_to_close from position_samples where position_id = ?")
+      .get(id) as { spx: number | null; cost_to_close: number };
+    expect(row.spx).toBeNull();
+    expect(row.cost_to_close).toBe(0);
+  });
+
   it("records no delta at all rather than some of it, and the other maps regardless", async () => {
     // the same all-or-nothing per map as the IV and the vega, and gated on its own: a withheld
     // delta makes neither the IV nor the vega reading untrue
@@ -683,6 +711,23 @@ describe("how often the sampler actually writes", () => {
     const row = db.prepare("select cost_to_close from position_samples").get() as
       { cost_to_close: number };
     expect(row.cost_to_close).toBe(3);
+  });
+
+  it("writes when only SPX moves, so the day's row keeps the index of its close", async () => {
+    // the index moves on a sweep where every mark sits still, and the row should say where it was
+    held("held");
+    const at = (premium: number): FakeProvider => (codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, mid_price: c === buildSpxCode(future(), "CALL", 8050) ? 5.0 : 1.0,
+      option_implied_volatility: 10.5, option_vega: 1.0, option_delta: 0.16,
+      last_price: 1.0, option_premium: premium,
+    })));
+    await sweeper(at(15)).sweep();
+    const after = writes();
+    await sweeper(at(14)).sweep();
+    expect(writes()).toBeGreaterThan(after);
+
+    const row = db.prepare("select spx from position_samples").get() as { spx: number };
+    expect(row.spx).toBe(Number((((8051 + 8076) / 2) / 1.14).toFixed(2)));
   });
 
   it("writes when only the IV moves, which the cost alone would hide", async () => {
