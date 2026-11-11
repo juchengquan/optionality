@@ -86,9 +86,12 @@
   background: var(--muted); overflow: hidden;
 }
 .nxp-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--muted-foreground); }
-.nxp-watch[data-state="entry"] .nxp-progress > span { background: var(--entry); }
-.nx[data-entry="risk"] .nxp-watch[data-state="entry"] .nxp-progress > span,
-.nxp-watch[data-state="alarm"] .nxp-progress > span { background: var(--alarm); }
+/* the bar carries its rule's state itself, so it is coloured the same on a card and in the sheet,
+   which is drawn in a portal where no card is its ancestor */
+.nxp-progress[data-state="entry"] > span { background: var(--entry); }
+:is(.nx, .nx-tokens)[data-entry="risk"] .nxp-progress[data-state="entry"] > span,
+.nxp-progress[data-state="alarm"] > span { background: var(--alarm); }
+.nxp-progress[data-state="fault"] > span { background: var(--fault); }
 
 /* a condor's two cards, together, under their summed P&L */
 .nxp-condor {

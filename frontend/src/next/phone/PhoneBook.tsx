@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import "./phone.css";
 import type { BookProps } from "../Book";
@@ -22,6 +22,11 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
   const subject = openId === null ? null : find(placed, openId);
+  // Gone — a valuation failed, or a rule was deleted — the sheet has closed and given its Back
+  // entry up, so it is forgotten: the next poll that brings the row back must not reopen a sheet
+  // nobody asked for, pushing a second entry as it does.
+  const gone = openId !== null && subject === null;
+  useEffect(() => { if (gone) setOpenId(null); }, [gone]);
   const flat = placed.holdings.flatMap((g) => g.rows.flat());
 
   const status = (

@@ -4,7 +4,7 @@
  *  Behaviour only. What a phone must MEASURE — nothing pushed sideways, 44pt targets, Back under
  *  the iPhone profile — is `__browser__/NextPhone.iphone.test.tsx`. */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding, Monitor } from "../api";
 import type { BookProps } from "../next/Book";
@@ -118,6 +118,24 @@ describe("the Live cards, on the owner's book", () => {
     expect(card("h-calls").querySelector(".nxp-hero [data-money]")!.textContent).toBe("$•••");
     expect(within(card("h-calls")).getByText("38 DTE")).toBeTruthy();
   });
+
+  it("hide a condor's summed P&L under privacy, and show it otherwise", () => {
+    const condor = () => within(region("Holdings")).getByRole("group", { name: /iron condor/ })
+      .querySelector(".nxp-condor-head [data-money]")!;
+    draw();
+    expect(condor().textContent).toBe("-$140");
+    cleanup();
+    draw({ privacy: true });
+    expect(condor().textContent).toBe("$•••");
+  });
+
+  it("draw no progress bar for a rule with no figure, where 0% would read as far from it", () => {
+    const blind = QUOTES.map((q) => q.id === "w-dec18" ? { ...q, fill: null, watched: null } as Entry : q);
+    draw({ quotes: blind });
+    expect(within(card("w-dec18")).queryByRole("progressbar")).toBeNull();
+    expect(within(card("w-dec18")).getByText(/no figure/)).toBeTruthy();
+    expect(within(card("w-dec31")).getByRole("progressbar")).toBeTruthy();
+  });
 });
 
 describe("the detail sheet", () => {
@@ -159,6 +177,73 @@ describe("the detail sheet", () => {
   });
 });
 
+describe("the detail sheet, beyond opening and closing", () => {
+  const props = (over: Partial<BookProps> = {}): BookProps => ({
+    quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null,
+    holdingsAt: null, mode: "live", privacy: false, entryStyle: "opportunity", ...over,
+  });
+
+  it("hides its $ amount under privacy", async () => {
+    draw({ privacy: true });
+    fireEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
+    const sheet = await screen.findByRole("dialog");
+    expect(sheet.querySelector(".nxp-hero [data-money]")!.textContent).toBe("$•••");
+    expect(within(sheet).queryByText(/\$\d/)).toBeNull();
+  });
+
+  it("hides the contract count under privacy, since contracts × points × 100 is the money", async () => {
+    const big = HOLDINGS.map((h) => ({ ...h, contracts: 7 }) as Holding);
+    for (const privacy of [false, true]) {
+      draw({ privacy, holdings: big });
+      fireEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
+      const sheet = await screen.findByRole("dialog");
+      expect(sheet.textContent!.includes("×7")).toBe(!privacy);
+      if (privacy) expect(sheet.textContent).toContain("×•••");
+      cleanup();
+      await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    }
+  });
+
+  it("draws no progress bar in the sheet for a rule with no figure", async () => {
+    const blind = QUOTES.map((q) => q.id === "w-dec18" ? { ...q, fill: null, watched: null } as Entry : q);
+    draw({ quotes: blind });
+    fireEvent.click(within(card("w-dec18")).getByRole("button", { name: /details of/ }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).queryByRole("progressbar")).toBeNull();
+  });
+
+  it("stays closed when what it showed goes away and comes back, and pushes no second entry", async () => {
+    const pushed = vi.spyOn(window.history, "pushState");
+    try {
+      const { rerender } = render(<div className="nx"><PhoneBook {...props()} /></div>);
+      fireEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
+      await screen.findByRole("dialog");
+      expect(pushed).toHaveBeenCalledTimes(1);
+      // a valuation fails: the holding is gone from the page, and so is the sheet
+      rerender(<div className="nx"><PhoneBook {...props({ holdings: null, holdingsError: "timed out" })} /></div>);
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+      // the next poll values it again: nobody asked for the sheet, so it does not come back
+      rerender(<div className="nx"><PhoneBook {...props()} /></div>);
+      await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(pushed).toHaveBeenCalledTimes(1);
+    } finally {
+      pushed.mockRestore();
+    }
+  });
+
+  it("takes its history entry back when it is unmounted open, as when the phone turns into the desk", async () => {
+    history.replaceState({ before: "the sheet" }, "");
+    const { unmount } = draw();
+    fireEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
+    await screen.findByRole("dialog");
+    expect(history.state?.panel).toBe(true);
+    unmount();
+    await waitFor(() => expect(history.state?.before).toBe("the sheet"));
+  });
+});
+
 describe("REVIEW", () => {
   it("pages through the holdings one per screen, in the book's order", () => {
     draw({ mode: "review" });
@@ -183,6 +268,16 @@ describe("REVIEW", () => {
     expect(within(page).getByText("captured")).toBeTruthy();
     expect(within(page).getByText("pace gap")).toBeTruthy();
     expect(within(region("Review")).getByText(/valued at 23:14:05/)).toBeTruthy();
+  });
+
+  it("hides the contract count on its pages under privacy, and shows it otherwise", () => {
+    const big = HOLDINGS.map((h) => ({ ...h, contracts: 7 }) as Holding);
+    draw({ mode: "review", holdings: big });
+    expect(region("Review").textContent).toContain("×7");
+    cleanup();
+    draw({ mode: "review", holdings: big, privacy: true });
+    expect(region("Review").textContent).not.toContain("×7");
+    expect(region("Review").textContent).toContain("×•••");
   });
 
   it("still draws the watchlist, so a banner about it has a card to lead to", () => {

@@ -1,7 +1,7 @@
 /** The phone's detail sheet (ADR 0023): a bottom sheet over the cards, with a card's detail and
  *  its Monitors. Back closes it — a history entry, never a route (ADR 0005) — through the same
  *  `useDismissOnBack` today's sheet at `/opt` uses. */
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import type { Entry, Holding, Monitor } from "../../api";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -10,8 +10,8 @@ import { readUp, type EntryStyle } from "../../prefs";
 import { useDismissOnBack } from "../../useDismissOnBack";
 import { Chip, Money } from "../Book";
 import { entryName, fieldWords, sentence } from "../needs";
-import { LevelChip, RuleLine } from "./Cards";
-import { delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
+import { LevelChip, Progress, RuleLine } from "./Cards";
+import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
 
 export type Subject =
@@ -29,6 +29,16 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
 }) {
   const open = subject !== null;
   useDismissOnBack(open, onClose);
+  // Unmounted while open — the phone turned into the desk (a Pro Max in landscape is 932px) — the
+  // hook's listener goes with it and its entry stays on the stack, so the next Back would do
+  // nothing. Next.tsx keeps the desk's Settings mounted for this; the book cannot stay mounted
+  // in the other arrangement, so it takes its entry back as it goes, if that entry is still
+  // the one the page is on.
+  const openNow = useRef(open);
+  openNow.current = open;
+  useEffect(() => () => {
+    if (openNow.current && window.history.state?.panel) window.history.back();
+  }, []);
   // the sheet animates out after it closes, and must still have something to draw while it does
   const last = useRef<Subject | null>(null);
   if (subject) last.current = subject;
@@ -61,7 +71,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
       <SheetHeader>
         <SheetTitle>{holding.name}</SheetTitle>
         <SheetDescription>
-          {`${holdingLegs(holding)} · ×${holding.contracts} · ${expiryWords(holding.strike_date)} · ${holding.dte} DTE`}
+          {`${holdingLegs(holding)} · ${contractsWords(holding.contracts, privacy)} · ${expiryWords(holding.strike_date)} · ${holding.dte} DTE`}
         </SheetDescription>
       </SheetHeader>
       <div className="nxp-sheet-body">
@@ -101,7 +111,6 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
 
 function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
   const state = ruleState(entry);
-  const fill = Math.max(0, Math.min(100, entry.fill ?? 0));
   return (
     <>
       <SheetHeader>
@@ -112,10 +121,7 @@ function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
       </SheetHeader>
       <div className="nxp-sheet-body">
         {state ? <p><Chip state={state} /></p> : null}
-        <div className="nxp-progress" role="progressbar" aria-label="toward its threshold"
-             aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fill)}>
-          <span style={{ width: `${fill}%` }} />
-        </div>
+        <Progress entry={entry} />
         <p className="nxp-sentence">{sentence(entry)}</p>
         {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
         <dl className="nxp-facts">

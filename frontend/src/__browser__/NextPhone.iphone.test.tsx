@@ -28,7 +28,7 @@ const health = {
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 };
 
-function serveOwnerBook(): void {
+function serveOwnerBook(quotes: object[] = QUOTES): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({
@@ -36,14 +36,14 @@ function serveOwnerBook(): void {
       });
     }
     const path = String(url).replace(/^.*\/api/, "");
-    const body = path === "/quotes" ? QUOTES : path === "/monitors" ? MONITORS
+    const body = path === "/quotes" ? quotes : path === "/monitors" ? MONITORS
       : path === "/health" ? health : path === "/positions/values" ? HOLDINGS : [];
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
 }
 
-async function show(view: "Live" | "Review" = "Live") {
-  serveOwnerBook();
+async function show(view: "Live" | "Review" = "Live", quotes: object[] = QUOTES) {
+  serveOwnerBook(quotes);
   render(<Next />);
   await settle();
   // the mode follows the real clock here; the tab makes it this test's
@@ -146,6 +146,20 @@ describe("the detail sheet", () => {
     expect(pastTheEdge(sheet)).toEqual([]);
   });
 
+  it("colours a fired entry's progress bar as the card does, though it is drawn outside the page", async () => {
+    const sheet = await openSheet("w-dec04");
+    const bar = within(sheet).getByRole("progressbar").firstElementChild as HTMLElement;
+    const onCard = card("w-dec04").querySelector<HTMLElement>(".nxp-progress > span")!;
+    // a probe in the sheet painted with the entry token, as the page resolves it there
+    const probe = document.createElement("span");
+    probe.style.background = "var(--entry)";
+    sheet.append(probe);
+    const entry = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    expect(getComputedStyle(bar).backgroundColor).toBe(entry);
+    expect(getComputedStyle(onCard).backgroundColor).toBe(getComputedStyle(bar).backgroundColor);
+  });
+
   it("gives its controls 44pt targets", async () => {
     await openSheet("w-dec18");
     expect(tooSmall()).toEqual([]);
@@ -206,6 +220,23 @@ describe("REVIEW", () => {
     track().scrollTo({ left: 2 * track().clientWidth });
     await waitFor(() => expect(within(review()).getByText("3 of 3")).toBeTruthy());
     expect(within(review()).getByRole("button", { name: "next holding" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("follows a banner to a rule two pages ahead: the page it is on, fully on the screen", async () => {
+    // the 4-leg condor's rule rings; its holding is the third page
+    const ringing = QUOTES.map((q) => q.id === "r-ic" ? { ...q, triggered: true, watched: 6.4, distance: -0.4 } : q);
+    await show("Review", ringing);
+    expect(within(review()).getByText("1 of 3")).toBeTruthy();
+    const banners = screen.getByRole("status", { name: "needs you" });
+    await userEvent.click(within(banners).getByRole("button", { name: /1231_IC ringing/ }));
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(within(review()).getByText("3 of 3")).toBeTruthy();
+    expect(Math.round(pages()[2]!.getBoundingClientRect().left)).toBe(0);
+    const row = card("r-ic");
+    const r = row.getBoundingClientRect();
+    expect(row.hasAttribute("data-revealed")).toBe(true);
+    expect(r.left >= 0 && r.right <= window.innerWidth).toBe(true);
+    expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);
   });
 
   it("gives every control a 44pt target", async () => {

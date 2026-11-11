@@ -1,6 +1,6 @@
 /** REVIEW on the phone (ADR 0023): one holding per screen, paged by a swipe or by the arrows, with
  *  its figures. Its burndown becomes the page's main chart in a later slice (#291). */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import type { Entry, Monitor } from "../../api";
@@ -8,7 +8,7 @@ import { DASH } from "../../format";
 import { Money } from "../Book";
 import type { PlacedHolding } from "../placement";
 import { LevelChip, RuleLine } from "./Cards";
-import { expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
+import { contractsWords, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 
 export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
   placed: PlacedHolding[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean;
@@ -17,20 +17,27 @@ export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
   const [index, setIndex] = useState(0);
   const at = Math.min(index, Math.max(0, placed.length - 1));
   const track = useRef<HTMLDivElement>(null);
-  // where a press of an arrow is taking the track: the scroll events on the way there are not
-  // the reader swiping, and must not move the index back to a page being scrolled past
+  // where the page is TAKING the track: the scroll events on the way there are not the reader
+  // swiping, and must not move the index back to a page being scrolled past
   const heading = useRef<number | null>(null);
 
-  useEffect(() => {
+  /** Page i, and the track brought to it: the index and the scroll move together. */
+  const goTo = useCallback((i: number) => {
+    setIndex(i);
     const el = track.current;
     if (!el || el.clientWidth === 0) return;
-    const left = at * el.clientWidth;
+    const left = i * el.clientWidth;
     if (Math.abs(el.scrollLeft - left) < 2) return;
     heading.current = left;
     const still = matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo?.({ left, behavior: still ? "auto" : "smooth" });
-  }, [at]);
+  }, []);
 
+  // Only the reader's own actions move the track: the arrows, through `goTo`, and a swipe, which
+  // `onScroll` follows. The index once SCROLLED the track whenever it changed, and that fought
+  // `reveal`: a banner about a row two pages ahead scrolls the track past the page between, the
+  // index followed it there, and the track was sent back to that page — the marked row left
+  // off the screen. Following the scroll and never answering it lets reveal's scroll land.
   const onScroll = () => {
     const el = track.current;
     if (!el || el.clientWidth === 0) return;
@@ -57,7 +64,7 @@ export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
                   <span className="nxp-legs">{holdingLegs(holding)}</span>
                   <span className="nxp-pill">{`${holding.dte} DTE`}</span>
                 </header>
-                <p className="nxp-meta">{`×${holding.contracts} · ${expiryWords(holding.strike_date)} · opened ${holding.opened_at ?? DASH}`}</p>
+                <p className="nxp-meta">{`${contractsWords(holding.contracts, privacy)} · ${expiryWords(holding.strike_date)} · opened ${holding.opened_at ?? DASH}`}</p>
                 <div className="nxp-hero">
                   <Money value={holding.pnl} privacy={privacy} />
                   <span className="nxp-hero-sub">unrealised</span>
@@ -84,10 +91,10 @@ export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
       </div>
       <div className="nxp-pager-nav">
         <button type="button" aria-label="previous holding" disabled={at === 0}
-                onClick={() => setIndex(at - 1)}><ChevronLeft aria-hidden="true" /></button>
+                onClick={() => goTo(at - 1)}><ChevronLeft aria-hidden="true" /></button>
         <span className="nxp-meta" aria-live="polite">{`${at + 1} of ${placed.length}`}</span>
         <button type="button" aria-label="next holding" disabled={at === placed.length - 1}
-                onClick={() => setIndex(at + 1)}><ChevronRight aria-hidden="true" /></button>
+                onClick={() => goTo(at + 1)}><ChevronRight aria-hidden="true" /></button>
       </div>
     </div>
   );

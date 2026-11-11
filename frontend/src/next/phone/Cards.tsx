@@ -72,11 +72,25 @@ export function HoldingCard({ placed, quotes, monitors, privacy, onOpen }: {
   );
 }
 
+/** How far a rule's figure has come toward its threshold, coloured by the rule's state. With NO
+ *  figure there is no bar at all: an empty bar would read as "far from it", and the sentence
+ *  beside it already says "no figure". */
+export function Progress({ entry }: { entry: Entry }) {
+  if (entry.fill === null || entry.fill === undefined) return null;
+  const fill = Math.max(0, Math.min(100, entry.fill));
+  return (
+    <div className="nxp-progress" role="progressbar" aria-label="toward its threshold"
+         aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fill)}
+         data-state={ruleState(entry) ?? "calm"}>
+      <span style={{ width: `${fill}%` }} />
+    </div>
+  );
+}
+
 /** A watched spread — or a single contract, or a rule on something held that no drawn holding
  *  owns — with its progress toward the threshold and the rules that sit under it. */
 export function RuleCard({ entry, under, onOpen }: { entry: Entry; under: Entry[]; onOpen: () => void }) {
   const state = ruleState(entry);
-  const fill = Math.max(0, Math.min(100, entry.fill ?? 0));
   return (
     <article className="nxp-card nxp-watch" data-ref={entry.id} data-state={state ?? "calm"}>
       <OpenCard name={entryName(entry)} onOpen={onOpen} />
@@ -85,10 +99,7 @@ export function RuleCard({ entry, under, onOpen }: { entry: Entry; under: Entry[
         {entry.legs ? <span className="nxp-legs">{legSummary(entry.legs)}</span> : null}
         {state ? <Chip state={state} /> : null}
       </header>
-      <div className="nxp-progress" role="progressbar" aria-label="toward its threshold"
-           aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fill)}>
-        <span style={{ width: `${fill}%` }} />
-      </div>
+      <Progress entry={entry} />
       <p className="nxp-sentence">{sentence(entry)}</p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
       {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}

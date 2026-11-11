@@ -27,6 +27,12 @@ export function holdingLegs(holding: Holding): string {
     .join(" ");
 }
 
+/** "×2", or "×•••" under privacy: contracts × points × 100 is the dollar amount privacy hides, so
+ *  the count beside a figure in points goes with it (owner's decision, #314). */
+export function contractsWords(contracts: number, privacy: boolean): string {
+  return privacy ? "×•••" : `×${contracts}`;
+}
+
 export interface ShortDelta {
   /** "C7300": which short leg, said only when a holding has more than one */
   leg: string;
