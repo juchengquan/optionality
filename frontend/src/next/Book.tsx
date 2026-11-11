@@ -1,24 +1,20 @@
 import { BellRing, OctagonAlert, Sparkles } from "lucide-react";
 
-import type { Entry, Holding } from "../api";
+import type { Entry, Holding, Monitor } from "../api";
+import type { EntryStyle } from "../prefs";
 import { DASH, legSummary } from "../format";
 import type { Mode } from "./mode";
 import { Glyph } from "./NeedsLine";
+import { placeBook } from "./placement";
 import { entryName, isEntrySignal, sentence } from "./needs";
 
-/** The book as a plain list: holdings first, each with the rules about it, then the watchlist,
- *  both by expiry (ADR 0023: the spread is the unit, grouped by expiry).
- *
- *  Deliberately plain. This is the first path through every layer — the service's new figures, the
- *  page that reads them, both arrangements around it — and the desk table (#289) and the phone
- *  cards (#290) replace this list. What it settles now is WHICH rule sits where:
- *  - a rule about a holding sits under that holding, because it is a risk on something owned;
- *  - a rule on nothing held is the watchlist, an entry signal on a candidate spread;
- *  - a single-leg rule whose contract is a leg of a watched spread (`in_combos`, a link the
- *    service discovers) sits under that spread, which is how a short leg's delta joins its spread.
- */
-export function Book({ quotes, holdings, holdingsError, holdingsAt, mode, privacy }: {
+/** What every drawing of the book is handed: the polled figures and the viewer's settings. The
+ *  desk's table (`desk/`, #289) and the phone's cards (`phone/`, #290) each take exactly this, and
+ *  place the book with `placeBook` so the two cannot group it differently. */
+export interface BookProps {
   quotes: Entry[];
+  /** every rule, enabled or not: the muted and quarantined ones are only here */
+  monitors: Monitor[];
   /** null while not valued, and after a valuation failed: the error is said INSTEAD of figures
    *  nobody can vouch for, as at `/opt` */
   holdings: Holding[] | null;
@@ -27,18 +23,17 @@ export function Book({ quotes, holdings, holdingsError, holdingsAt, mode, privac
   holdingsAt: string | null;
   mode: Mode;
   privacy: boolean;
-}) {
+  entryStyle: EntryStyle;
+}
+
+/** The book as a plain list: holdings first, each with the rules about it, then the watchlist,
+ *  both by expiry (ADR 0023: the spread is the unit, grouped by expiry). Which rule sits where is
+ *  `placeBook`'s; this only draws it, plainly, until the desk table (#289) and the phone cards
+ *  (#290) replace it. */
+export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy }: BookProps) {
+  const placed = placeBook(quotes, holdings, monitors);
   const watchlist = quotes.filter(isEntrySignal);
-  // a rule on something held whose holding is not drawn — the valuation failed or has not arrived,
-  // or two holdings share its contract — is still a risk rule, and still shown
-  const drawn = new Set((holdings ?? []).map((h) => h.id));
-  const unplaced = quotes.filter((e) => !isEntrySignal(e) && !e.positions.some((p) => drawn.has(p.id)));
-  const ids = new Set(watchlist.map((e) => e.id));
-  // a leg rule that has a spread on the watchlist to sit under; one whose spreads are all held or
-  // gone stands alone rather than disappearing
-  const nested = (e: Entry) => !e.legs && e.in_combos.some((id) => ids.has(id));
-  const top = watchlist.filter((e) => !nested(e));
-  const under = (combo: Entry) => watchlist.filter((e) => !e.legs && e.in_combos.includes(combo.id));
+  const unplaced = placed.unplaced;
 
   return (
     <div className="nx-book">
@@ -51,13 +46,12 @@ export function Book({ quotes, holdings, holdingsError, holdingsAt, mode, privac
         {holdings !== null && holdings.length === 0 ? <p className="nx-meta">nothing held</p> : null}
         {mode === "review" && holdings !== null && holdingsAt
           ? <p className="nx-meta">{`valued at ${holdingsAt}`}</p> : null}
-        {byExpiry(holdings ?? []).map(([expiry, group]) => (
+        {placed.holdings.map(({ expiry, rows }) => (
           <div key={expiry} className="nx-expiry">
             <h3>{expiry}</h3>
             <ul>
-              {group.map((h) => (
-                <HoldingItem key={h.id} holding={h} mode={mode} privacy={privacy}
-                             rules={quotes.filter((e) => e.positions.some((p) => p.id === h.id))} />
+              {rows.flat().map(({ holding, rules }) => (
+                <HoldingItem key={holding.id} holding={holding} mode={mode} privacy={privacy} rules={rules} />
               ))}
             </ul>
           </div>
@@ -78,16 +72,16 @@ export function Book({ quotes, holdings, holdingsError, holdingsAt, mode, privac
       <section aria-labelledby="nx-watchlist">
         <h2 id="nx-watchlist">Watchlist</h2>
         {watchlist.length === 0 ? <p className="nx-meta">nothing watched</p> : null}
-        {byExpiry(top).map(([expiry, group]) => (
+        {placed.watchlist.map(({ expiry, items }) => (
           <div key={expiry} className="nx-expiry">
             <h3>{expiry}</h3>
             <ul>
-              {group.map((e) => (
+              {items.map(({ entry: e, under }) => (
                 <li key={e.id} className="nx-item">
                   <Rule entry={e} />
-                  {e.legs && under(e).length > 0 ? (
+                  {under.length > 0 ? (
                     <ul className="nx-under">
-                      {under(e).map((leg) => <li key={leg.id}><Rule entry={leg} /></li>)}
+                      {under.map((leg) => <li key={leg.id}><Rule entry={leg} /></li>)}
                     </ul>
                   ) : null}
                 </li>
@@ -98,14 +92,6 @@ export function Book({ quotes, holdings, holdingsError, holdingsAt, mode, privac
       </section>
     </div>
   );
-}
-
-function byExpiry<T extends { strike_date: string }>(rows: T[]): [string, T[]][] {
-  const groups = new Map<string, T[]>();
-  for (const r of [...rows].sort((a, b) => a.strike_date.localeCompare(b.strike_date))) {
-    groups.set(r.strike_date, [...(groups.get(r.strike_date) ?? []), r]);
-  }
-  return [...groups];
 }
 
 /** The state a rule is in, as one of the attention family's chips — or none while it is calm. */

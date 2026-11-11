@@ -29,7 +29,7 @@ const ORDER: NeedKind[] = ["fault", "stop", "alarm", "entry", "target", "manage"
 /** The three quarantines (CONTEXT.md: Quarantine), each said as the fact about the data it is.
  *  The other reasons a rule is off — muted by hand, expired, its holding closed — are somebody's
  *  choice or the calendar, and are not news. */
-const QUARANTINED: Record<string, string> = {
+export const QUARANTINED: Record<string, string> = {
   "unknown-contract": "the provider does not know its contract",
   "no-figure": "its figure never arrives",
   unreadable: "its stored row cannot be read",
