@@ -364,6 +364,9 @@ export const INPUTS: Record<string, CaseInput[]> = {
         { code: "US.SPXW261113P7500000", last_price: 10, option_premium: 100 },
       ]] },
     { fn: "derivedSpx", name: "no SPX option in the batch", args: [[]] },
+    // String() would read an array holding a code as that code; a code that is not a string is none
+    { fn: "derivedSpx", name: "a code that is not a string is no option",
+      args: [[{ code: ["US.SPXW261113C7475000"], last_price: 79.2, option_premium: 0.547 }]] },
     // IB Gateway serves no premium at all
     { fn: "derivedSpx", name: "a missing premium",
       args: [[{ code: "US.SPXW261113C7475000", last_price: 79.2 },

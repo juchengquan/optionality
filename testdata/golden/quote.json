@@ -419,6 +419,25 @@
     },
     {
       "fn": "derivedSpx",
+      "name": "a code that is not a string is no option",
+      "args": [
+        [
+          {
+            "code": [
+              "US.SPXW261113C7475000"
+            ],
+            "last_price": 79.2,
+            "option_premium": 0.547
+          }
+        ]
+      ],
+      "expect": {
+        "price": null,
+        "reason": "no SPX option in the batch to derive it from"
+      }
+    },
+    {
+      "fn": "derivedSpx",
       "name": "a missing premium",
       "args": [
         [

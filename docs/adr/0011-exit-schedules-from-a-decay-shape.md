@@ -5,7 +5,8 @@ Date: 2026-10-12
 ## Status
 
 Accepted. Decided with the owner on 2026-10-12. Amended 2026-11-10: the daily sample is the day's
-close (or marked as not one), and records each leg's delta (last section).
+close (or marked as not one), and records each leg's delta (last section). Amended 2026-11-11 by
+ADR 0024: the sample also records SPX's price, derived from the sweep's batch (last section).
 
 ## Context
 
@@ -212,3 +213,13 @@ Opened has to say that day for the chain to start, as before.
 **Each leg's delta is recorded beside its IV and vega** (`legs_delta`, migration 0009): the risk the
 owner manages by, only knowable when observed, all or nothing per map and gated on its own, exactly
 as the vega is. Rows written before it carry none.
+
+## Amended 2026-11-11: the sample records SPX's price (ADR 0024)
+
+Each sample carries `spx`: the index level the writing sweep's batch implied, derived from its
+options' premiums (`derivedSpx`), so a chart can place a holding's strikes against where SPX stood
+on each day. Null where the batch could not give it (a Provider with no premium) and on every row
+written before migration 0010; never a Reference's figure. It is written and compared with the
+row's other figures — in the hours, a move in SPX alone rewrites the day's row — and plays no part
+in `takesSample`'s completion rule, so a row's SPX is whatever the sweep that last wrote it saw:
+a day whose final in-hours sweep had no premiums keeps a null.

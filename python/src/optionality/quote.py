@@ -105,7 +105,12 @@ def _finite(value: object) -> float | None:
     """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value) if math.isfinite(value) else None
+    try:
+        number = float(value)
+    except OverflowError:
+        # an int past a double's range, which JavaScript reads as Infinity: not a figure
+        return None
+    return number if math.isfinite(number) else None
 
 
 def derived_spx(records: list[Quote]) -> DerivedSpx:

@@ -149,7 +149,8 @@ export function derivedSpx(records: Quote[]): DerivedSpx {
   let premiums = 0;
   const levels: number[] = [];
   for (const record of records) {
-    const contract = parseSpxCode(String(record.code));
+    // a code that is not a string is no code: `String([code])` would read an array as one
+    const contract = typeof record.code === "string" ? parseSpxCode(record.code) : null;
     if (!contract) continue;
     options += 1;
     const premium = finite(record.option_premium);

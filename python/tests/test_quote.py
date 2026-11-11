@@ -27,3 +27,15 @@ def test_copies_rather_than_mutates_because_conversion_is_not_idempotent():
     display_records([record], "Asia/Singapore", AT)
     assert record["update_time"] == "2026-08-09 20:15:00"
     assert "fetched_at" not in record
+
+
+def test_derived_spx_reads_an_int_past_a_double_s_range_as_no_figure_rather_than_raising():
+    """JavaScript reads such a number as Infinity and leaves it out; `math.isfinite` on the int raised
+    OverflowError, and the sweep calls this outside its per-holding guard. No golden case can state
+    it: the TypeScript cannot hold the number at all."""
+    from optionality.quote import derived_spx
+
+    huge = {"code": "US.SPXW261113C7475000", "last_price": 10**400, "option_premium": 0.547}
+    fine = {"code": "US.SPXW261218P7525000", "last_price": 160.24, "option_premium": 2}
+    assert derived_spx([huge, fine]).price == 7515.06
+    assert derived_spx([{**huge, "last_price": 79.2, "option_premium": 10**400}]).price is None

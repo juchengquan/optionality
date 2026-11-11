@@ -488,6 +488,16 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/quotes"),
   },
   {
+    // premiums, but no last trade beside any of them (before the open, say): nothing to invert,
+    // and the reason says that rather than blaming the Provider
+    name: "GET /quotes gives no SPX price where no option has a last trade",
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })] },
+      provider: { quotes: { [C7300]: { ...PREMIUM_BOOK[C7300], last_price: null } } },
+    }),
+    request: request("GET", "/quotes"),
+  },
+  {
     // the holdings' own batch gives their SPX, so a held spread's strikes are placed against the
     // index of the instant its own cost to close was read (ADR 0010)
     name: "GET /positions/values derives SPX's price from the holdings' own batch",
