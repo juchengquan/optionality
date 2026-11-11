@@ -45,7 +45,10 @@ export const PositionIn = z.object({
  *  A Position's legs and count, without a name or an expiry — the payoff at expiry needs neither —
  *  and an Entry that is REQUIRED, because a curve is drawn at a credit and there is no other. */
 export const PayoffIn = z.object({
-  legs: z.array(LegIn).min(1),
+  /** a Position's legs, with a strike above zero: the payoff's left end is SPX at zero, and a
+   *  strike there is no contract. Its own rule, so PositionIn's legs are untouched — those are
+   *  probed against the Provider, which refuses a strike that does not exist anyway. */
+  legs: z.array(LegIn.extend({ strike: z.number().positive() })).min(1),
   /** points per contract, signed as a Position's: a credit received positive, a debit negative */
   entry: z.number(),
   contracts: z.int().min(1).optional(),

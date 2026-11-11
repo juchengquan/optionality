@@ -21,6 +21,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { fetchDraftPayoff, fetchPayoff, type DraftPayoff, type Entry, type Holding, type Payoff } from "../api";
+import { fieldWords } from "./needs";
 import "./payoff.css";
 
 /** How a P&L is said: money for a holding whose contract size the valuation served, points
@@ -45,29 +46,57 @@ function say(points: number, unit: Unit): string {
 /** An SPX level: whole where it is whole, else to the cent. */
 const level = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(2));
 
-/** The served payoff for `key`, asked for again only when the key changes: none of it moves with
- *  the market, so it is never polled. A null key asks for nothing. */
-function usePayoff(key: string | null, load: () => Promise<Payoff>) {
-  const [state, setState] = useState<{ key: string; payoff?: Payoff; error?: string } | null>(null);
+interface PayoffState {
+  /** the payoff on screen, and the key it was asked for under */
+  payoff?: Payoff;
+  shown?: string;
+  error?: string;
+  /** a newer key is being asked for, and the payoff on screen is the last one */
+  updating: boolean;
+}
+
+/** The served payoff for `key`, asked for again only when the key changes — never on a timer: none
+ *  of it moves with the market. A watched spread's key carries its value, so a poll that moves the
+ *  value asks once more (one POST, no Provider); until that answers, the LAST payoff stays on
+ *  screen, marked as updating, rather than blanking to "drawing…" once a poll. It is kept only for
+ *  the same `subject`: another holding's curve is never shown as this one's. A null key asks for
+ *  nothing. */
+function usePayoff(subject: string, key: string | null, load: () => Promise<Payoff>): PayoffState | null {
+  const [state, setState] = useState<{ subject: string; key: string; payoff?: Payoff; shown?: string; error?: string } | null>(null);
   const loader = useRef(load);
   loader.current = load;
   useEffect(() => {
     if (key === null) return;
     let live = true;
-    setState({ key });
+    setState((prev) => (prev?.subject === subject && prev.payoff
+      ? { subject, key, payoff: prev.payoff, shown: prev.shown }
+      : { subject, key }));
     loader.current().then(
-      (payoff) => { if (live) setState({ key, payoff }); },
-      (err: unknown) => { if (live) setState({ key, error: err instanceof Error ? err.message : String(err) }); },
+      (payoff) => { if (live) setState({ subject, key, payoff, shown: key }); },
+      (err: unknown) => {
+        if (live) setState({ subject, key, error: err instanceof Error ? err.message : String(err) });
+      },
     );
     return () => { live = false; };
-  }, [key]);
-  return state?.key === key ? state : null;
+  }, [subject, key]);
+  if (key === null || state?.subject !== subject) return null;
+  // a render between the key changing and the effect running still shows the last payoff
+  return { payoff: state.payoff, shown: state.shown, error: state.key === key ? state.error : undefined,
+    updating: state.shown !== key };
 }
+
+/** The fields whose combo value is a PRICE, and so a credit a curve can be drawn at. Only the mid:
+ *  the service takes any field a rule names, and a combo's value is the signed sum of THAT field
+ *  (`monitorValue`) — on delta, gamma, theta or vega it is no credit at all. A signed sum of bids or
+ *  of asks is a price but not what the spread sells for (that is short bids less long asks), so
+ *  the mid, which every figure on this page already prices by, is the one value it is honest to
+ *  draw at. */
+export const PRICE_FIELDS: ReadonlySet<string> = new Set(["mid_price"]);
 
 /** A holding's payoff, at the Entry it was taken for, over the contracts held. */
 export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy: boolean }) {
   const { id, entry, contracts } = holding;
-  const state = usePayoff(entry === null ? null : `${id}|${entry}|${contracts}`, () => fetchPayoff(id));
+  const state = usePayoff(id, entry === null ? null : `${id}|${entry}|${contracts}`, () => fetchPayoff(id));
   const unit: Unit = {
     size: holding.contract_size ?? 1, money: holding.contract_size !== null, hidden: privacy,
   };
@@ -82,8 +111,9 @@ export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy:
  *  what it would be sold for now is the negative of its value. One spread, in points: nobody holds
  *  it, so there is no count and no size to make money of. */
 export function WatchedPayoff({ entry }: { entry: Entry }) {
+  const priced = PRICE_FIELDS.has(entry.field);
   const value = entry.combo_value ?? null;
-  const draft: DraftPayoff | null = value === null || !entry.legs ? null : {
+  const draft: DraftPayoff | null = !priced || value === null || !entry.legs ? null : {
     legs: entry.legs.map((l) => ({
       side: l.sign < 0 ? "short" : "long", option_type: l.option_type as "CALL" | "PUT", strike: l.strike,
     })),
@@ -92,18 +122,21 @@ export function WatchedPayoff({ entry }: { entry: Entry }) {
     contracts: 1,
   };
   const key = draft === null ? null : JSON.stringify(draft);
-  const state = usePayoff(key, () => fetchDraftPayoff(draft!));
-  const credit = draft?.entry ?? 0;
+  const state = usePayoff(entry.id, key, () => fetchDraftPayoff(draft!));
+  // the label says the value the curve ON SCREEN was drawn at, which while updating is the last one
+  const credit = state?.shown ? (JSON.parse(state.shown) as DraftPayoff).entry : draft?.entry ?? 0;
+  const blank = !priced
+    ? `watches the ${fieldWords(entry.field, true)}, which is no price to draw it at`
+    : draft === null ? "no current value to draw it at" : null;
   return (
     <PayoffFigure state={state} unit={{ size: 1, money: false, hidden: false }}
-                  spx={entry.spx} spxReason={entry.spx_reason}
-                  blank={draft === null ? "no current value to draw it at" : null}
+                  spx={entry.spx} spxReason={entry.spx_reason} blank={blank}
                   note={`no Entry: drawn at its current value, ${Math.abs(credit).toFixed(2)}, as the ${credit < 0 ? "debit" : "credit"}`} />
   );
 }
 
 function PayoffFigure({ state, unit, spx, spxReason, blank, note }: {
-  state: ReturnType<typeof usePayoff>; unit: Unit; spx: number | null; spxReason: string | null;
+  state: PayoffState | null; unit: Unit; spx: number | null; spxReason: string | null;
   /** why nothing is drawn, when nothing can be */
   blank: string | null;
   note?: string;
@@ -124,7 +157,8 @@ function PayoffFigure({ state, unit, spx, spxReason, blank, note }: {
           </>
         );
   return (
-    <section className="nx-payoff" role="group" aria-label="payoff at expiry">
+    <section className="nx-payoff" role="group" aria-label="payoff at expiry" aria-busy={state?.updating && state.payoff ? true : undefined}
+             data-updating={blank === null && state?.updating && state.payoff ? "" : undefined}>
       <h4 className="nx-payoff-h">Payoff at expiry</h4>
       {body}
     </section>

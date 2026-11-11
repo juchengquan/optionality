@@ -226,6 +226,17 @@ describe("the payoff at expiry (#291)", () => {
     expect((await body(resp)).max_profit).toBe(4.5);
   });
 
+  it("refuses a draft leg whose strike is not above zero, in zod's words", async () => {
+    startWatching();
+    for (const strike of [0, -7100]) {
+      const resp = await h.call("/positions/payoff", json({
+        legs: [{ side: "short", option_type: "PUT", strike }], entry: 1,
+      }));
+      expect(resp.status).toBe(422);
+      expect((await body(resp)).detail).toBe("✖ Too small: expected number to be >0\n  → at legs[0].strike");
+    }
+  });
+
   it("refuses draft legs with no Entry, or none at all", async () => {
     startWatching();
     expect((await h.call("/positions/payoff", json({ legs: PUT_SPREAD }))).status).toBe(422);

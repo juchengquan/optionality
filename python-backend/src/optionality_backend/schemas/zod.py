@@ -234,12 +234,17 @@ class String(Check):
 
 @dataclass(frozen=True, kw_only=True)
 class Number(Check):
-    """`z.number()`: any finite number, and nothing else — not a boolean, not a numeric string."""
+    """`z.number()`: any finite number, and nothing else — not a boolean, not a numeric string. With
+    `positive`, `.positive()` as well: above zero, checked only on a number."""
+
+    positive: bool = False
 
     def check(self, value: Any) -> tuple[Any, list[str]]:
-        if _is_number(value) and math.isfinite(_double(value)):
-            return value, []
-        return value, [_invalid_type("number", value)]
+        if not (_is_number(value) and math.isfinite(_double(value))):
+            return value, [_invalid_type("number", value)]
+        if self.positive and not _double(value) > 0:
+            return value, ["Too small: expected number to be >0"]
+        return value, []
 
 
 @dataclass(frozen=True, kw_only=True)

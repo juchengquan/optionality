@@ -658,6 +658,14 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
+    // a strike of zero is no contract, and the payoff's left end is SPX at zero
+    name: "POST /positions/payoff refuses a strike that is not above zero",
+    world: world(),
+    request: request("POST", "/positions/payoff", {
+      legs: [{ side: "short", option_type: "PUT", strike: 0 }], entry: 1,
+    }),
+  },
+  {
     name: "POST /positions/payoff refuses draft legs with no entry",
     world: world(),
     request: request("POST", "/positions/payoff", {

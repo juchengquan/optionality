@@ -270,6 +270,14 @@ class TestThePayoffAtExpiry:
         resp = await h.call("/positions/payoff", **json_body({"legs": PUT_SPREAD, "entry": 1.5, "contracts": 3}))
         assert resp.json()["max_profit"] == 4.5
 
+    @pytest.mark.parametrize("strike", [0, -7100])
+    async def test_refuses_a_draft_leg_whose_strike_is_not_above_zero_in_zods_words(self, start, strike):
+        h = start_with(start)
+        legs = [{"side": "short", "option_type": "PUT", "strike": strike}]
+        resp = await h.call("/positions/payoff", **json_body({"legs": legs, "entry": 1}))
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "✖ Too small: expected number to be >0\n  → at legs[0].strike"
+
     async def test_refuses_draft_legs_with_no_entry_or_none_at_all(self, start):
         h = start_with(start)
         assert (await h.call("/positions/payoff", **json_body({"legs": PUT_SPREAD}))).status_code == 422

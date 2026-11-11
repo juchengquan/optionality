@@ -12,7 +12,7 @@ from typing import Annotated
 import pytest
 
 from optionality_backend.schemas.monitor import ComboMonitorIn, MonitorCreateIn, MonitorIn, MonitorPatch
-from optionality_backend.schemas.position import PositionIn, PositionPatch
+from optionality_backend.schemas.position import PayoffIn, PositionIn, PositionPatch
 from optionality_backend.schemas.reference import ReferenceIn
 from optionality_backend.schemas.zod import Number, Shape, ZodError, parse, prettify_error, prettify_issues
 
@@ -128,6 +128,17 @@ class TestWhatZodDoesByBeingZod:
             "✖ Too small: expected int to be >=-9007199254740991\n  → at contracts\n"
             "✖ Too small: expected number to be >=1\n  → at contracts"
         )
+
+    def test_a_positive_number_is_a_number_then_above_zero(self):
+        # `z.number().positive()`, which PayoffIn's strike is: zod 4.6's words for both refusals
+        leg = {"side": "short", "option_type": "PUT"}
+        assert refusal(PayoffIn, {"legs": [{**leg, "strike": 0}], "entry": 1}) == (
+            "✖ Too small: expected number to be >0\n  → at legs[0].strike"
+        )
+        assert refusal(PayoffIn, {"legs": [{**leg, "strike": "7100"}], "entry": 1}) == (
+            "✖ Invalid input: expected number, received string\n  → at legs[0].strike"
+        )
+        assert parse(PayoffIn, {"legs": [{**leg, "strike": 0.5}], "entry": 1}).legs[0].strike == 0.5
 
     def test_an_optional_key_may_be_absent_but_not_null_and_a_nullish_one_may_be_either(self):
         assert (

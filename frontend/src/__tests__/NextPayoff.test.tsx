@@ -91,6 +91,18 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
 
+  it("never shows one holding's curve as another's while the other's is asked for", async () => {
+    render(<DeskBook {...props()} />);
+    fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC" }));
+    const first = await payoffOf(screen.getByRole("complementary", { name: /inspector/ }));
+    await waitFor(() => expect(first.querySelector("svg")).toBeTruthy());
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    fireEvent.click(within(deskRow("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
+    await waitFor(() => expect(within(insp).getByText("drawing…")).toBeTruthy());
+    expect(insp.querySelector(".nx-payoff svg")).toBeNull();
+  });
+
   it("asks for nothing for a holding with no Entry, and says why", async () => {
     const blank = HOLDINGS.map((h) => (h.id === "h-ic" ? { ...h, entry: null } : h) as Holding);
     const insp = await inspect("h-ic", "1231_IC", { holdings: blank });
@@ -130,6 +142,38 @@ describe("a watched spread's payoff", () => {
     view.rerender(<DeskBook {...props({ quotes: moved })} />);
     await waitFor(() => expect(asked).toHaveLength(2));
     expect(asked[1]).toContain('"entry":2.55');
+  });
+
+  it("draws nothing for a spread watched on a greek, whose value is no price, and says why", async () => {
+    // a combo's value is the signed sum of the field it WATCHES: on delta it is -0.12, not a credit
+    const onDelta = QUOTES.map((q) => (q.id === "w-dec18"
+      ? { ...q, field: "option_delta", combo_value: -0.12 } : q) as Entry);
+    const insp = await inspect("w-dec18", "1218_P7150", { quotes: onDelta });
+    expect(within(insp).getByText(/watches the spread delta, which is no price to draw it at/)).toBeTruthy();
+    expect(insp.querySelector(".nx-payoff svg")).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it("keeps the last curve on screen while a moved value is asked for, marked as updating", async () => {
+    const view = render(<DeskBook {...props()} />);
+    fireEvent.click(within(deskRow("w-dec18")).getByRole("button", { name: "1218_P7150" }));
+    const payoff = await payoffOf(screen.getByRole("complementary", { name: /inspector/ }));
+    await waitFor(() => expect(payoff.querySelector("svg")).toBeTruthy());
+    // the next answer is held back, as a slow service would
+    let release: () => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => {
+      release = () => resolve({ ok: true, status: 200, json: () => Promise.resolve(payoffAnswer("/positions/payoff")) });
+    })));
+    const moved = QUOTES.map((q) => (q.id === "w-dec18" ? { ...q, combo_value: -2.55 } : q) as Entry);
+    view.rerender(<DeskBook {...props({ quotes: moved })} />);
+    await waitFor(() => expect(payoff.dataset.updating).toBe(""));
+    expect(payoff.querySelector("svg")).toBeTruthy();
+    expect(within(payoff).queryByText("drawing…")).toBeNull();
+    // the label is the curve's on screen, not the value still being asked for
+    expect(within(payoff).getByText(/current value, 2\.40, as the credit/)).toBeTruthy();
+    release();
+    await waitFor(() => expect(payoff.dataset.updating).toBeUndefined());
+    expect(within(payoff).getByText(/current value, 2\.55, as the credit/)).toBeTruthy();
   });
 
   it("draws nothing without a current value, and says so", async () => {

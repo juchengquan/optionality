@@ -27,3 +27,5 @@
   color: var(--muted-foreground); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em;
 }
 .nx-payoff-kv dd { font-variant-numeric: tabular-nums; font-size: 0.875rem; overflow-wrap: anywhere; }
+/* a moved value is being asked for: the last curve stays, a shade quieter, rather than blanking */
+.nx-payoff[data-updating] .nx-payoff-chart { opacity: 0.6; transition: opacity 150ms; }
