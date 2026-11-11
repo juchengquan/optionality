@@ -2180,6 +2180,273 @@
               ]
             }
           },
+          "/positions/{id}/payoff": {
+            "get": {
+              "operationId": "getPositionsByIdPayoff",
+              "summary": "A holding's payoff at expiry",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "at_strikes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "spx": {
+                                  "type": "number"
+                                },
+                                "pnl": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "spx",
+                                "pnl"
+                              ]
+                            }
+                          },
+                          "slope_below": {
+                            "type": "number"
+                          },
+                          "slope_above": {
+                            "type": "number"
+                          },
+                          "breakevens": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "max_profit": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "max_loss": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "at_strikes",
+                          "slope_below",
+                          "slope_above",
+                          "breakevens",
+                          "max_profit",
+                          "max_loss"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "positions"
+              ]
+            }
+          },
+          "/positions/payoff": {
+            "post": {
+              "operationId": "postPositionsPayoff",
+              "summary": "The payoff at expiry of draft legs, saving nothing and asking no Provider",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "at_strikes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "spx": {
+                                  "type": "number"
+                                },
+                                "pnl": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "spx",
+                                "pnl"
+                              ]
+                            }
+                          },
+                          "slope_below": {
+                            "type": "number"
+                          },
+                          "slope_above": {
+                            "type": "number"
+                          },
+                          "breakevens": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "max_profit": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "max_loss": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "at_strikes",
+                          "slope_below",
+                          "slope_above",
+                          "breakevens",
+                          "max_profit",
+                          "max_loss"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "legs": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "short",
+                                  "long"
+                                ]
+                              },
+                              "option_type": {
+                                "type": "string",
+                                "enum": [
+                                  "CALL",
+                                  "PUT"
+                                ]
+                              },
+                              "strike": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "side",
+                              "option_type",
+                              "strike"
+                            ]
+                          }
+                        },
+                        "entry": {
+                          "type": "number"
+                        },
+                        "contracts": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "legs",
+                        "entry"
+                      ]
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "positions"
+              ]
+            }
+          },
           "/positions/{id}": {
             "patch": {
               "operationId": "patchPositionsById",

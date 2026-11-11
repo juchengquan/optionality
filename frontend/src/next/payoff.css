@@ -1,0 +1,29 @@
+/* The payoff at expiry (#291), in the desk's inspector and the phone's sheet. Its colours are the
+   page's OUTCOME family (next.css: --gain, --loss), so the viewer's up/down setting turns the
+   shading over with everything else; nothing here is an attention colour. */
+.nx-payoff { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+.nx-payoff-h {
+  font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+.nx-payoff-note, .nx-payoff-spx { font-size: 0.75rem; }
+/* measured, then drawn at that width: block and shrinkable, so it can never push its box wider */
+.nx-payoff-chart { width: 100%; min-width: 0; overflow: hidden; }
+.nx-payoff-chart svg { display: block; max-width: 100%; height: auto; }
+.nx-payoff-chart text {
+  fill: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.nx-payoff-gain { fill: var(--gain); opacity: 0.18; }
+.nx-payoff-loss { fill: var(--loss); opacity: 0.18; }
+.nx-payoff-zero { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.6; }
+.nx-payoff-strike { stroke: var(--muted-foreground); stroke-dasharray: 3 3; opacity: 0.5; }
+.nx-payoff-curve { fill: none; stroke: var(--foreground); stroke-width: 1.75; stroke-linejoin: round; }
+.nx-payoff-be { fill: var(--foreground); }
+.nx-payoff-marker line { stroke: var(--foreground); stroke-width: 1.25; }
+.nx-payoff-marker text { fill: var(--foreground); font-weight: 600; }
+.nx-payoff-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.25rem 1rem; }
+.nx-payoff-kv div { min-width: 0; }
+.nx-payoff-kv dt {
+  color: var(--muted-foreground); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.nx-payoff-kv dd { font-variant-numeric: tabular-nums; font-size: 0.875rem; overflow-wrap: anywhere; }

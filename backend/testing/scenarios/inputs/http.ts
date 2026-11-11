@@ -612,6 +612,58 @@ export const HTTP: readonly HttpInput[] = [
     world: world({ tables: held }),
     request: request("GET", "/positions/pos-9/vol"),
   },
+  // --- the payoff at expiry (#291): legs, an Entry and a count, and no market data ---------
+  {
+    // the Provider is DOWN, so a payoff that asked it anything would fail; it answers, and asks
+    // nothing (`calls` is empty)
+    name: "GET /positions/{id}/payoff draws a holding's payoff with the Provider down",
+    world: world({ tables: held, provider: { down: DOWN } }),
+    request: request("GET", "/positions/pos-1/payoff"),
+  },
+  {
+    name: "GET /positions/{id}/payoff on a holding that does not exist",
+    world: world({ tables: held }),
+    request: request("GET", "/positions/pos-9/payoff"),
+  },
+  {
+    // a curve is drawn at a credit, and the put spread's was never recorded
+    name: "GET /positions/{id}/payoff refuses a holding with no entry",
+    world: world({ tables: wings }),
+    request: request("GET", "/positions/pos-puts/payoff"),
+  },
+  {
+    // the add form's preview: it writes nothing (`rows` is empty) and asks no Provider, which is
+    // down, so the scenario fails if either backend asks it
+    name: "POST /positions/payoff draws draft legs, writing nothing and asking no Provider",
+    world: world({ tables: held, provider: { down: DOWN } }),
+    request: request("POST", "/positions/payoff", {
+      legs: [
+        { side: "short", option_type: "PUT", strike: 6400 },
+        { side: "long", option_type: "PUT", strike: 6350 },
+      ],
+      entry: 1.85, contracts: 2,
+    }),
+  },
+  {
+    // a wrong leg sign, which is what the preview is for: a credit on a spread that was bought
+    // can never lose, and its lowest P&L says so by being positive
+    name: "POST /positions/payoff shows a wrong-sign leg as a credit that cannot be lost",
+    world: world(),
+    request: request("POST", "/positions/payoff", {
+      legs: [
+        { side: "long", option_type: "PUT", strike: 6400 },
+        { side: "short", option_type: "PUT", strike: 6350 },
+      ],
+      entry: 1.85,
+    }),
+  },
+  {
+    name: "POST /positions/payoff refuses draft legs with no entry",
+    world: world(),
+    request: request("POST", "/positions/payoff", {
+      legs: [{ side: "short", option_type: "PUT", strike: 6400 }],
+    }),
+  },
   {
     name: "PATCH /positions/{id} records the entry and the day it was opened",
     world: world({ tables: held }),

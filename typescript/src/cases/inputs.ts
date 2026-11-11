@@ -890,6 +890,40 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "captured", name: "no cost to close yet", args: [3, null] },
     { fn: "captured", name: "a NaN cost to close is no share", args: [3, NaN] },
   ],
+  // --- the payoff at expiry (#291): legs, an Entry and a count, and no market data at all ---
+  payoff: [
+    { fn: "payoffAtExpiry", name: "a short put spread",
+      args: [putSpread.legs, 1.6, 1] },
+    { fn: "payoffAtExpiry", name: "a short call spread, two contracts",
+      args: [callSpread.legs, 1.4, 2] },
+    { fn: "payoffAtExpiry", name: "a four-leg condor, its legs in any order", args: [condor.legs, 3.0, 2] },
+    // a debit is a NEGATIVE entry (ADR 0013): bought for 10, worth the width at most
+    { fn: "payoffAtExpiry", name: "a long put spread",
+      args: [[{ side: "long", option_type: "PUT", strike: 6500 }, { side: "short", option_type: "PUT", strike: 6450 }], -10, 1] },
+    // what the add form's preview is for: the put spread's sides swapped, so the credit can never
+    // be lost — its lowest P&L is POSITIVE
+    { fn: "payoffAtExpiry", name: "a wrong-sign leg: a credit taken on a spread that was bought",
+      args: [[{ side: "long", option_type: "PUT", strike: 6500 }, { side: "short", option_type: "PUT", strike: 6450 }], 1.6, 1] },
+    // the call spread's long leg entered as short: no floor at all
+    { fn: "payoffAtExpiry", name: "a wrong-sign leg: both calls short",
+      args: [[{ side: "short", option_type: "CALL", strike: 7100 }, { side: "short", option_type: "CALL", strike: 7150 }], 1.4, 1] },
+    { fn: "payoffAtExpiry", name: "a long call has no ceiling", args: [[{ side: "long", option_type: "CALL", strike: 7100 }], -20, 1] },
+    // SPX stops at zero, so a short put's worst is its strike less the credit
+    { fn: "payoffAtExpiry", name: "a short put's loss stops at an index of zero",
+      args: [[{ side: "short", option_type: "PUT", strike: 6500 }], 30, 1] },
+    { fn: "payoffAtExpiry", name: "an iron butterfly's shared strike, once",
+      args: [[{ side: "short", option_type: "CALL", strike: 6900 }, { side: "short", option_type: "PUT", strike: 6900 },
+              { side: "long", option_type: "CALL", strike: 6950 }, { side: "long", option_type: "PUT", strike: 6850 }], 30, 1] },
+    { fn: "payoffAtExpiry", name: "float noise in the entry, rounded to four places",
+      args: [[{ side: "short", option_type: "PUT", strike: 6512.5 }, { side: "long", option_type: "PUT", strike: 6455 }], 0.1 + 0.2, 3] },
+    // a leg named twice is held twice: two short puts against one long, crossing between strikes
+    { fn: "payoffAtExpiry", name: "a ratio spread, its breakeven between two strikes",
+      args: [[{ side: "short", option_type: "PUT", strike: 6500 }, { side: "short", option_type: "PUT", strike: 6500 },
+              { side: "long", option_type: "PUT", strike: 6450 }], 1.37, 1] },
+    // a breakeven exactly on a strike is found once, not twice
+    { fn: "payoffAtExpiry", name: "a breakeven exactly on a strike",
+      args: [[{ side: "short", option_type: "CALL", strike: 7100 }, { side: "long", option_type: "CALL", strike: 7101 }], 1, 1] },
+  ],
   vol: [
     { fn: "volAttribution", name: "three days from the day it was opened", args: [chain, condor] },
     { fn: "volAttribution", name: "no sample from the day it was opened", args: [chain.slice(1), condor] },

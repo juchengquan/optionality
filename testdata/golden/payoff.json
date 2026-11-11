@@ -1,0 +1,493 @@
+{
+  "module": "payoff",
+  "constants": {},
+  "cases": [
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a short put spread",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6500
+          },
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6450
+          }
+        ],
+        1.6,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6450,
+            "pnl": -48.4
+          },
+          {
+            "spx": 6500,
+            "pnl": 1.6
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          6498.4
+        ],
+        "max_profit": 1.6,
+        "max_loss": -48.4
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a short call spread, two contracts",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "CALL",
+            "strike": 7100
+          },
+          {
+            "side": "long",
+            "option_type": "CALL",
+            "strike": 7150
+          }
+        ],
+        1.4,
+        2
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 7100,
+            "pnl": 2.8
+          },
+          {
+            "spx": 7150,
+            "pnl": -97.2
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          7101.4
+        ],
+        "max_profit": 2.8,
+        "max_loss": -97.2
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a four-leg condor, its legs in any order",
+      "args": [
+        [
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6450
+          },
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6500
+          },
+          {
+            "side": "short",
+            "option_type": "CALL",
+            "strike": 7100
+          },
+          {
+            "side": "long",
+            "option_type": "CALL",
+            "strike": 7150
+          }
+        ],
+        3,
+        2
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6450,
+            "pnl": -94
+          },
+          {
+            "spx": 6500,
+            "pnl": 6
+          },
+          {
+            "spx": 7100,
+            "pnl": 6
+          },
+          {
+            "spx": 7150,
+            "pnl": -94
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          6497,
+          7103
+        ],
+        "max_profit": 6,
+        "max_loss": -94
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a long put spread",
+      "args": [
+        [
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6500
+          },
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6450
+          }
+        ],
+        -10,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6450,
+            "pnl": 40
+          },
+          {
+            "spx": 6500,
+            "pnl": -10
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          6490
+        ],
+        "max_profit": 40,
+        "max_loss": -10
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a wrong-sign leg: a credit taken on a spread that was bought",
+      "args": [
+        [
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6500
+          },
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6450
+          }
+        ],
+        1.6,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6450,
+            "pnl": 51.6
+          },
+          {
+            "spx": 6500,
+            "pnl": 1.6
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [],
+        "max_profit": 51.6,
+        "max_loss": 1.6
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a wrong-sign leg: both calls short",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "CALL",
+            "strike": 7100
+          },
+          {
+            "side": "short",
+            "option_type": "CALL",
+            "strike": 7150
+          }
+        ],
+        1.4,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 7100,
+            "pnl": 1.4
+          },
+          {
+            "spx": 7150,
+            "pnl": -48.6
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": -2,
+        "breakevens": [
+          7101.4
+        ],
+        "max_profit": 1.4,
+        "max_loss": null
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a long call has no ceiling",
+      "args": [
+        [
+          {
+            "side": "long",
+            "option_type": "CALL",
+            "strike": 7100
+          }
+        ],
+        -20,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 7100,
+            "pnl": -20
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 1,
+        "breakevens": [
+          7120
+        ],
+        "max_profit": null,
+        "max_loss": -20
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a short put's loss stops at an index of zero",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6500
+          }
+        ],
+        30,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6500,
+            "pnl": 30
+          }
+        ],
+        "slope_below": 1,
+        "slope_above": 0,
+        "breakevens": [
+          6470
+        ],
+        "max_profit": 30,
+        "max_loss": -6470
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "an iron butterfly's shared strike, once",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "CALL",
+            "strike": 6900
+          },
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6900
+          },
+          {
+            "side": "long",
+            "option_type": "CALL",
+            "strike": 6950
+          },
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6850
+          }
+        ],
+        30,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6850,
+            "pnl": -20
+          },
+          {
+            "spx": 6900,
+            "pnl": 30
+          },
+          {
+            "spx": 6950,
+            "pnl": -20
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          6870,
+          6930
+        ],
+        "max_profit": 30,
+        "max_loss": -20
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "float noise in the entry, rounded to four places",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6512.5
+          },
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6455
+          }
+        ],
+        0.30000000000000004,
+        3
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6455,
+            "pnl": -171.6
+          },
+          {
+            "spx": 6512.5,
+            "pnl": 0.9
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          6512.2
+        ],
+        "max_profit": 0.9,
+        "max_loss": -171.6
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a ratio spread, its breakeven between two strikes",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6500
+          },
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6500
+          },
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6450
+          }
+        ],
+        1.37,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 6450,
+            "pnl": -98.63
+          },
+          {
+            "spx": 6500,
+            "pnl": 1.37
+          }
+        ],
+        "slope_below": 1,
+        "slope_above": 0,
+        "breakevens": [
+          6499.315
+        ],
+        "max_profit": 1.37,
+        "max_loss": -6548.63
+      }
+    },
+    {
+      "fn": "payoffAtExpiry",
+      "name": "a breakeven exactly on a strike",
+      "args": [
+        [
+          {
+            "side": "short",
+            "option_type": "CALL",
+            "strike": 7100
+          },
+          {
+            "side": "long",
+            "option_type": "CALL",
+            "strike": 7101
+          }
+        ],
+        1,
+        1
+      ],
+      "expect": {
+        "at_strikes": [
+          {
+            "spx": 7100,
+            "pnl": 1
+          },
+          {
+            "spx": 7101,
+            "pnl": 0
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          7101
+        ],
+        "max_profit": 1,
+        "max_loss": 0
+      }
+    }
+  ]
+}

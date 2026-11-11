@@ -20,6 +20,11 @@ by_code = {r["code"]: r for r in records}
 reading alarms and in what words, whether a silent rule is about to be quarantined, what becomes of
 an expired one. The sentences are the ones the service sends, compared exactly (ADR 0017).
 
+`payoff.payoff_at_expiry(legs, entry, contracts)` is a structure's P&L at expiry, in points: at each
+strike, its slope beyond the outer two, its breakevens and its maximums. It needs no market data and
+no model, which is why it is at expiry only (ADR 0023); the dashboard's payoff chart draws the same
+figures from the service.
+
 `api.references()` gives every Reference with its live figure, including the vendor's own freshness
 claim — Yahoo states minutes, IBKR states only that it is delayed, moomoo states nothing (ADR
 0019). It is the one route that cannot fail: a vendor that is wholly down leaves each row a figure
@@ -103,9 +108,9 @@ It never runs on import and never raises: with no service reachable it says so a
 works, which is the whole point of the package (ADR 0014).
 
 That last sentence is checked rather than promised. `tests/test_standalone.py` holds it two ways,
-because they fail differently: a static pass reads all fifteen pure modules and names any line
+because they fail differently: a static pass reads all sixteen pure modules and names any line
 reaching an SDK, the network or one of the impure modules — including an import nested
-inside a function — and a subprocess then imports all fifteen with `moomoo` and `ib_async` made
+inside a function — and a subprocess then imports all sixteen with `moomoo` and `ib_async` made
 unimportable and `OPTIONALITY_API` unset, and computes with them. Only the second can see an import-time dependency
 no pattern would list, such as the zone data `timefmt` needs, which is present on a developer's
 machine and absent from a slim container. It was worth writing: `moomoo` is installed in the venv

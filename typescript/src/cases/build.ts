@@ -21,6 +21,7 @@ import * as flapping from "../domain/flapping.ts";
 import * as js from "../domain/js.ts";
 import * as lifecycle from "../domain/lifecycle.ts";
 import * as monitor from "../domain/monitor.ts";
+import * as payoff from "../domain/payoff.ts";
 import * as position from "../domain/position.ts";
 import * as quote from "../domain/quote.ts";
 import * as reference from "../domain/reference.ts";
@@ -36,7 +37,7 @@ import { INPUTS } from "./inputs.ts";
  *  off. Static imports rather than a dynamic walk, so the compiler still checks every name; the
  *  test is what makes the list complete. */
 export const MODULES: Record<string, Record<string, unknown>> = {
-  alarm, contract, degraded, exit, expiry, flapping, js, lifecycle, monitor, position,
+  alarm, contract, degraded, exit, expiry, flapping, js, lifecycle, monitor, payoff, position,
   quote, reference, vol, timefmt,
 };
 

@@ -11,6 +11,7 @@ import { Chip, Money, type BookProps } from "../Book";
 import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { monitorName, fieldWords } from "../needs";
+import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
 import {
   ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, type DeskColumn, type DeskRow,
@@ -441,6 +442,7 @@ function HoldingDetail({ row, privacy, partners, onSelect }: {
         </button>
       ) : null}
       <Legs legs={h.legs.map((l) => `${l.side} ${l.option_type} ${l.strike}`)} />
+      <HoldingPayoff holding={h} privacy={privacy} />
       <Figures row={row} privacy={privacy} extra={extra} />
       <Monitors entries={row.rules} />
     </>
@@ -457,6 +459,7 @@ function RuleDetail({ entry, rows, privacy }: { entry: Entry; rows: DeskRow[]; p
         {`${entry.strike_date} · ${entry.dte} DTE · ${entry.held ? "on something held" : "watch only"}`}
       </p>
       {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"} ${l.option_type} ${l.strike}`)} /> : null}
+      {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
       <Figures row={self} privacy={privacy} />
       {entry.error ? <p className="nxd-why">{entry.error}</p> : null}
       <Monitors entries={[entry, ...under.map((r) => r.entry)]} />

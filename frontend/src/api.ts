@@ -83,6 +83,25 @@ export const fetchVol = (id: string) =>
   read<Vol>(client.positions[":id"].vol.$get({ param: { id } }), `/positions/${id}/vol`);
 export const fetchMonitors = () => read<Monitor[]>(client.monitors.$get(), "/monitors");
 
+/** A structure's payoff at expiry, in points across its contracts (#291): the P&L at each strike,
+ *  the slope beyond the outer two, the breakevens and the maximums. At expiry only (ADR 0023).
+ *
+ *  Neither call asks the Provider: the payoff needs the legs, an Entry and a count and nothing
+ *  else, so it is asked for once when a holding or a spread is opened and never polled. */
+export type Payoff = Exclude<Infer<typeof client.positions[":id"]["payoff"]["$get"]>, { detail: string }>;
+export const fetchPayoff = (id: string) =>
+  read<Payoff>(client.positions[":id"].payoff.$get({ param: { id } }), `/positions/${id}/payoff`);
+
+/** The payoff of legs nobody holds, at an Entry: the add form's preview, and a watched spread drawn
+ *  at its current value. A POST because legs do not fit a query string; it writes nothing. */
+export interface DraftPayoff {
+  legs: { side: "short" | "long"; option_type: "CALL" | "PUT"; strike: number }[];
+  entry: number;
+  contracts?: number;
+}
+export const fetchDraftPayoff = (body: DraftPayoff) =>
+  read<Payoff>(client.positions.payoff.$post({ json: body }), "/positions/payoff");
+
 /** The Securities kept on the page to read the market by (ADR 0018).
  *
  *  POLLED, with `/quotes`, because its figures are the market right now and a backdrop a sweep old

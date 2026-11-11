@@ -40,8 +40,10 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.expiry import market_date
 from optionality.monitor import monitor_leg_codes
+from optionality.payoff import payoff_at_expiry
 from optionality.position import (
     POSITION_GREEK_FIELDS,
+    Leg,
     Position,
     contract_size,
     leg_readings,
@@ -78,7 +80,7 @@ from ....hydrate import to_monitor, to_position
 from ....monitors import adopt_orphan_monitors
 from ....ports import verify_contracts
 from ....schemas.monitor import DisabledReason
-from ....schemas.position import DEFAULT_CONTRACTS, ClosePositionIn, PositionIn, PositionPatch
+from ....schemas.position import DEFAULT_CONTRACTS, ClosePositionIn, PayoffIn, PositionIn, PositionPatch
 from ..deps import Deps
 from ..errors import http_error, not_found, provider_failed
 from ..validate import valid
@@ -188,6 +190,30 @@ class VolOut(BaseModel):
     from_: str | None = Field(alias="from")
     to: str | None
     days: float | None
+
+
+class PayoffAtOut(BaseModel):
+    model_config = _AS_ZOD
+
+    spx: float
+    pnl: float
+
+
+class PayoffOut(BaseModel):
+    """The payoff at expiry, in POINTS across the contracts (`payoff_at_expiry`, #291): the P&L at each
+    strike and the slope beyond the outer two, its breakevens and its maximums. At expiry only (ADR 0023):
+    no T+0 curve and no probability, because there is no pricing model to draw them with."""
+
+    model_config = _AS_ZOD
+
+    at_strikes: list[PayoffAtOut]
+    slope_below: float
+    slope_above: float
+    breakevens: list[float]
+    #: the highest P&L, or None where it has no ceiling
+    max_profit: float | None
+    #: the LOWEST P&L, signed (a loss is negative), or None where it has no floor
+    max_loss: float | None
 
 
 def _js_sorted(codes: set[str]) -> list[str]:
@@ -351,6 +377,32 @@ def position_routes(deps: Deps) -> APIRouter:
         if a is None:
             return {"vol": None, "from": None, "to": None, "days": None}
         return a.model_dump(by_alias=True)
+
+    @router.get("/{id}/payoff", summary="A holding's payoff at expiry", response_model=PayoffOut)
+    async def payoff(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:
+        """A holding's payoff at expiry, from its legs, its Entry and its count — and nothing else: no
+        quote, so no Provider call, and a closed holding answers as well as an open one."""
+        row = find_position(db, id_)
+        if row is None:
+            raise not_found("position")
+        # a curve is drawn at a credit; without one there is nothing honest to draw
+        if row["entry"] is None:
+            raise http_error(422, f"position '{row['name']}' has no entry: record what was taken in to draw its payoff")
+        position = to_position(row)
+        return payoff_at_expiry(list(position.legs), row["entry"], row["contracts"]).model_dump()
+
+    @router.post(
+        "/payoff",
+        summary="The payoff at expiry of draft legs, saving nothing and asking no Provider",
+        response_model=PayoffOut,
+    )
+    async def draft(p: Annotated[PayoffIn, Depends(valid("json", PayoffIn))]) -> dict[str, Any]:
+        """The payoff at expiry of legs nobody holds yet (#291): the add form's preview and a watched
+        spread drawn at its current value. A POST only because legs do not fit a query string: it writes
+        NOTHING and asks the Provider NOTHING."""
+        legs = [Leg(**leg.model_dump()) for leg in p.legs]
+        contracts = p.contracts if p.contracts is not None else DEFAULT_CONTRACTS
+        return payoff_at_expiry(legs, p.entry, contracts).model_dump()
 
     @router.post("", summary="Create a position", status_code=201, response_model=PositionOut)
     async def create(p: Annotated[PositionIn, Depends(valid("json", PositionIn))]) -> dict[str, Any]:

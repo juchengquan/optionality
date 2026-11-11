@@ -73,11 +73,23 @@ export function longBook(n: number): object[] {
   return rows;
 }
 
+/** A put spread's payoff at expiry, as `/positions/{id}/payoff` answers (#291). Written out here
+ *  rather than taken from `testing/ownerBook.ts`, which this module may not import: it is not a
+ *  test file itself (`make check-test-support`). */
+const payoff = {
+  at_strikes: [{ spx: 6950, pnl: -47 }, { spx: 7000, pnl: 3 }],
+  slope_below: 0, slope_above: 0, breakevens: [6997], max_profit: 3, max_loss: -47,
+};
+
 /** Every write is refused, as the service refuses one it will not take: a layout suite never
  *  changes the book, and a refusal is how a toast gets onto the page to be measured. */
 export function serveBook(extra: object[] = []): void {
   const book = [...quotes, ...extra];
   window.fetch = ((url: string, init?: RequestInit) => {
+    // the payoff (#291) is a read, its POST included: any one will do for a layout
+    if (/\/payoff$/.test(String(url))) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
+    }
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({
         ok: false, status: 409, json: () => Promise.resolve({ detail: "refused by the test service" }),

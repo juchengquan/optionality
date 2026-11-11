@@ -1,0 +1,57 @@
+{
+  "name": "POST /positions/payoff refuses draft legs with no entry",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/positions/payoff",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "legs": [
+        {
+          "side": "short",
+          "option_type": "PUT",
+          "strike": 6400
+        }
+      ]
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "✖ Invalid input: expected number, received undefined\n  → at entry"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

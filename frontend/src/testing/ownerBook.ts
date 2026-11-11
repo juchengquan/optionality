@@ -9,7 +9,7 @@
  *  Plain data: a test that wants the page serves it (`serveBook` in `__browser__/nextBook.ts` for
  *  the layout suites), and the model's tests read it directly.
  */
-import type { Entry, Holding, Monitor } from "../api";
+import type { Entry, Holding, Monitor, Payoff } from "../api";
 
 function entry(id: string, over: Partial<Entry> & { strike_date: string }): Entry {
   return {
@@ -32,7 +32,9 @@ export const QUOTES: Entry[] = [
   // the watchlist: three expiries
   entry("w-dec04", { code: "1204_P6900", strike_date: "2026-12-04", legs: put(6900, 6850),
     combo_value: 6.2, watched: 6.2, distance: -0.2, triggered: true, fill: 100 }),
-  entry("w-dec18", { code: "1218_P7150", strike_date: "2026-12-18", legs: put(7150, 7100) }),
+  // its value signed as the service signs a combo, minus short: a credit spread's is NEGATIVE
+  entry("w-dec18", { code: "1218_P7150", strike_date: "2026-12-18", legs: put(7150, 7100),
+    combo_value: -2.4 }),
   entry("w-dec18-delta", {
     code: "US.SPXW261218P7150000", strike_date: "2026-12-18", option_type: "PUT",
     field: "option_delta", threshold: 0.2, watched: -0.17, distance: 0.03, in_combos: ["w-dec18"],
@@ -101,3 +103,36 @@ export const MONITORS: Monitor[] = [
   monitor("m-expired", { code: "US.SPXW261106P6000000", strike_date: "2026-11-06", enabled: false,
     disabled_reason: "expired" }),
 ];
+
+/** `/positions/{id}/payoff` for each holding above, worked by hand from its legs, its Entry and its
+ *  count as the service's `payoffAtExpiry` would (#291): points across the contracts. */
+export const PAYOFFS: Record<string, Payoff> = {
+  "h-puts": {
+    at_strikes: [{ spx: 6350, pnl: -48 }, { spx: 6400, pnl: 2 }],
+    slope_below: 0, slope_above: 0, breakevens: [6398], max_profit: 2, max_loss: -48,
+  },
+  "h-calls": {
+    at_strikes: [{ spx: 7300, pnl: 2 }, { spx: 7350, pnl: -48 }],
+    slope_below: 0, slope_above: 0, breakevens: [7302], max_profit: 2, max_loss: -48,
+  },
+  "h-ic": {
+    at_strikes: [{ spx: 6250, pnl: -45 }, { spx: 6300, pnl: 5 }, { spx: 7400, pnl: 5 }, { spx: 7450, pnl: -45 }],
+    slope_below: 0, slope_above: 0, breakevens: [6295, 7405], max_profit: 5, max_loss: -45,
+  },
+};
+
+/** `POST /positions/payoff` for w-dec18 drawn at its current value: the 7150/7100 put spread sold
+ *  for the 2.40 its combo is worth now. */
+export const DRAFT_PAYOFF: Payoff = {
+  at_strikes: [{ spx: 7100, pnl: -47.6 }, { spx: 7150, pnl: 2.4 }],
+  slope_below: 0, slope_above: 0, breakevens: [7147.6], max_profit: 2.4, max_loss: -47.6,
+};
+
+/** The two payoff routes as a test service answers them, or null for any other path: a holding's
+ *  by its id, and draft legs with `DRAFT_PAYOFF` whatever they are — a test that cares what was
+ *  asked reads the request. Both are reads, so a suite that refuses every write still answers them. */
+export function payoffAnswer(path: string): Payoff | null {
+  if (path === "/positions/payoff") return DRAFT_PAYOFF;
+  const m = /^\/positions\/([^/]+)\/payoff$/.exec(path);
+  return m ? PAYOFFS[decodeURIComponent(m[1]!)] ?? null : null;
+}

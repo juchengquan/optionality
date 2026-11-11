@@ -412,10 +412,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
-  Counted on 2026-11-10 — every public function a public module of the package defines, against
-  every `fn` in `testdata/golden/` — that is 61 of the package's 88, which is exactly the 61 of the
-  TypeScript domain's 65 exported ones that have cases: the four `*Policy` readers take the
-  service's Settings, so the package takes their knobs directly instead. The other 27, none of them
+  Counted on 2026-11-11 — every public function a public module of the package defines, against
+  every `fn` in `testdata/golden/` — that is 62 of the package's 89, which is exactly the 62 of the
+  TypeScript domain's 66 exported ones that have cases (`payoff.payoffAtExpiry`, #291, the last):
+  the four `*Policy` readers take the service's Settings, so the package takes their knobs
+  directly instead. The other 27, none of them
   in `testdata/golden/`:
   - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
     five, `quotes.verify_contracts`, and `opend.quotes`, the one-shot for a script;
@@ -442,7 +443,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   maths and drives the ports, which is what it is for.
   `tests/test_cases.py` runs every golden case, and `tests/test_standalone.py` holds the promise
   three documents make and nothing checked: the maths imports and computes with NO `opend` extra
-  and NO service. Two checks, because they fail differently — a static pass over the fifteen pure
+  and NO service. Two checks, because they fail differently — a static pass over the sixteen pure
   modules (it reads the AST, so a lazy import inside a function is seen too) and a subprocess that
   imports them all with `moomoo` and `ib_async` unimportable and `OPTIONALITY_API` unset. The second is the only
   one that can catch an import-time dependency no pattern lists, like zone data. Worth having
@@ -527,7 +528,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `/positions/values` and the creation probes. Widened from "every call to the Provider" by ADR
   0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
   service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
-  call to one — a loophole that change itself created. `/references` makes one bounded call per
+  call to one — a loophole that change itself created. The payoff at expiry (`GET /positions/{id}/payoff`,
+  `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
+  an Entry and a count, and its door scenarios run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (`/positions/values` is polled by the dashboard's Holdings
   panel while it is open.) `/references` is polled WITH `/quotes` — two calls per poll per open
