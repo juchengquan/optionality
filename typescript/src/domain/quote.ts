@@ -175,3 +175,66 @@ export function derivedSpx(records: Quote[]): DerivedSpx {
   const median = levels.length % 2 === 1 ? levels[mid]! : (levels[mid - 1]! + levels[mid]!) / 2;
   return { price: toFixed(median, 2), reason: null };
 }
+
+/** How many standard deviations of SPX to expiry a distance in points is (#297):
+ *
+ *    σ = points / (SPX × IV × √(DTE / 365))
+ *
+ *  IV is the leg's own `option_implied_volatility`, which is a PERCENTAGE wherever it comes from —
+ *  moomoo serves 18.5 for 18.5%, and IB Gateway's fraction is converted to the same at its
+ *  `fields.ts` — so it is divided by 100 here. DTE is calendar days (`daysToExpiry`), over a
+ *  calendar year.
+ *
+ *  Rounded to two places, and signed as the points are. Null where it cannot be a figure: an IV,
+ *  an SPX or a DTE that is not positive — on the expiry day itself there is no time left for a σ
+ *  to measure — or an answer that is not finite.
+ */
+export function sigmaDistance(points: number, spx: number, iv: number, dte: number): number | null {
+  if (!(iv > 0) || !(spx > 0) || !(dte > 0)) return null;
+  const sigma = points / (spx * (iv / 100) * Math.sqrt(dte / 365));
+  return Number.isFinite(sigma) ? toFixed(sigma, 2) : null;
+}
+
+/** A short strike placed against SPX: what the strike strip draws (#297). */
+export interface StrikeDistance {
+  code: string;
+  option_type: "CALL" | "PUT";
+  strike: number;
+  /** the leg's own delta from the same batch, or null where it served none */
+  delta: number | null;
+  /** how far SPX has still to move to reach the strike, to two places: POSITIVE while it has not
+   *  (above a put's strike, below a call's) and negative by how far past. Null without an SPX. */
+  points: number | null;
+  /** `points` in σ to expiry (`sigmaDistance`), or null where either cannot be a figure */
+  sigma: number | null;
+}
+
+/** Each of these contracts — a spread's SHORT legs — placed against SPX's price, in the order
+ *  given, with its delta and IV read from the same batch (#297).
+ *
+ *  The price is the batch's own `derivedSpx`, passed in, never a Reference's figure (ADR 0018):
+ *  where there is none, each strike is still placed and its delta still read, and only the
+ *  distances are null. A code that names no SPX option has no strike to place and is left out.
+ */
+export function strikeDistances(
+  codes: string[], byCode: ByCode, spx: number | null, dte: number,
+): StrikeDistance[] {
+  const out: StrikeDistance[] = [];
+  for (const code of codes) {
+    const contract = parseSpxCode(code);
+    if (!contract) continue;
+    const record = byCode[code];
+    const points = spx === null ? null
+      : toFixed(contract.option_type === "CALL" ? contract.strike - spx : spx - contract.strike, 2);
+    const iv = finite(record?.option_implied_volatility);
+    out.push({
+      code,
+      option_type: contract.option_type,
+      strike: contract.strike,
+      delta: finite(record?.option_delta),
+      points,
+      sigma: points === null || spx === null || iv === null ? null : sigmaDistance(points, spx, iv, dte),
+    });
+  }
+  return out;
+}

@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { derivedSpx } from "./quote.ts";
+import { derivedSpx, sigmaDistance, strikeDistances } from "./quote.ts";
 
 /** 2026-11-10 09:30:01 New York; ^GSPC read 7513.09 at the same instant */
 const call = { code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 };
@@ -93,5 +93,63 @@ describe("no figure, and why", () => {
     expect(derivedSpx([{ ...call, last_price: null }])).toEqual({
       price: null, reason: "no option in the batch has both a last trade and a premium",
     });
+  });
+});
+
+/** How far SPX is from a spread's short strike (#297): in points, and in σ to expiry from the short
+ *  leg's own IV, which every Provider serves as a PERCENTAGE (moomoo 18.5, IB Gateway converted). */
+describe("sigmaDistance", () => {
+  it("is points over SPX × IV × √(DTE/365), with IV a percentage", () => {
+    // 7000 × 0.20 × √(36.5/365) = 442.72…; 250 / 442.72 = 0.5647…
+    expect(sigmaDistance(250, 7000, 20, 36.5)).toBe(0.56);
+  });
+
+  it("keeps the sign of the points: a strike already passed is negative σ", () => {
+    expect(sigmaDistance(-250, 7000, 20, 36.5)).toBe(-0.56);
+  });
+
+  it("has no figure without an IV, with none left to expiry, or without a price", () => {
+    expect(sigmaDistance(250, 7000, 0, 36)).toBeNull();
+    expect(sigmaDistance(250, 7000, -3, 36)).toBeNull();
+    expect(sigmaDistance(250, 7000, 20, 0)).toBeNull();
+    expect(sigmaDistance(250, 0, 20, 36)).toBeNull();
+    expect(sigmaDistance(250, 7000, Number.NaN, 36)).toBeNull();
+  });
+});
+
+describe("strikeDistances", () => {
+  const P = "US.SPXW261218P6400000";
+  const C = "US.SPXW261218C7300000";
+  const byCode = {
+    [P]: { code: P, option_delta: -0.21, option_implied_volatility: 18.5 },
+    [C]: { code: C, option_delta: 0.33, option_implied_volatility: 12 },
+  };
+
+  it("measures each short strike from SPX, positive while SPX has not reached it", () => {
+    // a put's strike is reached from above, a call's from below
+    expect(strikeDistances([P, C], byCode, 6900.5, 37)).toEqual([
+      { code: P, option_type: "PUT", strike: 6400, delta: -0.21, points: 500.5, sigma: 1.23 },
+      { code: C, option_type: "CALL", strike: 7300, delta: 0.33, points: 399.5, sigma: 1.52 },
+    ]);
+  });
+
+  it("is negative once SPX is past the strike", () => {
+    expect(strikeDistances([C], byCode, 7310.25, 37)[0]!.points).toBe(-10.25);
+  });
+
+  it("keeps the strike and its delta with no SPX, and measures nothing", () => {
+    expect(strikeDistances([P], byCode, null, 37)).toEqual([
+      { code: P, option_type: "PUT", strike: 6400, delta: -0.21, points: null, sigma: null },
+    ]);
+  });
+
+  it("has points but no σ where the leg's IV is missing, and no delta where it has none", () => {
+    expect(strikeDistances([P], { [P]: { code: P, option_implied_volatility: "18.5" } }, 6900.5, 37))
+      .toEqual([{ code: P, option_type: "PUT", strike: 6400, delta: null, points: 500.5, sigma: null }]);
+    expect(strikeDistances([P], {}, 6900.5, 37)[0]!.sigma).toBeNull();
+  });
+
+  it("leaves out a code that names no SPX option", () => {
+    expect(strikeDistances(["US..SPX", P], byCode, 6900.5, 37).map((d) => d.code)).toEqual([P]);
   });
 });

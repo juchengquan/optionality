@@ -8,6 +8,7 @@ them, because both backends write one file.
 """
 
 import json
+import math
 from datetime import UTC, datetime
 
 import pytest
@@ -624,6 +625,64 @@ class TestPositionsValues:
         bare = (await h.call("/positions/values")).json()[0]
         assert bare["spx"] is None
         assert bare["spx_reason"] == "the Provider gives no option premium to derive it from"
+
+    async def test_places_each_short_strike_against_that_spx_and_only_the_strikes_without_it(self, start):
+        # #297: the strike strip's figures, on each holding, from the same batch
+        premiums = True
+
+        def premium(code: str) -> float:
+            c = parse_spx_code(code)
+            assert c is not None
+            if c.option_type == "CALL":
+                return ((c.strike + 10) / 7000 - 1) * 100
+            return (1 - (c.strike - 10) / 7000) * 100
+
+        async def fetch(codes):
+            records = (await priced_fetcher(codes)).records
+            figures = [
+                {
+                    **r,
+                    "option_delta": 0.2 if r["code"][-8] == "C" else -0.25,
+                    "option_implied_volatility": 20,
+                }
+                for r in records
+            ]
+            if not premiums:
+                return figures
+            return [{**r, "last_price": 10, "option_premium": premium(r["code"])} for r in figures]
+
+        h = start_with(start, fetch)
+        await post(h, condor())
+        v = (await h.call("/positions/values")).json()[0]
+
+        def sigma(points: float) -> float:
+            return round(points / (7000 * 0.2 * math.sqrt(v["dte"] / 365)), 2)
+
+        # the SHORT legs only, in the holding's own order: the call at 8050 and the put at 7100
+        assert v["short_strikes"] == [
+            {
+                "code": build_spx_code(EXPIRY, "CALL", 8050),
+                "option_type": "CALL",
+                "strike": 8050,
+                "delta": 0.2,
+                "points": 1050,
+                "sigma": sigma(1050),
+            },
+            {
+                "code": build_spx_code(EXPIRY, "PUT", 7100),
+                "option_type": "PUT",
+                "strike": 7100,
+                "delta": -0.25,
+                "points": -100,
+                "sigma": sigma(-100),
+            },
+        ]
+        premiums = False
+        bare = (await h.call("/positions/values")).json()[0]
+        assert [[s["delta"], s["points"], s["sigma"]] for s in bare["short_strikes"]] == [
+            [0.2, None, None],
+            [-0.25, None, None],
+        ]
 
     async def test_reports_the_share_of_a_credit_captured_so_far_and_none_for_a_debit(self, start):
         # what the redesigned page shows beside the P&L (ADR 0023), decided here rather than divided out

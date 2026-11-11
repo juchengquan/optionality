@@ -38,6 +38,7 @@ import sqlite3
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Response
+from optionality.contract import build_spx_code
 from optionality.expiry import market_date
 from optionality.monitor import monitor_leg_codes
 from optionality.payoff import payoff_at_expiry
@@ -51,7 +52,7 @@ from optionality.position import (
     position_leg_codes,
     realized_points,
 )
-from optionality.quote import derived_spx
+from optionality.quote import derived_spx, strike_distances
 from optionality.timefmt import display_time
 from optionality.vol import VolSample, vol_attribution
 from pydantic import BaseModel, ConfigDict, Field
@@ -84,6 +85,7 @@ from ....schemas.position import DEFAULT_CONTRACTS, ClosePositionIn, PayoffIn, P
 from ..deps import Deps
 from ..errors import http_error, not_found, provider_failed
 from ..validate import valid
+from .monitors import StrikeDistanceOut
 
 #: zod's refusals: no coercion between types, and no number that is not finite
 _AS_ZOD = ConfigDict(strict=True, allow_inf_nan=False)
@@ -174,6 +176,10 @@ class PositionValues(PositionOut):
     #: from, which `greeks` (a signed sum over the legs) cannot give. None when any leg's delta is
     #: missing, as the daily sample's map is (`leg_readings`, #318).
     legs_delta: dict[str, float] | None
+    #: each SHORT leg placed against `spx`, in points and sigma, with its own delta (#297): what the strike
+    #: strip draws. The strikes and deltas are there without an SPX; only the distances are None, and
+    #: `spx_reason` says why.
+    short_strikes: list[StrikeDistanceOut]
     fetched_at: str | None
     #: days left where the option trades, the same reckoning the dashboard's column uses
     dte: float
@@ -341,6 +347,19 @@ def position_routes(deps: Deps) -> APIRouter:
                 "spx_reason": spx.reason,
                 "greeks": {f: position_greek(v.position, by_code, f) for f in POSITION_GREEK_FIELDS},
                 "legs_delta": leg_readings(v.position, by_code, "option_delta"),
+                "short_strikes": [
+                    s.model_dump()
+                    for s in strike_distances(
+                        [
+                            build_spx_code(v.position.strike_date, leg.option_type, leg.strike)
+                            for leg in v.position.legs
+                            if leg.side == "short"
+                        ],
+                        by_code,
+                        spx.price,
+                        v.dte,
+                    )
+                ],
                 "fetched_at": fetched,
                 "dte": v.dte,
                 "schedule": v.schedule,

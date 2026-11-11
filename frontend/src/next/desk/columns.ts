@@ -17,6 +17,7 @@ import { DASH, legSummary } from "../../format";
 import type { Mode } from "../mode";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
 import { servedDelta } from "../legs";
+import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
 export type DeskRow =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
@@ -178,6 +179,24 @@ const DELTA: DeskColumn = {
       : "",
 };
 
+/** The strike strip a row draws (#297): a holding's, and a watched spread's on its own row. A
+ *  combo under a holding is the holding's own strip again, so it draws none; a single contract is
+ *  no spread. */
+export function rowStrip(row: DeskRow): Strip | null {
+  if (row.kind === "holding") return stripOfHolding(row.holding);
+  if (row.kind === "rule" && !row.nested) return stripOfEntry(row.entry);
+  return null;
+}
+
+const STRIP: DeskColumn = {
+  // the scale is drawn beside these words, which are the nearest short strike's distance
+  key: "strip", label: "SPX → short",
+  text: (r) => { const s = rowStrip(r); return s ? cellWords(s) : ""; },
+};
+
+/** The compact strip's width, in characters: what `charsOf` adds for the drawing beside the words. */
+export const STRIP_CH = 10;
+
 const DTE: DeskColumn = {
   key: "dte", label: "DTE",
   text: (r) => r.kind === "holding" ? String(r.holding.dte) : r.kind === "rule" ? String(r.entry.dte) : "",
@@ -219,7 +238,7 @@ const ALARM: DeskColumn = {
 
 /** The columns, in the order they are DRAWN. */
 export const COLUMNS: Record<Mode, readonly DeskColumn[]> = {
-  live: [NAME, LEGS, VALUE, PNL, CAPTURED, DELTA, DTE, MANAGE, ALARM],
+  live: [NAME, LEGS, VALUE, PNL, CAPTURED, DELTA, STRIP, DTE, MANAGE, ALARM],
   // REVIEW is after the close, to understand: the outcome and the plan, not the market (ADR 0023)
   review: [NAME, LEGS, PNL, CAPTURED, ON_PACE, PACE_GAP, TO_MANAGE, ALARM],
 };
@@ -231,7 +250,7 @@ export const PINNED = "name";
  *  would starve every column behind it. The rule's sentence is the widest, and when it drops the
  *  fill bar moves into the name cell and the inspector still says it whole. */
 export const PRIORITY: Record<Mode, readonly string[]> = {
-  live: ["value", "pnl", "delta", "dte", "manage", "captured", "legs", "alarm"],
+  live: ["value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm"],
   review: ["pnl", "captured", "pace_gap", "on_pace", "to_manage", "legs", "alarm"],
 };
 
@@ -251,6 +270,7 @@ export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: b
       if (r.kind === "rule" && r.nested) n += 2;
     }
     if (column.key === "alarm" && n > 0) n += 6; // the fill bar beside the sentence
+    if (column.key === "strip" && n > 0) n += STRIP_CH + 1; // the scale beside the words
     longest = Math.max(longest, n);
   }
   return longest + PAD_CH;

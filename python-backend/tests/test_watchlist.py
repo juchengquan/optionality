@@ -1022,6 +1022,46 @@ class TestSpxSPriceOnEveryRow:
         assert e["spx_reason"] == "the Provider gives no option premium to derive it from"
 
 
+class TestASpreadSShortStrikesAgainstSpx:
+    """#297: each short leg of a combo placed against the batch's SPX, in points and sigma."""
+
+    async def test_places_each_short_leg_of_a_combo_against_the_batch_s_spx(self, combo, run):
+        # the combo is long 8100, short 8150 (minus is short)
+        combo()
+        fetch = quoting(
+            {
+                LEG_A: {"mid_price": 1, "last_price": 2, "option_premium": 7.0, "option_delta": 0.05},
+                LEG_B: {
+                    "mid_price": 1,
+                    "last_price": 1,
+                    "option_premium": 8.0,
+                    "option_delta": 0.04,
+                    "option_implied_volatility": 15,
+                },
+            }
+        )
+        [e] = await run(fetch, True)
+        spx = e["spx"]
+        points = round(8150 - spx, 2)
+        sigma = round(points / (spx * 0.15 * math.sqrt(e["dte"] / 365)), 2)
+        assert [s.model_dump() for s in e["short_strikes"]] == [
+            {"code": LEG_B, "option_type": "CALL", "strike": 8150, "delta": 0.04, "points": points, "sigma": sigma}
+        ]
+
+    async def test_keeps_the_strikes_and_deltas_with_no_spx_and_measures_nothing(self, combo, run):
+        combo()
+        [e] = await run(quoting({LEG_B: {"mid_price": 1, "option_delta": 0.04}}), True)
+        assert e["spx"] is None
+        assert [s.model_dump() for s in e["short_strikes"]] == [
+            {"code": LEG_B, "option_type": "CALL", "strike": 8150, "delta": 0.04, "points": None, "sigma": None}
+        ]
+
+    async def test_is_empty_for_a_single_contract_which_is_no_spread(self, monitor, run):
+        monitor()
+        [e] = await run(quoting({CODE: {"mid_price": 26.4}}))
+        assert e["short_strikes"] == []
+
+
 class TestWhatOnlyThePythonCanGetWrong:
     async def test_leaves_the_four_combo_keys_off_a_single_leg_entry_rather_than_setting_them_to_none(
         self, monitor, combo, run

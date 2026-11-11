@@ -19,8 +19,9 @@ import {
   updatePositionFields,
 } from "../../../db/queries/index.ts";
 import { monitorLegCodes } from "optionality/domain/monitor";
+import { buildSpxCode } from "optionality/domain/contract";
 import { payoffAtExpiry } from "optionality/domain/payoff";
-import { derivedSpx } from "optionality/domain/quote";
+import { derivedSpx, strikeDistances } from "optionality/domain/quote";
 import { atomic } from "../../../db/open.ts";
 import { holdingValues } from "../../../holdings.ts";
 import type { MonitorRow, PositionRow } from "../../../db/rows.ts";
@@ -39,6 +40,7 @@ import { displayStored } from "../../../db/time.ts";
 import { displayTime } from "optionality/domain/timefmt";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
+import { StrikeDistanceOut } from "./monitors.ts";
 
 /** `side` as the two values, not a string: a stored leg that still said "sold" would otherwise be
  *  served as though nothing were wrong, and the dashboard would read it as long (ADR 0013). */
@@ -107,6 +109,10 @@ const PositionValues = PositionOut.extend({
    *  read from, which `greeks` (a signed sum over the legs) cannot give. Null when any leg's delta
    *  is missing, as the daily sample's map is (`legReadings`, #318). */
   legs_delta: z.record(z.string(), z.number()).nullable(),
+  /** each SHORT leg placed against `spx`, in points and σ, with its own delta (#297): what the
+   *  strike strip draws. The strikes and deltas are there without an SPX; only the distances
+   *  are null, and `spx_reason` says why. */
+  short_strikes: z.array(StrikeDistanceOut),
   fetched_at: z.string().nullable(),
   /** days left where the option trades, the same reckoning the dashboard's column uses */
   dte: z.number(),
@@ -258,6 +264,10 @@ export function positionRoutes(deps: Deps) {
           POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(v.position, byCode, f)]),
         ),
         legs_delta: legReadings(v.position, byCode, "option_delta"),
+        short_strikes: strikeDistances(
+          v.position.legs.filter((l) => l.side === "short")
+            .map((l) => buildSpxCode(v.position.strike_date, l.option_type, l.strike)),
+          byCode, spx.price, v.dte),
         fetched_at: fetched,
         dte: v.dte,
         schedule: v.schedule,

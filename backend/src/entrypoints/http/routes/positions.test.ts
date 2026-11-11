@@ -596,6 +596,34 @@ describe("/positions/values", () => {
     expect(bare.spx_reason).toBe("the Provider gives no option premium to derive it from");
   });
 
+  it("places each short strike against that SPX, in points and σ, and only the strikes without it (#297)", async () => {
+    let premiums = true;
+    start(async (codes) => {
+      const { records } = await pricedFetcher(codes);
+      return records.map((r) => {
+        const c = parseSpxCode(String(r.code))!;
+        const premium = c.option_type === "CALL" ? ((c.strike + 10) / 7000 - 1) * 100
+          : (1 - (c.strike - 10) / 7000) * 100;
+        const figures = { ...r, option_delta: c.option_type === "CALL" ? 0.2 : -0.25, option_implied_volatility: 20 };
+        return premiums ? { ...figures, last_price: 10, option_premium: premium } : figures;
+      });
+    });
+    await post(condor());
+    const v = (await body(await h.call("/positions/values")))[0];
+    const sigma = (points: number) => Number((points / (7000 * 0.2 * Math.sqrt(Number(v.dte) / 365))).toFixed(2));
+    // the SHORT legs only, in the holding's own order: the call at 8050 and the put at 7100
+    expect(v.short_strikes).toEqual([
+      { code: buildSpxCode(EXPIRY, "CALL", 8050), option_type: "CALL", strike: 8050, delta: 0.2,
+        points: 1050, sigma: sigma(1050) },
+      { code: buildSpxCode(EXPIRY, "PUT", 7100), option_type: "PUT", strike: 7100, delta: -0.25,
+        points: -100, sigma: sigma(-100) },
+    ]);
+    premiums = false;
+    const bare = (await body(await h.call("/positions/values")))[0];
+    expect((bare.short_strikes as { points: unknown; sigma: unknown; delta: unknown }[])
+      .map((s) => [s.delta, s.points, s.sigma])).toEqual([[0.2, null, null], [-0.25, null, null]]);
+  });
+
   it("reports nothing rather than something wrong when a leg goes unpriced", async () => {
     // full quotes while creating, since the gate demands every leg exists; one dropped afterwards
     let complete = true;

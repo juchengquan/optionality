@@ -212,7 +212,17 @@
           "watched": -1,
           "distance": 3,
           "spx": 6900.5,
-          "spx_reason": null
+          "spx_reason": null,
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218C7300000",
+              "option_type": "CALL",
+              "strike": 7300,
+              "delta": 0.21,
+              "points": 399.5,
+              "sigma": 1.22
+            }
+          ]
         },
         {
           "id": "mon-1",
@@ -255,7 +265,8 @@
           "watched": 0.21,
           "distance": 0.09,
           "spx": 6900.5,
-          "spx_reason": null
+          "spx_reason": null,
+          "short_strikes": []
         },
         {
           "id": "mon-2",
@@ -296,7 +307,8 @@
           "watched": -0.18,
           "distance": 0.12,
           "spx": 6900.5,
-          "spx_reason": null
+          "spx_reason": null,
+          "short_strikes": []
         }
       ]
     },

@@ -176,11 +176,11 @@ describe("the payoff at expiry fits in the inspector (#291)", () => {
 describe("columns are dropped as measured (ADR 0008)", () => {
   it("draws every column on a wide desk and fewer on a narrow one", async () => {
     await show("live", 2560);
-    expect(shown()).toEqual(["name", "legs", "value", "pnl", "captured", "delta", "dte", "manage", "alarm"]);
+    expect(shown()).toEqual(["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage", "alarm"]);
     cleanup();
     await show("live", 900);
     await inspect("h-calls");
-    expect(shown().length).toBeLessThan(9);
+    expect(shown().length).toBeLessThan(10);
     expect(shown()[0]).toBe("name");
   });
 
