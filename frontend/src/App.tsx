@@ -68,6 +68,8 @@ export function App() {
   // sweep old would be read as current (ADR 0018)
   const [references, setReferences] = useState<Reference[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** Which poll is current, so a slow References call cannot land on top of a newer one. */
+  const polls = useRef(0);
   const [refresh, setRefresh] = useState(15);
   const [reading, setReading] = useState(() => readSignal());
   const [grouping, setGrouping] = useState(() => readGrouping());
@@ -110,23 +112,41 @@ export function App() {
   }, []);
 
   const load = useCallback(async () => {
+    // The References settle on their OWN, outside the await below, and set their own state when
+    // they arrive. A backdrop must never be able to blank the page, and the `.catch` here used to
+    // say exactly that — but it only stopped a REFUSAL doing it, never a DELAY.
+    //
+    // Measured 2026-11-10: `/references` took 8.00s on every call while `/quotes` took 0.02s. One
+    // bounded call per source, and a source that accepts a request and never answers it costs the
+    // whole of `requestTimeoutMs` — a gateway entitled to live data grants live for an index that
+    // is not calculated out of hours, so it accepts and says nothing. Inside `Promise.all` that
+    // 8 seconds WAS the page's first paint: the watchlist, the monitors and the health strip all
+    // waited on a backdrop, because `setQuotes` came after the await.
+    //
+    // That is the half ADR 0018's containment did not cover. A dead vendor dashes its own rows and
+    // nobody else's; a SLOW one blanked everybody's.
+    //
+    // An empty list rather than the last one on a refusal, as before: the strip then goes away
+    // instead of showing figures it cannot vouch for.
+    const generation = (polls.current += 1);
+    void fetchReferences()
+      .catch(() => [] as Reference[])
+      // and only if no later poll has started. Splitting these out lets two be in flight at once —
+      // at 8s a call and a 15s interval that is one slow poll away — and the LAST to arrive is not
+      // the most recent. Figures the strip cannot vouch for is the thing this feature exists to
+      // avoid, and a stale set shown over a fresh one is exactly that.
+      .then((refs) => { if (polls.current === generation) setReferences(refs); });
+
     try {
-      const [q, m, h, refs] = await Promise.all([
+      const [q, m, h] = await Promise.all([
         fetchQuotes(),
         fetchMonitors(),
         fetchHealth(),
-        // its OWN catch, inside the same poll. A backdrop must never be able to blank the page,
-        // and `Promise.all` rejects as a whole — so a refusal here would take the watchlist's
-        // figures down with it, which is the containment this feature is built around (ADR 0018).
-        // An empty list rather than the last one: the strip then goes away instead of showing
-        // figures it cannot vouch for.
-        fetchReferences().catch(() => [] as Reference[]),
       ]);
       setQuotes(q);
       setMonitors(m);
       rules.current = m;
       setHealth(h);
-      setReferences(refs);
       setPolledAt(clockTime(new Date()));
       setError(null);
     } catch (e: unknown) {
