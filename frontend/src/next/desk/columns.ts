@@ -16,6 +16,7 @@ import type { Entry, Holding, Monitor } from "../../api";
 import { DASH, legSummary } from "../../format";
 import type { Mode } from "../mode";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
+import { servedDelta } from "../legs";
 
 export type DeskRow =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
@@ -66,14 +67,19 @@ function contractOf(code: string): { type: "C" | "P"; strike: number } | null {
   return m ? { type: m[1] as "C" | "P", strike: Number(m[2]) / 1000 } : null;
 }
 
-/** The short leg's delta, as served by a rule watching that leg — the owner's way to set one up is
- *  a spread and a delta rule on its short leg (ADR 0023). `/positions/values` serves the POSITION's
- *  greeks, a signed sum over its legs, and that is not the short leg's delta, so with no rule on a
- *  short leg this is null rather than a figure derived on screen. Where two legs are short (a
- *  4-leg condor) it is the larger in size: the wing closer to the money. */
+/** The short leg's delta. `/positions/values` serves each leg's own (`legs_delta`, #318); where it
+ *  sent none, a rule watching that leg — the owner's other way to see it (ADR 0023) — and then
+ *  null, never a figure derived on screen: the holding's `greeks` are a signed sum over its legs
+ *  and are not the short leg's delta. Where two legs are short (a 4-leg condor) it is the larger
+ *  in size: the wing closer to the money. */
 export function shortLegDelta(holding: Holding, rules: Entry[]): number | null {
   let found: number | null = null;
   for (const leg of holding.legs.filter((l) => l.side === "short")) {
+    const served = servedDelta(holding, leg);
+    if (served !== null) {
+      if (found === null || Math.abs(served) > Math.abs(found)) found = served;
+      continue;
+    }
     const rule = rules.find((r) => {
       if (r.legs || r.strike_date !== holding.strike_date) return false;
       const c = contractOf(r.code);

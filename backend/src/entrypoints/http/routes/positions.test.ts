@@ -457,6 +457,26 @@ describe("/positions/values", () => {
     expect(share["1016_C8050"]).toBeNull();
   });
 
+  it("reports each leg's own delta, which the position's greeks sum away (#318)", async () => {
+    // the short leg's delta is the risk this book is managed by; `greeks` is a signed sum over the
+    // legs and is not it. Per leg, keyed by contract, from the same batch as the cost to close
+    let short: unknown = -0.31;
+    start(async (codes) => {
+      const { records } = await pricedFetcher(codes);
+      return records.map((r) => String(r.code).endsWith("P7100000") ? { ...r, option_delta: short } : r);
+    });
+    await post(condor());
+    const v = (await body(await h.call("/positions/values")))[0];
+    const legs = v.legs_delta as Record<string, number>;
+    expect(Object.keys(legs).sort()).toEqual(CONDOR_LEGS.map((l) =>
+      buildSpxCode(EXPIRY, l.option_type, l.strike)).sort());
+    expect(legs[buildSpxCode(EXPIRY, "PUT", 7100)]).toBe(-0.31);
+    expect(legs[buildSpxCode(EXPIRY, "CALL", 8050)]).toBe(0.2);
+    // all or nothing, as the sample's map is: a map over three legs of four is not served
+    short = null;
+    expect((await body(await h.call("/positions/values")))[0].legs_delta).toBeNull();
+  });
+
   it("reports SPX's price from its own batch's premiums, and why not where there are none", async () => {
     // every leg's premium is set so that it inverts to 7000, whatever its side: the figure is the
     // index the holdings were valued against (ADR 0024), on each holding as the contract size is

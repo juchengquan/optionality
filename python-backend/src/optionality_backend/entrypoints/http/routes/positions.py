@@ -44,6 +44,7 @@ from optionality.position import (
     POSITION_GREEK_FIELDS,
     Position,
     contract_size,
+    leg_readings,
     position_greek,
     position_leg_codes,
     realized_points,
@@ -167,6 +168,10 @@ class PositionValues(PositionOut):
     #: why `spx` is None, in words; None when there is a figure
     spx_reason: str | None
     greeks: dict[str, float | None]
+    #: each leg's OWN delta, contract code -> delta, from the same batch: what a short leg's Δ is read
+    #: from, which `greeks` (a signed sum over the legs) cannot give. None when any leg's delta is
+    #: missing, as the daily sample's map is (`leg_readings`, #318).
+    legs_delta: dict[str, float] | None
     fetched_at: str | None
     #: days left where the option trades, the same reckoning the dashboard's column uses
     dte: float
@@ -309,6 +314,7 @@ def position_routes(deps: Deps) -> APIRouter:
                 "spx": spx.price,
                 "spx_reason": spx.reason,
                 "greeks": {f: position_greek(v.position, by_code, f) for f in POSITION_GREEK_FIELDS},
+                "legs_delta": leg_readings(v.position, by_code, "option_delta"),
                 "fetched_at": fetched,
                 "dte": v.dte,
                 "schedule": v.schedule,

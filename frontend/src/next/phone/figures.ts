@@ -2,6 +2,7 @@
  *  computed: every figure is the service's (ADR 0005), and this only names and spells it. */
 import type { Entry, Holding, Monitor } from "../../api";
 import { DASH } from "../../format";
+import { servedDelta } from "../legs";
 
 /** "Fri 18 Dec 2026": an expiry as a date to read, not a key. Read as a calendar date in UTC, so
  *  the device's zone can never move it a day. */
@@ -39,12 +40,14 @@ export interface ShortDelta {
   delta: number | null;
 }
 
-/** Each short leg's delta, read from the live quote of a single-contract rule on that very
- *  contract. `/positions/values` serves a holding's NET greeks only, so a short leg nobody watches
- *  has no delta on this page, and is a dash rather than a figure made up here. */
+/** Each short leg's delta: as `/positions/values` serves it (`legs_delta`, #318), or where it sent
+ *  none, from the live quote of a single-contract rule on that very contract, and otherwise a dash
+ *  rather than a figure made up here — the holding's net greeks are not the short leg's delta. */
 export function shortDeltas(holding: Holding, quotes: Entry[], monitors: Monitor[]): ShortDelta[] {
   const byId = new Map(quotes.map((q) => [q.id, q]));
   return holding.legs.filter((l) => l.side === "short").map((l) => {
+    const served = servedDelta(holding, l);
+    if (served !== null) return { leg: `${l.option_type[0]}${l.strike}`, delta: served };
     const rule = monitors.find((m) => m.legs === null && m.strike_date === holding.strike_date
       && m.option_type === l.option_type && m.strike === l.strike && byId.get(m.id)?.quote);
     const figure = rule ? byId.get(rule.id)?.quote?.option_delta : undefined;

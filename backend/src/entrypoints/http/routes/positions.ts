@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { marketDate } from "optionality/domain/expiry";
 import {
-  POSITION_GREEK_FIELDS, contractSize, positionGreek, positionLegCodes, realizedPoints,
+  POSITION_GREEK_FIELDS, contractSize, legReadings, positionGreek, positionLegCodes, realizedPoints,
 } from "optionality/domain/position";
 import type { Deps } from "../deps.ts";
 import {
@@ -102,6 +102,10 @@ const PositionValues = PositionOut.extend({
   /** why `spx` is null, in words; null when there is a figure */
   spx_reason: z.string().nullable(),
   greeks: z.record(z.string(), z.number().nullable()),
+  /** each leg's OWN delta, contract code -> delta, from the same batch: what a short leg's Δ is
+   *  read from, which `greeks` (a signed sum over the legs) cannot give. Null when any leg's delta
+   *  is missing, as the daily sample's map is (`legReadings`, #318). */
+  legs_delta: z.record(z.string(), z.number()).nullable(),
   fetched_at: z.string().nullable(),
   /** days left where the option trades, the same reckoning the dashboard's column uses */
   dte: z.number(),
@@ -235,6 +239,7 @@ export function positionRoutes(deps: Deps) {
         greeks: Object.fromEntries(
           POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(v.position, byCode, f)]),
         ),
+        legs_delta: legReadings(v.position, byCode, "option_delta"),
         fetched_at: fetched,
         dte: v.dte,
         schedule: v.schedule,

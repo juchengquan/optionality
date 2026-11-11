@@ -478,6 +478,25 @@ class TestPositionsValues:
         assert v["contract_size"] is None
         assert v["pnl"] is None
 
+    async def test_reports_each_leg_s_own_delta_which_the_position_s_greeks_sum_away(self, start):
+        # the short leg's delta is the risk this book is managed by; `greeks` is a signed sum over the
+        # legs and is not it. Per leg, keyed by contract, from the same batch as the cost to close (#318)
+        short: object = -0.31
+
+        async def fetch(codes):
+            records = (await priced_fetcher(codes)).records
+            return [{**r, "option_delta": short} if r["code"].endswith("P7100000") else r for r in records]
+
+        h = start_with(start, fetch)
+        await post(h, condor())
+        legs = (await h.call("/positions/values")).json()[0]["legs_delta"]
+        assert sorted(legs) == sorted(build_spx_code(EXPIRY, l["option_type"], l["strike"]) for l in CONDOR_LEGS)
+        assert legs[build_spx_code(EXPIRY, "PUT", 7100)] == -0.31
+        assert legs[build_spx_code(EXPIRY, "CALL", 8050)] == 0.2
+        # all or nothing, as the sample's map is: a map over three legs of four is not served
+        short = None
+        assert (await h.call("/positions/values")).json()[0]["legs_delta"] is None
+
     async def test_reports_spx_s_price_from_its_own_batch_and_why_not_where_there_are_none(self, start):
         # every leg's premium is set so that it inverts to 7000, whatever its side: the figure is the
         # index the holdings were valued against (ADR 0024), on each holding as the contract size is

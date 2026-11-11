@@ -505,6 +505,16 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
+    // each leg's own delta, all or nothing: one leg with none and the holding serves no map, while
+    // its cost to close, which needs only the mids, is still there (#318)
+    name: "GET /positions/values serves no leg deltas when one leg has none",
+    world: world({
+      tables: held,
+      provider: { quotes: { ...BOOK, [P6350]: { ...BOOK[P6350], option_delta: null } } },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
     name: "GET /positions/values values every holding from one call",
     world: world({ tables: held, provider: { quotes: BOOK } }),
     request: request("GET", "/positions/values"),

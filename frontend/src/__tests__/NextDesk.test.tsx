@@ -108,14 +108,24 @@ describe("what each row says", () => {
     expect(cellText("h-calls", "manage")).toBe("—");
   });
 
-  it("gives a holding its short leg's delta from the rule watching that leg, and a dash with none", () => {
+  it("gives each holding its short leg's delta as the service serves it, with no rule on the leg", () => {
+    // #318: each leg's own delta comes with the holding; the fixture has no rule on any held leg
+    render(<DeskBook {...props()} />);
+    expect(cellText("h-calls", "delta")).toBe("0.330");
+    expect(cellText("h-puts", "delta")).toBe("-0.210");
+    // a 4-leg holding: the larger of its two short legs, in size
+    expect(cellText("h-ic", "delta")).toBe("-0.250");
+  });
+
+  it("falls back to the rule watching the leg where the service sent no deltas, then to a dash", () => {
     const leg: Entry = {
       ...QUOTES.find((q) => q.id === "w-dec18-delta")!, id: "r-leg", code: "US.SPXW261218C7300000",
       option_type: "CALL", held: true, scope: "leg", in_combos: [],
       positions: [{ id: "h-calls", name: "1218_C7300" }],
       quote: { name: "SPXW 261218 7300.00C", option_delta: 0.214 } as Entry["quote"], watched: 0.214,
     };
-    render(<DeskBook {...props({ quotes: [...QUOTES, leg] })} />);
+    const unserved = HOLDINGS.map((h) => ({ ...h, legs_delta: null }));
+    render(<DeskBook {...props({ quotes: [...QUOTES, leg], holdings: unserved })} />);
     expect(cellText("h-calls", "delta")).toBe("0.214");
     // the position's own greeks are a signed sum over its legs, not the short leg's delta
     expect(cellText("h-puts", "delta")).toBe("—");
@@ -129,7 +139,8 @@ describe("what each row says", () => {
       in_combos: [], positions: [{ id: "h-ic", name: "1231_IC" }],
       quote: { name: id, option_delta: d } as Entry["quote"], watched: d,
     });
-    render(<DeskBook {...props({ quotes: [...QUOTES,
+    const unserved = HOLDINGS.map((h) => ({ ...h, legs_delta: null }));
+    render(<DeskBook {...props({ holdings: unserved, quotes: [...QUOTES,
       leg("r-c", "US.SPXW261231C7400000", "CALL", 0.12), leg("r-p", "US.SPXW261231P6300000", "PUT", -0.25)] })} />);
     expect(cellText("h-ic", "delta")).toBe("-0.250");
   });
