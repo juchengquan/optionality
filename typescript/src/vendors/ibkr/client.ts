@@ -59,9 +59,12 @@
  *  Gateway's own Read-Only API switch is the second, independent lock.
  */
 import { contractFor } from "./contract.ts";
-import { GREEK_TICKS, PRICE_TICKS, grade, greekFields, hasFigures, withMid } from "./fields.ts";
 import {
-  MARKET_DATA_DELAYED_FROZEN, type Incoming, cancelMktData, reqContractDetails,
+  GREEK_TICKS, MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, grade, greekFields, hasFigures,
+  withMid,
+} from "./fields.ts";
+import {
+  type Incoming, cancelMktData, reqContractDetails,
   reqMarketDataType,
   reqMktData,
 } from "./messages.ts";

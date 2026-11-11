@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MARKET_DATA_DELAYED_FROZEN, type TwsContract, cancelMktData, readMessage,
+  type TwsContract, cancelMktData, readMessage,
   reqContractDetails,
   reqMarketDataType, reqMktData,
 } from "./messages.ts";
+import { MARKET_DATA_DELAYED_FROZEN } from "./fields.ts";
 import { readFields } from "./wire.ts";
 
 const NUL = "\u0000";
