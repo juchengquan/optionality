@@ -28,10 +28,17 @@ export const PRICE_TICKS: Record<number, string> = {
   66: "bid_price", 67: "ask_price", 68: "last_price", 75: "prev_close_price",
 };
 
-/** The greeks message's ids: the model computation, live and delayed. Nothing else is read — a
- *  bid- or ask-implied computation is a different claim from the model's, and the service has one
- *  field for each greek. */
-export const GREEK_TICKS = new Set([13, 53]);
+/** The greeks message's ids: the model computation, live (13) and delayed (83). Nothing else is
+ *  read — a bid- or ask-implied computation is a different claim from the model's, and the service
+ *  has one field for each greek.
+ *
+ *  This said 13 and 53 until #257's review, and 53 is the CUSTOM computation, not the delayed
+ *  model: IBKR's tick-type list and `ib_async`'s own map (`GREEKS_TICK_MAP`: 13 and 83 are
+ *  `modelGreeks`, 53 is `custGreeks`) agree. It mattered once `client.ts` began waiting for an
+ *  option's model greeks — a delayed option would have waited out the timeout for a 53 that never
+ *  comes. 83 is named from those two sources, not recorded: the paper login here is served LIVE
+ *  for SPXW, so no capture holds a delayed option's greeks. */
+export const GREEK_TICKS = new Set([13, 83]);
 
 /** The grades IB Gateway reports, as the two independent facts they really are.
  *

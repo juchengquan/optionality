@@ -1,0 +1,244 @@
+{
+  "conversation": "index-in-the-session",
+  "summary": "The control, then SPX and VIX the indices, each asked as a STREAM during the cash session: every figure an index has in one burst about half a second after the request, then SPX's updates until the stream is cancelled. Beside them, the same two indices asked as SNAPSHOTS, which carry no figure at all.",
+  "provenance": {
+    "kind": "recorded",
+    "at": "2026-11-10T16:31:57Z",
+    "gateway": "IB Gateway 10.52 on the owner's machine, port 4002, logged in to a paper account, with the Read-Only API switch on",
+    "protocol": 157,
+    "how": "Asked with the library's own encoders (handshake.ts, messages.ts) on client id 9187, the messages IbkrClient sends: the greeting, startApi, reqMarketDataType(4), then per code reqContractDetails, reqMktData and cancelMktData. The option was asked as a snapshot and listened to until the gateway's snapshot end (57); each index was asked as a stream, listened to for three seconds, and cancelled. The two index SNAPSHOT exchanges, the last two, were captured on a second connection 66 seconds later (16:33:03Z), same client id, each listened to until its end; that connection's lookups answered exactly the replies recorded here, so they are not repeated. Every frame was logged in both directions before anything decoded it.",
+    "market": "Tuesday 2026-11-10, 11:32 New York, two hours into the cash session. SPX and VIX were being calculated, and the gateway served the LIVE grade (1) for all three although DELAYED_FROZEN (4) was asked.",
+    "altered": [
+      "handshake.onStartApi[0]: the managed account, replaced by DU0000000, which has its shape (DU and seven characters) and is not it. The number is the owner's and this file is committed."
+    ],
+    "timing": "atMs is each reply's arrival, in milliseconds after its request was sent. A replay ignores it; it is kept because it is evidence (see notes).",
+    "notes": [
+      "Why an index is asked as a stream: the last two exchanges. Asked as a SNAPSHOT, SPX and VIX each answered a grade (LIVE), the request's parameters (message 81), and high, low and close ticks whose price field was EMPTY, then the snapshot end 11.1 seconds after the request: no figure at all. The parameters message says why: snapshot permissions 0 for both indices, where the SPXW option's says 3. The same snapshot of SPX before the open on 2026-11-09 sent one close tick with an empty price and the same permissions, 0; it was recorded as index-before-the-open and read as the hour, and it was the permission. That recording was retired with the snapshot it answered (#257). IbkrClient never asks an index for a snapshot, so only a test that sends one meets these two exchanges: a stub answers a snapshot only with a snapshot (README, rule 3).",
+      "A stream sends everything it holds at once: SPX's high, low, previous close, open and last arrived in one burst 520 ms after the request, VIX's in one 524 ms after. SPX then sent updates at 754, 1534 and 2555 ms, each its last price twice between two timestamps (tick 45); VIX sent none in three seconds. IbkrClient reads the burst and cancels. A replay delivers every reply at once, so the expected batch carries SPX's LAST update (7499.46), where the live client finishes on the burst (7499.18) or on the update that arrived inside its quiet window (7499.44).",
+      "The control's model greeks (tick 13) arrived 0.8 seconds after its book (2270 then 3068 ms). That pause is longer than the 250 ms quiet window that once finished an ask, which is #257: IbkrClient now waits for an option's greeks.",
+      "The usopt and usfarm.nj farms were reconnecting when the option was asked: four notices against request id -1 arrived inside its market-data exchange, before any figure, and are kept where they arrived.",
+      "A stream's cancel is answered with nothing; a snapshot's, after its end, with error 300.",
+      "A snapshot cancelled BEFORE its end, as IbkrClient now cancels an option once it has its greeks, got no reply at all and nothing after it: measured twice on 2026-11-10 (17:13:32Z and 17:13:54Z, the control, cancelled 1.5 seconds in, listened to for twelve seconds more). Not an exchange here, because a recording's onCancel is what a cancel sent after every reply got; it is what a stub told to pace does when a cancel cuts an answer short. The second of those captures sent the book at 0.72 s and the model's greeks at 1.40 s, and no previous close by the cancel: the close can come after the greeks, or not before the client is done."
+    ]
+  },
+  "ask": ["US.SPXW261218C8100000", "SPX", "VIX"],
+  "handshake": {
+    "greeting": ["157", "20261111 00:31:57 SGT"],
+    "onStartApi": [
+      ["15", "1", "DU0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:hfarm"],
+      ["4", "2", "-1", "2107", "HMDS data farm connection is inactive but should be available upon demand.apachmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", ""],
+      "replies": [
+        ["10", "8", "$reqId", "SPX", "OPT", "20261218 15:00 US/Central", "8100", "C", "SMART", "USD", "SPXW  261218C08100000", "SPXW", "SPXW", "902390015", "0.05", "1", "100", "ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,DIS,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NGCOMB,NONALGO,OCA,OPENCLOSE,PEGMIDVOL,PEGMKTVOL,PEGPRMVOL,PEGSRFVOL,POSTONLY,PRICECHK,REL,RELPCTOFS,RELSTK,RTH,SCALE,SCALERST,SIZECHK,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF", "SMART,CBOE,IBUSOPT", "1", "416904", "S&P 500 Stock Index", "", "202612", "Indices", "Broad Range Equity Index", "*", "US/Central", "20261109:1915-20261110:0825;20261110:0830-20261110:1600;20261110:1915-20261111:0825;20261111:0830-20261111:1600;20261111:1915-20261112:0825;20261112:0830-20261112:1600;20261112:1915-20261113:0825;20261113:0830-20261113:1600;20261114:CLOSED;20261115:1915-20261116:0825;20261116:0830-20261116:1600", "20261110:0830-20261110:1515;20261111:0830-20261111:1515;20261112:0830-20261112:1515;20261113:0830-20261113:1515;20261114:CLOSED;20261115:1915-20261116:0825;20261116:0830-20261116:1600", "", "", "0", "2", "SPX", "IND", "110,110,110", "20261218", ""],
+        ["52", "1", "$reqId"]
+      ],
+      "atMs": [210, 210]
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "OPT",
+        "lastTradeDateOrContractMonth": "20261218",
+        "strike": "8100.0",
+        "right": "C",
+        "exchange": "SMART",
+        "tradingClass": "SPXW"
+      },
+      "sent": ["1", "11", "$reqId", "0", "SPX", "OPT", "20261218", "8100.0", "C", "100", "SMART", "", "USD", "", "SPXW", "0", "", "1", "0", ""],
+      "replies": [
+        ["4", "2", "-1", "2119", "Market data farm is connecting:usopt"],
+        ["4", "2", "-1", "2119", "Market data farm is connecting:usopt"],
+        ["4", "2", "-1", "2119", "Market data farm is connecting:usfarm.nj"],
+        ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+        ["58", "1", "$reqId", "1"],
+        ["81", "$reqId", "0.05", "c70003", "3"],
+        ["2", "6", "$reqId", "8", "2"],
+        ["1", "6", "$reqId", "9", "7.20", "0", "0"],
+        ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+        ["1", "6", "$reqId", "1", "4.20", "19", "1"],
+        ["1", "6", "$reqId", "2", "4.50", "317", "1"],
+        ["46", "6", "$reqId", "32", "C"],
+        ["46", "6", "$reqId", "33", "C"],
+        ["21", "$reqId", "13", "0", "0.1257734345565974", "0.03596544525967343", "4.290967100906698", "-1", "2.593823963978756E-4", "2.166912854393047", "-0.34004054031385067", "7498.9501953125"],
+        ["21", "$reqId", "10", "0", "0.12497046278237635", "0.03408634145930886", "4.199999809265137", "13.779084151292583", "2.4992706213873117E-4", "1.8303296570715821", "-0.32929434854113476", "7497.96"],
+        ["21", "$reqId", "11", "0", "0.12654922221278808", "0.03588276864348229", "4.5", "13.779084151292583", "2.574355811657634E-4", "1.9091352962667185", "-0.3476962191098638", "7497.96"],
+        ["21", "$reqId", "12", "0", "-1", "-2", "-1", "13.779084151292583", "-2", "-2", "-2", "7498.34"],
+        ["57", "1", "$reqId"]
+      ],
+      "atMs": [48, 557, 557, 1524, 1744, 1744, 2047, 2047, 2092, 2270, 2270, 2270, 2270, 3068, 3860, 3860, 12099, 12099],
+      "onCancel": [
+        ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
+      ]
+    },
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "IND",
+        "lastTradeDateOrContractMonth": "",
+        "strike": "0.0",
+        "right": "",
+        "exchange": "CBOE",
+        "tradingClass": ""
+      },
+      "sent": ["9", "8", "$reqId", "0", "SPX", "IND", "", "0.0", "", "", "CBOE", "", "USD", "", "", "0", "", ""],
+      "replies": [
+        ["10", "8", "$reqId", "SPX", "IND", "", "0", "", "CBOE", "USD", "SPX", "", "", "416904", "0.01", "1", "", "ACTIVETIM,AD,ADJUST,ALERT,ALLOC,BASKET,BENCHPX,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,GAT,GTC,GTD,GTT,HID,LMT,NONALGO,OCA,SCALE,SCALERST,WHATIF", "CBOE", "1", "0", "S&P 500 Stock Index", "", "", "Indices", "Broad Range Equity Index", "*", "US/Central", "20261110:0830-20261110:1500;20261111:0830-20261111:1500;20261112:0830-20261112:1500;20261113:0830-20261113:1500", "20261110:0830-20261110:1500;20261111:0830-20261111:1500;20261112:0830-20261112:1500;20261113:0830-20261113:1500", "", "", "0", "2147483647", "", "", "25", "", ""],
+        ["52", "1", "$reqId"]
+      ],
+      "atMs": [46, 46]
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "IND",
+        "lastTradeDateOrContractMonth": "",
+        "strike": "0.0",
+        "right": "",
+        "exchange": "CBOE",
+        "tradingClass": ""
+      },
+      "sent": ["1", "11", "$reqId", "0", "SPX", "IND", "", "0.0", "", "", "CBOE", "", "USD", "", "", "0", "", "0", "0", ""],
+      "replies": [
+        ["58", "1", "$reqId", "1"],
+        ["81", "$reqId", "0.01", "", "0"],
+        ["46", "6", "$reqId", "45", "0"],
+        ["1", "6", "$reqId", "6", "7543.92", "0", "0"],
+        ["1", "6", "$reqId", "7", "7482.52", "0", "0"],
+        ["1", "6", "$reqId", "9", "7549.94", "0", "0"],
+        ["1", "6", "$reqId", "14", "7513.09", "0", "0"],
+        ["1", "6", "$reqId", "4", "7499.18", "0", "0"],
+        ["46", "6", "$reqId", "45", "1794328331"],
+        ["46", "6", "$reqId", "45", "1794328331"],
+        ["1", "6", "$reqId", "4", "7499.18", "0", "0"],
+        ["1", "6", "$reqId", "4", "7499.44", "0", "0"],
+        ["46", "6", "$reqId", "45", "1794328332"],
+        ["46", "6", "$reqId", "45", "1794328332"],
+        ["1", "6", "$reqId", "4", "7499.44", "0", "0"],
+        ["1", "6", "$reqId", "4", "7499.45", "0", "0"],
+        ["46", "6", "$reqId", "45", "1794328333"],
+        ["46", "6", "$reqId", "45", "1794328333"],
+        ["1", "6", "$reqId", "4", "7499.45", "0", "0"],
+        ["1", "6", "$reqId", "4", "7499.46", "0", "0"],
+        ["46", "6", "$reqId", "45", "1794328334"]
+      ],
+      "atMs": [520, 520, 520, 520, 520, 520, 520, 520, 520, 754, 754, 754, 754, 1534, 1534, 1535, 1535, 2555, 2556, 2556, 2556],
+      "onCancel": []
+    },
+    {
+      "request": "reqContractDetails",
+      "contract": {
+        "symbol": "VIX",
+        "secType": "IND",
+        "lastTradeDateOrContractMonth": "",
+        "strike": "0.0",
+        "right": "",
+        "exchange": "CBOE",
+        "tradingClass": ""
+      },
+      "sent": ["9", "8", "$reqId", "0", "VIX", "IND", "", "0.0", "", "", "CBOE", "", "USD", "", "", "0", "", ""],
+      "replies": [
+        ["10", "8", "$reqId", "VIX", "IND", "", "0", "", "CBOE", "USD", "VIX", "", "", "13455763", "0.01", "1", "", "ACTIVETIM,AD,ADJUST,ALERT,ALLOC,BASKET,BENCHPX,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,GAT,GTC,GTD,GTT,HID,LMT,NONALGO,OCA,SCALE,SCALERST,WHATIF", "CBOE", "1", "0", "CBOE Volatility Index", "", "", "Indices", "Volatility Index", "*", "US/Central", "20261110:0215-20261110:0815;20261110:0830-20261110:1600;20261111:0215-20261111:0815;20261111:0830-20261111:1600;20261112:0215-20261112:0815;20261112:0830-20261112:1600;20261113:0215-20261113:0815;20261113:0830-20261113:1600", "20261110:0215-20261110:0815;20261110:0830-20261110:1600;20261111:0215-20261111:0815;20261111:0830-20261111:1600;20261112:0215-20261112:0815;20261112:0830-20261112:1600;20261113:0215-20261113:0815;20261113:0830-20261113:1600", "", "", "0", "2147483647", "", "", "25", "", ""],
+        ["52", "1", "$reqId"]
+      ],
+      "atMs": [151, 151]
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "VIX",
+        "secType": "IND",
+        "lastTradeDateOrContractMonth": "",
+        "strike": "0.0",
+        "right": "",
+        "exchange": "CBOE",
+        "tradingClass": ""
+      },
+      "sent": ["1", "11", "$reqId", "0", "VIX", "IND", "", "0.0", "", "", "CBOE", "", "USD", "", "", "0", "", "0", "0", ""],
+      "replies": [
+        ["58", "1", "$reqId", "1"],
+        ["81", "$reqId", "0.01", "", "0"],
+        ["46", "6", "$reqId", "45", "0"],
+        ["1", "6", "$reqId", "6", "21.61", "0", "0"],
+        ["1", "6", "$reqId", "7", "19.62", "0", "0"],
+        ["1", "6", "$reqId", "9", "19.92", "0", "0"],
+        ["1", "6", "$reqId", "14", "19.76", "0", "0"],
+        ["1", "6", "$reqId", "4", "20.49", "0", "0"],
+        ["46", "6", "$reqId", "45", "1794328336"]
+      ],
+      "atMs": [524, 524, 525, 525, 525, 525, 526, 526, 526],
+      "onCancel": []
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "SPX",
+        "secType": "IND",
+        "lastTradeDateOrContractMonth": "",
+        "strike": "0.0",
+        "right": "",
+        "exchange": "CBOE",
+        "tradingClass": ""
+      },
+      "sent": ["1", "11", "$reqId", "0", "SPX", "IND", "", "0.0", "", "", "CBOE", "", "USD", "", "", "0", "", "1", "0", ""],
+      "replies": [
+        ["58", "1", "$reqId", "1"],
+        ["81", "$reqId", "0.01", "", "0"],
+        ["46", "6", "$reqId", "45", "0"],
+        ["1", "6", "$reqId", "6", "", "0", "0"],
+        ["1", "6", "$reqId", "7", "", "0", "0"],
+        ["1", "6", "$reqId", "9", "", "0", "0"],
+        ["57", "1", "$reqId"]
+      ],
+      "atMs": [363, 363, 599, 599, 599, 599, 11115],
+      "onCancel": [
+        ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
+      ]
+    },
+    {
+      "request": "reqMktData",
+      "contract": {
+        "symbol": "VIX",
+        "secType": "IND",
+        "lastTradeDateOrContractMonth": "",
+        "strike": "0.0",
+        "right": "",
+        "exchange": "CBOE",
+        "tradingClass": ""
+      },
+      "sent": ["1", "11", "$reqId", "0", "VIX", "IND", "", "0.0", "", "", "CBOE", "", "USD", "", "", "0", "", "1", "0", ""],
+      "replies": [
+        ["58", "1", "$reqId", "1"],
+        ["81", "$reqId", "0.01", "", "0"],
+        ["46", "6", "$reqId", "45", "0"],
+        ["1", "6", "$reqId", "6", "", "0", "0"],
+        ["1", "6", "$reqId", "7", "", "0", "0"],
+        ["1", "6", "$reqId", "9", "", "0", "0"],
+        ["57", "1", "$reqId"]
+      ],
+      "atMs": [288, 288, 525, 525, 525, 525, 11100],
+      "onCancel": [
+        ["4", "2", "$reqId", "300", "Can't find EId with tickerId:$reqId"]
+      ]
+    }
+  ]
+}

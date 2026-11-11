@@ -111,9 +111,10 @@ describe("the tick ids", () => {
     expect(PRICE_TICKS[75]).toBe(PRICE_TICKS[9]);
   });
 
-  it("reads the model computation and nothing else", () => {
-    // a bid- or ask-implied computation is a different claim from the model's, and the service
-    // has one field per greek
-    expect([...GREEK_TICKS].sort()).toEqual([13, 53]);
+  it("reads the model computation, live and delayed, and nothing else", () => {
+    // a bid- or ask-implied computation is a different claim from the model's, and so is the
+    // CUSTOM computation (53), which this table once named as the delayed model's; the service
+    // has one field per greek. The Python's suite checks these against ib_async's own map.
+    expect([...GREEK_TICKS].sort((a, b) => a - b)).toEqual([13, 83]);
   });
 });

@@ -21,8 +21,10 @@
  *  ## How it answers
  *
  *  The greeting, then the recording's session messages when startApi arrives. A contract lookup
- *  or a market-data request is answered with the exchange whose contract it names, with its own
- *  id put where the recording says `$reqId`; a request no exchange names is never answered, as a
+ *  or a market-data request is answered with the exchange whose contract it names — and, for
+ *  market data, that asked the same way, a snapshot or a stream, because those are two questions
+ *  with two answers (a snapshot of SPX carries no price at all) — with its own id put where the
+ *  recording says `$reqId`; a request no exchange names is never answered, as a
  *  gateway that does not answer is the only honest reply to a question nobody recorded. Where a
  *  recording holds several exchanges for one request and contract, they answer in turn and the
  *  last answers every request after it, counted over the stub's life rather than per connection:
@@ -30,12 +32,19 @@
  *  it. A cancel gets what the gateway said to that cancel, and reqMarketDataType gets nothing, as
  *  from the real one.
  *
+ *  Every reply goes at once, unless `pace` says otherwise: then each is sent at its recorded
+ *  `atMs` times `pace` after the request, and a cancel that comes before the last of them stops
+ *  the rest and is answered with nothing, as the gateway answered a snapshot cancelled before its
+ *  end. The corpus is replayed at once, because a timer racing a socket would make it flaky;
+ *  pacing is for a client test whose claim is WHEN.
+ *
  *  It still cannot speak for an account's entitlements, a dead session, or a market that is open.
  */
 import { createServer, type Server, type Socket } from "node:net";
 
 import {
-  CONTRACT_KEYS, type ContractKey, type Conversation, type Exchange, fill, loadConversation,
+  CONTRACT_KEYS, type ContractKey, type Conversation, type Exchange, SNAPSHOT_AT, fill,
+  loadConversation,
 } from "./recordings.ts";
 import { frame, readFields, readFrames, toFields } from "./wire.ts";
 
@@ -50,6 +59,8 @@ export interface FakeOptions {
    *  gateway below its floor can be tested. The one thing this stub says that no recording
    *  holds, and it is a number rather than a reply: no gateway here speaks below 157. */
   serverVersion?: number;
+  /** Send each reply at its recorded `atMs` times this, rather than every reply at once. */
+  pace?: number;
 }
 
 /** Listening, with the port it actually got (0 asks the OS for a free one). */
@@ -60,6 +71,9 @@ export interface FakeGateway {
   conversation: Conversation;
   /** How many contract lookups it has been asked, so a test can prove the conid cache saves one. */
   lookups: number;
+  /** Every message a client sent after its version range, in order, over the stub's life — so a
+   *  test can hold a client to what it sends, as the Python stub's `received` does. */
+  received: string[][];
   close: () => Promise<void>;
 }
 
@@ -76,8 +90,13 @@ const AT: Record<ContractKey, number> = {
 };
 
 /** Whether a request names this exchange's contract. The strike by value — "8100.0" from this
- *  client and "8100" from another are one double to the gateway — and the rest as exact text. */
+ *  client and "8100" from another are one double to the gateway — and the rest as exact text. A
+ *  market-data request must also ask the way the recording did, a snapshot or a stream, which
+ *  both carry at the same field (`SNAPSHOT_AT`). */
 function names(exchange: Exchange, fields: string[]): boolean {
+  if (exchange.request === "reqMktData" && fields[SNAPSHOT_AT] !== exchange.sent[SNAPSHOT_AT]) {
+    return false;
+  }
   return CONTRACT_KEYS.every((key) => key === "strike"
     ? Number(fields[AT[key]]) === Number(exchange.contract[key])
     : fields[AT[key]] === exchange.contract[key]);
@@ -87,6 +106,7 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
   const conversation = typeof options.conversation === "object"
     ? options.conversation : loadConversation(options.conversation ?? DEFAULT_CONVERSATION);
   const counts = { lookups: 0 };
+  const received: string[][] = [];
   const open = new Set<Socket>();
   /** how many requests each request-and-contract has had, keyed by the first exchange naming it */
   const turns = new Map<Exchange, number>();
@@ -98,12 +118,37 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
     let greeted = false;
     /** market-data requests answered on this connection, by id, for what a cancel is told */
     const answered = new Map<string, Exchange>();
+    /** replies still to be sent, by request id, when pacing */
+    const pending = new Map<string, { timers: ReturnType<typeof setTimeout>[]; left: number }>();
+    const write = (m: string[], reqId?: string) => {
+      if (!socket.destroyed) socket.write(frame(toFields(reqId === undefined ? m : fill(m, reqId))));
+    };
     const send = (messages: string[][], reqId?: string) => {
-      for (const m of messages) {
-        socket.write(frame(toFields(reqId === undefined ? m : fill(m, reqId))));
+      for (const m of messages) write(m, reqId);
+    };
+    const reply = (exchange: Exchange, reqId: string) => {
+      const pace = options.pace;
+      if (pace === undefined || exchange.atMs.length === 0) return send(exchange.replies, reqId);
+      const entry = { timers: [] as ReturnType<typeof setTimeout>[], left: exchange.replies.length };
+      entry.timers = exchange.replies.map((m, i) => setTimeout(() => {
+        write(m, reqId);
+        entry.left -= 1;
+      }, exchange.atMs[i]! * pace));
+      pending.set(reqId, entry);
+    };
+    /** Stops pacing, and says whether any reply was still to come. */
+    const stop = (reqId?: string): boolean => {
+      let cut = false;
+      for (const [id, entry] of pending) {
+        if (reqId !== undefined && id !== reqId) continue;
+        for (const timer of entry.timers) clearTimeout(timer);
+        cut ||= entry.left > 0;
+        pending.delete(id);
       }
+      return cut;
     };
 
+    socket.on("close", () => stop());
     socket.on("error", () => { /* a test closing its end is not a fault */ });
     socket.on("data", (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
@@ -123,6 +168,7 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
         }
         const f = readFields(payload);
         const reqId = f[2] ?? "";
+        received.push(f);
 
         if (f[0] === START_API) {
           send(conversation.handshake.onStartApi);
@@ -138,11 +184,14 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
           turns.set(recorded[0]!, turn + 1);
           const exchange = recorded[Math.min(turn, recorded.length - 1)]!;
           if (request === "reqMktData") answered.set(reqId, exchange);
-          send(exchange.replies, reqId);
+          reply(exchange, reqId);
           continue;
         }
         if (f[0] === CANCEL_MKT_DATA) {
-          send(answered.get(reqId)?.onCancel ?? [], reqId);
+          // `onCancel` is what a cancel got AFTER every recorded reply. One that cuts a paced
+          // answer short gets nothing, which is what the gateway sent a snapshot cancelled
+          // before its end: no reply, and nothing after it (measured 2026-11-10)
+          if (!stop(reqId)) send(answered.get(reqId)?.onCancel ?? [], reqId);
           answered.delete(reqId);
         }
         // reqMarketDataType, and anything else, gets no answer, as from the real gateway
@@ -160,6 +209,7 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
         port: got,
         conversation,
         get lookups() { return counts.lookups; },
+        received,
         close: () => new Promise<void>((done) => {
           // destroyed, not just closed: `server.close()` waits for open connections to end, so a
           // client still holding one makes it hang for ever — which it did, as a 10s hook timeout

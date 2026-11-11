@@ -101,6 +101,15 @@ def test_the_tick_tables_match_the_corpus() -> None:
         assert ibkr.PRICE_TICKS[delayed] == ibkr.PRICE_TICKS[live]
 
 
+def test_the_greek_ticks_are_the_model_computation_by_ib_asyncs_own_map() -> None:
+    """The ids `ib_async` itself files as the MODEL's greeks, live and delayed. 53 was here until
+    #257's review: it is the custom computation, and the client now waits for the model's, so a
+    delayed option would have waited out the timeout for a tick that never comes."""
+    wrapper = pytest.importorskip("ib_async.wrapper")
+    model = {tick for tick, name in wrapper.GREEKS_TICK_MAP.items() if name == "modelGreeks"}
+    assert set(ibkr.GREEK_TICKS) == model == {13, 83}
+
+
 def test_a_bool_is_not_a_price() -> None:
     """`typeof x === "number"` is false for a boolean; `isinstance(x, int)` is TRUE for one.
 
