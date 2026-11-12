@@ -97,6 +97,26 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
     return "yes" if incomplete and complete else "no"
 
 
+#: when a stored row was observed, against its day's close: what a chart of the samples marks
+type SampleTiming = Literal["close", "before-open", "after-close", "unrecorded"]
+
+
+def sample_timing(observed_at: str | None) -> SampleTiming:
+    """When a stored row was observed, against its day's close. `close` inside 09:30-16:15 New York (the
+    last sweep by the options' close, or a weekend's carried forward); `before-open` a fill from overnight
+    marks that nothing replaced; `after-close` a reading taken that evening (an opening day recorded then,
+    a missed session filled, a row completed); `unrecorded` a row from before `observed_at` existed, of
+    which nothing is claimed. By the hour alone, as `takes_sample`'s provisional check is. Mirrors
+    `expiry.ts`.
+    """
+    if observed_at is None:
+        return "unrecorded"
+    t = _since_new_york_midnight(datetime.fromisoformat(observed_at).replace(tzinfo=UTC))
+    if t < _SAMPLE_FROM:
+        return "before-open"
+    return "close" if t <= _SAMPLE_UNTIL else "after-close"
+
+
 def days_to_expiry(strike_date: str, now: datetime | None = None) -> int:
     """DTE: expiry day less New York's today. Zero on the day, negative after."""
     expiry = date.fromisoformat(normalize_strike_date(strike_date))

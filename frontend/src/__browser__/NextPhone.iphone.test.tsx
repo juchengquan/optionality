@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { overflowsSideways, settle } from "./nextBook";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
 
 afterEach(cleanup);
 
@@ -32,7 +32,9 @@ function serveOwnerBook(quotes: object[] = QUOTES): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     // the payoff's POST is a read, and is answered (#291)
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
-    if (payoff) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
+    // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
+    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""));
+    if (read) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(read) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({
         ok: false, status: 409, json: () => Promise.resolve({ detail: "refused by the test service" }),
@@ -264,6 +266,52 @@ describe("REVIEW", () => {
     expect(row.hasAttribute("data-revealed")).toBe(true);
     expect(r.left >= 0 && r.right <= window.innerWidth).toBe(true);
     expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);
+  });
+
+  it("draws each holding's burndown as its page's main chart, inside the screen (#295)", async () => {
+    await show("Review");
+    await settle();
+    const page1 = pages()[0]!;
+    const charts = [...page1.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
+    expect(charts).toHaveLength(2);
+    const card = page1.querySelector(".nxp-card")!.getBoundingClientRect();
+    for (const svg of charts) {
+      const r = svg.getBoundingClientRect();
+      // the card's whole width, less its padding: a main chart, not a thumbnail
+      expect(r.width).toBeGreaterThan(card.width - 40);
+      expect(r.left).toBeGreaterThanOrEqual(card.left);
+      expect(r.right).toBeLessThanOrEqual(card.right);
+      const labels = [...svg.querySelectorAll("text")].filter((t) => t.textContent);
+      for (const t of labels) {
+        const q = t.getBoundingClientRect();
+        expect(q.left >= r.left - 0.5 && q.right <= r.right + 0.5, t.textContent ?? "").toBe(true);
+        // and on top of no other label
+        for (const u of labels) {
+          if (u === t) continue;
+          const p = u.getBoundingClientRect();
+          const over = q.left < p.right - 1 && p.left < q.right - 1 && q.top < p.bottom - 1 && p.top < q.bottom - 1;
+          expect(over, `${t.textContent} / ${u.textContent}`).toBe(false);
+        }
+      }
+    }
+    // the burndown leads the page: above its figures
+    const facts = page1.querySelector(".nxp-facts")!.getBoundingClientRect();
+    expect(charts[0]!.getBoundingClientRect().bottom).toBeLessThanOrEqual(facts.top);
+    expect(overflowsSideways()).toBe(false);
+  });
+
+  it("says why a day is not the close when it is tapped, from anywhere near it", async () => {
+    await show("Review");
+    await settle();
+    const page1 = pages()[0]!;
+    const svg = page1.querySelector<SVGSVGElement>(".nx-hist svg")!;
+    const said = page1.querySelector(".nx-hist-said")!;
+    // the first day, h-calls' opening day, was recorded that evening: tapped beside it, not on it,
+    // since a finger is wider than the days are apart
+    const first = page1.querySelector<SVGCircleElement>("[data-sample] [data-mark]")!.getBoundingClientRect();
+    const box = svg.getBoundingClientRect();
+    await userEvent.click(svg, { position: { x: first.left - box.left + 6, y: first.top - box.top + 14 } });
+    expect(said.textContent).toMatch(/^3 Nov · 45 DTE .* not the close: observed after 16:15 New York/);
   });
 
   it("gives every control a 44pt target", async () => {

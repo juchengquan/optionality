@@ -81,6 +81,22 @@ const payoff = {
   slope_below: 0, slope_above: 0, breakevens: [6997], max_profit: 3, max_loss: -47,
 };
 
+/** A holding's daily samples, as `/positions/{id}/samples` answers (#295): a few days of p1's put
+ *  spread, one of them filled that evening rather than at the close, against its plan. Written out
+ *  here for the reason the payoff above is. */
+const samples = {
+  levels: { dte_at_open: 58, target: 1.5, stop: 6, target_dte: 15, manage_by_dte: 21 },
+  plan: Array.from({ length: 59 }, (_, i) => ({ dte: 58 - i, on_pace: 3 * Math.sqrt((58 - i) / 58) })),
+  samples: [
+    ["2026-11-03", 58, 2.9, "after-close"], ["2026-11-04", 57, 2.7, "close"],
+    ["2026-11-05", 56, 2.4, "close"], ["2026-11-06", 55, 2.2, "close"],
+  ].map(([on, dte, cost, timing]) => ({
+    observed_on: on, observed_at: "2026-11-07 05:00:00+08:00", timing, dte, cost_to_close: cost,
+    on_pace: 3 * Math.sqrt(Number(dte) / 58), legs_iv: { "US.SPXW261231P7000000": 18.5,
+      "US.SPXW261231P6950000": 19.25 }, legs_vega: null, legs_delta: null, spx: null,
+  })),
+};
+
 /** Every write is refused, as the service refuses one it will not take: a layout suite never
  *  changes the book, and a refusal is how a toast gets onto the page to be measured. */
 export function serveBook(extra: object[] = []): void {
@@ -89,6 +105,10 @@ export function serveBook(extra: object[] = []): void {
     // the payoff (#291) is a read, its POST included: any one will do for a layout
     if (/\/payoff$/.test(String(url))) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
+    }
+    // and so are REVIEW's samples (#295): an empty list in their place would break the page
+    if (/\/samples$/.test(String(url))) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(samples) });
     }
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({

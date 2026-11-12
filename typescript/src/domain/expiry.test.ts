@@ -14,7 +14,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  daysToExpiry, inSampleHours, marketDate, takesSample, type SampleReadings,
+  daysToExpiry, inSampleHours, marketDate, sampleTiming, takesSample, type SampleReadings,
 } from "./expiry.ts";
 
 describe("the market date", () => {
@@ -195,5 +195,35 @@ describe("takesSample — whether this sweep writes the day's row, and how", () 
     const october = at("2026-10-01T15:00:00Z"); // 11:00 EDT
     expect(takesSample(october, row("2026-10-01 13:29:59.000000"), readings)).toBe("yes");
     expect(takesSample(october, row("2026-10-01 13:30:00.000000"), readings)).toBe("if-changed");
+  });
+});
+
+describe("sampleTiming — whether a stored row is the day's close, and if not, why", () => {
+  it("calls a row observed inside the hours the close, both ends included", () => {
+    // Monday 9 November 2026 is EST (UTC-5)
+    expect(sampleTiming("2026-11-09 14:30:00.000000")).toBe("close"); // 09:30
+    expect(sampleTiming("2026-11-09 21:00:00.000000")).toBe("close"); // 16:00
+    expect(sampleTiming("2026-11-09 21:15:00.000000")).toBe("close"); // 16:15
+  });
+
+  it("calls a row observed before the open a fill from overnight marks", () => {
+    expect(sampleTiming("2026-11-09 05:05:00.000000")).toBe("before-open"); // 00:05
+    expect(sampleTiming("2026-11-09 14:29:59.999000")).toBe("before-open"); // 09:29:59.999
+  });
+
+  it("calls a row observed after 16:15 a reading taken that evening", () => {
+    expect(sampleTiming("2026-11-09 21:15:00.001000")).toBe("after-close");
+    // 23:30 in New York is already Tuesday in UTC
+    expect(sampleTiming("2026-11-10 04:30:00.000000")).toBe("after-close");
+  });
+
+  it("says nothing of a row written before observed_at existed", () => {
+    expect(sampleTiming(null)).toBe("unrecorded");
+  });
+
+  it("reads New York's clock across a change of the clocks", () => {
+    // 1 October 2026 is EDT (UTC-4): 13:29:59Z is 09:29:59, 13:30Z the open
+    expect(sampleTiming("2026-10-01 13:29:59.000000")).toBe("before-open");
+    expect(sampleTiming("2026-10-01 13:30:00.000000")).toBe("close");
   });
 });

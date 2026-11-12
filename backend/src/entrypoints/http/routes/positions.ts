@@ -7,7 +7,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { marketDate } from "optionality/domain/expiry";
+import { marketDate, sampleTiming } from "optionality/domain/expiry";
+import { dteAtOpen, exitLevels, exitPolicy, onPace } from "optionality/domain/exit";
 import {
   POSITION_GREEK_FIELDS, contractSize, legReadings, positionGreek, positionLegCodes, realizedPoints,
 } from "optionality/domain/position";
@@ -143,9 +144,53 @@ const PayoffOut = z.object({
   max_loss: z.number().nullable(),
 });
 
+/** Each leg's reading on one day, contract code -> figure: null where the sweep withheld the map,
+ *  and where a stored one cannot be read — a corrupt map costs its own figure, never the request. */
+const LegMap = z.record(z.string(), z.number()).nullable();
+
+/** One Daily sample as stored (ADR 0011), with the day's On-pace beside it. */
+const SampleOut = z.object({
+  /** the New York market day it is that day's row for */
+  observed_on: z.string(),
+  /** the instant it was observed, in DISPLAY_TZ; null on rows written before migration 0009 */
+  observed_at: z.string().nullable(),
+  /** whether it is the day's close, and if not why (`sampleTiming`): what the chart marks */
+  timing: z.enum(["close", "before-open", "after-close", "unrecorded"]),
+  dte: z.number(),
+  cost_to_close: z.number(),
+  /** what Cost to close would be at this DTE if only time had passed (`onPace`); null without a
+   *  schedule */
+  on_pace: z.number().nullable(),
+  legs_iv: LegMap,
+  legs_vega: LegMap,
+  legs_delta: LegMap,
+  /** SPX's price as the writing sweep's batch implied it (ADR 0024), or null */
+  spx: z.number().nullable(),
+});
+
+/** A holding's recorded history, for the burndown and the IV chart (#295): every Daily sample to
+ *  the day it closed, the Levels it is held against, and the planned decay at every DTE from the
+ *  open to expiry — the service's figures, so no curve is computed in the browser. */
+const SamplesOut = z.object({
+  /** null where Opened was never recorded: no schedule is inferred (ADR 0011) */
+  levels: z.object({
+    dte_at_open: z.number(),
+    /** null for a debit, which has no credit to keep a fraction of */
+    target: z.number().nullable(),
+    stop: z.number().nullable(),
+    target_dte: z.number().nullable(),
+    manage_by_dte: z.number(),
+  }).nullable(),
+  /** On-pace at each DTE from the open down to 0; empty without a schedule or an Entry */
+  plan: z.array(z.object({ dte: z.number(), on_pace: z.number() })),
+  /** oldest first, none after the day it closed (ADR 0022) */
+  samples: z.array(SampleOut),
+});
+
 const list = documented("List positions", { 200: z.array(PositionOut) });
 const values = documented("Live value, P&L and exit schedule of every position", { 200: z.array(PositionValues) }, [502]);
 const vol = documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]);
+const samples = documented("A holding's daily samples, with its on-pace and its levels", { 200: SamplesOut }, [404]);
 const payoff = documented("A holding's payoff at expiry", { 200: PayoffOut }, [404, 422]);
 const draft = documented("The payoff at expiry of draft legs, saving nothing and asking no Provider", { 200: PayoffOut });
 const create = documented("Create a position", { 201: PositionOut }, [409]);
@@ -228,6 +273,14 @@ export function positionRoutes(deps: Deps) {
     }
   };
 
+  /** A stored map whose every reading is a finite number, or null: the chart draws each leg's
+   *  figure, and one that is not a number would fail the answer's own schema. */
+  const legMap = (text: string | null): Record<string, number> | null => {
+    const map = parseMap(text);
+    if (map === null) return null;
+    return Object.values(map).every((v) => typeof v === "number" && Number.isFinite(v)) ? map : null;
+  };
+
   return new Hono()
     .get("/", list, (c) => list.reply(c, 200, listPositions(db).map(out)))
 
@@ -276,8 +329,8 @@ export function positionRoutes(deps: Deps) {
 
     /** What of this holding's pace gap vol accounts for (ADR 0011).
      *
-     *  The ONLY route that reads history — every other figure in this service comes from one live
-     *  batch. Separate from `/quotes` on purpose: the dashboard polls that every 15 seconds per
+     *  One of the two routes that read history, with `/samples` (#295) — every other figure in this
+     *  service comes from one live batch. Separate from `/quotes` on purpose: the dashboard polls that every 15 seconds per
      *  open tab and this changes once a market day, so the detail sheet asks for it when opened.
      *
      *  The remainder is NOT returned, because it is not ours to compute: a caller subtracts this
@@ -297,6 +350,48 @@ export function positionRoutes(deps: Deps) {
       }));
       const a = volAttribution(samples, toPosition(row));
       return vol.reply(c, 200, a ?? { vol: null, from: null, to: null, days: null });
+    })
+
+    /** A holding's daily samples, open or closed (#295): what REVIEW's burndown and IV chart draw.
+     *
+     *  Stored history, so no Provider call — which is why this is not on CLAUDE.md's list of
+     *  market-data calls — and asked for once when REVIEW opens a holding, never polled, since a
+     *  row changes at most once a market day. On-pace is `onPace` at each sample's DTE and at
+     *  every DTE to expiry, the same figure `/positions/values` serves today: the plan is the
+     *  service's, never redrawn in the browser. A backdated close hides the later rows
+     *  (`listPositionSamples`, ADR 0022).
+     */
+    .get("/:id/samples", samples, (c) => {
+      const id = c.req.param("id");
+      const row = findPosition(db, id);
+      if (!row) throw notFound("position");
+      const openedDte = row.opened_at === null ? null : dteAtOpen(row.strike_date, row.opened_at);
+      const levels = openedDte === null ? null
+        : exitLevels(row.entry, openedDte, openedDte, exitPolicy(settings));
+      const plan: { dte: number; on_pace: number }[] = [];
+      for (let dte = openedDte ?? -1; dte >= 0; dte--) {
+        const pace = onPace(row.entry, openedDte, dte);
+        if (pace !== null) plan.push({ dte, on_pace: pace });
+      }
+      return samples.reply(c, 200, {
+        levels: levels === null || openedDte === null ? null : {
+          dte_at_open: openedDte, target: levels.target, stop: levels.stop,
+          target_dte: levels.target_dte, manage_by_dte: levels.manage_by_dte,
+        },
+        plan,
+        samples: listPositionSamples(db, id).map((s) => ({
+          observed_on: s.observed_on,
+          observed_at: displayStored(s.observed_at, tz),
+          timing: sampleTiming(s.observed_at),
+          dte: s.dte,
+          cost_to_close: s.cost_to_close,
+          on_pace: onPace(row.entry, openedDte, s.dte),
+          legs_iv: legMap(s.legs_iv),
+          legs_vega: legMap(s.legs_vega),
+          legs_delta: legMap(s.legs_delta),
+          spx: s.spx,
+        })),
+      });
     })
 
     /** A holding's payoff at expiry, from its legs, its Entry and its count — and nothing else: no

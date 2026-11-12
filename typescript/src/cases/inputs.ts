@@ -256,6 +256,20 @@ export const INPUTS: Record<string, CaseInput[]> = {
       args: [at("2026-10-01T15:00:00Z"), { ...WHOLE, observed_at: "2026-10-01 13:29:59.000000" }, WHOLE] },
     { fn: "takesSample", name: "observed at 09:30 EDT is settled",
       args: [at("2026-10-01T15:00:00Z"), { ...WHOLE, observed_at: "2026-10-01 13:30:00.000000" }, WHOLE] },
+    // what a chart of the samples marks a stored row as: each boundary from both sides, as stored
+    { fn: "sampleTiming", name: "a row from before observed_at existed", args: [null] },
+    { fn: "sampleTiming", name: "observed just after midnight, a fill", args: ["2026-11-09 05:05:00.000000"] },
+    { fn: "sampleTiming", name: "observed a millisecond before 09:30", args: ["2026-11-09 14:29:59.999000"] },
+    { fn: "sampleTiming", name: "observed at 09:30 exactly", args: ["2026-11-09 14:30:00.000000"] },
+    { fn: "sampleTiming", name: "observed at 16:15 exactly", args: ["2026-11-09 21:15:00.000000"] },
+    { fn: "sampleTiming", name: "observed a millisecond after 16:15", args: ["2026-11-09 21:15:00.001000"] },
+    { fn: "sampleTiming", name: "observed at 23:30 in New York, Tuesday in UTC",
+      args: ["2026-11-10 04:30:00.000000"] },
+    { fn: "sampleTiming", name: "observed at 09:29:59 EDT", args: ["2026-10-01 13:29:59.000000"] },
+    { fn: "sampleTiming", name: "observed at 09:30 EDT", args: ["2026-10-01 13:30:00.000000"] },
+    // a sub-millisecond stamp: the database spells microseconds, an instant holds milliseconds
+    { fn: "sampleTiming", name: "observed 16:15:00.000999, truncated to the millisecond",
+      args: ["2026-11-09 21:15:00.000999"] },
   ],
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },

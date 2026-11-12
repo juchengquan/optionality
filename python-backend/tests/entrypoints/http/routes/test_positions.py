@@ -177,6 +177,119 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
         assert resp.json()["vol"] is None
 
 
+class TestAHoldingsDailySamples:
+    """Stored history and nothing live (#295): the Provider throws once the holding is made, so a samples
+    route that asked it anything would fail rather than pass."""
+
+    @staticmethod
+    def sample(h, id_, on, dte, cost, observed_at, iv=None, vega=None, delta=None, spx=None):
+        h.db.execute(
+            """insert into position_samples
+                 (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega, legs_delta, observed_at, spx)
+               values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (id_, on, dte, cost, iv, vega, delta, observed_at, spx),
+        )
+
+    @staticmethod
+    async def made(start, **over):
+        state = {"open": True}
+
+        async def fetch(codes):
+            if not state["open"]:
+                raise RuntimeError("the samples asked the Provider")
+            return [{"code": c} for c in codes]
+
+        h = start_with(start, fetch)
+        id_ = created201(await post(h, condor(**over)))
+        state["open"] = False
+        return h, id_
+
+    async def test_serves_each_days_figures_its_on_pace_and_whether_it_was_a_close(self, start):
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
+        self.sample(
+            h, id_, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000",
+            json.dumps(flat(14.5)), json.dumps(flat(4.25)), json.dumps(flat(0.2)), 6612.5,
+        )  # fmt: skip
+        self.sample(h, id_, "2026-10-07", 72, 2.75, "2026-10-08 00:30:00.000000")
+        self.sample(h, id_, "2026-10-08", 71, 2.5, None)
+
+        resp = await h.call(f"/positions/{id_}/samples")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["levels"] == {"dte_at_open": 73, "target": 1.5, "stop": 6, "target_dte": 18, "manage_by_dte": 21}
+        assert data["samples"] == [
+            {
+                "observed_on": "2026-10-06", "observed_at": "2026-10-07 04:00:00+08:00", "timing": "close",
+                "dte": 73, "cost_to_close": 2.9, "on_pace": 3, "spx": 6612.5,
+                "legs_iv": flat(14.5), "legs_vega": flat(4.25), "legs_delta": flat(0.2),
+            },
+            {
+                "observed_on": "2026-10-07", "observed_at": "2026-10-08 08:30:00+08:00", "timing": "after-close",
+                "dte": 72, "cost_to_close": 2.75, "on_pace": 3 * math.sqrt(72 / 73), "spx": None,
+                "legs_iv": None, "legs_vega": None, "legs_delta": None,
+            },
+            {
+                "observed_on": "2026-10-08", "observed_at": None, "timing": "unrecorded",
+                "dte": 71, "cost_to_close": 2.5, "on_pace": 3 * math.sqrt(71 / 73), "spx": None,
+                "legs_iv": None, "legs_vega": None, "legs_delta": None,
+            },
+        ]  # fmt: skip
+
+    async def test_serves_the_planned_decay_at_every_dte_from_the_open_to_expiry(self, start):
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
+        plan = (await h.call(f"/positions/{id_}/samples")).json()["plan"]
+        assert len(plan) == 74
+        assert plan[0] == {"dte": 73, "on_pace": 3}
+        assert plan[73 - 21] == {"dte": 21, "on_pace": 3 * math.sqrt(21 / 73)}
+        assert plan[73] == {"dte": 0, "on_pace": 0}
+
+    async def test_serves_no_schedule_and_no_plan_for_a_holding_whose_opened_nobody_recorded(self, start):
+        h, id_ = await self.made(start, entry=3)
+        self.sample(h, id_, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000")
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert data["levels"] is None
+        assert data["plan"] == []
+        assert data["samples"][0]["on_pace"] is None
+        assert data["samples"][0]["cost_to_close"] == 2.9
+
+    async def test_serves_a_debits_schedule_with_no_target_or_stop_and_its_signed_decay(self, start):
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=-2)
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert data["levels"] == {
+            "dte_at_open": 73, "target": None, "stop": None, "target_dte": None, "manage_by_dte": 21,
+        }  # fmt: skip
+        assert data["plan"][0] == {"dte": 73, "on_pace": -2}
+
+    async def test_serves_nothing_after_a_backdated_close_and_deletes_nothing(self, start):
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
+        self.sample(h, id_, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000")
+        self.sample(h, id_, "2026-10-07", 72, 2.8, "2026-10-07 20:00:00.000000")
+        h.db.execute("update positions set closed_on = '2026-10-06', exit = 2.9 where id = ?", (id_,))
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert [s["observed_on"] for s in data["samples"]] == ["2026-10-06"]
+        assert h.db.execute("select count(*) from position_samples").fetchone()[0] == 2
+
+    async def test_costs_a_corrupt_map_its_own_figure_never_the_request(self, start):
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
+        sc = leg_codes()[0]
+        self.sample(
+            h, id_, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000",
+            "{not json", json.dumps({**flat(4), sc: "four"}), json.dumps([0.2]),
+        )  # fmt: skip
+        resp = await h.call(f"/positions/{id_}/samples")
+        assert resp.status_code == 200
+        s = resp.json()["samples"][0]
+        assert [s["legs_iv"], s["legs_vega"], s["legs_delta"]] == [None, None, None]
+
+    async def test_answers_an_empty_history_for_a_holding_never_sampled(self, start):
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
+        assert (await h.call(f"/positions/{id_}/samples")).json()["samples"] == []
+
+    async def test_is_404_for_a_holding_that_does_not_exist(self, start):
+        h = start_with(start)
+        assert (await h.call("/positions/nope/samples")).status_code == 404
+
+
 PUT_SPREAD = [
     {"side": "short", "option_type": "PUT", "strike": 7100},
     {"side": "long", "option_type": "PUT", "strike": 7075},

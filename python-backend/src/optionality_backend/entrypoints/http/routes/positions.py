@@ -34,12 +34,14 @@ and not on a Monitor.
 - **The probe's codes are sorted as JavaScript sorts**, by UTF-16 code unit, as `holdings.py`'s are.
 """
 
+import math
 import sqlite3
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.contract import build_spx_code
-from optionality.expiry import market_date
+from optionality.exit import ExitPolicy, dte_at_open, exit_levels, on_pace
+from optionality.expiry import market_date, sample_timing
 from optionality.monitor import monitor_leg_codes
 from optionality.payoff import payoff_at_expiry
 from optionality.position import (
@@ -76,6 +78,7 @@ from ....db.queries import (
 from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored, to_sql_datetime
 from ....db.values import from_sqlite_json, new_id, to_sqlite_bool, to_sqlite_json
+from ....env import Settings
 from ....holdings import holding_values
 from ....hydrate import to_monitor, to_position
 from ....monitors import adopt_orphan_monitors
@@ -198,6 +201,63 @@ class VolOut(BaseModel):
     days: float | None
 
 
+class SampleOut(BaseModel):
+    """One Daily sample as stored (ADR 0011), with the day's On-pace beside it."""
+
+    model_config = _AS_ZOD
+
+    #: the New York market day it is that day's row for
+    observed_on: str
+    #: the instant it was observed, in DISPLAY_TZ; None on rows written before migration 0009
+    observed_at: str | None
+    #: whether it is the day's close, and if not why (`sample_timing`): what the chart marks
+    timing: Literal["close", "before-open", "after-close", "unrecorded"]
+    dte: float
+    cost_to_close: float
+    #: what Cost to close would be at this DTE if only time had passed (`on_pace`); None without a schedule
+    on_pace: float | None
+    #: each leg's reading, contract code -> figure: None where the sweep withheld the map, and where a stored
+    #: one cannot be read — a corrupt map costs its own figure, never the request
+    legs_iv: dict[str, float] | None
+    legs_vega: dict[str, float] | None
+    legs_delta: dict[str, float] | None
+    #: SPX's price as the writing sweep's batch implied it (ADR 0024), or None
+    spx: float | None
+
+
+class SampleLevelsOut(BaseModel):
+    model_config = _AS_ZOD
+
+    dte_at_open: float
+    #: None for a debit, which has no credit to keep a fraction of
+    target: float | None
+    stop: float | None
+    target_dte: float | None
+    manage_by_dte: float
+
+
+class PlanPointOut(BaseModel):
+    model_config = _AS_ZOD
+
+    dte: float
+    on_pace: float
+
+
+class SamplesOut(BaseModel):
+    """A holding's recorded history, for the burndown and the IV chart (#295): every Daily sample to the day
+    it closed, the Levels it is held against, and the planned decay at every DTE from the open to expiry —
+    the service's figures, so no curve is computed in the browser."""
+
+    model_config = _AS_ZOD
+
+    #: None where Opened was never recorded: no schedule is inferred (ADR 0011)
+    levels: SampleLevelsOut | None
+    #: On-pace at each DTE from the open down to 0; empty without a schedule or an Entry
+    plan: list[PlanPointOut]
+    #: oldest first, none after the day it closed (ADR 0022)
+    samples: list[SampleOut]
+
+
 class PayoffAtOut(BaseModel):
     model_config = _AS_ZOD
 
@@ -243,6 +303,25 @@ def _parse_map(text: str | None) -> dict[str, Any] | None:
     # guard catches the same values. One gate, where the rule lives, rather than two where only one is
     # tested.
     return parsed if isinstance(parsed, dict) else None
+
+
+def _leg_map(text: str | None) -> dict[str, Any] | None:
+    """A stored map whose every reading is a finite number, or None: the chart draws each leg's figure, and
+    one that is not a number would fail the answer's own schema. A boolean is no number, as `typeof` says."""
+    parsed = _parse_map(text)
+    if parsed is None:
+        return None
+    numbers = all(isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v) for v in parsed.values())
+    return parsed if numbers else None
+
+
+def _exit_policy(settings: Settings) -> ExitPolicy:
+    """The library's `exitPolicy`, which reads Settings: the three knobs, from `.env`."""
+    return ExitPolicy(
+        take_fraction=settings.exit_take_fraction,
+        stop_multiple=settings.exit_stop_multiple,
+        manage_by_dte=settings.exit_manage_by_dte,
+    )
 
 
 def _realized(row: PositionRow) -> float | None:
@@ -371,8 +450,8 @@ def position_routes(deps: Deps) -> APIRouter:
     async def vol(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:
         """What of this holding's pace gap vol accounts for (ADR 0011).
 
-        The ONLY route that reads history — every other figure in this service comes from one live
-        batch. Separate from `/quotes` on purpose: the dashboard polls that every 15 seconds per open
+        One of the two routes that read history, with `/samples` (#295) — every other figure in this
+        service comes from one live batch. Separate from `/quotes` on purpose: the dashboard polls that every 15 seconds per open
         tab and this changes once a market day, so the detail sheet asks for it when opened.
 
         The remainder is NOT returned, because it is not ours to compute: a caller subtracts this from
@@ -396,6 +475,58 @@ def position_routes(deps: Deps) -> APIRouter:
         if a is None:
             return {"vol": None, "from": None, "to": None, "days": None}
         return a.model_dump(by_alias=True)
+
+    @router.get(
+        "/{id}/samples",
+        summary="A holding's daily samples, with its on-pace and its levels",
+        response_model=SamplesOut,
+    )
+    async def samples(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:
+        """A holding's daily samples, open or closed (#295): what REVIEW's burndown and IV chart draw.
+
+        Stored history, so no Provider call, and asked for once when REVIEW opens a holding, never polled.
+        On-pace is `on_pace` at each sample's DTE and at every DTE to expiry, the same figure
+        `/positions/values` serves today: the plan is the service's, never redrawn in the browser. A
+        backdated close hides the later rows (`list_position_samples`, ADR 0022)."""
+        row = find_position(db, id_)
+        if row is None:
+            raise not_found("position")
+        opened_dte = None if row["opened_at"] is None else dte_at_open(row["strike_date"], row["opened_at"])
+        levels = (
+            None if opened_dte is None else exit_levels(row["entry"], opened_dte, opened_dte, _exit_policy(settings))
+        )
+        plan = []
+        for dte in range(opened_dte if opened_dte is not None else -1, -1, -1):
+            pace = on_pace(row["entry"], opened_dte, dte)
+            if pace is not None:
+                plan.append({"dte": dte, "on_pace": pace})
+        return {
+            "levels": None
+            if levels is None or opened_dte is None
+            else {
+                "dte_at_open": opened_dte,
+                "target": levels.target,
+                "stop": levels.stop,
+                "target_dte": levels.target_dte,
+                "manage_by_dte": levels.manage_by_dte,
+            },
+            "plan": plan,
+            "samples": [
+                {
+                    "observed_on": s["observed_on"],
+                    "observed_at": display_stored(s["observed_at"], tz),
+                    "timing": sample_timing(s["observed_at"]),
+                    "dte": s["dte"],
+                    "cost_to_close": s["cost_to_close"],
+                    "on_pace": on_pace(row["entry"], opened_dte, s["dte"]),
+                    "legs_iv": _leg_map(s["legs_iv"]),
+                    "legs_vega": _leg_map(s["legs_vega"]),
+                    "legs_delta": _leg_map(s["legs_delta"]),
+                    "spx": s["spx"],
+                }
+                for s in list_position_samples(db, id_)
+            ],
+        }
 
     @router.get("/{id}/payoff", summary="A holding's payoff at expiry", response_model=PayoffOut)
     async def payoff(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:

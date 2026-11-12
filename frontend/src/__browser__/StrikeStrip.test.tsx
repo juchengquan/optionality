@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { Entry, Holding } from "../api";
 import { Next } from "../next/Next";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 /* The owner-shaped book, served from this file: a non-test module may not import test support. */
@@ -31,7 +31,9 @@ function serve(quotes: object[], holdings: object[]): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     // the payoff beside the strip is a read, POST included, and is answered (#291)
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
-    if (payoff) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
+    // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
+    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""));
+    if (read) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(read) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
     }
