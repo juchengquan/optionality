@@ -6,3 +6,7 @@
   line-height: 1.25; color: var(--muted-foreground);
   white-space: normal; overflow-wrap: anywhere;
 }
+
+/* the last trade's date and time may take two lines: on one, it is wider than a narrow inspector's
+   cell (measured: 172px of text in a 154px cell at 1280px), and the desk's figures do not wrap */
+.nx-figures [data-figure="update_time"] dd { white-space: normal; }
