@@ -12,7 +12,7 @@ import {
  *
  *  Muting stays unguarded. It undoes with one click, so asking would be noise. */
 export function ConfirmDelete({
-  name, what, onConfirm, children, description,
+  name, what, onConfirm, children, description, disabled = false,
 }: {
   name: string;
   what: string;
@@ -22,11 +22,15 @@ export function ConfirmDelete({
    *  cannot be muted, so the monitor wording below would reassure about the wrong things and
    *  stay silent about the one that matters: its recorded history. */
   description?: React.ReactNode;
+  /** while a change already asked for is still to be seen, so it is not asked for twice */
+  disabled?: boolean;
 }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger
-        render={<Button type="button" variant="ghost" size="sm">{children ?? "delete"}</Button>}
+        render={
+          <Button type="button" variant="ghost" size="sm" disabled={disabled}>{children ?? "delete"}</Button>
+        }
       />
       {/* a reload would re-render the row this is anchored in and take the question away
           mid-decision, so it holds the poll off (App.beingOperated) */}

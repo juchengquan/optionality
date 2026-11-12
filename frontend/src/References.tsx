@@ -19,13 +19,17 @@ import { referenceTitle } from "./ReferenceStrip";
  *  somebody has come to do something about it.
  */
 export function References({
-  references, onAdd, onRemove,
+  references, onAdd, onRemove, pending = false,
 }: {
   references: Reference[];
   /** answers whether it landed, so the boxes are cleared only on a Reference that now exists */
   onAdd: (body: { code: string; label?: string; source: Source }) =>
     Promise<boolean>;
   onRemove: (id: string) => void;
+  /** a keep or drop the service has taken and the list does not show yet: said, and every write
+   *  held until it does, because a second press while the References are slow makes the same
+   *  change twice (#335) */
+  pending?: boolean;
 }) {
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
@@ -34,6 +38,7 @@ export function References({
   return (
     <section data-testid="references">
       <h3 className="text-sm font-semibold mb-1">on the page</h3>
+      {pending ? <p className="meta" role="status">refreshing references…</p> : null}
       {references.length === 0 ? (
         <p className="meta">nothing kept — the strip above the tables stays away until there is</p>
       ) : (
@@ -49,7 +54,7 @@ export function References({
                   Reference has neither — what it actually costs is nothing, which is worth saying
                   rather than leaving the monitor's sentence to imply otherwise */}
               <ConfirmDelete
-                name={referenceTitle(r)} what="reference" onConfirm={() => onRemove(r.id)}
+                name={referenceTitle(r)} what="reference" onConfirm={() => onRemove(r.id)} disabled={pending}
                 description={
                   "This takes it off the page. Nothing is watching it and nothing is derived from"
                   + " it, so there is nothing else to lose — keeping it again is one line in this"
@@ -120,7 +125,7 @@ export function References({
             said" rather than "it is live".
           </FieldDescription>
         </Field>
-        <Button type="submit" size="sm" variant="secondary">keep it</Button>
+        <Button type="submit" size="sm" variant="secondary" disabled={pending}>keep it</Button>
       </form>
     </section>
   );

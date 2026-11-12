@@ -227,7 +227,7 @@ export function Next() {
       health={book.health} needs={everything}
       complete={holdings !== null && book.holdingsError === null}
       holdingsAt={book.holdingsAt}
-      references={book.references}
+      references={book.references} referencesPending={book.referencesPending}
       onAddReference={(body) => book.act(() => addReference(body))}
       onRemoveReference={(id) => void book.act(() => removeReference(id))}
     />
@@ -548,20 +548,15 @@ function useBook(mode: Mode) {
   }, []);
 
   // A backdrop never blanks the page, and an empty list takes the strip away rather than leaving
-  // figures nobody can vouch for (ADR 0018). Its answers land as the holdings' do, unless a NEWER
-  // one already has, refusals included: `/references` costs the whole 8 s request timeout when a
-  // source accepts and never answers (#308), so two are one slow poll from being in flight at once,
-  // and the last to ARRIVE is then not the most recent. Not "only the latest ask": against a 5 s
-  // poll every answer would have a newer ask behind it, and none would ever land.
-  const refsAsked = useRef(0);
-  const refsLanded = useRef(0);
-  const loadReferences = useCallback(async () => {
-    const mine = ++refsAsked.current;
-    const refs = await fetchReferences().catch(() => [] as Reference[]);
-    if (mine < refsLanded.current) return;
-    refsLanded.current = mine;
-    setReferences(refs);
-  }, []);
+  // figures nobody can vouch for (ADR 0018). ONE call at a time (`oneAtATime`): a source that
+  // accepts and never answers costs the whole 8 s request timeout (#308), and nothing here waits
+  // for it, so every poll, press and save would otherwise stack another call against it.
+  const [loadReferences] = useState(() => oneAtATime(
+    () => fetchReferences().catch(() => [] as Reference[]).then(setReferences),
+  ));
+  // a keep or drop in Settings until a read that started after it has landed: the list it shows
+  // until then is from before the write, and a second press would make the same change twice
+  const [referencesPending, setReferencesPending] = useState(0);
 
   /** `rest`: the market data beyond the line, the holdings; `references` with them, which is
    *  LIVE's poll, and any change the owner made — a Reference kept or dropped in Settings must be
@@ -610,13 +605,17 @@ function useBook(mode: Mode) {
   const act = useCallback(async (fn: () => Promise<void>) => {
     try {
       await fn();
-      await load(true, true);
-      return true;
     } catch (e: unknown) {
       toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
       return false;
     }
-  }, [load]);
+    // asked here rather than by `load`, to know when it lands: a read that STARTS after the write,
+    // whatever is out already (`oneAtATime`)
+    setReferencesPending((n) => n + 1);
+    void loadReferences().finally(() => setReferencesPending((n) => n - 1));
+    await load(true, false);
+    return true;
+  }, [load, loadReferences]);
 
   /** everything again, after the add form saved */
   const reload = useCallback(() => load(true, true), [load]);
@@ -624,6 +623,24 @@ function useBook(mode: Mode) {
   return {
     quotes, monitors, health, references, holdings, holdingsError, holdingsAt, error, polledAt,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
-    reload,
+    referencesPending: referencesPending > 0, reload,
   };
+}
+
+/** `ask`, never two at once: asked while one is out, it starts ONE more when that one settles,
+ *  shared by everyone who asked meanwhile, and resolves when that one does — so a caller always
+ *  gets a read that started after it asked, and answers land in the order they were asked, which
+ *  is what keeps an older set from being drawn over a newer one. `ask` must not reject. */
+function oneAtATime(ask: () => Promise<void>): () => Promise<void> {
+  let out: Promise<void> | null = null;
+  let next: Promise<void> | null = null;
+  const run = (): Promise<void> => {
+    if (out === null) {
+      out = ask().finally(() => { out = null; });
+      return out;
+    }
+    next ??= out.then(() => { next = null; return run(); });
+    return next;
+  };
+  return run;
 }

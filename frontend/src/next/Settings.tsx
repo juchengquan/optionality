@@ -26,6 +26,8 @@ export interface SettingsProps {
   references: Reference[];
   onAddReference: (body: { code: string; label?: string; source: Source }) => Promise<boolean>;
   onRemoveReference: (id: string) => void;
+  /** a keep or drop not yet seen in `references` (useBook's `referencesPending`) */
+  referencesPending: boolean;
 }
 
 /** Settings and the Service panel's content in one place (ADR 0023): what this viewer prefers, and
@@ -120,7 +122,8 @@ export function Settings(p: SettingsProps) {
         </FieldDescription>
       </Field>
 
-      <References references={p.references} onAdd={p.onAddReference} onRemove={p.onRemoveReference} />
+      <References references={p.references} onAdd={p.onAddReference} onRemove={p.onRemoveReference}
+                  pending={p.referencesPending} />
     </div>
   );
 }
