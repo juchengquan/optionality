@@ -11,15 +11,34 @@
  *  the stage stays up exactly that long, so the tree read is the tree painted.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { page } from "@vitest/browser/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { commands, page } from "@vitest/browser/context";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { COLUMNS } from "../next/desk/columns";
-import { captureBox } from "../snapshot";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { settle } from "./nextBook";
 import { catchShare, CONTROLS, decode, forgetShare, placeIn, still } from "./picture";
+
+/** Every node handed to the rasterizer, with its text as it stood at that moment: the picture's
+ *  text cannot be read off its pixels, so it is read off the node the pixels were made from. */
+const captured = vi.hoisted(() => [] as { node: HTMLElement; text: string }[]);
+vi.mock("html-to-image", async (orig) => {
+  const real = await orig<typeof import("html-to-image")>();
+  return {
+    ...real,
+    toBlob: (node: HTMLElement, options?: object) => {
+      captured.push({ node, text: node.textContent ?? "" });
+      return real.toBlob(node, options);
+    },
+  };
+});
+
+/** One Reference, so LIVE's strip has something to say. */
+const references = [
+  { id: "ref1", code: "US..SPX", label: "S&P 500", source: "moomoo", figure: 7612.25, change: 0.0042,
+    field: "mid_price", name: "S&P 500", error: null, last_known: false },
+];
 
 /** A sweep slower than any test, so no poll lands between the press and the file: every request
  *  the page makes in that window is then one the press made. */
@@ -32,15 +51,15 @@ const health = {
 
 /** Every route the page calls, answered by name, and every request kept. Anything else is a 404
  *  in the error shape, so a route nobody expected is a failure rather than an empty list. */
-function serve(): string[] {
+function serve(quotes: () => unknown = () => QUOTES): string[] {
   const asked: string[] = [];
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     const method = init?.method ?? "GET";
     asked.push(`${method} ${path}`);
     const routes: Record<string, unknown> = {
-      "/quotes": QUOTES, "/monitors": MONITORS, "/health": health, "/positions/values": HOLDINGS,
-      "/references": [],
+      "/quotes": quotes(), "/monitors": MONITORS, "/health": health, "/positions/values": HOLDINGS,
+      "/references": references,
     };
     const known = method === "GET" && path in routes;
     return Promise.resolve({
@@ -51,9 +70,10 @@ function serve(): string[] {
   return asked;
 }
 
-async function show(mode: "live" | "review" = "live", width = 1280): Promise<string[]> {
+async function show(mode: "live" | "review" = "live", width = 1280,
+                    quotes?: () => unknown): Promise<string[]> {
   await page.viewport(width, 900);
-  const asked = serve();
+  const asked = serve(quotes);
   render(<Next />);
   await settle();
   fireEvent.click(screen.getByRole("button", { name: mode === "live" ? "Live" : "Review" }));
@@ -67,6 +87,8 @@ const rowIn = (root: ParentNode, id: string) =>
 
 afterEach(async () => {
   cleanup();
+  captured.length = 0;
+  await commands.colorScheme("light");
   forgetShare();
   document.cookie = "ui_privacy=;path=/;max-age=0";
   document.cookie = "ui_cols_combo=;path=/;max-age=0";
@@ -74,13 +96,16 @@ afterEach(async () => {
 });
 
 describe("saving the desk as an image", () => {
-  it("paints the fills and the attention chips, in their own colours", async () => {
+  for (const scheme of ["light", "dark"] as const) it(`paints the fills and the attention chips, in their own colours, ${scheme}`, async () => {
+    // dark first (ADR 0023): the tokens are redefined for the dark scheme, and painted again
+    await commands.colorScheme(scheme);
     await show();
     const shared = catchShare();
     press();
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
     const root = still()!;
     expect(root, "the picture's tree is not up while the sheet is open").toBeTruthy();
+    expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(root);
     const png = await decode(shared.file()!);
     const ratio = png.w / root.scrollWidth;
 
@@ -181,18 +206,15 @@ describe("saving the desk as an image", () => {
       const shared = catchShare();
       press();
       await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-      const root = still()!;
-      // read off the tree the file was made from: no picture's pixels can be read for text
-      const text = root.textContent!;
+      // the node the rasterizer was handed IS the picture's tree, and its text — as it stood when
+      // it was handed over — is what is checked: no picture's pixels can be read for text
+      expect(captured, "one capture per press").toHaveLength(1);
+      expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(still());
+      const text = captured[0]!.text;
       expect(text, "no P&L is drawn at all, so privacy proves nothing").toContain("$•••");
       expect(text).not.toMatch(/\$\s*[+-]?\d/);
       expect(text).not.toMatch(/[+-]\$\d/);
       expect(text).not.toMatch(/×\s*\d/);
-      // and the file IS that tree: its size is the tree's, at the resolution captureBox picks
-      const box = captureBox(root.scrollWidth, root.scrollHeight);
-      const png = await decode(shared.file()!);
-      expect(png.w).toBe(Math.round(box.width * box.pixelRatio));
-      expect(png.h).toBe(Math.round(box.height * box.pixelRatio));
       shared.release();
     });
   }
@@ -202,7 +224,46 @@ describe("saving the desk as an image", () => {
     const shared = catchShare();
     press();
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    expect(still()!.textContent).toMatch(/[+-]\$\d/);
+    expect(captured[0]!.node).toBe(still());
+    expect(captured[0]!.text).toMatch(/[+-]\$\d/);
+    shared.release();
+  });
+
+  it("carries LIVE's References, and not REVIEW's, which shows none", async () => {
+    // the one place a LIVE picture states SPX's level, from a figure the page already polls
+    await show("live");
+    let shared = catchShare();
+    press();
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    expect(captured[0]!.text).toContain("S&P 500");
+    expect(captured[0]!.text).toContain("7,612.25");
+    shared.release();
+    await expect.poll(() => document.querySelector(".nx-still-stage"), { timeout: 4000 }).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    await settle();
+    shared = catchShare();
+    press();
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    expect(captured[1]!.text).not.toContain("S&P 500");
+    shared.release();
+  });
+
+  it("is one moment: a poll that lands mid-capture changes the page, not the picture", async () => {
+    let watched = 2.4;
+    await show("live", 1280, () => QUOTES.map((q) => q.id === "w-dec31"
+      ? { ...q, watched, combo_value: watched, distance: 6 - watched } : q));
+    const shared = catchShare();
+    press();
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    const before = still()!.textContent;
+    expect(rowIn(still()!, "w-dec31").textContent).toContain("2.40");
+    // the next answer differs, and lands while the picture's tree is still up
+    watched = 5.55;
+    fireEvent.click(screen.getByRole("button", { name: "refresh now" }));
+    await expect.poll(() => rowIn(document.querySelector(".nx-main")!, "w-dec31").textContent, { timeout: 4000 })
+      .toContain("5.55");
+    expect(still(), "the tree went before the poll landed — nothing tested").toBeTruthy();
+    expect(still()!.textContent, "the picture took the poll's figures mid-capture").toBe(before);
     shared.release();
   });
 

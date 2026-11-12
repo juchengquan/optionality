@@ -17,10 +17,11 @@
 import { OctagonAlert } from "lucide-react";
 
 import "./still.css";
-import type { Entry, Health, Holding, Monitor } from "../../api";
+import type { Entry, Health, Holding, Monitor, Reference } from "../../api";
 import { DASH, shortDate } from "../../format";
 import { Freshness } from "../../Freshness";
 import { readHidden } from "../../prefs";
+import { ReferenceStrip } from "../../ReferenceStrip";
 import type { Arrangement } from "../arrangement";
 import { Money, type BookProps } from "../Book";
 import { AttentionChip, Cell, Fill, tableRows } from "../desk/DeskBook";
@@ -45,10 +46,12 @@ export interface StillProps extends BookProps {
   polledAt: string | null;
   /** why the figures may be stale, when they may */
   error: string | null;
+  /** the market beside the strikes, as LIVE polls it; REVIEW draws none */
+  references: Reference[];
 }
 
 export function Still(props: StillProps) {
-  const { arrangement, needs, health, polledAt, error, mode, entryStyle } = props;
+  const { arrangement, needs, health, polledAt, error, mode, entryStyle, references } = props;
   return (
     <div className={STILL} data-arrangement={arrangement}>
       <header className="nx-still-head">
@@ -61,6 +64,9 @@ export function Still(props: StillProps) {
                  sweepSeconds={health?.settings.sweep_seconds ?? null} />
       {/* the desk's one-line form in both: the phone's banners are buttons */}
       <NeedsLine items={needs} arrangement="desk" entryStyle={entryStyle} />
+      {/* as the page draws it, in LIVE only: the one place the picture states the market's level,
+          from a figure the page already polls. `/opt`'s picture has none; this one is a step on. */}
+      {mode === "live" ? <ReferenceStrip references={references} /> : null}
       {arrangement === "desk" ? <StillDesk {...props} /> : <StillCards {...props} />}
     </div>
   );

@@ -33,7 +33,7 @@ import { clockMode, useSessionClock, type Mode } from "./mode";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Settings } from "./Settings";
-import { Still } from "./snapshot/Still";
+import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
 
 /** The redesigned dashboard, at `/opt/next` beside today's (ADR 0023, #287).
@@ -69,8 +69,10 @@ export function Next() {
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
   const book = useBook(mode);
-  // the picture (#300): the press, and the off-screen tree it photographs while `shooting`
-  const { shooting, stageRef, save } = useSaveImage();
+  // the picture (#300): the press, and the page's figures as they were at it — the off-screen tree
+  // is drawn from that copy, so a poll landing mid-capture cannot make one picture two moments
+  const { frame: pictured, stageRef, save } = useSaveImage<StillProps>();
+  const shooting = pictured !== null;
   // REVIEW's closed trades (#296): read on entering REVIEW and after each write that changes them —
   // a close, a correction, a delete — and never polled; LIVE never asks for them
   const [journalAsk, setJournalAsk] = useState(0);
@@ -185,7 +187,11 @@ export function Next() {
         {phone ? null : <ModeSwitch mode={mode} byClock={chosen === null} onPick={pickMode} />}
         <span className="nx-spacer" />
         <Button variant="ghost" size="sm" aria-label="save as image" disabled={shooting}
-                onClick={() => void save()}>
+                onClick={() => void save({
+                  // the book, without REVIEW's closed trades: a journal is not the book
+                  ...bookProps, journal: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
+                  error: book.error, references: book.references,
+                })}>
           <ImageDown className={shooting ? "animate-pulse" : undefined} />
         </Button>
         <Button variant="ghost" size="sm" aria-label="refresh now" disabled={book.refreshing}
@@ -250,10 +256,9 @@ export function Next() {
       <DeskSettings open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}>
         {phone ? null : settings}
       </DeskSettings>
-      {shooting ? (
+      {pictured ? (
         <div ref={stageRef} className="nx-still-stage" aria-hidden="true">
-          <Still {...bookProps} arrangement={arrangement} needs={items} health={book.health}
-                 polledAt={book.polledAt} error={book.error} />
+          <Still {...pictured} />
         </div>
       ) : null}
       <Toaster />

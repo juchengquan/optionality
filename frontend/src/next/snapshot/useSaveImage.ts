@@ -12,6 +12,10 @@
  *  them and REVIEW read them on entering — so the picture is drawn from what the page has and the
  *  press asks the service for nothing.
  *
+ *  The page's figures are HELD from the press (`frame`), and the picture is drawn from that copy:
+ *  a poll that lands mid-capture would otherwise re-render the tree being photographed, and one
+ *  picture could carry two moments. One press at a time, for the same reason.
+ *
  *  Nothing it starts outlives the page: once the page has gone, a capture still in flight is
  *  dropped where it lands — no share sheet, no download, no toast and no state set on a tree that
  *  is not there.
@@ -25,13 +29,19 @@ import { captureBox, deliver, snapshotName } from "../../snapshot";
 /** The class of the node the picture is taken of, inside the stage. */
 export const STILL = "nx-still";
 
-export function useSaveImage(): {
-  /** true while the picture's tree must be mounted */
-  shooting: boolean;
+/** What a capture that failed says, when what it threw is not an Error: html-to-image rejects
+ *  with the DOM Event of an image that would not decode, which reads "[object Event]". */
+export const NOT_DRAWN = "the image could not be drawn";
+
+export function useSaveImage<T>(): {
+  /** the page's figures as they were at the press, while the picture's tree must be mounted;
+   *  null otherwise */
+  frame: T | null;
   stageRef: React.RefObject<HTMLDivElement | null>;
-  save: () => Promise<void>;
+  save: (frame: T) => Promise<void>;
 } {
-  const [shooting, setShooting] = useState(false);
+  const [frame, setFrame] = useState<T | null>(null);
+  const busy = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
   useEffect(() => {
@@ -39,8 +49,10 @@ export function useSaveImage(): {
     return () => { alive.current = false; };
   }, []);
 
-  const save = useCallback(async () => {
-    setShooting(true);
+  const save = useCallback(async (figures: T) => {
+    if (busy.current) return;
+    busy.current = true;
+    setFrame(figures);
     try {
       // two frames: mounted is not laid out, and an unlaid-out tree paints as nothing
       await new Promise(requestAnimationFrame);
@@ -57,11 +69,12 @@ export function useSaveImage(): {
       // the device's share sheet is its own confirmation; a toast on top of it is noise
       if (how === "downloaded" && alive.current) toast.add({ title: "saved as an image", type: "success" });
     } catch (e: unknown) {
-      if (alive.current) toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
+      if (alive.current) toast.add({ title: e instanceof Error ? e.message : NOT_DRAWN, type: "error" });
     } finally {
-      if (alive.current) setShooting(false);
+      busy.current = false;
+      if (alive.current) setFrame(null);
     }
   }, []);
 
-  return { shooting, stageRef, save };
+  return { frame, stageRef, save };
 }

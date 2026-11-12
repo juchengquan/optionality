@@ -6,13 +6,25 @@
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
-import { captureBox } from "../snapshot";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { settle } from "./nextBook";
 import { catchShare, CONTROLS, decode, forgetShare, placeIn, still } from "./picture";
+
+/** Every node handed to the rasterizer, with its text as it stood then (NextSnapshot.test.tsx). */
+const captured = vi.hoisted(() => [] as { node: HTMLElement; text: string }[]);
+vi.mock("html-to-image", async (orig) => {
+  const real = await orig<typeof import("html-to-image")>();
+  return {
+    ...real,
+    toBlob: (node: HTMLElement, options?: object) => {
+      captured.push({ node, text: node.textContent ?? "" });
+      return real.toBlob(node, options);
+    },
+  };
+});
 
 /** A sweep slower than any test, so no poll lands between the press and the file. */
 const health = {
@@ -60,6 +72,7 @@ const cardIn = (root: ParentNode, id: string) =>
 
 afterEach(() => {
   cleanup();
+  captured.length = 0;
   forgetShare();
   document.cookie = "ui_privacy=;path=/;max-age=0";
 });
@@ -78,6 +91,7 @@ describe("saving the phone's cards as an image", () => {
     await userEvent.click(save());
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
     const root = still()!;
+    expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(root);
     const png = await decode(shared.file()!);
     const ratio = png.w / root.scrollWidth;
     const at = (el: Element, dx?: number) => png.at(...placeIn(root, el, ratio, dx));
@@ -124,17 +138,14 @@ describe("saving the phone's cards as an image", () => {
       const shared = catchShare();
       await userEvent.click(save());
       await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-      const root = still()!;
-      const text = root.textContent!;
+      expect(captured, "one capture per press").toHaveLength(1);
+      expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(still());
+      const text = captured[0]!.text;
       expect(text, "no P&L is drawn at all, so privacy proves nothing").toContain("$•••");
       expect(text).not.toMatch(/\$\s*[+-]?\d/);
       expect(text).not.toMatch(/[+-]\$\d/);
       expect(text).not.toMatch(/×\s*\d/);
       if (view === "Review") expect(text, "REVIEW's count of contracts is not in the picture").toContain("×•••");
-      const box = captureBox(root.scrollWidth, root.scrollHeight);
-      const png = await decode(shared.file()!);
-      expect(png.w).toBe(Math.round(box.width * box.pixelRatio));
-      expect(png.h).toBe(Math.round(box.height * box.pixelRatio));
       shared.release();
     });
   }
