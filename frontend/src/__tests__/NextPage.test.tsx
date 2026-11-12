@@ -130,12 +130,15 @@ describe("what it asks for in each mode", () => {
   it("polls only what the needs-you line reads in REVIEW, having asked for the rest once", async () => {
     at(SUNDAY);
     await open();
-    // the rest WAS asked for, once, on entering REVIEW
-    expect(calls).toContain("/positions/values");
+    // the rest WAS asked for, once, on entering REVIEW: the valuation, the closed trades (#296)
+    // and the holding's samples, which its REVIEW page asks for once it is drawn — after the line
+    // that `open` waits for, so it is waited for too, or it lands in the poll's calls below
+    await waitFor(() => expect(calls).toEqual(
+      expect.arrayContaining(["/positions/values", "/positions", "/positions/p1/samples"])));
     calls = [];
     await act(async () => { vi.advanceTimersByTime(15_000); });
     await waitFor(() => expect(calls).toContain("/health"));
-    expect(new Set(calls), JSON.stringify(calls)).toEqual(new Set(["/quotes", "/monitors", "/health"]));
+    expect(new Set(calls)).toEqual(new Set(["/quotes", "/monitors", "/health"]));
   });
 });
 
