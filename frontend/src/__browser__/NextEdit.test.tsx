@@ -108,6 +108,8 @@ describe("mute, unmute and delete from the desk", () => {
     const panel = await inspectDelta();
     await userEvent.click(within(panel).getByRole("button", { name: `mute ${DELTA}` }));
     await waitFor(() => expect(writes).toHaveLength(1));
+    // the inspector went with the row; the focus is somewhere a keyboard can go on from, not the body
+    await waitFor(() => expect(document.activeElement?.matches("h2, h3, h4, summary")).toBe(true));
     // muted, it leaves the table, and the inspector with it; it is in the muted list instead
     const muted = await screen.findByText(/^Muted and expired · /);
     await userEvent.click(muted);

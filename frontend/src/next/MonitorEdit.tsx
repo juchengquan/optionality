@@ -51,19 +51,26 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
   const [error, setError] = useState<{ text: string; at: Spot } | null>(null);
   const [busy, setBusy] = useState(false);
   const editButton = useRef<HTMLButtonElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   const label = ruleLabel(rule);
   const state = stateOf(rule, (actions.now?.() ?? new Date()).toISOString().slice(0, 10));
 
   const to = (next: Mode) => { setError(null); setMode(next); };
   const close = () => { to("idle"); editButton.current?.focus(); };
 
-  /** One write, its refusal said where `at` says, or beside the buttons. */
-  const run = async (write: () => Promise<void>, after: () => void) => {
+  /** One write, its refusal said where `at` says, or beside the buttons. While it is on its way
+   *  every control that writes is disabled — a "keep it" pressed during a delete closed the
+   *  question while the delete went through. */
+  const run = async (write: () => Promise<void>, after: () => void, refocus = false) => {
     setBusy(true);
     setError(null);
+    // where the focus goes if this rule leaves: the surface it was drawn in, found BEFORE the page
+    // reloads and takes the rule — and with it the focused button — somewhere else or nowhere
+    const home = refocus ? homeOf(root.current) : null;
     try {
       await write();
       after();
+      if (refocus) setTimeout(() => settleFocus(root.current, editButton.current, home), 0);
     } catch (e: unknown) {
       const text = e instanceof Error ? e.message : String(e);
       setError({ text, at: mode === "editing" ? spotOf(text) : "form" });
@@ -83,11 +90,14 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
   // the whole reason, while the rule is still quarantined: a write lands and the page reloads before
   // this form's own state moves on, so the row can be back on while the question is still asked
   const why = state === "quarantined" ? QUARANTINE_WHY[rule.disabled_reason!]!(rule) : null;
-  const toggle = state === "on" ? { words: "mute", body: { enabled: false } }
-    : state === "muted" ? { words: "unmute", body: { enabled: true } } : null;
+  // unmuting a rule switched off with its holding watches contracts nobody holds: the button says so
+  const toggle = state === "on" ? { words: "mute", label: `mute ${label}`, body: { enabled: false } }
+    : state === "muted" ? (rule.disabled_reason === "holding-closed"
+      ? { words: "unmute (no longer held)", label: `unmute ${label}, no longer held`, body: { enabled: true } }
+      : { words: "unmute", label: `unmute ${label}`, body: { enabled: true } }) : null;
 
   return (
-    <div className="nx-mon">
+    <div className="nx-mon" ref={root}>
       {state === "expired" ? (
         <p className="nx-meta nx-mon-note">
           {`expired ${rule.strike_date} — the service deletes it ${actions.retentionDays === null
@@ -98,24 +108,24 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
 
       <div className="nx-mon-actions">
         <button ref={editButton} type="button" className="nx-mon-button" aria-label={`edit ${label}`}
-                aria-expanded={mode === "editing"}
+                disabled={busy} aria-expanded={mode === "editing"}
                 onClick={() => { if (mode === "editing") { close(); return; } setDraft(draftOf(rule)); to("editing"); }}>
           edit
         </button>
         {toggle ? (
-          <button type="button" className="nx-mon-button" aria-label={`${toggle.words} ${label}`} disabled={busy}
-                  onClick={() => void run(() => actions.patch(rule.id, toggle.body), () => to("idle"))}>
+          <button type="button" className="nx-mon-button" aria-label={toggle.label} disabled={busy}
+                  onClick={() => void run(() => actions.patch(rule.id, toggle.body), () => to("idle"), true)}>
             {toggle.words}
           </button>
         ) : null}
         {state === "quarantined" ? (
           <button type="button" className="nx-mon-button" aria-label={`switch ${label} back on`}
-                  aria-expanded={mode === "enabling"} onClick={() => to("enabling")}>
+                  disabled={busy} aria-expanded={mode === "enabling"} onClick={() => to("enabling")}>
             switch back on
           </button>
         ) : null}
         <button type="button" className="nx-mon-button" data-destructive="" aria-label={`delete ${label}`}
-                aria-expanded={mode === "deleting"} onClick={() => to("deleting")}>
+                disabled={busy} aria-expanded={mode === "deleting"} onClick={() => to("deleting")}>
           delete
         </button>
       </div>
@@ -123,13 +133,14 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
 
       {mode === "deleting" ? (
         <Ask label={`delete ${label}?`} yes="delete it" no="keep it" busy={busy} destructive
-             onYes={() => void run(() => actions.remove(rule.id), () => to("idle"))} onNo={close}>
+             onYes={() => void run(() => actions.remove(rule.id), () => to("idle"), true)} onNo={close}>
           Delete this Monitor for good? The service forgets it; a holding it watched is kept.
         </Ask>
       ) : null}
       {mode === "enabling" && why !== null ? (
         <Ask label={`switch ${label} back on?`} yes="switch it on" no="keep it off" busy={busy}
-             onYes={() => void run(() => actions.patch(rule.id, { enabled: true }), () => to("idle"))} onNo={close}>
+             onYes={() => void run(() => actions.patch(rule.id, { enabled: true }), () => to("idle"), true)}
+             onNo={close}>
           {`Switched off by the service: ${why}. Switch it back on once that is fixed: the next sweep `
             + "checks it again, and switches it off again if nothing has changed."}
         </Ask>
@@ -140,6 +151,24 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
       ) : null}
     </div>
   );
+}
+
+/** The surface a rule's controls are drawn in: the phone's sheet, the desk's inspector, a section. */
+function homeOf(el: HTMLElement | null): HTMLElement | null {
+  return el?.closest<HTMLElement>('[role="dialog"], aside, details, section') ?? null;
+}
+
+/** Where the focus goes after a write that may have moved the rule: its own edit button while it is
+ *  still drawn here; else the heading of the surface it was in (or a folded list's summary); else
+ *  the page's first heading. Never left on the body, where the next Tab starts from the top. */
+function settleFocus(root: HTMLElement | null, edit: HTMLElement | null, home: HTMLElement | null) {
+  if (root?.isConnected && edit) { edit.focus(); return; }
+  const place = home?.isConnected ? home : document.querySelector<HTMLElement>(".nx-main");
+  const target = place instanceof HTMLDetailsElement ? place.querySelector<HTMLElement>("summary")
+    : place?.querySelector<HTMLElement>("h2, h3, h4") ?? null;
+  if (!target) return;
+  if (!target.matches("summary") && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+  target.focus();
 }
 
 function Refusal({ text, id }: { text: string; id?: string }) {
@@ -161,7 +190,7 @@ function Ask({ label, yes, no, busy, destructive, onYes, onNo, children }: {
       <div className="nx-mon-actions">
         <Button type="button" size="sm" variant={destructive ? "destructive" : "default"} disabled={busy}
                 onClick={onYes}>{yes}</Button>
-        <Button ref={safe} type="button" size="sm" variant="ghost" onClick={onNo}>{no}</Button>
+        <Button ref={safe} type="button" size="sm" variant="ghost" disabled={busy} onClick={onNo}>{no}</Button>
       </div>
     </div>
   );

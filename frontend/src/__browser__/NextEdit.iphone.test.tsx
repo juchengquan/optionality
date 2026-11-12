@@ -137,6 +137,8 @@ describe("mute, unmute and delete on the phone", () => {
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toEqual([{ what: "DELETE /monitors/w-dec18-delta", body: null }]));
+    // the rule is gone with its buttons: the focus is on the sheet's heading, not the body
+    await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
   });
 
   it("switches a quarantined rule back on from the switched-off list, saying why first", async () => {

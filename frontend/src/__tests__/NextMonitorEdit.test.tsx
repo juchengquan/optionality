@@ -249,6 +249,14 @@ describe("mute, unmute and delete", () => {
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: DELTA.id, body: { enabled: false } }]));
   });
 
+  it("says what unmuting a rule switched off with its holding does", async () => {
+    const { sent } = controls({ monitor: { ...monitor("m-muted"), disabled_reason: "holding-closed" } });
+    const unmute = screen.getByRole("button", { name: "unmute 261218 8000C delta, no longer held" });
+    expect(unmute.textContent).toBe("unmute (no longer held)");
+    fireEvent.click(unmute);
+    await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: "m-muted", body: { enabled: true } }]));
+  });
+
   it("unmutes a rule muted by hand", async () => {
     const { sent } = controls({ monitor: monitor("m-muted") });
     fireEvent.click(screen.getByRole("button", { name: "unmute 261218 8000C delta" }));
@@ -275,6 +283,68 @@ describe("mute, unmute and delete", () => {
     controls({ entry: DELTA }, { patch: vi.fn(async () => { throw new Error("monitor not found"); }) });
     fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P delta" }));
     expect((await screen.findByRole("alert")).textContent).toBe("monitor not found");
+  });
+});
+
+describe("while a write is in flight, and after it", () => {
+  /** A write the test lets land when it chooses. */
+  function pending() {
+    let land = () => undefined as void;
+    const write = vi.fn(() => new Promise<void>((r) => { land = r; }));
+    return { write, land: () => land() };
+  }
+
+  it("takes no second action while a mute is on its way", () => {
+    const p = pending();
+    controls({ entry: DELTA }, { patch: p.write });
+    fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P delta" }));
+    for (const name of ["edit", "mute", "delete"]) {
+      expect([name, screen.getByRole("button", { name: `${name} 261218 7150P delta` }).hasAttribute("disabled")])
+        .toEqual([name, true]);
+    }
+  });
+
+  it("cannot be kept once the delete is on its way, nor deleted twice", () => {
+    const p = pending();
+    controls({ entry: DELTA }, { remove: p.write });
+    fireEvent.click(screen.getByRole("button", { name: "delete 261218 7150P delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "delete it" }));
+    const ask = screen.getByRole("group", { name: "delete 261218 7150P delta?" });
+    expect(within(ask).getByRole("button", { name: "keep it" }).hasAttribute("disabled")).toBe(true);
+    expect(within(ask).getByRole("button", { name: "delete it" }).hasAttribute("disabled")).toBe(true);
+    expect(p.write).toHaveBeenCalledOnce();
+  });
+
+  it("takes no switch back on twice while the first is on its way", () => {
+    const p = pending();
+    controls({ monitor: monitor("q-unknown") }, { patch: p.write });
+    fireEvent.click(screen.getByRole("button", { name: "switch 261211 8000C delta back on" }));
+    fireEvent.click(screen.getByRole("button", { name: "switch it on" }));
+    expect(screen.getByRole("button", { name: "switch it on" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "keep it off" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "switch 261211 8000C delta back on" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("hands the focus to its edit button when the rule is still drawn here after a mute", async () => {
+    controls({ entry: DELTA });
+    const mute = screen.getByRole("button", { name: "mute 261218 7150P delta" });
+    mute.focus();
+    fireEvent.click(mute);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "edit 261218 7150P delta" })));
+  });
+
+  it("hands the focus to the sheet's heading when the rule it was on is gone", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") });
+    onTestFinished(() => { vi.useRealTimers(); });
+    const writes = serveEditing();
+    render(<Next />);
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    const sheet = await screen.findByRole("dialog");
+    fireEvent.click(within(sheet).getByRole("button", { name: "delete 261218 7150P delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "delete it" }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
   });
 });
 
