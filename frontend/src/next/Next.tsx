@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ImageDown, Plus, RefreshCw, Settings2 } from "lucide-react";
+import { ImageDown, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
 
 import "./next.css";
 import {
@@ -14,7 +14,7 @@ import { clockTime } from "../format";
 import { Freshness } from "../Freshness";
 import {
   readArrangement, readEntryStyle, readPrivacy, readRefresh, readUp, writeArrangement,
-  writeEntryStyle, writePrivacy, writeRefresh, writeUp, type EntryStyle, type UpColour,
+  writeEntryStyle, writePrivacy, writeRefresh, writeUp, type ArrangementChoice, type EntryStyle, type UpColour,
 } from "../prefs";
 import { ReferenceStrip } from "../ReferenceStrip";
 import { useDismissOnBack } from "../useDismissOnBack";
@@ -26,12 +26,17 @@ import type { BookProps } from "./Book";
 import { DeskBook } from "./desk/DeskBook";
 import { DeskJournal } from "./desk/DeskJournal";
 import { useJournal } from "./journal";
+import { rowId, tableRows } from "./desk/columns";
+import { holdOnDesk, NOTHING_SELECTED, type DeskSelection } from "./desk/keys";
 import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
 import { clockMode, useSessionClock, type Mode } from "./mode";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
+import { Palette, paletteShortcut, type Chosen } from "./Palette";
+import { findables, HOLD_WHY, paletteActions } from "./commands";
+import { placeBook } from "./placement";
 import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
@@ -47,7 +52,8 @@ export function Next() {
   const [entryStyle, setEntryStyle] = useState(readEntryStyle);
   const [privacy, setPrivacy] = useState(readPrivacy);
   const [choice, setChoice] = useState(readArrangement);
-  const arrangement = arrangementFor(useViewportWidth(), choice);
+  const width = useViewportWidth();
+  const arrangement = arrangementFor(width, choice);
   const phone = arrangement === "phone";
 
   // On the document as well as the page: a dialog or a toast is drawn in a portal outside `.nx`,
@@ -141,6 +147,55 @@ export function Next() {
     setTimeout(() => reveal(ref), 0);
   }, []);
 
+  // The desk's selection, kept here so the palette (#299) can read it and land on a row; the table
+  // moves it itself, by a click, j and k, or the price map.
+  const deskSelection = useState<DeskSelection>(NOTHING_SELECTED);
+  const [desk, setDesk] = deskSelection;
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const requests = useRef(0);
+  const placed = useMemo(() => placeBook(book.quotes, holdings, book.monitors), [book.quotes, holdings, book.monitors]);
+  const found = useMemo(() => findables(placed), [placed]);
+  const selectedRow = useMemo(
+    () => (desk.id === null ? null : tableRows(placed).find((r) => rowId(r) === desk.id) ?? null), [placed, desk.id],
+  );
+  // a form open on the desk, read as the palette opens: while one holds, the palette lands on
+  // nothing and opens no other form, as j and k move nothing (desk/keys.ts)
+  const hold = useMemo(() => (paletteOpen ? holdOnDesk(document.querySelector(".nxd")) : null), [paletteOpen]);
+  const autoIsPhone = arrangementFor(width, "auto") === "phone";
+  const actions = useMemo(
+    () => paletteActions({ mode, choice, selected: selectedRow, hold, autoIsPhone }),
+    [mode, choice, selectedRow, hold, autoIsPhone],
+  );
+  // the desk's selection is the desk's: the phone has none, and coming back to the desk must not
+  // reopen an inspector on a row picked before it went
+  useEffect(() => { if (phone) setDesk(NOTHING_SELECTED); }, [phone, setDesk]);
+  const chooseArrangement = useCallback((v: ArrangementChoice) => { setChoice(v); writeArrangement(v); }, []);
+  const runChosen = useCallback((c: Chosen) => {
+    const land = (id: string, then: "inspect" | "edit" | "close") =>
+      setDesk({ id, open: true, request: { n: ++requests.current, then } });
+    if ("find" in c) {
+      if (c.find.kind === "muted Monitor" || c.find.kind === "expired Monitor") landOnMuted(c.find.ref);
+      else land(c.find.ref, "inspect");
+      return;
+    }
+    const a = c.action;
+    if (a.key === "add") {
+      if (!adding) { setAdding(true); return; }
+      document.getElementById(panelId)?.querySelector<HTMLElement>("input, select, textarea")?.focus();
+    } else if (a.key === "edit-monitor" && desk.id !== null) land(desk.id, "edit");
+    else if (a.key === "close-holding" && desk.id !== null) land(desk.id, "close");
+    else if (a.key === "save-image") saveViewNow.current();
+    else if (a.key === "mode") pickMode(mode === "live" ? "review" : "live");
+    else if (a.key === "arrange-desk") chooseArrangement("desk");
+    else if (a.key === "arrange-phone") {
+      chooseArrangement("phone");
+      // the phone has no palette, so the way back is said where it will be seen
+      toast.add({ title: "the phone arrangement: Settings switches it back", type: "success" });
+    }
+    else if (a.key === "arrange-auto") chooseArrangement("auto");
+  }, [adding, panelId, desk.id, setDesk, pickMode, mode, chooseArrangement]);
+  const shortcut = paletteShortcut();
+
   // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once
   // in REVIEW, so in REVIEW their Levels are left to Settings, which asks again and says when
   const items = useMemo(
@@ -167,7 +222,7 @@ export function Next() {
       up={up} onUp={(v) => { setUp(v); writeUp(v); }}
       entryStyle={entryStyle} onEntryStyle={(v) => { setEntryStyle(v); writeEntryStyle(v); }}
       privacy={privacy} onPrivacy={(v) => { setPrivacy(v); writePrivacy(v); }}
-      choice={choice} onChoice={(v) => { setChoice(v); writeArrangement(v); }}
+      choice={choice} onChoice={chooseArrangement}
       refresh={book.refresh} onRefresh={(n) => { book.setRefresh(n); writeRefresh(n); }}
       health={book.health} needs={everything}
       complete={holdings !== null && book.holdingsError === null}
@@ -178,6 +233,15 @@ export function Next() {
     />
   );
 
+  // the picture (#300), from the header's button and the palette alike: one press
+  const saveView = () => void save({
+    // the book, without REVIEW's closed trades: a journal is not the book
+    ...bookProps, journal: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
+    error: book.error, references: book.references,
+  });
+  const saveViewNow = useRef(saveView);
+  saveViewNow.current = saveView;
+
   return (
     <MonitorActionsContext.Provider value={monitorActions}>
     <div className="nx" data-arrangement={arrangement} data-mode={mode} data-up={up}
@@ -187,17 +251,19 @@ export function Next() {
         {phone ? null : <ModeSwitch mode={mode} byClock={chosen === null} onPick={pickMode} />}
         <span className="nx-spacer" />
         <Button variant="ghost" size="sm" aria-label="save as image" disabled={shooting}
-                onClick={() => void save({
-                  // the book, without REVIEW's closed trades: a journal is not the book
-                  ...bookProps, journal: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
-                  error: book.error, references: book.references,
-                })}>
+                onClick={saveView}>
           <ImageDown className={shooting ? "animate-pulse" : undefined} />
         </Button>
         <Button variant="ghost" size="sm" aria-label="refresh now" disabled={book.refreshing}
                 onClick={() => void book.refreshNow()}>
           <RefreshCw className={book.refreshing ? "animate-spin" : undefined} />
         </Button>
+        {phone ? null : (
+          <Button variant="ghost" size="sm" className="nx-palette-open" aria-label={`find and act (${shortcut.shown})`}
+                  aria-keyshortcuts={shortcut.aria} aria-haspopup="dialog" onClick={() => setPaletteOpen(true)}>
+            <Search /><kbd aria-hidden="true">{shortcut.shown}</kbd>
+          </Button>
+        )}
         {phone ? null : (
           <Button ref={plusButton} variant="ghost" size="sm" aria-label="add a spread" aria-expanded={adding}
                   aria-controls={adding ? panelId : undefined} onClick={() => setAdding((a) => !a)}>
@@ -234,7 +300,8 @@ export function Next() {
             {addForm}
           </section>
         ) : null}
-        {phone && settingsOpen ? settings : phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} />}
+        {phone && settingsOpen ? settings : phone ? <PhoneBook {...bookProps} />
+          : <DeskBook {...bookProps} selection={deskSelection} />}
         {mode === "review" && !phone
           ? <DeskJournal journal={journal} privacy={privacy} onCorrected={rereadJournal} onDeleted={tradeDeleted} />
           : null}
@@ -261,10 +328,27 @@ export function Next() {
           <Still {...pictured} />
         </div>
       ) : null}
+      {/* the desk's alone: the phone registers no chord and no keys (ADR 0023, #299) */}
+      {phone ? null : (
+        <Palette open={paletteOpen} onOpenChange={setPaletteOpen} found={found} findWhy={hold === null ? null : HOLD_WHY} actions={actions}
+                 onChoose={runChosen} up={up} entryStyle={entryStyle} />
+      )}
       <Toaster />
     </div>
     </MonitorActionsContext.Provider>
   );
+}
+
+/** A muted or expired rule found by the palette, landed on where it is listed: the folded list
+ *  opened, the rule brought into view and focused. */
+function landOnMuted(id: string) {
+  const folded = document.querySelector<HTMLDetailsElement>("details.nxd-muted");
+  const listed = [...(folded?.querySelectorAll<HTMLElement>("li[data-ref]") ?? [])].find((li) => li.dataset.ref === id);
+  if (!folded || !listed) return;
+  folded.open = true;
+  listed.tabIndex = -1;
+  listed.scrollIntoView?.({ block: "nearest" });
+  listed.focus();
 }
 
 /** LIVE or REVIEW on the desk, and whose choice it is. */

@@ -1,0 +1,79 @@
+/* The desk's ⌘K palette (#299): a dialog in a portal outside .nx, so it carries the page's colour
+   tokens itself (.nx-tokens, next.css). Drawn near the top, where the eye already is, and never
+   wider than the screen less its gutters. */
+
+.nx-palette-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  background: color-mix(in oklch, black 30%, transparent);
+}
+
+.nx-palette {
+  position: fixed; z-index: 51;
+  top: 12vh; left: 50%; transform: translateX(-50%);
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: 70vh;
+  display: flex; flex-direction: column;
+  background: var(--popover, var(--background));
+  color: var(--popover-foreground, var(--foreground));
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  box-shadow: 0 1.25rem 3.75rem color-mix(in oklch, black 35%, transparent);
+  overflow: hidden;
+}
+
+.nx-palette-box {
+  height: 2.75rem;
+  padding: 0 0.875rem;
+  border: 0; border-bottom: 1px solid var(--border);
+  background: transparent; color: inherit;
+  font-size: 0.9375rem;
+  outline: none;
+}
+
+.nx-palette-count {
+  margin: 0; padding: 0.25rem 0.875rem;
+  font-size: 0.6875rem; color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+}
+
+.nx-palette-list { list-style: none; margin: 0; padding: 0.25rem; overflow-y: auto; }
+
+.nx-palette-list [role="option"] {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.4375rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.nx-palette-list [role="option"][aria-selected="true"] {
+  background: color-mix(in oklch, var(--foreground) 10%, transparent);
+  box-shadow: inset 2px 0 0 var(--foreground);
+}
+.nx-palette-list [role="option"][aria-disabled="true"] { cursor: not-allowed; }
+.nx-palette-list [role="option"][aria-disabled="true"] .nx-palette-label { color: var(--muted-foreground); }
+
+.nx-palette-label {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nx-palette-detail, .nx-palette-group {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nx-palette-group { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.625rem; }
+
+/* the header's way in, for a pointer, saying the chord it stands for */
+.nx-palette-open kbd {
+  font: inherit; font-size: 0.6875rem;
+  padding: 0 0.3125rem;
+  border: 1px solid var(--border); border-radius: 0.25rem;
+  color: var(--muted-foreground);
+}
+
+/* the row j and k are on, with the inspector shut: marked, more faintly than the one inspected */
+.nxd-row[data-cursor]:not([data-selected]) { box-shadow: inset 2px 0 0 var(--muted-foreground); }

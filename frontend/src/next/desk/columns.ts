@@ -15,6 +15,7 @@
 import type { Entry, Holding, Monitor } from "../../api";
 import { DASH, legSummary } from "../../format";
 import type { Mode } from "../mode";
+import type { BookModel } from "../placement";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
 import { servedDelta } from "../legs";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
@@ -107,6 +108,27 @@ export function quarantineSentence(m: Monitor): string {
   const words = fieldWords(m.field, Boolean(m.legs));
   const why = (m.disabled_reason && QUARANTINED[m.disabled_reason]) ?? "switched off by the service";
   return `${m.compare === "abs" ? `|${words}|` : words} ${sign} ${m.threshold} — ${why}`;
+}
+
+/** Every row the table can draw, in the order it draws them: the fitting measures exactly these,
+ *  and the inspector finds its row among them. */
+export function tableRows(placed: BookModel): DeskRow[] {
+  const out: DeskRow[] = [];
+  for (const g of placed.holdings) {
+    for (const p of g.rows.flat()) {
+      out.push({ kind: "holding", holding: p.holding, rules: p.rules });
+      for (const entry of p.rules) out.push({ kind: "rule", entry, nested: true });
+    }
+  }
+  for (const entry of placed.unplaced) out.push({ kind: "rule", entry, nested: false });
+  for (const g of placed.watchlist) {
+    for (const i of g.items) {
+      out.push({ kind: "rule", entry: i.entry, nested: false });
+      for (const entry of i.under) out.push({ kind: "rule", entry, nested: true });
+    }
+  }
+  for (const monitor of placed.quarantined) out.push({ kind: "quarantined", monitor });
+  return out;
 }
 
 export function rowId(row: DeskRow): string {
