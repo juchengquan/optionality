@@ -103,6 +103,29 @@ describe("the panel", () => {
     expect(map.querySelectorAll("[data-spread]")).toHaveLength(6);
   });
 
+  it("says which batch its line is from, and in REVIEW that it is as last valued", () => {
+    const at = "2026-11-10 23:14:35+08:00";
+    const holdings = HOLDINGS.map((h) => ({ ...h, spx: 6911.25, fetched_at: at }));
+    const view = render(<DeskBook {...props({ holdings })} />);
+    let map = open();
+    expect(within(map).getByText("SPX 6911.25 · from the holdings' batch, 23:14:35")).toBeTruthy();
+    view.unmount();
+    render(<DeskBook {...props({ holdings, mode: "review" })} />);
+    map = panel()!;
+    expect(within(map).getByText("SPX 6911.25 · as last valued, 23:14:35")).toBeTruthy();
+  });
+
+  it("says the holdings are not on it while they are being valued, or could not be", () => {
+    const view = render(<DeskBook {...props({ holdings: null })} />);
+    let map = open();
+    expect(within(map).getByText("holdings not valued yet — only watched spreads are drawn")).toBeTruthy();
+    view.unmount();
+    render(<DeskBook {...props({ holdings: null, holdingsError: "the Provider is down" })} />);
+    map = panel()!;
+    expect(within(map).getByText("holdings could not be valued — only watched spreads are drawn")).toBeTruthy();
+    expect(map.querySelectorAll('[data-spread][data-kind="held"]')).toHaveLength(0);
+  });
+
   it("asks the service for nothing: it draws what the page already polled", () => {
     render(<DeskBook {...props()} />);
     open();

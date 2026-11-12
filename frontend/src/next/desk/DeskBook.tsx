@@ -102,6 +102,10 @@ export function DeskBook(props: BookProps) {
   const toggleMap = useCallback(() => setMapOpen((was) => { writePriceMap(!was); return !was; }), []);
   const map = useMemo(() => priceMapOf(placed, spxOfBook(quotes, holdings)), [placed, quotes, holdings]);
   const mapId = useId();
+  // the held spreads are missing while the holdings are not valued: said, never left to be noticed
+  const mapNote = holdings !== null ? null : props.holdingsError !== null
+    ? "holdings could not be valued — only watched spreads are drawn"
+    : "holdings not valued yet — only watched spreads are drawn";
   /** A spread picked on the map is the row picked in the table: selected, and brought into view. */
   const pickOnMap = useCallback((id: string) => {
     setSelected(id);
@@ -117,7 +121,8 @@ export function DeskBook(props: BookProps) {
 
   return (
     <div className="nx-book nxd" ref={root} data-inspecting={current ? "" : undefined}>
-      {mapOpen ? <PriceMapPanel id={mapId} map={map} selected={current ? rowId(current) : null} onSelect={pickOnMap} /> : null}
+      {mapOpen ? <PriceMapPanel id={mapId} map={map} mode={mode} note={mapNote}
+                                 selected={current ? rowId(current) : null} onSelect={pickOnMap} /> : null}
       <div className="nxd-table" ref={fit.ref} style={{ "--nxd-cols": fit.template } as React.CSSProperties}>
         <div className="nxd-head nxd-grid">
           {fit.columns.map((c) => (

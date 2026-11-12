@@ -20,8 +20,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { shortDate } from "../../format";
+import type { Mode } from "../mode";
 import {
-  bandWords, domainOf, slotRows, ticksOf, type MapSpread, type PriceMap,
+  bandWords, domainOf, slotRows, spxWords, ticksOf, type MapSpread, type PriceMap,
 } from "../pricemap";
 import { distanceWords, nearest, strikeName } from "../strip";
 
@@ -59,8 +60,10 @@ function spreadWords(s: MapSpread): string {
   return [s.name, s.kind, strikes.join(" "), ...(k ? [distanceWords(k)] : [])].join(", ");
 }
 
-export function PriceMapPanel({ id, map, selected, onSelect }: {
-  id: string; map: PriceMap; selected: string | null; onSelect: (id: string) => void;
+/** `note` says what is missing from the map, as while the holdings are not valued. */
+export function PriceMapPanel({ id, map, mode, note, selected, onSelect }: {
+  id: string; map: PriceMap; mode: Mode; note: string | null; selected: string | null;
+  onSelect: (id: string) => void;
 }) {
   const [box, W] = useWidth();
   const [lo, hi] = domainOf(map);
@@ -68,9 +71,8 @@ export function PriceMapPanel({ id, map, selected, onSelect }: {
   const laneWords = map.lanes.map((l) => [`${shortDate(l.expiry)} · ${l.dte} DTE`, bandWords(l)] as const);
   const LEFT = Math.ceil(Math.max(80, ...laneWords.flatMap(([a, b]) => [textWidth(a, 12), textWidth(b, 10.5)]))) + 14;
   // the plot is inset by the widest strike label's half, so one on the outermost strike stays inside
-  const inset = Math.ceil(Math.max(20, ...map.lanes.flatMap((l) => l.spreads.flatMap((s) => [
-    ...s.shorts.map((k) => textWidth(labelOf(k)) / 2), ...s.longs.map((k) => textWidth(String(k.strike), 10) / 2),
-  ])))) + 4;
+  const inset = Math.ceil(Math.max(20, ...map.lanes.flatMap((l) => l.spreads.flatMap((s) =>
+    s.shorts.map((k) => textWidth(labelOf(k)) / 2))))) + 4;
   const [from, to] = [LEFT + inset, Math.max(LEFT + inset + 40, W - RIGHT - inset)];
   const x = (p: number) => from + ((p - lo) / (hi - lo)) * (to - from);
 
@@ -97,9 +99,12 @@ export function PriceMapPanel({ id, map, selected, onSelect }: {
 
   return (
     <section id={id} className="nxm" role="region" aria-label="price map">
-      {spx === null ? <p className="nxm-why">{`SPX — ${map.reason ?? "no price"}`}</p> : null}
-      {map.lanes.length === 0 ? <p className="nx-meta">no spread held or watched to place</p> : (
-        <div className="nxm-box" ref={box}>
+      <p className="nxm-why">{spxWords(map, mode)}</p>
+      {note ? <p className="nxm-why">{note}</p> : null}
+      {/* the box is ALWAYS drawn, so it is measured from the start and kept measured: drawn only
+          once there were lanes, a panel opened on an empty book kept its first guess for good */}
+      <div className="nxm-box" ref={box}>
+        {map.lanes.length === 0 ? <p className="nx-meta">no spread held or watched to place</p> : (
           <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="group"
                aria-label="every spread on one SPX axis, a lane per expiry">
             {ticks.map((t) => (
@@ -137,8 +142,8 @@ export function PriceMapPanel({ id, map, selected, onSelect }: {
               </g>
             ) : null}
           </svg>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }

@@ -10,6 +10,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { page } from "@vitest/browser/context";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { DeskBook } from "../next/desk/DeskBook";
 import { Next } from "../next/Next";
 import type { Entry } from "../api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, served } from "../testing/ownerBook";
@@ -172,6 +173,44 @@ describe("the price map panel", () => {
       expect(crossed).toEqual([]);
     });
   }
+
+  /** The map's drawing as wide as its box: measured, not a first guess kept. */
+  const fits = () => {
+    const box = panel()!.querySelector<HTMLElement>(".nxm-box")!;
+    const svg = box.querySelector("svg")!;
+    return [Math.round(svg.getBoundingClientRect().width), box.clientWidth];
+  };
+
+  it("opened from the cookie on an empty page, is drawn at its box's width once the book arrives", async () => {
+    document.cookie = "ui_price_map=open;path=/";
+    await show(2560);
+    expect(panel()).not.toBeNull();
+    const [svg, box] = fits();
+    expect(box).toBeGreaterThan(2000);
+    expect(svg).toBe(box);
+  });
+
+  it("is drawn at its box's width after its lanes go to none and come back", async () => {
+    await page.viewport(2560, 1000);
+    document.cookie = "ui_price_map=open;path=/";
+    const book = { quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
+      mode: "live" as const, privacy: false, entryStyle: "opportunity" as const };
+    const view = render(<DeskBook {...book} quotes={[]} holdings={[]} />);
+    await settle();
+    view.rerender(<DeskBook {...book} />);
+    await settle();
+    expect(fits()[0]).toBe(fits()[1]);
+    view.rerender(<DeskBook {...book} quotes={[]} holdings={[]} />);
+    await settle();
+    await page.viewport(1400, 1000);
+    await settle();
+    view.rerender(<DeskBook {...book} />);
+    await settle();
+    const [svg, box] = fits();
+    expect(box).toBeLessThanOrEqual(1400);
+    expect(box).toBeGreaterThan(1000);
+    expect(svg).toBe(box);
+  });
 
   it("picks a row from the map, and the map marks the row picked in the table", async () => {
     await show(1280);

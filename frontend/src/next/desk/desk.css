@@ -171,8 +171,10 @@
 
 /* the price map (#298): a panel ABOVE the table and the inspector, across both, so it takes no width
    from the table and the table's measured fit (useDeskFit) is the same open or shut */
-.nxm { grid-column: 1 / -1; min-width: 0; margin: 0 0 0.75rem; }
-.nxm-box { width: 100%; min-width: 0; overflow: hidden; }
+.nxm { grid-column: 1 / -1; align-self: stretch; justify-self: stretch; min-width: 0; margin: 0 0 0.75rem; }
+/* contained: the drawing is as wide as the box and never the other way round — its width is set
+   from the box's measurement, and a box sized by its drawing kept its first measurement for good */
+.nxm-box { width: 100%; min-width: 0; overflow: hidden; contain: inline-size; }
 .nxm-box svg { display: block; max-width: 100%; height: auto; }
 .nxm-why { font-size: 0.8125rem; color: var(--muted-foreground); padding: 0.25rem 0.75ch; }
 .nxm text { font-size: 11px; font-variant-numeric: tabular-nums; fill: var(--muted-foreground); }
