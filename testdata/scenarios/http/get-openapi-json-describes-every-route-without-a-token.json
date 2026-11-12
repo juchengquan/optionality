@@ -2244,13 +2244,55 @@
                               "number",
                               "null"
                             ]
+                          },
+                          "reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "gap": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "rest": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "vega": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "cover": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
                           "vol",
                           "from",
                           "to",
-                          "days"
+                          "days",
+                          "reason",
+                          "at",
+                          "gap",
+                          "rest",
+                          "vega",
+                          "cover"
                         ]
                       }
                     }

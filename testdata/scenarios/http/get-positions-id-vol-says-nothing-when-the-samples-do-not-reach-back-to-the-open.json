@@ -101,7 +101,13 @@
         "vol": null,
         "from": null,
         "to": null,
-        "days": null
+        "days": null,
+        "reason": "its samples begin on 2026-11-08, not on 2026-11-06 when it was Opened: the vol it was sold at was never recorded",
+        "at": "2026-11-08",
+        "gap": -2.995760466870613,
+        "rest": null,
+        "vega": 0,
+        "cover": null
       }
     },
     "rows": {},
