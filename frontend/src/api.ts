@@ -224,6 +224,21 @@ export async function closePosition(
   return body as Closed;
 }
 
+/** Correct a mistyped close — its Exit and its day — by the same PATCH that edits a held holding
+ *  (ADR 0022), answered with the holding as it now stands, so the page can say what it now made
+ *  in the service's own `realized_points` rather than working it out. */
+export type Corrected = Exclude<Infer<typeof client.positions[":id"]["$patch"]>, { detail: string }>;
+export async function correctClose(
+  id: string, given: { exit: number | null; closed_on: string },
+): Promise<Corrected> {
+  const response = await client.positions[":id"].$patch({ param: { id }, json: given });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok || isRefusal(body)) {
+    throw new Error(isRefusal(body) ? body.detail : `/positions/${id} → ${response.status}`);
+  }
+  return body as Corrected;
+}
+
 /** Record a credit taken in across everything a rule spans; the server derives the one wing
  *  that has no rule of its own, so the per-wing credits stay the single source of truth. */
 export const setTotalEntry = (monitorId: string, entry: number) =>

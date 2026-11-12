@@ -1,0 +1,52 @@
+/* Changing a holding (#294): three buttons under its detail, a form opened in place under them, and
+   the page's account of a close. Drawn in the desk's inspector, in the phone's sheet and in the
+   page itself, so nothing here assumes which. */
+.nx-hold { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; margin-top: 0.75rem; }
+.nx-hold-actions, .nx-hold-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0.75rem; min-width: 0; }
+.nx-hold button, .nx-closed button {
+  padding: 0.25rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.nx-hold button[aria-expanded="true"] { background: var(--foreground); color: var(--background); }
+.nx-hold .nx-hold-primary, .nx-closed .nx-hold-primary { background: var(--foreground); color: var(--background); }
+/* the destructive action is not the alarm red and not the "down" red (ADR 0023): it is outlined in
+   the fault colour, and says what it does in words */
+.nx-hold .nx-hold-danger { border-color: var(--fault); }
+.nx-hold .nx-hold-link, .nx-closed .nx-hold-link {
+  border: 0; padding: 0; text-decoration: underline; font-size: inherit; color: inherit;
+}
+
+.nx-hold-form { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.nx-hold-field { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; font-size: 0.8125rem; }
+.nx-hold-field > span { color: var(--muted-foreground); font-size: 0.75rem; }
+.nx-hold-field input {
+  min-width: 0; max-width: 100%; width: 9rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 0.25rem 0.5rem; background: var(--background); font-variant-numeric: tabular-nums;
+}
+.nx-hold-count input { width: 5rem; }
+.nx-hold-exit { max-width: 22rem; }
+/* the count hidden under privacy, drawn as dots without being a password box (add.css) */
+.nx-hold-field input.nx-private { -webkit-text-security: disc; }
+
+.nx-hold-error {
+  border-left: 4px solid var(--fault); padding: 0.375rem 0.625rem; border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--fault) 12%, var(--background)); overflow-wrap: anywhere;
+}
+.nx-hold-ask { border-left: 4px solid var(--fault); padding-left: 0.625rem; }
+
+/* the close's account: a region of the page, above the book */
+.nx-closed {
+  display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; padding: 0.75rem 1rem;
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card, var(--background));
+  min-width: 0; overflow-wrap: anywhere;
+}
+.nx-closed h2 { font-size: 1rem; font-weight: 650; }
+.nx-closed h3 { font-size: 0.875rem; font-weight: 600; }
+.nx-closed-fates { display: flex; flex-direction: column; gap: 0.25rem; }
+.nx-closed-fates span { font-weight: 600; }
+
+/* on the phone every box is a 44pt target with 16px text already (next.css); the boxes share the
+   width rather than overflowing it */
+html[data-nx-arrangement="phone"] .nx-hold-field { flex: 1 1 9rem; }
+html[data-nx-arrangement="phone"] .nx-hold-field input { width: 100%; }
+html[data-nx-arrangement="phone"] .nx-hold-link { min-height: 44px; }

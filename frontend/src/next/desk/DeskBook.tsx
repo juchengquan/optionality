@@ -12,6 +12,7 @@ import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { monitorName, fieldWords } from "../needs";
 import { HoldingHistory } from "../History";
+import { HoldingActions, type HoldingWrites } from "../HoldingActions";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
@@ -119,7 +120,7 @@ export function DeskBook(props: BookProps) {
       </div>
 
       {current ? <Inspector id={inspectorId} row={current} mode={mode} privacy={privacy} rows={rows} partners={partners}
-                            onSelect={setSelected} onClose={close} /> : null}
+                            onSelect={setSelected} onClose={close} monitors={monitors} writes={props.writes} /> : null}
     </div>
   );
 }
@@ -381,9 +382,9 @@ function Fill({ entry }: { entry: Entry }) {
 
 // ---- the inspector
 
-function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose }: {
+function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose, monitors, writes }: {
   id: string; row: DeskRow; mode: Mode; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
-  onSelect: (id: string) => void; onClose: () => void;
+  onSelect: (id: string) => void; onClose: () => void; monitors: Monitor[]; writes?: HoldingWrites;
 }) {
   const name = rowName(row);
   // the focus follows what was opened, so a keyboard reader lands on it
@@ -402,6 +403,12 @@ function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose }
         : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} privacy={privacy} />
           : <QuarantinedDetail row={row} />}
       <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
+      {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
+          carried to the next row selected */}
+      {row.kind === "holding" && writes ? (
+        <HoldingActions key={row.holding.id} holding={row.holding} monitors={monitors} rules={row.rules}
+                        privacy={privacy} writes={writes} />
+      ) : null}
     </aside>
   );
 }
