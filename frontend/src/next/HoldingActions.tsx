@@ -102,7 +102,8 @@ export function HoldingActions({ holding, monitors, rules, privacy, writes, now 
                 aria-expanded={open === "delete"} aria-controls={open === "delete" ? `${id}-form` : undefined}
                 onClick={() => toggle("delete")}>Delete…</button>
       </div>
-      {saved ? <p className="nx-meta" role="status">{`saved ${holding.name}`}</p> : null}
+      {/* mounted empty and filled, so a screen reader announces it */}
+      <p className="nx-meta nx-hold-status" role="status">{saved ? `saved ${holding.name}` : ""}</p>
       {open === "edit" ? (
         <EditForm id={`${id}-form`} holding={holding} watching={watching.length} privacy={privacy} now={now}
                   onCancel={cancel} onSaved={() => {
@@ -184,8 +185,10 @@ function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
         </label>
       </div>
       <p className="nx-meta">
-        {"The name and the legs stay as recorded — the service does not edit them: a different structure is a "}
-        {"different holding. Recorded wrongly? Delete it and add it again"}
+        {"The name and the legs stay as recorded — the service does not edit them. "}
+        {"A wrong name cannot be changed, and the daily samples are worth more than the name: keep it. "}
+        {"Wrong legs are a different holding: delete it and add it again — which deletes its daily samples "}
+        {"for good"}
         {watching > 0
           ? `; its ${watching} Monitor${watching === 1 ? " is" : "s are"} kept, and a holding added with the same contracts takes ${watching === 1 ? "it" : "them"} back.`
           : "."}
@@ -208,20 +211,27 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
   }));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // a REF as well as the state: two submits in one tick both read the state from before either set
+  // it, and a second close is a 409 shown over a close that succeeded
+  const busy = useRef(false);
   const first = useRef<HTMLInputElement>(null);
   useEffect(() => { first.current?.focus(); }, []);
   const change = (c: Partial<CloseDraft>) => { setDraft((d) => ({ ...d, ...c })); setError(null); };
+  const expired = holding.strike_date < marketDay(now);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy.current) return;
     const out = closeBody(draft);
     if ("error" in out) { setError(out.error); return; }
+    busy.current = true;
     setSaving(true);
     let closed: Closed;
     try {
       closed = await closePosition(holding.id, out.body);
     } catch (err) {
       setError(message(err));
+      busy.current = false;
       setSaving(false);
       return;
     }
@@ -238,7 +248,9 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
       </p>
       <div className="nx-hold-row">
         <ExitField inputRef={first} value={draft.exit} onChange={(exit) => change({ exit })}
-                   served={holding.cost_to_close} />
+                   served={holding.cost_to_close} valuedAt={holding.fetched_at}
+                   // never prefilled: blank is "unknown" (ADR 0022), and 0 is the owner's to say
+                   expired={expired} />
         <DayField value={draft.closedOn} onChange={(closedOn) => change({ closedOn })} />
       </div>
       {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
@@ -251,22 +263,29 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
 }
 
 /** The Exit, with its sign said out loud: a sale typed positive for a long reads as a large loss. */
-export function ExitField({ value, onChange, served, inputRef }: {
+export function ExitField({ value, onChange, served, valuedAt, expired = false, inputRef }: {
   value: string; onChange: (v: string) => void;
-  /** the Cost to close now, where the field was prefilled from it */
+  /** the Cost to close the field was prefilled from, as last valued */
   served?: number | null;
+  /** when that valuation was made, as the service stamped it: in REVIEW it is the one read made on
+   *  entering the mode, and in LIVE the form may have been open a while, so "now" would be untrue */
+  valuedAt?: string | null;
+  /** past its expiry: the Cost to close is gone, and a worthless expiry is an Exit of 0 */
+  expired?: boolean;
   inputRef?: React.Ref<HTMLInputElement>;
 }) {
+  const hint = useId();
   return (
     <label className="nx-hold-field nx-hold-exit">
       <span>exit, per contract</span>
-      <input ref={inputRef} aria-label="exit, per contract" inputMode="decimal" value={value} placeholder="unknown"
-             onChange={(e) => onChange(e.target.value)} />
-      <small className="nx-meta">
+      <input ref={inputRef} aria-label="exit, per contract" aria-describedby={hint} inputMode="decimal" value={value}
+             placeholder="unknown" onChange={(e) => onChange(e.target.value)} />
+      <small id={hint} className="nx-meta">
         {"signed like the Cost to close: positive when closing cost you, negative when it paid you (a long sold). "}
         {served === undefined ? "" : served === null
-          ? "No Cost to close is served now, so it starts blank. "
-          : "Starts at the Cost to close now. "}
+          ? "No Cost to close was served, so it starts blank. "
+          : `Starts at the Cost to close as last valued${valuedAt ? `, at ${valuedAt}` : ""}. `}
+        {expired ? "Expired worthless? type 0. " : ""}
         Blank if you do not know it.
       </small>
     </label>

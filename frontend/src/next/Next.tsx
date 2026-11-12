@@ -64,7 +64,7 @@ export function Next() {
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
   const book = useBook(mode);
-  const { holdings, writes, outcome, dismissOutcome } = useHoldingWrites(book.holdings, book.reload);
+  const { holdings, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.reload);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // adding a spread (#293): a panel above the desk's table, a bottom sheet from the phone's Add tab
@@ -191,10 +191,12 @@ export function Next() {
             frozen at the moment the mode was entered would be read as current (ADR 0018) */}
         {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
         {/* a close's account (#294): the holding has left the book, and its detail with it */}
-        {outcome && !(phone && settingsOpen) ? (
-          <ClosedResult key={outcome.closed.id} outcome={outcome} privacy={privacy} onDone={dismissOutcome}
+        {/* one per close, newest first, each until its own Done: a second close never discards the
+            first's account, nor a correction half typed into it */}
+        {phone && settingsOpen ? null : outcomes.map((o) => (
+          <ClosedResult key={o.closed.id} outcome={o} privacy={privacy} onDone={() => dismissOutcome(o.closed.id)}
                         onCorrected={() => void book.reload()} />
-        ) : null}
+        ))}
         {adding && !phone ? (
           <section id={panelId} className="nx-add-panel" aria-label="adding a spread"
                    onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(); } }}>
@@ -307,7 +309,7 @@ function DeskSettings({ open, onClose, up, entryStyle, children }: {
  */
 function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>) {
   const [departed, setDeparted] = useState<ReadonlySet<string>>(new Set());
-  const [outcome, setOutcome] = useState<ClosedOutcome | null>(null);
+  const [outcomes, setOutcomes] = useState<ClosedOutcome[]>([]);
   const holdings = useMemo(
     () => (valued === null || departed.size === 0 ? valued : valued.filter((h) => !departed.has(h.id))),
     [valued, departed],
@@ -319,7 +321,7 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>)
       edited: () => { void reload(); },
       closed: (o) => {
         depart(o.holding.id);
-        setOutcome(o);
+        setOutcomes((all) => [o, ...all]);
         void reload();
       },
       deleted: (h) => {
@@ -329,8 +331,10 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>)
       },
     };
   }, [reload]);
-  const dismissOutcome = useCallback(() => setOutcome(null), []);
-  return { holdings, writes, outcome, dismissOutcome };
+  const dismissOutcome = useCallback(
+    (id: string) => setOutcomes((all) => all.filter((o) => o.closed.id !== id)), [],
+  );
+  return { holdings, writes, outcomes, dismissOutcome };
 }
 
 /** Whether a poll would disturb something being operated (App.tsx: `beingOperated`). */

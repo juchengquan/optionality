@@ -84,6 +84,20 @@ describe("changing a holding from the phone's sheet", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
+  it("cancels the close form with Escape and keeps the sheet open, the focus back on Close…", async () => {
+    const s = await openPhone();
+    const sheet = await sheetOf("h-ic");
+    const button = within(sheet).getByRole("button", { name: "Close…" });
+    await userEvent.click(button);
+    expect(document.activeElement).toBe(within(sheet).getByLabelText("exit, per contract"));
+    await userEvent.keyboard("{Escape}");
+    await animationsDone();
+    expect(within(sheet).queryByRole("form", { name: "close 1231_IC" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "1231_IC" })).toBeTruthy();
+    expect(document.activeElement).toBe(button);
+    expect(writes(s)).toEqual([]);
+  });
+
   it("edits a holding", async () => {
     const s = await openPhone();
     const sheet = await sheetOf("h-ic");

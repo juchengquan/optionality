@@ -27,7 +27,7 @@ function sayWhenSettled(section: HTMLElement | null, heading: HTMLElement | null
     || document.querySelector('[data-slot="sheet-content"]') !== null;
   const step = () => {
     if (busy() && performance.now() - started < 2000) { frame = requestAnimationFrame(step); return; }
-    section?.scrollIntoView?.({ block: "nearest" });
+    section?.scrollIntoView?.({ block: "start" });
     heading?.focus({ preventScroll: true });
   };
   step();
@@ -35,6 +35,8 @@ function sayWhenSettled(section: HTMLElement | null, heading: HTMLElement | null
 }
 
 const pts = (n: number | null) => (n === null ? null : n.toFixed(2));
+/** Entry and Exit as STORED — 1.225 is not 1.23 — with only a sum's float noise trimmed */
+const stored = (n: number | null) => (n === null ? null : String(Number(n.toFixed(6))));
 
 export function ClosedResult({ outcome, privacy, onDone, onCorrected }: {
   outcome: ClosedOutcome;
@@ -62,7 +64,7 @@ export function ClosedResult({ outcome, privacy, onDone, onCorrected }: {
     <section ref={section} className="nx-closed" aria-label={`closed ${holding.name}`}>
       <h2 ref={heading} tabIndex={-1}>{`Closed ${holding.name}`}</h2>
       <p>
-        {`closed on ${now.closed_on ?? "—"} · entry ${pts(holding.entry) ?? "—"} → exit ${pts(now.exit) ?? "—"} · made `}
+        {`closed on ${now.closed_on ?? "—"} · entry ${stored(holding.entry) ?? "—"} → exit ${stored(now.exit) ?? "—"} · made `}
         <strong data-testid="realized">{made}</strong>
       </p>
       <p className="nx-meta">Points, Entry less Exit across the contracts held: a closed holding has no quote to give it a dollar size.</p>
@@ -93,12 +95,16 @@ function Correction({ id, name, closedOn, exit, onSaved }: {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // a ref, not only the state: two submits in one tick both read the state from before either set it
+  const busy = useRef(false);
   const change = (c: Partial<CloseDraft>) => { setDraft((d) => ({ ...d, ...c })); setError(null); setSaved(false); };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy.current) return;
     const out = correctionBody(draft);
     if ("error" in out) { setError(out.error); return; }
+    busy.current = true;
     setSaving(true);
     try {
       const answer = await correctClose(id, out.body);
@@ -107,6 +113,7 @@ function Correction({ id, name, closedOn, exit, onSaved }: {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -120,7 +127,8 @@ function Correction({ id, name, closedOn, exit, onSaved }: {
         <DayField value={draft.closedOn} onChange={(v) => change({ closedOn: v })} />
       </div>
       {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
-      {saved ? <p className="nx-meta" role="status">corrected</p> : null}
+      {/* mounted empty and filled, so a screen reader announces it */}
+      <p className="nx-meta" role="status">{saved ? "corrected" : ""}</p>
       <div className="nx-hold-row">
         <button type="submit" disabled={saving}>{saving ? "saving…" : "Save correction"}</button>
       </div>
