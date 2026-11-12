@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSpxCode } from "./contract.ts";
-import { volAttribution, type VolSample } from "./vol.ts";
+import { paceExplained, volAttribution, type PacedSample, type VolSample } from "./vol.ts";
 import type { Position } from "./position.ts";
 
 const EXPIRY = "2026-11-20";
@@ -246,5 +246,106 @@ describe("what the first version got wrong", () => {
       day("2026-10-07", 44, [12, 10, 22, 22], VEGA),
     ], condor());
     expect(a === null || Number.isFinite(a.vol)).toBe(true);
+  });
+});
+
+/** The whole explanation of a pace gap, as the vol route serves it (#333): the vol part with the
+ *  reason when there is none, and the gap it splits measured at the SAME close the vol part runs
+ *  to, so vol + rest = gap holds of three figures from one instant. */
+describe("the pace gap explained", () => {
+  /** a day with that day's Cost to close, as the route reads `position_samples` */
+  const paced = (cost: number | null, ...args: Parameters<typeof day>): PacedSample =>
+    ({ ...day(...args), cost_to_close: cost });
+  const pace = (dte: number) => 6.86 * Math.sqrt(dte / 45);
+  // exposure-signed, as a holding's position vega is: a short leg's vega counts against you
+  const netVega = -VEGA[0] + VEGA[1] - VEGA[2] + VEGA[3];
+
+  it("splits the gap at the last close into the vol part and the rest", () => {
+    const chain = [
+      paced(6.86, "2026-10-06", 45, FLAT, VEGA),
+      paced(6.9, "2026-10-07", 44, [11, 10, 22, 22], VEGA),
+    ];
+    const e = paceExplained(chain, condor());
+    const gap = 6.9 - pace(44);
+    expect(e).toEqual({
+      vol: 4, from: "2026-10-06", to: "2026-10-07", days: 1, reason: null,
+      at: "2026-10-07", gap, rest: gap - 4, vega: netVega, cover: Math.abs(gap / netVega),
+    });
+  });
+
+  it("says why on the day it was opened, when nothing has moved yet", () => {
+    const e = paceExplained([paced(6.86, "2026-10-06", 45, FLAT, VEGA)], condor());
+    expect(e.reason).toBe("only 2026-10-06, the day it was Opened, is recorded: nothing has moved yet");
+    expect(e.rest).toBeNull();
+    // the zero is still the true answer volAttribution gives; it is the reason that says not to read it
+    expect(e.vol).toBe(0);
+  });
+
+  it("says why when the samples begin after it was Opened, and still says what would cover the gap", () => {
+    const e = paceExplained([
+      paced(6.9, "2026-10-07", 44, FLAT, VEGA),
+      paced(7.1, "2026-10-08", 43, FLAT, VEGA),
+    ], condor());
+    expect(e.reason).toBe(
+      "its samples begin on 2026-10-07, not on 2026-10-06 when it was Opened: the vol it was sold at was never recorded",
+    );
+    expect([e.vol, e.from, e.to, e.days, e.rest]).toEqual([null, null, null, null, null]);
+    const gap = 7.1 - pace(43);
+    expect([e.at, e.gap, e.vega, e.cover]).toEqual(["2026-10-08", gap, netVega, Math.abs(gap / netVega)]);
+  });
+
+  it("names the day a reading is missing on", () => {
+    const e = paceExplained([
+      paced(6.86, "2026-10-06", 45, FLAT, VEGA),
+      { ...paced(6.9, "2026-10-07", 44, FLAT, VEGA), legs_iv: null },
+    ], condor());
+    expect(e.reason).toBe("2026-10-07 has no vol reading for every leg");
+  });
+
+  it("names the two days a missing one falls between", () => {
+    const e = paceExplained([
+      paced(6.86, "2026-10-06", 45, FLAT, VEGA),
+      paced(6.9, "2026-10-08", 43, FLAT, VEGA),
+    ], condor());
+    expect(e.reason).toBe("the record skips from 2026-10-06 to 2026-10-08: a day is missing");
+  });
+
+  it("says nothing has been recorded when there are no samples", () => {
+    expect(paceExplained([], condor())).toEqual({
+      vol: null, from: null, to: null, days: null, reason: "no day has been recorded for it yet",
+      at: null, gap: null, rest: null, vega: null, cover: null,
+    });
+  });
+
+  it("says Opened is missing when it was never declared, and has no gap to split", () => {
+    const e = paceExplained([paced(6.86, "2026-10-06", 45, FLAT, VEGA)], condor(null));
+    expect(e.reason).toBe("Opened is not recorded, so there is no day to measure vol from");
+    expect([e.gap, e.rest, e.cover]).toEqual([null, null, null]);
+  });
+
+  it("has no gap where the last close has no Cost to close, and keeps the vol part", () => {
+    const e = paceExplained([
+      paced(6.86, "2026-10-06", 45, FLAT, VEGA),
+      paced(null, "2026-10-07", 44, [11, 10, 22, 22], VEGA),
+    ], condor());
+    expect([e.vol, e.reason, e.gap, e.rest, e.cover]).toEqual([4, null, null, null, null]);
+  });
+
+  it("covers nothing with a net vega of zero, rather than an infinity", () => {
+    const e = paceExplained([
+      paced(6.86, "2026-10-06", 45, FLAT, [3, 3, 3, 3]),
+      paced(7.2, "2026-10-07", 44, FLAT, [3, 3, 3, 3]),
+    ], condor());
+    expect([e.vega, e.cover]).toEqual([0, null]);
+  });
+
+  it("has no vega where the last close is missing one leg's", () => {
+    const last = paced(7.2, "2026-10-08", 43, FLAT, VEGA);
+    const e = paceExplained([
+      paced(6.9, "2026-10-07", 44, FLAT, VEGA),
+      { ...last, legs_vega: { [SC]: 4, [LC]: 3, [SP]: 3.5 } },
+    ], condor());
+    expect([e.vega, e.cover]).toEqual([null, null]);
+    expect(e.gap).toBe(7.2 - pace(43));
   });
 });

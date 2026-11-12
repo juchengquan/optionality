@@ -15,7 +15,7 @@ import { buildSpxCode } from "../domain/contract.ts";
 import type { ExitPolicy } from "../domain/exit.ts";
 import type { Monitor } from "../domain/monitor.ts";
 import type { ByCode, Position } from "../domain/position.ts";
-import type { VolSample } from "../domain/vol.ts";
+import type { PacedSample, VolSample } from "../domain/vol.ts";
 
 export interface CaseInput {
   fn: string;
@@ -135,6 +135,8 @@ const chain = [
   sample("2026-10-07", 44, [20.5, 19.6, 12.4, 11.8], [2.0, 3.1, 3.3, 2.4]),
   sample("2026-10-08", 43, [19.8, 18.7, 11.9, 11.2], [1.9, 3.0, 3.2, 2.3]),
 ];
+/** the same days with each close's Cost to close, as the vol route reads them (#333) */
+const paced = chain.map((s, i): PacedSample => ({ ...s, cost_to_close: [3.0, 3.05, 2.91][i]! }));
 
 const at = (iso: string) => new Date(iso);
 /** A day's vol readings for `takesSample`: both maps, or one withheld. */
@@ -1002,5 +1004,19 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "volAttribution", name: "no sample from the day it was opened", args: [chain.slice(1), condor] },
     { fn: "volAttribution", name: "a market day missing", args: [[chain[0], chain[2]], condor] },
     { fn: "volAttribution", name: "a day without vega", args: [[chain[0], { ...chain[1]!, legs_vega: null }], condor] },
+    { fn: "paceExplained", name: "the gap at the last close, split", args: [paced, condor] },
+    { fn: "paceExplained", name: "only the day it was opened", args: [paced.slice(0, 1), condor] },
+    { fn: "paceExplained", name: "samples that begin after the open: what would cover the gap",
+      args: [paced.slice(1), condor] },
+    { fn: "paceExplained", name: "a day missing, named", args: [[paced[0], paced[2]], condor] },
+    { fn: "paceExplained", name: "a day without IV, named", args: [[paced[0], { ...paced[1]!, legs_iv: null }], condor] },
+    { fn: "paceExplained", name: "nothing recorded", args: [[], condor] },
+    { fn: "paceExplained", name: "Opened never declared", args: [paced, { ...condor, opened_at: null }] },
+    { fn: "paceExplained", name: "no Cost to close at the last close",
+      args: [[paced[0], { ...paced[1]!, cost_to_close: null }], condor] },
+    { fn: "paceExplained", name: "a net vega of zero covers nothing",
+      args: [paced.slice(0, 2).map((s) => ({ ...s, legs_vega: Object.fromEntries(Object.keys(s.legs_vega!).map((c) => [c, 2])) })), condor] },
+    { fn: "paceExplained", name: "a leg's vega missing at the last close",
+      args: [[paced[0], { ...paced[1]!, legs_vega: { [LP]: 2, [SP]: 3.1 } }], condor] },
   ],
 };

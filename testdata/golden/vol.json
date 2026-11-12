@@ -305,6 +305,831 @@
         }
       ],
       "expect": null
+    },
+    {
+      "fn": "paceExplained",
+      "name": "the gap at the last close, split",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3
+          },
+          {
+            "observed_on": "2026-10-07",
+            "dte": 44,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20.5,
+              "US.SPXW261120P6500000": 19.6,
+              "US.SPXW261120C7100000": 12.4,
+              "US.SPXW261120C7150000": 11.8
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3.1,
+              "US.SPXW261120C7100000": 3.3,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-10-08",
+            "dte": 43,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 19.8,
+              "US.SPXW261120P6500000": 18.7,
+              "US.SPXW261120C7100000": 11.9,
+              "US.SPXW261120C7150000": 11.2
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 1.9,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.3
+            },
+            "cost_to_close": 2.91
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": -0.24000000000000088,
+        "from": "2026-10-06",
+        "to": "2026-10-08",
+        "days": 2,
+        "reason": null,
+        "at": "2026-10-08",
+        "gap": -0.02257565972303599,
+        "rest": 0.2174243402769649,
+        "vega": -2.000000000000001,
+        "cover": 0.01128782986151799
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "only the day it was opened",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": 0,
+        "from": "2026-10-06",
+        "to": "2026-10-06",
+        "days": 0,
+        "reason": "only 2026-10-06, the day it was Opened, is recorded: nothing has moved yet",
+        "at": "2026-10-06",
+        "gap": 0,
+        "rest": null,
+        "vega": -1.8000000000000003,
+        "cover": 0
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "samples that begin after the open: what would cover the gap",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-07",
+            "dte": 44,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20.5,
+              "US.SPXW261120P6500000": 19.6,
+              "US.SPXW261120C7100000": 12.4,
+              "US.SPXW261120C7150000": 11.8
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3.1,
+              "US.SPXW261120C7100000": 3.3,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-10-08",
+            "dte": 43,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 19.8,
+              "US.SPXW261120P6500000": 18.7,
+              "US.SPXW261120C7100000": 11.9,
+              "US.SPXW261120C7150000": 11.2
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 1.9,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.3
+            },
+            "cost_to_close": 2.91
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "its samples begin on 2026-10-07, not on 2026-10-06 when it was Opened: the vol it was sold at was never recorded",
+        "at": "2026-10-08",
+        "gap": -0.02257565972303599,
+        "rest": null,
+        "vega": -2.000000000000001,
+        "cover": 0.01128782986151799
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "a day missing, named",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3
+          },
+          {
+            "observed_on": "2026-10-08",
+            "dte": 43,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 19.8,
+              "US.SPXW261120P6500000": 18.7,
+              "US.SPXW261120C7100000": 11.9,
+              "US.SPXW261120C7150000": 11.2
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 1.9,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.3
+            },
+            "cost_to_close": 2.91
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "the record skips from 2026-10-06 to 2026-10-08: a day is missing",
+        "at": "2026-10-08",
+        "gap": -0.02257565972303599,
+        "rest": null,
+        "vega": -2.000000000000001,
+        "cover": 0.01128782986151799
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "a day without IV, named",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3
+          },
+          {
+            "observed_on": "2026-10-07",
+            "dte": 44,
+            "legs_iv": null,
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3.1,
+              "US.SPXW261120C7100000": 3.3,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3.05
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "2026-10-07 has no vol reading for every leg",
+        "at": "2026-10-07",
+        "gap": 0.08352060516173454,
+        "rest": null,
+        "vega": -2.0000000000000004,
+        "cover": 0.04176030258086726
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "nothing recorded",
+      "args": [
+        [],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "no day has been recorded for it yet",
+        "at": null,
+        "gap": null,
+        "rest": null,
+        "vega": null,
+        "cover": null
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "Opened never declared",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3
+          },
+          {
+            "observed_on": "2026-10-07",
+            "dte": 44,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20.5,
+              "US.SPXW261120P6500000": 19.6,
+              "US.SPXW261120C7100000": 12.4,
+              "US.SPXW261120C7150000": 11.8
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3.1,
+              "US.SPXW261120C7100000": 3.3,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-10-08",
+            "dte": 43,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 19.8,
+              "US.SPXW261120P6500000": 18.7,
+              "US.SPXW261120C7100000": 11.9,
+              "US.SPXW261120C7150000": 11.2
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 1.9,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.3
+            },
+            "cost_to_close": 2.91
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": null,
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "Opened is not recorded, so there is no day to measure vol from",
+        "at": "2026-10-08",
+        "gap": null,
+        "rest": null,
+        "vega": -2.000000000000001,
+        "cover": null
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "no Cost to close at the last close",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3
+          },
+          {
+            "observed_on": "2026-10-07",
+            "dte": 44,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20.5,
+              "US.SPXW261120P6500000": 19.6,
+              "US.SPXW261120C7100000": 12.4,
+              "US.SPXW261120C7150000": 11.8
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3.1,
+              "US.SPXW261120C7100000": 3.3,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": null
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": 1.3600000000000039,
+        "from": "2026-10-06",
+        "to": "2026-10-07",
+        "days": 1,
+        "reason": null,
+        "at": "2026-10-07",
+        "gap": null,
+        "rest": null,
+        "vega": -2.0000000000000004,
+        "cover": null
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "a net vega of zero covers nothing",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 2,
+              "US.SPXW261120C7100000": 2,
+              "US.SPXW261120C7150000": 2
+            },
+            "cost_to_close": 3
+          },
+          {
+            "observed_on": "2026-10-07",
+            "dte": 44,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20.5,
+              "US.SPXW261120P6500000": 19.6,
+              "US.SPXW261120C7100000": 12.4,
+              "US.SPXW261120C7150000": 11.8
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 2,
+              "US.SPXW261120C7100000": 2,
+              "US.SPXW261120C7150000": 2
+            },
+            "cost_to_close": 3.05
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": 0.40000000000000213,
+        "from": "2026-10-06",
+        "to": "2026-10-07",
+        "days": 1,
+        "reason": null,
+        "at": "2026-10-07",
+        "gap": 0.08352060516173454,
+        "rest": -0.3164793948382676,
+        "vega": 0,
+        "cover": null
+      }
+    },
+    {
+      "fn": "paceExplained",
+      "name": "a leg's vega missing at the last close",
+      "args": [
+        [
+          {
+            "observed_on": "2026-10-06",
+            "dte": 45,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20,
+              "US.SPXW261120P6500000": 19,
+              "US.SPXW261120C7100000": 12,
+              "US.SPXW261120C7150000": 11.5
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3,
+              "US.SPXW261120C7100000": 3.2,
+              "US.SPXW261120C7150000": 2.4
+            },
+            "cost_to_close": 3
+          },
+          {
+            "observed_on": "2026-10-07",
+            "dte": 44,
+            "legs_iv": {
+              "US.SPXW261120P6450000": 20.5,
+              "US.SPXW261120P6500000": 19.6,
+              "US.SPXW261120C7100000": 12.4,
+              "US.SPXW261120C7150000": 11.8
+            },
+            "legs_vega": {
+              "US.SPXW261120P6450000": 2,
+              "US.SPXW261120P6500000": 3.1
+            },
+            "cost_to_close": 3.05
+          }
+        ],
+        {
+          "id": "p1",
+          "name": "1120_IC",
+          "strike_date": "2026-11-20",
+          "contracts": 2,
+          "entry": 3,
+          "strategy": "iron condor",
+          "opened_at": "2026-10-06",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "2026-10-07 has no vol reading for every leg",
+        "at": "2026-10-07",
+        "gap": 0.08352060516173454,
+        "rest": null,
+        "vega": null,
+        "cover": null
+      }
     }
   ]
 }
