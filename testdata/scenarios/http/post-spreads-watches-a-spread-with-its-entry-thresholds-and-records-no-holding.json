@@ -1,0 +1,208 @@
+{
+  "name": "POST /spreads watches a spread with its entry thresholds and records no holding",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218C7300000": {
+          "name": "SPXW 261218 7300C",
+          "mid_price": 2.75,
+          "bid_price": 2.7,
+          "ask_price": 2.8,
+          "last_price": 2.75,
+          "option_delta": 0.21,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218C7350000": {
+          "name": "SPXW 261218 7350C",
+          "mid_price": 1.75,
+          "bid_price": 1.7,
+          "ask_price": 1.8,
+          "last_price": 1.75,
+          "option_delta": 0.15,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6350000": {
+          "name": "SPXW 261218 6350P",
+          "mid_price": 2.25,
+          "bid_price": 2.2,
+          "ask_price": 2.3,
+          "last_price": 2.25,
+          "option_delta": -0.12,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 20,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6400000": {
+          "name": "SPXW 261218 6400P",
+          "mid_price": 4.5,
+          "bid_price": 4.45,
+          "ask_price": 4.55,
+          "last_price": 4.5,
+          "option_delta": -0.18,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 19.25,
+          "option_contract_size": 100
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/spreads",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "strike_date": "2026-12-18",
+      "spreads": [
+        {
+          "name": "dec-puts",
+          "held": false,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 2.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.15
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 201,
+      "body": {
+        "positions": [],
+        "monitors": [
+          {
+            "id": "00000000000000000000000000000001",
+            "code": "dec-puts",
+            "field": "mid_price"
+          },
+          {
+            "id": "00000000000000000000000000000002",
+            "code": "US.SPXW261218P6400000",
+            "field": "option_delta"
+          }
+        ],
+        "replaced": []
+      }
+    },
+    "rows": {
+      "monitors": {
+        "added": [
+          {
+            "id": "00000000000000000000000000000001",
+            "code": "dec-puts",
+            "strike_date": "2026-12-18",
+            "option_type": "CMB",
+            "strike": 0,
+            "field": "mid_price",
+            "threshold": 2.5,
+            "direction": "above",
+            "compare": "abs",
+            "legs": [
+              {
+                "sign": -1,
+                "option_type": "PUT",
+                "strike": 6400
+              },
+              {
+                "sign": 1,
+                "option_type": "PUT",
+                "strike": 6350
+              }
+            ],
+            "scope": null,
+            "enabled": 1,
+            "disabled_reason": null,
+            "triggered": 0,
+            "last_value": null,
+            "last_checked_at": null,
+            "last_alarm_at": null,
+            "created_at": "2026-11-09 15:00:00.000000"
+          },
+          {
+            "id": "00000000000000000000000000000002",
+            "code": "US.SPXW261218P6400000",
+            "strike_date": "2026-12-18",
+            "option_type": "PUT",
+            "strike": 6400,
+            "field": "option_delta",
+            "threshold": 0.15,
+            "direction": "above",
+            "compare": "abs",
+            "legs": null,
+            "scope": null,
+            "enabled": 1,
+            "disabled_reason": null,
+            "triggered": 0,
+            "last_value": null,
+            "last_checked_at": null,
+            "last_alarm_at": null,
+            "created_at": "2026-11-09 15:00:00.000000"
+          }
+        ]
+      }
+    },
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}

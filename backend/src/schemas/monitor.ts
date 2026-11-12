@@ -16,7 +16,7 @@ export const DEFAULT_COMPARE = "abs";
 export const DEFAULT_ENABLED = true;
 
 /** Accepts both spellings and always stores the dashed one, as the Python does. */
-const StrikeDate = z.string().transform((value, ctx) => {
+export const StrikeDate = z.string().transform((value, ctx) => {
   try {
     return normalizeStrikeDate(value);
   } catch {
@@ -48,8 +48,8 @@ export const DISABLED_REASONS =
   ["unknown-contract", "no-figure", "unreadable", "expired", "manual", "holding-closed"] as const;
 export type DisabledReason = (typeof DISABLED_REASONS)[number];
 
-const Direction = z.enum(["above", "below"]);
-const Compare = z.enum(["abs", "signed"]);
+export const Direction = z.enum(["above", "below"]);
+export const Compare = z.enum(["abs", "signed"]);
 
 /** The API's wording for a threshold the rule refuses, or null.
  *

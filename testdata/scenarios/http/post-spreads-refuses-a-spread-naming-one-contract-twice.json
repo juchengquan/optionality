@@ -1,0 +1,81 @@
+{
+  "name": "POST /spreads refuses a spread naming one contract twice",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/spreads",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "strike_date": "2026-12-18",
+      "spreads": [
+        {
+          "name": "dec-puts",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "'dec-puts' names PUT 6400 twice"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

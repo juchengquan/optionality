@@ -327,7 +327,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   three shapes merged by hand in `main.ts` and again in `routes/references.ts`),
   `references.ts` (the Reference path: one bounded
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
-  the number of References, which the sweep could not afford; ADR 0018).
+  the number of References, which the sweep could not afford; ADR 0018), and `create-spread.ts`
+  behind `POST /spreads` (#293): spreads on one expiry, each held or watched, with the Monitors
+  they start with, ALL OR NOTHING — every refusal decided before ONE probe of every leg, then one
+  transaction; `create-monitor.ts`'s order, and its refusals' words where the two overlap. A held
+  spread's own Monitors are linked to IT, never re-inferred against the book (a shared strike made
+  that ambiguous), and a UNIQUE clash inside the write is the checks' own 409, not a 500.
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
   **Two pages in one build until the swap (ADR 0023):** today's (`index.html`, `src/`) and the
   redesign at `/opt/next` (`next/index.html`, `src/next/`), built beside it slice by slice (#287
@@ -525,7 +530,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
 - Every call for **market data** is a single bounded one: the sweep, `/quotes`, `/references`,
-  `/positions/values` and the creation probes. Widened from "every call to the Provider" by ADR
+  `/positions/values` and the creation probes (`POST /monitors`, `/positions`, `/references` and
+  `/spreads`, which probes every leg of every spread in ONE call). Widened from "every call to the Provider" by ADR
   0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
   service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
   call to one — a loophole that change itself created. The payoff at expiry (`GET /positions/{id}/payoff`,
@@ -575,7 +581,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   fault: an unknown contract, or a watched figure that has not arrived for `QUARANTINE_AFTER_SILENT_SWEEPS`
   consecutive sweeps (observed, never declared — what a provider serves depends on the account, not on its
   code; 0 only logs). Expired monitors: mute with notice, auto-delete after `EXPIRED_RETENTION_DAYS`.
-  Nothing else is ever auto-deleted. A holding that ends is CLOSED, not deleted (ADR 0022): kept with
+  Nothing else is ever auto-deleted. One deletion is the OWNER's, triggered by saving: `POST /spreads`
+  recording a spread as HELD replaces a WATCH rule (linked to no holding) on a (code, field) it makes —
+  deleted and remade as the holding's in one transaction, named by the form before the save and in
+  its answer after (#293). A watched spread, a switched-off default or another holding's rule never
+  replaces anything. A holding that ends is CLOSED, not deleted (ADR 0022): kept with
   its samples, out of everything live (`openPositions` — the sweep, `/positions/values`, linking), its
   rules unlinked — handed first to any open holding still holding their contracts (a roll), and
   disabled as `holding-closed` only when nothing open does — so no monitor is ever linked to a closed

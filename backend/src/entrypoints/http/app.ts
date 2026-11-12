@@ -13,6 +13,7 @@ import { healthRoutes } from "./routes/health.ts";
 import { monitorRoutes, quoteRoutes } from "./routes/monitors.ts";
 import { positionRoutes } from "./routes/positions.ts";
 import { referenceRoutes } from "./routes/references.ts";
+import { spreadRoutes } from "./routes/spreads.ts";
 
 /** Paths reachable without a token. `/health` is open because whatever is checking on the service
  *  may be the thing that has lost its credentials, and because the dashboard reads it to find out
@@ -91,7 +92,8 @@ export function createApp(deps: Deps) {
     .route("/", quoteRoutes(deps))
     .route("/monitors", monitorRoutes(deps))
     .route("/positions", positionRoutes(deps))
-    .route("/references", referenceRoutes(deps));
+    .route("/references", referenceRoutes(deps))
+    .route("/spreads", spreadRoutes(deps));
   // after every other route, because the spec is generated from the routes already registered;
   // and not part of the chain, so `AppType` stays the API's alone
   mountDocs(app, deps.settings.rootPath, OPEN_PATHS);

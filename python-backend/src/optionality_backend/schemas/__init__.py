@@ -22,6 +22,7 @@ from .monitor import (
 )
 from .position import ClosePositionIn, LegIn, PayoffIn, PositionIn, PositionPatch
 from .reference import SOURCES, ReferenceIn, Source
+from .spread import SpreadIn, SpreadMonitorIn, SpreadsIn
 
 __all__ = [
     "DISABLED_REASONS",
@@ -38,5 +39,8 @@ __all__ = [
     "PositionPatch",
     "ReferenceIn",
     "Source",
+    "SpreadIn",
+    "SpreadMonitorIn",
+    "SpreadsIn",
     "TotalEntryIn",
 ]
