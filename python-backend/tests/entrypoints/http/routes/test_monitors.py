@@ -332,9 +332,7 @@ class TestPatching:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "nothing to update"
 
-    async def test_changes_every_field_a_rule_has_in_one_patch_what_it_watches_its_direction_its_compare(
-        self, start
-    ):
+    async def test_changes_every_field_a_rule_has_in_one_patch_what_it_watches_its_direction_its_compare(self, start):
         # the dashboard's editor sends whichever of the four changed (#292), and each must land
         h = start()
         id_ = (await post(h, single())).json()["id"]
