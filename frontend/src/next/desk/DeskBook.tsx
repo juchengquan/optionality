@@ -18,10 +18,11 @@ import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, rowStrip, type DeskColumn, type DeskRow,
+  ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, rowStrip, tableRows, type DeskColumn, type DeskRow,
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
 import { joinStrips, stripOfEntry, stripOfHolding } from "../strip";
+import { NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
 import { PriceMapPanel } from "./PriceMapPanel";
 import { priceMapOf, spxOfBook } from "../pricemap";
@@ -38,7 +39,10 @@ import "./desk.css";
  *  - The columns are fitted to the room by measurement (ADR 0008), and the viewer's column choice
  *    is `/opt`'s combo-table cookie, so a choice made there holds here.
  */
-export function DeskBook(props: BookProps) {
+export function DeskBook({ selection, ...props }: BookProps & {
+  /** the selection, when the page owns it (#299): the palette reads it and lands on a row */
+  selection?: [DeskSelection, (s: DeskSelection) => void];
+}) {
   const { quotes, monitors, holdings, mode, privacy } = props;
   const placed = useMemo(() => placeBook(quotes, holdings, monitors), [quotes, holdings, monitors]);
   const rows = useMemo(() => tableRows(placed), [placed]);
@@ -65,22 +69,33 @@ export function DeskBook(props: BookProps) {
     setHidden(next);
   }, []);
 
-  const [selected, setSelected] = useState<string | null>(null);
-  const current = selected === null ? null : rows.find((r) => rowId(r) === selected) ?? null;
+  // The selection is the table's cursor, and the inspector is open on it or not (#299): j and k
+  // move it with the inspector shut, Enter opens it, Escape shuts it and keeps the place. A click,
+  // the price map or the palette selects AND opens. The page may own it (`selection`), so the
+  // palette can read it and land on a row; a desk drawn alone keeps its own.
+  const own = useState<DeskSelection>(NOTHING_SELECTED);
+  const [sel, setSel] = selection ?? own;
+  const selectedRow = sel.id === null ? null : rows.find((r) => rowId(r) === sel.id) ?? null;
+  const current = sel.open ? selectedRow : null;
   // a row that leaves the book takes the selection with it: kept, it reopened the inspector by
   // itself when the row came back, as on the poll after one failed valuation
-  useEffect(() => { if (selected !== null && !current) setSelected(null); }, [selected, current]);
+  useEffect(() => { if (sel.id !== null && !selectedRow) setSel(NOTHING_SELECTED); }, [sel.id, selectedRow, setSel]);
+  const setSelected = useCallback((id: string) => setSel({ id, open: true }), [setSel]);
 
   // closing by hand hands the focus back to the row's button, which the close button took with it
   const root = useRef<HTMLDivElement>(null);
   const returnTo = useRef<string | null>(null);
-  const close = useCallback(() => setSelected((id) => { returnTo.current = id; return null; }), []);
+  const selNow = useRef(sel);
+  selNow.current = sel;
+  const close = useCallback(() => {
+    returnTo.current = selNow.current.id;
+    setSel({ id: selNow.current.id, open: false });
+  }, [setSel]);
   useEffect(() => {
     if (current || returnTo.current === null) return;
     const id = returnTo.current;
     returnTo.current = null;
-    [...(root.current?.querySelectorAll<HTMLElement>(".nxd-row[data-ref]") ?? [])]
-      .find((r) => r.dataset.ref === id)?.querySelector<HTMLElement>(".nxd-name")?.focus();
+    rowElement(root.current, id)?.querySelector<HTMLElement>(".nxd-name")?.focus();
   }, [current]);
 
   // Escape is the inspector's only when nothing else took it: not one a popover or a dialog
@@ -97,6 +112,32 @@ export function DeskBook(props: BookProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [current, close]);
 
+  const ids = useMemo(() => rows.map(rowId), [rows]);
+  useDeskKeys({ ids, selection: sel, setSelection: setSel, desk: root });
+
+  // the palette's landing (#299): the row brought into view, then the inspector's heading focused,
+  // or the selected Monitor's editor or the selected holding's close form opened in it
+  const request = sel.request;
+  useEffect(() => {
+    if (!request) return;
+    rowElement(root.current, sel.id)?.scrollIntoView?.({ block: "nearest" });
+    const inspector = root.current?.querySelector<HTMLElement>(".nxd-inspector");
+    if (!inspector) return;
+    const button = request.then === "edit"
+      // the selected rule's own controls come first in its inspector, before any rule under it
+      ? inspector.querySelector<HTMLElement>(".nx-mon-actions button")
+      : request.then === "close"
+        ? [...inspector.querySelectorAll<HTMLElement>(".nx-hold-actions button")].find((b) => b.textContent === "Close…")
+        : null;
+    if (button) {
+      if (button.getAttribute("aria-expanded") !== "true") button.click();
+    } else {
+      inspector.querySelector<HTMLElement>("h3")?.focus();
+    }
+    // the request is spent: a later render must not run it again (it runs once per request)
+    setSel({ id: sel.id, open: sel.open });
+  }, [request?.n]);
+
   // the price map (#298): a panel over the table and the inspector, sharing their ONE selection
   const [mapOpen, setMapOpen] = useState(readPriceMap);
   const toggleMap = useCallback(() => setMapOpen((was) => { writePriceMap(!was); return !was; }), []);
@@ -109,13 +150,13 @@ export function DeskBook(props: BookProps) {
   /** A spread picked on the map is the row picked in the table: selected, and brought into view. */
   const pickOnMap = useCallback((id: string) => {
     setSelected(id);
-    [...(root.current?.querySelectorAll<HTMLElement>(".nxd-row[data-ref]") ?? [])]
-      .find((r) => r.dataset.ref === id)?.scrollIntoView?.({ block: "nearest" });
-  }, []);
+    rowElement(root.current, id)?.scrollIntoView?.({ block: "nearest" });
+  }, [setSelected]);
 
   const inspectorId = useId();
   const ctx: Ctx = {
-    columns: fit.columns, privacy, selected: current ? rowId(current) : null, select: setSelected, inspectorId,
+    columns: fit.columns, privacy, selected: current ? rowId(current) : null, cursor: sel.id, select: setSelected,
+    inspectorId,
   };
   const pickable = COLUMNS[mode].filter((c) => c.key !== "name" && (fit.offered.has(c.key) || hidden.has(c.key)));
 
@@ -155,6 +196,8 @@ interface Ctx {
   columns: DeskColumn[];
   privacy: boolean;
   selected: string | null;
+  /** the row j and k are on, whether or not the inspector is open on it */
+  cursor: string | null;
   select: (id: string) => void;
   inspectorId: string;
 }
@@ -162,26 +205,8 @@ interface Ctx {
 /** Every key the desk draws: all it may change in the column cookie it shares with `/opt`. */
 const DESK_KEYS = new Set([...COLUMNS.live, ...COLUMNS.review].map((c) => c.key));
 
-/** Every row the table can draw, in the order it draws them: the fitting measures exactly these,
- *  and the inspector finds its row among them. */
-export function tableRows(placed: BookModel): DeskRow[] {
-  const out: DeskRow[] = [];
-  for (const g of placed.holdings) {
-    for (const p of g.rows.flat()) {
-      out.push({ kind: "holding", holding: p.holding, rules: p.rules });
-      for (const entry of p.rules) out.push({ kind: "rule", entry, nested: true });
-    }
-  }
-  for (const entry of placed.unplaced) out.push({ kind: "rule", entry, nested: false });
-  for (const g of placed.watchlist) {
-    for (const i of g.items) {
-      out.push({ kind: "rule", entry: i.entry, nested: false });
-      for (const entry of i.under) out.push({ kind: "rule", entry, nested: true });
-    }
-  }
-  for (const monitor of placed.quarantined) out.push({ kind: "quarantined", monitor });
-  return out;
-}
+/** `tableRows` lives with the columns (`columns.ts`); the still (#300) reads it from here. */
+export { tableRows } from "./columns";
 
 /** The picker draws a label and a key; the rest of `/opt`'s column descriptor is its table's. */
 const asPickable = (c: DeskColumn): Column => ({ key: c.key, label: c.label, estimate: 0, text: () => "" });
@@ -324,6 +349,7 @@ function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | 
     <div className="nxd-row nxd-grid" data-ref={id} data-kind={row.kind} data-state={stateOf(row)}
          data-nested={isRule && row.nested ? "" : undefined}
          data-selected={ctx.selected === id ? "" : undefined}
+         data-cursor={ctx.cursor === id ? "" : undefined}
          onClick={() => ctx.select(id)}>
       {bracket ? <span className="nxd-bracket" data-part={bracket} aria-hidden="true" /> : null}
       {ctx.columns.map((c) => (
