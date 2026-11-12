@@ -1,0 +1,34 @@
+/* The saved image's tree (#300): mounted off screen while the picture is taken. Scoped under
+   .nx-still-stage and .nx-still, so nothing here reaches the page on screen. */
+
+/* OFF SCREEN rather than `display: none` — a node with no layout paints as nothing — and fixed, so
+   it cannot lengthen the page or move its scroll while the picture is taken (app.css: .snapshot-stage) */
+.nx-still-stage { position: fixed; top: 0; left: -10000px; pointer-events: none; }
+
+/* An explicit ground and ink, or the PNG is transparent wherever the page's own shows through —
+   which in a chat is whatever colour that app happens to use. */
+.nx-still {
+  padding: 16px 16px 8px;
+  background: var(--background);
+  color: var(--foreground);
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+/* A's table at a FLOOR of 1000px, so two days' pictures are one size, and wider where the columns
+   need it: `max-content` is what lets the picture hold every ticked column at any screen width */
+.nx-still[data-arrangement="desk"] { width: max-content; min-width: 1000px; }
+/* B's cards at the picture's own width, not the device's: one book, one picture, from any phone */
+.nx-still[data-arrangement="phone"] { width: 420px; box-sizing: border-box; }
+
+.nx-still-head { display: flex; align-items: baseline; gap: 0.75rem; }
+.nx-still-head h1 { font-size: 1.125rem; font-weight: 650; letter-spacing: -0.01em; }
+.nx-still .nx-needs { margin-bottom: 0; }
+
+/* the table, as a picture: nothing to scroll, so nothing clipped and nothing sticky. Sticky would
+   resolve against the page, and the stage sits 10000px to the left of it (app.css: .snapshot) */
+.nx-still .nxd { display: block; }
+.nx-still .nxd-table { overflow: visible; }
+.nx-still .nxd-head { position: static; }
+/* the header row in the table's own size, its labels smaller: the columns are in `ch`, and a `ch`
+   resolves in the row's font, so a smaller row would draw narrower columns than the rows under it */
+.nx-still .nxd-head { font-size: inherit; }
+.nx-still .nxd-head > [data-col] { font-size: 0.6875rem; }
