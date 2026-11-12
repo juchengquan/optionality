@@ -143,6 +143,6 @@ describe("mute, unmute and delete from the desk", () => {
   it("says when an expired rule is deleted, from the retention the service serves", async () => {
     await openDesk();
     await userEvent.click(await screen.findByText(/^Muted and expired · /));
-    expect(screen.getByText("expired 2026-11-06 — the service deletes it on 2026-11-14")).toBeTruthy();
+    expect(screen.getByText("expired 2026-11-06 — the service deletes it on 2026-11-12")).toBeTruthy();
   });
 });
