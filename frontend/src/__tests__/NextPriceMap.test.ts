@@ -85,13 +85,13 @@ describe("the ±1σ band", () => {
     const map = mapOf(quotes, HOLDINGS.map(noIv));
     for (const lane of map.lanes) {
       expect(lane.band).toBeNull();
-      expect(lane.bandWhy).toBe("no ±1σ: no short leg's IV was served");
+      expect(lane.bandWhy).toBe("no ±1σ: no IV served");
     }
   });
 
   it("is not drawn without SPX's price, and the lane says why", () => {
     const map = mapOf(QUOTES.map(bare), HOLDINGS.map(bare));
-    expect(map.lanes.every((l) => l.band === null && l.bandWhy === "no ±1σ without SPX's price")).toBe(true);
+    expect(map.lanes.every((l) => l.band === null && l.bandWhy === "no ±1σ without SPX")).toBe(true);
   });
 
   it("says its width and whose IV it is", () => {

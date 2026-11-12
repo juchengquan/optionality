@@ -74,7 +74,7 @@ export function SpxPath({ served, holding, span }: { served: Samples; holding: H
   // each strike's name at its line in the gutter; two strikes close together would print over each
   // other, so each is pushed below the one above it, then the column back up if it ran off
   const labels = strikes.map((k) => ({ ...k, at: y(k.strike) })).sort((a, b) => a.at - b.at);
-  for (let i = 1; i < labels.length; i++) labels[i]!.at = Math.max(labels[i]!.at, labels[i - 1]!.at + 12);
+  for (let i = 1; i < labels.length; i++) labels[i]!.at = Math.max(labels[i]!.at, labels[i - 1]!.at + 14);
   const over = (labels.at(-1)?.at ?? 0) - (H - B);
   if (over > 0) for (const l of labels) l.at = Math.max(T, l.at - over);
   const labelAt = new Map(labels.map((l) => [l.strike, l.at]));

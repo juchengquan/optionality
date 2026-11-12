@@ -105,13 +105,13 @@ export function priceMapOf(placed: BookModel, { spx, reason }: { spx: number | n
   const out = [...lanes.values()].sort((a, b) => a.expiry.localeCompare(b.expiry));
   for (const l of out) {
     if (spx === null) {
-      l.bandWhy = "no ±1σ without SPX's price";
+      l.bandWhy = "no ±1σ without SPX";
       continue;
     }
     const shorts = l.spreads.flatMap((s) => s.shorts)
       .filter((k) => k.one_sigma !== null && k.one_sigma !== undefined && k.points !== null);
     if (shorts.length === 0) {
-      l.bandWhy = "no ±1σ: no short leg's IV was served";
+      l.bandWhy = "no ±1σ: no IV served";
       continue;
     }
     const strike = shorts.reduce((a, b) => (Math.abs(b.points!) < Math.abs(a.points!) ? b : a));

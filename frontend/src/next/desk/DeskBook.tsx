@@ -6,7 +6,7 @@ import { ColumnPicker } from "../../ColumnPickers";
 import type { Column } from "../../columns";
 import { shortDate } from "../../format";
 import { GROUPS } from "../../MutedTables";
-import { readHidden, writeHidden } from "../../prefs";
+import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../prefs";
 import { Chip, Money, type BookProps } from "../Book";
 import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
@@ -23,6 +23,8 @@ import {
 import { StrikeStrip } from "../StrikeStrip";
 import { joinStrips, stripOfEntry, stripOfHolding } from "../strip";
 import { useDeskFit } from "./useDeskFit";
+import { PriceMapPanel } from "./PriceMapPanel";
+import { priceMapOf, spxOfBook } from "../pricemap";
 import "./desk.css";
 
 /** The desk's book, arrangement A (ADR 0023, #289): ONE dense table, holdings first and then the
@@ -95,6 +97,18 @@ export function DeskBook(props: BookProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [current, close]);
 
+  // the price map (#298): a panel over the table and the inspector, sharing their ONE selection
+  const [mapOpen, setMapOpen] = useState(readPriceMap);
+  const toggleMap = useCallback(() => setMapOpen((was) => { writePriceMap(!was); return !was; }), []);
+  const map = useMemo(() => priceMapOf(placed, spxOfBook(quotes, holdings)), [placed, quotes, holdings]);
+  const mapId = useId();
+  /** A spread picked on the map is the row picked in the table: selected, and brought into view. */
+  const pickOnMap = useCallback((id: string) => {
+    setSelected(id);
+    [...(root.current?.querySelectorAll<HTMLElement>(".nxd-row[data-ref]") ?? [])]
+      .find((r) => r.dataset.ref === id)?.scrollIntoView?.({ block: "nearest" });
+  }, []);
+
   const inspectorId = useId();
   const ctx: Ctx = {
     columns: fit.columns, privacy, selected: current ? rowId(current) : null, select: setSelected, inspectorId,
@@ -103,6 +117,7 @@ export function DeskBook(props: BookProps) {
 
   return (
     <div className="nx-book nxd" ref={root} data-inspecting={current ? "" : undefined}>
+      {mapOpen ? <PriceMapPanel id={mapId} map={map} selected={current ? rowId(current) : null} onSelect={pickOnMap} /> : null}
       <div className="nxd-table" ref={fit.ref} style={{ "--nxd-cols": fit.template } as React.CSSProperties}>
         <div className="nxd-head nxd-grid">
           {fit.columns.map((c) => (
@@ -112,8 +127,14 @@ export function DeskBook(props: BookProps) {
 
         <Holdings {...props} placed={placed} ctx={ctx} picker={
           // on the first section's line, at its end: over the header it sat on top of a label
-          <ColumnPicker table="combo" label="book" hidden={hidden} onToggle={onToggle} onReset={onReset}
-                        all={pickable.map(asPickable)} />
+          <>
+            <button type="button" className="nxd-maptoggle" aria-expanded={mapOpen}
+                    aria-controls={mapOpen ? mapId : undefined} onClick={toggleMap}>
+              price map
+            </button>
+            <ColumnPicker table="combo" label="book" hidden={hidden} onToggle={onToggle} onReset={onReset}
+                          all={pickable.map(asPickable)} />
+          </>
         } />
         <Watchlist placed={placed} ctx={ctx} />
         <Muted monitors={placed.muted} />
