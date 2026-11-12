@@ -95,7 +95,11 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     const { writes, held } = serve();
     await open(arrangement);
     const home = await openSpread(arrangement);
-    fireEvent.click(within(home).getByRole("button", { name: "mute 261218 7150P delta" }));
+    // pressed as the owner presses it, which focuses it: the desk's inspector starts with the focus
+    // on its own heading, where the mute finishing would leave it, and so could not tell
+    const mute = within(home).getByRole("button", { name: "mute 261218 7150P delta" });
+    mute.focus();
+    fireEvent.click(mute);
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18-delta", body: { enabled: false } }]));
     // the save's reload has landed: the rule is off, listed with what is switched off
     await screen.findByRole("button", { name: "unmute 261218 7150P delta", hidden: true });
@@ -131,7 +135,9 @@ describe.each(arrangements)("on the %s, a Reference source that refuses", (arran
     const { writes } = serve(true);
     await open(arrangement);
     const home = await openSpread(arrangement);
-    fireEvent.click(within(home).getByRole("button", { name: "mute 261218 7150P delta" }));
+    const mute = within(home).getByRole("button", { name: "mute 261218 7150P delta" });
+    mute.focus();
+    fireEvent.click(mute);
     await waitFor(() => expect(writes).toHaveLength(1));
     await screen.findByRole("button", { name: "unmute 261218 7150P delta", hidden: true });
     await waitFor(() => expect(home.contains(document.activeElement)
