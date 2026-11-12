@@ -5,6 +5,9 @@
  *  What a save posts is `add.ts`'s; this draws the draft and says what went wrong. A refusal — the
  *  draft's own, or the service's — is said INSIDE the form, by the button that was pressed: the old
  *  form's toast was drawn underneath it, and a refused form looked like nothing had happened.
+ *
+ *  The same place adds ONE contract (#331): a choice above the form, and `AddContract.tsx` in the
+ *  spread form's stead. Each draft is kept here, so switching back and forth loses neither.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
@@ -17,10 +20,12 @@ import {
   setLeg, setSpread, spreadsBody, stopWarning, valueEnabled, valueHint, valueShown, type AddDraft,
   type Preset, type SpreadDraft,
 } from "./add";
+import { AddContract } from "./AddContract";
+import { newContract, type ContractDraft } from "./contract";
 import { DraftPreview } from "./Payoff";
 import "./add.css";
 
-export function AddSpread({ privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, now }: {
+type Props = {
   privacy: boolean;
   /** every rule, as `/monitors` gave them: what a held spread will replace is read from these */
   monitors: Monitor[];
@@ -33,10 +38,41 @@ export function AddSpread({ privacy, monitors, spx, spxReason, onSaved, onCancel
   autoFocus?: boolean;
   /** injected only by tests: Opened starts as the New York trading day on this clock */
   now?: Date;
-}) {
-  const [draft, setDraft] = useState<AddDraft>(() => newDraft(marketDay(now)));
-  const [error, setError] = useState<string | null>(null);
+};
+
+/** What to add — a spread, or one contract — and the form for it. */
+export function AddSpread(props: Props) {
+  const [kind, setKind] = useState<"spread" | "contract">("spread");
+  // the focus goes into the form when it opens, and stays on the choice when the choice is changed
+  const [chosen, setChosen] = useState(false);
+  const choose = (k: "spread" | "contract") => { setKind(k); setChosen(true); };
+  const [spread, setSpreadDraft] = useState<AddDraft>(() => newDraft(marketDay(props.now)));
+  const [contract, setContract] = useState<ContractDraft>(() => newContract(marketDay(props.now)));
+  // one save in flight for the whole place, not per form: switching form mid-save would otherwise
+  // mount a fresh save button that sends the same thing again (review of #340)
   const [saving, setSaving] = useState(false);
+  return (
+    <div className="nx-add-what">
+      <div className="nx-seg" role="group" aria-label="what to add">
+        <button type="button" aria-pressed={kind === "spread"} disabled={saving} onClick={() => choose("spread")}>a spread</button>
+        <button type="button" aria-pressed={kind === "contract"} disabled={saving} onClick={() => choose("contract")}>one contract</button>
+      </div>
+      {kind === "spread"
+        ? <SpreadForm {...props} autoFocus={props.autoFocus && !chosen} draft={spread} setDraft={setSpreadDraft}
+                      saving={saving} setSaving={setSaving} />
+        : <AddContract privacy={props.privacy} monitors={props.monitors} spx={props.spx} spxReason={props.spxReason}
+                       onSaved={props.onSaved} onCancel={props.onCancel} today={marketDay(props.now)}
+                       draft={contract} setDraft={setContract} saving={saving} setSaving={setSaving} />}
+    </div>
+  );
+}
+
+function SpreadForm({
+  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, draft, setDraft, saving, setSaving,
+}: Props & {
+  draft: AddDraft; setDraft: (d: AddDraft) => void; saving: boolean; setSaving: (s: boolean) => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
   const id = useId();
   const change = (next: AddDraft) => { setDraft(next); setError(null); };
   const expiry = useRef<HTMLInputElement>(null);
@@ -47,6 +83,7 @@ export function AddSpread({ privacy, monitors, spx, spxReason, onSaved, onCancel
     e.preventDefault();
     const out = spreadsBody(draft);
     if ("error" in out) { setError(out.error); return; }
+    if (saving) return;
     setSaving(true);
     try {
       onSaved(await addSpreads(out.body));

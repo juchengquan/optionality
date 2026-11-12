@@ -116,6 +116,14 @@ const WATCHING_PUTS = [
   monitor({ id: "mon-watch-delta", option_type: "PUT", strike: 6400, threshold: 0.15 }),
 ];
 
+/** One contract held, as the add form's "one contract" sends it (#331): a spread of one leg, and
+ *  the one Monitor the owner typed, naming that leg. */
+const ONE_PUT = {
+  name: "1218_P6400", held: true, entry: 4.5, contracts: 1, opened_at: "2026-11-06",
+  legs: [{ side: "short", option_type: "PUT", strike: 6400 }],
+  monitors: [{ option_type: "PUT", strike: 6400, field: "option_delta", threshold: 0.3, direction: "above", compare: "abs" }],
+};
+
 /** The book with a far call priced too, which nothing holds and no combo names. */
 const WIDE = { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) };
 
@@ -1127,6 +1135,38 @@ export const HTTP: readonly HttpInput[] = [
     name: "POST /spreads links a new holding's Monitors to it when another holding shares its legs",
     world: world({ tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: BOOK } }),
     request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [PUT_SPREAD] }),
+  },
+  // one contract, as the add form's "one contract" sends it (#331): a spread of one leg and the one
+  // Monitor naming that leg, on any field, direction and compare
+  {
+    // the strike the owner watched has been sold: its watch rule, linked to no holding, is replaced
+    // by the holding's own, as a held spread's are (#322)
+    name: "POST /spreads records one contract held, replacing the watch rule on it",
+    world: world({ tables: { monitors: [WATCHING_PUTS[1]!] }, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [ONE_PUT] }),
+  },
+  {
+    // the condor already holds the 6400 put: the lone holding's rule is linked to IT, never to the
+    // condor, and the condor gains no rule nobody asked for
+    name: "POST /spreads links one contract's rule to its own holding when another holding holds that strike",
+    world: world({ tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [ONE_PUT] }),
+  },
+  {
+    // a strike nothing holds, watched on its IV, signed and below: one contract's IV is its own,
+    // where a spread's would be a sum and is refused
+    name: "POST /spreads watches one contract's IV",
+    world: world({ provider: { quotes: WIDE } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{
+        name: "1218_C7500", held: false, legs: [{ side: "short", option_type: "CALL", strike: 7500 }],
+        monitors: [{
+          option_type: "CALL", strike: 7500, field: "option_implied_volatility", threshold: 18,
+          direction: "below", compare: "signed",
+        }],
+      }],
+    }),
   },
   {
     name: "POST /spreads refuses a spread with no name",
