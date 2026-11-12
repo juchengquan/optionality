@@ -121,9 +121,14 @@ export function deletesOn(strikeDate: string, retentionDays: number): string {
 /** Which of the four a rule is in, for what may be done to it. */
 export type RuleState = "on" | "muted" | "quarantined" | "expired";
 
-export function stateOf(r: Rule): RuleState {
+/** @param today the sweep's day, the UTC date (`sweeper.ts`'s `utcDate`): a rule is past its
+ *  expiry from the day after it, and the sweep deletes ANY rule past it once the retention window
+ *  is behind it, on or off and whatever switched it off (`expiryVerdict`). So a rule past its expiry
+ *  is expired here whatever its reason says — a quarantine or a closed holding included — and is
+ *  offered nothing that would switch it back on. */
+export function stateOf(r: Rule, today: string): RuleState {
+  if (r.strike_date < today || r.disabled_reason === "expired") return "expired";
   if (r.enabled) return "on";
-  if (r.disabled_reason === "expired") return "expired";
   return r.disabled_reason !== null && r.disabled_reason in QUARANTINE_WHY ? "quarantined" : "muted";
 }
 

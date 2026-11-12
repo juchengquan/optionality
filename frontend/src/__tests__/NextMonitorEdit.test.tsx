@@ -3,7 +3,7 @@
  *  refusal is VISIBLE above a sheet, and that the phone's boxes are 16px, is measured by the browser
  *  suite (`NextEdit.test.tsx` and `NextEdit.iphone.test.tsx` under `__browser__/`). */
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { MonitorPatch } from "backend/schemas";
 import type { Entry, Monitor } from "../api";
@@ -35,6 +35,9 @@ function actions(over: Partial<MonitorActions> = {}) {
     patch: vi.fn(async (id: string, body: unknown) => { sent.push({ what: "PATCH", id, body }); }),
     remove: vi.fn(async (id: string) => { sent.push({ what: "DELETE", id }); }),
     retentionDays: 7,
+    // the evening of 10 November in New York, already the 11th in UTC: every rule in the owner's
+    // book is in the future, the expired one excepted
+    now: () => new Date("2026-11-11T01:30:00Z"),
     ...over,
   };
   return { value, sent };
@@ -276,6 +279,27 @@ describe("a rule the service switched off", () => {
     expect(screen.getByRole("button", { name: /^delete/ })).toBeTruthy();
   });
 
+  it("is expired by its date, whatever its reason: a quarantine past expiry is not switched back on", () => {
+    // the sweep deletes ANY rule past its expiry and retention, on or off (`expiryVerdict`)
+    controls({ monitor: { ...monitor("q-unknown"), strike_date: "2026-11-06" } });
+    expect(screen.getByText("expired 2026-11-06 — the service deletes it on 2026-11-14")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /back on$/ })).toBeNull();
+  });
+
+  it("offers no unmute to a rule past its expiry that was switched off with its holding", () => {
+    controls({ monitor: { ...monitor("m-muted"), disabled_reason: "holding-closed", strike_date: "2026-11-10" } });
+    // the 10th is before the 11th, the sweep's day (UTC), though it is still the 10th in New York
+    expect(screen.getByText("expired 2026-11-10 — the service deletes it on 2026-11-18")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^unmute/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /^delete/ })).toBeTruthy();
+  });
+
+  it("is not expired on its expiry day itself, which the sweep still watches", () => {
+    controls({ monitor: { ...monitor("m-muted"), strike_date: "2026-11-11" } });
+    expect(screen.queryByText(/^expired/)).toBeNull();
+    expect(screen.getByRole("button", { name: /^unmute/ })).toBeTruthy();
+  });
+
   it("says the expiry alone while the service has not said its retention", () => {
     controls({ monitor: monitor("m-expired") }, { retentionDays: null });
     expect(screen.getByText("expired 2026-11-06 — the service deletes it after its retention window")).toBeTruthy();
@@ -367,6 +391,9 @@ describe("the page after a save", () => {
   it("keeps the saved book when a poll asked before the save answers after it", async () => {
     // a slow poll — OpenD's 10 s limit against a 5 s cadence — still in flight when the owner
     // mutes a rule: the save's reload lands first, and the older answer must not put the rule back
+    // the owner's book on a day before its expiries, as the rest of this file's clock is
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") });
+    onTestFinished(() => { vi.useRealTimers(); });
     const writes = serveEditing();
     const served = window.fetch;
     let hold = false;

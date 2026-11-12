@@ -31,6 +31,8 @@ export interface MonitorActions {
   remove: (id: string) => Promise<void>;
   /** `/health`'s `expired_retention_days`, or null until it has answered */
   retentionDays: number | null;
+  /** the clock, injected by tests; the page's is the real one */
+  now?: () => Date;
 }
 
 export const MonitorActionsContext = createContext<MonitorActions | null>(null);
@@ -50,7 +52,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
   const [busy, setBusy] = useState(false);
   const editButton = useRef<HTMLButtonElement>(null);
   const label = ruleLabel(rule);
-  const state = stateOf(rule);
+  const state = stateOf(rule, (actions.now?.() ?? new Date()).toISOString().slice(0, 10));
 
   const to = (next: Mode) => { setError(null); setMode(next); };
   const close = () => { to("idle"); editButton.current?.focus(); };
