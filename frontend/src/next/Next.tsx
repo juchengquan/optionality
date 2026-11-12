@@ -227,7 +227,7 @@ export function Next() {
       health={book.health} needs={everything}
       complete={holdings !== null && book.holdingsError === null}
       holdingsAt={book.holdingsAt}
-      references={book.references}
+      references={book.references} referencesPending={book.referencesPending}
       onAddReference={(body) => book.act(() => addReference(body))}
       onRemoveReference={(id) => void book.act(() => removeReference(id))}
     />
@@ -547,22 +547,30 @@ function useBook(mode: Mode) {
     }
   }, []);
 
-  const loadReferences = useCallback(
-    // a backdrop never blanks the page, and an empty list takes the strip away rather than
-    // leaving figures nobody can vouch for (ADR 0018)
-    () => fetchReferences().then(setReferences, () => setReferences([])),
-    [],
-  );
+  // A backdrop never blanks the page, and an empty list takes the strip away rather than leaving
+  // figures nobody can vouch for (ADR 0018). ONE call at a time (`oneAtATime`): a source that
+  // accepts and never answers costs the whole 8 s request timeout (#308), and nothing here waits
+  // for it, so every poll, press and save would otherwise stack another call against it.
+  const [loadReferences] = useState(() => oneAtATime(
+    () => fetchReferences().catch(() => [] as Reference[]).then(setReferences),
+  ));
+  // a keep or drop in Settings until a read that started after it has landed: the list it shows
+  // until then is from before the write, and a second press would make the same change twice
+  const [referencesPending, setReferencesPending] = useState(0);
 
   /** `rest`: the market data beyond the line, the holdings; `references` with them, which is
    *  LIVE's poll, and any change the owner made — a Reference kept or dropped in Settings must be
-   *  seen to have been, in REVIEW too. */
+   *  seen to have been, in REVIEW too.
+   *
+   *  The References are ASKED here and never awaited (#335, as `/opt` since #308): what this
+   *  returns settles when the line and the holdings land, so a save, a refresh or a poll finishes
+   *  on its own reads and the strip catches up when its slowest source answers. Awaited, a mute
+   *  said "saving…" for the whole of a silent source's 8 s. */
   const load = useCallback(
-    (rest: boolean, references: boolean = rest && live) => Promise.all([
-      loadLine(),
-      rest ? loadHoldings() : null,
-      references ? loadReferences() : null,
-    ]).then(() => undefined),
+    (rest: boolean, references: boolean = rest && live) => {
+      if (references) void loadReferences();
+      return Promise.all([loadLine(), rest ? loadHoldings() : null]).then(() => undefined);
+    },
     [loadLine, loadHoldings, loadReferences, live],
   );
 
@@ -597,13 +605,17 @@ function useBook(mode: Mode) {
   const act = useCallback(async (fn: () => Promise<void>) => {
     try {
       await fn();
-      await load(true, true);
-      return true;
     } catch (e: unknown) {
       toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
       return false;
     }
-  }, [load]);
+    // asked here rather than by `load`, to know when it lands: a read that STARTS after the write,
+    // whatever is out already (`oneAtATime`)
+    setReferencesPending((n) => n + 1);
+    void loadReferences().finally(() => setReferencesPending((n) => n - 1));
+    await load(true, false);
+    return true;
+  }, [load, loadReferences]);
 
   /** everything again, after the add form saved */
   const reload = useCallback(() => load(true, true), [load]);
@@ -611,6 +623,24 @@ function useBook(mode: Mode) {
   return {
     quotes, monitors, health, references, holdings, holdingsError, holdingsAt, error, polledAt,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
-    reload,
+    referencesPending: referencesPending > 0, reload,
   };
+}
+
+/** `ask`, never two at once: asked while one is out, it starts ONE more when that one settles,
+ *  shared by everyone who asked meanwhile, and resolves when that one does — so a caller always
+ *  gets a read that started after it asked, and answers land in the order they were asked, which
+ *  is what keeps an older set from being drawn over a newer one. `ask` must not reject. */
+function oneAtATime(ask: () => Promise<void>): () => Promise<void> {
+  let out: Promise<void> | null = null;
+  let next: Promise<void> | null = null;
+  const run = (): Promise<void> => {
+    if (out === null) {
+      out = ask().finally(() => { out = null; });
+      return out;
+    }
+    next ??= out.then(() => { next = null; return run(); });
+    return next;
+  };
+  return run;
 }
