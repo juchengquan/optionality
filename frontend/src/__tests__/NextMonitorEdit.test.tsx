@@ -243,6 +243,22 @@ describe("a rule the service switched off", () => {
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: "q-unknown", body: { enabled: true } }]));
   });
 
+  it("survives the row coming back on while the question is still asked", () => {
+    // the write lands and the page reloads BEFORE the question closes: the rule is on by then
+    const a = actions();
+    const q = monitor("q-unknown");
+    const ui = (m: Monitor) => (
+      <MonitorActionsContext.Provider value={a.value}>
+        <MonitorControls rule={ruleOfMonitor(m)} served={null} />
+      </MonitorActionsContext.Provider>
+    );
+    const { rerender } = render(ui(q));
+    fireEvent.click(screen.getByRole("button", { name: "switch 261211 8000C delta back on" }));
+    rerender(ui({ ...q, enabled: true, disabled_reason: null }));
+    expect(screen.queryByRole("group", { name: /back on\?$/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "mute 261211 8000C delta" })).toBeTruthy();
+  });
+
   it("can be edited to fix it, while off", async () => {
     const { sent } = controls({ monitor: monitor("q-unknown") });
     const form = await openEditor("261211 8000C delta");

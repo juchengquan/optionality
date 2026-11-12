@@ -78,6 +78,9 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     void run(() => actions.patch(rule.id, out.body!), close);
   };
 
+  // the whole reason, while the rule is still quarantined: a write lands and the page reloads before
+  // this form's own state moves on, so the row can be back on while the question is still asked
+  const why = state === "quarantined" ? QUARANTINE_WHY[rule.disabled_reason!]!(rule) : null;
   const toggle = state === "on" ? { words: "mute", body: { enabled: false } }
     : state === "muted" ? { words: "unmute", body: { enabled: true } } : null;
 
@@ -89,9 +92,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
             ? "after its retention window" : `on ${deletesOn(rule.strike_date, actions.retentionDays)}`}`}
         </p>
       ) : null}
-      {state === "quarantined" && mode !== "enabling" ? (
-        <p className="nx-mon-note">{`Switched off by the service: ${QUARANTINE_WHY[rule.disabled_reason!]!(rule)}.`}</p>
-      ) : null}
+      {why !== null && mode !== "enabling" ? <p className="nx-mon-note">{`Switched off by the service: ${why}.`}</p> : null}
 
       <div className="nx-mon-actions">
         <button ref={editButton} type="button" className="nx-mon-button" aria-label={`edit ${label}`}
@@ -124,11 +125,11 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
           Delete this Monitor for good? The service forgets it; a holding it watched is kept.
         </Ask>
       ) : null}
-      {mode === "enabling" ? (
+      {mode === "enabling" && why !== null ? (
         <Ask label={`switch ${label} back on?`} yes="switch it on" no="keep it off" busy={busy}
              onYes={() => void run(() => actions.patch(rule.id, { enabled: true }), () => to("idle"))} onNo={close}>
-          {`Switched off by the service: ${QUARANTINE_WHY[rule.disabled_reason!]!(rule)}. Switch it back on once
-            that is fixed: the next sweep checks it again, and switches it off again if nothing has changed.`}
+          {`Switched off by the service: ${why}. Switch it back on once that is fixed: the next sweep `
+            + "checks it again, and switches it off again if nothing has changed."}
         </Ask>
       ) : null}
       {mode === "editing" ? (
