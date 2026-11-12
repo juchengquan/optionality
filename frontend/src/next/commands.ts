@@ -26,13 +26,34 @@ export interface Findable {
   name: string;
   /** what it is, its expiry and its strikes, in words */
   detail: string;
-  /** everything typed text is matched against, lower case */
-  text: string;
+  /** the words typed text is matched against, lower case (`tokens`) */
+  words: string[];
 }
 
-/** `-P7150 +P7100`: legs as the table writes them, short as minus. */
-const legWords = (legs: { short: boolean; type: string; strike: number }[]) =>
-  legs.map((l) => `${l.short ? "-" : "+"}${l.type[0]}${l.strike}`).join(" ");
+/** A leg; `short` unset for the one contract a rule watches, which is not a position. */
+type Leg = { short?: boolean; type: string; strike: number };
+
+/** `-P7150 +P7100`: legs as the table writes them, short as minus; `P7150` for a rule's contract. */
+const legWords = (legs: Leg[]) =>
+  legs.map((l) => `${l.short === undefined ? "" : l.short ? "-" : "+"}${l.type[0]}${l.strike}`).join(" ");
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** The words a text is made of, as typed text is split: lower case, and nothing but letters,
+ *  digits and the `_`, `-` and `.` that names, dates and prices are written with. */
+export function tokens(text: string): string[] {
+  return text.toLowerCase().replace(/[^a-z0-9_.\-]+/g, " ").split(" ").filter(Boolean);
+}
+
+/** Every way the owner writes an expiry: `261218`, `2026-12-18`, and `dec 18` (or `dec 04`). */
+function dateWords(iso: string): string[] {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return [iso];
+  return [shortDate(iso), iso, MONTHS[Number(m[1]) - 1] ?? "", m[2]!, String(Number(m[2]))];
+}
+
+/** A strike alone and with its side, `7150` and `p7150`. */
+const strikeWords = (legs: Leg[]) => legs.flatMap((l) => [String(l.strike), `${l.type[0]}${l.strike}`]);
 
 /** moomoo's `US.SPXW261218P7150000` as the strike it names, or null for anything else. */
 function strikeOf(code: string): number | null {
@@ -40,34 +61,42 @@ function strikeOf(code: string): number | null {
   return m ? Number(m[1]) / 1000 : null;
 }
 
-function findable(ref: string, kind: FindKind, name: string, date: string, legs: string, extra: string[]): Findable {
-  const detail = [kind, shortDate(date), legs, ...extra].filter(Boolean).join(" · ");
-  return { ref, kind, name, detail, text: [name, detail, date, ...extra].join(" ").toLowerCase() };
+/** One thing the palette finds. Its words are its name (whole, and in its parts), what it is, its
+ *  expiry, its strikes and what it watches — NEVER a contract's code: moomoo writes a strike with
+ *  three zeros after it (`…P6700000`), so "7000" found a 6700 put inside one. */
+function findable(ref: string, kind: FindKind, name: string, date: string, legs: Leg[], field: string | null): Findable {
+  const detail = [kind, shortDate(date), legWords(legs), field].filter(Boolean).join(" · ");
+  const words = [name, ...tokens(name), ...tokens(kind), ...dateWords(date), ...strikeWords(legs), ...tokens(field ?? "")]
+    .map((w) => w.toLowerCase()).filter(Boolean);
+  return { ref, kind, name, detail, words: [...new Set(words)] };
 }
 
 function ofRow(row: DeskRow): Findable {
   if (row.kind === "holding") {
     const h = row.holding;
-    const legs = legWords(h.legs.map((l) => ({ short: l.side === "short", type: l.option_type, strike: l.strike })));
-    return findable(h.id, "holding", h.name, h.strike_date, legs, []);
+    const legs = h.legs.map((l) => ({ short: l.side === "short", type: l.option_type, strike: l.strike }));
+    return findable(h.id, "holding", h.name, h.strike_date, legs, null);
   }
   if (row.kind === "rule") {
     const e = row.entry;
     const legs = e.legs
-      ? legWords(e.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike })))
-      : `${e.option_type[0]}${strikeOf(e.code) ?? ""}`;
+      ? e.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike }))
+      : single(e.option_type, strikeOf(e.code));
     const kind: FindKind = e.legs && !e.held ? "watched spread" : "Monitor";
-    return findable(e.id, kind, rowName(row), e.strike_date, legs, [fieldWords(e.field, Boolean(e.legs)), e.code]);
+    return findable(e.id, kind, rowName(row), e.strike_date, legs, fieldWords(e.field, Boolean(e.legs)));
   }
   return ofMonitor(row.monitor, "quarantined Monitor");
 }
 
 function ofMonitor(m: Monitor, kind: FindKind): Findable {
   const legs = m.legs
-    ? legWords(m.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike })))
-    : `${m.option_type[0]}${strikeOf(m.code) ?? m.strike}`;
-  return findable(m.id, kind, monitorName(m), m.strike_date, legs, [fieldWords(m.field, Boolean(m.legs)), m.code]);
+    ? m.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike }))
+    : single(m.option_type, strikeOf(m.code) ?? m.strike);
+  return findable(m.id, kind, monitorName(m), m.strike_date, legs, fieldWords(m.field, Boolean(m.legs)));
 }
+
+/** The single contract a rule watches, as one leg with no side. */
+const single = (type: string, strike: number | null): Leg[] => (strike === null ? [] : [{ type, strike }]);
 
 /** Everything the palette can find, in the order the desk draws it. */
 export function findables(placed: BookModel): Findable[] {
@@ -77,16 +106,19 @@ export function findables(placed: BookModel): Findable[] {
   ];
 }
 
-/** The words typed, each of which must appear; none typed is everything. */
-export function words(query: string): string[] {
-  return query.toLowerCase().split(/\s+/).filter(Boolean);
+/** What `query` finds among `all`, in their order: every word typed must START one of an item's
+ *  words, in any order and any case — the start, so a word finds as it is typed ("715" already
+ *  narrows to 7150), and a WORD, so a strike is never found in the middle of another number. */
+export function matching<T extends { words: string[] }>(all: T[], query: string): T[] {
+  const ws = tokens(query);
+  return all.filter((f) => ws.every((w) => f.words.some((t) => t.startsWith(w))));
 }
 
-/** What `query` finds among `all`, in their order: every word typed, anywhere, in any case. */
-export function matching<T extends { text: string }>(all: T[], query: string): T[] {
-  const ws = words(query);
-  return all.filter((f) => ws.every((w) => f.text.includes(w)));
-}
+/** What holds the desk, for the palette: nothing; the selected rule's own editor; the selected
+ *  holding's close form; or some other form — any of which a jump elsewhere would discard. */
+export type Hold = "edit" | "close" | "other" | null;
+
+export const HOLD_WHY = "finish or cancel the open form first";
 
 export type ActionKey =
   | "add" | "edit-monitor" | "close-holding" | "mode" | "arrange-desk" | "arrange-phone" | "arrange-auto";
@@ -98,7 +130,7 @@ export interface PaletteAction {
   detail: string;
   /** why it cannot run now, or null when it can */
   why: string | null;
-  text: string;
+  words: string[];
 }
 
 const ARRANGEMENTS: [ActionKey, ArrangementChoice, string][] = [
@@ -109,27 +141,39 @@ const ARRANGEMENTS: [ActionKey, ArrangementChoice, string][] = [
 
 /** The palette's actions. Two act on the selected row and are closed, with the reason, when the
  *  selection is not what they act on: a holding is not a Monitor, nor a Monitor a holding. */
-export function paletteActions(s: { mode: Mode; choice: ArrangementChoice; selected: DeskRow | null }): PaletteAction[] {
+export function paletteActions(s: {
+  mode: Mode; choice: ArrangementChoice; selected: DeskRow | null;
+  /** what holds the desk (`holdOnDesk`): a form whose draft a jump or another form would discard */
+  hold?: Hold;
+  /** whether "by the screen's width" would make this screen the phone, which unmounts the desk */
+  autoIsPhone?: boolean;
+}): PaletteAction[] {
   const kind = s.selected?.kind ?? null;
   const name = s.selected ? rowName(s.selected) : "";
   const isMonitor = kind === "rule" || kind === "quarantined";
-  const out: Omit<PaletteAction, "text">[] = [
+  const hold = s.hold ?? null;
+  // a form action is fine while ITS form is the one open: that is landing on it again
+  const held = (mine: Hold) => (hold !== null && hold !== mine ? HOLD_WHY : null);
+  const out: Omit<PaletteAction, "words">[] = [
     { key: "add", label: "Add a spread", detail: "", why: null },
     {
       key: "edit-monitor", label: "Edit the selected Monitor", detail: isMonitor ? name : "",
       why: kind === null ? "nothing is selected"
-        : kind === "holding" ? "a holding is selected: select one of its Monitors" : null,
+        : kind === "holding" ? "a holding is selected: select one of its Monitors" : held("edit"),
     },
     {
       key: "close-holding", label: "Close the selected holding", detail: kind === "holding" ? name : "",
-      why: kind === null ? "nothing is selected" : kind === "holding" ? null : "a Monitor is selected, not a holding",
+      why: kind === null ? "nothing is selected"
+        : kind === "holding" ? held("close") : "a Monitor is selected, not a holding",
     },
+    // neither a mode nor the desk's own arrangement takes the desk down, so neither waits for a form
     { key: "mode", label: s.mode === "live" ? "Switch to Review" : "Switch to Live", detail: "", why: null },
     ...ARRANGEMENTS.map(([key, choice, label]) => ({
-      key, label, detail: s.choice === choice ? "in use" : "", why: null,
+      key, label, detail: s.choice === choice ? "in use" : "",
+      why: hold !== null && (choice === "phone" || (choice === "auto" && s.autoIsPhone)) ? HOLD_WHY : null,
     })),
   ];
-  return out.map((a) => ({ ...a, text: `${a.label} ${a.detail}`.toLowerCase() }));
+  return out.map((a) => ({ ...a, words: tokens(`${a.label} ${a.detail}`) }));
 }
 
 /** Whether the page is on a Mac, where the palette's chord is ⌘K rather than Ctrl+K. */

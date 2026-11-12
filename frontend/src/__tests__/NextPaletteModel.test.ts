@@ -42,10 +42,51 @@ describe("what it finds", () => {
     // an expiry, as the table heads its groups and as the service writes it
     expect(find("261231")).toEqual(["h-ic", "r-ic", "w-dec31", "w-lone"]);
     expect(find("2026-12-04")).toEqual(["w-dec04"]);
-    // a contract by its code
-    expect(find("US.SPXW261211C8300000")).toEqual(["q-unknown"]);
     expect(find("8300")).toEqual(["q-unknown"]);
     expect(find("delta 7150")).toEqual(["w-dec18-delta"]);
+  });
+
+  it("matches the start of a whole word, never the middle of a code", () => {
+    // moomoo writes a strike with three zeros after it (`…C7800000`), so a raw code in the text made
+    // the muted 7800 call answer "8000", a 6700 put answer "7000" and a 7065 put answer "6500"
+    const put = (strike: number, id: string) => ({
+      ...QUOTES.find((q) => q.id === "w-lone")!, id, option_type: "PUT",
+      code: `US.SPXW261218P${strike * 1000}`, quote: { name: `SPXW 261218 ${strike}.00P`, option_delta: -0.1 },
+    });
+    // the rules as the service serves them, each naming the strike its code does (the fixture's
+    // switched-off rules carry a default strike of 8000 whatever their code)
+    const monitors = MONITORS.map((m) => {
+      const k = /[CP](\d+)000$/.exec(m.code);
+      return k ? { ...m, strike: Number(k[1]) } : m;
+    });
+    const more = findables(placeBook([...QUOTES, put(6700, "x-6700"), put(7065, "x-7065")], HOLDINGS, monitors));
+    const in_ = (q: string) => refs(matching(more, q));
+    expect(in_("8000")).toEqual(["w-lone"]);
+    expect(in_("7000")).toEqual([]);
+    expect(in_("6500")).toEqual([]);
+    expect(in_("6700")).toEqual(["x-6700"]);
+    expect(in_("7065")).toEqual(["x-7065"]);
+    // and no code at all: it is the wire's spelling, not the owner's
+    expect(in_("US.SPXW261211C8300000")).toEqual([]);
+    expect(in_("spxw")).toEqual([]);
+  });
+
+  it("finds a strike with its side, and an expiry three ways", () => {
+    expect(find("p7150")).toEqual(["w-dec18", "w-dec18-delta"]);
+    expect(find("c7300")).toEqual(["h-calls", "r-calls"]);
+    expect(find("p7300")).toEqual([]);
+    expect(find("dec 4")).toEqual(["w-dec04"]);
+    expect(find("dec 04")).toEqual(["w-dec04"]);
+    expect(find("Dec 18 holding")).toEqual(["h-calls", "h-puts"]);
+    expect(find("2026-12-18 holding")).toEqual(["h-calls", "h-puts"]);
+    expect(find("nov")).toEqual(["m-expired"]);
+  });
+
+  it("finds a word as it is being typed", () => {
+    // the start of a strike already narrows to it
+    expect(find("715")).toEqual(["w-dec18", "w-dec18-delta"]);
+    expect(find("1218_p71")).toEqual(["w-dec18"]);
+    expect(find("quar")).toEqual(["q-unknown"]);
   });
 
   it("takes every word typed, in any order and any case", () => {
@@ -99,6 +140,25 @@ describe("its actions", () => {
     });
     // a quarantined rule is a Monitor too, and its editor is in the inspector
     expect(why(row("q-unknown"))).toMatchObject({ "edit-monitor": null });
+  });
+
+  it("refuses what would carry off a form being typed into, and nothing else", () => {
+    const why = (selected: DeskRow | null, hold: "edit" | "close" | "other" | null, autoIsPhone = false) =>
+      Object.fromEntries(paletteActions({ mode: "live", choice: "desk", selected, hold, autoIsPhone })
+        .map((a) => [a.key, a.why]));
+    const HOLD = "finish or cancel the open form first";
+    // the selected rule's own editor is open: editing it again is landing on it, closing is not
+    expect(why(row("w-dec18"), "edit")).toMatchObject({ "edit-monitor": null, add: null, mode: null });
+    expect(why(row("h-calls"), "close")).toMatchObject({ "close-holding": null });
+    // another form open: neither form action, and not the phone, which unmounts the desk
+    expect(why(row("w-dec18"), "other")).toMatchObject({ "edit-monitor": HOLD, "arrange-phone": HOLD });
+    expect(why(row("h-calls"), "edit")).toMatchObject({ "close-holding": HOLD });
+    expect(why(row("h-calls"), "other")).toMatchObject({ "close-holding": HOLD, "arrange-desk": null });
+    // by the screen's width is refused only where the width would make it the phone
+    expect(why(null, "other", false)["arrange-auto"]).toBeNull();
+    expect(why(null, "other", true)["arrange-auto"]).toBe(HOLD);
+    // and with nothing held, nothing is refused for it
+    expect(why(row("h-calls"), null, true)).toMatchObject({ "arrange-phone": null, "arrange-auto": null });
   });
 
   it("names what it acts on", () => {

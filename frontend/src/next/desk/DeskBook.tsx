@@ -131,6 +131,9 @@ export function DeskBook({ selection, ...props }: BookProps & {
         : null;
     if (button) {
       if (button.getAttribute("aria-expanded") !== "true") button.click();
+      // already open: the focus goes where the form put it when it opened — its first box — rather
+      // than staying on the page behind the palette that just closed
+      else formOf(button)?.querySelector<HTMLElement>("input")?.focus();
     } else {
       inspector.querySelector<HTMLElement>("h3")?.focus();
     }
@@ -190,6 +193,12 @@ export function DeskBook({ selection, ...props }: BookProps & {
                             onSelect={setSelected} onClose={close} monitors={monitors} writes={props.writes} /> : null}
     </div>
   );
+}
+
+/** The form a button in the inspector opened: the Monitor's editor beside its controls, or the
+ *  holding's form under its three buttons. */
+function formOf(button: HTMLElement): HTMLFormElement | null {
+  return button.closest(".nx-mon, .nx-hold")?.querySelector("form") ?? null;
 }
 
 interface Ctx {

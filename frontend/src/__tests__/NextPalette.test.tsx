@@ -298,7 +298,7 @@ describe("the phone gets nothing new", () => {
     await run(user, "arrangement: phone");
     await waitFor(() => expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("phone"));
     expect(fireEvent.keyDown(document.body, { key: "k", ctrlKey: true })).toBe(true);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull();
   });
 });
 
@@ -311,3 +311,126 @@ describe("nothing outlives the page", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("after review (#329)", () => {
+  it("lets a composing input method keep Enter and the arrows", async () => {
+    const { user } = await open();
+    await chord(user);
+    await user.type(box(), "7150");
+    fireEvent.keyDown(box(), { key: "ArrowDown", keyCode: 229 });
+    fireEvent.keyDown(box(), { key: "ArrowDown", isComposing: true });
+    expect(options()[0]!.getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(box(), { key: "Enter", isComposing: true });
+    fireEvent.keyDown(box(), { key: "Enter", keyCode: 229 });
+    expect(palette()).toBeTruthy();
+    expect(inspector()).toBeNull();
+  });
+
+  it("names the active option by what it is, so a new top result is a new one", async () => {
+    const { user } = await open();
+    await chord(user);
+    await user.type(box(), "7150");
+    const first = box().getAttribute("aria-activedescendant");
+    expect(document.getElementById(first!)!.textContent).toMatch(/1218_P7150/);
+    await user.type(box(), " delta");
+    const now = box().getAttribute("aria-activedescendant");
+    expect(now).not.toBe(first);
+    expect(document.getElementById(now!)!.textContent).toMatch(/261218 7150P/);
+  });
+
+  it("says out loud why a closed action did nothing", async () => {
+    const { user } = await open();
+    await chord(user);
+    await user.type(box(), "close the selected");
+    const said = within(palette()).getByTestId("refusal");
+    expect(said.getAttribute("aria-live")).toBe("assertive");
+    expect(said.textContent).toBe("");
+    await user.keyboard("{Enter}");
+    expect(said.textContent).toBe("Close the selected holding: nothing is selected");
+    // typing again clears it
+    await user.type(box(), "x");
+    expect(said.textContent).toBe("");
+  });
+
+  it("puts the focus in an editor that is already open rather than leave it on the page", async () => {
+    const { user } = await open();
+    await run(user, "7150 delta");
+    await run(user, "edit the selected");
+    const form = await screen.findByRole("form", { name: "editing 261218 7150P delta" });
+    (document.activeElement as HTMLElement).blur();
+    await run(user, "edit the selected");
+    await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
+    expect(screen.getByRole("form", { name: "editing 261218 7150P delta" })).toBe(form);
+  });
+
+  it("puts the focus in a close form that is already open", async () => {
+    const { user } = await open();
+    await run(user, "1218_C7300 holding");
+    await run(user, "close the selected");
+    const form = await screen.findByRole("form", { name: "close 1218_C7300" });
+    (document.activeElement as HTMLElement).blur();
+    await run(user, "close the selected");
+    await waitFor(() => expect(document.activeElement).toBe(form.querySelector("input")));
+  });
+
+  it("will not carry a draft off: finds, and the phone, wait until the open form is done", async () => {
+    const { user } = await open();
+    await run(user, "1218_C7300 holding");
+    await run(user, "close the selected");
+    const form = await screen.findByRole("form", { name: "close 1218_C7300" });
+    await chord(user);
+    await user.type(box(), "7150");
+    for (const o of options().filter((x) => x.textContent!.includes("go to"))) {
+      expect(o.getAttribute("aria-disabled")).toBe("true");
+      expect(o.textContent).toMatch(/finish or cancel the open form first/);
+    }
+    await user.keyboard("{Enter}");
+    expect(palette()).toBeTruthy();
+    expect(within(palette()).getByTestId("refusal").textContent)
+      .toBe("1218_P7150: finish or cancel the open form first");
+    await user.clear(box());
+    await user.type(box(), "arrangement: phone");
+    expect(options()[0]!.getAttribute("aria-disabled")).toBe("true");
+    // a mode switch keeps the form, so it is offered, and the form is still there after it
+    await user.clear(box());
+    await user.type(box(), "switch to review");
+    expect(options()[0]!.getAttribute("aria-disabled")).toBeNull();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(document.querySelector(".nx")!.getAttribute("data-mode")).toBe("review"));
+    expect(screen.getByRole("form", { name: "close 1218_C7300" })).toBe(form);
+    expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+  });
+
+  it("will not open another form over the one being typed into", async () => {
+    const { user } = await open();
+    await run(user, "1218_C7300 holding");
+    await user.click(within(inspector()!).getByRole("button", { name: "Edit" }));
+    await chord(user);
+    await user.type(box(), "close the selected");
+    expect(options()[0]!.textContent).toMatch(/finish or cancel the open form first/);
+  });
+
+  it("takes Ctrl+K over another dialog from the browser, and opens nothing over it", async () => {
+    const { user } = await open();
+    await user.click(screen.getByRole("button", { name: "settings" }));
+    await screen.findByRole("dialog", { name: "Settings" });
+    expect(fireEvent.keyDown(document.activeElement ?? document.body, { key: "k", ctrlKey: true })).toBe(false);
+    expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull();
+  });
+
+  it("forgets the desk's selection on the phone, and says how to come back", async () => {
+    const { user } = await open();
+    await run(user, "1231_IC holding");
+    await waitFor(() => expect(inspector()).not.toBeNull());
+    await run(user, "arrangement: phone");
+    await screen.findByText(/Settings switches it back/);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.selectOptions(await screen.findByLabelText("arrangement"), "desk");
+    await waitFor(() => expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk"));
+    // back on the desk: nothing selected, no inspector reopened on the old row
+    await waitFor(() => expect(document.querySelector(".nxd")).not.toBeNull());
+    expect(inspector()).toBeNull();
+    expect(document.querySelector("[data-cursor], [data-selected]")).toBeNull();
+  });
+});
+

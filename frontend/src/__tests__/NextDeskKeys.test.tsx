@@ -78,6 +78,8 @@ describe("moving the selection", () => {
     expect(row("h-ic").hasAttribute("data-selected")).toBe(true);
     press("k");
     expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1218_P6400");
+    // and the focus stays in the inspector, where its reader is, rather than going to the row
+    expect(inspector()!.contains(document.activeElement)).toBe(true);
   });
 });
 
@@ -143,6 +145,19 @@ describe("when they do nothing", () => {
     for (const mod of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
       expect(press("j", document.body, mod)).toBe(true);
     }
+    expect(cursor()).toBeNull();
+  });
+
+  it("does nothing while an input method is composing a word", () => {
+    render(<DeskBook {...props()} />);
+    expect(press("j", document.body, { isComposing: true })).toBe(true);
+    expect(press("j", document.body, { keyCode: 229 })).toBe(true);
+    expect(cursor()).toBeNull();
+  });
+
+  it("does nothing with a key something earlier already handled", () => {
+    render(<><DeskBook {...props()} /><div tabIndex={-1} aria-label="handler" onKeyDown={(e) => e.preventDefault()} /></>);
+    press("j", screen.getByLabelText("handler"));
     expect(cursor()).toBeNull();
   });
 

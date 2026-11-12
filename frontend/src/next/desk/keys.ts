@@ -3,16 +3,21 @@
  *  inspector, was the inspector's before these and stays in `DeskBook`.
  *
  *  A key does nothing when it is someone else's:
- *  - with Ctrl, ⌘ or Alt held — that is another chord, and the browser's;
+ *  - with Ctrl, ⌘ or Alt held — that is another chord, and the browser's — or while an input
+ *    method is composing a word, or when something earlier already handled the key;
  *  - while the focus is where a key is TYPED: an input, a textarea, a select, an editable region;
  *  - while a dialog is open — the palette, Settings, a column picker — which owns the keyboard;
  *  - while a form is open in the desk (the inspector's editors, a delete asked about) or the add
- *    panel is: j would move the inspector out from under a draft, and with it the draft.
+ *    panel is: j would move the inspector out from under a draft, and with it the draft. The
+ *    palette keeps the same rule (`holdOnDesk`): while a form holds, it lands on nothing and opens
+ *    no other form, and says so.
  *  Enter is also left to any control that has the focus, which answers it itself.
  *
  *  Only the desk mounts this, so the phone registers nothing (ADR 0023: parity is by touch there).
  */
 import { useEffect, useRef } from "react";
+
+import type { Hold } from "../commands";
 
 /** Where the table's selection is, and whether the inspector is open on it. */
 export interface DeskSelection {
@@ -41,6 +46,21 @@ export function keysAreElsewhere(desk: Element | null): boolean {
   return Boolean(desk?.querySelector('form, [data-poll="hold"]'));
 }
 
+/** What holds the desk, for the palette (`Hold` in commands.ts): read from the page as it stands. */
+export function holdOnDesk(desk: Element | null): Hold {
+  const held = [...(desk?.querySelectorAll('[data-poll="hold"]') ?? [])];
+  if (held.length === 0) return null;
+  const inspector = desk!.querySelector(".nxd-inspector");
+  const form = held[0]!;
+  if (held.length === 1 && inspector?.contains(form)) {
+    // the selected rule's controls are the inspector's first; a rule under it has its own
+    if (form.matches("form.nx-mon-form") && form.closest(".nx-mon") === inspector.querySelector(".nx-mon")) return "edit";
+    const pressed = inspector.querySelector('.nx-hold-actions button[aria-expanded="true"]');
+    if (form.closest(".nx-hold") && pressed?.textContent === "Close…") return "close";
+  }
+  return "other";
+}
+
 /** What a control with the focus answers Enter with itself. */
 const ANSWERS_ENTER = 'button, a[href], summary, [role="button"], [role="link"], [role="option"], [tabindex]:not([tabindex="-1"])';
 
@@ -59,6 +79,7 @@ export function useDeskKeys({ ids, selection, setSelection, desk }: {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key !== "j" && e.key !== "k" && e.key !== "Enter") return;
       if (typingInto(e.target) || keysAreElsewhere(desk.current)) return;
       const { ids, selection: s, setSelection: set } = now.current;

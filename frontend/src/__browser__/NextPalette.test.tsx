@@ -10,7 +10,6 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { onMac } from "../next/commands";
 import { Next } from "../next/Next";
 import { holdingService, type HoldingService } from "../testing/holdingService";
 import { settle } from "./nextBook";
@@ -18,13 +17,17 @@ import { settle } from "./nextBook";
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
   for (const n of ["ui_arrangement", "ui_privacy", "ui_pricemap"]) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
 /** Noon in New York, in the session, so the page opens in LIVE whatever the machine's clock says. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
-async function openDesk(height = 900): Promise<HoldingService> {
+/** The page on a Mac unless told otherwise: the platform is STUBBED, so the suite exercises the
+ *  page's own detection both ways rather than asking it which chord to press. */
+async function openDesk(height = 900, platform = "MacIntel"): Promise<HoldingService> {
+  vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
   vi.useFakeTimers({ toFake: ["Date"], now: IN_SESSION });
   await page.viewport(1440, height);
   const s = holdingService();
@@ -34,8 +37,8 @@ async function openDesk(height = 900): Promise<HoldingService> {
   return s;
 }
 
-/** The chord this machine's browser answers to: ⌘K on a Mac, Ctrl+K elsewhere. */
-const chord = () => userEvent.keyboard(onMac() ? "{Meta>}k{/Meta}" : "{Control>}k{/Control}");
+/** ⌘K, as the stubbed Mac answers to. */
+const chord = () => userEvent.keyboard("{Meta>}k{/Meta}");
 const palette = () => screen.getByRole("dialog", { name: "commands" });
 const gone = () => waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
 const inspector = () => screen.queryByRole("complementary", { name: /^inspector:/ });
@@ -172,3 +175,23 @@ describe("j and k", () => {
     expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
   });
 });
+
+describe("the chord the platform answers to", () => {
+  it("is ⌘K on a Mac, where Ctrl+K stays the text field's", async () => {
+    await openDesk(900, "MacIntel");
+    await userEvent.keyboard("{Control>}k{/Control}");
+    expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull();
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    expect(await screen.findByRole("dialog", { name: "commands" })).toBeTruthy();
+  });
+
+  it("is Ctrl+K off a Mac, and ⌘K does nothing there", async () => {
+    await openDesk(900, "Linux x86_64");
+    expect(screen.getByRole("button", { name: /^find and act/ }).getAttribute("aria-keyshortcuts")).toBe("Control+K");
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull();
+    await userEvent.keyboard("{Control>}k{/Control}");
+    expect(await screen.findByRole("dialog", { name: "commands" })).toBeTruthy();
+  });
+});
+

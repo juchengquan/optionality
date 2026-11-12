@@ -27,7 +27,7 @@ import { DeskBook } from "./desk/DeskBook";
 import { DeskJournal } from "./desk/DeskJournal";
 import { useJournal } from "./journal";
 import { rowId, tableRows } from "./desk/columns";
-import { NOTHING_SELECTED, type DeskSelection } from "./desk/keys";
+import { holdOnDesk, NOTHING_SELECTED, type DeskSelection } from "./desk/keys";
 import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
@@ -35,7 +35,7 @@ import { clockMode, useSessionClock, type Mode } from "./mode";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
-import { findables, paletteActions } from "./commands";
+import { findables, HOLD_WHY, paletteActions } from "./commands";
 import { placeBook } from "./placement";
 import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
@@ -52,7 +52,8 @@ export function Next() {
   const [entryStyle, setEntryStyle] = useState(readEntryStyle);
   const [privacy, setPrivacy] = useState(readPrivacy);
   const [choice, setChoice] = useState(readArrangement);
-  const arrangement = arrangementFor(useViewportWidth(), choice);
+  const width = useViewportWidth();
+  const arrangement = arrangementFor(width, choice);
   const phone = arrangement === "phone";
 
   // On the document as well as the page: a dialog or a toast is drawn in a portal outside `.nx`,
@@ -157,7 +158,17 @@ export function Next() {
   const selectedRow = useMemo(
     () => (desk.id === null ? null : tableRows(placed).find((r) => rowId(r) === desk.id) ?? null), [placed, desk.id],
   );
-  const actions = useMemo(() => paletteActions({ mode, choice, selected: selectedRow }), [mode, choice, selectedRow]);
+  // a form open on the desk, read as the palette opens: while one holds, the palette lands on
+  // nothing and opens no other form, as j and k move nothing (desk/keys.ts)
+  const hold = useMemo(() => (paletteOpen ? holdOnDesk(document.querySelector(".nxd")) : null), [paletteOpen]);
+  const autoIsPhone = arrangementFor(width, "auto") === "phone";
+  const actions = useMemo(
+    () => paletteActions({ mode, choice, selected: selectedRow, hold, autoIsPhone }),
+    [mode, choice, selectedRow, hold, autoIsPhone],
+  );
+  // the desk's selection is the desk's: the phone has none, and coming back to the desk must not
+  // reopen an inspector on a row picked before it went
+  useEffect(() => { if (phone) setDesk(NOTHING_SELECTED); }, [phone, setDesk]);
   const chooseArrangement = useCallback((v: ArrangementChoice) => { setChoice(v); writeArrangement(v); }, []);
   const runChosen = useCallback((c: Chosen) => {
     const land = (id: string, then: "inspect" | "edit" | "close") =>
@@ -175,7 +186,11 @@ export function Next() {
     else if (a.key === "close-holding" && desk.id !== null) land(desk.id, "close");
     else if (a.key === "mode") pickMode(mode === "live" ? "review" : "live");
     else if (a.key === "arrange-desk") chooseArrangement("desk");
-    else if (a.key === "arrange-phone") chooseArrangement("phone");
+    else if (a.key === "arrange-phone") {
+      chooseArrangement("phone");
+      // the phone has no palette, so the way back is said where it will be seen
+      toast.add({ title: "the phone arrangement: Settings switches it back", type: "success" });
+    }
     else if (a.key === "arrange-auto") chooseArrangement("auto");
   }, [adding, panelId, desk.id, setDesk, pickMode, mode, chooseArrangement]);
   const shortcut = paletteShortcut();
@@ -309,7 +324,7 @@ export function Next() {
       ) : null}
       {/* the desk's alone: the phone registers no chord and no keys (ADR 0023, #299) */}
       {phone ? null : (
-        <Palette open={paletteOpen} onOpenChange={setPaletteOpen} found={found} actions={actions}
+        <Palette open={paletteOpen} onOpenChange={setPaletteOpen} found={found} findWhy={hold === null ? null : HOLD_WHY} actions={actions}
                  onChoose={runChosen} up={up} entryStyle={entryStyle} />
       )}
       <Toaster />
