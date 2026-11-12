@@ -46,9 +46,9 @@ const FULL = {
   option_delta: -0.9912, option_gamma: -0.000123, option_theta: -12.0567, option_vega: -10.4321,
 };
 
-/** The book with w-lone priced in full, or with nothing, and w-dec18 with or without its greeks. */
+/** The book with w-lone priced in full, or with a quote carrying none of its figures, and w-dec18 with or without its greeks. */
 const book = (served: boolean) => QUOTES.map((q) => q.id === "w-lone"
-  ? { ...q, quote: served ? FULL : null } as Entry
+  ? { ...q, quote: served ? FULL : { name: FULL.name } } as Entry
   : q.id === "w-dec18" && served
     ? { ...q, combo_greeks: { option_delta: -0.0512, option_gamma: -0.00031, option_theta: 10.731, option_vega: -11.284 } } as Entry
     : q);

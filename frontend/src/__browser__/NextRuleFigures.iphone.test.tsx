@@ -47,7 +47,7 @@ const FULL = {
 };
 
 const book = (served: boolean) => QUOTES.map((q) => q.id === "w-lone"
-  ? { ...q, quote: served ? FULL : null } as Entry
+  ? { ...q, quote: served ? FULL : { name: FULL.name } } as Entry
   : q.id === "w-dec18" && served
     ? { ...q, combo_greeks: { option_delta: -0.0512, option_gamma: -0.00031, option_theta: 10.731, option_vega: -11.284 } } as Entry
     : q);

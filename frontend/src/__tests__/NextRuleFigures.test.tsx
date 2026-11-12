@@ -13,7 +13,7 @@ import type { Entry } from "../api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
-import { ruleFigures } from "../next/quotefigures";
+import { ruleFigures, wholeMissing } from "../next/quotefigures";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 afterEach(cleanup);
@@ -61,19 +61,57 @@ describe("a single contract's figures", () => {
     }
     // the mid is derived, and only from both sides
     expect(figure(rows, "mid")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
-    expect(figure(rows, "last trade")).toMatchObject({ text: "—", why: "no trade reported" });
+    // no stamp at all is a Provider that sends none (IB Gateway never does), not an untraded contract
+    expect(figure(rows, "last trade")).toMatchObject({ text: "—", why: "not served by the provider" });
     expect(rows.some((r) => /^-?0(\.0+)?%?$/.test(r.text))).toBe(false);
   });
 
-  it("are all dashes, saying so, when the batch carried no quote for it", () => {
-    const rows = ruleFigures(withQuote("w-lone", { quote: null }));
-    expect(rows).toHaveLength(10);
-    for (const r of rows) expect(r).toMatchObject({ text: "—", why: "no quote in this poll" });
+  it("are one reason, not ten dashes repeating it, when the batch carried no quote for it", () => {
+    const none = withQuote("w-lone", { quote: null });
+    expect(ruleFigures(none)).toEqual([]);
+    expect(wholeMissing(none)).toBe("no quote in this poll");
+    expect(wholeMissing(withQuote("w-lone", { quote: FULL }))).toBeNull();
   });
 
   it("say the service's own word when the Provider does not know the contract", () => {
-    const rows = ruleFigures(withQuote("w-lone", { quote: null, error: "unknown contract" }));
-    for (const r of rows) expect(r).toMatchObject({ text: "—", why: "unknown contract" });
+    const unknown = withQuote("w-lone", { quote: null, error: "unknown contract" });
+    expect(ruleFigures(unknown)).toEqual([]);
+    expect(wholeMissing(unknown)).toBe("unknown contract");
+  });
+
+  it("read IB Gateway's quote, which carries a last price and never a last-trade time", () => {
+    const ibkr = { bid_price: 1.1, ask_price: 1.2, mid_price: 1.15, last_price: 1.15, option_delta: 0.2 };
+    const rows = ruleFigures(withQuote("w-lone", { quote: ibkr }));
+    expect(figure(rows, "last")).toMatchObject({ text: "1.15", why: null });
+    expect(figure(rows, "last trade")).toMatchObject({ text: "—", why: "not served by the provider" });
+  });
+
+  it("read moomoo's N/A for a contract that has not traded as no trade, never as a time", () => {
+    const untraded = { ...FULL, update_time: "N/A" };
+    const rows = ruleFigures(withQuote("w-lone", { quote: untraded }));
+    expect(figure(rows, "last trade")).toMatchObject({ text: "—", why: "no trade reported" });
+    // a price beside a real stamp stays a figure
+    expect(figure(rows, "last")).toMatchObject({ text: "0.60", why: null });
+    // and the price of no trade — the 0 a never-traded contract arrives with — is no price at all
+    const zero = ruleFigures(withQuote("w-lone", { quote: { ...untraded, last_price: 0 } }));
+    expect(figure(zero, "last")).toMatchObject({ text: "—", why: "no trade reported" });
+    // anything that is not a stamp is not drawn as one
+    const odd = ruleFigures(withQuote("w-lone", { quote: { ...FULL, update_time: "--" } }));
+    expect(figure(odd, "last trade")).toMatchObject({ text: "—", why: "no trade reported" });
+  });
+
+  it("derive no mid in the browser: bid and ask without the served mid is a dash", () => {
+    const rows = ruleFigures(withQuote("w-lone", { quote: { ...FULL, mid_price: undefined } }));
+    expect(figure(rows, "bid")).toMatchObject({ text: "0.45", why: null });
+    expect(figure(rows, "mid")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
+  });
+
+  it("say a served γ too small for four places as under 0.0001, never 0.0000", () => {
+    const tiny = (g: number) => figure(ruleFigures(withQuote("w-lone", { quote: { ...FULL, option_gamma: g } })), "γ").text;
+    expect(tiny(0.00004)).toBe("<0.0001");
+    expect(tiny(-0.00004)).toBe(">-0.0001");
+    expect(tiny(0)).toBe("0.0000");
+    expect(tiny(0.00006)).toBe("0.0001");
   });
 
   it("read a figure that is not a finite number as not served, rather than printing it", () => {
@@ -114,6 +152,23 @@ describe("a combo's figures", () => {
     for (const label of ["Δ", "γ", "θ", "vega"]) {
       expect(figure(ruleFigures(quote("w-dec18")), label)).toMatchObject({ text: "—", why: partial });
     }
+  });
+
+  it("list no spread value for a rule watching a greek: its sum is that greek, not a price", () => {
+    const rows = ruleFigures(withQuote("w-dec18", {
+      field: "option_delta", combo_value: -0.05, combo_greeks: { option_delta: -0.0512 },
+    }));
+    expect(rows.some((r) => r.label === "spread value")).toBe(false);
+    expect(rows.some((r) => r.text === "-0.05")).toBe(false);
+    expect(figure(rows, "Δ")).toMatchObject({ text: "-0.051", why: null });
+  });
+
+  it("say why a held spread has no cost to close when every leg is priced but not held once", () => {
+    const rows = ruleFigures(withQuote("r-calls", { field: "mid_price", combo_value: -4.4, cost_to_close: null }));
+    expect(figure(rows, "cost to close")).toMatchObject({
+      text: "—", why: "not every leg is held exactly once by one holding" });
+    const unpriced = ruleFigures(withQuote("r-calls", { field: "mid_price", combo_value: null, cost_to_close: null }));
+    expect(figure(unpriced, "cost to close").why).toBe("a leg has no figure, and no sum is taken from part of them");
   });
 
   it("add the cost to close where the rule covers a holding", () => {
@@ -187,6 +242,31 @@ describe.each([["the desk's inspector", openDesk], ["the phone's sheet", openPho
     expect(drawn(at, "θ")).toBe("0.73");
     expect(drawn(at, "vega")).toBe("-1.28");
     expect(within(within(at).getByRole("group", { name: "figures" })).queryByText("IV")).toBeNull();
+  });
+
+  it("calls a delta rule's summed delta no spread value, anywhere", async () => {
+    const delta = BOOK.map((q) => q.id === "w-dec18"
+      ? { ...q, field: "option_delta", threshold: 0.2, combo_value: -0.05, watched: -0.05,
+          combo_greeks: { option_delta: -0.0512 } } as Entry : q);
+    const at = await open("w-dec18", delta);
+    expect(at.textContent).not.toContain("spread value");
+    expect(drawn(at, "Δ")).toBe("-0.051");
+  });
+
+  it("labels the spread value once in the whole of it, for a rule on the spread's price", async () => {
+    const at = await open("w-dec18");
+    // as a figure's label, anywhere in the sheet or inspector — the facts once had one of their own
+    expect(within(at).getAllByText("spread value", { selector: "dt" })).toHaveLength(1);
+    expect(drawn(at, "spread value")).toBe("-2.40");
+  });
+
+  it("says once why there are no figures, rather than a dash per figure", async () => {
+    const at = await open("w-lone", BOOK.map((q) => q.id === "w-lone"
+      ? { ...q, quote: null, error: "unknown contract", watched: null, fill: null } as Entry : q));
+    expect(within(at).queryByRole("group", { name: "figures" })).toBeNull();
+    const line = at.querySelector("[data-figures-missing]")!;
+    expect(line.textContent).toBe("no figures — unknown contract");
+    expect(at.querySelectorAll("[data-figure]")).toHaveLength(0);
   });
 
   it("hides none of them under privacy: they are a contract's figures in points, not $ amounts", async () => {

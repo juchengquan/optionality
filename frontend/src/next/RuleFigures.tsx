@@ -2,10 +2,13 @@
  *  its key-value grid's class, the phone's sheet its facts grid's, so each looks like the figures
  *  around it. What the list says is `rulefigures.ts`, one list for both. */
 import type { Entry } from "../api";
-import { ruleFigures } from "./quotefigures";
+import { ruleFigures, wholeMissing } from "./quotefigures";
 import "./rulefigures.css";
 
 export function RuleFigures({ entry, className }: { entry: Entry; className: string }) {
+  // no quote at all: one reason, rather than ten dashes each repeating it
+  const missing = wholeMissing(entry);
+  if (missing !== null) return <p className="nx-meta nx-figures-missing" data-figures-missing="">{`no figures — ${missing}`}</p>;
   return (
     <dl className={`${className} nx-figures`} role="group" aria-label="figures">
       {ruleFigures(entry).map((f) => (
