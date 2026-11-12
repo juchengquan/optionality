@@ -134,7 +134,8 @@
             "code": "US.SPXW261218P6400000",
             "field": "option_delta"
           }
-        ]
+        ],
+        "replaced": []
       }
     },
     "rows": {

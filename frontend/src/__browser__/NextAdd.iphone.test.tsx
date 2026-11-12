@@ -16,6 +16,7 @@ afterEach(cleanup);
 const ADDED = {
   positions: [{ id: "p1", name: "a" }, { id: "p2", name: "b" }],
   monitors: ["m1", "m2", "m3", "m4"].map((id) => ({ id, code: id, field: "mid_price" })),
+  replaced: [],
 };
 
 /** A dialog slides in, and a box measured mid-animation is not where it will be. */

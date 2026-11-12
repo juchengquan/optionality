@@ -1,0 +1,305 @@
+{
+  "name": "POST /spreads refuses more than eight spreads",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/spreads",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "strike_date": "2026-12-18",
+      "spreads": [
+        {
+          "name": "dec-puts-0",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-1",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-2",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-3",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-4",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-5",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-6",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-7",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        },
+        {
+          "name": "dec-puts-8",
+          "held": true,
+          "entry": 2.25,
+          "opened_at": "2026-11-06",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "monitors": [
+            {
+              "threshold": 4.5
+            },
+            {
+              "option_type": "PUT",
+              "strike": 6400,
+              "threshold": 0.3
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "✖ Too big: expected array to have <=8 items\n  → at spreads"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

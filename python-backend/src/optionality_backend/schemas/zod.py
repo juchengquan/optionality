@@ -151,6 +151,30 @@ def _min_length(value: Any, minimum: int | None) -> list[str]:
     ]
 
 
+def _max_length(value: Any, maximum: int | None) -> list[str]:
+    """`.max(n)` on an array: `$ZodCheckMaxLength`, `_min_length`'s mirror, guarded the same way — so
+    it too runs on a value whose TYPE was refused (`"xyz"` is "expected array" and then "expected
+    string to have <=2 characters"), and on an object with a "length" key."""
+    if maximum is None or value is None or value is UNDEFINED:
+        return []
+    if isinstance(value, (str, list)):
+        small = len(value) <= maximum
+        origin = "string" if isinstance(value, str) else "array"
+    elif isinstance(value, dict) and "length" in value:
+        small = number(value["length"]) <= maximum
+        origin = "unknown"
+    else:
+        return []
+    if small:
+        return []
+    unit = {"string": "characters", "array": "items"}.get(origin)
+    return [
+        f"Too big: expected {origin} to have <={maximum} {unit}"
+        if unit
+        else f"Too big: expected {origin} to be <={maximum}"
+    ]
+
+
 def _refuse(issues: list[Issue]) -> PydanticCustomError:
     """A field's issues, handed to pydantic to gather. Their paths are relative to the field; pydantic
     prefixes where the field is."""
@@ -313,21 +337,25 @@ class Enum(Check):
 
 @dataclass(frozen=True, kw_only=True)
 class Array(Check):
-    """`z.array(item).min(n)`. Every element's issues AND the length's, which pydantic will not give
-    together: it reports the elements of a list that is also too short, and stops there."""
+    """`z.array(item).min(n).max(m)`. Every element's issues AND the length's, which pydantic will not
+    give together: it reports the elements of a list that is also too short, and stops there."""
 
     min: int | None = None
+    max: int | None = None
+
+    def _lengths(self, value: Any) -> list[str]:
+        return [*_min_length(value, self.min), *_max_length(value, self.max)]
 
     def parse(self, value: Any, handler: core_schema.ValidatorFunctionWrapHandler) -> Any:
         if not isinstance(value, list):
-            raise _refuse([((), m) for m in [_invalid_type("array", value), *_min_length(value, self.min)]])
+            raise _refuse([((), m) for m in [_invalid_type("array", value), *self._lengths(value)]])
         issues: list[Issue] = []
         out = None
         try:
             out = handler(value)
         except ValidationError as err:
             issues += issues_of(err)
-        issues += [((), m) for m in _min_length(value, self.min)]
+        issues += [((), m) for m in self._lengths(value)]
         if issues:
             raise _refuse(issues)
         return out

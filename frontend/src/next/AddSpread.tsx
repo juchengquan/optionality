@@ -6,26 +6,31 @@
  *  draft's own, or the service's — is said INSIDE the form, by the button that was pressed: the old
  *  form's toast was drawn underneath it, and a refused form looked like nothing had happened.
  */
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 
-import { addSpreads, type Added } from "../api";
+import { addSpreads, type Added, type Monitor } from "../api";
 import { Button } from "@/components/ui/button";
 import { marketDay } from "../format";
 import {
-  addSpread, derivedName, deltaShown, flipSide, newDraft, previewOf, removeSpread, saveWords, setLeg,
-  setSpread, spreadsBody, valueShown, type AddDraft, type Preset, type SpreadDraft,
+  addSpread, derivedName, deltaShown, flipSide, newDraft, previewOf, removeSpread, replaces, saveWords,
+  setLeg, setSpread, spreadsBody, stopWarning, valueEnabled, valueHint, valueShown, type AddDraft,
+  type Preset, type SpreadDraft,
 } from "./add";
 import { DraftPreview } from "./Payoff";
 import "./add.css";
 
-export function AddSpread({ privacy, spx, spxReason, onSaved, onCancel, now }: {
+export function AddSpread({ privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, now }: {
   privacy: boolean;
+  /** every rule, as `/monitors` gave them: what a held spread will replace is read from these */
+  monitors: Monitor[];
   /** SPX's derived price from the book's last batch, for the preview's marker, or null */
   spx: number | null;
   spxReason: string | null;
   onSaved: (added: Added) => void;
   onCancel: () => void;
+  /** take the focus on opening: the desk's panel does; the phone's sheet moves it itself */
+  autoFocus?: boolean;
   /** injected only by tests: Opened starts as the New York trading day on this clock */
   now?: Date;
 }) {
@@ -34,6 +39,9 @@ export function AddSpread({ privacy, spx, spxReason, onSaved, onCancel, now }: {
   const [saving, setSaving] = useState(false);
   const id = useId();
   const change = (next: AddDraft) => { setDraft(next); setError(null); };
+  const expiry = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (autoFocus) expiry.current?.focus(); }, [autoFocus]);
+  const replacing = replaces(draft, monitors);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +69,7 @@ export function AddSpread({ privacy, spx, spxReason, onSaved, onCancel, now }: {
       <div className="nx-add-row">
         <label className="nx-add-field">
           <span>expiry</span>
-          <input type="date" aria-label="expiry" value={draft.expiry}
+          <input ref={expiry} type="date" aria-label="expiry" value={draft.expiry}
                  onChange={(e) => change({ ...draft, expiry: e.target.value })} />
         </label>
         {held ? (
@@ -76,6 +84,7 @@ export function AddSpread({ privacy, spx, spxReason, onSaved, onCancel, now }: {
 
       {draft.spreads.map((s, i) => (
         <SpreadFields key={s.key} index={i} spread={s} draft={draft} privacy={privacy} id={id}
+                      replacing={replacing[i] ?? []}
                       spx={spx} spxReason={spxReason} onChange={change}
                       onRemove={draft.spreads.length > 1 ? () => change(removeSpread(draft, s.key)) : null} />
       ))}
@@ -102,8 +111,10 @@ const PRESET_WORDS: Record<Preset, string> = {
   put: "put spread", call: "call spread", condor: "condor as one holding",
 };
 
-function SpreadFields({ index, spread: s, draft, privacy, id, spx, spxReason, onChange, onRemove }: {
+function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, spxReason, onChange, onRemove }: {
   index: number; spread: SpreadDraft; draft: AddDraft; privacy: boolean; id: string;
+  /** the watch rules saving this spread will replace, in words */
+  replacing: string[];
   spx: number | null; spxReason: string | null;
   onChange: (d: AddDraft) => void; onRemove: (() => void) | null;
 }) {
@@ -112,6 +123,8 @@ function SpreadFields({ index, spread: s, draft, privacy, id, spx, spxReason, on
   const set = (change: Partial<SpreadDraft>) => onChange(setSpread(draft, s.key, change));
   const preview = previewOf(draft, s);
   const credit = preview?.entry ?? 0;
+  const warning = stopWarning(held, s);
+  const valueOn = valueEnabled(held, s);
   return (
     <fieldset className="nx-add-spread" data-spread={n}>
       <legend>{`spread ${n}`}</legend>
@@ -155,8 +168,8 @@ function SpreadFields({ index, spread: s, draft, privacy, id, spx, spxReason, on
             </div>
           ) : null}
           <div className="nx-add-monitors" role="group" aria-label={`spread ${n}'s Monitors`}>
-            <MonitorLine on={s.valueOn} onToggle={() => set({ valueOn: !s.valueOn })} label={`spread ${n} value Monitor`}
-                         words="spread value ≥" hint={held ? "2× the Entry: the stop" : "an entry signal"}
+            <MonitorLine on={valueOn} onToggle={() => set({ valueOn: !valueOn })} label={`spread ${n} value Monitor`}
+                         words="spread value ≥" hint={valueHint(held, s)}
                          value={valueShown(held, s)} onValue={(v) => set({ valueAt: v })}
                          inputLabel={`spread ${n} value threshold`} />
             <MonitorLine on={s.deltaOn} onToggle={() => set({ deltaOn: !s.deltaOn })} label={`spread ${n} delta Monitor`}
@@ -165,6 +178,10 @@ function SpreadFields({ index, spread: s, draft, privacy, id, spx, spxReason, on
                          value={deltaShown(held, s)} onValue={(v) => set({ deltaAt: v })}
                          inputLabel={`spread ${n} delta threshold`} />
           </div>
+          {warning ? <p className="nx-add-warn" role="status" aria-label={`spread ${n}'s stop`}>{warning}</p> : null}
+          {replacing.length > 0
+            ? <p className="nx-meta nx-add-replaces">{`Replaces the watch rules: ${replacing.join(", ")}`}</p>
+            : null}
           {onRemove ? (
             <button type="button" className="nx-add-ghost" aria-label={`remove spread ${n}`} onClick={onRemove}>
               <X aria-hidden="true" />remove

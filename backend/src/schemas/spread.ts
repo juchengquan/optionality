@@ -28,8 +28,9 @@ export const SpreadMonitorIn = z.object({
 
 export const SpreadIn = z.object({
   /** the holding's name when held, and the value Monitor's code either way */
-  name: z.string(),
-  legs: z.array(LegIn).min(1),
+  name: z.string().min(1),
+  /** a condor at most: with the eight spreads below, the one probe asks for no more than 32 codes */
+  legs: z.array(LegIn).min(1).max(4),
   /** true records a Position; false records only the Monitors */
   held: z.boolean(),
   /** a holding's, as POST /positions takes them; refused on a spread that is only watched */
@@ -42,5 +43,6 @@ export const SpreadIn = z.object({
 
 export const SpreadsIn = z.object({
   strike_date: StrikeDate,
-  spreads: z.array(SpreadIn).min(1),
+  /** at most eight, so the request's ONE probe is bounded in size as well as in number */
+  spreads: z.array(SpreadIn).min(1).max(8),
 });

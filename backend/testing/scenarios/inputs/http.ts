@@ -106,6 +106,16 @@ const CALL_SPREAD = {
   monitors: [{ threshold: 2 }, { option_type: "CALL", strike: 7300, threshold: 0.3 }],
 };
 
+/** The put spread watched before it was sold: an entry signal on its value and on its short
+ *  put's delta, linked to no holding. */
+const WATCHING_PUTS = [
+  combo({
+    id: "mon-watch-value", code: "dec-puts", threshold: 2.5,
+    legs: [{ sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 }],
+  }),
+  monitor({ id: "mon-watch-delta", option_type: "PUT", strike: 6400, threshold: 0.15 }),
+];
+
 /** The book with a far call priced too, which nothing holds and no combo names. */
 const WIDE = { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) };
 
@@ -919,11 +929,82 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
-    // the short call's delta is already watched (`held`'s mon-1), so the call spread's default
+    // a watched spread replaces nothing: the short call's delta is already watched, so its default
     // would be a second rule on it, and the whole request is refused
     name: "POST /spreads refuses a Monitor that is already there, without asking the Provider",
     world: world({ tables: { monitors: [monitor({ id: "mon-1" })] }, provider: { quotes: BOOK } }),
-    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [PUT_SPREAD, CALL_SPREAD] }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{ name: "dec-calls", held: false, legs: CALL_SPREAD.legs, monitors: CALL_SPREAD.monitors }],
+    }),
+  },
+  {
+    // the candidate the owner watched has been sold: its watch rules, linked to no holding, are
+    // deleted and the holding's own made in their place — a deletion the owner asked for by saving
+    name: "POST /spreads replaces the watch rules a held spread clashes with",
+    world: world({ tables: { monitors: WATCHING_PUTS }, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [PUT_SPREAD] }),
+  },
+  {
+    // only a Monitor the request MAKES replaces one: the delta default switched off leaves the watch
+    // rule on the short put alone, and the new holding then adopts it, as POST /positions would
+    name: "POST /spreads leaves the watch rule of a default switched off, and the holding adopts it",
+    world: world({ tables: { monitors: WATCHING_PUTS }, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...PUT_SPREAD, monitors: [PUT_SPREAD.monitors[0]] }],
+    }),
+  },
+  {
+    // the short call's delta rule belongs to the condor already held: a 409, and nothing written
+    name: "POST /spreads refuses a clash with a rule another holding owns",
+    world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...CALL_SPREAD, name: "dec-call-spread" }],
+    }),
+  },
+  {
+    // scaling in on the condor's put strikes: the new holding's own rules are linked to IT, not
+    // left unlinked because two open holdings now hold those contracts
+    name: "POST /spreads links a new holding's Monitors to it when another holding shares its legs",
+    world: world({ tables: { positions: [position({ id: "pos-1" })] }, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [PUT_SPREAD] }),
+  },
+  {
+    name: "POST /spreads refuses a spread with no name",
+    world: world(),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [{ ...PUT_SPREAD, name: "" }] }),
+  },
+  {
+    name: "POST /spreads refuses a spread naming one contract twice",
+    world: world(),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...PUT_SPREAD, legs: [PUT_SPREAD.legs[0], PUT_SPREAD.legs[0]] }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a spread both short and long one contract",
+    world: world(),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{ ...PUT_SPREAD, legs: [PUT_SPREAD.legs[0], { ...PUT_SPREAD.legs[0], side: "long" }] }],
+    }),
+  },
+  {
+    // at most eight spreads of at most four legs: the one probe asks for 32 codes at most
+    name: "POST /spreads refuses more than eight spreads",
+    world: world(),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: Array.from({ length: 9 }, (_, i) => ({ ...PUT_SPREAD, name: `dec-puts-${i}` })),
+    }),
+  },
+  {
+    name: "POST /spreads refuses a spread of more than four legs",
+    world: world(),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{ ...PUT_SPREAD, legs: [...PUT_SPREAD.legs, ...CALL_SPREAD.legs, { side: "long", option_type: "CALL", strike: 7500 }] }],
+    }),
   },
   {
     name: "POST /spreads refuses a request with no spreads in it",

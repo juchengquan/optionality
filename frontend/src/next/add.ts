@@ -12,7 +12,7 @@
  *    the two differ, and a holding whose Opened is not its first sample's day loses its vol figure
  *    without a word (ADR 0011).
  */
-import type { DraftPayoff } from "../api";
+import type { DraftPayoff, Monitor } from "../api";
 
 export type Side = "short" | "long";
 export type OptionType = "CALL" | "PUT";
@@ -32,7 +32,9 @@ export interface SpreadDraft {
   /** a holding's, per contract, signed as a Position's: a credit received is positive */
   entry: string;
   contracts: string;
-  valueOn: boolean;
+  /** null follows the default: on, except for a HELD DEBIT spread, whose stop is a fall in value
+   *  that a "2x the Entry, above" rule would get backwards (`valueEnabled`) */
+  valueOn: boolean | null;
   /** null follows the default: 2x the Entry when held, nothing when watched */
   valueAt: string | null;
   deltaOn: boolean;
@@ -85,7 +87,7 @@ const LEGS: Record<Preset, () => LegDraft[]> = {
 function spread(preset: Preset): SpreadDraft {
   return {
     key: nextKey(), legs: LEGS[preset](), name: "", entry: "", contracts: "1",
-    valueOn: true, valueAt: null, deltaOn: true, deltaAt: null,
+    valueOn: null, valueAt: null, deltaOn: true, deltaAt: null,
   };
 }
 
@@ -137,11 +139,73 @@ function typed(text: string): number | null {
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 
-/** The value Monitor's default: 2x the Entry when held — the stop — and none when watched, where
- *  the threshold is the owner's entry signal and has no default. */
+/** A held spread whose Entry was a DEBIT: paid, typed negative as a Position's Entry is. */
+const isDebit = (held: boolean, s: SpreadDraft) => held && (typed(s.entry) ?? 0) < 0;
+
+/** The value Monitor's default: 2x a credit's Entry when held — the stop — and none when watched,
+ *  where the threshold is the owner's entry signal. None for a debit either: its value FALLS as it
+ *  loses, and "value ≥ 2x" would ring on a gain. */
 export function valueDefault(held: boolean, s: SpreadDraft): string {
   const entry = typed(s.entry);
-  return held && entry !== null && entry !== 0 ? cents(Math.abs(entry) * 2).toFixed(2) : "";
+  return held && entry !== null && entry > 0 ? cents(entry * 2).toFixed(2) : "";
+}
+
+/** Whether the value Monitor is on: as switched, or by default on — except for a held debit
+ *  spread, where it starts OFF rather than as a rule that rings on a gain (review of #322). The
+ *  stop of a debit is a fall in value, and this form does not invent a "below" rule for it. */
+export function valueEnabled(held: boolean, s: SpreadDraft): boolean {
+  return s.valueOn ?? !isDebit(held, s);
+}
+
+/** The words beside the value Monitor. */
+export function valueHint(held: boolean, s: SpreadDraft): string {
+  if (!held) return "an entry signal";
+  return isDebit(held, s) ? "a debit spread's stop is a fall in its value: set one by hand" : "2× the Entry: the stop";
+}
+
+/** What closing the legs would cost at expiry with SPX at `x`: the short legs' worth less the
+ *  long ones', per contract. Its most is what a credit spread can cost to close. */
+function costAt(legs: { side: Side; option_type: OptionType; strike: number }[], x: number): number {
+  return legs.reduce((sum, l) => {
+    const worth = l.option_type === "CALL" ? Math.max(0, x - l.strike) : Math.max(0, l.strike - x);
+    return sum + (l.side === "short" ? worth : -worth);
+  }, 0);
+}
+
+/** The most the legs can cost to close at expiry, and the least; null where it has no ceiling. */
+function costRange(legs: { side: Side; option_type: OptionType; strike: number }[]): { most: number | null; least: number } {
+  const ks = legs.map((l) => l.strike);
+  const top = Math.max(...ks);
+  const xs = [0, ...ks, top + 1];
+  const costs = xs.map((x) => costAt(legs, x));
+  const rising = costAt(legs, top + 1) > costAt(legs, top);
+  return { most: rising ? null : Math.max(...costs), least: Math.min(...costs) };
+}
+
+const legsOf = (s: SpreadDraft) => {
+  const ks = strikes(s);
+  return ks.some((k) => k === null || k <= 0)
+    ? null : s.legs.map((l, j) => ({ side: l.side, option_type: l.option_type, strike: ks[j]! }));
+};
+
+/** A held credit spread's stop that can never fire: 2x a rich credit is past what the spread can
+ *  ever cost to close. Said, and left on — the owner may mean it. */
+export function stopWarning(held: boolean, s: SpreadDraft): string | null {
+  if (!held || !valueEnabled(held, s) || isDebit(held, s)) return null;
+  const legs = legsOf(s);
+  const at = typed(valueShown(held, s));
+  if (legs === null || at === null) return null;
+  const { most } = costRange(legs);
+  if (most === null || at < most) return null;
+  return `the stop at ${at.toFixed(2)} can never fire: this spread costs at most ${most.toFixed(2)} to close`;
+}
+
+/** Whether a structure is put on for a credit, by its legs alone: one that can only cost to close
+ *  was sold, one that can only pay was bought. A structure that can do either (a ratio) is taken
+ *  as a credit, the book's usual case (review of #322). */
+function soldForCredit(legs: { side: Side; option_type: OptionType; strike: number }[]): boolean {
+  const { most, least } = costRange(legs);
+  return !(least < 0 && most !== null && most <= 0);
 }
 
 export function deltaDefault(held: boolean): string {
@@ -165,7 +229,7 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
     const legs = s.legs.map((l, j) => ({ side: l.side, option_type: l.option_type, strike: ks[j]! }));
 
     const monitors: SpreadBody["monitors"] = [];
-    if (s.valueOn) {
+    if (valueEnabled(d.held, s)) {
       const at = typed(valueShown(d.held, s));
       if (at === null || at <= 0) {
         return { error: d.held && typed(s.entry) === null
@@ -210,19 +274,19 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
 export function previewOf(d: AddDraft, s: SpreadDraft): DraftPayoff | null {
   const ks = strikes(s);
   if (ks.some((k) => k === null || k <= 0)) return null;
-  const credit = typed(d.held ? s.entry : valueShown(false, s)) ?? 0;
-  return {
-    legs: s.legs.map((l, j) => ({ side: l.side, option_type: l.option_type, strike: ks[j]! })),
-    entry: cents(credit),
-    contracts: 1,
-  };
+  const legs = s.legs.map((l, j) => ({ side: l.side, option_type: l.option_type, strike: ks[j]! }));
+  // a held spread's Entry is typed signed; a watched one's threshold is a size (compared `abs`),
+  // signed here by what the legs are: a debit spread is bought, at the value it watches for
+  const typedAt = typed(d.held ? s.entry : valueShown(false, s)) ?? 0;
+  const credit = d.held || soldForCredit(legs) ? typedAt : -typedAt;
+  return { legs, entry: cents(credit) || 0, contracts: 1 };
 }
 
 /** What a save will make, said on its button: holdings and Monitors, never contracts. */
 export function saveWords(d: AddDraft): string {
   const out = spreadsBody(d);
   const monitors = "error" in out
-    ? d.spreads.reduce((n, s) => n + (s.valueOn ? 1 : 0)
+    ? d.spreads.reduce((n, s) => n + (valueEnabled(d.held, s) ? 1 : 0)
       + (s.deltaOn ? s.legs.filter((l) => l.side === "short").length : 0), 0)
     : out.body.spreads.reduce((n, s) => n + s.monitors.length, 0);
   const m = `${monitors} Monitor${monitors === 1 ? "" : "s"}`;
@@ -230,3 +294,45 @@ export function saveWords(d: AddDraft): string {
   const h = d.spreads.length === 1 ? "holding" : `${d.spreads.length} holdings`;
   return `Record ${h} + ${m}`;
 }
+
+/** A Contract's code, as the service builds it (`buildSpxCode`): what a delta Monitor is keyed by. */
+export function contractCode(expiry: string, type: OptionType, strike: number): string {
+  return `US.SPXW${expiry.slice(2, 4)}${expiry.slice(5, 7)}${expiry.slice(8, 10)}${type[0]}${Math.trunc(strike)}000`;
+}
+
+/** The (code, field) of each Monitor a spread will make, as `POST /spreads` keys them. */
+function planned(d: AddDraft, s: SpreadDraft): { code: string; field: string }[] {
+  const legs = legsOf(s);
+  if (legs === null || d.expiry.length < 10) return [];
+  const out: { code: string; field: string }[] = [];
+  if (valueEnabled(d.held, s)) out.push({ code: s.name.trim() || derivedName(d.expiry, s.legs), field: "mid_price" });
+  if (s.deltaOn) {
+    for (const l of legs.filter((x) => x.side === "short")) {
+      out.push({ code: contractCode(d.expiry, l.option_type, l.strike), field: "option_delta" });
+    }
+  }
+  return out;
+}
+
+/** A rule in words, the way the form names one it will replace. */
+function ruleWords(m: Monitor): string {
+  const op = m.direction === "below" ? "≤" : "≥";
+  const at = m.threshold.toFixed(2);
+  if (m.legs) return `${m.code} ${m.field === "mid_price" ? "value" : m.field} ${op} ${at}`;
+  const what = m.field === "option_delta" ? (m.compare === "abs" ? "|Δ|" : "Δ") : m.field;
+  return `${m.strike} ${m.option_type.toLowerCase()} ${what} ${op} ${at}`;
+}
+
+/** Per spread, the WATCH rules saving it will replace (owner's decision on #322): a Monitor already
+ *  on a (code, field) a HELD spread makes, owned by no holding, is deleted and the holding's own made
+ *  in its place. One another holding owns is refused instead, and a watched spread, or a default
+ *  switched off, replaces nothing. Read from the `/monitors` the page already has. */
+export function replaces(d: AddDraft, monitors: Monitor[]): string[][] {
+  return d.spreads.map((s) => {
+    if (!d.held) return [];
+    return planned(d, s).flatMap(({ code, field }) => monitors
+      .filter((m) => m.code === code && m.field === field && m.positions.length === 0)
+      .map(ruleWords));
+  });
+}
+

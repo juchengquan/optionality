@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Plus, RefreshCw, Settings2 } from "lucide-react";
 
 import "./next.css";
@@ -65,7 +65,11 @@ export function Next() {
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // adding a spread (#293): a panel above the desk's table, a bottom sheet from the phone's Add tab
   const [adding, setAdding] = useState(false);
+  const panelId = useId();
+  const plusButton = useRef<HTMLButtonElement>(null);
   const closeAdding = useCallback(() => setAdding(false), []);
+  // the desk's panel hands the focus back to "+" when it goes, by Escape or Cancel
+  const closePanel = useCallback(() => { setAdding(false); plusButton.current?.focus(); }, []);
   const { reload } = book;
   const saved = useCallback((added: Added) => {
     setAdding(false);
@@ -74,7 +78,11 @@ export function Next() {
       added.positions.length ? `${added.positions.length} holding${added.positions.length === 1 ? "" : "s"}` : null,
       `${added.monitors.length} Monitor${added.monitors.length === 1 ? "" : "s"}`,
     ].filter(Boolean).join(" and ");
-    toast.add({ title: `added ${made}`, type: "success" });
+    const r = added.replaced.length;
+    toast.add({
+      title: `added ${made}${r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : ""}`, type: "success",
+    });
+    plusButton.current?.focus();
     void reload();
   }, [reload]);
   // the preview's SPX marker: the book's last batch's derived price, never a Reference's (ADR 0024)
@@ -82,7 +90,8 @@ export function Next() {
   const spx = priced?.spx ?? null;
   const spxReason = priced ? null : book.quotes[0]?.spx_reason ?? book.holdings?.[0]?.spx_reason ?? null;
   const addForm = (
-    <AddSpread privacy={privacy} spx={spx} spxReason={spxReason} onSaved={saved} onCancel={closeAdding} />
+    <AddSpread privacy={privacy} monitors={book.monitors} spx={spx} spxReason={spxReason} onSaved={saved}
+               onCancel={phone ? closeAdding : closePanel} autoFocus={!phone} />
   );
 
   // Settings is the one surface that may say "nothing needs you" (ADR 0012), and where References
@@ -148,8 +157,8 @@ export function Next() {
           <RefreshCw className={book.refreshing ? "animate-spin" : undefined} />
         </Button>
         {phone ? null : (
-          <Button variant="ghost" size="sm" aria-label="add a spread" aria-expanded={adding}
-                  onClick={() => setAdding((a) => !a)}>
+          <Button ref={plusButton} variant="ghost" size="sm" aria-label="add a spread" aria-expanded={adding}
+                  aria-controls={adding ? panelId : undefined} onClick={() => setAdding((a) => !a)}>
             <Plus />
           </Button>
         )}
@@ -169,7 +178,8 @@ export function Next() {
             frozen at the moment the mode was entered would be read as current (ADR 0018) */}
         {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
         {adding && !phone ? (
-          <section className="nx-add-panel" aria-label="adding a spread">
+          <section id={panelId} className="nx-add-panel" aria-label="adding a spread"
+                   onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(); } }}>
             <h2>Add a spread</h2>
             {addForm}
           </section>

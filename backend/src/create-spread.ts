@@ -26,14 +26,17 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { buildSpxCode } from "optionality/domain/contract";
 import { comboFieldError, thresholdFault } from "optionality/domain/monitor";
+import { positionsHolding } from "optionality/domain/position";
 import { type QuoteFetcher, verifyContracts } from "optionality/quotes";
 import { atomic } from "./db/open.ts";
 import {
-  findMonitorByCodeField, findPositionByName, insertMonitor, insertPosition,
+  clearMonitorLinks, deleteMonitorRow, findMonitorByCodeField, findPositionByName, insertMonitor,
+  insertPosition, linkMonitorToPositions, positionsForMonitor, updateMonitorFields,
 } from "./db/queries/index.ts";
 import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { toSqlDatetime } from "./db/time.ts";
 import { newId, toSqliteJson } from "./db/values.ts";
+import { toPosition } from "./hydrate.ts";
 import { adoptOrphanMonitors, linkToPositions } from "./monitors.ts";
 import {
   DEFAULT_COMBO_FIELD, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_SINGLE_FIELD, thresholdError,
@@ -83,10 +86,12 @@ export interface SpreadFault {
   message: string;
 }
 
-/** What was added, by id: the page reads the book again rather than trusting an echo of it. */
+/** What was added, by id: the page reads the book again rather than trusting an echo of it. And
+ *  the watch rules a held spread replaced, which the form names before the save and after it. */
 export interface Added {
   positions: { id: string; name: string }[];
   monitors: { id: string; code: string; field: string }[];
+  replaced: { id: string; code: string; field: string }[];
 }
 
 export function isSpreadFault(result: Added | SpreadFault): result is SpreadFault {
@@ -154,6 +159,54 @@ function plan(
   };
 }
 
+/** Step 2, the database: the first clash it finds, or the watch rules a HELD spread replaces.
+ *
+ *  A planned Monitor whose (code, field) is already taken is a 409 — unless the spread is held and
+ *  the rule in the way is linked to no holding: a WATCH rule on the candidate the owner has now
+ *  sold, which the holding's own rule replaces (owner's decision, #322). One another holding owns
+ *  is still a 409, and a watched spread never replaces anything. `replacing: false` asks for the
+ *  409 alone, which is how a clash the write itself ran into is answered. */
+function inTheWay(
+  db: DatabaseSync, spreads: Spread[], planned: Planned[][], replacing: boolean,
+): MonitorRow[] | SpreadFault {
+  for (const spread of spreads) {
+    if (spread.held && findPositionByName(db, spread.name)) {
+      return refuse(`position '${spread.name}' already exists`, 409);
+    }
+  }
+  const replaced: MonitorRow[] = [];
+  for (const [i, spread] of spreads.entries()) {
+    for (const p of planned[i]!) {
+      const there = findMonitorByCodeField(db, p.code, p.field);
+      if (!there) continue;
+      const watching = positionsForMonitor(db, there.id).every((h) => h.closed_on !== null);
+      if (!(replacing && spread.held && watching)) {
+        return refuse(`monitor for (${p.code}, ${p.field}) already exists`, 409);
+      }
+      replaced.push(there);
+    }
+  }
+  return replaced;
+}
+
+/** Two legs on one contract: a typo, or a leg that cancels itself. */
+function twiceOver(spread: Spread): SpreadFault | null {
+  const seen = new Map<string, SpreadLeg>();
+  for (const l of spread.legs) {
+    const key = `${l.option_type} ${l.strike}`;
+    const before = seen.get(key);
+    if (before) {
+      return refuse(before.side === l.side
+        ? `'${spread.name}' names ${key} twice`
+        : `'${spread.name}' is both short and long ${key}`);
+    }
+    seen.set(key, l);
+  }
+  return null;
+}
+
+const isUniqueClash = (err: unknown) => err instanceof Error && /UNIQUE constraint failed/.test(err.message);
+
 export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Promise<Added | SpreadFault> {
   const { db } = deps;
   const date = input.strike_date;
@@ -173,6 +226,8 @@ export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Prom
     }
     if (names.has(spread.name)) return refuse(`'${spread.name}' is named twice`);
     names.add(spread.name);
+    const twice = twiceOver(spread);
+    if (twice) return twice;
     const mine: Planned[] = [];
     for (const [i, m] of spread.monitors.entries()) {
       const p = plan(date, spread, m, i);
@@ -186,16 +241,8 @@ export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Prom
   }
 
   // 2. the database
-  for (const spread of input.spreads) {
-    if (spread.held && findPositionByName(db, spread.name)) {
-      return refuse(`position '${spread.name}' already exists`, 409);
-    }
-  }
-  for (const p of planned.flat()) {
-    if (findMonitorByCodeField(db, p.code, p.field)) {
-      return refuse(`monitor for (${p.code}, ${p.field}) already exists`, 409);
-    }
-  }
+  const replacing = inTheWay(db, input.spreads, planned, true);
+  if ("status" in replacing) return replacing;
 
   // 3. one probe, last: the one step that leaves the machine
   const codes = [...new Set(input.spreads.flatMap((s) =>
@@ -206,45 +253,85 @@ export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Prom
   // 4. all of it, in one transaction
   const id = deps.newId ?? newId;
   const createdAt = toSqlDatetime(deps.now());
-  return atomic(db, () => {
-    const added: Added = { positions: [], monitors: [] };
-    for (const [i, spread] of input.spreads.entries()) {
-      if (spread.held) {
-        const row: PositionRow = {
-          id: id(),
-          name: spread.name,
-          strategy: null,
-          strike_date: date,
-          contracts: spread.contracts ?? DEFAULT_CONTRACTS,
-          entry: spread.entry ?? null,
-          legs: toSqliteJson(spread.legs.map((l) => ({
-            side: l.side, option_type: l.option_type, strike: l.strike,
-          }))),
-          created_at: createdAt,
-          opened_at: spread.opened_at ?? null,
-          manage_notified_at: null,
-          closed_on: null,
-          exit: null,
-        };
-        insertPosition(db, row);
-        added.positions.push({ id: row.id, name: row.name });
-      }
-      for (const p of planned[i]!) {
-        const row = {
-          id: id(), code: "", strike_date: "", option_type: "", strike: 0, field: "", threshold: 0,
-          direction: DEFAULT_DIRECTION, compare: DEFAULT_COMPARE, legs: null, scope: null,
-          enabled: 1, disabled_reason: null, triggered: 0, last_value: null, last_checked_at: null,
-          last_alarm_at: null, created_at: createdAt, ...p.columns,
-        } as MonitorRow;
-        insertMonitor(db, row);
-        added.monitors.push({ id: row.id, code: p.code, field: p.field });
-      }
+  try {
+    return await atomic(db, () => write(db, input, planned, replacing, id, createdAt));
+  } catch (err) {
+    // Something got in after the checks — a second save of the same spread, landing between this
+    // one's checks and its transaction. The transaction is rolled back, and the clash is answered
+    // as the checks would have answered it, rather than as a 500.
+    if (!isUniqueClash(err)) throw err;
+    const clash = inTheWay(db, input.spreads, planned, false);
+    if ("status" in clash) return clash;
+    throw err;
+  }
+}
+
+function write(
+  db: DatabaseSync, input: SpreadsInput, planned: Planned[][], replacing: MonitorRow[],
+  id: () => string, createdAt: string,
+): Added {
+  const date = input.strike_date;
+  const added: Added = {
+    positions: [], monitors: [],
+    replaced: replacing.map((m) => ({ id: m.id, code: m.code, field: m.field })),
+  };
+  // the watch rules a held spread replaces go first, so their (code, field) is free: a deletion the
+  // owner asked for by saving, not one the service decided on (CLAUDE.md's retention invariant)
+  for (const m of replacing) {
+    clearMonitorLinks(db, m.id);
+    deleteMonitorRow(db, m.id);
+  }
+  const links: { monitorId: string; contracts: string[]; holding: PositionRow | null }[] = [];
+  for (const [i, spread] of input.spreads.entries()) {
+    let holding: PositionRow | null = null;
+    if (spread.held) {
+      holding = {
+        id: id(),
+        name: spread.name,
+        strategy: null,
+        strike_date: date,
+        contracts: spread.contracts ?? DEFAULT_CONTRACTS,
+        entry: spread.entry ?? null,
+        legs: toSqliteJson(spread.legs.map((l) => ({
+          side: l.side, option_type: l.option_type, strike: l.strike,
+        }))),
+        created_at: createdAt,
+        opened_at: spread.opened_at ?? null,
+        manage_notified_at: null,
+        closed_on: null,
+        exit: null,
+      };
+      insertPosition(db, holding);
+      added.positions.push({ id: holding.id, name: holding.name });
     }
-    // linked once every holding of this request exists, so a rule on one spread finds the holding
-    // of another — a condor's value rule over both spreads, when the form ever sends one
-    for (const [k, p] of planned.flat().entries()) linkToPositions(db, added.monitors[k]!.id, p.contracts);
-    // and a rule set before these holdings were recorded is adopted by them, as POST /positions does
-    adoptOrphanMonitors(db);
-    return added;
-  });
+    for (const p of planned[i]!) {
+      const row = {
+        id: id(), code: "", strike_date: "", option_type: "", strike: 0, field: "", threshold: 0,
+        direction: DEFAULT_DIRECTION, compare: DEFAULT_COMPARE, legs: null, scope: null,
+        enabled: 1, disabled_reason: null, triggered: 0, last_value: null, last_checked_at: null,
+        last_alarm_at: null, created_at: createdAt, ...p.columns,
+      } as MonitorRow;
+      insertMonitor(db, row);
+      added.monitors.push({ id: row.id, code: p.code, field: p.field });
+      links.push({ monitorId: row.id, contracts: p.contracts, holding });
+    }
+  }
+  for (const { monitorId, contracts, holding } of links) {
+    if (holding) {
+      // A held spread's rules are ITS rules, so they are linked to it and to nothing else, scoped
+      // as against that one holding. Worked out against the whole book, a contract another open
+      // holding shares — a neighbouring spread, or scaling in on the same strikes — reads as
+      // ambiguous, and the new holding's own stop and delta rule came out linked to nothing.
+      const { found, scope } = positionsHolding([toPosition(holding)], contracts);
+      if (found.size === 0) continue;
+      updateMonitorFields(db, monitorId, { scope });
+      linkMonitorToPositions(db, monitorId, [...found]);
+    } else {
+      // a watched spread's rule is linked as POST /monitors links one: to whatever holds its contracts
+      linkToPositions(db, monitorId, contracts);
+    }
+  }
+  // and a rule set before these holdings were recorded is adopted by them, as POST /positions does
+  adoptOrphanMonitors(db);
+  return added;
 }

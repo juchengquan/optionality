@@ -3320,11 +3320,34 @@
                                 "field"
                               ]
                             }
+                          },
+                          "replaced": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "field": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code",
+                                "field"
+                              ]
+                            }
                           }
                         },
                         "required": [
                           "positions",
-                          "monitors"
+                          "monitors",
+                          "replaced"
                         ]
                       }
                     }
@@ -3381,15 +3404,18 @@
                         },
                         "spreads": {
                           "minItems": 1,
+                          "maxItems": 8,
                           "type": "array",
                           "items": {
                             "type": "object",
                             "properties": {
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1
                               },
                               "legs": {
                                 "minItems": 1,
+                                "maxItems": 4,
                                 "type": "array",
                                 "items": {
                                   "type": "object",

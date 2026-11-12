@@ -19,6 +19,8 @@ import { valid } from "../validate.ts";
 const AddedOut = z.object({
   positions: z.array(z.object({ id: z.string(), name: z.string() })),
   monitors: z.array(z.object({ id: z.string(), code: z.string(), field: z.string() })),
+  /** the watch rules a held spread replaced: deleted, with the holding's own made in their place */
+  replaced: z.array(z.object({ id: z.string(), code: z.string(), field: z.string() })),
 });
 
 const create = documented(

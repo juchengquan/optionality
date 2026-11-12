@@ -36,8 +36,9 @@ class SpreadMonitorIn(Shape):
 
 class SpreadIn(Shape):
     #: the holding's name when held, and the value Monitor's code either way
-    name: Annotated[str, String()]
-    legs: Annotated[list[LegIn], Array(min=1)]
+    name: Annotated[str, String(min=1)]
+    #: a condor at most: with the eight spreads below, the one probe asks for no more than 32 codes
+    legs: Annotated[list[LegIn], Array(min=1, max=4)]
     #: True records a Position; False records only the Monitors
     held: Annotated[bool, Boolean()]
     #: a holding's, as POST /positions takes them; refused on a spread that is only watched
@@ -50,4 +51,5 @@ class SpreadIn(Shape):
 
 class SpreadsIn(Shape):
     strike_date: Annotated[str, StrikeDate]
-    spreads: Annotated[list[SpreadIn], Array(min=1)]
+    #: at most eight, so the request's ONE probe is bounded in size as well as in number
+    spreads: Annotated[list[SpreadIn], Array(min=1, max=8)]

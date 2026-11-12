@@ -254,3 +254,144 @@ describe("adding spreads with their Monitors", () => {
     expect((await body(date)).detail).toMatch(/invalid strike_date 'next friday'/);
   });
 });
+
+/** The rows a monitor links to, and its scope. */
+const linksOf = (monitorId: string): [string[], string | null] => [
+  (h.db.prepare("select position_id from monitor_positions where monitor_id = ? order by position_id")
+    .all(monitorId) as { position_id: string }[]).map((r) => r.position_id),
+  (h.db.prepare("select scope from monitors where id = ?").get(monitorId) as { scope: string | null }).scope,
+];
+const created = async (resp: Response) => {
+  const data = await body(resp);
+  expect(resp.status, JSON.stringify(data)).toBe(201);
+  return data;
+};
+const holding = (name: string, legs: unknown[]) =>
+  h.call("/positions", json({ name, strike_date: EXPIRY, legs, entry: 1 })).then(created);
+
+describe("linking a new holding's own Monitors", () => {
+  /** A holding that shares a contract with another one was the case positionsHolding calls
+   *  ambiguous against the whole book: its own stop and delta rule came out linked to nothing. */
+  it("links them to the holding they were made for when another holding shares a leg", async () => {
+    start();
+    await holding("first", [
+      { side: "short", option_type: "PUT", strike: 7100 }, { side: "long", option_type: "PUT", strike: 7050 },
+    ]);
+    const added = await created(await post({ strike_date: EXPIRY, spreads: [heldSpread("second", PUTS, 1.5, { option_type: "PUT", strike: 7150 })] }));
+    const second = added.positions[0].id as string;
+    expect(added.monitors.map((m: { id: string }) => linksOf(m.id))).toEqual([[[second], "all"], [[second], "leg"]]);
+  });
+
+  it("links them to the new holding when it scales in on the same strikes", async () => {
+    start();
+    await holding("first", PUTS);
+    const added = await created(await post({ strike_date: EXPIRY, spreads: [heldSpread("second", PUTS, 1.5, { option_type: "PUT", strike: 7150 })] }));
+    const second = added.positions[0].id as string;
+    expect(added.monitors.map((m: { id: string }) => linksOf(m.id))).toEqual([[[second], "all"], [[second], "leg"]]);
+  });
+});
+
+describe("all of it or none of it, when the write itself fails", () => {
+  /** A probe that writes behind the checks' backs: what a second save landing between this one's
+   *  checks and its transaction looks like. */
+  const racing = (sql: string) => (codes: string[]) => {
+    h.db.exec(sql);
+    return Promise.resolve({ records: codes.map((code) => ({ code })), unknown: [] });
+  };
+
+  it("leaves nothing behind when a Monitor clashes after the holdings were written, and says so as a 409", async () => {
+    start(racing(`insert into monitors (id, code, strike_date, option_type, strike, field, threshold, direction,
+      compare, enabled, triggered, created_at) values ('race', 'c', '${EXPIRY}', 'CMB', 0, 'mid_price', 9,
+      'above', 'abs', 1, 0, '2026-10-02 00:00:00.000000')`));
+    const resp = await post(condor());
+    expect(resp.status).toBe(409);
+    expect((await body(resp)).detail).toBe("monitor for (c, mid_price) already exists");
+    expect([count("positions"), count("monitors"), count("monitor_positions")]).toEqual([0, 1, 0]);
+  });
+
+  it("leaves nothing behind when a holding's name is taken after the checks, and says so as a 409", async () => {
+    start(racing(`insert into positions (id, name, strike_date, contracts, legs, created_at)
+      values ('race', 'c', '${EXPIRY}', 1, '[]', '2026-10-02 00:00:00.000000')`));
+    const resp = await post(condor());
+    expect(resp.status).toBe(409);
+    expect((await body(resp)).detail).toBe("position 'c' already exists");
+    expect([count("positions"), count("monitors"), count("monitor_positions")]).toEqual([1, 0, 0]);
+  });
+});
+
+describe("what a spread may not say", () => {
+  const refused = async (payload: unknown) => {
+    const resp = await post(payload);
+    expect(resp.status).toBe(422);
+    return (await body(resp)).detail as string;
+  };
+  const one = (over: object) => ({ strike_date: EXPIRY, spreads: [{ name: "w", legs: PUTS, held: false, monitors: [{ threshold: 2 }], ...over }] });
+
+  it("a blank name", async () => {
+    start();
+    expect(await refused(one({ name: "" }))).toBe("✖ Too small: expected string to have >=1 characters\n  → at spreads[0].name");
+  });
+
+  it("one contract twice, on one side or on both", async () => {
+    start();
+    expect(await refused(one({ legs: [PUTS[0], PUTS[0]] }))).toBe("'w' names PUT 7150 twice");
+    expect(await refused(one({ legs: [PUTS[0], { ...PUTS[0], side: "long" }] }))).toBe("'w' is both short and long PUT 7150");
+    nothingWritten();
+  });
+
+  it("more than eight spreads, or more than four legs to one, so the one probe stays small", async () => {
+    start();
+    const nine = Array.from({ length: 9 }, (_, i) => ({ name: `w${i}`, legs: PUTS, held: false, monitors: [{ threshold: 2 }] }));
+    expect(await refused({ strike_date: EXPIRY, spreads: nine })).toBe("✖ Too big: expected array to have <=8 items\n  → at spreads");
+    const five = [...PUTS, ...CALLS, { side: "long", option_type: "CALL", strike: 7800 }];
+    expect(await refused(one({ legs: five }))).toBe("✖ Too big: expected array to have <=4 items\n  → at spreads[0].legs");
+  });
+});
+
+describe("a held spread replacing the watch rules it clashes with", () => {
+  const watch = (monitors: unknown[]) => post({ strike_date: EXPIRY, spreads: [{ name: "p", legs: PUTS, held: false, monitors }] }).then(created);
+  const ids = () => (h.db.prepare("select id from monitors order by id").all() as { id: string }[]).map((r) => r.id);
+
+  it("deletes the clashing watch rules and makes the holding's in their place, saying which", async () => {
+    start();
+    const watched = await watch([{ threshold: 1.8 }, { option_type: "PUT", strike: 7150, threshold: 0.15 }]);
+    const added = await created(await post({ strike_date: EXPIRY, spreads: [heldSpread("p", PUTS, 1.5, { option_type: "PUT", strike: 7150 })] }));
+    expect(added.replaced).toEqual(watched.monitors);
+    const now = ids();
+    expect(now).toHaveLength(2);
+    for (const old of watched.monitors) expect(now).not.toContain(old.id);
+    const id = added.positions[0].id as string;
+    expect(added.monitors.map((m: { id: string }) => linksOf(m.id))).toEqual([[[id], "all"], [[id], "leg"]]);
+    expect(h.db.prepare("select threshold from monitors where code = 'p'").get()).toEqual({ threshold: 3 });
+  });
+
+  it("leaves a watch rule alone when its default was switched off, and the holding adopts it", async () => {
+    start();
+    const watched = await watch([{ threshold: 1.8 }, { option_type: "PUT", strike: 7150, threshold: 0.15 }]);
+    const added = await created(await post({ strike_date: EXPIRY, spreads: [{ ...heldSpread("p", PUTS, 1.5, { option_type: "PUT", strike: 7150 }), monitors: [{ threshold: 3 }] }] }));
+    expect(added.replaced).toEqual([watched.monitors[0]]);
+    const kept = watched.monitors[1].id as string;
+    expect(ids()).toContain(kept);
+    expect(h.db.prepare("select threshold from monitors where id = ?").get(kept)).toEqual({ threshold: 0.15 });
+    expect(linksOf(kept)).toEqual([[added.positions[0].id], "leg"]);
+  });
+
+  it("refuses, writing nothing, a clash with a rule another holding owns", async () => {
+    start();
+    await holding("first", PUTS);
+    const owned = await created(await h.call("/monitors", json({ strike_date: EXPIRY, option_type: "PUT", strike: 7150, threshold: 0.2 })));
+    expect(linksOf(owned.id)[0]).toHaveLength(1);
+    const resp = await post({ strike_date: EXPIRY, spreads: [heldSpread("second", PUTS, 1.5, { option_type: "PUT", strike: 7150 })] });
+    expect(resp.status).toBe(409);
+    expect([count("positions"), count("monitors")]).toEqual([1, 1]);
+  });
+
+  it("never deletes for a spread that is only watched", async () => {
+    start();
+    await watch([{ threshold: 1.8 }]);
+    const resp = await post({ strike_date: EXPIRY, spreads: [{ name: "p", legs: PUTS, held: false, monitors: [{ threshold: 2 }] }] });
+    expect(resp.status).toBe(409);
+    expect(count("monitors")).toBe(1);
+  });
+});
+

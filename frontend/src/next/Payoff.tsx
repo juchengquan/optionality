@@ -150,8 +150,12 @@ export function DraftPreview({ subject, draft, blank, note, spx, spxReason }: {
   spx: number | null;
   spxReason: string | null;
 }) {
-  const key = useSettled(draft === null ? null : JSON.stringify(draft), 200);
-  const state = usePayoff(subject, key, () => fetchDraftPayoff(JSON.parse(key!) as DraftPayoff));
+  const raw = draft === null ? null : JSON.stringify(draft);
+  const key = useSettled(raw, 200);
+  const asked = usePayoff(subject, key, () => fetchDraftPayoff(JSON.parse(key!) as DraftPayoff));
+  // updating from the moment the draft changes, not from when the pause ends: a side flipped a
+  // moment ago must not leave the old curve standing as current
+  const state = asked && raw !== null && asked.shown !== raw ? { ...asked, updating: true } : asked;
   return (
     <PayoffFigure state={state} unit={{ size: 1, money: false, hidden: false }} spx={spx} spxReason={spxReason}
                   blank={draft === null ? blank : null} note={note} />

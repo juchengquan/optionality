@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SpreadsIn } from "backend/schemas";
 import { AddSpread } from "../next/AddSpread";
+import { Next } from "../next/Next";
+import type { Monitor } from "../api";
 
 /** Every request, as `METHOD path` with its parsed body. */
 let asked: { what: string; body: unknown }[] = [];
@@ -38,10 +40,10 @@ afterEach(() => {
 /** 09:30 on 11 November in Singapore, which is still the evening of the 10th in New York. */
 const SGT_MORNING = new Date("2026-11-11T01:30:00Z");
 
-function open(over: { privacy?: boolean } = {}) {
+function open(over: { privacy?: boolean; monitors?: Monitor[] } = {}) {
   const onSaved = vi.fn();
   render(<AddSpread privacy={over.privacy ?? false} spx={null} spxReason="no batch yet" onSaved={onSaved}
-                    onCancel={() => undefined} now={SGT_MORNING} />);
+                    monitors={over.monitors ?? []} onCancel={() => undefined} now={SGT_MORNING} />);
   return { form: screen.getByRole("form", { name: "add a spread" }), onSaved };
 }
 
@@ -133,9 +135,51 @@ describe("the add form", () => {
     });
   });
 
-  it("hides the contract count under privacy", () => {
+  it("hides the contract count under privacy, with the class that masks it", () => {
     open({ privacy: true });
-    expect(screen.getByLabelText("spread 1 contracts").hasAttribute("data-private")).toBe(true);
+    // the class is what draws the digits as dots (add.css); the browser suite measures that it does
+    expect(screen.getByLabelText("spread 1 contracts").classList.contains("nx-private")).toBe(true);
+    cleanup();
+    open({ privacy: false });
+    expect(screen.getByLabelText("spread 1 contracts").classList.contains("nx-private")).toBe(false);
+  });
+
+  it("starts a debit spread's stop switched off, and says why", () => {
+    open();
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "-1.50");
+    expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("a debit spread's stop is a fall in its value: set one by hand")).toBeTruthy();
+  });
+
+  it("warns, and keeps it on, when a credit's stop can never fire", () => {
+    open();
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "30");
+    expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("status", { name: "spread 1's stop" }).textContent)
+      .toBe("the stop at 60.00 can never fire: this spread costs at most 50.00 to close");
+  });
+
+  it("names the watch rules a held spread will replace, before saving and after", async () => {
+    const watching: Monitor = {
+      id: "w1", code: "US.SPXW261218P7150000", strike_date: "2026-12-18", option_type: "PUT", strike: 7150,
+      field: "option_delta", threshold: 0.15, direction: "above", compare: "abs", legs: null, enabled: true,
+      scope: null, positions: [], disabled_reason: null, triggered: false, last_value: null,
+      last_checked_at: null, created_at: null,
+    };
+    answer = { status: 201, body: { positions: [{ id: "p1", name: "x" }], monitors: [], replaced: [{ id: "w1", code: watching.code, field: "option_delta" }] } };
+    const { onSaved } = open({ monitors: [watching] });
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "1.50");
+    expect(screen.getByText("Replaces the watch rules: 7150 put |Δ| ≥ 0.15")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Record/ }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect(onSaved.mock.calls[0]![0].replaced).toHaveLength(1);
   });
 });
 
@@ -160,6 +204,37 @@ describe("the preview", () => {
     await screen.findByRole("img", { name: /payoff at expiry/ });
 
     fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 2 side: long — flip" }));
+    // at once, before the pause that settles the typing: the curve on screen is no longer this
+    // draft's, and says so rather than standing as current
+    expect(screen.getByRole("group", { name: "payoff at expiry" }).getAttribute("aria-busy")).toBe("true");
     await waitFor(() => expect(drafts().at(-1)?.legs.map((l) => l.side)).toEqual(["short", "short"]));
   });
 });
+
+describe("the desk's panel", () => {
+  beforeEach(() => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      const path = String(url).replace(/^.*\/api/, "");
+      const body = path === "/health"
+        ? { db: true, provider: { name: "moomoo", ok: true }, monitor: { last_sweep_at: null, alarms: { label: "watching", bad: false }, fetched_at: null }, settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 } }
+        : [];
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    }));
+  });
+  afterEach(() => { document.cookie = "ui_arrangement=;path=/;max-age=0"; });
+
+  it("takes the focus into the form, names itself from +, and gives it back on Escape", async () => {
+    render(<Next />);
+    const plus = screen.getByRole("button", { name: "add a spread" });
+    fireEvent.click(plus);
+    const panel = screen.getByRole("region", { name: "adding a spread" });
+    expect(plus.getAttribute("aria-controls")).toBe(panel.id);
+    expect(panel.id).not.toBe("");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("expiry")));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("region", { name: "adding a spread" })).toBeNull();
+    expect(document.activeElement).toBe(plus);
+  });
+});
+

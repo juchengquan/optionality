@@ -48,6 +48,8 @@ class AddedOut(BaseModel):
 
     positions: list[_AddedPosition]
     monitors: list[_AddedMonitor]
+    #: the watch rules a held spread replaced: deleted, with the holding's own made in their place
+    replaced: list[_AddedMonitor]
 
 
 def spread_routes(deps: Deps) -> APIRouter:

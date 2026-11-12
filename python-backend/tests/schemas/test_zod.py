@@ -14,6 +14,7 @@ import pytest
 from optionality_backend.schemas.monitor import ComboMonitorIn, MonitorCreateIn, MonitorIn, MonitorPatch
 from optionality_backend.schemas.position import PayoffIn, PositionIn, PositionPatch
 from optionality_backend.schemas.reference import ReferenceIn
+from optionality_backend.schemas.spread import SpreadIn, SpreadsIn
 from optionality_backend.schemas.zod import Number, Shape, ZodError, parse, prettify_error, prettify_issues
 
 LEG = {"side": "short", "option_type": "CALL", "strike": 8100}
@@ -89,6 +90,26 @@ class TestWhatZodDoesByBeingZod:
         assert refusal(ComboMonitorIn, wing(legs=[{**CLEG, "sign": 2}])) == (
             "✖ Too small: expected array to have >=2 items\n  → at legs\n"
             "✖ Invalid option: expected one of 1|-1\n  → at legs[0].sign"
+        )
+
+    def test_an_array_too_long_is_said_as_zod_says_it_measured_against_zod_itself(self):
+        # `.max(n)`, `.min(n)`'s mirror, with what zod 4.6 answered for each of these (#293)
+        spread = {"name": "w", "legs": [], "held": False, "monitors": []}
+        leg = {"side": "short", "option_type": "PUT", "strike": 1}
+        assert refusal(SpreadsIn, {"strike_date": "2026-12-18", "spreads": [spread] * 9}).startswith(
+            "✖ Too big: expected array to have <=8 items\n  → at spreads\n"
+        )
+        assert refusal(SpreadIn, {**spread, "legs": [leg] * 5}) == (
+            "✖ Too big: expected array to have <=4 items\n  → at legs"
+        )
+        # guarded like `.min`: run on a value whose type was refused, and on an object with a "length"
+        assert refusal(SpreadIn, {**spread, "legs": "xxxxx"}) == (
+            "✖ Invalid input: expected array, received string\n  → at legs\n"
+            "✖ Too big: expected string to have <=4 characters\n  → at legs"
+        )
+        assert refusal(SpreadIn, {**spread, "legs": {"length": 5}}) == (
+            "✖ Invalid input: expected array, received object\n  → at legs\n"
+            "✖ Too big: expected unknown to be <=4\n  → at legs"
         )
 
     def test_a_json_number_is_a_javascript_number(self):

@@ -16,6 +16,7 @@ afterEach(cleanup);
 const ADDED = {
   positions: [{ id: "p1", name: "a" }, { id: "p2", name: "b" }],
   monitors: ["m1", "m2", "m3", "m4"].map((id) => ({ id, code: id, field: "mid_price" })),
+  replaced: [],
 };
 
 /** What it took, as the audit counted it: every press of a button, every field typed into. */
@@ -138,5 +139,25 @@ describe("the panel's fit", () => {
     const payoff = within(spread).getByRole("group", { name: "payoff at expiry" }).getBoundingClientRect();
     expect(payoff.left).toBeGreaterThanOrEqual(fields.right);
     expect(payoff.top).toBeLessThan(fields.bottom);
+  });
+});
+
+describe("privacy", () => {
+  afterEach(() => { document.cookie = "ui_privacy=;path=/;max-age=0"; });
+
+  it("draws the contract count as dots, not digits", async () => {
+    document.cookie = "ui_privacy=on;path=/";
+    await openDesk();
+    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    const count = screen.getByLabelText("spread 1 contracts") as HTMLInputElement;
+    await userEvent.fill(count, "12");
+    expect(count.value).toBe("12");
+    expect(getComputedStyle(count).getPropertyValue("-webkit-text-security")).toBe("disc");
+  });
+
+  it("leaves it readable with privacy off", async () => {
+    await openDesk();
+    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    expect(getComputedStyle(screen.getByLabelText("spread 1 contracts")).getPropertyValue("-webkit-text-security")).toBe("none");
   });
 });

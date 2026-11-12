@@ -112,39 +112,8 @@
       "strike_date": "2026-12-18",
       "spreads": [
         {
-          "name": "dec-puts",
-          "held": true,
-          "entry": 2.25,
-          "opened_at": "2026-11-06",
-          "legs": [
-            {
-              "side": "short",
-              "option_type": "PUT",
-              "strike": 6400
-            },
-            {
-              "side": "long",
-              "option_type": "PUT",
-              "strike": 6350
-            }
-          ],
-          "monitors": [
-            {
-              "threshold": 4.5
-            },
-            {
-              "option_type": "PUT",
-              "strike": 6400,
-              "threshold": 0.3
-            }
-          ]
-        },
-        {
           "name": "dec-calls",
-          "held": true,
-          "entry": 1,
-          "opened_at": "2026-11-06",
-          "contracts": 2,
+          "held": false,
           "legs": [
             {
               "side": "short",
