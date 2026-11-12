@@ -1,0 +1,314 @@
+{
+  "name": "GET /positions/{id}/samples reads a stamp it cannot parse as unrecorded",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-11-06",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-06",
+          "dte": 42,
+          "cost_to_close": 6.25,
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-06T21:00:00Z",
+          "spx": null
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-07",
+          "dte": 41,
+          "cost_to_close": 6,
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "not a time",
+          "spx": null
+        }
+      ],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/positions/pos-1/samples",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "levels": {
+          "dte_at_open": 42,
+          "target": 3.2,
+          "stop": 12.8,
+          "target_dte": 11,
+          "manage_by_dte": 21
+        },
+        "plan": [
+          {
+            "dte": 42,
+            "on_pace": 6.4
+          },
+          {
+            "dte": 41,
+            "on_pace": 6.323350528379864
+          },
+          {
+            "dte": 40,
+            "on_pace": 6.245760466870613
+          },
+          {
+            "dte": 39,
+            "on_pace": 6.167194314620362
+          },
+          {
+            "dte": 38,
+            "on_pace": 6.0876142797525885
+          },
+          {
+            "dte": 37,
+            "on_pace": 6.006980066872998
+          },
+          {
+            "dte": 36,
+            "on_pace": 5.925248638544329
+          },
+          {
+            "dte": 35,
+            "on_pace": 5.842373946721772
+          },
+          {
+            "dte": 34,
+            "on_pace": 5.758306629391599
+          },
+          {
+            "dte": 33,
+            "on_pace": 5.6729936667386776
+          },
+          {
+            "dte": 32,
+            "on_pace": 5.586377990041405
+          },
+          {
+            "dte": 31,
+            "on_pace": 5.498398035099037
+          },
+          {
+            "dte": 30,
+            "on_pace": 5.408987230262507
+          },
+          {
+            "dte": 29,
+            "on_pace": 5.318073406968427
+          },
+          {
+            "dte": 28,
+            "on_pace": 5.225578117937447
+          },
+          {
+            "dte": 27,
+            "on_pace": 5.131415844718549
+          },
+          {
+            "dte": 26,
+            "on_pace": 5.035493071804437
+          },
+          {
+            "dte": 25,
+            "on_pace": 4.937707198786942
+          },
+          {
+            "dte": 24,
+            "on_pace": 4.837945254518108
+          },
+          {
+            "dte": 23,
+            "on_pace": 4.736082367366111
+          },
+          {
+            "dte": 22,
+            "on_pace": 4.631979932516773
+          },
+          {
+            "dte": 21,
+            "on_pace": 4.525483399593905
+          },
+          {
+            "dte": 20,
+            "on_pace": 4.416419579791067
+          },
+          {
+            "dte": 19,
+            "on_pace": 4.304593338461116
+          },
+          {
+            "dte": 18,
+            "on_pace": 4.1897834925310535
+          },
+          {
+            "dte": 17,
+            "on_pace": 4.0717376657942514
+          },
+          {
+            "dte": 16,
+            "on_pace": 3.950165759029553
+          },
+          {
+            "dte": 15,
+            "on_pace": 3.8247315498700596
+          },
+          {
+            "dte": 14,
+            "on_pace": 3.6950417228136048
+          },
+          {
+            "dte": 13,
+            "on_pace": 3.560631297690796
+          },
+          {
+            "dte": 12,
+            "on_pace": 3.4209438964790326
+          },
+          {
+            "dte": 11,
+            "on_pace": 3.275304420602618
+          },
+          {
+            "dte": 10,
+            "on_pace": 3.1228802334353065
+          },
+          {
+            "dte": 9,
+            "on_pace": 2.9626243192721646
+          },
+          {
+            "dte": 8,
+            "on_pace": 2.7931889950207025
+          },
+          {
+            "dte": 7,
+            "on_pace": 2.6127890589687235
+          },
+          {
+            "dte": 6,
+            "on_pace": 2.418972627259054
+          },
+          {
+            "dte": 5,
+            "on_pace": 2.2082097898955335
+          },
+          {
+            "dte": 4,
+            "on_pace": 1.9750828795147766
+          },
+          {
+            "dte": 3,
+            "on_pace": 1.7104719482395163
+          },
+          {
+            "dte": 2,
+            "on_pace": 1.3965944975103513
+          },
+          {
+            "dte": 1,
+            "on_pace": 0.9875414397573883
+          },
+          {
+            "dte": 0,
+            "on_pace": 0
+          }
+        ],
+        "samples": [
+          {
+            "observed_on": "2026-11-06",
+            "observed_at": null,
+            "timing": "unrecorded",
+            "dte": 42,
+            "cost_to_close": 6.25,
+            "on_pace": 6.4,
+            "legs_iv": null,
+            "legs_vega": null,
+            "legs_delta": null,
+            "spx": null
+          },
+          {
+            "observed_on": "2026-11-07",
+            "observed_at": null,
+            "timing": "unrecorded",
+            "dte": 41,
+            "cost_to_close": 6,
+            "on_pace": 6.323350528379864,
+            "legs_iv": null,
+            "legs_vega": null,
+            "legs_delta": null,
+            "spx": null
+          }
+        ]
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

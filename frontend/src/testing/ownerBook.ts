@@ -9,7 +9,7 @@
  *  Plain data: a test that wants the page serves it (`serveBook` in `__browser__/nextBook.ts` for
  *  the layout suites), and the model's tests read it directly.
  */
-import type { Entry, Holding, Monitor, Payoff } from "../api";
+import type { Entry, Holding, Monitor, Payoff, Sample, Samples } from "../api";
 
 /** SPX's price as the service derives it (ADR 0024), on every row of both responses. */
 const SPX = 6900.5;
@@ -100,7 +100,8 @@ export const HOLDINGS: Holding[] = [
     legs_delta: { "US.SPXW261218C7300000": 0.33, "US.SPXW261218C7350000": 0.24 },
     short_strikes: [served("2026-12-18", "CALL", 7300, 0.33, 38)] }),
   // a 4-leg condor held as one: one row, never split
-  holding("h-ic", { name: "1231_IC", strike_date: "2026-12-31", entry: 5,
+  // held twice over, so a figure across the contracts is not the per-contract one (#295)
+  holding("h-ic", { name: "1231_IC", strike_date: "2026-12-31", entry: 5, contracts: 2,
     legs: [side("short", "CALL", 7400), side("long", "CALL", 7450),
            side("short", "PUT", 6300), side("long", "PUT", 6250)],
     legs_delta: { "US.SPXW261231C7400000": 0.12, "US.SPXW261231C7450000": 0.08,
@@ -139,8 +140,8 @@ export const PAYOFFS: Record<string, Payoff> = {
     slope_below: 0, slope_above: 0, breakevens: [7302], max_profit: 2, max_loss: -48,
   },
   "h-ic": {
-    at_strikes: [{ spx: 6250, pnl: -45 }, { spx: 6300, pnl: 5 }, { spx: 7400, pnl: 5 }, { spx: 7450, pnl: -45 }],
-    slope_below: 0, slope_above: 0, breakevens: [6295, 7405], max_profit: 5, max_loss: -45,
+    at_strikes: [{ spx: 6250, pnl: -90 }, { spx: 6300, pnl: 10 }, { spx: 7400, pnl: 10 }, { spx: 7450, pnl: -90 }],
+    slope_below: 0, slope_above: 0, breakevens: [6295, 7405], max_profit: 10, max_loss: -90,
   },
 };
 
@@ -158,4 +159,68 @@ export function payoffAnswer(path: string): Payoff | null {
   if (path === "/positions/payoff") return DRAFT_PAYOFF;
   const m = /^\/positions\/([^/]+)\/payoff$/.exec(path);
   return m ? PAYOFFS[decodeURIComponent(m[1]!)] ?? null : null;
+}
+
+/** The Opened day and the expiries above, as days from one to the other. */
+const daysBetween = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
+/** One stored day, as `/positions/{id}/samples` serves it (#295). */
+type Day = [on: string, cost: number, timing: Sample["timing"], ivs: number[] | null];
+
+/** A holding's samples as the service would serve them: its Levels under the default policy (take
+ *  half, stop at twice, manage by 21 DTE), the planned decay at every DTE from the open — `onPace`,
+ *  Entry × √(d / D₀), worked here as the service works it — and each day with its On-pace. */
+function history(h: Holding, days: Day[]): Samples {
+  const d0 = daysBetween(h.opened_at!, h.strike_date);
+  const entry = h.entry!;
+  const pace = (dte: number) => entry * Math.sqrt(dte / d0);
+  const codes = h.legs.map((l) =>
+    `US.SPXW${h.strike_date.slice(2).replaceAll("-", "")}${l.option_type[0]}${l.strike}000`);
+  return {
+    levels: { dte_at_open: d0, target: entry / 2, stop: entry * 2, target_dte: Math.round(d0 / 4), manage_by_dte: 21 },
+    plan: Array.from({ length: d0 + 1 }, (_, i) => ({ dte: d0 - i, on_pace: pace(d0 - i) })),
+    samples: days.map(([on, cost, timing, ivs]) => {
+      const dte = daysBetween(on, h.strike_date);
+      // in Singapore, as DISPLAY_TZ serves it: 16:00 and 20:30 New York are the next morning there
+      const next = new Date(Date.parse(`${on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+      const observed_at = timing === "unrecorded" ? null
+        : timing === "before-open" ? `${on} 13:05:00+08:00`
+          : `${next} ${timing === "close" ? "05:00:00" : "09:30:00"}+08:00`;
+      return {
+        observed_on: on, observed_at, timing, dte, cost_to_close: cost, on_pace: pace(dte),
+        legs_iv: ivs === null ? null : Object.fromEntries(codes.map((c, i) => [c, ivs[i]!])),
+        legs_vega: null, legs_delta: null, spx: null,
+      };
+    }),
+  };
+}
+
+const [H_PUTS, H_CALLS, H_IC] = HOLDINGS as [Holding, Holding, Holding];
+
+/** `/positions/{id}/samples` for each holding: a week from the day each was opened. The call
+ *  spread is behind pace, and its week has a day recorded that evening, an overnight fill nothing
+ *  replaced and a row from before observation times were kept. */
+export const SAMPLES: Record<string, Samples> = {
+  "h-puts": history(H_PUTS, [
+    ["2026-11-03", 1.95, "close", [19.5, 20.25]], ["2026-11-04", 1.85, "close", [19.25, 20]],
+    ["2026-11-05", 1.8, "close", [19, 19.75]], ["2026-11-06", 1.6, "close", [18.5, 19.5]],
+    ["2026-11-07", 1.6, "close", [18.5, 19.5]], ["2026-11-08", 1.6, "close", [18.5, 19.5]],
+    ["2026-11-09", 1.4, "close", [18, 19]],
+  ]),
+  "h-calls": history(H_CALLS, [
+    ["2026-11-03", 2.05, "after-close", [11.5, 11]], ["2026-11-04", 2.3, "close", [12, 11.5]],
+    ["2026-11-05", 2.9, "close", [12.75, 12]], ["2026-11-06", 3.4, "unrecorded", null],
+    ["2026-11-07", 3.4, "close", [13, 12.5]], ["2026-11-08", 3.5, "before-open", [13.25, 12.5]],
+    ["2026-11-09", 4.1, "close", [14, 13.25]],
+  ]),
+  "h-ic": history(H_IC, [
+    ["2026-11-03", 5, "close", [10.5, 10, 21, 22]], ["2026-11-04", 4.85, "close", [10.5, 10, 20.5, 21.5]],
+  ]),
+};
+
+/** `/positions/{id}/samples` as a test service answers it, or null for any other path. */
+export function samplesAnswer(path: string): Samples | null {
+  const m = /^\/positions\/([^/]+)\/samples$/.exec(path);
+  return m ? SAMPLES[decodeURIComponent(m[1]!)] ?? null : null;
 }

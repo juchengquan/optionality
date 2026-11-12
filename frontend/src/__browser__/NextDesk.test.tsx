@@ -5,11 +5,11 @@
  *  jsdom suite's (`__tests__/NextDesk.test.tsx`).
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { page } from "@vitest/browser/context";
+import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 /* The owner-shaped book the desk's acceptance criteria name, served to the page. Here and not in a
@@ -33,7 +33,9 @@ function serveOwnerBook(extra: object[] = []): void {
   const quotes = [...QUOTES, ...extra];
   window.fetch = ((url: string, init?: RequestInit) => {
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
-    if (payoff) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
+    // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
+    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""));
+    if (read) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(read) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
     }
@@ -170,6 +172,104 @@ describe("the payoff at expiry fits in the inspector (#291)", () => {
     await inspect("h-ic");
     const label = document.querySelector<SVGTextElement>(".nxd-inspector [data-breakeven] text")!;
     expect(label.getBoundingClientRect().height).toBeGreaterThanOrEqual(10);
+  });
+});
+
+describe("the burndown and the IV chart fit in the inspector in REVIEW (#295)", () => {
+  /** Each chart drawn at the inspector's measured width: every piece inside the inspector's box,
+   *  no label cut by its own SVG, nothing scrolling sideways — and the line under the burndown
+   *  saying why a day is not the close when the pointer rests on it. */
+  function outside(insp: HTMLElement): string[] {
+    const box = insp.getBoundingClientRect();
+    return [...insp.querySelectorAll<Element>(".nx-hist, .nx-hist *")]
+      .filter((el) => el.getClientRects().length > 0 && !el.classList.contains("nx-hist-hit"))
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5;
+      })
+      .map((el) => `${el.tagName.toLowerCase()} ${el.getAttribute("class") ?? ""} ${el.textContent?.slice(0, 20)}`);
+  }
+  function clipped(svg: SVGSVGElement): string[] {
+    const box = svg.getBoundingClientRect();
+    return [...svg.querySelectorAll("text")]
+      .filter((t) => {
+        const r = t.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5 || r.top < box.top - 0.5 || r.bottom > box.bottom + 0.5;
+      })
+      .map((t) => t.textContent ?? "");
+  }
+  /** Labels drawn over one another, which a box test cannot see either. */
+  function overlapping(svg: SVGSVGElement): string[] {
+    const boxes = [...svg.querySelectorAll("text")].filter((t) => t.textContent)
+      .map((t) => [t.textContent!, t.getBoundingClientRect()] as const);
+    const out: string[] = [];
+    boxes.forEach(([a, r], i) => boxes.slice(i + 1).forEach(([b, q]) => {
+      if (r.left < q.right - 1 && q.left < r.right - 1 && r.top < q.bottom - 1 && q.top < r.bottom - 1) out.push(`${a} / ${b}`);
+    }));
+    return out;
+  }
+
+  // the call spread's week, with a day missing its IV; and the 4-leg condor's two days, whose
+  // calls end half a point of IV apart, which put their names on top of each other
+  for (const width of [900, 1280, 2560]) for (const [id, days] of [["h-calls", 7], ["h-ic", 2]] as const) {
+    it(`${id}'s at ${width}px`, async () => {
+      await show("review", width);
+      await inspect(id);
+      const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
+      await settle();
+      const charts = [...insp.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
+      // worth nothing unless both charts are there to be measured, at a usable size
+      expect(charts).toHaveLength(2);
+      for (const svg of charts) {
+        expect(svg.getBoundingClientRect().width).toBeGreaterThan(200);
+        expect(clipped(svg)).toEqual([]);
+        expect(overlapping(svg)).toEqual([]);
+      }
+      expect(insp.querySelectorAll("[data-sample]")).toHaveLength(days);
+      expect(outside(insp)).toEqual([]);
+      expect(insp.scrollWidth).toBeLessThanOrEqual(insp.clientWidth);
+      expect(overflowsSideways()).toBe(false);
+      expect(misfits()).toEqual([]);
+    });
+  }
+
+  it("says why a day is not the close when the pointer rests on it", async () => {
+    await show("review", 1280);
+    await inspect("h-calls");
+    await settle();
+    const evening = document.querySelector<SVGGElement>(".nxd-inspector [data-sample][data-timing='after-close']")!;
+    // drawn hollow, at a size a pointer can find
+    const mark = evening.querySelector<SVGCircleElement>("[data-mark='off-close']")!;
+    expect(getComputedStyle(mark).fill).toBe(getComputedStyle(document.querySelector(".nx")!).backgroundColor);
+    expect(mark.getBoundingClientRect().width).toBeGreaterThanOrEqual(6);
+    await userEvent.hover(mark);
+    const said = document.querySelector(".nxd-inspector .nx-hist-said")!;
+    expect(said.textContent).toMatch(/not the close: observed 20:30 New York, after the 16:15 close/);
+    // and anywhere on the chart picks the nearest day: the right-hand end is the last one
+    const svg = document.querySelector<SVGSVGElement>(".nxd-inspector .nx-hist svg")!;
+    const box = svg.getBoundingClientRect();
+    await userEvent.hover(svg, { position: { x: box.width - 12, y: 10 } });
+    expect(said.textContent).toMatch(/^9 Nov · 39 DTE/);
+  });
+
+  it("is one tab stop, whose arrow keys move from day to day", async () => {
+    await show("review", 1280);
+    await inspect("h-calls");
+    await settle();
+    const days = document.querySelector<HTMLElement>(".nxd-inspector .nx-hist-chart[role='group']")!;
+    days.focus();
+    expect(document.activeElement).toBe(days);
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+    const said = document.querySelector(".nxd-inspector .nx-hist-said")!;
+    expect(said.textContent).toMatch(/^4 Nov · 44 DTE/);
+    // the day said is the day marked
+    expect(document.querySelector(".nxd-inspector [data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-04");
+  });
+
+  it("is not drawn in LIVE", async () => {
+    await show("live", 1280);
+    await inspect("h-calls");
+    expect(document.querySelector(".nxd-inspector .nx-hist")).toBeNull();
   });
 });
 

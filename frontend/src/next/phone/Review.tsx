@@ -1,11 +1,13 @@
 /** REVIEW on the phone (ADR 0023): one holding per screen, paged by a swipe or by the arrows, with
- *  its figures. Its burndown becomes the page's main chart in a later slice (#291). */
+ *  its burndown as the page's main chart and its legs' IV beneath it (#295), then its figures. Each
+ *  page reads its holding's samples once, when REVIEW opens, and never again while it is open. */
 import { useCallback, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import type { Entry, Monitor } from "../../api";
 import { DASH } from "../../format";
 import { Money } from "../Book";
+import { HoldingHistory } from "../History";
 import type { PlacedHolding } from "../placement";
 import { LevelChip, RuleLine } from "./Cards";
 import { contractsWords, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
@@ -70,6 +72,7 @@ export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
                   <span className="nxp-hero-sub">unrealised</span>
                   <LevelChip holding={holding} />
                 </div>
+                <HoldingHistory holding={holding} privacy={privacy} />
                 <dl className="nxp-facts">
                   <div><dt>captured</dt><dd>{percent(holding.captured)}</dd></div>
                   <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>

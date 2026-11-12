@@ -329,7 +329,7 @@ describe("the inspector", () => {
     render(<DeskBook {...props()} />);
     fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
     let insp = screen.getByRole("complementary", { name: /inspector/ });
-    expect(within(insp).getByText("contracts").nextElementSibling!.textContent).toBe("×1");
+    expect(within(insp).getByText("contracts").nextElementSibling!.textContent).toBe("×2");
     cleanup();
     render(<DeskBook {...props({ privacy: true })} />);
     fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));

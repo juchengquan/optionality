@@ -1,0 +1,37 @@
+/* The burndown and the IV chart (#295), in the desk's inspector and on the phone's REVIEW page. The
+   Levels take their kinds' attention colours (next.css: a Stop is drawn as an alarm, a Target as an
+   entry, Manage-by as a warning), the costs the foreground, the plan a quieter dotted line. */
+.nx-hist { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+.nx-hist-h {
+  font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+.nx-hist-chart { width: 100%; min-width: 0; overflow: hidden; }
+.nx-hist-chart svg { display: block; max-width: 100%; height: auto; overflow: visible; }
+.nx-hist-chart text { fill: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+.nx-hist-zero { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.4; }
+.nx-hist-plan { fill: none; stroke: var(--muted-foreground); stroke-width: 1.5; stroke-dasharray: 1.5 3; }
+.nx-hist-costs { fill: none; stroke: var(--foreground); stroke-width: 1.25; opacity: 0.45; }
+.nx-hist-stop line { stroke: var(--alarm); stroke-width: 1; }
+.nx-hist-stop text { fill: var(--alarm); }
+.nx-hist-target line { stroke: var(--entry); stroke-width: 1; stroke-dasharray: 5 3; }
+.nx-hist-target text { fill: var(--entry); }
+.nx-hist-manage line { stroke: var(--warn); stroke-dasharray: 2 2; }
+.nx-hist-manage text { fill: var(--warn); }
+/* a day: the close filled, a point that is not one hollow, a row nobody timed faint */
+/* the whole chart is the target: a pointer anywhere on it picks the nearest day (History.tsx) */
+.nx-hist-chart svg { cursor: crosshair; }
+.nx-hist-chart:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 0.25rem; }
+.nx-hist-unit { margin-left: 0.5rem; text-transform: none; letter-spacing: normal; font-weight: 400; }
+.nx-hist-point [data-mark="close"] { fill: var(--foreground); }
+.nx-hist-point [data-mark="off-close"] {
+  fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; stroke-dasharray: 2 1.5;
+}
+.nx-hist-point [data-mark="unrecorded"] { fill: var(--foreground); opacity: 0.4; }
+.nx-hist-point[data-pointed] [data-mark], .nx-hist-point:hover [data-mark] { stroke: var(--ring); stroke-width: 2.5; }
+.nx-hist-now rect { fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; }
+.nx-hist-said { font-size: 0.75rem; color: var(--muted-foreground); min-height: 2.5em; overflow-wrap: anywhere; }
+.nx-hist-leg polyline { fill: none; stroke: var(--foreground); stroke-width: 1.5; }
+.nx-hist-leg circle { fill: var(--foreground); }
+.nx-hist-leg[data-side="long"] polyline { stroke: var(--muted-foreground); stroke-dasharray: 4 2; }
+.nx-hist-leg[data-side="long"] circle { fill: var(--muted-foreground); }

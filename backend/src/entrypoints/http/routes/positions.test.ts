@@ -151,6 +151,151 @@ describe("what vol did to a holding, over its own samples", () => {
   });
 });
 
+describe("a holding's daily samples, served for the burndown and the IV chart (#295)", () => {
+  /** Stored history and nothing live: the Provider here throws on any call, so a samples route that
+   *  asked it anything would fail rather than pass. */
+  const refusing: FakeProvider = async () => { throw new Error("the samples asked the Provider"); };
+  const legCodes = () => CONDOR_LEGS.map((l) => buildSpxCode(EXPIRY, l.option_type as "CALL" | "PUT", l.strike));
+  const flat = (v: number) => JSON.stringify(Object.fromEntries(legCodes().map((c) => [c, v])));
+  const sample = (
+    id: string, on: string, dte: number, cost: number, observedAt: string | null,
+    maps: { iv?: string | null; vega?: string | null; delta?: string | null; spx?: number | null } = {},
+  ) => {
+    h.db.prepare(
+      `insert into position_samples
+         (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega, legs_delta, observed_at, spx)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, on, dte, cost, maps.iv ?? null, maps.vega ?? null, maps.delta ?? null, observedAt,
+      maps.spx ?? null);
+  };
+  /** A holding made while the Provider still answers its creation probe, which then refuses. */
+  const made = async (over: Record<string, unknown> = {}) => {
+    let open = true;
+    start(async (codes) => {
+      if (!open) return refusing(codes);
+      return codes.map((code) => ({ code }));
+    });
+    const id = await created201(await post(condor(over)));
+    open = false;
+    return id;
+  };
+
+  it("serves each day's figures, its on-pace from the exit schedule and whether it was a close", async () => {
+    // opened at 73 DTE for a 3.00 credit, under the default policy: take half, stop at twice
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    // 16:00 EDT, the close
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000",
+      { iv: flat(14.5), vega: flat(4.25), delta: flat(0.2), spx: 6612.5 });
+    // 20:30 EDT: a missed session, filled that evening
+    sample(id, "2026-10-07", 72, 2.75, "2026-10-08 00:30:00.000000");
+    // written before observed_at existed
+    sample(id, "2026-10-08", 71, 2.5, null);
+
+    const resp = await h.call(`/positions/${id}/samples`);
+    expect(resp.status).toBe(200);
+    const data = await body(resp);
+    expect(data.levels).toEqual({ dte_at_open: 73, target: 1.5, stop: 6, target_dte: 18, manage_by_dte: 21 });
+    expect(data.samples).toEqual([
+      {
+        observed_on: "2026-10-06", observed_at: "2026-10-07 04:00:00+08:00", timing: "close", dte: 73,
+        cost_to_close: 2.9, on_pace: 3, spx: 6612.5,
+        legs_iv: JSON.parse(flat(14.5)), legs_vega: JSON.parse(flat(4.25)), legs_delta: JSON.parse(flat(0.2)),
+      },
+      {
+        observed_on: "2026-10-07", observed_at: "2026-10-08 08:30:00+08:00", timing: "after-close", dte: 72,
+        cost_to_close: 2.75, on_pace: 3 * Math.sqrt(72 / 73), spx: null,
+        legs_iv: null, legs_vega: null, legs_delta: null,
+      },
+      {
+        observed_on: "2026-10-08", observed_at: null, timing: "unrecorded", dte: 71,
+        cost_to_close: 2.5, on_pace: 3 * Math.sqrt(71 / 73), spx: null,
+        legs_iv: null, legs_vega: null, legs_delta: null,
+      },
+    ]);
+  });
+
+  it("serves the planned decay at every DTE from the open to expiry, as the domain computes it", async () => {
+    // the line is the service's figure, so the browser draws points and computes no curve
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    const { plan } = await body(await h.call(`/positions/${id}/samples`));
+    expect(plan).toHaveLength(74);
+    expect(plan[0]).toEqual({ dte: 73, on_pace: 3 });
+    expect(plan[73 - 21]).toEqual({ dte: 21, on_pace: 3 * Math.sqrt(21 / 73) });
+    expect(plan[73]).toEqual({ dte: 0, on_pace: 0 });
+  });
+
+  it("serves no schedule and no plan for a holding whose Opened nobody recorded", async () => {
+    const id = await made({ entry: 3 });
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000");
+    const data = await body(await h.call(`/positions/${id}/samples`));
+    expect(data.levels).toBeNull();
+    expect(data.plan).toEqual([]);
+    expect(data.samples[0].on_pace).toBeNull();
+    expect(data.samples[0].cost_to_close).toBe(2.9);
+  });
+
+  it("serves a debit's schedule with no Target or Stop, and its signed decay", async () => {
+    const id = await made({ opened_at: "2026-10-06", entry: -2 });
+    const data = await body(await h.call(`/positions/${id}/samples`));
+    expect(data.levels).toEqual({ dte_at_open: 73, target: null, stop: null, target_dte: null, manage_by_dte: 21 });
+    expect(data.plan[0]).toEqual({ dte: 73, on_pace: -2 });
+  });
+
+  it("serves nothing after a backdated close, and deletes nothing (ADR 0022)", async () => {
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000");
+    sample(id, "2026-10-07", 72, 2.8, "2026-10-07 20:00:00.000000");
+    h.db.prepare("update positions set closed_on = '2026-10-06', exit = 2.9 where id = ?").run(id);
+    const data = await body(await h.call(`/positions/${id}/samples`));
+    expect(data.samples.map((s: { observed_on: string }) => s.observed_on)).toEqual(["2026-10-06"]);
+    expect(h.db.prepare("select count(*) as n from position_samples").get()).toEqual({ n: 2 });
+  });
+
+  it("costs a corrupt map its own figure, never the request", async () => {
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    const [sc] = legCodes();
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000", {
+      iv: "{not json",
+      vega: JSON.stringify({ ...JSON.parse(flat(4)), [sc!]: "four" }),
+      delta: JSON.stringify([0.2]),
+    });
+    const resp = await h.call(`/positions/${id}/samples`);
+    expect(resp.status).toBe(200);
+    const [s] = (await body(resp)).samples;
+    expect([s.legs_iv, s.legs_vega, s.legs_delta]).toEqual([null, null, null]);
+  });
+
+  it("costs a stamp it cannot read its own timing, never the request", async () => {
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06T20:00:00Z");
+    sample(id, "2026-10-07", 72, 2.8, "garbage");
+    const resp = await h.call(`/positions/${id}/samples`);
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).samples.map((s: { timing: string; observed_at: string | null }) =>
+      [s.timing, s.observed_at])).toEqual([["unrecorded", null], ["unrecorded", null]]);
+  });
+
+  it("costs a reading too large for a double its map, never the request", async () => {
+    // JSON.parse reads 1e400 as Infinity; the Python reads an integer that long exactly
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    const [sc] = legCodes();
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000", { iv: `{"${sc}": 1${"0".repeat(400)}}` });
+    const resp = await h.call(`/positions/${id}/samples`);
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).samples[0].legs_iv).toBeNull();
+  });
+
+  it("answers an empty history for a holding never sampled", async () => {
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    expect((await body(await h.call(`/positions/${id}/samples`))).samples).toEqual([]);
+  });
+
+  it("is 404 for a holding that does not exist", async () => {
+    start(refusing);
+    expect((await h.call("/positions/nope/samples")).status).toBe(404);
+  });
+});
+
 describe("the payoff at expiry (#291)", () => {
   /** At expiry only, so it needs the legs, the Entry and the count and nothing else (ADR 0023):
    *  neither form may ask the Provider anything. The Provider here prices what a creation probe

@@ -2277,6 +2277,227 @@
               ]
             }
           },
+          "/positions/{id}/samples": {
+            "get": {
+              "operationId": "getPositionsByIdSamples",
+              "summary": "A holding's daily samples, with its on-pace and its levels",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "levels": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "dte_at_open": {
+                                    "type": "number"
+                                  },
+                                  "target": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "stop": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "target_dte": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "manage_by_dte": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "dte_at_open",
+                                  "target",
+                                  "stop",
+                                  "target_dte",
+                                  "manage_by_dte"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "plan": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "dte": {
+                                  "type": "number"
+                                },
+                                "on_pace": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "dte",
+                                "on_pace"
+                              ]
+                            }
+                          },
+                          "samples": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "observed_on": {
+                                  "type": "string"
+                                },
+                                "observed_at": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "timing": {
+                                  "type": "string",
+                                  "enum": [
+                                    "close",
+                                    "before-open",
+                                    "after-close",
+                                    "unrecorded"
+                                  ]
+                                },
+                                "dte": {
+                                  "type": "number"
+                                },
+                                "cost_to_close": {
+                                  "type": "number"
+                                },
+                                "on_pace": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "legs_iv": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "legs_vega": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "legs_delta": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "spx": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "observed_on",
+                                "observed_at",
+                                "timing",
+                                "dte",
+                                "cost_to_close",
+                                "on_pace",
+                                "legs_iv",
+                                "legs_vega",
+                                "legs_delta",
+                                "spx"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "levels",
+                          "plan",
+                          "samples"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "positions"
+              ]
+            }
+          },
           "/positions/{id}/payoff": {
             "get": {
               "operationId": "getPositionsByIdPayoff",

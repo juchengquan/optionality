@@ -418,9 +418,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
   Counted on 2026-11-11 and moved by #297's two (`quote.sigma_distance`, `quote.strike_distances`)
+  and #295's one (`expiry.sample_timing`)
   — every public function a public module of the package defines, against every `fn` in
-  `testdata/golden/` — that is 64 of the package's 91, which is exactly the 64 of the TypeScript
-  domain's 68 exported ones that have cases: the four `*Policy` readers take the
+  `testdata/golden/` — that is 65 of the package's 92, which is exactly the 65 of the TypeScript
+  domain's 69 exported ones that have cases: the four `*Policy` readers take the
   service's Settings, so the package takes their knobs directly instead. The other 27, none of them
   in `testdata/golden/`:
   - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
@@ -536,7 +537,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
   call to one — a loophole that change itself created. The payoff at expiry (`GET /positions/{id}/payoff`,
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
-  an Entry and a count, and its door scenarios run with the Provider down. `/references` makes one bounded call per
+  an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
+  samples (`GET /positions/{id}/samples`, #295): stored history, read once when REVIEW opens a
+  holding and never polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (`/positions/values` is polled by the dashboard's Holdings
   panel while it is open.) `/references` is polled WITH `/quotes` — two calls per poll per open

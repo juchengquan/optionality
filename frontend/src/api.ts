@@ -83,6 +83,14 @@ export const fetchVol = (id: string) =>
   read<Vol>(client.positions[":id"].vol.$get({ param: { id } }), `/positions/${id}/vol`);
 export const fetchMonitors = () => read<Monitor[]>(client.monitors.$get(), "/monitors");
 
+/** A holding's Daily samples (#295): each day's Cost to close, On-pace, legs' IV, vega and delta,
+ *  and whether it was the close; with the Levels and the planned decay, both the service's. Stored
+ *  history and no Provider call: REVIEW asks once when it opens a holding and never polls it. */
+export type Samples = Exclude<Infer<typeof client.positions[":id"]["samples"]["$get"]>, { detail: string }>;
+export type Sample = Samples["samples"][number];
+export const fetchSamples = (id: string) =>
+  read<Samples>(client.positions[":id"].samples.$get({ param: { id } }), `/positions/${id}/samples`);
+
 /** A structure's payoff at expiry, in points across its contracts (#291): the P&L at each strike,
  *  the slope beyond the outer two, the breakevens and the maximums. At expiry only (ADR 0023).
  *

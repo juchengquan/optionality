@@ -104,6 +104,8 @@ async function endpoints() {
     // the payoff at expiry (#291): a holding's, and draft legs' — the add form's preview and a
     // watched spread drawn at its current value
     payoff: await (await client.positions[":id"].payoff.$get({ param: id })).json(),
+    // the daily samples (#295): REVIEW's burndown and IV chart, read once when opened
+    samples: await (await client.positions[":id"].samples.$get({ param: id })).json(),
     draftPayoff: await client.positions.payoff.$post({
       json: { legs: [{ side: "short", option_type: "PUT", strike: 7100 }], entry: 1.5 },
     }),
@@ -234,6 +236,18 @@ export type HcChecks = [
   Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsAdded"]["json"]>>>["positions"], { id: string; name: string }[]>>,
   Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsAdded"]["json"]>>>["monitors"],
     { id: string; code: string; field: string }[]>>,
+  // the samples as the burndown draws them: the plan is the service's, the timing says which
+  // points are not closes, and every reading the sweep may have withheld is nullable
+  Checked<Exactly<Ok<E["samples"]>["plan"], { dte: number; on_pace: number }[]>>,
+  Checked<Exactly<NonNullable<Ok<E["samples"]>["levels"]>["target"], number | null>>,
+  Checked<Exactly<NonNullable<Ok<E["samples"]>["levels"]>["manage_by_dte"], number>>,
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["timing"],
+    "close" | "before-open" | "after-close" | "unrecorded">>,
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["observed_at"], string | null>>,
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["cost_to_close"], number>>,
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["on_pace"], number | null>>,
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["legs_iv"], Record<string, number> | null>>,
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["spx"], number | null>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.

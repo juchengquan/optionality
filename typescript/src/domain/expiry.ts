@@ -123,6 +123,50 @@ export function takesSample(
   return incomplete && complete ? "yes" : "no";
 }
 
+/** When a stored row was observed, against its day's close: what a chart of the samples marks.
+ *
+ *  - **close**: inside 09:30–16:15 New York, where the row is written freely and settles on the
+ *    last sweep by the options' close — or, on a weekend or a holiday, carries the last close
+ *    forward (`inSampleHours`).
+ *  - **before-open**: a fill from overnight marks, taken before 09:30 and never replaced, because
+ *    no sweep ran in that day's hours or that evening.
+ *  - **after-close**: taken after 16:15 — an opening day recorded in New York's evening, a missed
+ *    session filled that night, or a row completed then.
+ *  - **unrecorded**: a row written before `observed_at` existed (migration 0009). Nothing says
+ *    when it was observed, so nothing here claims it was a close or that it was not.
+ *
+ *  By the hour alone, as `takesSample`'s provisional check is: the sweep keys every row to the New
+ *  York date it was observed on, so the instant's own day is the row's. A stamp in any spelling but
+ *  the stored one (`storedInstant`) is `unrecorded` too: a corrupt row costs its own figure, and
+ *  never the request that reads it (#295).
+ */
+/** UTC as the database spells it — "2026-11-09 21:00:00.000000", the fraction optional and any
+ *  length — as an instant to the millisecond, or null for anything else: another spelling (a "T", a
+ *  zone), or a day or a time that does not exist. Read strictly, so the Python reads the same
+ *  strings the same way; a JavaScript Date would take 24:00 as the next midnight. */
+function storedInstant(text: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?$/.exec(text);
+  if (!m) return null;
+  const [y, mo, d, h, mi, s] = m.slice(1, 7).map(Number) as [number, number, number, number, number, number];
+  const ms = Number((m[7] ?? "").slice(0, 3).padEnd(3, "0"));
+  const when = new Date(Date.UTC(y, mo - 1, d, h, mi, s, ms));
+  // Date.UTC rolls an impossible field into the next one; a stamp that does not come back as
+  // itself named a day or a time that does not exist
+  const same = when.getUTCFullYear() === y && when.getUTCMonth() === mo - 1 && when.getUTCDate() === d
+    && when.getUTCHours() === h && when.getUTCMinutes() === mi && when.getUTCSeconds() === s;
+  return same ? when : null;
+}
+
+export type SampleTiming = "close" | "before-open" | "after-close" | "unrecorded";
+
+export function sampleTiming(observedAt: string | null): SampleTiming {
+  const when = observedAt === null ? null : storedInstant(observedAt);
+  if (when === null) return "unrecorded";
+  const t = sinceNewYorkMidnight(when);
+  if (t < SAMPLE_FROM) return "before-open";
+  return t <= SAMPLE_UNTIL ? "close" : "after-close";
+}
+
 /** Calendar days from the current MARKET date to expiry.
  *
  *  Market date, not DISPLAY_TZ: at 09:40 in Singapore it is still the previous afternoon in New

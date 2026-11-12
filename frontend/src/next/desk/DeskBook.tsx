@@ -11,6 +11,7 @@ import { Chip, Money, type BookProps } from "../Book";
 import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { monitorName, fieldWords } from "../needs";
+import { HoldingHistory } from "../History";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
 import {
@@ -394,7 +395,7 @@ function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose }
           <X aria-hidden="true" />
         </button>
       </div>
-      {row.kind === "holding" ? <HoldingDetail row={row} privacy={privacy} partners={partners} onSelect={onSelect} />
+      {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} privacy={privacy} partners={partners} onSelect={onSelect} />
         : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} privacy={privacy} />
           : <QuarantinedDetail row={row} />}
       <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
@@ -425,8 +426,8 @@ function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean;
   );
 }
 
-function HoldingDetail({ row, privacy, partners, onSelect }: {
-  row: Extract<DeskRow, { kind: "holding" }>; privacy: boolean; partners: Map<string, Holding>;
+function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
+  row: Extract<DeskRow, { kind: "holding" }>; mode: Mode; privacy: boolean; partners: Map<string, Holding>;
   onSelect: (id: string) => void;
 }) {
   const h: Holding = row.holding;
@@ -459,6 +460,8 @@ function HoldingDetail({ row, privacy, partners, onSelect }: {
       ) : null}
       <Legs legs={h.legs.map((l) => `${l.side} ${l.option_type} ${l.strike}`)} />
       <InspectorStrip holding={h} partner={partner} />
+      {/* REVIEW's charts (ADR 0023, #295): the recorded days, read once when opened */}
+      {mode === "review" ? <HoldingHistory holding={h} privacy={privacy} /> : null}
       <HoldingPayoff holding={h} privacy={privacy} />
       <Figures row={row} privacy={privacy} extra={extra} />
       <Monitors entries={row.rules} />

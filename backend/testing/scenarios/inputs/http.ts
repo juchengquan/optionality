@@ -639,6 +639,111 @@ export const HTTP: readonly HttpInput[] = [
     world: world({ tables: held }),
     request: request("GET", "/positions/pos-9/vol"),
   },
+  // --- the daily samples (#295): stored history, and no market data -----------------------
+  {
+    // the Provider is DOWN, so a route that asked it anything would fail. Opened at 42 DTE for a
+    // 6.40 credit: a close, an evening fill of a missed session, an overnight fill nothing
+    // replaced, and a row from before observed_at existed — each said by its `timing`
+    name: "GET /positions/{id}/samples serves an open holding's days against its plan",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [
+          sample({
+            position_id: "pos-1", observed_on: "2026-11-06", dte: 42, cost_to_close: 6.25,
+            observed_at: "2026-11-06 21:00:00.000000", spx: 6812.5,
+            legs_iv: { [C7300]: 14.5, [P6400]: 19.25 }, legs_vega: { [C7300]: 4.25, [P6400]: 4 },
+            legs_delta: { [C7300]: 0.21, [P6400]: -0.18 },
+          }),
+          sample({
+            position_id: "pos-1", observed_on: "2026-11-07", dte: 41, cost_to_close: 6,
+            observed_at: "2026-11-08 01:30:00.000000",
+          }),
+          sample({
+            position_id: "pos-1", observed_on: "2026-11-08", dte: 40, cost_to_close: 5.75,
+            observed_at: "2026-11-08 05:05:00.000000",
+          }),
+          sample({ position_id: "pos-1", observed_on: "2026-11-05", dte: 43, cost_to_close: 6.5 }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    // closed on the last day sampled: its history whole, held against the same schedule
+    name: "GET /positions/{id}/samples serves a closed holding's history",
+    world: world({
+      tables: {
+        positions: [{ ...opened, closed_on: "2026-11-07", exit: 6 }],
+        position_samples: [
+          sample({ position_id: "pos-1", observed_on: "2026-11-06", dte: 42, cost_to_close: 6.25,
+            observed_at: "2026-11-06 21:00:00.000000" }),
+          sample({ position_id: "pos-1", observed_on: "2026-11-07", dte: 41, cost_to_close: 6,
+            observed_at: "2026-11-07 21:00:00.000000" }),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    // the sweep sampled the 7th and 8th before the close was recorded as the 6th: those rows are
+    // not its history, and they are kept (`rows` is empty)
+    name: "GET /positions/{id}/samples hides the days after a backdated close",
+    world: world({
+      tables: {
+        positions: [{ ...opened, closed_on: "2026-11-06", exit: 6.25 }],
+        position_samples: [
+          sample({ position_id: "pos-1", observed_on: "2026-11-06", dte: 42, cost_to_close: 6.25,
+            observed_at: "2026-11-06 21:00:00.000000" }),
+          sample({ position_id: "pos-1", observed_on: "2026-11-07", dte: 41, cost_to_close: 6,
+            observed_at: "2026-11-07 21:00:00.000000" }),
+          sample({ position_id: "pos-1", observed_on: "2026-11-08", dte: 40, cost_to_close: 5.75,
+            observed_at: "2026-11-08 21:00:00.000000" }),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    // a stamp in another spelling and one that is no time at all: each row costs its own timing
+    // and stamp, read as unrecorded, and the request answers (#295 review)
+    name: "GET /positions/{id}/samples reads a stamp it cannot parse as unrecorded",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [
+          sample({ position_id: "pos-1", observed_on: "2026-11-06", dte: 42, cost_to_close: 6.25,
+            observed_at: "2026-11-06T21:00:00Z" }),
+          sample({ position_id: "pos-1", observed_on: "2026-11-07", dte: 41, cost_to_close: 6,
+            observed_at: "not a time" }),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    name: "GET /positions/{id}/samples answers an empty history for a holding never sampled",
+    world: world({ tables: { positions: [opened] } }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    // no Opened, so no schedule is inferred: the costs alone, with no plan and no Levels
+    name: "GET /positions/{id}/samples serves no plan for a holding with no Opened",
+    world: world({
+      tables: {
+        positions: [position({ id: "pos-1", opened_at: null })],
+        position_samples: [sample({ position_id: "pos-1", observed_on: "2026-11-06", dte: 42,
+          cost_to_close: 6.25, observed_at: "2026-11-06 21:00:00.000000" })],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    name: "GET /positions/{id}/samples on a holding that does not exist",
+    world: world({ tables: held }),
+    request: request("GET", "/positions/pos-9/samples"),
+  },
   // --- the payoff at expiry (#291): legs, an Entry and a count, and no market data ---------
   {
     // the Provider is DOWN, so a payoff that asked it anything would fail; it answers, and asks
