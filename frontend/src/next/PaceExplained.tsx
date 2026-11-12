@@ -1,13 +1,16 @@
 /** A holding's pace explained (#333, ADR 0011), in the desk's inspector and the phone's holding
- *  detail, in LIVE and REVIEW alike: the DTE it was opened at, the gap in words, the √T working of
- *  its On-pace, the DTE decay alone reaches the Target at, and what `/positions/{id}/vol` says of
- *  the gap — vol's part and the rest, or why it cannot split it and how many vol points would.
+ *  detail, in LIVE and REVIEW alike: the DTE it was opened at, the √T working of its On-pace, the
+ *  DTE decay alone reaches the Target at, and what `/positions/{id}/vol` says of the gap — vol's
+ *  part and the rest, or why it cannot split it and how many vol points would cover it.
  *
- *  - **Every figure is the service's.** The working is the schedule's On-pace beside the served
- *    figures it came from, written out so it can be checked by eye; the split is the route's own
- *    `vol`, `rest`, `gap`, `vega` and `cover`, never a subtraction here. The split's gap is the one
- *    at the close the vol part runs to (`at`), which is why it is dated: the live gap above it is
- *    a later instant, and the three figures of the split are only one sum at one.
+ *  - **Every figure and every reason is the service's.** The working is the schedule's On-pace
+ *    beside the served figures it came from, written out so it can be checked by eye; the split is
+ *    the route's own `vol`, `rest`, `gap`, `vega` and `cover`, never a sum here, and where one is
+ *    absent the route says why (`reason`, `gap_reason`, `cover_reason`) and this says that.
+ *  - **The split is dated, and said for what it is.** Its gap is the one at the last sample, the
+ *    one the vol part runs to (ADR 0011, 2026-11-12), which the route says is that day's close, a
+ *    reading in hours still running, before the open or after the close. The live gap is the
+ *    holding's own figure beside this, in words, and is not said again here.
  *  - **Read once, when opened, and never polled**, in either mode: the split changes at most once a
  *    market day. A new valuation of the same holding asks nothing more; an answer is kept under
  *    the id it answered, so another holding's split is never shown under this one while its own is
@@ -32,12 +35,7 @@ export function PaceExplained({ holding }: { holding: Holding }) {
     : null;
   return (
     <section className="nx-pace" aria-label="the pace explained">
-      <p>
-        {`opened at ${s.dte_at_open} DTE`}
-        {s.pace_gap === null ? null : (
-          <>{" · "}<strong data-outcome={paceOutcome(s.pace_gap)}>{paceWords(s.pace_gap)}</strong></>
-        )}
-      </p>
+      <p>{`opened at ${s.dte_at_open} DTE`}</p>
       {working ? <p className="nx-pace-working">{working}</p> : null}
       <dl className="nx-pace-kv">
         <div>
@@ -79,8 +77,21 @@ function useVol(id: string): VolState | null {
 }
 
 const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-/** "9 Nov": a market date read in UTC, so the device's zone cannot move it. */
+/** "9 Nov": a market date read in UTC, so the device's zone cannot move it — the way the service
+ *  writes the days in its reasons. */
 const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
+
+/** The sample the split is at, as the route says it is: a close only once its hours are over. */
+function atWords(at: string, timing: Vol["timing"]): string {
+  const day = dayWords(at);
+  switch (timing) {
+    case "close": return `at the ${day} close`;
+    case "in-hours": return `as of ${day}, in hours`;
+    case "before-open": return `as of ${day}, before the open`;
+    case "after-close": return `as of ${day}, after the close`;
+    default: return `as of ${day}`;
+  }
+}
 
 /** "cost you" or "saved you": a vol part is POSITIVE when it hurts, the opposite of a P&L, so it
  *  is said in words and never as a sign (ADR 0011). */
@@ -95,19 +106,22 @@ function Split({ id }: { id: string }) {
   }
   const v = state.vol;
   const vega = v.vega === null ? null : ` · net vega ${v.vega.toFixed(2)}`;
+  // the gap's own reason, unless the vol part's already said the same thing
+  const noGap = v.gap === null && v.gap_reason !== null && v.gap_reason !== v.reason ? v.gap_reason : null;
   return (
     <div className="nx-pace-split" data-split="">
       {v.at !== null && v.gap !== null ? (
         <p>
-          {`at the ${dayWords(v.at)} close: `}
+          {`${atWords(v.at, v.timing)}: `}
           <strong data-outcome={paceOutcome(v.gap)}>{paceWords(v.gap)}</strong>
         </p>
       ) : null}
+      {noGap ? <p className="nx-pace-why">{`no gap to split: ${noGap}`}</p> : null}
       {v.reason === null && v.vol !== null ? (
         <>
           <p>
             {`vol ${costWords(v.vol)}`}
-            {v.rest === null ? " · the rest cannot be said: that close has no Cost to close" : ` · the rest ${costWords(v.rest)}`}
+            {v.rest === null ? null : ` · the rest ${costWords(v.rest)}`}
           </p>
           <p className="nx-pace-note">
             {`over ${v.days} day${v.days === 1 ? "" : "s"} from ${dayWords(v.from!)}`}{vega}
@@ -116,9 +130,11 @@ function Split({ id }: { id: string }) {
       ) : (
         <>
           <p className="nx-pace-why">{`vol cannot be split out: ${v.reason ?? "the service gave no reason"}`}</p>
-          {v.cover === null ? null : (
+          {v.cover !== null ? (
             <p className="nx-pace-note">{`${v.cover.toFixed(2)} vol points would cover this gap`}{vega}</p>
-          )}
+          ) : v.gap !== null && v.cover_reason !== null ? (
+            <p className="nx-pace-note">{v.cover_reason}</p>
+          ) : null}
         </>
       )}
     </div>

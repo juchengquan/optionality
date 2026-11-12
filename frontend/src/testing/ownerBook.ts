@@ -237,12 +237,15 @@ export function samplesAnswer(path: string): Samples | null {
  *  page that split the live gap would say other figures than these. */
 export const VOLS: Record<string, Vol> = {
   "h-puts": { vol: 0.31, from: "2026-11-03", to: "2026-11-09", days: 6, reason: null,
-    at: "2026-11-09", gap: -0.42, rest: -0.73, vega: -0.86, cover: 0.4883720930232558 },
+    at: "2026-11-09", timing: "close", gap: -0.42, gap_reason: null, rest: -0.73, vega: -0.86,
+    cover: 0.4883720930232558, cover_reason: null },
   "h-calls": { vol: null, from: null, to: null, days: null,
-    reason: "2026-11-06 has no vol reading for every leg",
-    at: "2026-11-09", gap: 2.27, rest: null, vega: -1.25, cover: 1.816 },
+    reason: "6 Nov has no vol reading for every leg",
+    at: "2026-11-09", timing: "close", gap: 2.27, gap_reason: null, rest: null, vega: -1.25,
+    cover: 1.816, cover_reason: null },
   "h-ic": { vol: -0.05, from: "2026-11-03", to: "2026-11-04", days: 1, reason: null,
-    at: "2026-11-04", gap: 0.12, rest: 0.17, vega: -2.1, cover: 0.05714285714285714 },
+    at: "2026-11-04", timing: "close", gap: 0.12, gap_reason: null, rest: 0.17, vega: -2.1,
+    cover: 0.05714285714285714, cover_reason: null },
 };
 
 /** `/positions/{id}/vol` as a test service answers it, or null for any other path. */
