@@ -322,8 +322,15 @@ function useBook(mode: Mode) {
   const [pollFrom, setPollFrom] = useState(0);
   const live = mode === "live";
 
+  // The line's answers land as the holdings' do (below): unless a NEWER one already has. A poll
+  // asked before a save and answered after its reload put the saved-over rows back (#292).
+  const lineAsked = useRef(0);
+  const lineLanded = useRef(0);
   const loadLine = useCallback(async () => {
+    const mine = ++lineAsked.current;
     const [q, m, h] = await Promise.allSettled([fetchQuotes(), fetchMonitors(), fetchHealth()]);
+    if (mine < lineLanded.current) return;
+    lineLanded.current = mine;
     if (q.status === "fulfilled") setQuotes(q.value);
     if (m.status === "fulfilled") setMonitors(m.value);
     if (h.status === "fulfilled") setHealth(h.value);

@@ -14,6 +14,8 @@ import {
   deletesOn, draftOf, draftWords, patchOf, ruleOfEntry, ruleOfMonitor, spotOf,
 } from "../next/edit";
 import { sentence } from "../next/needs";
+import { Next } from "../next/Next";
+import { serveEditing } from "../testing/editBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
@@ -358,5 +360,40 @@ describe("from both arrangements", () => {
     render(<DeskBook {...book()} />);
     fireEvent.click(screen.getByRole("button", { name: "1218_P7150" }));
     expect(screen.queryByRole("button", { name: /^edit / })).toBeNull();
+  });
+});
+
+describe("the page after a save", () => {
+  it("keeps the saved book when a poll asked before the save answers after it", async () => {
+    // a slow poll — OpenD's 10 s limit against a 5 s cadence — still in flight when the owner
+    // mutes a rule: the save's reload lands first, and the older answer must not put the rule back
+    const writes = serveEditing();
+    const served = window.fetch;
+    let hold = false;
+    const held: (() => void)[] = [];
+    window.fetch = ((url: string, init?: RequestInit) => {
+      const answer = served(url, init);
+      if (!hold || !String(url).endsWith("/quotes")) return answer;
+      return new Promise((r) => held.push(() => r(answer)));
+    }) as typeof fetch;
+    render(<Next />);
+    // jsdom's window is the phone's width: the rule is reached through its spread's sheet
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    const sheet = await screen.findByRole("dialog");
+
+    hold = true;
+    fireEvent.click(screen.getByRole("button", { name: "refresh now", hidden: true }));
+    hold = false;
+    fireEvent.click(within(sheet).getByRole("button", { name: "mute 261218 7150P delta" }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    // the save's reload has landed: the rule is off, listed with what is switched off
+    await screen.findByRole("button", { name: "unmute 261218 7150P delta", hidden: true });
+
+    // the poll from before the save answers last, with the book as it was
+    expect(held).toHaveLength(1);
+    held[0]!();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole("button", { name: "mute 261218 7150P delta", hidden: true })).toBeNull();
+    expect(screen.getByRole("button", { name: "unmute 261218 7150P delta", hidden: true })).toBeTruthy();
   });
 });
