@@ -220,7 +220,8 @@
               "strike": 7300,
               "delta": 0.21,
               "points": 399.5,
-              "sigma": 1.22
+              "sigma": 1.22,
+              "one_sigma": 327.07
             }
           ]
         },

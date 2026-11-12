@@ -191,6 +191,22 @@ def sigma_distance(points: float, spx: float, iv: float, dte: float) -> float | 
     return to_fixed(sigma, 2) if math.isfinite(sigma) else None
 
 
+def one_sigma(spx: float, iv: float, dte: float) -> float | None:
+    """One standard deviation of SPX to expiry, in points (#298).
+
+        1 sigma = SPX × IV × √(DTE / 365)
+
+    The width `sigma_distance` divides a distance by, served on its own so the price map can draw a
+    ±1 sigma band about SPX without the browser working it out (ADR 0005). IV is a percentage and DTE
+    calendar days, as there. Rounded to two places; None where an IV, an SPX or a DTE is not positive,
+    or the answer is not finite.
+    """
+    if not (iv > 0) or not (spx > 0) or not (dte > 0):
+        return None
+    width = spx * (iv / 100) * math.sqrt(dte / 365)
+    return to_fixed(width, 2) if math.isfinite(width) else None
+
+
 class StrikeDistance(BaseModel):
     """A short strike placed against SPX: what the strike strip draws (#297)."""
 
@@ -205,6 +221,9 @@ class StrikeDistance(BaseModel):
     points: float | None
     #: `points` in sigma to expiry (`sigma_distance`), or None where either cannot be a figure
     sigma: float | None
+    #: one sigma of SPX to expiry in points, from this leg's IV (`one_sigma`, #298): the price map's
+    #: band. None without an SPX or an IV, or with no day left.
+    one_sigma: float | None
 
 
 def strike_distances(codes: list[str], by_code: ByCode, spx: float | None, dte: float) -> list[StrikeDistance]:
@@ -234,6 +253,7 @@ def strike_distances(codes: list[str], by_code: ByCode, spx: float | None, dte: 
                 delta=_finite(record.get("option_delta")),
                 points=points,
                 sigma=None if points is None or spx is None or iv is None else sigma_distance(points, spx, iv, dte),
+                one_sigma=None if spx is None or iv is None else one_sigma(spx, iv, dte),
             )
         )
     return out

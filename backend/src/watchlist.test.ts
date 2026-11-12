@@ -1062,6 +1062,8 @@ describe("a spread's short strikes against SPX (#297)", () => {
     expect(e!.short_strikes).toEqual([{
       code: LEG_B, option_type: "CALL", strike: 8150, delta: 0.04, points,
       sigma: Number((points / (spx * 0.15 * Math.sqrt(dte / 365))).toFixed(2)),
+      // one σ of SPX to expiry from the short leg's own IV: the price map's band (#298)
+      one_sigma: Number((spx * 0.15 * Math.sqrt(dte / 365)).toFixed(2)),
     }]);
   });
 
@@ -1070,7 +1072,8 @@ describe("a spread's short strikes against SPX (#297)", () => {
     const [e] = await run(quoting({ [LEG_B]: { mid_price: 1, option_delta: 0.04 } }), true);
     expect(e!.spx).toBeNull();
     expect(e!.short_strikes).toEqual([
-      { code: LEG_B, option_type: "CALL", strike: 8150, delta: 0.04, points: null, sigma: null },
+      { code: LEG_B, option_type: "CALL", strike: 8150, delta: 0.04, points: null, sigma: null,
+        one_sigma: null },
     ]);
   });
 

@@ -41,7 +41,7 @@ type Ok<T> = T extends ErrorBody ? never : T;
  *  out rather than imported, so a change to the domain's own type is a change to this pin too. */
 type StrikeDistance = {
   code: string; option_type: "CALL" | "PUT"; strike: number;
-  delta: number | null; points: number | null; sigma: number | null;
+  delta: number | null; points: number | null; sigma: number | null; one_sigma: number | null;
 };
 
 /** Every endpoint, called the way the dashboard will call it.

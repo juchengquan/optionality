@@ -236,7 +236,8 @@
               "strike": 7300,
               "delta": null,
               "points": null,
-              "sigma": null
+              "sigma": null,
+              "one_sigma": null
             }
           ]
         },

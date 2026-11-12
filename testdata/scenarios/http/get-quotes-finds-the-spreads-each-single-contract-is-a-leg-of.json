@@ -321,7 +321,8 @@
               "strike": 7300,
               "delta": 0.21,
               "points": null,
-              "sigma": null
+              "sigma": null,
+              "one_sigma": null
             }
           ]
         },
@@ -386,7 +387,8 @@
               "strike": 7300,
               "delta": 0.21,
               "points": null,
-              "sigma": null
+              "sigma": null,
+              "one_sigma": null
             },
             {
               "code": "US.SPXW261218P6400000",
@@ -394,7 +396,8 @@
               "strike": 6400,
               "delta": -0.18,
               "points": null,
-              "sigma": null
+              "sigma": null,
+              "one_sigma": null
             }
           ]
         },

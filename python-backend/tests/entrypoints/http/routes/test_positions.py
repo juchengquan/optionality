@@ -792,6 +792,9 @@ class TestPositionsValues:
         def sigma(points: float) -> float:
             return round(points / (7000 * 0.2 * math.sqrt(v["dte"] / 365)), 2)
 
+        # one sigma of SPX to expiry from each short leg's own IV, the price map's band (#298)
+        width = round(7000 * 0.2 * math.sqrt(v["dte"] / 365), 2)
+
         # the SHORT legs only, in the holding's own order: the call at 8050 and the put at 7100
         assert v["short_strikes"] == [
             {
@@ -801,6 +804,7 @@ class TestPositionsValues:
                 "delta": 0.2,
                 "points": 1050,
                 "sigma": sigma(1050),
+                "one_sigma": width,
             },
             {
                 "code": build_spx_code(EXPIRY, "PUT", 7100),
@@ -809,13 +813,14 @@ class TestPositionsValues:
                 "delta": -0.25,
                 "points": -100,
                 "sigma": sigma(-100),
+                "one_sigma": width,
             },
         ]
         premiums = False
         bare = (await h.call("/positions/values")).json()[0]
-        assert [[s["delta"], s["points"], s["sigma"]] for s in bare["short_strikes"]] == [
-            [0.2, None, None],
-            [-0.25, None, None],
+        assert [[s["delta"], s["points"], s["sigma"], s["one_sigma"]] for s in bare["short_strikes"]] == [
+            [0.2, None, None, None],
+            [-0.25, None, None, None],
         ]
 
     async def test_reports_the_share_of_a_credit_captured_so_far_and_none_for_a_debit(self, start):

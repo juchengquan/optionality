@@ -19,10 +19,12 @@ const SPX = 6900.5;
 export function served(date: string, type: "CALL" | "PUT", strike: number, delta: number | null, dte: number,
                        spx: number | null = SPX) {
   const points = spx === null ? null : Number((type === "CALL" ? strike - spx : spx - strike).toFixed(2));
+  // one σ of SPX to expiry at that IV, in points: the price map's band (#298)
+  const one_sigma = spx === null ? null : Number((spx * 0.18 * Math.sqrt(dte / 365)).toFixed(2));
   const sigma = points === null || spx === null ? null
     : Number((points / (spx * 0.18 * Math.sqrt(dte / 365))).toFixed(2));
   const code = `US.SPXW${date.slice(2).replaceAll("-", "")}${type[0]}${strike}000`;
-  return { code, option_type: type, strike, delta, points, sigma };
+  return { code, option_type: type, strike, delta, points, sigma, one_sigma };
 }
 
 function entry(id: string, over: Partial<Entry> & { strike_date: string }): Entry {

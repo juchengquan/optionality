@@ -408,6 +408,16 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "sigmaDistance", name: "past expiry", args: [250, 7000, 20, -1] },
     { fn: "sigmaDistance", name: "no SPX", args: [250, 0, 20, 36] },
     { fn: "sigmaDistance", name: "a vanishing IV whose answer is not finite", args: [250, 7000, 1e-320, 36] },
+    // --- one σ of SPX to expiry, in points: the price map's band (#298) ---
+    { fn: "oneSigma", name: "SPX × IV × √(DTE/365)", args: [7000, 20, 36.5] },
+    { fn: "oneSigma", name: "a half rounds as toFixed does", args: [6900.5, 18.5, 37] },
+    { fn: "oneSigma", name: "no IV", args: [7000, 0, 36] },
+    { fn: "oneSigma", name: "a negative IV", args: [7000, -3, 36] },
+    { fn: "oneSigma", name: "an IV that is not a number", args: [7000, NaN, 36] },
+    { fn: "oneSigma", name: "the expiry day: no time left", args: [7000, 20, 0] },
+    { fn: "oneSigma", name: "past expiry", args: [7000, 20, -1] },
+    { fn: "oneSigma", name: "no SPX", args: [0, 20, 36] },
+    { fn: "oneSigma", name: "an answer that is not finite", args: [1e308, 1e308, 36] },
     { fn: "strikeDistances", name: "a put reached from above, a call from below",
       args: [["US.SPXW261218P6400000", "US.SPXW261218C7300000"], {
         "US.SPXW261218P6400000": { option_delta: -0.21, option_implied_volatility: 18.5 },
