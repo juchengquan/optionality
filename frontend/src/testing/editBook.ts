@@ -9,8 +9,8 @@
 import type { Entry, Monitor } from "../api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "./ownerBook";
 
-/** Five days kept, not the default seven: a page that hard-coded the default would still say the
- *  right day if the service served it. */
+/** Five days kept, not the default seven, so a page that hard-coded the default would say the
+ *  wrong day for an expired rule. */
 export const EDIT_HEALTH = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
