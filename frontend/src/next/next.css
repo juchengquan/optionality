@@ -163,7 +163,9 @@ html[data-nx-arrangement="phone"] :is(button, select, input, a) { min-height: 44
 html[data-nx-arrangement="phone"] :is(select, input, textarea) { font-size: 16px; }
 .nx-tabs {
   position: fixed; inset: auto 0 0 0; z-index: 10;
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  /* one column per tab, however many there are: a fixed count wrapped Settings to a second row
+     when Add became the fourth (#293) */
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--background); border-top: 1px solid var(--border);
 }
