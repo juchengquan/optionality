@@ -218,8 +218,9 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295)", 
       const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
       await settle();
       const charts = [...insp.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
-      // worth nothing unless both charts are there to be measured, at a usable size
-      expect(charts).toHaveLength(2);
+      // worth nothing unless every chart is there to be measured, at a usable size: the burndown,
+      // the IV chart and where SPX was against the strikes (#298)
+      expect(charts).toHaveLength(3);
       for (const svg of charts) {
         expect(svg.getBoundingClientRect().width).toBeGreaterThan(200);
         expect(clipped(svg)).toEqual([]);

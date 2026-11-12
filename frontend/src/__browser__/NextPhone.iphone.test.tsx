@@ -272,8 +272,9 @@ describe("REVIEW", () => {
     await show("Review");
     await settle();
     const page1 = pages()[0]!;
+    // the burndown, the IV chart and where SPX was against the strikes (#298)
     const charts = [...page1.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
-    expect(charts).toHaveLength(2);
+    expect(charts).toHaveLength(3);
     const card = page1.querySelector(".nxp-card")!.getBoundingClientRect();
     for (const svg of charts) {
       const r = svg.getBoundingClientRect();
