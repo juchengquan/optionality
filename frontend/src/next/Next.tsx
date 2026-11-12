@@ -547,22 +547,35 @@ function useBook(mode: Mode) {
     }
   }, []);
 
-  const loadReferences = useCallback(
-    // a backdrop never blanks the page, and an empty list takes the strip away rather than
-    // leaving figures nobody can vouch for (ADR 0018)
-    () => fetchReferences().then(setReferences, () => setReferences([])),
-    [],
-  );
+  // A backdrop never blanks the page, and an empty list takes the strip away rather than leaving
+  // figures nobody can vouch for (ADR 0018). Its answers land as the holdings' do, unless a NEWER
+  // one already has, refusals included: `/references` costs the whole 8 s request timeout when a
+  // source accepts and never answers (#308), so two are one slow poll from being in flight at once,
+  // and the last to ARRIVE is then not the most recent. Not "only the latest ask": against a 5 s
+  // poll every answer would have a newer ask behind it, and none would ever land.
+  const refsAsked = useRef(0);
+  const refsLanded = useRef(0);
+  const loadReferences = useCallback(async () => {
+    const mine = ++refsAsked.current;
+    const refs = await fetchReferences().catch(() => [] as Reference[]);
+    if (mine < refsLanded.current) return;
+    refsLanded.current = mine;
+    setReferences(refs);
+  }, []);
 
   /** `rest`: the market data beyond the line, the holdings; `references` with them, which is
    *  LIVE's poll, and any change the owner made — a Reference kept or dropped in Settings must be
-   *  seen to have been, in REVIEW too. */
+   *  seen to have been, in REVIEW too.
+   *
+   *  The References are ASKED here and never awaited (#335, as `/opt` since #308): what this
+   *  returns settles when the line and the holdings land, so a save, a refresh or a poll finishes
+   *  on its own reads and the strip catches up when its slowest source answers. Awaited, a mute
+   *  said "saving…" for the whole of a silent source's 8 s. */
   const load = useCallback(
-    (rest: boolean, references: boolean = rest && live) => Promise.all([
-      loadLine(),
-      rest ? loadHoldings() : null,
-      references ? loadReferences() : null,
-    ]).then(() => undefined),
+    (rest: boolean, references: boolean = rest && live) => {
+      if (references) void loadReferences();
+      return Promise.all([loadLine(), rest ? loadHoldings() : null]).then(() => undefined);
+    },
     [loadLine, loadHoldings, loadReferences, live],
   );
 
