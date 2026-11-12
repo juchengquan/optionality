@@ -11,7 +11,8 @@ import { page } from "@vitest/browser/context";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
+import type { Entry } from "../api";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 const health = {
@@ -24,6 +25,17 @@ const health = {
 /** Requests the page made that this suite does not answer: each one is a failure. */
 let unanswered: string[] = [];
 
+/** Watched put spreads crowding the 18 Dec lane: one on the held put spread's very strikes, one
+ *  25 points inside it and one beside the watched 7150, so the lane must slot them into rows. */
+const crowd = (id: string, short: number, long: number, delta: number): Entry => ({
+  ...QUOTES.find((q) => q.id === "w-dec18")!, id, code: `1218_P${short}${id}`,
+  legs: [{ sign: -1, option_type: "PUT", strike: short }, { sign: 1, option_type: "PUT", strike: long }],
+  short_strikes: [served("2026-12-18", "PUT", short, delta, 38)],
+} as Entry);
+const CROWDED = [...QUOTES, crowd("c1", 6400, 6350, -0.21), crowd("c2", 6425, 6375, -0.23),
+  crowd("c3", 7160, 7110, -0.18)];
+let quotes: Entry[] = QUOTES;
+
 function serve(): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
@@ -33,7 +45,7 @@ function serve(): void {
     const read = payoffAnswer(path) ?? samplesAnswer(path);
     if (read) return ok(read);
     if (method === "GET") {
-      if (path === "/quotes") return ok(QUOTES);
+      if (path === "/quotes") return ok(quotes);
       if (path === "/monitors") return ok(MONITORS);
       if (path === "/health") return ok(health);
       if (path === "/positions/values") return ok(HOLDINGS);
@@ -55,6 +67,7 @@ async function show(width: number, mode: "Live" | "Review" = "Live") {
 
 beforeEach(() => {
   unanswered = [];
+  quotes = QUOTES;
   document.cookie = "ui_price_map=;path=/";
 });
 
@@ -133,6 +146,30 @@ describe("the price map panel", () => {
       for (const b of svg.querySelectorAll("[data-band]")) {
         expect(inside(b.getBoundingClientRect(), svg.getBoundingClientRect())).toBe(true);
       }
+    });
+  }
+
+  for (const width of [900, 1280, 2560]) {
+    it(`at ${width}px, a crowded lane slots its spreads into rows, every label still apart`, async () => {
+      quotes = CROWDED;
+      await show(width);
+      fireEvent.click(toggle());
+      await settle();
+      const svg = panel()!.querySelector("svg")!;
+      expect(svg.querySelectorAll('[data-lane="2026-12-18"] [data-spread]')).toHaveLength(6);
+      expect(labelFaults(svg, `crowded map at ${width}px`)).toEqual([]);
+      // and no two bars drawn over each other
+      const bars = [...svg.querySelectorAll<SVGRectElement>('[data-lane="2026-12-18"] .nxm-bar')]
+        .map((b) => b.getBoundingClientRect());
+      const touching = bars.flatMap((a, i) => bars.slice(i + 1).filter((b) => overlap(a, b)));
+      expect(touching).toEqual([]);
+      // nor a spread's label over another spread's bar
+      const spreads = [...svg.querySelectorAll<SVGGElement>("[data-spread]")];
+      const crossed = spreads.flatMap((one) => [...one.querySelectorAll(".nxm-label")].flatMap((label) =>
+        spreads.filter((other) => other !== one && overlap(label.getBoundingClientRect(),
+          other.querySelector(".nxm-bar")!.getBoundingClientRect()))
+          .map((other) => `${label.textContent} over ${other.dataset.spread}'s bar`)));
+      expect(crossed).toEqual([]);
     });
   }
 

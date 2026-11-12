@@ -17,6 +17,7 @@
  *  is, which is how a selection in one is a selection in the other.
  */
 import type { Entry, Holding } from "../api";
+import { entryName } from "./needs";
 import type { BookModel } from "./placement";
 import { strikeName, stripOfEntry, stripOfHolding, type LongStrike, type ShortStrike } from "./strip";
 
@@ -98,7 +99,7 @@ export function priceMapOf(placed: BookModel, { spx, reason }: { spx: number | n
     for (const { entry } of g.items) {
       // a single contract is no spread: the map draws spreads
       const strip = stripOfEntry(entry);
-      const s = strip ? spreadOf(entry.id, entry.code, "watched", strip) : null;
+      const s = strip ? spreadOf(entry.id, entryName(entry), "watched", strip) : null;
       if (s) lane(entry.strike_date, entry.dte).spreads.push(s);
     }
   }
