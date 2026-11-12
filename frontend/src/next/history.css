@@ -35,3 +35,13 @@
 .nx-hist-leg circle { fill: var(--foreground); }
 .nx-hist-leg[data-side="long"] polyline { stroke: var(--muted-foreground); stroke-dasharray: 4 2; }
 .nx-hist-leg[data-side="long"] circle { fill: var(--muted-foreground); }
+/* where SPX was against the strikes (#298): each strike a rule across the plot, the short ones in
+   the foreground and the side each loses on faintly shaded; SPX's days a line in the foreground */
+.nx-spxp svg { cursor: default; }
+.nx-spxp-loss { fill: var(--muted-foreground); opacity: 0.08; }
+.nx-spxp-k line { stroke: var(--foreground); stroke-width: 1; opacity: 0.7; }
+.nx-spxp-k[data-side="long"] line { stroke: var(--muted-foreground); stroke-dasharray: 4 2; opacity: 1; }
+.nx-spxp-k[data-side="short"] text { fill: var(--foreground); font-weight: 600; }
+.nx-spxp-line { fill: none; stroke: var(--foreground); stroke-width: 1.75; }
+.nx-spxp-day { fill: var(--foreground); }
+.nx-spxp-now rect { fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; }

@@ -195,6 +195,21 @@ export function sigmaDistance(points: number, spx: number, iv: number, dte: numb
   return Number.isFinite(sigma) ? toFixed(sigma, 2) : null;
 }
 
+/** One standard deviation of SPX to expiry, in points (#298):
+ *
+ *    1σ = SPX × IV × √(DTE / 365)
+ *
+ *  the width `sigmaDistance` divides a distance by, served on its own so the price map can draw a
+ *  ±1σ band about SPX without the browser working it out (ADR 0005). IV is a percentage and DTE
+ *  calendar days, as there. Rounded to two places; null where an IV, an SPX or a DTE is not
+ *  positive, or the answer is not finite.
+ */
+export function oneSigma(spx: number, iv: number, dte: number): number | null {
+  if (!(iv > 0) || !(spx > 0) || !(dte > 0)) return null;
+  const width = spx * (iv / 100) * Math.sqrt(dte / 365);
+  return Number.isFinite(width) ? toFixed(width, 2) : null;
+}
+
 /** A short strike placed against SPX: what the strike strip draws (#297). */
 export interface StrikeDistance {
   code: string;
@@ -207,6 +222,9 @@ export interface StrikeDistance {
   points: number | null;
   /** `points` in σ to expiry (`sigmaDistance`), or null where either cannot be a figure */
   sigma: number | null;
+  /** one σ of SPX to expiry in points, from this leg's IV (`oneSigma`, #298): the price map's band.
+   *  Null without an SPX or an IV, or with no day left. */
+  one_sigma: number | null;
 }
 
 /** Each of these contracts — a spread's SHORT legs — placed against SPX's price, in the order
@@ -234,6 +252,7 @@ export function strikeDistances(
       delta: finite(record?.option_delta),
       points,
       sigma: points === null || spx === null || iv === null ? null : sigmaDistance(points, spx, iv, dte),
+      one_sigma: spx === null || iv === null ? null : oneSigma(spx, iv, dte),
     });
   }
   return out;

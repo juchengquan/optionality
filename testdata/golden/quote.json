@@ -587,6 +587,98 @@
       "expect": null
     },
     {
+      "fn": "oneSigma",
+      "name": "SPX × IV × √(DTE/365)",
+      "args": [
+        7000,
+        20,
+        36.5
+      ],
+      "expect": 442.72
+    },
+    {
+      "fn": "oneSigma",
+      "name": "a half rounds as toFixed does",
+      "args": [
+        6900.5,
+        18.5,
+        37
+      ],
+      "expect": 406.45
+    },
+    {
+      "fn": "oneSigma",
+      "name": "no IV",
+      "args": [
+        7000,
+        0,
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "oneSigma",
+      "name": "a negative IV",
+      "args": [
+        7000,
+        -3,
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "oneSigma",
+      "name": "an IV that is not a number",
+      "args": [
+        7000,
+        {
+          "$num": "NaN"
+        },
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "oneSigma",
+      "name": "the expiry day: no time left",
+      "args": [
+        7000,
+        20,
+        0
+      ],
+      "expect": null
+    },
+    {
+      "fn": "oneSigma",
+      "name": "past expiry",
+      "args": [
+        7000,
+        20,
+        -1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "oneSigma",
+      "name": "no SPX",
+      "args": [
+        0,
+        20,
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "oneSigma",
+      "name": "an answer that is not finite",
+      "args": [
+        1e+308,
+        1e+308,
+        36
+      ],
+      "expect": null
+    },
+    {
       "fn": "strikeDistances",
       "name": "a put reached from above, a call from below",
       "args": [
@@ -614,7 +706,8 @@
           "strike": 6400,
           "delta": -0.21,
           "points": 500.5,
-          "sigma": 1.23
+          "sigma": 1.23,
+          "one_sigma": 406.45
         },
         {
           "code": "US.SPXW261218C7300000",
@@ -622,7 +715,8 @@
           "strike": 7300,
           "delta": 0.33,
           "points": 399.5,
-          "sigma": 1.52
+          "sigma": 1.52,
+          "one_sigma": 263.64
         }
       ]
     },
@@ -649,7 +743,8 @@
           "strike": 7300,
           "delta": 0.52,
           "points": -10.25,
-          "sigma": -0.04
+          "sigma": -0.04,
+          "one_sigma": 279.3
         }
       ]
     },
@@ -676,7 +771,8 @@
           "strike": 6400,
           "delta": -0.21,
           "points": null,
-          "sigma": null
+          "sigma": null,
+          "one_sigma": null
         }
       ]
     },
@@ -703,7 +799,8 @@
           "strike": 6400,
           "delta": null,
           "points": 500.5,
-          "sigma": null
+          "sigma": null,
+          "one_sigma": null
         }
       ]
     },
@@ -725,7 +822,8 @@
           "strike": 6400,
           "delta": null,
           "points": 500.5,
-          "sigma": null
+          "sigma": null,
+          "one_sigma": null
         }
       ]
     },
@@ -752,7 +850,8 @@
           "strike": 6400,
           "delta": -0.21,
           "points": 500.5,
-          "sigma": null
+          "sigma": null,
+          "one_sigma": null
         }
       ]
     },
@@ -775,7 +874,8 @@
           "strike": 6400,
           "delta": null,
           "points": 500.5,
-          "sigma": null
+          "sigma": null,
+          "one_sigma": null
         }
       ]
     },
@@ -803,7 +903,8 @@
           "points": {
             "$num": "-0"
           },
-          "sigma": 0
+          "sigma": 0,
+          "one_sigma": 278.91
         }
       ]
     },
@@ -825,7 +926,8 @@
           "strike": 6400,
           "delta": null,
           "points": 500.3,
-          "sigma": null
+          "sigma": null,
+          "one_sigma": null
         }
       ]
     },

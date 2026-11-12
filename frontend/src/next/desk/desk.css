@@ -168,3 +168,40 @@
 .nxd-monitor[data-state="fault"] { --chip: var(--fault); }
 .nx[data-entry="risk"] .nxd-monitor[data-state="entry"] { --chip: var(--alarm); }
 .nxd-why { color: var(--fault); }
+
+/* the price map (#298): a panel ABOVE the table and the inspector, across both, so it takes no width
+   from the table and the table's measured fit (useDeskFit) is the same open or shut */
+.nxm { grid-column: 1 / -1; align-self: stretch; justify-self: stretch; min-width: 0; margin: 0 0 0.75rem; }
+/* contained: the drawing is as wide as the box and never the other way round — its width is set
+   from the box's measurement, and a box sized by its drawing kept its first measurement for good */
+.nxm-box { width: 100%; min-width: 0; overflow: hidden; contain: inline-size; }
+.nxm-box svg { display: block; max-width: 100%; height: auto; }
+.nxm-why { font-size: 0.8125rem; color: var(--muted-foreground); padding: 0.25rem 0.75ch; }
+.nxm text { font-size: 11px; font-variant-numeric: tabular-nums; fill: var(--muted-foreground); }
+.nxm-tick line { stroke: var(--border); }
+.nxm-lane-bg { fill: transparent; }
+.nxm-lane-bg[data-even] { fill: var(--muted); opacity: 0.35; }
+.nxm .nxm-when { font-size: 12px; font-weight: 700; fill: var(--foreground); }
+.nxm .nxm-sigma { font-size: 10.5px; }
+/* the ±1σ band: where SPX is a standard deviation either side, by the lane's served IV */
+.nxm-band { fill: var(--muted-foreground); opacity: 0.12; stroke: var(--muted-foreground); stroke-dasharray: 2 3; }
+.nxm-spread { cursor: pointer; outline: none; }
+.nxm-hit { fill: transparent; }
+.nxm-bar { fill: transparent; stroke: var(--muted-foreground); stroke-width: 1.25; }
+.nxm-spread[data-kind="held"] .nxm-bar { fill: var(--foreground); fill-opacity: 0.18; stroke: var(--foreground); stroke-width: 1.5; }
+.nxm-short { fill: var(--foreground); }
+.nxm-long { fill: var(--muted-foreground); }
+.nxm .nxm-label { fill: var(--foreground); font-weight: 600; }
+.nxm-sel { fill: none; stroke: var(--ring); stroke-width: 2; }
+.nxm-spread:focus-visible .nxm-hit { stroke: var(--ring); stroke-width: 2; }
+/* SPX's derived price: the one line every lane is read against */
+.nxm-spx line { stroke: var(--foreground); stroke-width: 1.5; }
+.nxm .nxm-spx text { fill: var(--foreground); font-size: 12px; font-weight: 700; }
+.nxd-maptoggle {
+  height: 1.5rem; padding: 0 0.6rem; margin-right: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem;
+  background: transparent; color: var(--muted-foreground); font: inherit; font-size: 0.6875rem;
+  letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+}
+.nxd-maptoggle[aria-expanded="true"] { color: var(--foreground); border-color: var(--foreground); }
+/* the toggle shares the picker's corner, but not its square icon-button size */
+.nxd-picker .nxd-maptoggle { width: auto; padding: 0 0.6rem; }

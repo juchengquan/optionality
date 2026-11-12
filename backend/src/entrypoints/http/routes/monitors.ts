@@ -271,6 +271,9 @@ export const StrikeDistanceOut = z.object({
   /** `points` in σ to expiry, from the leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365)).
    *  Null without points, an IV, or a day left to expiry. */
   sigma: z.number().nullable(),
+  /** one σ of SPX to expiry, in points, from the leg's own IV: SPX × IV% / 100 × √(DTE / 365)
+   *  (`oneSigma`, #298) — the price map's ±1σ band. Null without an SPX, an IV, or a day left. */
+  one_sigma: z.number().nullable(),
 });
 
 const EntryOut = z.object({

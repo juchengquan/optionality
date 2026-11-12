@@ -239,7 +239,10 @@ expiry from that short leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365
 percentage by every Provider. POSITIVE while SPX has not reached the strike (above a put's, below a
 call's) and negative by how far past. Served per short leg as `short_strikes`, beside the leg's
 own Δ, and drawn as the strike strip (#297). With no SPX's price there is none, and the strikes
-and Δ are still served.
+and Δ are still served. Beside it, ONE σ in points from the same IV — SPX × IV% / 100 × √(DTE / 365),
+`one_sigma` — which is the width the price map's ±1σ band about SPX is drawn with (#298): the band
+of an expiry uses the short strike nearest SPX, because a lane has one band and the skew gives each
+strike its own IV.
 _Avoid_: distance (unqualified — that is a Monitor's), cushion, buffer, moneyness
 
 **Quarantine**:

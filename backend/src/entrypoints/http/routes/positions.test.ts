@@ -756,17 +756,19 @@ describe("/positions/values", () => {
     await post(condor());
     const v = (await body(await h.call("/positions/values")))[0];
     const sigma = (points: number) => Number((points / (7000 * 0.2 * Math.sqrt(Number(v.dte) / 365))).toFixed(2));
+    // one σ of SPX to expiry from each short leg's own IV, the price map's band (#298)
+    const width = Number((7000 * 0.2 * Math.sqrt(Number(v.dte) / 365)).toFixed(2));
     // the SHORT legs only, in the holding's own order: the call at 8050 and the put at 7100
     expect(v.short_strikes).toEqual([
       { code: buildSpxCode(EXPIRY, "CALL", 8050), option_type: "CALL", strike: 8050, delta: 0.2,
-        points: 1050, sigma: sigma(1050) },
+        points: 1050, sigma: sigma(1050), one_sigma: width },
       { code: buildSpxCode(EXPIRY, "PUT", 7100), option_type: "PUT", strike: 7100, delta: -0.25,
-        points: -100, sigma: sigma(-100) },
+        points: -100, sigma: sigma(-100), one_sigma: width },
     ]);
     premiums = false;
     const bare = (await body(await h.call("/positions/values")))[0];
-    expect((bare.short_strikes as { points: unknown; sigma: unknown; delta: unknown }[])
-      .map((s) => [s.delta, s.points, s.sigma])).toEqual([[0.2, null, null], [-0.25, null, null]]);
+    expect((bare.short_strikes as { points: unknown; sigma: unknown; delta: unknown; one_sigma: unknown }[])
+      .map((s) => [s.delta, s.points, s.sigma, s.one_sigma])).toEqual([[0.2, null, null, null], [-0.25, null, null, null]]);
   });
 
   it("reports nothing rather than something wrong when a leg goes unpriced", async () => {

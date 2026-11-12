@@ -1044,8 +1044,18 @@ class TestASpreadSShortStrikesAgainstSpx:
         spx = e["spx"]
         points = round(8150 - spx, 2)
         sigma = round(points / (spx * 0.15 * math.sqrt(e["dte"] / 365)), 2)
+        # one sigma of SPX to expiry from the short leg's own IV: the price map's band (#298)
+        width = round(spx * 0.15 * math.sqrt(e["dte"] / 365), 2)
         assert [s.model_dump() for s in e["short_strikes"]] == [
-            {"code": LEG_B, "option_type": "CALL", "strike": 8150, "delta": 0.04, "points": points, "sigma": sigma}
+            {
+                "code": LEG_B,
+                "option_type": "CALL",
+                "strike": 8150,
+                "delta": 0.04,
+                "points": points,
+                "sigma": sigma,
+                "one_sigma": width,
+            }
         ]
 
     async def test_keeps_the_strikes_and_deltas_with_no_spx_and_measures_nothing(self, combo, run):
@@ -1053,7 +1063,15 @@ class TestASpreadSShortStrikesAgainstSpx:
         [e] = await run(quoting({LEG_B: {"mid_price": 1, "option_delta": 0.04}}), True)
         assert e["spx"] is None
         assert [s.model_dump() for s in e["short_strikes"]] == [
-            {"code": LEG_B, "option_type": "CALL", "strike": 8150, "delta": 0.04, "points": None, "sigma": None}
+            {
+                "code": LEG_B,
+                "option_type": "CALL",
+                "strike": 8150,
+                "delta": 0.04,
+                "points": None,
+                "sigma": None,
+                "one_sigma": None,
+            }
         ]
 
     async def test_is_empty_for_a_single_contract_which_is_no_spread(self, monitor, run):

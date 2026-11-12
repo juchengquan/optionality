@@ -2,7 +2,7 @@ import { DEFAULT_BAND, isPinned, type Grouping, type Signal } from "./columns";
 
 /** What the browser remembers for this viewer, and nothing else.
  *
- *  Six preferences for the dashboard at `/opt`, and four more for the redesigned one at `/opt/next`
+ *  Six preferences for the dashboard at `/opt`, and five more for the redesigned one at `/opt/next`
  *  (ADR 0023), at the end. The six: which reading earns the second colour and the band it must clear, how the rows
  *  are divided, which columns each table hides, and how often the screen polls. They are here
  *  rather than in `columns.ts` because only two of them are about columns at all — the other four
@@ -148,4 +148,13 @@ export function readArrangement(): ArrangementChoice {
 
 export function writeArrangement(choice: ArrangementChoice): void {
   writeCookie("ui_arrangement", choice);
+}
+
+/** Whether the desk's price map panel is open (#298): shut until the viewer opens it. */
+export function readPriceMap(): boolean {
+  return readCookie("ui_price_map") === "open";
+}
+
+export function writePriceMap(open: boolean): void {
+  writeCookie("ui_price_map", open ? "open" : "shut");
 }

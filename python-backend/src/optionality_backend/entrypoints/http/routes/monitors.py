@@ -385,6 +385,9 @@ class StrikeDistanceOut(BaseModel):
     #: `points` in sigma to expiry, from the leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365)).
     #: None without points, an IV, or a day left to expiry.
     sigma: float | None
+    #: one sigma of SPX to expiry, in points, from the leg's own IV: SPX × IV% / 100 × √(DTE / 365)
+    #: (`one_sigma`, #298) — the price map's ±1 sigma band. None without an SPX, an IV, or a day left.
+    one_sigma: float | None
 
 
 class EntryOut(BaseModel):

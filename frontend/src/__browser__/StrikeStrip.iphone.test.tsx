@@ -26,7 +26,7 @@ const health = {
 const REASON = "the Provider gives no option premium to derive it from";
 function bare<T extends Entry | Holding>(row: T): T {
   return { ...row, spx: null, spx_reason: REASON,
-    short_strikes: row.short_strikes.map((s) => ({ ...s, points: null, sigma: null })) };
+    short_strikes: row.short_strikes.map((s) => ({ ...s, points: null, sigma: null, one_sigma: null })) };
 }
 
 function serve(quotes: object[], holdings: object[]): void {

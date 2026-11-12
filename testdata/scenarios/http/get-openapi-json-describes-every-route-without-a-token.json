@@ -563,6 +563,12 @@
                                       "number",
                                       "null"
                                     ]
+                                  },
+                                  "one_sigma": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
                                   }
                                 },
                                 "required": [
@@ -571,7 +577,8 @@
                                   "strike",
                                   "delta",
                                   "points",
-                                  "sigma"
+                                  "sigma",
+                                  "one_sigma"
                                 ]
                               }
                             }
@@ -2042,6 +2049,12 @@
                                       "number",
                                       "null"
                                     ]
+                                  },
+                                  "one_sigma": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
                                   }
                                 },
                                 "required": [
@@ -2050,7 +2063,8 @@
                                   "strike",
                                   "delta",
                                   "points",
-                                  "sigma"
+                                  "sigma",
+                                  "one_sigma"
                                 ]
                               }
                             },
