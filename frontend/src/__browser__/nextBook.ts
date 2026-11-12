@@ -147,3 +147,47 @@ export function contrast(x: string, y: string): number {
   const [hi, lo] = [luminance(x), luminance(y)].sort((p, q) => q - p);
   return (hi! + 0.05) / (lo! + 0.05);
 }
+
+/** A draft's payoff at expiry, worked out here as the service would (`payoffAtExpiry`) — enough
+ *  of it for a curve that turns over when a leg's side does. */
+export function draftPayoff(body: {
+  legs: { side: string; option_type: string; strike: number }[]; entry: number; contracts?: number;
+}): object {
+  const n = body.contracts ?? 1;
+  const pnl = (s: number) => n * body.legs.reduce((sum, l) => {
+    const worth = l.option_type === "CALL" ? Math.max(0, s - l.strike) : Math.max(0, l.strike - s);
+    return sum + (l.side === "long" ? worth : -worth);
+  }, body.entry);
+  const ks = [...new Set(body.legs.map((l) => l.strike))].sort((a, b) => a - b);
+  const at = ks.map((k) => ({ spx: k, pnl: pnl(k) }));
+  const below = pnl(ks[0]!) - pnl(ks[0]! - 1);
+  const above = pnl(ks.at(-1)! + 1) - pnl(ks.at(-1)!);
+  const pnls = at.map((a) => a.pnl);
+  return {
+    at_strikes: at, slope_below: below, slope_above: above, breakevens: [],
+    max_profit: above > 0 || below < 0 ? null : Math.max(...pnls),
+    max_loss: above < 0 || below > 0 ? null : Math.min(...pnls),
+  };
+}
+
+/** The page's every route, for the add form's suites (#293): the book empty, the draft payoff
+ *  worked out, and `POST /spreads` answered as `spreads` says — every body it was sent is kept.
+ *  Any route not named is a 404 in the error shape, never an empty list a page could crash on. */
+export function serveAdding(spreads: { status: number; body: object }): unknown[] {
+  const sent: unknown[] = [];
+  const reply = (status: number, body: unknown) =>
+    Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
+  window.fetch = ((url: string, init?: RequestInit) => {
+    const path = String(url).replace(/^.*\/api/, "");
+    const method = init?.method ?? "GET";
+    const body = init?.body ? JSON.parse(String(init.body)) as never : null;
+    if (method === "POST" && path === "/positions/payoff") return reply(200, draftPayoff(body!));
+    if (method === "POST" && path === "/spreads") { sent.push(body); return reply(spreads.status, spreads.body); }
+    if (method === "GET") {
+      if (path === "/health") return reply(200, health);
+      if (["/quotes", "/monitors", "/positions/values", "/references"].includes(path)) return reply(200, []);
+    }
+    return reply(404, { detail: `${method} ${path} is not served here` });
+  }) as unknown as typeof fetch;
+  return sent;
+}

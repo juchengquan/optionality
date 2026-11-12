@@ -107,6 +107,22 @@ async function endpoints() {
     draftPayoff: await client.positions.payoff.$post({
       json: { legs: [{ side: "short", option_type: "PUT", strike: 7100 }], entry: 1.5 },
     }),
+
+    // --- spreads -----------------------------------------------------------------------
+    // a spread, held, with its two usual Monitors, in one step and all or nothing (#293)
+    spreadsAdded: await client.spreads.$post({
+      json: {
+        strike_date: "2026-12-18",
+        spreads: [{
+          name: "1218_P7150_P7100", held: true, entry: 1.5, opened_at: "2026-11-11",
+          legs: [
+            { side: "short", option_type: "PUT", strike: 7150 },
+            { side: "long", option_type: "PUT", strike: 7100 },
+          ],
+          monitors: [{ threshold: 3 }, { option_type: "PUT", strike: 7150, threshold: 0.3 }],
+        }],
+      },
+    }),
   };
 }
 
@@ -214,6 +230,10 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["payoff"]>["max_profit"], number | null>>,
   Checked<Exactly<Ok<E["payoff"]>["max_loss"], number | null>>,
   Checked<Exactly<Ok<Awaited<ReturnType<E["draftPayoff"]["json"]>>>["max_loss"], number | null>>,
+  // what the add form reads back from a save: what it made, by id and name
+  Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsAdded"]["json"]>>>["positions"], { id: string; name: string }[]>>,
+  Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsAdded"]["json"]>>>["monitors"],
+    { id: string; code: string; field: string }[]>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.
@@ -235,6 +255,7 @@ export type StatusChecks = [
   Checked<Exactly<E["referenceCreated"]["status"], 201 | 422>>,
   Checked<Exactly<E["referenceDeleted"]["status"], 204>>,
   Checked<Exactly<E["draftPayoff"]["status"], 200 | 422>>,
+  Checked<Exactly<E["spreadsAdded"]["status"], 201 | 422>>,
 
   // {detail} is IN the union wherever a route VALIDATES its input, so the dashboard cannot read
   // rows without saying what it does when the request was refused. That is the bug class that used

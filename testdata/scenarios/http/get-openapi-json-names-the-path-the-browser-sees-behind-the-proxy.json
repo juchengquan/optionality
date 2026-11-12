@@ -3268,6 +3268,240 @@
                 "references"
               ]
             }
+          },
+          "/spreads": {
+            "post": {
+              "operationId": "postSpreads",
+              "summary": "Add spreads, each held or watched, with their Monitors: all of it or none",
+              "responses": {
+                "201": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "positions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ]
+                            }
+                          },
+                          "monitors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "field": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code",
+                                "field"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "positions",
+                          "monitors"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "409": {
+                  "description": "would duplicate an existing record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "strike_date": {
+                          "type": "string"
+                        },
+                        "spreads": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "legs": {
+                                "minItems": 1,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "side": {
+                                      "type": "string",
+                                      "enum": [
+                                        "short",
+                                        "long"
+                                      ]
+                                    },
+                                    "option_type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "CALL",
+                                        "PUT"
+                                      ]
+                                    },
+                                    "strike": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "side",
+                                    "option_type",
+                                    "strike"
+                                  ]
+                                }
+                              },
+                              "held": {
+                                "type": "boolean"
+                              },
+                              "entry": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "contracts": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "opened_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "monitors": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "option_type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "CALL",
+                                        "PUT"
+                                      ]
+                                    },
+                                    "strike": {
+                                      "type": "number"
+                                    },
+                                    "field": {
+                                      "type": "string"
+                                    },
+                                    "threshold": {
+                                      "type": "number"
+                                    },
+                                    "direction": {
+                                      "type": "string",
+                                      "enum": [
+                                        "above",
+                                        "below"
+                                      ]
+                                    },
+                                    "compare": {
+                                      "type": "string",
+                                      "enum": [
+                                        "abs",
+                                        "signed"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "threshold"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "legs",
+                              "held",
+                              "monitors"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "strike_date",
+                        "spreads"
+                      ]
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "spreads"
+              ]
+            }
           }
         }
       }

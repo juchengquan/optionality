@@ -135,6 +135,41 @@ export function WatchedPayoff({ entry }: { entry: Entry }) {
   );
 }
 
+/** The payoff of a spread nobody has saved yet: the add form's preview (#293), beside the legs it
+ *  draws, so a leg on the wrong side shows as the wrong curve before anything is saved (ADR 0023).
+ *  Asked for again as the legs change, a moment after the typing stops — one POST, no Provider —
+ *  with the last curve kept on screen, marked as updating, until the next one arrives. Per
+ *  contract and in points (`add.ts`, `previewOf`), so it says nothing privacy hides. */
+export function DraftPreview({ subject, draft, blank, note, spx, spxReason }: {
+  /** which draft spread this is, so another one's curve is never shown as this one's */
+  subject: string;
+  draft: DraftPayoff | null;
+  /** why nothing is drawn while `draft` is null */
+  blank: string;
+  note?: string;
+  spx: number | null;
+  spxReason: string | null;
+}) {
+  const key = useSettled(draft === null ? null : JSON.stringify(draft), 200);
+  const state = usePayoff(subject, key, () => fetchDraftPayoff(JSON.parse(key!) as DraftPayoff));
+  return (
+    <PayoffFigure state={state} unit={{ size: 1, money: false, hidden: false }} spx={spx} spxReason={spxReason}
+                  blank={draft === null ? blank : null} note={note} />
+  );
+}
+
+/** `value`, once it has stopped changing for `ms`: a strike typed digit by digit asks once. A
+ *  null is passed at once, so a draft that stops being drawable says so straight away. */
+function useSettled<T>(value: T | null, ms: number): T | null {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    if (value === null) { setSettled(null); return; }
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return value === null ? null : settled;
+}
+
 function PayoffFigure({ state, unit, spx, spxReason, blank, note }: {
   state: PayoffState | null; unit: Unit; spx: number | null; spxReason: string | null;
   /** why nothing is drawn, when nothing can be */

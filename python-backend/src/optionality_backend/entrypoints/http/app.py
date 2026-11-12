@@ -44,6 +44,7 @@ from .routes.health import health_routes
 from .routes.monitors import monitor_routes, quote_routes
 from .routes.positions import position_routes
 from .routes.references import reference_routes
+from .routes.spreads import spread_routes
 
 log = logging.getLogger(__name__)
 
@@ -155,5 +156,6 @@ def create_app(deps: Deps) -> FastAPI:
     app.include_router(monitor_routes(deps), prefix="/monitors")
     app.include_router(position_routes(deps), prefix="/positions")
     app.include_router(reference_routes(deps), prefix="/references")
+    app.include_router(spread_routes(deps), prefix="/spreads")
     mount_docs(app, deps.settings.root_path)
     return app

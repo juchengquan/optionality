@@ -32,7 +32,8 @@ def _normalized(value: str) -> str:
         raise CustomIssue(f"invalid strike_date '{value}': use YYYY-MM-DD or YYYYMMDD") from None
 
 
-_StrikeDate = String(transform=_normalized)
+StrikeDate = String(transform=_normalized)
+_StrikeDate = StrikeDate
 
 #: Every reason the service writes into `disabled_reason`, named once.
 #:

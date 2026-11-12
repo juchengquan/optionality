@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, Settings2 } from "lucide-react";
+import { Plus, RefreshCw, Settings2 } from "lucide-react";
 
 import "./next.css";
 import {
   addReference, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes, fetchReferences,
   removeReference,
-  type Entry, type Health, type Holding, type Monitor, type Reference,
+  type Added, type Entry, type Health, type Holding, type Monitor, type Reference,
 } from "../api";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -18,6 +18,7 @@ import {
 } from "../prefs";
 import { ReferenceStrip } from "../ReferenceStrip";
 import { useDismissOnBack } from "../useDismissOnBack";
+import { AddSpread } from "./AddSpread";
 import { arrangementFor, useViewportWidth } from "./arrangement";
 import type { BookProps } from "./Book";
 import { DeskBook } from "./desk/DeskBook";
@@ -62,6 +63,27 @@ export function Next() {
   const book = useBook(mode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  // adding a spread (#293): a panel above the desk's table, a bottom sheet from the phone's Add tab
+  const [adding, setAdding] = useState(false);
+  const closeAdding = useCallback(() => setAdding(false), []);
+  const { reload } = book;
+  const saved = useCallback((added: Added) => {
+    setAdding(false);
+    // what was made, in rows; never a count of contracts, which privacy hides
+    const made = [
+      added.positions.length ? `${added.positions.length} holding${added.positions.length === 1 ? "" : "s"}` : null,
+      `${added.monitors.length} Monitor${added.monitors.length === 1 ? "" : "s"}`,
+    ].filter(Boolean).join(" and ");
+    toast.add({ title: `added ${made}`, type: "success" });
+    void reload();
+  }, [reload]);
+  // the preview's SPX marker: the book's last batch's derived price, never a Reference's (ADR 0024)
+  const priced = book.quotes.find((q) => q.spx !== null) ?? book.holdings?.find((h) => h.spx !== null);
+  const spx = priced?.spx ?? null;
+  const spxReason = priced ? null : book.quotes[0]?.spx_reason ?? book.holdings?.[0]?.spx_reason ?? null;
+  const addForm = (
+    <AddSpread privacy={privacy} spx={spx} spxReason={spxReason} onSaved={saved} onCancel={closeAdding} />
+  );
 
   // Settings is the one surface that may say "nothing needs you" (ADR 0012), and where References
   // are kept or dropped. LIVE polls both already; REVIEW polls neither, so opening Settings there
@@ -126,6 +148,12 @@ export function Next() {
           <RefreshCw className={book.refreshing ? "animate-spin" : undefined} />
         </Button>
         {phone ? null : (
+          <Button variant="ghost" size="sm" aria-label="add a spread" aria-expanded={adding}
+                  onClick={() => setAdding((a) => !a)}>
+            <Plus />
+          </Button>
+        )}
+        {phone ? null : (
           <Button variant="ghost" size="sm" aria-label="settings" onClick={() => setSettingsOpen(true)}>
             <Settings2 />
           </Button>
@@ -140,14 +168,25 @@ export function Next() {
         {/* the market as it is now, so only in LIVE: in REVIEW nothing re-reads it, and a strip
             frozen at the moment the mode was entered would be read as current (ADR 0018) */}
         {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
+        {adding && !phone ? (
+          <section className="nx-add-panel" aria-label="adding a spread">
+            <h2>Add a spread</h2>
+            {addForm}
+          </section>
+        ) : null}
         {phone && settingsOpen ? settings : phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} />}
       </main>
 
       {phone ? (
-        <TabBar mode={mode} settings={settingsOpen}
+        <TabBar mode={mode} settings={settingsOpen} adding={adding}
                 onMode={(m) => { setSettingsOpen(false); pickMode(m); }}
+                onAdd={() => setAdding(true)}
                 onSettings={() => setSettingsOpen(true)} />
       ) : null}
+      {/* mounted in both, open only on the phone, for the reason DeskSettings below is */}
+      <AddSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}>
+        {phone ? addForm : null}
+      </AddSheet>
       {/* Mounted in both arrangements and only OPEN on the desk: switching to the phone with it
           open then closes it, and closing is what takes its history entry back off the stack.
           Unmounted instead, the entry stayed and the next Back press did nothing. */}
@@ -172,21 +211,42 @@ function ModeSwitch({ mode, byClock, onPick }: {
   );
 }
 
-/** The phone's bottom bar: Live and Review are the mode, Settings a screen of its own. Add joins
- *  it when adding a spread lands (#293). */
-function TabBar({ mode, settings, onMode, onSettings }: {
-  mode: Mode; settings: boolean; onMode: (m: Mode) => void; onSettings: () => void;
+/** The phone's bottom bar: Live and Review are the mode, Settings a screen of its own, and Add
+ *  opens the add form as a bottom sheet over whichever is showing (#293). */
+function TabBar({ mode, settings, adding, onMode, onAdd, onSettings }: {
+  mode: Mode; settings: boolean; adding: boolean; onMode: (m: Mode) => void; onAdd: () => void;
+  onSettings: () => void;
 }) {
-  const current = settings ? "settings" : mode;
+  const current = adding ? "add" : settings ? "settings" : mode;
   return (
     <nav className="nx-tabs" aria-label="views">
       <button type="button" aria-current={current === "live" ? "page" : undefined}
               onClick={() => onMode("live")}>Live</button>
       <button type="button" aria-current={current === "review" ? "page" : undefined}
               onClick={() => onMode("review")}>Review</button>
+      <button type="button" aria-current={current === "add" ? "page" : undefined}
+              onClick={onAdd}>Add</button>
       <button type="button" aria-current={current === "settings" ? "page" : undefined}
               onClick={onSettings}>Settings</button>
     </nav>
+  );
+}
+
+/** The phone's Add sheet: a bottom sheet over the page, closed by Back (ADR 0023). */
+function AddSheet({ open, onClose, up, entryStyle, children }: {
+  open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle; children: React.ReactNode;
+}) {
+  useDismissOnBack(open, onClose);
+  return (
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}>
+        <SheetHeader>
+          <SheetTitle>Add a spread</SheetTitle>
+          <SheetDescription>The spread and the Monitors it starts with, saved together.</SheetDescription>
+        </SheetHeader>
+        <div className="nxp-sheet-body">{children}</div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -346,8 +406,12 @@ function useBook(mode: Mode) {
     }
   }, [load]);
 
+  /** everything again, after the add form saved */
+  const reload = useCallback(() => load(true, true), [load]);
+
   return {
     quotes, monitors, health, references, holdings, holdingsError, holdingsAt, error, polledAt,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
+    reload,
   };
 }

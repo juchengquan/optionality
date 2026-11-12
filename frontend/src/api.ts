@@ -12,7 +12,7 @@
  *  The import is type-only, so nothing of the backend reaches the bundle — `node:sqlite` and the rest
  *  are erased before Vite sees them. What crosses the boundary is a type, and the client that reads it.
  */
-import { hc } from "hono/client";
+import { hc, type InferRequestType } from "hono/client";
 
 import type { AppType } from "backend";
 import type { Source } from "backend/schemas";
@@ -101,6 +101,21 @@ export interface DraftPayoff {
 }
 export const fetchDraftPayoff = (body: DraftPayoff) =>
   read<Payoff>(client.positions.payoff.$post({ json: body }), "/positions/payoff");
+
+/** Spreads on one expiry, each held or watched, with the Monitors they start with — saved in ONE
+ *  request, all of it or none (#293). The answer names what was made; the page reads the book
+ *  again rather than trusting an echo of it. A refusal throws the service's own words, which the
+ *  form shows where the owner is looking. */
+export type Added = Exclude<Infer<typeof client.spreads.$post>, { detail: string }>;
+export type SpreadsRequest = InferRequestType<typeof client.spreads.$post>["json"];
+export async function addSpreads(body: SpreadsRequest): Promise<Added> {
+  const response = await client.spreads.$post({ json: body });
+  const answer: unknown = await response.json().catch(() => null);
+  if (!response.ok || isRefusal(answer)) {
+    throw new Error(isRefusal(answer) ? answer.detail : `/spreads → ${response.status}`);
+  }
+  return answer as Added;
+}
 
 /** The Securities kept on the page to read the market by (ADR 0018).
  *
