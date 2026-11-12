@@ -126,7 +126,7 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
   );
 }
 
-function ExpiryHead({ expiry, dte }: { expiry: string; dte: number }) {
+export function ExpiryHead({ expiry, dte }: { expiry: string; dte: number }) {
   return (
     <h3 className="nxp-expiry-head">
       <span>{expiryWords(expiry)}</span>
@@ -137,7 +137,7 @@ function ExpiryHead({ expiry, dte }: { expiry: string; dte: number }) {
 
 /** A condor held as two spreads: its two cards together, under one line with their summed P&L —
  *  summed only when both are known, as a combo never sums a partial (CLAUDE.md: Combos). */
-function Condor({ row, privacy, children }: { row: PlacedHolding[]; privacy: boolean; children: React.ReactNode }) {
+export function Condor({ row, privacy, children }: { row: PlacedHolding[]; privacy: boolean; children: React.ReactNode }) {
   const pnls = row.map((p) => p.holding.pnl);
   const total = pnls.every((v): v is number => v !== null) ? pnls.reduce((a, b) => a + b, 0) : null;
   return (

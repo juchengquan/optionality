@@ -164,7 +164,7 @@ const DESK_KEYS = new Set([...COLUMNS.live, ...COLUMNS.review].map((c) => c.key)
 
 /** Every row the table can draw, in the order it draws them: the fitting measures exactly these,
  *  and the inspector finds its row among them. */
-function tableRows(placed: BookModel): DeskRow[] {
+export function tableRows(placed: BookModel): DeskRow[] {
   const out: DeskRow[] = [];
   for (const g of placed.holdings) {
     for (const p of g.rows.flat()) {
@@ -352,7 +352,7 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
 
 /** A rule's state is the attention family's chip (Book.tsx's `Chip`); a holding's Level and its
  *  Manage-by are drawn as the needs-you line draws them, with their kinds' glyphs. */
-function AttentionChip({ kind }: { kind: NonNullable<ReturnType<typeof attentionOf>> }) {
+export function AttentionChip({ kind }: { kind: NonNullable<ReturnType<typeof attentionOf>> }) {
   if (kind === "fault" || kind === "entry" || kind === "alarm") return <Chip state={kind} />;
   return (
     <span className="nx-chip" data-kind={kind}>
@@ -363,7 +363,7 @@ function AttentionChip({ kind }: { kind: NonNullable<ReturnType<typeof attention
 
 /** One figure. The visually hidden label says which figure it is to a reader that does not see
  *  the header above it — the rows are a grid of spans, not a `<table>`. */
-function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; privacy: boolean }) {
+export function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; privacy: boolean }) {
   const text = column.text(row, privacy);
   if (text === "") return null;
   const strip = column.key === "strip" ? rowStrip(row) : null;
@@ -395,7 +395,7 @@ function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; priv
 }
 
 /** How far the watched figure has come toward its threshold, as the service measured it. */
-function Fill({ entry }: { entry: Entry }) {
+export function Fill({ entry }: { entry: Entry }) {
   if (entry.fill === null || entry.error) return null;
   const fill = Math.max(0, Math.min(100, entry.fill));
   return (

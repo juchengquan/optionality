@@ -53,13 +53,15 @@ export function RuleLine({ entry, marked = true, children }: {
 }
 
 export function HoldingCard({ placed, quotes, monitors, privacy, onOpen }: {
-  placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; onOpen: () => void;
+  placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean;
+  /** absent in the saved picture (#300), where nothing can be pressed */
+  onOpen?: () => void;
 }) {
   const { holding, rules } = placed;
   const hot = holding.schedule?.reached === "stop" || rules.some((r) => ruleState(r) === "alarm");
   return (
     <article className="nxp-card nxp-holding" data-ref={holding.id} data-state={hot ? "alarm" : "calm"}>
-      <OpenCard name={holding.name} onOpen={onOpen} />
+      {onOpen ? <OpenCard name={holding.name} onOpen={onOpen} /> : null}
       <header className="nxp-head">
         <span className="nxp-name">{holding.name}</span>
         <span className="nxp-legs">{holdingLegs(holding)}</span>
@@ -97,11 +99,11 @@ export function Progress({ entry }: { entry: Entry }) {
 
 /** A watched spread — or a single contract, or a rule on something held that no drawn holding
  *  owns — with its progress toward the threshold and the rules that sit under it. */
-export function RuleCard({ entry, under, onOpen }: { entry: Entry; under: Entry[]; onOpen: () => void }) {
+export function RuleCard({ entry, under, onOpen }: { entry: Entry; under: Entry[]; onOpen?: () => void }) {
   const state = ruleState(entry);
   return (
     <article className="nxp-card nxp-watch" data-ref={entry.id} data-state={state ?? "calm"}>
-      <OpenCard name={entryName(entry)} onOpen={onOpen} />
+      {onOpen ? <OpenCard name={entryName(entry)} onOpen={onOpen} /> : null}
       <header className="nxp-head">
         <span className="nxp-name">{entryName(entry)}</span>
         {entry.legs ? <span className="nxp-legs">{legSummary(entry.legs)}</span> : null}
