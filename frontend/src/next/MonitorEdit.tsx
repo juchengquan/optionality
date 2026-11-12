@@ -154,7 +154,7 @@ function Ask({ label, yes, no, busy, destructive, onYes, onNo, children }: {
   useEffect(() => { safe.current?.focus(); }, []);
   return (
     <div className="nx-mon-ask" role="group" aria-label={label} data-poll="hold"
-         onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); onNo(); } }}>
+         onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onNo(); } }}>
       <p>{children}</p>
       <div className="nx-mon-actions">
         <Button type="button" size="sm" variant={destructive ? "destructive" : "default"} disabled={busy}
@@ -184,7 +184,7 @@ function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, on
           onKeyDown={(e) => {
             // Escape is the form's: it cancels the edit and goes no further, so the desk's
             // inspector, which closes on an Escape nobody handled, stays open
-            if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+            if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel(); }
           }}>
       <p className="nx-mon-draft" data-testid="draft" aria-live="polite">{draftWords(rule, draft)}</p>
       {served ? <p className="nx-meta" data-testid="served">{`as saved: ${sentence(served)}`}</p> : null}

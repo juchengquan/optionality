@@ -189,8 +189,8 @@ describe("editing a rule in place", () => {
     document.removeEventListener("keydown", outside);
     expect(screen.queryByRole("form")).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "edit 261218 7150P delta" }));
-    // the inspector closes on an Escape nobody handled; this one was handled
-    expect(outside).toHaveReturnedWith(true);
+    // the inspector closes on an Escape nobody handled: this one never reaches it unhandled
+    expect(outside.mock.results.filter((r) => r.value !== true)).toEqual([]);
   });
 });
 
@@ -333,6 +333,25 @@ describe("from both arrangements", () => {
     fireEvent.click(edit);
     const form = await within(sheet).findByRole("form");
     expect(form.textContent).not.toMatch(/\$\d|×\d/);
+  });
+
+  it("keeps the phone's sheet open when Escape cancels an edit or a question inside it", async () => {
+    // the sheet's own dismissal does not ask whether the key was handled: Escape must stop here
+    const { value } = actions();
+    wrap(value, <div className="nx"><PhoneBook {...book()} /></div>);
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
+    const sheet = await screen.findByRole("dialog");
+    fireEvent.click(within(sheet).getByRole("button", { name: "edit 261218 7150P delta" }));
+    fireEvent.keyDown(within(sheet).getByLabelText("threshold"), { key: "Escape" });
+    expect(within(sheet).queryByRole("form")).toBeNull();
+    fireEvent.click(within(sheet).getByRole("button", { name: "delete 261218 7150P delta" }));
+    fireEvent.keyDown(within(sheet).getByRole("button", { name: "keep it" }), { key: "Escape" });
+    expect(within(sheet).queryByRole("group", { name: /^delete/ })).toBeNull();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole("dialog")).not.toBeNull();
+    // and an Escape nobody handled still closes it
+    fireEvent.keyDown(within(sheet).getByRole("button", { name: "edit 261218 7150P delta" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("draws no control where no actions were given, as a book drawn on its own is", () => {
