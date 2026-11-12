@@ -16,6 +16,8 @@ import { contractsWords, delta, expiryWords, holdingLegs, percent, points, short
 import { ruleState } from "./state";
 import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { stripOfEntry } from "../strip";
+import { MonitorControls } from "../MonitorEdit";
+import { ruleOfEntry } from "../edit";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
@@ -107,7 +109,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
         ) : <p className="nxp-meta">no schedule — Opened not recorded</p>}
         <h3 className="nxp-h">Monitors</h3>
         {rules.length > 0
-          ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} marked={false} />)}</ul>
+          ? <ul className="nxp-rules">{rules.map((r) => <EditableLine key={r.id} entry={r} />)}</ul>
           : <p className="nxp-meta">no Monitor is linked to this holding</p>}
       </div>
     </>
@@ -129,6 +131,7 @@ function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
         <Progress entry={entry} />
         <p className="nxp-sentence">{sentence(entry)}</p>
         {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
+        <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
         {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
         {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
         <dl className="nxp-facts">
@@ -140,10 +143,19 @@ function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
         {under.length > 0 ? (
           <>
             <h3 className="nxp-h">Monitors on its legs</h3>
-            <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} marked={false} />)}</ul>
+            <ul className="nxp-rules">{under.map((r) => <EditableLine key={r.id} entry={r} />)}</ul>
           </>
         ) : null}
       </div>
     </>
+  );
+}
+
+/** A rule in the sheet with its controls under it (#292). */
+function EditableLine({ entry }: { entry: Entry }) {
+  return (
+    <RuleLine entry={entry} marked={false}>
+      <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
+    </RuleLine>
   );
 }

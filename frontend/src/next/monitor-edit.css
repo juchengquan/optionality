@@ -1,0 +1,45 @@
+/* Editing a Monitor in place (#292): under the rule it is about, in the desk's inspector and the
+   phone's sheet. A line of its own wherever it sits, so a rule's sentence and its controls never
+   share a line that has to wrap. */
+.nx-mon { flex: 1 1 100%; display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; font-size: 0.8125rem; }
+.nx-mon-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+.nx-mon-button {
+  padding: 0.125rem 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 0.8125rem; color: var(--foreground); background: var(--background);
+}
+.nx-mon-button[aria-expanded="true"] { background: var(--foreground); color: var(--background); }
+.nx-mon-button[data-destructive] { color: var(--fault); }
+.nx-mon-button:disabled { opacity: 0.5; }
+.nx-mon-note { overflow-wrap: anywhere; }
+
+.nx-mon-form, .nx-mon-ask {
+  display: flex; flex-direction: column; gap: 0.5rem; min-width: 0;
+  padding: 0.5rem 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--background);
+}
+.nx-mon-draft { font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.nx-mon-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.5rem 0.75rem; }
+.nx-mon-field { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }
+.nx-mon-field > label { color: var(--muted-foreground); font-size: 0.75rem; }
+.nx-mon-field :is(select, input) {
+  min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 0.25rem 0.5rem; background: var(--background); color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+.nx-mon-field [aria-invalid="true"] { border-color: var(--fault); }
+
+/* a refusal, said beside what it is about in the attention family's fault colour, as the add form
+   says one (add.css) */
+.nx-mon-error {
+  border-left: 4px solid var(--fault); padding: 0.25rem 0.5rem; border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--fault) 12%, var(--background)); color: var(--foreground);
+  overflow-wrap: anywhere; white-space: pre-wrap;
+}
+
+/* the phone: one field per line, every box its 16px and 44pt (next.css) */
+html[data-nx-arrangement="phone"] .nx-mon-fields { grid-template-columns: minmax(0, 1fr); }
+html[data-nx-arrangement="phone"] .nx-mon { font-size: 0.9375rem; }
+
+/* a switched-off card is not one target (it opens no sheet), but its children are drawn
+   pointer-events: none as every card's are (phone.css); its controls must take a tap */
+.nxp-off .nxp-card > .nx-mon { pointer-events: auto; }
