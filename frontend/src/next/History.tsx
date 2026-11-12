@@ -260,7 +260,7 @@ function Burndown({ served, holding, unit, gutters }: {
   const manageWords = levels ? `manage-by ${levels.manage_by_dte}` : "";
   const half = textWidth(manageWords) / 2;
   const manageLabelX = manageX === null ? null : Math.min(
-    Math.max(manageX, L + textWidth(startWords) + 6 + half), W - R - textWidth(endWords) - 6 - half);
+    Math.max(manageX, L + textWidth(startWords) + 6 + half), W - 4 - textWidth(endWords) - 6 - half);
   const point = pointed === null ? null : samples[pointed] ?? null;
   /** The day nearest the pointer, across the width: what a hover or a tap anywhere on the chart
    *  means. A day's own mark answers for itself, so its events are not taken twice. */
@@ -335,7 +335,8 @@ function Burndown({ served, holding, unit, gutters }: {
             </g>
           ) : null}
           <text x={L} y={H - 6} textAnchor="start">{startWords}</text>
-          <text x={W - R} y={H - 6} textAnchor="end">{endWords}</text>
+          {/* in the margin, as the IV chart writes it: the shared right margin is the leg names' room */}
+          <text x={W - 4} y={H - 6} textAnchor="end">{endWords}</text>
         </svg>
       </div>
       <p className="nx-hist-said" role="status">

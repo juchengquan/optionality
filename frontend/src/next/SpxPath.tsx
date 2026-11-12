@@ -134,7 +134,7 @@ export function SpxPath({ served, holding, span, gutters }: {
             </g>
           ) : null}
           <text x={L} y={H - 6} textAnchor="start">{`${span} DTE`}</text>
-          <text x={W - R} y={H - 6} textAnchor="end">expiry</text>
+          <text x={W - 4} y={H - 6} textAnchor="end">expiry</text>
         </svg>
       </div>
       <p className="nx-hist-said">
