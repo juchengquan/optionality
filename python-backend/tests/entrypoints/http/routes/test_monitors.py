@@ -332,6 +332,38 @@ class TestPatching:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "nothing to update"
 
+    async def test_changes_every_field_a_rule_has_in_one_patch_what_it_watches_its_direction_its_compare(
+        self, start
+    ):
+        # the dashboard's editor sends whichever of the four changed (#292), and each must land
+        h = start()
+        id_ = (await post(h, single())).json()["id"]
+        data = (
+            await patch(h, id_, {"field": "mid_price", "direction": "below", "compare": "signed", "threshold": -1.5})
+        ).json()
+        assert [data["field"], data["direction"], data["compare"], data["threshold"]] == [
+            "mid_price",
+            "below",
+            "signed",
+            -1.5,
+        ]
+        assert (await h.call("/monitors")).json()[0]["field"] == "mid_price"
+
+    async def test_refuses_a_combo_moved_onto_a_figure_that_does_not_add_up_across_its_legs(self, start):
+        # POST refuses a combo on IV; a PATCH reaching the same row by the back door must too, or the
+        # engine sums nothing and the rule goes silent until it is quarantined (CLAUDE.md: Combos)
+        h = start()
+        id_ = (await post(h, combo())).json()["id"]
+        resp = await patch(h, id_, {"field": "option_implied_volatility"})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "combos cannot watch option_implied_volatility: it is not additive across legs"
+        assert (await h.call("/monitors")).json()[0]["field"] == "mid_price"
+
+    async def test_lets_a_single_leg_watch_its_iv_which_is_its_own_and_needs_no_sum(self, start):
+        h = start()
+        id_ = (await post(h, single())).json()["id"]
+        assert (await patch(h, id_, {"field": "option_implied_volatility", "threshold": 25})).status_code == 200
+
     async def test_refuses_a_field_that_would_collide_with_another_monitor_on_the_same_contract(self, start):
         h = start()
         await post(h, single())

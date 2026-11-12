@@ -19,6 +19,7 @@ import {
 import type { MonitorRow } from "../../../db/rows.ts";
 import { fromSqliteBool, toSqliteBool } from "../../../db/values.ts";
 import { exitPolicy } from "optionality/domain/exit";
+import { comboFieldError } from "optionality/domain/monitor";
 import { httpError, notFound, providerFailed } from "../errors.ts";
 import { applyTotalEntry, watchlistQuotes } from "../../../monitors.ts";
 import {
@@ -181,6 +182,11 @@ export function monitorRoutes(deps: Deps) {
       const why = patchThresholdError(compare, threshold);
       if (why) throw httpError(422, why);
       const field = given.field ?? row.field;
+      // POST refuses a combo on a figure that is not additive across its legs; a PATCH is the
+      // same rule reached by another door, and left open it made a combo watch a summed IV that
+      // the engine refuses to compute, so the rule fell silent until quarantined (#292)
+      const notAdditive = given.field !== undefined && row.legs !== null ? comboFieldError(field) : null;
+      if (notAdditive) throw httpError(422, notAdditive);
       if (field !== row.field && findMonitorByCodeField(db, changes.code ?? row.code, field, id)) {
         throw httpError(409, `monitor for (${changes.code ?? row.code}, ${field}) already exists`);
       }

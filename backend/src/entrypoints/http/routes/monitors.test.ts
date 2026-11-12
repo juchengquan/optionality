@@ -346,6 +346,36 @@ describe("patching", () => {
     expect((await body(resp)).detail).toBe("nothing to update");
   });
 
+  it("changes every field a rule has in one patch: what it watches, its direction, its compare", async () => {
+    // the dashboard's editor sends whichever of the four changed (#292), and each must land
+    h = harness();
+    const id = (await body(await post(single()))).id;
+    const data = await body(await patch(id, {
+      field: "mid_price", direction: "below", compare: "signed", threshold: -1.5,
+    }));
+    expect([data.field, data.direction, data.compare, data.threshold])
+      .toEqual(["mid_price", "below", "signed", -1.5]);
+    expect((await body(await h.call("/monitors")))[0].field).toBe("mid_price");
+  });
+
+  it("refuses a combo moved onto a figure that does not add up across its legs", async () => {
+    // POST refuses a combo on IV; a PATCH reaching the same row by the back door must too, or the
+    // engine sums nothing and the rule goes silent until it is quarantined (CLAUDE.md: Combos)
+    h = harness();
+    const id = (await body(await post(combo()))).id;
+    const resp = await patch(id, { field: "option_implied_volatility" });
+    expect(resp.status).toBe(422);
+    expect((await body(resp)).detail)
+      .toBe("combos cannot watch option_implied_volatility: it is not additive across legs");
+    expect((await body(await h.call("/monitors")))[0].field).toBe("mid_price");
+  });
+
+  it("lets a single leg watch its IV, which is its own and needs no sum", async () => {
+    h = harness();
+    const id = (await body(await post(single()))).id;
+    expect((await patch(id, { field: "option_implied_volatility", threshold: 25 })).status).toBe(200);
+  });
+
   it("refuses a field that would collide with another monitor on the same contract", async () => {
     h = harness();
     await post(single());

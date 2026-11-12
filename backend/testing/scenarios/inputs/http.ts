@@ -393,6 +393,30 @@ export const HTTP: readonly HttpInput[] = [
     request: request("PATCH", "/monitors/mon-1", { threshold: 0.35 }),
   },
   {
+    // the dashboard edits every field in place (#292): what a rule watches, its direction and how
+    // it compares, with the threshold that is legal under the new compare, in one change
+    name: "PATCH /monitors/{id} changes what a rule watches, its direction and its compare",
+    world: world({ tables: held }),
+    request: request("PATCH", "/monitors/mon-1", {
+      field: "mid_price", direction: "below", compare: "signed", threshold: -1.5,
+    }),
+  },
+  {
+    name: "PATCH /monitors/{id} refuses a combo moved onto a figure that does not add up",
+    world: world({ tables: held }),
+    request: request("PATCH", "/monitors/mon-2", { field: "option_implied_volatility" }),
+  },
+  {
+    // the owner's fix for a quarantine: switched back on, its reason cleared, the sweep to judge it
+    name: "PATCH /monitors/{id} switches a quarantined rule back on and clears its reason",
+    world: world({
+      tables: {
+        monitors: [monitor({ id: "mon-1", enabled: 0, disabled_reason: "unknown-contract" })],
+      },
+    }),
+    request: request("PATCH", "/monitors/mon-1", { enabled: true }),
+  },
+  {
     name: "PATCH /monitors/{id} mutes a rule by hand",
     world: world({ tables: held }),
     request: request("PATCH", "/monitors/mon-1", { enabled: false }),
