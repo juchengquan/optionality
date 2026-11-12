@@ -25,6 +25,7 @@ import { joinStrips, stripOfEntry, stripOfHolding } from "../strip";
 import { NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
 import { PriceMapPanel } from "./PriceMapPanel";
+import { RuleFigures } from "../RuleFigures";
 import { priceMapOf, spxOfBook } from "../pricemap";
 import "./desk.css";
 
@@ -461,7 +462,7 @@ function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose, 
         </button>
       </div>
       {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} privacy={privacy} partners={partners} onSelect={onSelect} />
-        : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} privacy={privacy} />
+        : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} />
           : <QuarantinedDetail row={row} />}
       <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
       {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
@@ -510,6 +511,7 @@ function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
     // privacy hides the count too: contracts × points × the contract size is the money it hides
     ["contracts", privacy ? "×•••" : `×${h.contracts}`],
     ["position Δ", greek("option_delta", 3)],
+    ["position γ", greek("option_gamma", 4)],
     ["position θ", greek("option_theta", 2)],
     ["position vega", greek("option_vega", 2)],
   ];
@@ -549,8 +551,7 @@ function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holdi
   return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
-function RuleDetail({ entry, rows, privacy }: { entry: Entry; rows: DeskRow[]; privacy: boolean }) {
-  const self = rows.find((r) => r.kind === "rule" && r.entry.id === entry.id)!;
+function RuleDetail({ entry, rows }: { entry: Entry; rows: DeskRow[] }) {
   const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
     r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
   return (
@@ -561,7 +562,8 @@ function RuleDetail({ entry, rows, privacy }: { entry: Entry; rows: DeskRow[]; p
       {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"} ${l.option_type} ${l.strike}`)} /> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
       {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
-      <Figures row={self} privacy={privacy} />
+      {/* every figure of its contract or combo, the reason beside each dash (#332) */}
+      <RuleFigures entry={entry} className="nxd-kv" />
       {entry.error ? <p className="nxd-why">{entry.error}</p> : null}
       <Monitors entries={[entry, ...under.map((r) => r.entry)]} />
     </>
