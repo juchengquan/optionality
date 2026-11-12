@@ -65,6 +65,22 @@ describe("under the iPhone profile", () => {
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("phone");
     expect(screen.getByRole("navigation", { name: "views" })).toBeTruthy();
   });
+
+  it("lays every tab of the bottom bar on one row, and keeps the page's end clear of it", async () => {
+    // With a fourth tab (#293) on a three-column grid, Settings wrapped to a second row: the bar
+    // grew to two rows and covered the end of the page, which leaves room for one.
+    await show();
+    const bar = screen.getByRole("navigation", { name: "views" });
+    const tabs = within(bar).getAllByRole("button");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Live", "Review", "Add", "Settings"]);
+    const tops = new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top)));
+    expect(tops.size).toBe(1);
+    const lastRight = tabs.at(-1)!.getBoundingClientRect().right;
+    expect(lastRight).toBeLessThanOrEqual(document.documentElement.clientWidth + 0.5);
+    const main = document.querySelector<HTMLElement>(".nx-main")!;
+    expect(parseFloat(getComputedStyle(main).paddingBottom))
+      .toBeGreaterThanOrEqual(bar.getBoundingClientRect().height);
+  });
 });
 
 describe("the Live view", () => {
