@@ -133,6 +133,17 @@ export function fieldWords(field: string, combo: boolean): string {
  *  away does not read "0.00 away", and gamma to four rather than the six a table once showed. */
 const PLACES: Record<string, number> = { option_delta: 3, option_gamma: 4 };
 
+/** "|spread value| ≥ 6.01": a rule in words, with no figure — the sentence's first half, and the
+ *  whole of what the editor's draft says as it is typed (#292), so the two cannot word it apart.
+ *  The threshold is printed as given: typed text in a draft, the stored number in a sentence. */
+export function ruleWords(
+  field: string, combo: boolean, compare: string, direction: string, threshold: number | string,
+): string {
+  const sign = direction === "below" ? "≤" : "≥";
+  const words = fieldWords(field, combo);
+  return `${compare === "abs" ? `|${words}|` : words} ${sign} ${threshold}`;
+}
+
 /** "|spread value| ≥ 6.01 — now -2.00, 4.01 away".
  *
  *  Every figure in it is the service's: `watched` is the very figure the bell and the fill bar were
@@ -144,9 +155,7 @@ const PLACES: Record<string, number> = { option_delta: 3, option_gamma: 4 };
  *  so "now -2.00, 4.01 away" reads true beside `|spread value| ≥ 6.01` where it would not beside a
  *  bare "spread value ≥ 6.01". The figure itself is shown as served, never made absolute here. */
 export function sentence(entry: Entry): string {
-  const sign = entry.direction === "below" ? "≤" : "≥";
-  const words = fieldWords(entry.field, Boolean(entry.legs));
-  const rule = `${entry.compare === "abs" ? `|${words}|` : words} ${sign} ${entry.threshold}`;
+  const rule = ruleWords(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
   if (entry.watched === null) return `${rule} — no figure`;
   const places = PLACES[entry.field] ?? 2;
   const now = `now ${entry.watched.toFixed(places)}`;

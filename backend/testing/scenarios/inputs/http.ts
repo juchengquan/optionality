@@ -393,6 +393,60 @@ export const HTTP: readonly HttpInput[] = [
     request: request("PATCH", "/monitors/mon-1", { threshold: 0.35 }),
   },
   {
+    // the dashboard edits every field in place (#292): what a rule watches, its direction and how
+    // it compares, with the threshold that is legal under the new compare, in one change
+    name: "PATCH /monitors/{id} changes what a rule watches, its direction and its compare",
+    world: world({ tables: held }),
+    request: request("PATCH", "/monitors/mon-1", {
+      field: "mid_price", direction: "below", compare: "signed", threshold: -1.5,
+    }),
+  },
+  {
+    // a ringing rule edited to watch something else is a new rule: its bell and its last alarm are
+    // the old rule's, and the sweep would compare the new figure against them (#292)
+    name: "PATCH /monitors/{id} forgets a ringing rule's alarm when what it watches changes",
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1", triggered: 1, last_alarm_at: "2026-11-02 14:30:00" })] },
+    }),
+    request: request("PATCH", "/monitors/mon-1", { field: "mid_price", threshold: 4 }),
+  },
+  {
+    // a threshold moved alone keeps the bell: it flips at the new line on the next sweep
+    name: "PATCH /monitors/{id} keeps a ringing rule's alarm when only its threshold moves",
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1", triggered: 1, last_alarm_at: "2026-11-02 14:30:00" })] },
+    }),
+    request: request("PATCH", "/monitors/mon-1", { threshold: 0.35 }),
+  },
+  {
+    // switched off with its holding while ringing, then back on: it comes back as a new rule
+    name: "PATCH /monitors/{id} forgets the alarm of a rule switched back on",
+    world: world({
+      tables: {
+        monitors: [monitor({
+          id: "mon-1", enabled: 0, disabled_reason: "holding-closed", triggered: 1,
+          last_alarm_at: "2026-11-02 14:30:00",
+        })],
+      },
+    }),
+    request: request("PATCH", "/monitors/mon-1", { enabled: true }),
+  },
+  {
+    name: "PATCH /monitors/{id} refuses a combo moved onto a figure that does not add up",
+    world: world({ tables: held }),
+    request: request("PATCH", "/monitors/mon-2", { field: "option_implied_volatility" }),
+  },
+  {
+    // the owner's fix for a quarantine: switched back on, its reason cleared, the sweep to judge it
+    name: "PATCH /monitors/{id} switches a quarantined rule back on and clears its reason",
+    world: world({
+      tables: {
+        monitors: [monitor({ id: "mon-1", enabled: 0, disabled_reason: "unknown-contract" })],
+      },
+    }),
+    request: request("PATCH", "/monitors/mon-1", { enabled: true }),
+  },
+  {
     name: "PATCH /monitors/{id} mutes a rule by hand",
     world: world({ tables: held }),
     request: request("PATCH", "/monitors/mon-1", { enabled: false }),

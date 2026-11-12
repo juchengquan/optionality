@@ -3,8 +3,8 @@ import { Plus, RefreshCw, Settings2 } from "lucide-react";
 
 import "./next.css";
 import {
-  addReference, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes, fetchReferences,
-  removeReference,
+  addReference, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes, fetchReferences,
+  patchMonitor, removeReference,
   type Added, type Entry, type Health, type Holding, type Monitor, type Reference,
 } from "../api";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { AddSpread } from "./AddSpread";
 import { arrangementFor, useViewportWidth } from "./arrangement";
 import type { BookProps } from "./Book";
 import { DeskBook } from "./desk/DeskBook";
+import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { clockMode, useSessionClock, type Mode } from "./mode";
 import { NeedsLine, reveal } from "./NeedsLine";
@@ -85,6 +86,14 @@ export function Next() {
     plusButton.current?.focus();
     void reload();
   }, [reload]);
+  // editing a Monitor in place (#292): each write then the page as the service now tells it, its
+  // refusal thrown back to the form that sent it rather than toasted underneath it
+  const retentionDays = book.health?.settings.expired_retention_days ?? null;
+  const monitorActions = useMemo<MonitorActions>(() => ({
+    patch: async (id, body) => { await patchMonitor(id, body as Record<string, unknown>); await reload(); },
+    remove: async (id) => { await deleteMonitor(id); await reload(); },
+    retentionDays,
+  }), [reload, retentionDays]);
   // the preview's SPX marker: the book's last batch's derived price, never a Reference's (ADR 0024)
   const priced = book.quotes.find((q) => q.spx !== null) ?? book.holdings?.find((h) => h.spx !== null);
   const spx = priced?.spx ?? null;
@@ -146,6 +155,7 @@ export function Next() {
   );
 
   return (
+    <MonitorActionsContext.Provider value={monitorActions}>
     <div className="nx" data-arrangement={arrangement} data-mode={mode} data-up={up}
          data-entry={entryStyle}>
       <header className="nx-head">
@@ -205,6 +215,7 @@ export function Next() {
       </DeskSettings>
       <Toaster />
     </div>
+    </MonitorActionsContext.Provider>
   );
 }
 
@@ -311,8 +322,15 @@ function useBook(mode: Mode) {
   const [pollFrom, setPollFrom] = useState(0);
   const live = mode === "live";
 
+  // The line's answers land as the holdings' do (below): unless a NEWER one already has. A poll
+  // asked before a save and answered after its reload put the saved-over rows back (#292).
+  const lineAsked = useRef(0);
+  const lineLanded = useRef(0);
   const loadLine = useCallback(async () => {
+    const mine = ++lineAsked.current;
     const [q, m, h] = await Promise.allSettled([fetchQuotes(), fetchMonitors(), fetchHealth()]);
+    if (mine < lineLanded.current) return;
+    lineLanded.current = mine;
     if (q.status === "fulfilled") setQuotes(q.value);
     if (m.status === "fulfilled") setMonitors(m.value);
     if (h.status === "fulfilled") setHealth(h.value);

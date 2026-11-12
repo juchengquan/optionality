@@ -14,6 +14,8 @@ import { monitorName, fieldWords } from "../needs";
 import { HoldingHistory } from "../History";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
+import { MonitorControls } from "../MonitorEdit";
+import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
   ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, rowStrip, type DeskColumn, type DeskRow,
 } from "./columns";
@@ -269,6 +271,7 @@ function Muted({ monitors }: { monitors: Monitor[] }) {
             <span className="nxd-name">{monitorName(m)}</span>
             <span>{`${fieldWords(m.field, Boolean(m.legs))} ${m.direction === "below" ? "≤" : "≥"} ${m.threshold}`}</span>
             <span className="nx-meta">{reason(m)}</span>
+            <MonitorControls rule={ruleOfMonitor(m)} served={null} />
           </li>
         ))}
       </ul>
@@ -508,6 +511,7 @@ function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined
         <span>{text}</span>
       </div>
       <p className="nx-meta">Nothing watches what this rule watched until it is fixed or removed.</p>
+      <MonitorControls rule={ruleOfMonitor(m)} served={null} />
     </>
   );
 }
@@ -534,6 +538,7 @@ function Monitors({ entries }: { entries: Entry[] }) {
               {a ? <AttentionChip kind={a} /> : null}
               <span>{COLUMNS.live.find((c) => c.key === "alarm")!.text(row, false)}</span>
               <Fill entry={e} />
+              <MonitorControls rule={ruleOfEntry(e)} served={e} />
             </li>
           );
         })}

@@ -1,0 +1,107 @@
+{
+  "name": "PATCH /monitors/{id} switches a quarantined rule back on and clears its reason",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 0,
+          "disabled_reason": "unknown-contract",
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "PATCH",
+    "path": "/monitors/mon-1",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "enabled": true
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "id": "mon-1",
+        "code": "US.SPXW261218C7300000",
+        "strike_date": "2026-12-18",
+        "option_type": "CALL",
+        "strike": 7300,
+        "field": "option_delta",
+        "threshold": 0.3,
+        "direction": "above",
+        "compare": "abs",
+        "legs": null,
+        "enabled": true,
+        "scope": null,
+        "positions": [],
+        "disabled_reason": null,
+        "triggered": false,
+        "last_value": null,
+        "last_checked_at": null,
+        "created_at": "2026-11-02 22:30:00+08:00"
+      }
+    },
+    "rows": {
+      "monitors": {
+        "changed": [
+          {
+            "key": {
+              "id": "mon-1"
+            },
+            "from": {
+              "enabled": 0,
+              "disabled_reason": "unknown-contract"
+            },
+            "to": {
+              "enabled": 1,
+              "disabled_reason": null
+            }
+          }
+        ]
+      }
+    },
+    "calls": {}
+  }
+}

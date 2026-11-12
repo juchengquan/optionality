@@ -14,10 +14,28 @@ import {
   updateMonitorFields,
 } from "./db/queries/index.ts";
 import { toMonitor, toPosition } from "./hydrate.ts";
+import type { MonitorRow } from "./db/rows.ts";
 import { displayRecords, type QuoteFetcher } from "optionality/quotes";
 import type { ExitPolicy } from "optionality/domain/exit";
 import { buildEntries, codesFor, type MonitorForEntry, type WatchlistEntry } from "./watchlist.ts";
 import type { Position } from "optionality/domain/position";
+
+/** The changes an edit writes, with the alarm state it must forget (#292).
+ *
+ *  `triggered` and `last_alarm_at` are the sweep's verdict on the rule AS IT WAS: the next sweep
+ *  compares the new figure against that flag. Kept across a change of what the rule watches, its
+ *  direction or its compare, a ringing rule edited onto a breach never said it crossed, and one
+ *  edited off said "back below" about a rule that was never above. So a change that ACTUALLY
+ *  differs from what is stored makes it a new rule, unrung. So does switching a rule that was off
+ *  back on: muted while ringing, or off with its holding, it comes back as new. A threshold moved
+ *  alone keeps the state, as it always has — the bell then flips at the new line on the next sweep.
+ */
+export function editedMonitor(row: MonitorRow, changes: Partial<MonitorRow>): Partial<MonitorRow> {
+  const differs = (["field", "direction", "compare"] as const)
+    .some((k) => changes[k] !== undefined && changes[k] !== row[k]);
+  const reenabled = changes.enabled === 1 && row.enabled === 0;
+  return differs || reenabled ? { ...changes, triggered: 0, last_alarm_at: null } : changes;
+}
 
 /** Attach a new Monitor to whatever Position already holds its contracts.
  *

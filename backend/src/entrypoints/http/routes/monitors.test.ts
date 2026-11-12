@@ -346,6 +346,73 @@ describe("patching", () => {
     expect((await body(resp)).detail).toBe("nothing to update");
   });
 
+  it("changes every field a rule has in one patch: what it watches, its direction, its compare", async () => {
+    // the dashboard's editor sends whichever of the four changed (#292), and each must land
+    h = harness();
+    const id = (await body(await post(single()))).id;
+    const data = await body(await patch(id, {
+      field: "mid_price", direction: "below", compare: "signed", threshold: -1.5,
+    }));
+    expect([data.field, data.direction, data.compare, data.threshold])
+      .toEqual(["mid_price", "below", "signed", -1.5]);
+    expect((await body(await h.call("/monitors")))[0].field).toBe("mid_price");
+  });
+
+  it("refuses a combo moved onto a figure that does not add up across its legs", async () => {
+    // POST refuses a combo on IV; a PATCH reaching the same row by the back door must too, or the
+    // engine sums nothing and the rule goes silent until it is quarantined (CLAUDE.md: Combos)
+    h = harness();
+    const id = (await body(await post(combo()))).id;
+    const resp = await patch(id, { field: "option_implied_volatility" });
+    expect(resp.status).toBe(422);
+    expect((await body(resp)).detail)
+      .toBe("combos cannot watch option_implied_volatility: it is not additive across legs");
+    expect((await body(await h.call("/monitors")))[0].field).toBe("mid_price");
+  });
+
+  it("lets a single leg watch its IV, which is its own and needs no sum", async () => {
+    h = harness();
+    const id = (await body(await post(single()))).id;
+    expect((await patch(id, { field: "option_implied_volatility", threshold: 25 })).status).toBe(200);
+  });
+
+  it("forgets the alarm state when what a rule watches, its direction or its compare changes", async () => {
+    // the sweep reads `triggered` as the OLD rule's verdict; kept across an edit, a ringing rule
+    // edited onto a breach never says it crossed, and one edited off says "back" about nothing
+    h = harness();
+    for (const change of [{ field: "mid_price", threshold: 30 }, { direction: "below" }, { compare: "signed" }]) {
+      const id = (await body(await post(single()))).id;
+      h.db.prepare("update monitors set triggered = 1, last_alarm_at = '2026-10-01 05:00:00' where id = ?").run(id);
+      const data = await body(await patch(id, change));
+      expect([change, data.triggered]).toEqual([change, false]);
+      const stored = h.db.prepare("select triggered, last_alarm_at from monitors where id = ?").get(id) as Record<string, unknown>;
+      expect(stored).toEqual({ triggered: 0, last_alarm_at: null });
+      await h.call(`/monitors/${id}`, { method: "DELETE" });
+    }
+  });
+
+  it("keeps the alarm state through a threshold alone, or a field sent unchanged", async () => {
+    h = harness();
+    const id = (await body(await post(single()))).id;
+    h.db.prepare("update monitors set triggered = 1, last_alarm_at = '2026-10-01 05:00:00' where id = ?").run(id);
+    await patch(id, { threshold: 0.65 });
+    await patch(id, { field: "option_delta", direction: "above", compare: "abs" });
+    const stored = h.db.prepare("select triggered, last_alarm_at from monitors where id = ?").get(id) as Record<string, unknown>;
+    expect(stored).toEqual({ triggered: 1, last_alarm_at: "2026-10-01 05:00:00" });
+  });
+
+  it("forgets the alarm state when a rule that was off is switched back on", async () => {
+    // a rule muted while ringing, or switched off with its holding, comes back as a new rule
+    h = harness();
+    const id = (await body(await post(single()))).id;
+    h.db.prepare("update monitors set enabled = 0, disabled_reason = 'holding-closed', triggered = 1, "
+      + "last_alarm_at = '2026-10-01 05:00:00' where id = ?").run(id);
+    expect((await body(await patch(id, { enabled: true }))).triggered).toBe(false);
+    // and switching OFF a rule keeps what it was, for whoever switches it on to see
+    h.db.prepare("update monitors set triggered = 1 where id = ?").run(id);
+    expect((await body(await patch(id, { enabled: false }))).triggered).toBe(true);
+  });
+
   it("refuses a field that would collide with another monitor on the same contract", async () => {
     h = harness();
     await post(single());

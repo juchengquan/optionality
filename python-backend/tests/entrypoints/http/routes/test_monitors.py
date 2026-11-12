@@ -332,6 +332,73 @@ class TestPatching:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "nothing to update"
 
+    async def test_changes_every_field_a_rule_has_in_one_patch_what_it_watches_its_direction_its_compare(self, start):
+        # the dashboard's editor sends whichever of the four changed (#292), and each must land
+        h = start()
+        id_ = (await post(h, single())).json()["id"]
+        data = (
+            await patch(h, id_, {"field": "mid_price", "direction": "below", "compare": "signed", "threshold": -1.5})
+        ).json()
+        assert [data["field"], data["direction"], data["compare"], data["threshold"]] == [
+            "mid_price",
+            "below",
+            "signed",
+            -1.5,
+        ]
+        assert (await h.call("/monitors")).json()[0]["field"] == "mid_price"
+
+    async def test_refuses_a_combo_moved_onto_a_figure_that_does_not_add_up_across_its_legs(self, start):
+        # POST refuses a combo on IV; a PATCH reaching the same row by the back door must too, or the
+        # engine sums nothing and the rule goes silent until it is quarantined (CLAUDE.md: Combos)
+        h = start()
+        id_ = (await post(h, combo())).json()["id"]
+        resp = await patch(h, id_, {"field": "option_implied_volatility"})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "combos cannot watch option_implied_volatility: it is not additive across legs"
+        assert (await h.call("/monitors")).json()[0]["field"] == "mid_price"
+
+    async def test_lets_a_single_leg_watch_its_iv_which_is_its_own_and_needs_no_sum(self, start):
+        h = start()
+        id_ = (await post(h, single())).json()["id"]
+        assert (await patch(h, id_, {"field": "option_implied_volatility", "threshold": 25})).status_code == 200
+
+    async def test_forgets_the_alarm_state_when_what_a_rule_watches_its_direction_or_its_compare_changes(self, start):
+        # the sweep reads `triggered` as the OLD rule's verdict; kept across an edit, a ringing rule
+        # edited onto a breach never says it crossed, and one edited off says "back" about nothing
+        h = start()
+        for change in [{"field": "mid_price", "threshold": 30}, {"direction": "below"}, {"compare": "signed"}]:
+            id_ = (await post(h, single())).json()["id"]
+            h.db.execute(
+                "update monitors set triggered = 1, last_alarm_at = '2026-10-01 05:00:00' where id = ?", (id_,)
+            )
+            assert (await patch(h, id_, change)).json()["triggered"] is False
+            stored = h.db.execute("select triggered, last_alarm_at from monitors where id = ?", (id_,)).fetchone()
+            assert (change, tuple(stored)) == (change, (0, None))
+            await h.call(f"/monitors/{id_}", method="DELETE")
+
+    async def test_keeps_the_alarm_state_through_a_threshold_alone_or_a_field_sent_unchanged(self, start):
+        h = start()
+        id_ = (await post(h, single())).json()["id"]
+        h.db.execute("update monitors set triggered = 1, last_alarm_at = '2026-10-01 05:00:00' where id = ?", (id_,))
+        await patch(h, id_, {"threshold": 0.65})
+        await patch(h, id_, {"field": "option_delta", "direction": "above", "compare": "abs"})
+        stored = h.db.execute("select triggered, last_alarm_at from monitors where id = ?", (id_,)).fetchone()
+        assert tuple(stored) == (1, "2026-10-01 05:00:00")
+
+    async def test_forgets_the_alarm_state_when_a_rule_that_was_off_is_switched_back_on(self, start):
+        # a rule muted while ringing, or switched off with its holding, comes back as a new rule
+        h = start()
+        id_ = (await post(h, single())).json()["id"]
+        h.db.execute(
+            "update monitors set enabled = 0, disabled_reason = 'holding-closed', triggered = 1, "
+            "last_alarm_at = '2026-10-01 05:00:00' where id = ?",
+            (id_,),
+        )
+        assert (await patch(h, id_, {"enabled": True})).json()["triggered"] is False
+        # and switching OFF a rule keeps what it was, for whoever switches it on to see
+        h.db.execute("update monitors set triggered = 1 where id = ?", (id_,))
+        assert (await patch(h, id_, {"enabled": False})).json()["triggered"] is True
+
     async def test_refuses_a_field_that_would_collide_with_another_monitor_on_the_same_contract(self, start):
         h = start()
         await post(h, single())

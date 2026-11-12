@@ -13,6 +13,8 @@ import type { PlacedHolding } from "../placement";
 import { holdingLegs, mutedWords, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
 import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
+import { MonitorControls } from "../MonitorEdit";
+import { ruleOfMonitor } from "../edit";
 import { stripOfEntry } from "../strip";
 
 /** The button that makes a whole card one target. It is drawn over the card, so the card's text
@@ -30,8 +32,10 @@ export function LevelChip({ holding }: { holding: Holding }) {
 }
 
 /** One rule as a line: what it watches in its own sentence, and its state's chip when it has one. */
-export function RuleLine({ entry, marked = true }: {
+export function RuleLine({ entry, marked = true, children }: {
   entry: Entry;
+  /** drawn under the rule: the sheet's controls for it (#292) */
+  children?: React.ReactNode;
   /** whether a banner may lead here: on the page yes, in the sheet no, or a banner tapped while
    *  the sheet is open would find the copy in the sheet rather than the card */
   marked?: boolean;
@@ -43,6 +47,7 @@ export function RuleLine({ entry, marked = true }: {
       <span className="nxp-sentence">{sentence(entry)}</span>
       {state ? <Chip state={state} /> : null}
       {entry.error ? <span className="nxp-error">{entry.error}</span> : null}
+      {children}
     </li>
   );
 }
@@ -122,6 +127,7 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
           <span className="nxp-sentence">{fieldWords(m.field, Boolean(m.legs))}</span>
           <span className="nx-chip" data-attention="fault"><OctagonAlert aria-hidden="true" />quarantined</span>
           <span className="nxp-meta">{QUARANTINED[m.disabled_reason ?? ""] ?? m.disabled_reason}</span>
+          <MonitorControls rule={ruleOfMonitor(m)} served={null} />
         </li>
       ))}
       {muted.map((m) => (
@@ -129,6 +135,7 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
           <span className="nxp-name">{monitorName(m)}</span>
           <span className="nxp-sentence">{fieldWords(m.field, Boolean(m.legs))}</span>
           <span className="nxp-meta">{mutedWords(m.disabled_reason)}</span>
+          <MonitorControls rule={ruleOfMonitor(m)} served={null} />
         </li>
       ))}
     </ul>

@@ -30,6 +30,7 @@ from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.exit import ExitPolicy
+from optionality.monitor import combo_field_error
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from ....create_monitor import (
@@ -56,7 +57,7 @@ from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored
 from ....db.values import from_sqlite_bool, from_sqlite_json, to_sqlite_bool
 from ....env import Settings
-from ....monitors import apply_total_entry, watchlist_quotes
+from ....monitors import apply_total_entry, edited_monitor, watchlist_quotes
 from ....schemas.monitor import (
     ComboMonitorIn,
     MonitorCreateIn,
@@ -261,6 +262,12 @@ def monitor_routes(deps: Deps) -> APIRouter:
         if why:
             raise http_error(422, why)
         field = given.field if given.field is not None else row["field"]
+        # POST refuses a combo on a figure that is not additive across its legs; a PATCH is the
+        # same rule reached by another door, and left open it made a combo watch a summed IV that
+        # the engine refuses to compute, so the rule fell silent until quarantined (#292)
+        not_additive = combo_field_error(field) if given.field is not None and row["legs"] is not None else None
+        if not_additive:
+            raise http_error(422, not_additive)
         code = changes.get("code", row["code"])
         if field != row["field"] and find_monitor_by_code_field(db, code, field, id_):
             raise http_error(409, f"monitor for ({code}, {field}) already exists")
@@ -277,7 +284,7 @@ def monitor_routes(deps: Deps) -> APIRouter:
             # re-enabling clears the reason; disabling by hand records that it was by hand, so the
             # sweeper's own quarantine and expiry notices are not overwritten by a manual toggle
             changes["disabled_reason"] = None if given.enabled else "manual"
-        return one(update_monitor_fields(db, id_, changes))
+        return one(update_monitor_fields(db, id_, edited_monitor(row, changes)))
 
     @router.post("/{id}/total-entry", summary="Spread a total entry across the holding", response_model=TotalEntryOut)
     async def total_entry(

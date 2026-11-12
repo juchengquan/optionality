@@ -28,11 +28,13 @@ from sweep import SWEEP_SETTINGS as BASE
 from sweep import MonitorState, insert_combo, insert_monitor, monitor_state, quoting
 
 from optionality_backend.db.open import create_database
+from optionality_backend.db.queries import find_monitor, update_monitor_fields
 from optionality_backend.db.time import to_sql_datetime
 from optionality_backend.db.values import to_sqlite_json
 from optionality_backend.engine.health import STALE_AFTER_SWEEPS
 from optionality_backend.engine.sweeper import MonitorSweeper, SweeperDeps
 from optionality_backend.env import settings_for
+from optionality_backend.monitors import edited_monitor
 from optionality_backend.notify import NotifySender
 from optionality_backend.ports import AlarmState
 
@@ -208,6 +210,35 @@ class TestABreach:
         await s.sweep()  # -3.95 back above
         assert len(t.sent) == 2
         assert t.row(id_)["triggered"] == 0
+
+
+class TestAnEditedRule:
+    """#292."""
+
+    async def test_says_it_crossed_when_a_ringing_rule_is_edited_onto_a_figure_already_past_the_new_threshold(
+        self, t: Sweeps
+    ) -> None:
+        # ringing on its delta, then edited to watch its mid >= 4 while the mid is 5: a new rule,
+        # breached from its first sweep, so the owner is told — the old rule's bell must not swallow it
+        id_ = t.monitor()
+        await t.sweeper(quoting("option_delta", {CODE: 0.7})).sweep()
+        assert len(t.sent) == 1
+        row = find_monitor(t.db, id_)
+        assert row is not None
+        update_monitor_fields(t.db, id_, edited_monitor(row, {"field": "mid_price", "threshold": 4}))
+        await t.tick(t.sweeper(quoting("mid_price", {CODE: 5})))
+        assert len(t.sent) == 2
+        assert "crossed ≥" in t.sent[1]
+
+    async def test_says_nothing_when_a_ringing_rule_is_edited_onto_a_rule_that_never_breached(self, t: Sweeps) -> None:
+        id_ = t.monitor()
+        await t.sweeper(quoting("option_delta", {CODE: 0.7})).sweep()
+        row = find_monitor(t.db, id_)
+        assert row is not None
+        update_monitor_fields(t.db, id_, edited_monitor(row, {"field": "mid_price", "threshold": 30}))
+        await t.tick(t.sweeper(quoting("mid_price", {CODE: 5})))
+        # not "back below 30" about a rule that was never above it
+        assert len(t.sent) == 1
 
 
 class TestHowOftenItSpeaks:
