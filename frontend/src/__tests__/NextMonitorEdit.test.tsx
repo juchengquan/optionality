@@ -140,6 +140,37 @@ describe("editing a rule in place", () => {
     expect(within(form).getByTestId("served").textContent).toBe(`as saved: ${sentence(DELTA)}`);
   });
 
+  it("opens on the rule as saved, not on a draft that was cancelled", async () => {
+    controls({ entry: DELTA });
+    let form = await openEditor("261218 7150P delta");
+    choose(form, "what it watches", "mid_price");
+    choose(form, "direction", "below");
+    choose(form, "compare", "signed");
+    choose(form, "threshold", "9");
+    fireEvent.click(within(form).getByRole("button", { name: "cancel" }));
+    form = await openEditor("261218 7150P delta");
+    const values = ["what it watches", "direction", "compare", "threshold"]
+      .map((l) => (within(form).getByLabelText(l) as HTMLInputElement).value);
+    expect(values).toEqual(["option_delta", "above", "abs", "0.2"]);
+  });
+
+  it("opens on the rule as a later poll served it, after it changed while the editor was shut", async () => {
+    const a = actions();
+    const ui = (e: Entry) => (
+      <MonitorActionsContext.Provider value={a.value}>
+        <MonitorControls rule={ruleOfEntry(e)} served={e} />
+      </MonitorActionsContext.Provider>
+    );
+    const { rerender } = render(ui(DELTA));
+    let form = await openEditor("261218 7150P delta");
+    fireEvent.click(within(form).getByRole("button", { name: "cancel" }));
+    // changed elsewhere — another tab, the bot's /threshold — and served by the next poll
+    rerender(ui({ ...DELTA, threshold: 0.35, direction: "below" }));
+    form = await openEditor("261218 7150P delta");
+    expect((within(form).getByLabelText("threshold") as HTMLInputElement).value).toBe("0.35");
+    expect((within(form).getByLabelText("direction") as HTMLSelectElement).value).toBe("below");
+  });
+
   it("offers a combo no IV, which does not add up across its legs", async () => {
     controls({ entry: SPREAD });
     const form = await openEditor("1218_P7150 spread value");
