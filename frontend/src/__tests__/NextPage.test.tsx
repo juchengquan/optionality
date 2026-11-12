@@ -103,9 +103,12 @@ function at(iso: string) {
 const SESSION = "2026-11-09T15:00:00Z";
 const SUNDAY = "2026-11-08T15:00:00Z";
 
+/** How long a wait on a condition may take under a full suite's load, well past waitFor's 1s. */
+const SLOW = 10_000;
+
 async function open() {
   render(<Next />);
-  await waitFor(() => expect(screen.getByText("1218_7150P")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("1218_7150P")).toBeTruthy(), { timeout: SLOW });
 }
 
 const COOKIES = ["ui_up", "ui_entry", "ui_privacy", "ui_arrangement", "ui_refresh"];
@@ -133,11 +136,17 @@ describe("what it asks for in each mode", () => {
     // the rest WAS asked for, once, on entering REVIEW: the valuation, the closed trades (#296)
     // and the holding's samples, which its REVIEW page asks for once it is drawn — after the line
     // that `open` waits for, so it is waited for too, or it lands in the poll's calls below
+    //
+    // The waits are on CONDITIONS, with room: under a full suite's load the page's first reads took
+    // longer than waitFor's default second and this flaked (seen three times on 2026-11-12, never
+    // alone). Waiting longer for a condition costs nothing when it holds and changes no verdict.
     await waitFor(() => expect(calls).toEqual(
-      expect.arrayContaining(["/positions/values", "/positions", "/positions/p1/samples"])));
+      expect.arrayContaining(["/positions/values", "/positions", "/positions/p1/samples"])), { timeout: SLOW });
     calls = [];
     await act(async () => { vi.advanceTimersByTime(15_000); });
-    await waitFor(() => expect(calls).toContain("/health"));
+    // the poll's last read is /health; every read it makes has landed once the three are in
+    await waitFor(() => expect(calls).toEqual(expect.arrayContaining(["/quotes", "/monitors", "/health"])),
+      { timeout: SLOW });
     expect(new Set(calls)).toEqual(new Set(["/quotes", "/monitors", "/health"]));
   });
 });
