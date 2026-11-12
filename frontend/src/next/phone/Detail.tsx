@@ -9,6 +9,7 @@ import { DASH, legSummary } from "../../format";
 import { readUp, type EntryStyle } from "../../prefs";
 import { useDismissOnBack } from "../../useDismissOnBack";
 import { Chip, Money } from "../Book";
+import { HoldingActions, type HoldingWrites } from "../HoldingActions";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { entryName, fieldWords, sentence } from "../needs";
 import { LevelChip, Progress, RuleLine } from "./Cards";
@@ -23,7 +24,7 @@ export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
   | { kind: "rule"; entry: Entry; under: Entry[] };
 
-export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle }: {
+export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes }: {
   /** what is open, from the figures as they are NOW, or null for nothing */
   subject: Subject | null;
   onClose: () => void;
@@ -31,6 +32,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   monitors: Monitor[];
   privacy: boolean;
   entryStyle: EntryStyle;
+  /** editing, closing and deleting a holding (#294) */
+  writes?: HoldingWrites;
 }) {
   const open = subject !== null;
   useDismissOnBack(open, onClose);
@@ -58,6 +61,12 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
           <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
                          privacy={privacy} />
         ) : shown?.kind === "rule" ? <RuleDetail entry={shown.entry} under={shown.under} /> : null}
+        {shown?.kind === "holding" && writes ? (
+          <div className="nxp-sheet-body">
+            <HoldingActions key={shown.holding.id} holding={shown.holding} monitors={monitors} rules={shown.rules}
+                            privacy={privacy} writes={writes} />
+          </div>
+        ) : null}
       </SheetContent>
     </Sheet>
   );

@@ -19,6 +19,8 @@ import {
 import { ReferenceStrip } from "../ReferenceStrip";
 import { useDismissOnBack } from "../useDismissOnBack";
 import { AddSpread } from "./AddSpread";
+import { ClosedResult } from "./ClosedResult";
+import type { ClosedOutcome, HoldingWrites } from "./HoldingActions";
 import { arrangementFor, useViewportWidth } from "./arrangement";
 import type { BookProps } from "./Book";
 import { DeskBook } from "./desk/DeskBook";
@@ -62,6 +64,7 @@ export function Next() {
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
   const book = useBook(mode);
+  const { holdings, writes, outcome, dismissOutcome } = useHoldingWrites(book.holdings, book.reload);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // adding a spread (#293): a panel above the desk's table, a bottom sheet from the phone's Add tab
@@ -124,18 +127,18 @@ export function Next() {
   // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once
   // in REVIEW, so in REVIEW their Levels are left to Settings, which asks again and says when
   const items = useMemo(
-    () => needsYou(book.quotes, book.monitors, book.health, mode === "live" ? book.holdings : null),
-    [book.quotes, book.monitors, book.health, book.holdings, mode],
+    () => needsYou(book.quotes, book.monitors, book.health, mode === "live" ? holdings : null),
+    [book.quotes, book.monitors, book.health, holdings, mode],
   );
   const everything = useMemo(
-    () => needsYou(book.quotes, book.monitors, book.health, book.holdings),
-    [book.quotes, book.monitors, book.health, book.holdings],
+    () => needsYou(book.quotes, book.monitors, book.health, holdings),
+    [book.quotes, book.monitors, book.health, holdings],
   );
 
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
-    quotes: book.quotes, monitors: book.monitors, holdings: book.holdings,
-    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, mode, privacy, entryStyle,
+    quotes: book.quotes, monitors: book.monitors, holdings,
+    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, mode, privacy, entryStyle, writes,
   };
 
   const settings = (
@@ -146,7 +149,7 @@ export function Next() {
       choice={choice} onChoice={(v) => { setChoice(v); writeArrangement(v); }}
       refresh={book.refresh} onRefresh={(n) => { book.setRefresh(n); writeRefresh(n); }}
       health={book.health} needs={everything}
-      complete={book.holdings !== null && book.holdingsError === null}
+      complete={holdings !== null && book.holdingsError === null}
       holdingsAt={book.holdingsAt}
       references={book.references}
       onAddReference={(body) => book.act(() => addReference(body))}
@@ -187,6 +190,11 @@ export function Next() {
         {/* the market as it is now, so only in LIVE: in REVIEW nothing re-reads it, and a strip
             frozen at the moment the mode was entered would be read as current (ADR 0018) */}
         {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
+        {/* a close's account (#294): the holding has left the book, and its detail with it */}
+        {outcome && !(phone && settingsOpen) ? (
+          <ClosedResult key={outcome.closed.id} outcome={outcome} privacy={privacy} onDone={dismissOutcome}
+                        onCorrected={() => void book.reload()} />
+        ) : null}
         {adding && !phone ? (
           <section id={panelId} className="nx-add-panel" aria-label="adding a spread"
                    onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(); } }}>
@@ -288,6 +296,41 @@ function DeskSettings({ open, onClose, up, entryStyle, children }: {
       </SheetContent>
     </Sheet>
   );
+}
+
+/** Editing, closing and deleting a holding (#294), as the page sees it.
+ *
+ *  A holding closed or deleted here leaves the live view AT ONCE, and stays out: its id is kept and
+ *  filtered from every valuation the page draws, so a poll asked before the write and answered
+ *  after it cannot bring it back. Neither can return — there is no reopen (ADR 0022) — so the list
+ *  only grows, by one per write.
+ */
+function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>) {
+  const [departed, setDeparted] = useState<ReadonlySet<string>>(new Set());
+  const [outcome, setOutcome] = useState<ClosedOutcome | null>(null);
+  const holdings = useMemo(
+    () => (valued === null || departed.size === 0 ? valued : valued.filter((h) => !departed.has(h.id))),
+    [valued, departed],
+  );
+  const writes = useMemo<HoldingWrites>(() => {
+    const depart = (id: string) => setDeparted((d) => new Set([...d, id]));
+    return {
+      // said by the inspector's or the sheet's own buttons (HoldingActions), where it was saved
+      edited: () => { void reload(); },
+      closed: (o) => {
+        depart(o.holding.id);
+        setOutcome(o);
+        void reload();
+      },
+      deleted: (h) => {
+        depart(h.id);
+        toast.add({ title: `deleted ${h.name}, with its daily samples`, type: "success" });
+        void reload();
+      },
+    };
+  }, [reload]);
+  const dismissOutcome = useCallback(() => setOutcome(null), []);
+  return { holdings, writes, outcome, dismissOutcome };
 }
 
 /** Whether a poll would disturb something being operated (App.tsx: `beingOperated`). */

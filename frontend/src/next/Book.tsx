@@ -3,6 +3,7 @@ import { BellRing, OctagonAlert, Sparkles } from "lucide-react";
 import type { Entry, Holding, Monitor } from "../api";
 import type { EntryStyle } from "../prefs";
 import { DASH, legSummary } from "../format";
+import type { HoldingWrites } from "./HoldingActions";
 import type { Mode } from "./mode";
 import { Glyph } from "./NeedsLine";
 import { placeBook } from "./placement";
@@ -24,6 +25,8 @@ export interface BookProps {
   mode: Mode;
   privacy: boolean;
   entryStyle: EntryStyle;
+  /** editing, closing and deleting a holding (#294); absent, its detail offers none of them */
+  writes?: HoldingWrites;
 }
 
 /** The book as a plain list: holdings first, each with the rules about it, then the watchlist,

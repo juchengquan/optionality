@@ -17,7 +17,7 @@ import { ReviewPager } from "./Review";
  *  up in each render's figures, so the sheet follows the poll rather than freezing the moment it
  *  was opened, and closes itself if what it shows is gone.
  */
-export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy, entryStyle }: BookProps) {
+export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy, entryStyle, writes }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
@@ -118,7 +118,7 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
       ) : null}
 
       <DetailSheet subject={subject} onClose={close} quotes={quotes} monitors={monitors}
-                   privacy={privacy} entryStyle={entryStyle} />
+                   privacy={privacy} entryStyle={entryStyle} writes={writes} />
     </div>
   );
 }
