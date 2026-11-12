@@ -40,6 +40,13 @@ const references = [
     field: "mid_price", name: "S&P 500", error: null, last_known: false },
 ];
 
+/** A holding closed on 6 Nov, as `/positions` keeps it (ADR 0022). */
+const CLOSED = {
+  ...HOLDINGS[0]!, id: "c-old", name: "1120_P6000", strike_date: "2026-11-20", opened_at: "2026-11-01",
+  closed_on: "2026-11-06", entry: 2, exit: 0.5, realized_points: 1.5, cost_to_close: null, pnl: null,
+  captured: null,
+};
+
 /** A sweep slower than any test, so no poll lands between the press and the file: every request
  *  the page makes in that window is then one the press made. */
 const health = {
@@ -59,6 +66,8 @@ function serve(quotes: () => unknown = () => QUOTES): string[] {
     asked.push(`${method} ${path}`);
     const routes: Record<string, unknown> = {
       "/quotes": quotes(), "/monitors": MONITORS, "/health": health, "/positions/values": HOLDINGS,
+      // REVIEW's closed trades (#296), which the picture leaves out: a journal is not the book
+      "/positions": [CLOSED],
       "/references": references,
     };
     const known = method === "GET" && path in routes;

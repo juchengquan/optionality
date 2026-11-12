@@ -26,6 +26,13 @@ vi.mock("html-to-image", async (orig) => {
   };
 });
 
+/** A holding closed on 6 Nov, as `/positions` keeps it (ADR 0022). */
+const CLOSED = {
+  ...HOLDINGS[0]!, id: "c-old", name: "1120_P6000", strike_date: "2026-11-20", opened_at: "2026-11-01",
+  closed_on: "2026-11-06", entry: 2, exit: 0.5, realized_points: 1.5, cost_to_close: null, pnl: null,
+  captured: null,
+};
+
 /** A sweep slower than any test, so no poll lands between the press and the file. */
 const health = {
   db: true, provider: { name: "moomoo", ok: true },
@@ -44,6 +51,8 @@ function serve(): string[] {
     asked.push(`${method} ${path}`);
     const routes: Record<string, unknown> = {
       "/quotes": QUOTES, "/monitors": MONITORS, "/health": health, "/positions/values": HOLDINGS,
+      // REVIEW's closed trades (#296), which the picture leaves out: a journal is not the book
+      "/positions": [CLOSED],
       "/references": [],
     };
     const samples = method === "GET" && /^\/positions\/[^/]+\/samples$/.test(path);
@@ -149,6 +158,18 @@ describe("saving the phone's cards as an image", () => {
       shared.release();
     });
   }
+
+  it("leaves REVIEW's closed trades out of the picture: a journal is not the book", async () => {
+    await show("Review");
+    await expect.poll(() => document.querySelector(".nx-main")!.textContent, { timeout: 4000 })
+      .toContain("1120_P6000");
+    const shared = catchShare();
+    await userEvent.click(save());
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    expect(captured[0]!.text).toContain("1218_C7300");
+    expect(captured[0]!.text).not.toContain("1120_P6000");
+    shared.release();
+  });
 
   it("asks the service for nothing, and takes the tree down when it is done", async () => {
     const asked = await show("Review");
