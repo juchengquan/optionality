@@ -18,7 +18,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { Holding, Samples } from "../api";
 import { spxRange, spxRuns, unrecorded } from "./spxdays";
 
-const H = 156, T = 10, B = 22, R = 10;
+const H = 156, T = 10, B = 22;
 
 /** A label's width at the charts' 11px tabular figures, near enough to leave it room. */
 const textWidth = (text: string) => text.length * 6.6;
@@ -43,15 +43,26 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
 const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
 const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
 
-/** `span` is the burndown's DTE window, handed down so the two charts' days line up. */
-export function SpxPath({ served, holding, span }: { served: Samples; holding: Holding; span: number }) {
+/** Each leg's name as the chart writes it in its left margin. */
+const namesOf = (holding: Holding) => holding.legs.map((l) => `${l.option_type[0]}${l.strike}`);
+
+/** The left margin this chart's strike names need, for the margins all three charts share. */
+export const spxGutter = (holding: Holding) =>
+  Math.ceil(Math.max(...namesOf(holding).map(textWidth), 16)) + 10;
+
+/** `span` is the burndown's DTE window and `gutters` the margins all three charts share, handed
+ *  down so a day lands at the same x in each (#298). */
+export function SpxPath({ served, holding, span, gutters }: {
+  served: Samples; holding: Holding; span: number; gutters: { L: number; R: number };
+}) {
   const [box, W] = useWidth();
   const runs = spxRuns(served.samples);
   const missing = unrecorded(served.samples);
   const gapWords = missing === 0 ? null
     : `${missing} day${missing === 1 ? "" : "s"} stored without SPX's price: a gap, never zero`;
-  const strikes = holding.legs.map((l) => ({
-    strike: l.strike, side: l.side, type: l.option_type, name: `${l.option_type[0]}${l.strike}`,
+  const names = namesOf(holding);
+  const strikes = holding.legs.map((l, i) => ({
+    i, strike: l.strike, side: l.side, type: l.option_type, name: names[i]!,
   }));
   const now = holding.closed_on === null && typeof holding.spx === "number" && holding.dte >= 0
     ? { dte: holding.dte, spx: holding.spx } : null;
@@ -68,7 +79,7 @@ export function SpxPath({ served, holding, span }: { served: Samples; holding: H
   }
 
   const [lo, hi] = spxRange(served.samples, strikes.map((k) => k.strike), now?.spx ?? null);
-  const L = Math.ceil(Math.max(...strikes.map((k) => textWidth(k.name)), 16)) + 10;
+  const { L, R } = gutters;
   const x = (dte: number) => L + ((span - dte) / span) * (W - L - R);
   const y = (p: number) => T + ((hi - p) / (hi - lo)) * (H - T - B);
   // each strike's name at its line in the gutter; two strikes close together would print over each
@@ -77,7 +88,8 @@ export function SpxPath({ served, holding, span }: { served: Samples; holding: H
   for (let i = 1; i < labels.length; i++) labels[i]!.at = Math.max(labels[i]!.at, labels[i - 1]!.at + 14);
   const over = (labels.at(-1)?.at ?? 0) - (H - B);
   if (over > 0) for (const l of labels) l.at = Math.max(T, l.at - over);
-  const labelAt = new Map(labels.map((l) => [l.strike, l.at]));
+  // by the leg, never by its strike alone: an iron fly's short put and short call share one
+  const labelAt = new Map(labels.map((l) => [l.i, l.at]));
 
   const first = runs[0]![0]!;
   const last = runs.at(-1)!.at(-1)!;
@@ -96,13 +108,13 @@ export function SpxPath({ served, holding, span }: { served: Samples; holding: H
           {strikes.filter((k) => k.side === "short").map((k) => {
             const edge = Math.min(Math.max(y(k.strike), T), H - B);
             const [top, bottom] = k.type === "PUT" ? [edge, H - B] : [T, edge];
-            return <rect key={`loss${k.strike}`} className="nx-spxp-loss" x={L} width={W - L - R}
+            return <rect key={`loss${k.i}`} className="nx-spxp-loss" x={L} width={W - L - R}
                          y={top} height={Math.max(0, bottom - top)} />;
           })}
           {strikes.map((k) => (
-            <g key={`${k.side}${k.strike}${k.type}`} data-strike={k.strike} data-side={k.side} className="nx-spxp-k">
+            <g key={k.i} data-strike={k.strike} data-side={k.side} className="nx-spxp-k">
               <line x1={L} x2={W - R} y1={y(k.strike)} y2={y(k.strike)} />
-              <text x={L - 6} y={labelAt.get(k.strike)! + 4} textAnchor="end">{k.name}</text>
+              <text x={L - 6} y={labelAt.get(k.i)! + 4} textAnchor="end">{k.name}</text>
             </g>
           ))}
           {runs.map((run) => (

@@ -10,10 +10,11 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { page } from "@vitest/browser/context";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { DeskBook } from "../next/desk/DeskBook";
 import { Next } from "../next/Next";
+import { DeskBook } from "../next/desk/DeskBook";
+import { SpxPath, spxGutter } from "../next/SpxPath";
 import type { Entry } from "../api";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, served } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 const health = {
@@ -244,4 +245,45 @@ describe("where SPX was against the strikes, in REVIEW's inspector", () => {
       expect(overflowsSideways()).toBe(false);
     });
   }
+});
+
+describe("the three REVIEW charts share their plot", () => {
+  for (const width of [1280, 2560]) for (const privacy of [false, true]) {
+    it(`at ${width}px${privacy ? ", privacy on" : ""}, put a day at the same x in each`, async () => {
+      if (privacy) document.cookie = "ui_privacy=on;path=/";
+      try {
+        await show(width, "Review");
+        fireEvent.click(within(rowOf("h-puts")).getByRole("button", { name: /./ }));
+        await settle();
+        const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
+        const centre = (el: Element | null) => {
+          const r = el!.getBoundingClientRect();
+          return r.left + r.width / 2;
+        };
+        // 4 Nov, 44 DTE: a day each of the three charts draws
+        const burndown = centre(insp.querySelector('[data-sample="2026-11-04"] circle'));
+        const iv = [...insp.querySelectorAll('[aria-label="IV by leg"] circle[data-dte="44"]')].map(centre);
+        const spx = centre(insp.querySelector('circle[data-spx-day="2026-11-04"]'));
+        expect(iv.length).toBeGreaterThan(0);
+        for (const x of [...iv, spx]) expect(Math.abs(x - burndown)).toBeLessThan(0.75);
+      } finally {
+        document.cookie = "ui_privacy=;path=/";
+      }
+    });
+  }
+});
+
+describe("where SPX was, for an iron fly", () => {
+  it("prints the short put and the short call that share a strike apart, inside the chart", async () => {
+    const fly = { ...HOLDINGS[0]!, id: "h-fly", name: "1218_IF7000", legs: [
+      { side: "short", option_type: "PUT", strike: 7000 }, { side: "short", option_type: "CALL", strike: 7000 },
+      { side: "long", option_type: "PUT", strike: 6950 }, { side: "long", option_type: "CALL", strike: 7050 },
+    ] } as typeof HOLDINGS[number];
+    render(<div style={{ width: 360 }}>
+      <SpxPath served={SAMPLES["h-puts"]!} holding={fly} span={45} gutters={{ L: spxGutter(fly), R: 10 }} />
+    </div>);
+    await settle();
+    const svg = screen.getByRole("group", { name: "SPX against the strikes" }).querySelector("svg")!;
+    expect(labelFaults(svg, "iron fly")).toEqual([]);
+  });
 });

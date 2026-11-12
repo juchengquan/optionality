@@ -11,6 +11,7 @@ import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { spxRange, spxRuns } from "../next/spxdays";
+import { SpxPath, spxGutter } from "../next/SpxPath";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer } from "../testing/ownerBook";
 
 let asked: string[] = [];
@@ -130,6 +131,25 @@ describe("in the desk's inspector, in REVIEW", () => {
   it("is not drawn in LIVE", () => {
     const insp = inspect("h-puts", "1218_P6400", { mode: "live" });
     expect(within(insp).queryByRole("group", { name: "SPX against the strikes" })).toBeNull();
+  });
+});
+
+describe("a holding with two legs on one strike", () => {
+  it("names each leg on its own line: an iron fly's short put and short call never print as one", () => {
+    // short P7000 and short C7000 share a strike: their names are pushed apart, not laid on each other
+    const fly = { ...HOLDINGS[0]!, id: "h-fly", name: "1218_IF7000", legs: [
+      { side: "short", option_type: "PUT", strike: 7000 }, { side: "short", option_type: "CALL", strike: 7000 },
+      { side: "long", option_type: "PUT", strike: 6950 }, { side: "long", option_type: "CALL", strike: 7050 },
+    ] } as typeof HOLDINGS[number];
+    const { container } = render(
+      <SpxPath served={SAMPLES["h-puts"]!} holding={fly} span={45} gutters={{ L: spxGutter(fly), R: 10 }} />);
+    const ys = [...container.querySelectorAll<SVGTextElement>("[data-strike] text")]
+      .map((t) => [t.textContent, Number(t.getAttribute("y"))] as const);
+    expect(ys.map(([name]) => name).sort()).toEqual(["C7000", "C7050", "P6950", "P7000"]);
+    const at = Object.fromEntries(ys);
+    expect(Math.abs(at["P7000"]! - at["C7000"]!)).toBeGreaterThanOrEqual(14);
+    const sorted = ys.map(([, y]) => y).sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) expect(sorted[i]! - sorted[i - 1]!).toBeGreaterThanOrEqual(14);
   });
 });
 
