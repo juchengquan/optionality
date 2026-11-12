@@ -11,12 +11,26 @@
  */
 import type { Entry, Holding, Monitor, Payoff } from "../api";
 
+/** SPX's price as the service derives it (ADR 0024), on every row of both responses. */
+const SPX = 6900.5;
+
+/** A short strike as the service serves it in `short_strikes` (#297): the distance worked out as
+ *  `strikeDistances` does — positive while SPX has not reached it — at an IV of 18%. */
+export function served(date: string, type: "CALL" | "PUT", strike: number, delta: number | null, dte: number,
+                       spx: number | null = SPX) {
+  const points = spx === null ? null : Number((type === "CALL" ? strike - spx : spx - strike).toFixed(2));
+  const sigma = points === null || spx === null ? null
+    : Number((points / (spx * 0.18 * Math.sqrt(dte / 365))).toFixed(2));
+  const code = `US.SPXW${date.slice(2).replaceAll("-", "")}${type[0]}${strike}000`;
+  return { code, option_type: type, strike, delta, points, sigma };
+}
+
 function entry(id: string, over: Partial<Entry> & { strike_date: string }): Entry {
   return {
     id, code: id, option_type: "CMB", field: "mid_price", threshold: 6, direction: "above",
     compare: "abs", triggered: false, quote: null, dte: 38, scope: null, positions: [],
     cost_to_close: null, entry: null, pnl: null, fill: 40, schedule: null, watched: 2.4,
-    distance: 3.6, in_combos: [], held: false, spx: 6900.5, spx_reason: null,
+    distance: 3.6, in_combos: [], held: false, spx: SPX, spx_reason: null, short_strikes: [],
     ...over,
   } as Entry;
 }
@@ -31,16 +45,20 @@ const call = (short: number, long: number) => [
 export const QUOTES: Entry[] = [
   // the watchlist: three expiries
   entry("w-dec04", { code: "1204_P6900", strike_date: "2026-12-04", legs: put(6900, 6850),
+    short_strikes: [served("2026-12-04", "PUT", 6900, -0.48, 38)],
     combo_value: 6.2, watched: 6.2, distance: -0.2, triggered: true, fill: 100 }),
-  // its value signed as the service signs a combo, minus short: a credit spread's is NEGATIVE
   entry("w-dec18", { code: "1218_P7150", strike_date: "2026-12-18", legs: put(7150, 7100),
-    combo_value: -2.4 }),
+    // its value signed as the service signs a combo, minus short: a credit spread's is NEGATIVE
+    combo_value: -2.4,
+    // SPX is already below this short put: a distance past the strike is negative
+    short_strikes: [served("2026-12-18", "PUT", 7150, -0.17, 38)] }),
   entry("w-dec18-delta", {
     code: "US.SPXW261218P7150000", strike_date: "2026-12-18", option_type: "PUT",
     field: "option_delta", threshold: 0.2, watched: -0.17, distance: 0.03, in_combos: ["w-dec18"],
     quote: { name: "SPXW 261218 7150.00P", option_delta: -0.17 },
   }),
-  entry("w-dec31", { code: "1231_C7600", strike_date: "2026-12-31", legs: call(7600, 7650) }),
+  entry("w-dec31", { code: "1231_C7600", strike_date: "2026-12-31", legs: call(7600, 7650),
+    short_strikes: [served("2026-12-31", "CALL", 7600, 0.06, 38)] }),
   // a single contract no spread on the watchlist holds: it stands alone
   entry("w-lone", {
     code: "US.SPXW261231C8000000", strike_date: "2026-12-31", option_type: "CALL",
@@ -50,9 +68,11 @@ export const QUOTES: Entry[] = [
   // rules on what is held
   entry("r-calls", { code: "1218_C7300", strike_date: "2026-12-18", legs: call(7300, 7350),
     held: true, scope: "all", positions: [{ id: "h-calls", name: "1218_C7300" }],
+    short_strikes: [served("2026-12-18", "CALL", 7300, 0.33, 38)],
     threshold: 4, watched: 4.4, distance: -0.4, triggered: true, fill: 100 }),
   entry("r-ic", { code: "1231_IC", strike_date: "2026-12-31", held: true, scope: "all",
     legs: [...call(7400, 7450), ...put(6300, 6250)],
+    short_strikes: [served("2026-12-31", "CALL", 7400, 0.12, 38), served("2026-12-31", "PUT", 6300, -0.25, 38)],
     positions: [{ id: "h-ic", name: "1231_IC" }] }),
 ];
 
@@ -60,8 +80,8 @@ function holding(id: string, over: Partial<Holding> & { strike_date: string; leg
   return {
     id, name: id, strategy: null, contracts: 1, entry: 2, created_at: null, opened_at: "2026-11-03",
     closed_on: null, exit: null, realized_points: null, cost_to_close: 1, pnl: 100, captured: 0.5,
-    contract_size: 100, spx: 6900.5, spx_reason: null, greeks: {}, legs_delta: null, fetched_at: "x",
-    dte: 38, schedule: null, ...over,
+    contract_size: 100, spx: SPX, spx_reason: null, greeks: {}, legs_delta: null, short_strikes: [],
+    fetched_at: "x", dte: 38, schedule: null, ...over,
   } as Holding;
 }
 
@@ -73,16 +93,19 @@ export const HOLDINGS: Holding[] = [
   holding("h-puts", { name: "1218_P6400", strike_date: "2026-12-18",
     legs: [side("short", "PUT", 6400), side("long", "PUT", 6350)],
     // each leg's own delta, as /positions/values serves it (#318); no rule watches either leg
-    legs_delta: { "US.SPXW261218P6400000": -0.21, "US.SPXW261218P6350000": -0.15 } }),
+    legs_delta: { "US.SPXW261218P6400000": -0.21, "US.SPXW261218P6350000": -0.15 },
+    short_strikes: [served("2026-12-18", "PUT", 6400, -0.21, 38)] }),
   holding("h-calls", { name: "1218_C7300", strike_date: "2026-12-18",
     legs: [side("short", "CALL", 7300), side("long", "CALL", 7350)], cost_to_close: 4.4, pnl: -240,
-    legs_delta: { "US.SPXW261218C7300000": 0.33, "US.SPXW261218C7350000": 0.24 } }),
+    legs_delta: { "US.SPXW261218C7300000": 0.33, "US.SPXW261218C7350000": 0.24 },
+    short_strikes: [served("2026-12-18", "CALL", 7300, 0.33, 38)] }),
   // a 4-leg condor held as one: one row, never split
   holding("h-ic", { name: "1231_IC", strike_date: "2026-12-31", entry: 5,
     legs: [side("short", "CALL", 7400), side("long", "CALL", 7450),
            side("short", "PUT", 6300), side("long", "PUT", 6250)],
     legs_delta: { "US.SPXW261231C7400000": 0.12, "US.SPXW261231C7450000": 0.08,
-                  "US.SPXW261231P6300000": -0.25, "US.SPXW261231P6250000": -0.18 } }),
+                  "US.SPXW261231P6300000": -0.25, "US.SPXW261231P6250000": -0.18 },
+    short_strikes: [served("2026-12-31", "CALL", 7400, 0.12, 38), served("2026-12-31", "PUT", 6300, -0.25, 38)] }),
 ];
 
 function monitor(id: string, over: Partial<Monitor>): Monitor {

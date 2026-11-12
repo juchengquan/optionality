@@ -29,6 +29,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Literal, NamedTuple, NotRequired, TypedDict, cast
 
+from optionality.contract import build_spx_code
 from optionality.exit import ExitPolicy, dte_at_open, exit_levels
 from optionality.expiry import days_to_expiry
 from optionality.monitor import (
@@ -51,7 +52,7 @@ from optionality.position import (
     holds_any_of,
     position_leg_codes,
 )
-from optionality.quote import ByCode, Quote, derived_spx
+from optionality.quote import ByCode, Quote, StrikeDistance, derived_spx, strike_distances
 
 
 class PositionRef(TypedDict):
@@ -140,6 +141,10 @@ class WatchlistEntry(TypedDict):
     spx: float | None
     #: why `spx` is None, in words; None when there is a figure
     spx_reason: str | None
+    #: a combo's SHORT legs (minus is short) placed against `spx`, in points and sigma, with each leg's
+    #: own delta from this batch (`strike_distances`, #297): what the strike strip draws. Empty for a
+    #: single contract, which is no spread.
+    short_strikes: list[StrikeDistance]
 
 
 class MonitorForEntry(Monitor):
@@ -262,6 +267,14 @@ def _entry(
         "schedule": None,
         "spx": spx,
         "spx_reason": spx_reason,
+        "short_strikes": strike_distances(
+            [build_spx_code(m.strike_date, leg.option_type, leg.strike) for leg in m.legs or () if leg.sign < 0],
+            by_code,
+            spx,
+            days_to_expiry(m.strike_date, now),
+        )
+        if is_combo
+        else [],
     }
 
     if is_combo:

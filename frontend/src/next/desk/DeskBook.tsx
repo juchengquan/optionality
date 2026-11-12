@@ -14,8 +14,10 @@ import { monitorName, fieldWords } from "../needs";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
 import {
-  ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, type DeskColumn, type DeskRow,
+  ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, rowStrip, type DeskColumn, type DeskRow,
 } from "./columns";
+import { StrikeStrip } from "../StrikeStrip";
+import { joinStrips, stripOfEntry, stripOfHolding } from "../strip";
 import { useDeskFit } from "./useDeskFit";
 import "./desk.css";
 
@@ -333,6 +335,19 @@ function AttentionChip({ kind }: { kind: NonNullable<ReturnType<typeof attention
 function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; privacy: boolean }) {
   const text = column.text(row, privacy);
   if (text === "") return null;
+  const strip = column.key === "strip" ? rowStrip(row) : null;
+  if (strip) {
+    // the reason there is no price goes with the dash: to a pointer, and to a reader
+    const why = strip.spx === null ? strip.reason ?? undefined : undefined;
+    return (
+      <>
+        <span className="sr-only">{`${column.label} `}</span>
+        <StrikeStrip strip={strip} compact />
+        <span className="nxd-v" title={why}>{text}</span>
+        {why ? <span className="sr-only">{` ${why}`}</span> : null}
+      </>
+    );
+  }
   const label = column.key === "value" && row.kind === "holding" ? "cost to close" : column.label;
   if (column.key === "pnl" && row.kind === "holding") {
     return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Money value={row.holding.pnl} privacy={privacy} /></span></>;
@@ -392,7 +407,8 @@ function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean;
   const seen = new Set<string>();
   const items: [string, React.ReactNode][] = [];
   for (const c of [...COLUMNS.live, ...COLUMNS.review]) {
-    if (c.key === "name" || c.key === "alarm" || c.key === "legs" || seen.has(c.key)) continue;
+    // the strip is drawn whole beneath, with its words
+    if (c.key === "name" || c.key === "alarm" || c.key === "legs" || c.key === "strip" || seen.has(c.key)) continue;
     seen.add(c.key);
     const text = c.text(row, privacy);
     if (text === "") continue;
@@ -442,11 +458,21 @@ function HoldingDetail({ row, privacy, partners, onSelect }: {
         </button>
       ) : null}
       <Legs legs={h.legs.map((l) => `${l.side} ${l.option_type} ${l.strike}`)} />
+      <InspectorStrip holding={h} partner={partner} />
       <HoldingPayoff holding={h} privacy={privacy} />
       <Figures row={row} privacy={privacy} extra={extra} />
       <Monitors entries={row.rules} />
     </>
   );
+}
+
+/** A holding's strike strip, its bracketed partner's strikes on the same scale; none for a holding
+ *  with no short leg. */
+function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holding | null }) {
+  const own = stripOfHolding(holding);
+  const other = partner ? stripOfHolding(partner) : null;
+  const strip = own && other ? joinStrips(own, other) : own;
+  return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
 function RuleDetail({ entry, rows, privacy }: { entry: Entry; rows: DeskRow[]; privacy: boolean }) {
@@ -459,6 +485,7 @@ function RuleDetail({ entry, rows, privacy }: { entry: Entry; rows: DeskRow[]; p
         {`${entry.strike_date} · ${entry.dte} DTE · ${entry.held ? "on something held" : "watch only"}`}
       </p>
       {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"} ${l.option_type} ${l.strike}`)} /> : null}
+      {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
       {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
       <Figures row={self} privacy={privacy} />
       {entry.error ? <p className="nxd-why">{entry.error}</p> : null}

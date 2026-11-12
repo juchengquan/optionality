@@ -361,6 +361,25 @@ class ScheduleOut(BaseModel):
     manage_by_due: bool
 
 
+class StrikeDistanceOut(BaseModel):
+    """A spread's short strike placed against SPX (`strike_distances`, #297): what the strike strip
+    draws. Shared with `/positions/values`, whose holdings carry the same list."""
+
+    model_config = _AS_ZOD
+
+    code: str
+    option_type: Literal["CALL", "PUT"]
+    strike: float
+    #: the leg's own delta from the same batch, or None where it served none
+    delta: float | None
+    #: how far SPX has still to move to reach the strike: positive while it has not, negative by how far
+    #: past. None where there is no SPX, which `spx_reason` explains.
+    points: float | None
+    #: `points` in sigma to expiry, from the leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365)).
+    #: None without points, an IV, or a day left to expiry.
+    sigma: float | None
+
+
 class EntryOut(BaseModel):
     """One watchlist row: everything needed to draw it, with no arithmetic left for the client.
 
@@ -415,16 +434,19 @@ class EntryOut(BaseModel):
     spx: float | None
     #: why `spx` is None, in words; None when there is a figure
     spx_reason: str | None
+    #: a combo's short legs placed against `spx` (#297); empty for a single contract
+    short_strikes: list[StrikeDistanceOut]
 
 
 _ENTRIES = TypeAdapter(list[EntryOut])
 
 
 def _as_json(entry: WatchlistEntry) -> dict[str, Any]:
-    """An entry as the JSON the schema reads: its legs are the library's models."""
-    if "legs" not in entry:
-        return dict(entry)
-    return {**entry, "legs": [leg.model_dump() for leg in entry["legs"]]}
+    """An entry as the JSON the schema reads: its legs and its short strikes are the library's models."""
+    out: dict[str, Any] = {**entry, "short_strikes": [s.model_dump() for s in entry["short_strikes"]]}
+    if "legs" in entry:
+        out["legs"] = [leg.model_dump() for leg in entry["legs"]]
+    return out
 
 
 def quote_routes(deps: Deps) -> APIRouter:

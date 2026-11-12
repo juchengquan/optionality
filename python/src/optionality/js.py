@@ -61,6 +61,11 @@ def to_fixed(x: float, digits: int) -> float:
         raise ValueError("toFixed() digits argument must be between 0 and 100")
     if not math.isfinite(x) or abs(x) >= 1e21:
         return x
+    if x == 0:
+        # `(-0).toFixed(2)` writes "0.00", so the number back is +0, where Decimal keeps the sign.
+        # Only a zero GIVEN: a negative that rounds to zero is "-0.00" there and -0 here, as it
+        # should be (#297's review: a sigma worked out from -0 points was served as -0.0)
+        return 0.0
     with localcontext() as ctx:
         # room for every integer digit of a double plus the decimals asked for
         ctx.prec = 400

@@ -37,6 +37,13 @@ type ErrorBody = { detail: string };
 /** Strip the error arm, the way a caller does after checking `res.ok`. */
 type Ok<T> = T extends ErrorBody ? never : T;
 
+/** A short strike against SPX as both `/quotes` and `/positions/values` serve it (#297), written
+ *  out rather than imported, so a change to the domain's own type is a change to this pin too. */
+type StrikeDistance = {
+  code: string; option_type: "CALL" | "PUT"; strike: number;
+  delta: number | null; points: number | null; sigma: number | null;
+};
+
 /** Every endpoint, called the way the dashboard will call it.
  *
  *  EVERY one of them. A route added without a line here is a route nothing has type-checked, which is
@@ -142,6 +149,8 @@ export type HcChecks = [
   // SPX's price as the batch implies it, and why not (ADR 0024): what a strike is placed against
   Checked<Exactly<Ok<E["quotes"]>[number]["spx"], number | null>>,
   Checked<Exactly<Ok<E["quotes"]>[number]["spx_reason"], string | null>>,
+  // a spread's short strikes against that SPX, in points and σ: what the strike strip draws (#297)
+  Checked<Exactly<Ok<E["quotes"]>[number]["short_strikes"], StrikeDistance[]>>,
 
   // monitors --------------------------------------------------------------------------
   Checked<Known<Ok<E["monitors"]>>>,
@@ -189,6 +198,7 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["values"]>[number]["spx_reason"], string | null>>,
   // each leg's own delta: where a short leg's Δ comes from (#318)
   Checked<Exactly<Ok<E["values"]>[number]["legs_delta"], Record<string, number> | null>>,
+  Checked<Exactly<Ok<E["values"]>[number]["short_strikes"], StrikeDistance[]>>,
   Checked<Known<Ok<E["values"]>[number]["greeks"]>>,
   // a closed holding, as the Holdings panel's closed list reads it (ADR 0022)
   Checked<Exactly<Ok<E["positions"]>[number]["closed_on"], string | null>>,

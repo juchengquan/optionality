@@ -374,6 +374,42 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "derivedSpx", name: "a premium with no last trade",
       args: [[{ code: "US.SPXW261113C7475000", last_price: null, option_premium: 0.547 }]] },
 
+    // --- a short strike's distance from SPX, in points and in σ (#297): IV is a percentage ---
+    { fn: "sigmaDistance", name: "points over SPX × IV × √(DTE/365)", args: [250, 7000, 20, 36.5] },
+    { fn: "sigmaDistance", name: "a strike already passed is negative", args: [-250, 7000, 20, 36.5] },
+    { fn: "sigmaDistance", name: "a half rounds as toFixed does", args: [500.5, 6900.5, 18.5, 37] },
+    { fn: "sigmaDistance", name: "no IV", args: [250, 7000, 0, 36] },
+    { fn: "sigmaDistance", name: "a negative IV", args: [250, 7000, -3, 36] },
+    { fn: "sigmaDistance", name: "an IV that is not a number", args: [250, 7000, NaN, 36] },
+    { fn: "sigmaDistance", name: "the expiry day: no time left to measure", args: [250, 7000, 20, 0] },
+    { fn: "sigmaDistance", name: "past expiry", args: [250, 7000, 20, -1] },
+    { fn: "sigmaDistance", name: "no SPX", args: [250, 0, 20, 36] },
+    { fn: "sigmaDistance", name: "a vanishing IV whose answer is not finite", args: [250, 7000, 1e-320, 36] },
+    { fn: "strikeDistances", name: "a put reached from above, a call from below",
+      args: [["US.SPXW261218P6400000", "US.SPXW261218C7300000"], {
+        "US.SPXW261218P6400000": { option_delta: -0.21, option_implied_volatility: 18.5 },
+        "US.SPXW261218C7300000": { option_delta: 0.33, option_implied_volatility: 12 },
+      }, 6900.5, 37] },
+    { fn: "strikeDistances", name: "past the strike, negative",
+      args: [["US.SPXW261218C7300000"],
+        { "US.SPXW261218C7300000": { option_delta: 0.52, option_implied_volatility: 12 } }, 7310.25, 37] },
+    { fn: "strikeDistances", name: "no SPX: strikes and deltas, no distances",
+      args: [["US.SPXW261218P6400000"],
+        { "US.SPXW261218P6400000": { option_delta: -0.21, option_implied_volatility: 18.5 } }, null, 37] },
+    { fn: "strikeDistances", name: "an IV or a delta that is not a number is none",
+      args: [["US.SPXW261218P6400000"],
+        { "US.SPXW261218P6400000": { option_delta: true, option_implied_volatility: "18.5" } }, 6900.5, 37] },
+    { fn: "strikeDistances", name: "a leg missing from the batch", args: [["US.SPXW261218P6400000"], {}, 6900.5, 37] },
+    { fn: "strikeDistances", name: "the expiry day", args: [["US.SPXW261218P6400000"],
+      { "US.SPXW261218P6400000": { option_delta: -0.21, option_implied_volatility: 18.5 } }, 6900.5, 0] },
+    { fn: "strikeDistances", name: "a code that names no SPX option is left out",
+      args: [["US..SPX", "US.SPXW261218P6400000"], {}, 6900.5, 37] },
+    // the points round to -0, and σ from -0 is a negative zero that toFixed serves as +0
+    { fn: "strikeDistances", name: "SPX a hair past the strike: a zero sigma is a positive zero",
+      args: [["US.SPXW261218C7300000"], { "US.SPXW261218C7300000": { option_implied_volatility: 12 } }, 7300.004, 37] },
+    { fn: "strikeDistances", name: "float noise in the points is rounded away",
+      args: [["US.SPXW261218P6400000"], {}, 6900.1 + 0.2, 37] },
+
     { fn: "round4", name: "four places", args: [1.23456] },
     { fn: "round4", name: "a decimal half that is not one in binary", args: [1.00005] },
     { fn: "round4", name: "2.675", args: [2.675] },
@@ -684,6 +720,10 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "toFixed", name: "a negative exact half", args: [-0.03125, 4] },
     { fn: "toFixed", name: "no decimals at all", args: [2.5, 0] },
     { fn: "toFixed", name: "NaN survives", args: [NaN, 2] },
+    // `(-0).toFixed(2)` is "0.00", so the number back is +0; a negative that rounds to zero is
+    // "-0.00", which is -0: two zeros a plain JSON comparison cannot tell apart (#297's review)
+    { fn: "toFixed", name: "a negative zero comes back positive", args: [-0, 2] },
+    { fn: "toFixed", name: "a negative that rounds to zero keeps its sign", args: [-0.004, 2] },
     // ten decimals of a large double: `quantize` raised past the default context precision, which
     // the >= 1e21 guard covered only while digits <= 7 — true of every call site in the package,
     // so it was correct because its callers were disciplined (review 2026-11-01)

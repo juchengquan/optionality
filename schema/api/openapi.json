@@ -488,6 +488,53 @@
                           "string",
                           "null"
                         ]
+                      },
+                      "short_strikes": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "option_type": {
+                              "type": "string",
+                              "enum": [
+                                "CALL",
+                                "PUT"
+                              ]
+                            },
+                            "strike": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "points": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "sigma": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "option_type",
+                            "strike",
+                            "delta",
+                            "points",
+                            "sigma"
+                          ]
+                        }
                       }
                     },
                     "required": [
@@ -514,7 +561,8 @@
                       "watched",
                       "distance",
                       "spx",
-                      "spx_reason"
+                      "spx_reason",
+                      "short_strikes"
                     ]
                   }
                 }
@@ -1920,6 +1968,53 @@
                           }
                         ]
                       },
+                      "short_strikes": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "option_type": {
+                              "type": "string",
+                              "enum": [
+                                "CALL",
+                                "PUT"
+                              ]
+                            },
+                            "strike": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "points": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "sigma": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "option_type",
+                            "strike",
+                            "delta",
+                            "points",
+                            "sigma"
+                          ]
+                        }
+                      },
                       "fetched_at": {
                         "type": [
                           "string",
@@ -2027,6 +2122,7 @@
                       "spx_reason",
                       "greeks",
                       "legs_delta",
+                      "short_strikes",
                       "fetched_at",
                       "dte",
                       "schedule"

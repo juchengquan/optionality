@@ -14,6 +14,8 @@ import { entryName, fieldWords, sentence } from "../needs";
 import { LevelChip, Progress, RuleLine } from "./Cards";
 import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
+import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
+import { stripOfEntry } from "../strip";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
@@ -81,6 +83,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
           <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
           <LevelChip holding={holding} />
         </div>
+        <HoldingStrip holding={holding} />
         <HoldingPayoff holding={holding} privacy={privacy} />
         <dl className="nxp-facts">
           <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
@@ -126,6 +129,7 @@ function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
         <Progress entry={entry} />
         <p className="nxp-sentence">{sentence(entry)}</p>
         {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
+        {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
         {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
         <dl className="nxp-facts">
           <div><dt>watches</dt><dd>{fieldWords(entry.field, Boolean(entry.legs))}</dd></div>

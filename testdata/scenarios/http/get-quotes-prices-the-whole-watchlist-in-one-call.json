@@ -238,7 +238,17 @@
           "watched": -1,
           "distance": 3,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218C7300000",
+              "option_type": "CALL",
+              "strike": 7300,
+              "delta": 0.21,
+              "points": null,
+              "sigma": null
+            }
+          ]
         },
         {
           "id": "mon-1",
@@ -285,7 +295,8 @@
           "watched": 0.21,
           "distance": 0.09,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         }
       ]
     },

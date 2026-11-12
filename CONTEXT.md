@@ -233,6 +233,15 @@ is never a Reference's figure — a Reference is the one thing nothing derives f
 cannot give it (a Provider that serves no premium) it is a dash with its reason, never a guess.
 _Avoid_: spot (unqualified), underlying price, SPX quote, the Reference's SPX
 
+**Strike distance**:
+How far SPX's price has still to move to reach a spread's SHORT strike, in points and in σ to
+expiry from that short leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365)) — IV is served as a
+percentage by every Provider. POSITIVE while SPX has not reached the strike (above a put's, below a
+call's) and negative by how far past. Served per short leg as `short_strikes`, beside the leg's
+own Δ, and drawn as the strike strip (#297). With no SPX's price there is none, and the strikes
+and Δ are still served.
+_Avoid_: distance (unqualified — that is a Monitor's), cushion, buffer, moneyness
+
 **Quarantine**:
 A Monitor the service has disabled itself because it cannot be evaluated — its Contract is unknown
 to the Provider, or the figure it watches never arrives. Always with a notice, and never deleted:

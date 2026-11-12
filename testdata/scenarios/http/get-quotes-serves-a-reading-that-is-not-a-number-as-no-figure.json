@@ -173,7 +173,8 @@
           "watched": 0.21,
           "distance": 0.09,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         },
         {
           "id": "mon-interest",
@@ -214,7 +215,8 @@
           "watched": null,
           "distance": null,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         }
       ]
     },

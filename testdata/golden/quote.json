@@ -475,6 +475,361 @@
       }
     },
     {
+      "fn": "sigmaDistance",
+      "name": "points over SPX × IV × √(DTE/365)",
+      "args": [
+        250,
+        7000,
+        20,
+        36.5
+      ],
+      "expect": 0.56
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "a strike already passed is negative",
+      "args": [
+        -250,
+        7000,
+        20,
+        36.5
+      ],
+      "expect": -0.56
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "a half rounds as toFixed does",
+      "args": [
+        500.5,
+        6900.5,
+        18.5,
+        37
+      ],
+      "expect": 1.23
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "no IV",
+      "args": [
+        250,
+        7000,
+        0,
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "a negative IV",
+      "args": [
+        250,
+        7000,
+        -3,
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "an IV that is not a number",
+      "args": [
+        250,
+        7000,
+        {
+          "$num": "NaN"
+        },
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "the expiry day: no time left to measure",
+      "args": [
+        250,
+        7000,
+        20,
+        0
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "past expiry",
+      "args": [
+        250,
+        7000,
+        20,
+        -1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "no SPX",
+      "args": [
+        250,
+        0,
+        20,
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sigmaDistance",
+      "name": "a vanishing IV whose answer is not finite",
+      "args": [
+        250,
+        7000,
+        1e-320,
+        36
+      ],
+      "expect": null
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "a put reached from above, a call from below",
+      "args": [
+        [
+          "US.SPXW261218P6400000",
+          "US.SPXW261218C7300000"
+        ],
+        {
+          "US.SPXW261218P6400000": {
+            "option_delta": -0.21,
+            "option_implied_volatility": 18.5
+          },
+          "US.SPXW261218C7300000": {
+            "option_delta": 0.33,
+            "option_implied_volatility": 12
+          }
+        },
+        6900.5,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218P6400000",
+          "option_type": "PUT",
+          "strike": 6400,
+          "delta": -0.21,
+          "points": 500.5,
+          "sigma": 1.23
+        },
+        {
+          "code": "US.SPXW261218C7300000",
+          "option_type": "CALL",
+          "strike": 7300,
+          "delta": 0.33,
+          "points": 399.5,
+          "sigma": 1.52
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "past the strike, negative",
+      "args": [
+        [
+          "US.SPXW261218C7300000"
+        ],
+        {
+          "US.SPXW261218C7300000": {
+            "option_delta": 0.52,
+            "option_implied_volatility": 12
+          }
+        },
+        7310.25,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218C7300000",
+          "option_type": "CALL",
+          "strike": 7300,
+          "delta": 0.52,
+          "points": -10.25,
+          "sigma": -0.04
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "no SPX: strikes and deltas, no distances",
+      "args": [
+        [
+          "US.SPXW261218P6400000"
+        ],
+        {
+          "US.SPXW261218P6400000": {
+            "option_delta": -0.21,
+            "option_implied_volatility": 18.5
+          }
+        },
+        null,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218P6400000",
+          "option_type": "PUT",
+          "strike": 6400,
+          "delta": -0.21,
+          "points": null,
+          "sigma": null
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "an IV or a delta that is not a number is none",
+      "args": [
+        [
+          "US.SPXW261218P6400000"
+        ],
+        {
+          "US.SPXW261218P6400000": {
+            "option_delta": true,
+            "option_implied_volatility": "18.5"
+          }
+        },
+        6900.5,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218P6400000",
+          "option_type": "PUT",
+          "strike": 6400,
+          "delta": null,
+          "points": 500.5,
+          "sigma": null
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "a leg missing from the batch",
+      "args": [
+        [
+          "US.SPXW261218P6400000"
+        ],
+        {},
+        6900.5,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218P6400000",
+          "option_type": "PUT",
+          "strike": 6400,
+          "delta": null,
+          "points": 500.5,
+          "sigma": null
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "the expiry day",
+      "args": [
+        [
+          "US.SPXW261218P6400000"
+        ],
+        {
+          "US.SPXW261218P6400000": {
+            "option_delta": -0.21,
+            "option_implied_volatility": 18.5
+          }
+        },
+        6900.5,
+        0
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218P6400000",
+          "option_type": "PUT",
+          "strike": 6400,
+          "delta": -0.21,
+          "points": 500.5,
+          "sigma": null
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "a code that names no SPX option is left out",
+      "args": [
+        [
+          "US..SPX",
+          "US.SPXW261218P6400000"
+        ],
+        {},
+        6900.5,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218P6400000",
+          "option_type": "PUT",
+          "strike": 6400,
+          "delta": null,
+          "points": 500.5,
+          "sigma": null
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "SPX a hair past the strike: a zero sigma is a positive zero",
+      "args": [
+        [
+          "US.SPXW261218C7300000"
+        ],
+        {
+          "US.SPXW261218C7300000": {
+            "option_implied_volatility": 12
+          }
+        },
+        7300.004,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218C7300000",
+          "option_type": "CALL",
+          "strike": 7300,
+          "delta": null,
+          "points": {
+            "$num": "-0"
+          },
+          "sigma": 0
+        }
+      ]
+    },
+    {
+      "fn": "strikeDistances",
+      "name": "float noise in the points is rounded away",
+      "args": [
+        [
+          "US.SPXW261218P6400000"
+        ],
+        {},
+        6900.3,
+        37
+      ],
+      "expect": [
+        {
+          "code": "US.SPXW261218P6400000",
+          "option_type": "PUT",
+          "strike": 6400,
+          "delta": null,
+          "points": 500.3,
+          "sigma": null
+        }
+      ]
+    },
+    {
       "fn": "round4",
       "name": "four places",
       "args": [

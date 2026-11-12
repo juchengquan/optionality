@@ -251,6 +251,22 @@ const QuoteOut = z.looseObject({
 });
 
 /** One watchlist row: everything needed to draw it, with no arithmetic left for the client. */
+/** A spread's short strike placed against SPX (`strikeDistances`, #297): what the strike strip
+ *  draws. Shared with `/positions/values`, whose holdings carry the same list. */
+export const StrikeDistanceOut = z.object({
+  code: z.string(),
+  option_type: z.enum(["CALL", "PUT"]),
+  strike: z.number(),
+  /** the leg's own delta from the same batch, or null where it served none */
+  delta: z.number().nullable(),
+  /** how far SPX has still to move to reach the strike: positive while it has not, negative by
+   *  how far past. Null where there is no SPX, which `spx_reason` explains. */
+  points: z.number().nullable(),
+  /** `points` in σ to expiry, from the leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365)).
+   *  Null without points, an IV, or a day left to expiry. */
+  sigma: z.number().nullable(),
+});
+
 const EntryOut = z.object({
   id: z.string(),
   code: z.string(),
@@ -316,6 +332,8 @@ const EntryOut = z.object({
   spx: z.number().nullable(),
   /** why `spx` is null, in words; null when there is a figure */
   spx_reason: z.string().nullable(),
+  /** a combo's short legs placed against `spx` (#297); empty for a single contract */
+  short_strikes: z.array(StrikeDistanceOut),
 });
 
 const quotes = documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]);

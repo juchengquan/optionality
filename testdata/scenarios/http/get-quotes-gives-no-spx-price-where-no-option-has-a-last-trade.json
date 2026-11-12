@@ -115,7 +115,8 @@
           "watched": 0.21,
           "distance": 0.09,
           "spx": null,
-          "spx_reason": "no option in the batch has both a last trade and a premium"
+          "spx_reason": "no option in the batch has both a last trade and a premium",
+          "short_strikes": []
         }
       ]
     },

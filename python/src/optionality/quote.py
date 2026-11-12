@@ -168,3 +168,72 @@ def derived_spx(records: list[Quote]) -> DerivedSpx:
     mid = len(levels) // 2
     median = levels[mid] if len(levels) % 2 == 1 else (levels[mid - 1] + levels[mid]) / 2
     return DerivedSpx(price=to_fixed(median, 2), reason=None)
+
+
+def sigma_distance(points: float, spx: float, iv: float, dte: float) -> float | None:
+    """How many standard deviations of SPX to expiry a distance in points is (#297).
+
+        sigma = points / (SPX × IV × √(DTE / 365))
+
+    IV is the leg's own `option_implied_volatility`, a PERCENTAGE wherever it comes from (moomoo
+    serves 18.5 for 18.5%; IB Gateway's fraction is converted at its field mapping), so it is divided
+    by 100 here. DTE is calendar days over a calendar year. Rounded to two places and signed as the
+    points are; None where an IV, an SPX or a DTE is not positive — on the expiry day there is no
+    time left to measure — or the answer is not finite.
+    """
+    if not (iv > 0) or not (spx > 0) or not (dte > 0):
+        return None
+    try:
+        sigma = points / (spx * (iv / 100) * math.sqrt(dte / 365))
+    except ZeroDivisionError:
+        # a denominator that underflowed to zero: JavaScript answers ±Infinity, not a figure
+        return None
+    return to_fixed(sigma, 2) if math.isfinite(sigma) else None
+
+
+class StrikeDistance(BaseModel):
+    """A short strike placed against SPX: what the strike strip draws (#297)."""
+
+    model_config = ConfigDict(frozen=True)
+    code: str
+    option_type: str
+    strike: float
+    #: the leg's own delta from the same batch, or None where it served none
+    delta: float | None
+    #: how far SPX has still to move to reach the strike, to two places: POSITIVE while it has not
+    #: (above a put's strike, below a call's), negative by how far past; None without an SPX
+    points: float | None
+    #: `points` in sigma to expiry (`sigma_distance`), or None where either cannot be a figure
+    sigma: float | None
+
+
+def strike_distances(codes: list[str], by_code: ByCode, spx: float | None, dte: float) -> list[StrikeDistance]:
+    """Each of these contracts — a spread's SHORT legs — placed against SPX's price (#297).
+
+    In the order given, with delta and IV read from the same batch. The price is the batch's own
+    `derived_spx`, never a Reference's figure (ADR 0018): without one each strike is still placed and
+    its delta read, and only the distances are None. A code naming no SPX option is left out.
+    """
+    out: list[StrikeDistance] = []
+    for code in codes:
+        contract = parse_spx_code(code)
+        if contract is None:
+            continue
+        record = by_code.get(code) or {}
+        points = (
+            None
+            if spx is None
+            else to_fixed(contract.strike - spx if contract.option_type == "CALL" else spx - contract.strike, 2)
+        )
+        iv = _finite(record.get("option_implied_volatility"))
+        out.append(
+            StrikeDistance(
+                code=code,
+                option_type=contract.option_type,
+                strike=contract.strike,
+                delta=_finite(record.get("option_delta")),
+                points=points,
+                sigma=None if points is None or spx is None or iv is None else sigma_distance(points, spx, iv, dte),
+            )
+        )
+    return out

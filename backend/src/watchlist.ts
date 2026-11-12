@@ -16,7 +16,8 @@ import {
 } from "optionality/domain/position";
 import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
 import type { Position } from "optionality/domain/position";
-import { derivedSpx } from "optionality/domain/quote";
+import { buildSpxCode } from "optionality/domain/contract";
+import { derivedSpx, strikeDistances, type StrikeDistance } from "optionality/domain/quote";
 import type { QuoteRecord } from "optionality/quotes";
 
 export interface WatchlistEntry {
@@ -86,6 +87,10 @@ export interface WatchlistEntry {
   spx: number | null;
   /** why `spx` is null, in words; null when there is a figure */
   spx_reason: string | null;
+  /** a combo's SHORT legs (minus is short) placed against `spx`, in points and σ, with each leg's
+   *  own delta from this batch (`strikeDistances`, #297): what the strike strip draws. Empty for a
+   *  single contract, which is no spread. */
+  short_strikes: StrikeDistance[];
 }
 
 /** What buildEntries needs, and deliberately no more: the engine's `triggered` and `last_value`
@@ -195,6 +200,11 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
       schedule: null,
       spx: spx.price,
       spx_reason: spx.reason,
+      short_strikes: isCombo
+        ? strikeDistances(
+          m.legs!.filter((l) => l.sign < 0).map((l) => buildSpxCode(m.strike_date, l.option_type, l.strike)),
+          byCode, spx.price, daysToExpiry(m.strike_date, now))
+        : [],
     };
 
     if (isCombo) {

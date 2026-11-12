@@ -1045,3 +1045,38 @@ describe("SPX's price on every row (#288)", () => {
     expect(quotes[0]!.spx_reason).toBe("the Provider gives no option premium to derive it from");
   });
 });
+
+describe("a spread's short strikes against SPX (#297)", () => {
+  it("places each short leg of a combo against the batch's SPX, in points and σ", async () => {
+    // the combo is long 8100, short 8150 (minus is short); every leg inverts to 7547.22 or so
+    combo();
+    const fetch = quoting({
+      [LEG_A]: { mid_price: 1, last_price: 2, option_premium: 7.0, option_delta: 0.05 },
+      [LEG_B]: { mid_price: 1, last_price: 1, option_premium: 8.0, option_delta: 0.04,
+                 option_implied_volatility: 15 },
+    });
+    const [e] = await run(fetch, true);
+    const spx = e!.spx!;
+    const points = Number((8150 - spx).toFixed(2));
+    const dte = e!.dte;
+    expect(e!.short_strikes).toEqual([{
+      code: LEG_B, option_type: "CALL", strike: 8150, delta: 0.04, points,
+      sigma: Number((points / (spx * 0.15 * Math.sqrt(dte / 365))).toFixed(2)),
+    }]);
+  });
+
+  it("keeps the strikes and deltas with no SPX, and measures nothing", async () => {
+    combo();
+    const [e] = await run(quoting({ [LEG_B]: { mid_price: 1, option_delta: 0.04 } }), true);
+    expect(e!.spx).toBeNull();
+    expect(e!.short_strikes).toEqual([
+      { code: LEG_B, option_type: "CALL", strike: 8150, delta: 0.04, points: null, sigma: null },
+    ]);
+  });
+
+  it("is empty for a single contract, which is no spread", async () => {
+    monitor();
+    const [e] = await run(quoting({ [CODE]: { mid_price: 26.4 } }));
+    expect(e!.short_strikes).toEqual([]);
+  });
+});

@@ -248,7 +248,17 @@
           "watched": -1,
           "distance": -0.25,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218C7300000",
+              "option_type": "CALL",
+              "strike": 7300,
+              "delta": 0.21,
+              "points": null,
+              "sigma": null
+            }
+          ]
         },
         {
           "id": "mon-past",
@@ -290,7 +300,8 @@
           "watched": 2.75,
           "distance": -0.25,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         },
         {
           "id": "mon-at",
@@ -332,7 +343,8 @@
           "watched": 1.75,
           "distance": 0,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         },
         {
           "id": "mon-unpriced",
@@ -358,7 +370,8 @@
           "watched": null,
           "distance": null,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         },
         {
           "id": "mon-inside",
@@ -398,7 +411,8 @@
           "watched": 4.5,
           "distance": 3,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         }
       ]
     },

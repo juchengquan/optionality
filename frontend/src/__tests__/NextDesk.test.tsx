@@ -415,7 +415,7 @@ describe("the columns", () => {
   it("carry over today's column choice", () => {
     document.cookie = "ui_cols_combo=pnl.legs.delta;path=/";
     render(<DeskBook {...props()} />);
-    expect(headers()).toEqual(["name", "value", "captured", "dte", "manage", "alarm"]);
+    expect(headers()).toEqual(["name", "value", "captured", "strip", "dte", "manage", "alarm"]);
   });
 
   it("stop at the first that does not fit, rather than skipping to a narrower one (ADR 0008)", () => {

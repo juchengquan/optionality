@@ -217,6 +217,16 @@
             "US.SPXW261218C7300000": 0.21,
             "US.SPXW261218C7350000": 0.15
           },
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218C7300000",
+              "option_type": "CALL",
+              "strike": 7300,
+              "delta": 0.21,
+              "points": null,
+              "sigma": null
+            }
+          ],
           "fetched_at": "2026-11-09 23:00:00+08:00",
           "dte": 39,
           "schedule": {
@@ -265,6 +275,7 @@
           "legs_delta": {
             "US.SPXW261218C7500000": 0.06
           },
+          "short_strikes": [],
           "fetched_at": "2026-11-09 23:00:00+08:00",
           "dte": 39,
           "schedule": {
@@ -319,6 +330,16 @@
             "US.SPXW261218P6400000": -0.18,
             "US.SPXW261218P6350000": -0.12
           },
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218P6400000",
+              "option_type": "PUT",
+              "strike": 6400,
+              "delta": -0.18,
+              "points": null,
+              "sigma": null
+            }
+          ],
           "fetched_at": "2026-11-09 23:00:00+08:00",
           "dte": 39,
           "schedule": {

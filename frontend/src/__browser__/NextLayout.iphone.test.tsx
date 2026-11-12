@@ -45,6 +45,14 @@ function zooms(): string[] {
     .map((el) => `${el.id || el.tagName} ${getComputedStyle(el).fontSize}`);
 }
 
+/** Until the page has come to rest: the same position twice, 150ms apart, within 4.5s. */
+async function scrolled(): Promise<void> {
+  for (let last = -1, i = 0; window.scrollY !== last && i < 30; i++) {
+    last = window.scrollY;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+}
+
 describe("under the iPhone profile", () => {
   it("is a phone to the page: a coarse pointer, 390px wide", () => {
     // without this the profile could silently not apply and every test below measure a desktop
@@ -89,8 +97,12 @@ describe("the Live view", () => {
     const banners = screen.getByRole("status", { name: "needs you" });
     fireEvent.click(within(banners).getByRole("button", { name: /0917_5800P entry signal/ }));
     await new Promise((r) => setTimeout(r, 900));
-    const r = row.getBoundingClientRect();
+    // marked for a moment only, so read while the scroll is still under way
     expect(row.hasAttribute("data-revealed")).toBe(true);
+    // the smooth scroll takes as long as the page is long, which the cards' strike strips (#297)
+    // lengthened: wait for it to come to rest rather than for a fixed time
+    await scrolled();
+    const r = row.getBoundingClientRect();
     expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);
   });
 });

@@ -313,7 +313,17 @@
           "watched": -1,
           "distance": 3,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218C7300000",
+              "option_type": "CALL",
+              "strike": 7300,
+              "delta": 0.21,
+              "points": null,
+              "sigma": null
+            }
+          ]
         },
         {
           "id": "mon-condor",
@@ -368,7 +378,25 @@
           "watched": -3.25,
           "distance": 0.75,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218C7300000",
+              "option_type": "CALL",
+              "strike": 7300,
+              "delta": 0.21,
+              "points": null,
+              "sigma": null
+            },
+            {
+              "code": "US.SPXW261218P6400000",
+              "option_type": "PUT",
+              "strike": 6400,
+              "delta": -0.18,
+              "points": null,
+              "sigma": null
+            }
+          ]
         },
         {
           "id": "mon-short-call",
@@ -411,7 +439,8 @@
           "watched": 0.21,
           "distance": 0.09,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         },
         {
           "id": "mon-far-call",
@@ -451,7 +480,8 @@
           "watched": 0.06,
           "distance": 0.24,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         },
         {
           "id": "mon-short-put",
@@ -493,7 +523,8 @@
           "watched": -0.18,
           "distance": 0.12,
           "spx": null,
-          "spx_reason": "the Provider gives no option premium to derive it from"
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": []
         }
       ]
     },

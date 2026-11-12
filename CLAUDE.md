@@ -412,11 +412,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
-  Counted on 2026-11-11 — every public function a public module of the package defines, against
-  every `fn` in `testdata/golden/` — that is 62 of the package's 89, which is exactly the 62 of the
-  TypeScript domain's 66 exported ones that have cases (`payoff.payoffAtExpiry`, #291, the last):
-  the four `*Policy` readers take the service's Settings, so the package takes their knobs
-  directly instead. The other 27, none of them
+  Counted on 2026-11-11 and moved by #297's two (`quote.sigma_distance`, `quote.strike_distances`)
+  — every public function a public module of the package defines, against every `fn` in
+  `testdata/golden/` — that is 64 of the package's 91, which is exactly the 64 of the TypeScript
+  domain's 68 exported ones that have cases: the four `*Policy` readers take the
+  service's Settings, so the package takes their knobs directly instead. The other 27, none of them
   in `testdata/golden/`:
   - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
     five, `quotes.verify_contracts`, and `opend.quotes`, the one-shot for a script;
