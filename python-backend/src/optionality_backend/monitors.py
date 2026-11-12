@@ -15,6 +15,7 @@ The non-sweeper half of the old Python's monitor.py; the sweeper itself is the e
 import logging
 import sqlite3
 from datetime import UTC, datetime
+from typing import Any
 
 from optionality.exit import ExitPolicy
 from optionality.monitor import monitor_leg_codes
@@ -40,6 +41,22 @@ from .ports import QuoteFetcher
 from .watchlist import MonitorForEntry, WatchlistEntry, build_entries, codes_for
 
 log = logging.getLogger(__name__)
+
+
+def edited_monitor(row: MonitorRow, changes: dict[str, Any]) -> dict[str, Any]:
+    """The changes an edit writes, with the alarm state it must forget (#292).
+
+    `triggered` and `last_alarm_at` are the sweep's verdict on the rule AS IT WAS: the next sweep
+    compares the new figure against that flag. Kept across a change of what the rule watches, its
+    direction or its compare, a ringing rule edited onto a breach never said it crossed, and one
+    edited off said "back below" about a rule that was never above. So a change that ACTUALLY
+    differs from what is stored makes it a new rule, unrung. So does switching a rule that was off
+    back on: muted while ringing, or off with its holding, it comes back as new. A threshold moved
+    alone keeps the state, as it always has — the bell then flips at the new line on the next sweep.
+    """
+    differs = any(k in changes and changes[k] != row[k] for k in ("field", "direction", "compare"))
+    reenabled = changes.get("enabled") == 1 and row["enabled"] == 0
+    return {**changes, "triggered": 0, "last_alarm_at": None} if differs or reenabled else changes
 
 
 def link_to_positions(db: sqlite3.Connection, monitor_id: str, contracts: list[str]) -> None:

@@ -57,7 +57,7 @@ from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored
 from ....db.values import from_sqlite_bool, from_sqlite_json, to_sqlite_bool
 from ....env import Settings
-from ....monitors import apply_total_entry, watchlist_quotes
+from ....monitors import apply_total_entry, edited_monitor, watchlist_quotes
 from ....schemas.monitor import (
     ComboMonitorIn,
     MonitorCreateIn,
@@ -284,7 +284,7 @@ def monitor_routes(deps: Deps) -> APIRouter:
             # re-enabling clears the reason; disabling by hand records that it was by hand, so the
             # sweeper's own quarantine and expiry notices are not overwritten by a manual toggle
             changes["disabled_reason"] = None if given.enabled else "manual"
-        return one(update_monitor_fields(db, id_, changes))
+        return one(update_monitor_fields(db, id_, edited_monitor(row, changes)))
 
     @router.post("/{id}/total-entry", summary="Spread a total entry across the holding", response_model=TotalEntryOut)
     async def total_entry(
