@@ -84,6 +84,18 @@ describe("the draft and what it sends", () => {
       .toEqual({ error: "type a threshold", at: "threshold" });
   });
 
+  it("takes a threshold only as a plain decimal, as the owner would write it", () => {
+    const rule = ruleOfEntry(DELTA);
+    const at = (t: string) => patchOf(rule, { ...draftOf(rule), threshold: t });
+    // Number() reads all of these, and the first two are not what anybody meant
+    for (const t of ["0x10", "1e-2", "Infinity", "1_000", "--1", "0.2.1"]) {
+      expect([t, at(t)]).toEqual([t, { error: "the threshold is not a number", at: "threshold" }]);
+    }
+    for (const [t, n] of [["0.25", 0.25], ["-1.5", -1.5], ["+3", 3], [".5", 0.5], ["4.", 4], [" 0.3 ", 0.3]] as const) {
+      expect([t, at(t)]).toEqual([t, { body: { threshold: n } }]);
+    }
+  });
+
   it("files each of the service's refusals beside the field it is about", () => {
     expect(spotOf("signed threshold cannot be 0; use e.g. ±0.01")).toBe("threshold");
     expect(spotOf("threshold must be positive when compare='abs'")).toBe("threshold");
@@ -209,7 +221,7 @@ describe("editing a rule in place", () => {
   it("asks the service nothing for a threshold that is not a number", async () => {
     const { sent } = controls({ entry: DELTA });
     const form = await openEditor("261218 7150P delta");
-    choose(form, "threshold", "abc");
+    choose(form, "threshold", "0x10");
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     expect(within(form).getByRole("alert").textContent).toBe("the threshold is not a number");
     expect(sent).toEqual([]);

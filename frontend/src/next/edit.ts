@@ -81,13 +81,17 @@ export interface PatchBody {
 /** Where a refusal is said: beside the field it is about, or by the save button. */
 export type Spot = "field" | "direction" | "compare" | "threshold" | "form";
 
+const PLAIN = /^[+-]?(\d+\.?\d*|\.\d+)$/;
+
 /** The change a draft makes — only the keys that changed, or null for none — or why it cannot be
  *  sent. An absent key is "leave it" to the route, so an unchanged field is never re-sent. */
 export function patchOf(r: Rule, d: Draft): { body: PatchBody | null } | { error: string; at: Spot } {
   const typed = d.threshold.trim();
   if (typed === "") return { error: "type a threshold", at: "threshold" };
+  // a plain decimal only — a sign, digits, a fraction: Number() also reads "0x10" as 16, "1e-2" as
+  // 0.01 and "Infinity", none of which is a threshold anybody typed on purpose
+  if (!PLAIN.test(typed)) return { error: "the threshold is not a number", at: "threshold" };
   const threshold = Number(typed);
-  if (!Number.isFinite(threshold)) return { error: "the threshold is not a number", at: "threshold" };
   const body: PatchBody = {};
   if (d.field !== r.field) body.field = d.field;
   if (d.direction !== r.direction) body.direction = d.direction as PatchBody["direction"];
