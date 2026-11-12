@@ -133,7 +133,7 @@ describe("changing a holding from the phone's sheet", () => {
     const fix = within(result).getByRole("form", { name: "correct the close of 1231_IC" });
     await userEvent.fill(within(fix).getByLabelText("closed on"), "2026-11-11");
     await userEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
-    await waitFor(() => expect(writes(s)[1]).toEqual(["PATCH /positions/h-ic", { exit: 1.225, closed_on: "2026-11-11" }]));
+    await waitFor(() => expect(writes(s)[1]).toEqual(["PATCH /positions/h-ic", { closed_on: "2026-11-11" }]));
     await waitFor(() => expect(within(result).getByText(/closed on 2026-11-11/)).toBeTruthy());
   });
 

@@ -44,16 +44,20 @@ const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", 
 const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
 
 /** Each leg's name as the chart writes it in its left margin. */
-const namesOf = (holding: Holding) => holding.legs.map((l) => `${l.option_type[0]}${l.strike}`);
+/** What it reads of a holding: its legs, and — only while held and valued — SPX now. A closed
+ *  holding (#296) has neither a valuation nor a "now". */
+type Charted = Pick<Holding, "legs" | "closed_on"> & Partial<Pick<Holding, "spx" | "dte">>;
+
+const namesOf = (holding: Charted) => holding.legs.map((l) => `${l.option_type[0]}${l.strike}`);
 
 /** The left margin this chart's strike names need, for the margins all three charts share. */
-export const spxGutter = (holding: Holding) =>
+export const spxGutter = (holding: Charted) =>
   Math.ceil(Math.max(...namesOf(holding).map(textWidth), 16)) + 10;
 
 /** `span` is the burndown's DTE window and `gutters` the margins all three charts share, handed
  *  down so a day lands at the same x in each (#298). */
 export function SpxPath({ served, holding, span, gutters }: {
-  served: Samples; holding: Holding; span: number; gutters: { L: number; R: number };
+  served: Samples; holding: Charted; span: number; gutters: { L: number; R: number };
 }) {
   const [box, W] = useWidth();
   const runs = spxRuns(served.samples);
@@ -64,7 +68,8 @@ export function SpxPath({ served, holding, span, gutters }: {
   const strikes = holding.legs.map((l, i) => ({
     i, strike: l.strike, side: l.side, type: l.option_type, name: names[i]!,
   }));
-  const now = holding.closed_on === null && typeof holding.spx === "number" && holding.dte >= 0
+  const now = holding.closed_on === null && typeof holding.spx === "number" && holding.dte !== undefined
+    && holding.dte >= 0
     ? { dte: holding.dte, spx: holding.spx } : null;
 
   if (runs.length === 0) {

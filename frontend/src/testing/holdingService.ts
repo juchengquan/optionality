@@ -9,7 +9,7 @@
  *
  *  Any route it does not serve is a 404 in the error shape, never an empty list a page could draw.
  */
-import type { Entry, Holding, Monitor } from "../api";
+import type { Entry, Holding, Monitor, Samples } from "../api";
 import { HOLDINGS, MONITORS, QUOTES, payoffAnswer, samplesAnswer } from "./ownerBook";
 
 const health = {
@@ -39,6 +39,9 @@ export function holdingService(over: {
   holdings?: Holding[]; monitors?: Monitor[]; quotes?: Entry[];
   /** monitor id -> the holding a close hands it to */
   handTo?: Record<string, { id: string; name: string }>;
+  /** holding id -> its samples, over `ownerBook`'s; either is served only to the day the holding
+   *  is closed on NOW, as `listPositionSamples` hides the days after a backdated close (ADR 0022) */
+  samples?: Record<string, Samples>;
 } = {}): HoldingService {
   const stored = new Map((over.holdings ?? HOLDINGS).map((h) => [h.id, { ...h }]));
   const first = new Map(stored);
@@ -51,13 +54,23 @@ export function holdingService(over: {
   // a COPY, as a wire gives: the page must never hold the very objects a later write changes
   const reply = (status: number, body: unknown) =>
     Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(structuredClone(body)) });
-  const out = (h: Holding) => {
-    const { cost_to_close: _c, pnl: _p, captured: _x, ...rest } = h;
-    return {
-      ...rest,
-      realized_points: h.closed_on === null || h.entry === null || h.exit === null
-        ? null : (h.entry - h.exit) * h.contracts,
-    };
+  // `GET /positions`' row (`PositionOut`): what is stored and nothing a valuation adds — no contract
+  // size, no Cost to close — named field by field, so a page cannot lean on a figure it is not sent
+  const out = (h: Holding) => ({
+    id: h.id, name: h.name, strategy: h.strategy, strike_date: h.strike_date, contracts: h.contracts,
+    entry: h.entry, legs: h.legs, created_at: h.created_at, opened_at: h.opened_at, closed_on: h.closed_on,
+    exit: h.exit,
+    realized_points: h.closed_on === null || h.entry === null || h.exit === null
+      ? null : (h.entry - h.exit) * h.contracts,
+  });
+
+  const samplesOf = (path: string): Samples | null => {
+    const m = /^\/positions\/([^/]+)\/samples$/.exec(path);
+    const id = m ? decodeURIComponent(m[1]!) : null;
+    const all = id === null ? null : over.samples?.[id] ?? samplesAnswer(path);
+    const closedOn = id === null ? null : stored.get(id)?.closed_on ?? null;
+    if (!all) return null;
+    return closedOn === null ? all : { ...all, samples: all.samples.filter((d) => d.observed_on <= closedOn) };
   };
 
   const impl = (url: string, init?: RequestInit) => {
@@ -78,8 +91,10 @@ export function holdingService(over: {
         return reply(200, open);
       }
       if (path === "/positions") return reply(200, [...stored.values()].map(out));
-      const payoff = payoffAnswer(path) ?? samplesAnswer(path);
+      const payoff = payoffAnswer(path);
       if (payoff) return reply(200, payoff);
+      const samples = samplesOf(path);
+      if (samples) return reply(200, samples);
     }
     if (method === "POST" && path === "/positions/payoff") return reply(200, payoffAnswer(path));
 

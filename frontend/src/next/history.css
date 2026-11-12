@@ -45,3 +45,6 @@
 .nx-spxp-line { fill: none; stroke: var(--foreground); stroke-width: 1.75; }
 .nx-spxp-day { fill: var(--foreground); }
 .nx-spxp-now rect { fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; }
+/* a closed holding's last day (#296): the samples end here, and the plan runs on to expiry */
+.nx-hist-close line { stroke: var(--foreground); stroke-width: 1; opacity: 0.6; }
+.nx-hist-close text { fill: var(--foreground); }

@@ -145,7 +145,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       const result = await screen.findByRole("region", { name: "closed 1231_IC" });
       expect(document.querySelector('[data-ref="h-ic"]')).toBeNull();
       // (5 − 1.5) × 2 contracts, as the service answered it
-      expect(within(result).getByTestId("realized").textContent).toBe("7.00 pts");
+      expect(within(result).getByTestId("realized").textContent).toBe("7 pts");
       const fates = within(result).getAllByRole("listitem").map((li) => li.textContent);
       expect(fates).toEqual([
         expect.stringMatching(/switched off — holding closed$/),
@@ -171,7 +171,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       typeIn(within(fix).getByLabelText("exit, per contract"), "1.1");
       typeIn(within(fix).getByLabelText("closed on"), "2026-11-11");
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
-      await waitFor(() => expect(within(result).getByTestId("realized").textContent).toBe("7.80 pts"));
+      await waitFor(() => expect(within(result).getByTestId("realized").textContent).toBe("7.8 pts"));
       expect(s.writes().at(-1)).toEqual({ method: "PATCH", path: "/positions/h-ic", body: { exit: 1.1, closed_on: "2026-11-11" } });
       expect(within(result).getByText(/closed on 2026-11-11/)).toBeTruthy();
     });
@@ -235,6 +235,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       const fix = within(result).getByRole("form", { name: "correct the close of 1231_IC" });
       // mounted empty, so a screen reader announces it when it fills
       expect(within(fix).getByRole("status").textContent).toBe("");
+      typeIn(within(fix).getByLabelText("exit, per contract"), "1.3");
       fireEvent.submit(fix);
       fireEvent.submit(fix);
       await waitFor(() => expect(within(fix).getByRole("status").textContent).toBe("corrected"));

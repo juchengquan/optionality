@@ -144,6 +144,10 @@ describe("two Reference calls in flight at once", () => {
     await vi.advanceTimersByTimeAsync(0);
     // then the FIRST poll answers, with a figure that is now stale
     pending[0]!([{ ...SPX, figure: 7376.86 }]);
+    // both answers drained to the screen, however many turns their promises take to interleave
+    // with React's commit (ScreenUpdated.test.tsx: `painted`) — one drain alone failed under load.
+    // Bounded, so a fresh figure the stale one overwrote still fails below.
+    for (let i = 0; i < 20 && screen.queryByText("7,549.94") === null; i += 1) await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(screen.getByText("7,549.94"), "the stale set overwrote the fresh one").toBeTruthy();

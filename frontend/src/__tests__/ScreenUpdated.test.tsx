@@ -68,7 +68,10 @@ describe("what the page says about its own freshness", () => {
 
     vi.setSystemTime(new Date("2026-10-20T00:11:07+08:00"));
     fireEvent.click(screen.getByRole("button", { name: "refresh now" }));
-    await vi.advanceTimersByTimeAsync(0);
+    // drained as `painted` drains the first fetch, and for its reason: a refetch's paint needs one
+    // drain or two depending on how its promises interleave with React's commit — one alone
+    // failed under load. Bounded, so a line that never moves still fails below.
+    for (let i = 0; i < 20 && line() === before; i += 1) await vi.advanceTimersByTimeAsync(0);
 
     expect(line(), `it still reads ${before}`).not.toBe(before);
   });

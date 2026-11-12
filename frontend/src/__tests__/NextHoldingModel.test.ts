@@ -61,14 +61,27 @@ describe("the close", () => {
 });
 
 describe("correcting a close", () => {
-  it("always sends the exit, a cleared one as null, and the day", () => {
-    const out = correctionBody({ exit: "", closedOn: "2026-11-10" });
-    expect(out).toEqual({ body: { exit: null, closed_on: "2026-11-10" } });
+  const served = { exit: 1, closed_on: "2026-11-10" };
+
+  it("sends only what changed from the close as the service has it, a cleared Exit as null", () => {
+    // another form may have corrected the other field meanwhile: one sent unchanged would revert it
+    expect(correctionBody(served, { exit: "1", closedOn: "2026-11-09" })).toEqual({ body: { closed_on: "2026-11-09" } });
+    expect(correctionBody(served, { exit: "0.7", closedOn: "2026-11-10" })).toEqual({ body: { exit: 0.7 } });
+    const out = correctionBody(served, { exit: "", closedOn: "2026-11-09" });
+    // blank is an answer, "I do not know what I paid": sent as null, never left out
+    expect(out).toEqual({ body: { exit: null, closed_on: "2026-11-09" } });
     expect(PositionPatch.safeParse((out as { body: unknown }).body).success).toBe(true);
+    // a blank Exit left blank is no change
+    expect(correctionBody({ exit: null, closed_on: "2026-11-10" }, { exit: "", closedOn: "2026-11-09" }))
+      .toEqual({ body: { closed_on: "2026-11-09" } });
+  });
+
+  it("says nothing changed rather than sending an empty correction", () => {
+    expect(correctionBody(served, { exit: "1.0", closedOn: "2026-11-10" })).toEqual({ error: "nothing changed" });
   });
 
   it("refuses a blank day: a closed holding always has one", () => {
-    expect(correctionBody({ exit: "1", closedOn: "" })).toEqual({ error: "type the day it was closed" });
+    expect(correctionBody(served, { exit: "1", closedOn: "" })).toEqual({ error: "type the day it was closed" });
   });
 });
 

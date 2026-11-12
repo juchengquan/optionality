@@ -24,8 +24,11 @@ import type { ClosedOutcome, HoldingWrites } from "./HoldingActions";
 import { arrangementFor, useViewportWidth } from "./arrangement";
 import type { BookProps } from "./Book";
 import { DeskBook } from "./desk/DeskBook";
+import { DeskJournal } from "./desk/DeskJournal";
+import { useJournal } from "./journal";
 import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { PhoneBook } from "./phone/PhoneBook";
+import { PhoneJournal } from "./phone/PhoneJournal";
 import { clockMode, useSessionClock, type Mode } from "./mode";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
@@ -64,7 +67,15 @@ export function Next() {
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
   const book = useBook(mode);
-  const { holdings, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.reload);
+  // REVIEW's closed trades (#296): read on entering REVIEW and after each write that changes them —
+  // a close, a correction, a delete — and never polled; LIVE never asks for them
+  const [journalAsk, setJournalAsk] = useState(0);
+  const journal = useJournal(mode === "review", journalAsk);
+  const rereadJournal = useCallback(() => setJournalAsk((n) => n + 1), []);
+  // a closed trade deleted from the journal leaves it at once, and the re-read says the rest
+  const { drop: dropTrade } = journal;
+  const tradeDeleted = useCallback((id: string) => { dropTrade(id); rereadJournal(); }, [dropTrade, rereadJournal]);
+  const { holdings, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.reload, rereadJournal);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // adding a spread (#293): a panel above the desk's table, a bottom sheet from the phone's Add tab
@@ -139,6 +150,10 @@ export function Next() {
   const bookProps: BookProps = {
     quotes: book.quotes, monitors: book.monitors, holdings,
     holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, mode, privacy, entryStyle, writes,
+    journal: mode === "review" && phone
+      ? <PhoneJournal journal={journal} privacy={privacy} entryStyle={entryStyle} onCorrected={rereadJournal}
+                      onDeleted={tradeDeleted} />
+      : undefined,
   };
 
   const settings = (
@@ -195,7 +210,8 @@ export function Next() {
             first's account, nor a correction half typed into it */}
         {phone && settingsOpen ? null : outcomes.map((o) => (
           <ClosedResult key={o.closed.id} outcome={o} privacy={privacy} onDone={() => dismissOutcome(o.closed.id)}
-                        onCorrected={() => void book.reload()} />
+                        onCorrected={() => { rereadJournal(); void book.reload(); }}
+                        served={journal.trades?.find((t) => t.id === o.closed.id) ?? null} />
         ))}
         {adding && !phone ? (
           <section id={panelId} className="nx-add-panel" aria-label="adding a spread"
@@ -205,6 +221,9 @@ export function Next() {
           </section>
         ) : null}
         {phone && settingsOpen ? settings : phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} />}
+        {mode === "review" && !phone
+          ? <DeskJournal journal={journal} privacy={privacy} onCorrected={rereadJournal} onDeleted={tradeDeleted} />
+          : null}
       </main>
 
       {phone ? (
@@ -307,7 +326,7 @@ function DeskSettings({ open, onClose, up, entryStyle, children }: {
  *  after it cannot bring it back. Neither can return — there is no reopen (ADR 0022) — so the list
  *  only grows, by one per write.
  */
-function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>) {
+function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>, rereadJournal: () => void) {
   const [departed, setDeparted] = useState<ReadonlySet<string>>(new Set());
   const [outcomes, setOutcomes] = useState<ClosedOutcome[]>([]);
   const holdings = useMemo(
@@ -322,15 +341,17 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>)
       closed: (o) => {
         depart(o.holding.id);
         setOutcomes((all) => [o, ...all]);
+        rereadJournal();
         void reload();
       },
       deleted: (h) => {
+        // an OPEN holding: the journal of closed ones has nothing to read again
         depart(h.id);
         toast.add({ title: `deleted ${h.name}, with its daily samples`, type: "success" });
         void reload();
       },
     };
-  }, [reload]);
+  }, [reload, rereadJournal]);
   const dismissOutcome = useCallback(
     (id: string) => setOutcomes((all) => all.filter((o) => o.closed.id !== id)), [],
   );

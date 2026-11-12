@@ -134,16 +134,26 @@ const MARK: Record<Sample["timing"], "close" | "off-close" | "unrecorded"> = {
 /** A label's width at the charts' 11px tabular figures, near enough to leave it room. */
 const textWidth = (text: string) => text.length * 6.6;
 
-export function HoldingHistory({ holding, privacy }: { holding: Holding; privacy: boolean }) {
+/** What the charts draw a holding from: its legs and its count, and — only while it is held and
+ *  valued — today's figures. A closed holding (#296) is drawn from `GET /positions`, which carries
+ *  none of them: no contract size, so its money is points per contract, and no "now". */
+export type Charted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">
+  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "spx">>;
+
+export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy: boolean }) {
   const state = useSamples(holding.id);
+  const size = holding.contract_size ?? null;
   const unit: Unit = {
-    size: holding.contract_size ?? 1, contracts: holding.contracts,
-    money: holding.contract_size !== null, hidden: privacy,
+    size: size ?? 1, contracts: holding.contracts, money: size !== null, hidden: privacy,
   };
   const served = state?.samples;
   const blank = state?.error !== undefined ? `the samples could not be read — ${state.error}`
     : !served ? "reading the samples…"
-      : served.samples.length === 0 ? "no daily samples recorded yet: the sweep writes one a day while it is held"
+      : served.samples.length === 0 ? (holding.closed_on === null
+        ? "no daily samples recorded yet: the sweep writes one a day while it is held"
+        // nothing more is coming: it closed before its first sample, or the close was backdated
+        // before every one of them, which the service hides (ADR 0022)
+        : "no daily samples for this trade: it closed before its first sample, or its close was backdated before all of them")
         : null;
   // one pair of margins for all three charts, so a DTE is at the same x in each (#298)
   const gutters: Gutters | null = blank !== null || !served ? null : (() => {
@@ -209,11 +219,11 @@ export interface Gutters {
 }
 
 /** The burndown's value axis, and the left margin its labels need. */
-function burndownAxis(served: Samples, holding: Holding, unit: Unit) {
+function burndownAxis(served: Samples, holding: Charted, unit: Unit) {
   const { levels, plan, samples } = served;
   // today's valuation, from REVIEW's one batch: drawn apart from the closes, and only while held
-  const now = holding.closed_on === null && holding.cost_to_close !== null && holding.dte >= 0
-    ? { dte: holding.dte, cost: holding.cost_to_close } : null;
+  const now = holding.closed_on === null && holding.cost_to_close != null && holding.dte !== undefined
+    && holding.dte >= 0 ? { dte: holding.dte, cost: holding.cost_to_close } : null;
 
   const values = [
     0, ...samples.map((s) => s.cost_to_close), ...plan.map((p) => p.on_pace),
@@ -232,14 +242,24 @@ function burndownAxis(served: Samples, holding: Holding, unit: Unit) {
   return { now, top, bottom, axis, L };
 }
 
+/** A market date in its dashed spelling: an expiry is stored either way, 2026-12-18 or 20261218,
+ *  as `daysToExpiry` and `dteAtOpen` read it (`normalizeStrikeDate`). */
+const dashed = (iso: string) => iso.replace(/^(\d{4})-?(\d{2})-?(\d{2})$/, "$1-$2-$3");
+
+/** Calendar days from a market date to the expiry: the samples' own DTE (`dte` on each row). */
+const daysTo = (on: string, expiry: string) =>
+  Math.round((Date.parse(`${dashed(expiry)}T00:00:00Z`) - Date.parse(`${dashed(on)}T00:00:00Z`)) / 86_400_000);
+
 function Burndown({ served, holding, unit, gutters }: {
-  served: Samples; holding: Holding; unit: Unit; gutters: Gutters;
+  served: Samples; holding: Charted; unit: Unit; gutters: Gutters;
 }) {
   const [box, W] = useWidth();
   const [pointed, setPointed] = useState<number | null>(null);
   const { levels, plan, samples } = served;
   const span = dteWindow(served);
   const { now, top, bottom, axis } = burndownAxis(served, holding, unit);
+  // a closed holding's last day: the service serves no sample after it (ADR 0022), and this says where
+  const closeDte = holding.closed_on === null ? null : daysTo(holding.closed_on, holding.strike_date);
   // shared with the other charts; under privacy no wider than they need, so it says nothing
   const { L, R } = gutters;
   const x = (dte: number) => L + ((span - dte) / span) * (W - L - R);
@@ -303,6 +323,16 @@ function Burndown({ served, holding, unit, gutters }: {
               <text x={manageLabelX!} y={H - 6} textAnchor="middle">{manageWords}</text>
             </g>
           )}
+          {closeDte === null || !Number.isFinite(closeDte) || closeDte < 0 || closeDte > span ? null : (
+            <g data-close="" className="nx-hist-close">
+              <line x1={x(closeDte)} x2={x(closeDte)} y1={T} y2={H - B} />
+              {/* to the left of its line, where the days it ends are; to the right if that would
+                  run into the value axis */}
+              {x(closeDte) - textWidth("closed") - 4 < L
+                ? <text x={x(closeDte) + 4} y={T + 10} textAnchor="start">closed</text>
+                : <text x={x(closeDte) - 4} y={T + 10} textAnchor="end">closed</text>}
+            </g>
+          )}
           {axis === null ? null : (
             <g data-axis="y">
               {axis.map((v) => <text key={v} x={L - 6} y={y(v) + 4} textAnchor="end">{say(v, unit)}</text>)}
@@ -362,7 +392,7 @@ const IV_H = 132;
 /** Each leg's IV per day, a line per leg named by its side and strike. A day with no IV is a gap,
  *  never a line drawn across it. In %, which privacy keeps (ADR 0023). */
 /** The IV chart's legs, value axis and the margins its labels need; null with no reading at all. */
-function ivAxis(served: Samples, holding: Holding) {
+function ivAxis(served: Samples, holding: Charted) {
   const legs = holding.legs.map((l) => ({
     code: legCode(holding.strike_date, l),
     name: `${l.side === "short" ? "−" : "+"}${l.option_type[0]}${l.strike}`,
@@ -381,7 +411,7 @@ function ivAxis(served: Samples, holding: Holding) {
   return { legs, top, bottom, ticks, label, L, RL };
 }
 
-function IvChart({ served, holding, gutters }: { served: Samples; holding: Holding; gutters: Gutters }) {
+function IvChart({ served, holding, gutters }: { served: Samples; holding: Charted; gutters: Gutters }) {
   const [box, W] = useWidth();
   const span = dteWindow(served);
   const scale = ivAxis(served, holding);

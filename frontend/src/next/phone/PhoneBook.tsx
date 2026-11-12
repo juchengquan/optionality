@@ -17,7 +17,7 @@ import { ReviewPager } from "./Review";
  *  up in each render's figures, so the sheet follows the poll rather than freezing the moment it
  *  was opened, and closes itself if what it shows is gone.
  */
-export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy, entryStyle, writes }: BookProps) {
+export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy, entryStyle, writes, journal }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
@@ -92,6 +92,9 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
           {unplaced}
         </section>
       )}
+      {/* the closed trades (#296), between REVIEW's holdings and the watchlist: the page hands
+          them over in REVIEW only */}
+      {journal}
 
       <section aria-labelledby="nxp-watchlist">
         <h2 id="nxp-watchlist">Watchlist</h2>

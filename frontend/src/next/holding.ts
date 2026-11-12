@@ -59,14 +59,21 @@ export function closeBody(d: CloseDraft): Out<{ exit: number | null; closed_on?:
   return { body: d.closedOn === "" ? { exit } : { exit, closed_on: d.closedOn } };
 }
 
-/** What `PATCH /positions/{id}` is sent to correct a close. The Exit is ALWAYS sent, a cleared one
- *  as null — blank is an answer, "I do not know what I paid" — and leaving it out would answer 200
- *  with the old Exit unchanged. */
-export function correctionBody(d: CloseDraft): Out<{ exit: number | null; closed_on: string }> {
+/** What `PATCH /positions/{id}` is sent to correct a close: only what changed from the close AS THE
+ *  SERVICE HAS IT, like `editBody`. Two forms can correct one close — the close's account and the
+ *  journal's entry (#296) — and a field sent unchanged from a form opened earlier would put back
+ *  what the other just corrected. A cleared Exit is a change, sent as null: blank is an answer, "I
+ *  do not know what I paid", and leaving it out would keep the old Exit. */
+export function correctionBody(
+  served: { exit: number | null; closed_on: string }, d: CloseDraft,
+): Out<{ exit?: number | null; closed_on?: string }> {
   const exit = exitOf(d.exit);
   if (exit !== null && typeof exit === "object") return exit;
   if (d.closedOn === "") return { error: "type the day it was closed" };
-  return { body: { exit, closed_on: d.closedOn } };
+  const body: { exit?: number | null; closed_on?: string } = {};
+  if (exit !== served.exit) body.exit = exit;
+  if (d.closedOn !== served.closed_on) body.closed_on = d.closedOn;
+  return Object.keys(body).length === 0 ? { error: "nothing changed" } : { body };
 }
 
 export interface EditDraft {
