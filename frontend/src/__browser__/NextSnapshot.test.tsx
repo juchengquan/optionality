@@ -103,6 +103,11 @@ describe("saving the desk as an image", () => {
     expect(chip(entry), "the entry chip and the alarm chip are one colour").not.toBe(chip(alarm));
     expect(fill(entry), "a fired fill is painted as a calm one").not.toBe(fill(calm));
     expect(fill(alarm), "a ringing fill is painted as a calm one").not.toBe(fill(calm));
+    // and each fired row's bar and chip are ONE colour, its attention colour: a row's tint differs
+    // from row to row too, so the comparisons above would survive a chip or a bar left unpainted —
+    // the row's ground showing through instead — and this one cannot
+    expect(fill(entry), "the entry row's bar and chip differ — one of them was not painted").toBe(chip(entry));
+    expect(fill(alarm), "the ringing row's bar and chip differ — one of them was not painted").toBe(chip(alarm));
     shared.release();
   });
 
