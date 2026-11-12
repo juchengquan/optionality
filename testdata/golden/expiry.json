@@ -655,6 +655,62 @@
         "2026-11-09 21:15:00.000999"
       ],
       "expect": "close"
+    },
+    {
+      "fn": "sampleTiming",
+      "name": "an instant spelled with a T and a Z",
+      "args": [
+        "2026-11-09T21:00:00Z"
+      ],
+      "expect": "unrecorded"
+    },
+    {
+      "fn": "sampleTiming",
+      "name": "the stored spelling with a Z after it",
+      "args": [
+        "2026-11-09 21:00:00.000000Z"
+      ],
+      "expect": "unrecorded"
+    },
+    {
+      "fn": "sampleTiming",
+      "name": "no time at all",
+      "args": [
+        "not a time"
+      ],
+      "expect": "unrecorded"
+    },
+    {
+      "fn": "sampleTiming",
+      "name": "a day that does not exist",
+      "args": [
+        "2026-02-30 15:00:00.000000"
+      ],
+      "expect": "unrecorded"
+    },
+    {
+      "fn": "sampleTiming",
+      "name": "24:00, which a JavaScript Date reads as the next midnight",
+      "args": [
+        "2026-11-09 24:00:00.000000"
+      ],
+      "expect": "unrecorded"
+    },
+    {
+      "fn": "sampleTiming",
+      "name": "a two-digit year, which Date.UTC reads as the 1900s",
+      "args": [
+        "0050-11-09 21:00:00"
+      ],
+      "expect": "unrecorded"
+    },
+    {
+      "fn": "sampleTiming",
+      "name": "no fraction",
+      "args": [
+        "2026-11-09 21:00:00"
+      ],
+      "expect": "close"
     }
   ]
 }

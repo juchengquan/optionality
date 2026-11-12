@@ -120,7 +120,8 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     fireEvent.mouseEnter(evening);
     const said = within(chart).getByRole("status");
     expect(said.textContent).toMatch(/3 Nov · 45 DTE/);
-    expect(said.textContent).toMatch(/not the close: observed after 16:15 New York \(2026-11-04 09:30:00\+08:00\)/);
+    // the rule is New York's, so the time is said on New York's clock: 09:30 in Singapore is 20:30
+    expect(said.textContent).toMatch(/not the close: observed 20:30 New York, after the 16:15 close/);
     // and a native tooltip, for a pointer that rests on it
     expect(evening.querySelector("title")?.textContent).toMatch(/not the close/);
   });
@@ -130,7 +131,8 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
     fireEvent.mouseEnter(chart.querySelector("[data-sample][data-timing='before-open']")!);
-    expect(within(chart).getByRole("status").textContent).toMatch(/not the close: observed before 09:30 New York/);
+    expect(within(chart).getByRole("status").textContent)
+      .toMatch(/not the close: observed 00:05 New York, before the 09:30 open/);
     fireEvent.mouseEnter(chart.querySelector("[data-sample][data-timing='unrecorded']")!);
     expect(within(chart).getByRole("status").textContent).toMatch(/whether it was the close is not known/);
   });
@@ -170,6 +172,87 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
   });
 
+  it("calls a day observed in the hours in hours, with its New York time, rather than the close", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    fireEvent.mouseEnter(chart.querySelector("[data-sample][data-timing='close']")!);
+    expect(within(chart).getByRole("status").textContent).toMatch(/— in hours \(observed 16:00 New York\)$/);
+  });
+
+  it("says its money's scope, so it cannot read as the inspector's cost to close per contract", async () => {
+    // the 4-leg condor is held twice over: a Level is the per-contract figure × 2 × 100
+    const { insp } = await inspect("h-ic", "1231_IC");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelector("[data-level='target']")).toBeTruthy());
+    expect(chart.querySelector("[data-level='target']")?.textContent).toBe("target $500");
+    expect(within(chart).getByText("$ to close, 2 contracts")).toBeTruthy();
+    fireEvent.mouseEnter(chart.querySelector("[data-sample]")!);
+    expect(within(chart).getByRole("status").textContent).toMatch(/· to close, 2 contracts: \$1,000 · on pace \$1,000 —/);
+  });
+
+  it("says no count and no $ under privacy", async () => {
+    const { insp } = await inspect("h-ic", "1231_IC", { privacy: true });
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(2));
+    expect(within(chart).queryByText(/contracts/)).toBeNull();
+    fireEvent.mouseEnter(chart.querySelector("[data-sample]")!);
+    expect(within(chart).getByRole("status").textContent).toMatch(/· to close: \$••• · on pace \$••• —/);
+  });
+
+  it("is one stop for the keyboard, its arrows moving from day to day and the line saying each", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    expect(days.tabIndex).toBe(0);
+    // no day is a tab stop of its own
+    expect(chart.querySelectorAll("[tabindex]")).toHaveLength(1);
+    const said = () => within(chart).getByRole("status").textContent;
+    fireEvent.keyDown(days, { key: "ArrowRight" });
+    expect(said()).toMatch(/^3 Nov · 45 DTE/);
+    fireEvent.keyDown(days, { key: "ArrowRight" });
+    expect(said()).toMatch(/^4 Nov · 44 DTE/);
+    fireEvent.keyDown(days, { key: "ArrowLeft" });
+    expect(said()).toMatch(/^3 Nov/);
+    fireEvent.keyDown(days, { key: "ArrowLeft" });
+    expect(said()).toMatch(/^3 Nov/);
+    fireEvent.keyDown(days, { key: "End" });
+    expect(said()).toMatch(/^9 Nov · 39 DTE/);
+    fireEvent.keyDown(days, { key: "ArrowRight" });
+    expect(said()).toMatch(/^9 Nov/);
+    fireEvent.keyDown(days, { key: "Home" });
+    expect(said()).toMatch(/^3 Nov/);
+  });
+
+  it("names each value on its axis once, for a debit whose every figure is below zero", async () => {
+    const debit = HOLDINGS.map((h) => (h.id === "h-calls" ? { ...h, entry: -2, cost_to_close: -1.5 } : h) as Holding);
+    serveSamples({
+      levels: { dte_at_open: 45, target: null, stop: null, target_dte: null, manage_by_dte: 21 },
+      plan: [{ dte: 45, on_pace: -2 }, { dte: 0, on_pace: 0 }],
+      samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: -s.cost_to_close, on_pace: null })),
+    });
+    const { insp } = await inspect("h-calls", "1218_C7300", { holdings: debit });
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelector("[data-axis='y']")).toBeTruthy());
+    const labels = [...chart.querySelectorAll("[data-axis='y'] text")].map((t) => t.textContent);
+    expect(labels).toEqual(["$0", "-$410"]);
+  });
+
+  it("breaks the line across a missed session rather than joining the days either side", async () => {
+    // no row at all for 5 Nov: the service was down that whole New York day
+    const days = SAMPLES["h-calls"]!.samples.filter((s) => s.observed_on !== "2026-11-05");
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(6));
+    expect([...chart.querySelectorAll("[data-costs]")].map((r) => corners(r).length)).toEqual([2, 4]);
+    // and the IV, which also has 6 Nov's row without a reading: [3 Nov, 4 Nov] | [7, 8, 9 Nov]
+    const iv = await ivOf(insp);
+    const runs = [...iv.querySelectorAll("[data-leg]")][0]!.querySelectorAll("polyline");
+    expect([...runs].map((r) => corners(r).length)).toEqual([2, 3]);
+  });
+
   it("is not drawn in LIVE, which asks for no samples", async () => {
     const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
     await within(insp).findByRole("group", { name: "payoff at expiry" });
@@ -197,6 +280,52 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     serveSamples(null);
     const { insp } = await inspect("h-calls", "1218_C7300");
     expect(await within(insp).findByText(/the samples could not be read — .*404/)).toBeTruthy();
+  });
+});
+
+describe("switching holdings in REVIEW", () => {
+  /** Each holding's samples answered when the test says, as a slow service would. */
+  function held() {
+    const waiting = new Map<string, () => void>();
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const path = String(url).replace(/^.*\/api/, "");
+      asked.push(`${init?.method ?? "GET"} ${path}`);
+      const samples = samplesAnswer(path);
+      if (!samples) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoffAnswer(path)) });
+      return new Promise((resolve) => waiting.set(path, () =>
+        resolve({ ok: true, status: 200, json: () => Promise.resolve(samples) })));
+    }));
+    return async (path: string) => { await act(async () => { waiting.get(path)!(); await Promise.resolve(); }); };
+  }
+  const select = (id: string, name: string) =>
+    fireEvent.click(within(deskRow(id)).getByRole("button", { name }));
+  const chartOf = () => burndownOf(screen.getByRole("complementary", { name: /inspector/ }));
+
+  it("draws the holding now selected when the one before answers late", async () => {
+    const answer = held();
+    render(<DeskBook {...props()} />);
+    select("h-calls", "1218_C7300");
+    select("h-puts", "1218_P6400");
+    await answer("/positions/h-puts/samples");
+    await answer("/positions/h-calls/samples");
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples", "GET /positions/h-puts/samples"]);
+    const chart = await chartOf();
+    expect(within(chart).queryByText("reading the samples…")).toBeNull();
+    // h-puts' week is all closes; h-calls' has a day recorded that evening
+    expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7);
+    expect(chart.querySelector("[data-timing='after-close']")).toBeNull();
+  });
+
+  it("never draws the last holding's days under the next while its own are asked for", async () => {
+    const answer = held();
+    render(<DeskBook {...props()} />);
+    select("h-calls", "1218_C7300");
+    await answer("/positions/h-calls/samples");
+    expect((await chartOf()).querySelectorAll("[data-sample]")).toHaveLength(7);
+    select("h-puts", "1218_P6400");
+    const chart = await chartOf();
+    expect(within(chart).getByText("reading the samples…")).toBeTruthy();
+    expect(chart.querySelectorAll("[data-sample]")).toHaveLength(0);
   });
 });
 
@@ -248,7 +377,8 @@ describe("on the phone's one-holding REVIEW page", () => {
     const chart = await burndownOf(page("h-calls"));
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
     fireEvent.click(chart.querySelector("[data-sample][data-timing='before-open']")!);
-    expect(within(chart).getByRole("status").textContent).toMatch(/not the close: observed before 09:30 New York/);
+    expect(within(chart).getByRole("status").textContent)
+      .toMatch(/not the close: observed 00:05 New York, before the 09:30 open/);
   });
 
   it("hides the $ axis under privacy", async () => {

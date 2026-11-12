@@ -244,12 +244,26 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295)", 
     expect(mark.getBoundingClientRect().width).toBeGreaterThanOrEqual(6);
     await userEvent.hover(mark);
     const said = document.querySelector(".nxd-inspector .nx-hist-said")!;
-    expect(said.textContent).toMatch(/not the close: observed after 16:15 New York/);
+    expect(said.textContent).toMatch(/not the close: observed 20:30 New York, after the 16:15 close/);
     // and anywhere on the chart picks the nearest day: the right-hand end is the last one
     const svg = document.querySelector<SVGSVGElement>(".nxd-inspector .nx-hist svg")!;
     const box = svg.getBoundingClientRect();
     await userEvent.hover(svg, { position: { x: box.width - 12, y: 10 } });
     expect(said.textContent).toMatch(/^9 Nov · 39 DTE/);
+  });
+
+  it("is one tab stop, whose arrow keys move from day to day", async () => {
+    await show("review", 1280);
+    await inspect("h-calls");
+    await settle();
+    const days = document.querySelector<HTMLElement>(".nxd-inspector .nx-hist-chart[role='group']")!;
+    days.focus();
+    expect(document.activeElement).toBe(days);
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+    const said = document.querySelector(".nxd-inspector .nx-hist-said")!;
+    expect(said.textContent).toMatch(/^4 Nov · 44 DTE/);
+    // the day said is the day marked
+    expect(document.querySelector(".nxd-inspector [data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-04");
   });
 
   it("is not drawn in LIVE", async () => {

@@ -706,6 +706,23 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/pos-1/samples"),
   },
   {
+    // a stamp in another spelling and one that is no time at all: each row costs its own timing
+    // and stamp, read as unrecorded, and the request answers (#295 review)
+    name: "GET /positions/{id}/samples reads a stamp it cannot parse as unrecorded",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [
+          sample({ position_id: "pos-1", observed_on: "2026-11-06", dte: 42, cost_to_close: 6.25,
+            observed_at: "2026-11-06T21:00:00Z" }),
+          sample({ position_id: "pos-1", observed_on: "2026-11-07", dte: 41, cost_to_close: 6,
+            observed_at: "not a time" }),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
     name: "GET /positions/{id}/samples answers an empty history for a holding never sampled",
     world: world({ tables: { positions: [opened] } }),
     request: request("GET", "/positions/pos-1/samples"),

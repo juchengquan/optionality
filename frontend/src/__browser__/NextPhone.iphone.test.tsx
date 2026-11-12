@@ -311,7 +311,7 @@ describe("REVIEW", () => {
     const first = page1.querySelector<SVGCircleElement>("[data-sample] [data-mark]")!.getBoundingClientRect();
     const box = svg.getBoundingClientRect();
     await userEvent.click(svg, { position: { x: first.left - box.left + 6, y: first.top - box.top + 14 } });
-    expect(said.textContent).toMatch(/^3 Nov · 45 DTE .* not the close: observed after 16:15 New York/);
+    expect(said.textContent).toMatch(/^3 Nov · 45 DTE .* not the close: observed 20:30 New York, after the 16:15 close/);
   });
 
   it("gives every control a 44pt target", async () => {

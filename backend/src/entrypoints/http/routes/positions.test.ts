@@ -265,6 +265,26 @@ describe("a holding's daily samples, served for the burndown and the IV chart (#
     expect([s.legs_iv, s.legs_vega, s.legs_delta]).toEqual([null, null, null]);
   });
 
+  it("costs a stamp it cannot read its own timing, never the request", async () => {
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06T20:00:00Z");
+    sample(id, "2026-10-07", 72, 2.8, "garbage");
+    const resp = await h.call(`/positions/${id}/samples`);
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).samples.map((s: { timing: string; observed_at: string | null }) =>
+      [s.timing, s.observed_at])).toEqual([["unrecorded", null], ["unrecorded", null]]);
+  });
+
+  it("costs a reading too large for a double its map, never the request", async () => {
+    // JSON.parse reads 1e400 as Infinity; the Python reads an integer that long exactly
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    const [sc] = legCodes();
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000", { iv: `{"${sc}": 1${"0".repeat(400)}}` });
+    const resp = await h.call(`/positions/${id}/samples`);
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).samples[0].legs_iv).toBeNull();
+  });
+
   it("answers an empty history for a holding never sampled", async () => {
     const id = await made({ opened_at: "2026-10-06", entry: 3 });
     expect((await body(await h.call(`/positions/${id}/samples`))).samples).toEqual([]);

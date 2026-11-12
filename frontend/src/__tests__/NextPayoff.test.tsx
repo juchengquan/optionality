@@ -58,9 +58,9 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(asked).toEqual(["GET /positions/h-ic/payoff"]);
     expect(within(payoff).getByRole("img", { name: /payoff at expiry/ })).toBeTruthy();
     expect(payoff.querySelector("[data-curve]")?.getAttribute("d")).toMatch(/^M/);
-    // points times the contract size the valuation served (100): money, as P&L is
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+$500");
-    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("-$4,500");
+    // points across its two contracts times the contract size the valuation served (100): money
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+$1,000");
+    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("-$9,000");
     expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295 · 7405");
     expect(payoff.querySelectorAll("[data-breakeven]")).toHaveLength(2);
   });

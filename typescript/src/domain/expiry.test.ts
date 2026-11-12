@@ -227,3 +227,26 @@ describe("sampleTiming — whether a stored row is the day's close, and if not, 
     expect(sampleTiming("2026-10-01 13:30:00.000000")).toBe("close");
   });
 });
+
+describe("sampleTiming — a stamp it cannot read", () => {
+  /** A corrupt row costs its own figure, never the request (#295 review): `observed_at` is read in
+   *  the stored spelling only, and anything else is a row whose time nothing can vouch for. */
+  it("calls an instant in another spelling, or none at all, unrecorded", () => {
+    expect(sampleTiming("2026-11-09T21:00:00Z")).toBe("unrecorded");
+    expect(sampleTiming("2026-11-09 21:00:00.000000Z")).toBe("unrecorded");
+    expect(sampleTiming("not a time")).toBe("unrecorded");
+    expect(sampleTiming("")).toBe("unrecorded");
+  });
+
+  it("calls a day or an hour that does not exist unrecorded", () => {
+    expect(sampleTiming("2026-02-30 15:00:00.000000")).toBe("unrecorded");
+    expect(sampleTiming("2026-11-09 24:00:00.000000")).toBe("unrecorded");
+    expect(sampleTiming("2026-11-09 21:60:00.000000")).toBe("unrecorded");
+  });
+
+  it("reads the stored spelling with any number of fractional digits, or none", () => {
+    expect(sampleTiming("2026-11-09 21:00:00")).toBe("close");
+    expect(sampleTiming("2026-11-09 21:15:00.0009")).toBe("close");
+    expect(sampleTiming("2026-11-09 21:15:00.001")).toBe("after-close");
+  });
+});

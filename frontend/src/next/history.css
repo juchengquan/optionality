@@ -21,13 +21,14 @@
 /* a day: the close filled, a point that is not one hollow, a row nobody timed faint */
 /* the whole chart is the target: a pointer anywhere on it picks the nearest day (History.tsx) */
 .nx-hist-chart svg { cursor: crosshair; }
-.nx-hist-point { outline: none; }
+.nx-hist-chart:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 0.25rem; }
+.nx-hist-unit { margin-left: 0.5rem; text-transform: none; letter-spacing: normal; font-weight: 400; }
 .nx-hist-point [data-mark="close"] { fill: var(--foreground); }
 .nx-hist-point [data-mark="off-close"] {
   fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; stroke-dasharray: 2 1.5;
 }
 .nx-hist-point [data-mark="unrecorded"] { fill: var(--foreground); opacity: 0.4; }
-.nx-hist-point:focus-visible [data-mark], .nx-hist-point:hover [data-mark] { stroke: var(--ring); stroke-width: 2.5; }
+.nx-hist-point[data-pointed] [data-mark], .nx-hist-point:hover [data-mark] { stroke: var(--ring); stroke-width: 2.5; }
 .nx-hist-now rect { fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; }
 .nx-hist-said { font-size: 0.75rem; color: var(--muted-foreground); min-height: 2.5em; overflow-wrap: anywhere; }
 .nx-hist-leg polyline { fill: none; stroke: var(--foreground); stroke-width: 1.5; }

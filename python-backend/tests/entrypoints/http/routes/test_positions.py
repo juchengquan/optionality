@@ -281,6 +281,27 @@ class TestAHoldingsDailySamples:
         s = resp.json()["samples"][0]
         assert [s["legs_iv"], s["legs_vega"], s["legs_delta"]] == [None, None, None]
 
+    async def test_costs_a_stamp_it_cannot_read_its_own_timing_never_the_request(self, start):
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
+        self.sample(h, id_, "2026-10-06", 73, 2.9, "2026-10-06T20:00:00Z")
+        self.sample(h, id_, "2026-10-07", 72, 2.8, "garbage")
+        resp = await h.call(f"/positions/{id_}/samples")
+        assert resp.status_code == 200
+        assert [[s["timing"], s["observed_at"]] for s in resp.json()["samples"]] == [
+            ["unrecorded", None],
+            ["unrecorded", None],
+        ]
+
+    async def test_costs_a_reading_too_large_for_a_double_its_map_never_the_request(self, start):
+        # JSON.parse reads 1e400 as Infinity; Python reads an integer that long exactly, and math.isfinite
+        # of it overflows
+        h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
+        sc = leg_codes()[0]
+        self.sample(h, id_, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000", f'{{"{sc}": 1{"0" * 400}}}')
+        resp = await h.call(f"/positions/{id_}/samples")
+        assert resp.status_code == 200
+        assert resp.json()["samples"][0]["legs_iv"] is None
+
     async def test_answers_an_empty_history_for_a_holding_never_sampled(self, start):
         h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
         assert (await h.call(f"/positions/{id_}/samples")).json()["samples"] == []

@@ -270,6 +270,15 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // a sub-millisecond stamp: the database spells microseconds, an instant holds milliseconds
     { fn: "sampleTiming", name: "observed 16:15:00.000999, truncated to the millisecond",
       args: ["2026-11-09 21:15:00.000999"] },
+    // a stamp it cannot read is a row nobody timed: a corrupt row costs its own figure (#295)
+    { fn: "sampleTiming", name: "an instant spelled with a T and a Z", args: ["2026-11-09T21:00:00Z"] },
+    { fn: "sampleTiming", name: "the stored spelling with a Z after it", args: ["2026-11-09 21:00:00.000000Z"] },
+    { fn: "sampleTiming", name: "no time at all", args: ["not a time"] },
+    { fn: "sampleTiming", name: "a day that does not exist", args: ["2026-02-30 15:00:00.000000"] },
+    { fn: "sampleTiming", name: "24:00, which a JavaScript Date reads as the next midnight",
+      args: ["2026-11-09 24:00:00.000000"] },
+    { fn: "sampleTiming", name: "a two-digit year, which Date.UTC reads as the 1900s", args: ["0050-11-09 21:00:00"] },
+    { fn: "sampleTiming", name: "no fraction", args: ["2026-11-09 21:00:00"] },
   ],
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },

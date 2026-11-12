@@ -40,7 +40,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.contract import build_spx_code
-from optionality.exit import ExitPolicy, dte_at_open, exit_levels, on_pace
+from optionality.exit import dte_at_open, exit_levels, on_pace
 from optionality.expiry import market_date, sample_timing
 from optionality.monitor import monitor_leg_codes
 from optionality.payoff import payoff_at_expiry
@@ -78,8 +78,7 @@ from ....db.queries import (
 from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored, to_sql_datetime
 from ....db.values import from_sqlite_json, new_id, to_sqlite_bool, to_sqlite_json
-from ....env import Settings
-from ....holdings import holding_values
+from ....holdings import _exit_policy, holding_values
 from ....hydrate import to_monitor, to_position
 from ....monitors import adopt_orphan_monitors
 from ....ports import verify_contracts
@@ -208,7 +207,8 @@ class SampleOut(BaseModel):
 
     #: the New York market day it is that day's row for
     observed_on: str
-    #: the instant it was observed, in DISPLAY_TZ; None on rows written before migration 0009
+    #: the instant it was observed, in DISPLAY_TZ; None on rows written before migration 0009, and where the
+    #: stored stamp cannot be read (`timing` is then `unrecorded`)
     observed_at: str | None
     #: whether it is the day's close, and if not why (`sample_timing`): what the chart marks
     timing: Literal["close", "before-open", "after-close", "unrecorded"]
@@ -311,17 +311,14 @@ def _leg_map(text: str | None) -> dict[str, Any] | None:
     parsed = _parse_map(text)
     if parsed is None:
         return None
-    numbers = all(isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v) for v in parsed.values())
+    try:
+        numbers = all(
+            isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v) for v in parsed.values()
+        )
+    except OverflowError:
+        # an integer too long for a double, which JSON.parse reads as Infinity: not finite either
+        return None
     return parsed if numbers else None
-
-
-def _exit_policy(settings: Settings) -> ExitPolicy:
-    """The library's `exitPolicy`, which reads Settings: the three knobs, from `.env`."""
-    return ExitPolicy(
-        take_fraction=settings.exit_take_fraction,
-        stop_multiple=settings.exit_stop_multiple,
-        manage_by_dte=settings.exit_manage_by_dte,
-    )
 
 
 def _realized(row: PositionRow) -> float | None:
@@ -514,8 +511,10 @@ def position_routes(deps: Deps) -> APIRouter:
             "samples": [
                 {
                     "observed_on": s["observed_on"],
-                    "observed_at": display_stored(s["observed_at"], tz),
-                    "timing": sample_timing(s["observed_at"]),
+                    # a stamp `sample_timing` cannot read is no instant to convert: it costs its own time,
+                    # never the request (#295)
+                    "observed_at": None if timing == "unrecorded" else display_stored(s["observed_at"], tz),
+                    "timing": timing,
                     "dte": s["dte"],
                     "cost_to_close": s["cost_to_close"],
                     "on_pace": on_pace(row["entry"], opened_dte, s["dte"]),
@@ -525,6 +524,7 @@ def position_routes(deps: Deps) -> APIRouter:
                     "spx": s["spx"],
                 }
                 for s in list_position_samples(db, id_)
+                for timing in [sample_timing(s["observed_at"])]
             ],
         }
 

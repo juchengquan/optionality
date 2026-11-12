@@ -100,7 +100,8 @@ export const HOLDINGS: Holding[] = [
     legs_delta: { "US.SPXW261218C7300000": 0.33, "US.SPXW261218C7350000": 0.24 },
     short_strikes: [served("2026-12-18", "CALL", 7300, 0.33, 38)] }),
   // a 4-leg condor held as one: one row, never split
-  holding("h-ic", { name: "1231_IC", strike_date: "2026-12-31", entry: 5,
+  // held twice over, so a figure across the contracts is not the per-contract one (#295)
+  holding("h-ic", { name: "1231_IC", strike_date: "2026-12-31", entry: 5, contracts: 2,
     legs: [side("short", "CALL", 7400), side("long", "CALL", 7450),
            side("short", "PUT", 6300), side("long", "PUT", 6250)],
     legs_delta: { "US.SPXW261231C7400000": 0.12, "US.SPXW261231C7450000": 0.08,
@@ -139,8 +140,8 @@ export const PAYOFFS: Record<string, Payoff> = {
     slope_below: 0, slope_above: 0, breakevens: [7302], max_profit: 2, max_loss: -48,
   },
   "h-ic": {
-    at_strikes: [{ spx: 6250, pnl: -45 }, { spx: 6300, pnl: 5 }, { spx: 7400, pnl: 5 }, { spx: 7450, pnl: -45 }],
-    slope_below: 0, slope_above: 0, breakevens: [6295, 7405], max_profit: 5, max_loss: -45,
+    at_strikes: [{ spx: 6250, pnl: -90 }, { spx: 6300, pnl: 10 }, { spx: 7400, pnl: 10 }, { spx: 7450, pnl: -90 }],
+    slope_below: 0, slope_above: 0, breakevens: [6295, 7405], max_profit: 10, max_loss: -90,
   },
 };
 

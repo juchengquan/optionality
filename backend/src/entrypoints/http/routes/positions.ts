@@ -152,7 +152,8 @@ const LegMap = z.record(z.string(), z.number()).nullable();
 const SampleOut = z.object({
   /** the New York market day it is that day's row for */
   observed_on: z.string(),
-  /** the instant it was observed, in DISPLAY_TZ; null on rows written before migration 0009 */
+  /** the instant it was observed, in DISPLAY_TZ; null on rows written before migration 0009, and
+   *  where the stored stamp cannot be read (`timing` is then `unrecorded`) */
   observed_at: z.string().nullable(),
   /** whether it is the day's close, and if not why (`sampleTiming`): what the chart marks */
   timing: z.enum(["close", "before-open", "after-close", "unrecorded"]),
@@ -379,18 +380,23 @@ export function positionRoutes(deps: Deps) {
           target_dte: levels.target_dte, manage_by_dte: levels.manage_by_dte,
         },
         plan,
-        samples: listPositionSamples(db, id).map((s) => ({
-          observed_on: s.observed_on,
-          observed_at: displayStored(s.observed_at, tz),
-          timing: sampleTiming(s.observed_at),
-          dte: s.dte,
-          cost_to_close: s.cost_to_close,
-          on_pace: onPace(row.entry, openedDte, s.dte),
-          legs_iv: legMap(s.legs_iv),
-          legs_vega: legMap(s.legs_vega),
-          legs_delta: legMap(s.legs_delta),
-          spx: s.spx,
-        })),
+        samples: listPositionSamples(db, id).map((s) => {
+          const timing = sampleTiming(s.observed_at);
+          return {
+            observed_on: s.observed_on,
+            // a stamp `sampleTiming` cannot read is no instant to convert: it costs its own time,
+            // never the request (#295)
+            observed_at: timing === "unrecorded" ? null : displayStored(s.observed_at, tz),
+            timing,
+            dte: s.dte,
+            cost_to_close: s.cost_to_close,
+            on_pace: onPace(row.entry, openedDte, s.dte),
+            legs_iv: legMap(s.legs_iv),
+            legs_vega: legMap(s.legs_vega),
+            legs_delta: legMap(s.legs_delta),
+            spx: s.spx,
+          };
+        }),
       });
     })
 

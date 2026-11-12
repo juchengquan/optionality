@@ -1,5 +1,6 @@
 """DTE, counted from New York's calendar day. Mirrors typescript/src/domain/expiry.ts."""
 
+import re
 from datetime import UTC, date, datetime
 from typing import Literal, TypedDict
 from zoneinfo import ZoneInfo
@@ -97,6 +98,27 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
     return "yes" if incomplete and complete else "no"
 
 
+_STORED = re.compile(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?", re.ASCII)
+
+
+def _stored_instant(text: str) -> datetime | None:
+    """UTC as the database spells it, the fraction optional and any length, to the millisecond — or None
+    for any other spelling (a "T", a zone) and for a day or a time that does not exist. Read strictly, as
+    `expiry.ts`' `storedInstant` reads it: `fromisoformat` would take a "T" and a "Z", and a year below 100
+    is refused because `Date.UTC` reads one as the 1900s."""
+    m = _STORED.fullmatch(text)
+    if m is None:
+        return None
+    y, mo, d, h, mi, s = (int(g) for g in m.groups()[:6])
+    ms = int((m.group(7) or "")[:3].ljust(3, "0"))
+    if y < 100:
+        return None
+    try:
+        return datetime(y, mo, d, h, mi, s, ms * 1000, tzinfo=UTC)
+    except ValueError:
+        return None
+
+
 #: when a stored row was observed, against its day's close: what a chart of the samples marks
 type SampleTiming = Literal["close", "before-open", "after-close", "unrecorded"]
 
@@ -109,9 +131,10 @@ def sample_timing(observed_at: str | None) -> SampleTiming:
     which nothing is claimed. By the hour alone, as `takes_sample`'s provisional check is. Mirrors
     `expiry.ts`.
     """
-    if observed_at is None:
+    when = None if observed_at is None else _stored_instant(observed_at)
+    if when is None:
         return "unrecorded"
-    t = _since_new_york_midnight(datetime.fromisoformat(observed_at).replace(tzinfo=UTC))
+    t = _since_new_york_midnight(when)
     if t < _SAMPLE_FROM:
         return "before-open"
     return "close" if t <= _SAMPLE_UNTIL else "after-close"
