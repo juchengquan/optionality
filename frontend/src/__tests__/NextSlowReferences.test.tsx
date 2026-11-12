@@ -27,6 +27,7 @@ afterEach(() => {
 const SPX: Reference = {
   id: "r1", code: "SPX", label: "SPX", source: "ibkr", name: null,
   figure: 7376.86, field: "last_price", change: 0.0031, error: null,
+  delayed: null, last_known: null, delayed_by_minutes: null,
 };
 
 /** One call to `/references`, answered when the test chooses: with rows, or with a refusal. */
@@ -43,7 +44,8 @@ function serve(refuse = false) {
     if (refuse) return Promise.reject(new Error("yahoo unreachable"));
     return new Promise((resolve, reject) => {
       held.push({
-        answer: (rows) => resolve({ ok: true, status: 200, json: () => Promise.resolve(rows) } as Response),
+        answer: (rows) =>
+          resolve({ ok: true, status: 200, json: () => Promise.resolve(rows) } as Response),
         refuse: (why) => reject(new Error(why)),
       });
     });
@@ -60,7 +62,8 @@ async function open(arrangement: Arrangement) {
   vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") });
   if (arrangement === "desk") document.cookie = "ui_arrangement=desk;path=/";
   render(<Next />);
-  await waitFor(() => expect(document.querySelector(".nx")?.getAttribute("data-arrangement")).toBe(arrangement));
+  await waitFor(() =>
+    expect(document.querySelector(".nx")?.getAttribute("data-arrangement")).toBe(arrangement));
 }
 
 /** Where the spread 1218_P7150's rules are edited: the phone's sheet, or the desk's inspector. */
@@ -100,7 +103,8 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     const mute = within(home).getByRole("button", { name: "mute 261218 7150P delta" });
     mute.focus();
     fireEvent.click(mute);
-    await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18-delta", body: { enabled: false } }]));
+    await waitFor(() =>
+      expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18-delta", body: { enabled: false } }]));
     // the save's reload has landed: the rule is off, listed with what is switched off
     await screen.findByRole("button", { name: "unmute 261218 7150P delta", hidden: true });
     // and the mute has FINISHED: it hands the focus on only once its write and its reads are done,
@@ -125,7 +129,8 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     fireEvent.change(within(form).getByLabelText("threshold"), { target: { value: "0.25" } });
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toHaveLength(1));
-    await waitFor(() => expect(within(home).queryByRole("form", { name: "editing 261218 7150P delta" })).toBeNull());
+    await waitFor(() =>
+      expect(within(home).queryByRole("form", { name: "editing 261218 7150P delta" })).toBeNull());
     expect(screen.queryByText("saving…")).toBeNull();
   });
 });
