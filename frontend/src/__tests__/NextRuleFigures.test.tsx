@@ -101,7 +101,8 @@ describe("a single contract's figures", () => {
   });
 
   it("derive no mid in the browser: bid and ask without the served mid is a dash", () => {
-    const rows = ruleFigures(withQuote("w-lone", { quote: { ...FULL, mid_price: undefined } }));
+    const { mid_price: _mid, ...noMid } = FULL;
+    const rows = ruleFigures(withQuote("w-lone", { quote: noMid }));
     expect(figure(rows, "bid")).toMatchObject({ text: "0.45", why: null });
     expect(figure(rows, "mid")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
   });
