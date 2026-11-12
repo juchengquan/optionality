@@ -54,7 +54,8 @@ export function References({
                   Reference has neither — what it actually costs is nothing, which is worth saying
                   rather than leaving the monitor's sentence to imply otherwise */}
               <ConfirmDelete
-                name={referenceTitle(r)} what="reference" onConfirm={() => onRemove(r.id)} disabled={pending}
+                name={referenceTitle(r)} what="reference" onConfirm={() => onRemove(r.id)}
+                disabled={pending}
                 description={
                   "This takes it off the page. Nothing is watching it and nothing is derived from"
                   + " it, so there is nothing else to lose — keeping it again is one line in this"

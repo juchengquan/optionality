@@ -29,7 +29,9 @@ export function ConfirmDelete({
     <AlertDialog>
       <AlertDialogTrigger
         render={
-          <Button type="button" variant="ghost" size="sm" disabled={disabled}>{children ?? "delete"}</Button>
+          <Button type="button" variant="ghost" size="sm" disabled={disabled}>
+            {children ?? "delete"}
+          </Button>
         }
       />
       {/* a reload would re-render the row this is anchored in and take the question away

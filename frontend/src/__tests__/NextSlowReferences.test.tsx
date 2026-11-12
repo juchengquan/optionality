@@ -185,8 +185,8 @@ describe.each(arrangements)("on the %s, one Reference call in flight at a time",
       await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
       fireEvent.click(button);
     }
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "refresh now", hidden: true }).hasAttribute("disabled")).toBe(false));
+    const button = () => screen.getByRole("button", { name: "refresh now", hidden: true });
+    await waitFor(() => expect(button().hasAttribute("disabled")).toBe(false));
   }
 
   it("asks once more, and only once, however many presses came while one was out", async () => {
@@ -249,7 +249,7 @@ describe.each(arrangements)("on the %s, one Reference call in flight at a time",
   });
 });
 
-describe.each(arrangements)("on the %s, keeping a Reference while the References are slow", (arrangement) => {
+describe.each(arrangements)("on the %s, keeping a Reference while they are slow", (arrangement) => {
   async function openSettings() {
     fireEvent.click(await screen.findByRole("button", { name: /^settings$/i }));
     return screen.findByTestId("references");
