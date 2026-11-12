@@ -121,7 +121,8 @@ describe("its actions", () => {
 
   it("offers every one, in a stable order", () => {
     expect(paletteActions({ mode: "live", choice: "auto", selected: null }).map((a) => a.label)).toEqual([
-      "Add a spread", "Edit the selected Monitor", "Close the selected holding", "Switch to Review",
+      "Add a spread", "Edit the selected Monitor", "Close the selected holding", "Save the view as an image",
+      "Switch to Review",
       "Arrangement: desk", "Arrangement: phone", "Arrangement: by the screen's width",
     ]);
     expect(paletteActions({ mode: "review", choice: "desk", selected: null })
@@ -148,7 +149,7 @@ describe("its actions", () => {
         .map((a) => [a.key, a.why]));
     const HOLD = "finish or cancel the open form first";
     // the selected rule's own editor is open: editing it again is landing on it, closing is not
-    expect(why(row("w-dec18"), "edit")).toMatchObject({ "edit-monitor": null, add: null, mode: null });
+    expect(why(row("w-dec18"), "edit")).toMatchObject({ "edit-monitor": null, add: null, mode: null, "save-image": null });
     expect(why(row("h-calls"), "close")).toMatchObject({ "close-holding": null });
     // another form open: neither form action, and not the phone, which unmounts the desk
     expect(why(row("w-dec18"), "other")).toMatchObject({ "edit-monitor": HOLD, "arrange-phone": HOLD });

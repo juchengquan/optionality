@@ -13,11 +13,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Next } from "../next/Next";
 import { holdingService, type HoldingService } from "../testing/holdingService";
 import { settle } from "./nextBook";
+import { catchShare, forgetShare } from "./picture";
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  forgetShare();
   for (const n of ["ui_arrangement", "ui_privacy", "ui_pricemap"]) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
@@ -111,6 +113,23 @@ describe("every action, from the keyboard", () => {
     expect(document.cookie).toMatch(/ui_arrangement=auto/);
     // 1440px wide: by the width, still the desk
     expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk");
+  });
+});
+
+describe("saving the view, from the keyboard", () => {
+  it("takes the picture the header's button takes, with no palette and no selection in it", async () => {
+    await openDesk();
+    const share = catchShare();
+    await userEvent.keyboard("jj{Enter}");
+    await waitFor(() => expect(inspector()).not.toBeNull());
+    await run("save the view");
+    await waitFor(() => expect(share.shares()).toBe(1));
+    // the still, read while the sheet is up: drawn without the palette or the table's selection
+    const still = document.querySelector<HTMLElement>(".nx-still")!;
+    expect(still).not.toBeNull();
+    expect(still.querySelector('[role="dialog"], [role="combobox"], [data-cursor], [data-selected]')).toBeNull();
+    expect(share.file()!.type).toBe("image/png");
+    share.release();
   });
 });
 

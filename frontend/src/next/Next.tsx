@@ -184,6 +184,7 @@ export function Next() {
       document.getElementById(panelId)?.querySelector<HTMLElement>("input, select, textarea")?.focus();
     } else if (a.key === "edit-monitor" && desk.id !== null) land(desk.id, "edit");
     else if (a.key === "close-holding" && desk.id !== null) land(desk.id, "close");
+    else if (a.key === "save-image") saveViewNow.current();
     else if (a.key === "mode") pickMode(mode === "live" ? "review" : "live");
     else if (a.key === "arrange-desk") chooseArrangement("desk");
     else if (a.key === "arrange-phone") {
@@ -232,6 +233,15 @@ export function Next() {
     />
   );
 
+  // the picture (#300), from the header's button and the palette alike: one press
+  const saveView = () => void save({
+    // the book, without REVIEW's closed trades: a journal is not the book
+    ...bookProps, journal: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
+    error: book.error, references: book.references,
+  });
+  const saveViewNow = useRef(saveView);
+  saveViewNow.current = saveView;
+
   return (
     <MonitorActionsContext.Provider value={monitorActions}>
     <div className="nx" data-arrangement={arrangement} data-mode={mode} data-up={up}
@@ -241,11 +251,7 @@ export function Next() {
         {phone ? null : <ModeSwitch mode={mode} byClock={chosen === null} onPick={pickMode} />}
         <span className="nx-spacer" />
         <Button variant="ghost" size="sm" aria-label="save as image" disabled={shooting}
-                onClick={() => void save({
-                  // the book, without REVIEW's closed trades: a journal is not the book
-                  ...bookProps, journal: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
-                  error: book.error, references: book.references,
-                })}>
+                onClick={saveView}>
           <ImageDown className={shooting ? "animate-pulse" : undefined} />
         </Button>
         <Button variant="ghost" size="sm" aria-label="refresh now" disabled={book.refreshing}

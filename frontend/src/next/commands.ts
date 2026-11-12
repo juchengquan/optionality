@@ -121,7 +121,7 @@ export type Hold = "edit" | "close" | "other" | null;
 export const HOLD_WHY = "finish or cancel the open form first";
 
 export type ActionKey =
-  | "add" | "edit-monitor" | "close-holding" | "mode" | "arrange-desk" | "arrange-phone" | "arrange-auto";
+  | "add" | "edit-monitor" | "close-holding" | "save-image" | "mode" | "arrange-desk" | "arrange-phone" | "arrange-auto";
 
 export interface PaletteAction {
   key: ActionKey;
@@ -166,6 +166,8 @@ export function paletteActions(s: {
       why: kind === null ? "nothing is selected"
         : kind === "holding" ? held("close") : "a Monitor is selected, not a holding",
     },
+    // the header's "save as image" (#300): a picture of the view, which changes nothing in it
+    { key: "save-image", label: "Save the view as an image", detail: "", why: null },
     // neither a mode nor the desk's own arrangement takes the desk down, so neither waits for a form
     { key: "mode", label: s.mode === "live" ? "Switch to Review" : "Switch to Live", detail: "", why: null },
     ...ARRANGEMENTS.map(([key, choice, label]) => ({
