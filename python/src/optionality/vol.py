@@ -5,8 +5,8 @@ guess — whenever the chain is not whole.
 """
 
 import math
-from itertools import pairwise
 from datetime import datetime
+from itertools import pairwise
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -118,7 +118,7 @@ _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
 
 
 def _day_words(iso: str) -> str:
-    """"9 Nov": a stored YYYY-MM-DD as the dashboard writes a day, by string."""
+    """ "9 Nov": a stored YYYY-MM-DD as the dashboard writes a day, by string."""
     return f"{int(iso[8:10])} {_MONTHS[int(iso[5:7]) - 1]}"
 
 

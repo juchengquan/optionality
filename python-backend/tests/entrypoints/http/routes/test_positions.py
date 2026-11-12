@@ -158,8 +158,7 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
         }
         # and says why, in the service's words, for the dashboard to say as they are (#333)
         assert got["reason"] == (
-            "its samples begin on 12 Oct, not on 6 Oct when it was Opened: "
-            "the vol it was sold at was never recorded"
+            "its samples begin on 12 Oct, not on 6 Oct when it was Opened: the vol it was sold at was never recorded"
         )
 
     async def test_survives_a_sample_whose_stored_reading_is_not_a_number(self, start):
