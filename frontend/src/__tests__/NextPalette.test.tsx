@@ -76,6 +76,12 @@ describe("opening and closing it", () => {
     expect(palette()).toBeTruthy();
   });
 
+  it("takes its chord from the browser, which would otherwise act on it too", async () => {
+    await open();
+    expect(fireEvent.keyDown(document.body, { key: "k", ctrlKey: true })).toBe(false);
+    expect(palette()).toBeTruthy();
+  });
+
   it("takes no chord but its own: a plain k, and Ctrl+Shift+K, are not swallowed", async () => {
     await open();
     expect(fireEvent.keyDown(document.body, { key: "k", ctrlKey: true, shiftKey: true })).toBe(true);
@@ -169,6 +175,16 @@ describe("finding by text", () => {
     expect(row("r-calls").hasAttribute("data-selected")).toBe(true);
     await run(user, "8300");
     await waitFor(() => expect(row("q-unknown").hasAttribute("data-selected")).toBe(true));
+  });
+
+  it("lands on the row already open, the focus going back into its inspector", async () => {
+    const { user } = await open();
+    await run(user, "1231_C7600");
+    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1231_C7600"));
+    within(row("w-dec04")).getByRole("button", { name: "1204_P6900" }).focus();
+    await run(user, "1231_C7600");
+    await waitFor(() => expect(inspector()!.contains(document.activeElement)).toBe(true));
+    expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1231_C7600");
   });
 
   it("lands on a muted rule where it is listed: the folded list opened and the rule focused", async () => {
