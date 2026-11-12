@@ -7,7 +7,7 @@
  *  call gone wrong; a route not named here is a 404 that says which call it was.
  */
 import type { Entry, Monitor } from "../api";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "./ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "./ownerBook";
 
 /** Five days kept, not the default seven, so a page that hard-coded the default would say the
  *  wrong day for an expired rule. */
@@ -53,7 +53,7 @@ export function serveEditing(refuse: (id: string, body: Record<string, unknown>)
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     const method = init?.method ?? "GET";
-    const read = payoffAnswer(path) ?? samplesAnswer(path);
+    const read = payoffAnswer(path) ?? samplesAnswer(path) ?? volAnswer(path);
     if (read) return reply(200, read);
     const id = /^\/monitors\/([^/]+)$/.exec(path)?.[1];
 

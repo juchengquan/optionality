@@ -73,11 +73,12 @@ async function read<T>(
 
 export const fetchQuotes = () => read<Entry[]>(client.quotes.$get(), "/quotes");
 
-/** What of a holding's pace gap vol accounts for, over its own stored samples (ADR 0011).
+/** What of a holding's pace gap vol accounts for, over its own stored samples (ADR 0011), and
+ *  since #333 the whole split: why not where it cannot say, and the gap, the rest and what would
+ *  cover it at the close the vol part runs to.
  *
- *  The only read of history in the client. Deliberately NOT on the /quotes payload, which the
- *  dashboard polls every 15 seconds per open tab while this changes once a market day — the sheet
- *  asks for it when it opens. Every field is null together where the chain cannot say. */
+ *  Deliberately NOT on the /quotes payload, which the dashboard polls every 15 seconds per open
+ *  tab while this changes once a market day — the sheet asks for it when it opens. */
 export type Vol = Exclude<Infer<typeof client.positions[":id"]["vol"]["$get"]>, { detail: string }>;
 export const fetchVol = (id: string) =>
   read<Vol>(client.positions[":id"].vol.$get({ param: { id } }), `/positions/${id}/vol`);

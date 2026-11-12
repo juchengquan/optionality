@@ -6,6 +6,7 @@ import { DASH, legSummary } from "../format";
 import type { HoldingWrites } from "./HoldingActions";
 import type { Mode } from "./mode";
 import { Glyph } from "./NeedsLine";
+import { paceWords } from "./pace";
 import { placeBook } from "./placement";
 import { entryName, isEntrySignal, sentence } from "./needs";
 
@@ -177,7 +178,7 @@ function HoldingItem({ holding, rules, mode, privacy }: {
             {"P&L "}
             <Money value={holding.pnl} privacy={privacy} />
             {` · captured ${percent(holding.captured)}`}
-            {s ? ` · pace gap ${points(s.pace_gap)} · ${holding.dte} DTE, manage-by at ${s.manage_by_dte}`
+            {s ? ` · pace gap: ${paceWords(s.pace_gap)} · ${holding.dte} DTE, manage-by at ${s.manage_by_dte}`
               : ` · ${holding.dte} DTE · no schedule (Opened not recorded)`}
           </span>
         )}

@@ -29,6 +29,7 @@ import {
   attentionOf, charsOf, COLUMNS, PINNED, rowId, rowName, type DeskColumn, type DeskRow,
 } from "../desk/columns";
 import { NeedsLine } from "../NeedsLine";
+import { paceOutcome, paceWords } from "../pace";
 import { fieldWords, monitorName, QUARANTINED, type Need } from "../needs";
 import { HoldingCard, LevelChip, RuleCard, RuleLine } from "../phone/Cards";
 import {
@@ -271,7 +272,7 @@ function ReviewCard({ placed: { holding, rules }, quotes, monitors, privacy }: {
         <div><dt>captured</dt><dd>{percent(holding.captured)}</dd></div>
         <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
         <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
-        <div><dt>pace gap</dt><dd>{points(s?.pace_gap)}</dd></div>
+        <div><dt>pace gap</dt><dd data-outcome={paceOutcome(s?.pace_gap)}>{paceWords(s?.pace_gap)}</dd></div>
         <div><dt>manage-by</dt><dd>{s ? `at ${s.manage_by_dte} DTE` : DASH}</dd></div>
         <div><dt>short Δ</dt><dd>{shortDeltaWords(shortDeltas(holding, quotes, monitors))}</dd></div>
       </dl>

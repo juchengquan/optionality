@@ -12,7 +12,7 @@ import { DeskBook } from "../next/desk/DeskBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { spxRange, spxRuns } from "../next/spxdays";
 import { SpxPath, spxGutter } from "../next/SpxPath";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
 let asked: string[] = [];
 let samples: (path: string) => Samples | null = samplesAnswer;
@@ -23,8 +23,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     asked.push(`${init?.method ?? "GET"} ${path}`);
-    // the inspector asks for exactly two things: the holding's samples and its payoff
-    const body = /\/samples$/.test(path) ? samples(path) : payoffAnswer(path);
+    // the inspector asks for exactly three things: the holding's samples, its payoff and its split
+    const body = /\/samples$/.test(path) ? samples(path) : payoffAnswer(path) ?? volAnswer(path);
     return Promise.resolve(body
       ? { ok: true, status: 200, json: () => Promise.resolve(body) }
       : { ok: false, status: 404, json: () => Promise.resolve({ detail: "not served here" }) });

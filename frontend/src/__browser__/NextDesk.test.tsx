@@ -9,7 +9,7 @@ import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 /* The owner-shaped book the desk's acceptance criteria name, served to the page. Here and not in a
@@ -34,7 +34,9 @@ function serveOwnerBook(extra: object[] = []): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
     // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
-    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""));
+    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""))
+      // and the pace split (#333), read once when a holding is opened
+      ?? volAnswer(String(url).replace(/^.*\/api/, ""));
     if (read) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(read) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
@@ -115,6 +117,40 @@ describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => 
         expect(insp.right).toBeLessThanOrEqual(document.documentElement.clientWidth);
         expect(overflowsSideways()).toBe(false);
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
+        expect(misfits()).toEqual([]);
+      });
+    }
+  }
+});
+
+describe("the pace explained fits in the inspector (#333)", () => {
+  /** Anything in the section drawn past the inspector's own box. */
+  function outside(insp: HTMLElement): string[] {
+    const box = insp.getBoundingClientRect();
+    return [...insp.querySelectorAll<Element>(".nx-pace, .nx-pace *")]
+      .filter((el) => el.getClientRects().length > 0)
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5;
+      })
+      .map((el) => `${el.tagName.toLowerCase()} ${el.getAttribute("class") ?? ""} ${el.textContent?.slice(0, 20)}`);
+  }
+
+  // the call spread's split declined with the route's reason and what would cover the gap; the put
+  // spread's split whole — in both modes, since the inspector explains the pace in both
+  for (const mode of ["live", "review"] as const) for (const width of [900, 1280, 2560]) {
+    for (const id of ["h-calls", "h-puts"]) {
+      it(`${id}'s at ${width}px in ${mode}`, async () => {
+        await show(mode, width);
+        await inspect(id);
+        const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
+        const pace = within(insp).getByRole("region", { name: "the pace explained" });
+        await settle();
+        expect(pace.querySelector("[data-split]")).toBeTruthy();
+        expect(pace.getBoundingClientRect().width).toBeGreaterThan(200);
+        expect(outside(insp)).toEqual([]);
+        expect(insp.scrollWidth).toBeLessThanOrEqual(insp.clientWidth);
+        expect(overflowsSideways()).toBe(false);
         expect(misfits()).toEqual([]);
       });
     }

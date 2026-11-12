@@ -9,7 +9,7 @@ import type { Holding, Samples } from "../api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
 /** Every request the page made, as `METHOD path`. */
 let asked: string[] = [];
@@ -19,7 +19,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     asked.push(`${init?.method ?? "GET"} ${path}`);
-    const body = samplesAnswer(path) ?? payoffAnswer(path);
+    const body = samplesAnswer(path) ?? payoffAnswer(path) ?? volAnswer(path);
     return Promise.resolve(body
       ? { ok: true, status: 200, json: () => Promise.resolve(body) }
       : { ok: false, status: 404, json: () => Promise.resolve({ detail: "not served here" }) });
@@ -50,7 +50,7 @@ function serveSamples(samples: Samples | null) {
         ? { ok: true, status: 200, json: () => Promise.resolve(samples) }
         : { ok: false, status: 404, json: () => Promise.resolve({ detail: "position not found" }) });
     }
-    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoffAnswer(path)) });
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoffAnswer(path) ?? volAnswer(path)) });
   }));
 }
 
@@ -291,7 +291,7 @@ describe("switching holdings in REVIEW", () => {
       const path = String(url).replace(/^.*\/api/, "");
       asked.push(`${init?.method ?? "GET"} ${path}`);
       const samples = samplesAnswer(path);
-      if (!samples) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoffAnswer(path)) });
+      if (!samples) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoffAnswer(path) ?? volAnswer(path)) });
       return new Promise((resolve) => waiting.set(path, () =>
         resolve({ ok: true, status: 200, json: () => Promise.resolve(samples) })));
     }));

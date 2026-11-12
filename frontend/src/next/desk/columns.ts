@@ -8,7 +8,7 @@
  *  for is blank, not a dash, because a dash reads as "the figure has not arrived".
  *
  *  Every figure is one the service served. Nothing here models a price: a pace is the schedule's
- *  `on_pace` and `pace_gap`, never a curve drawn on screen (ADR 0023: "never draw what the system
+ *  `on_pace` and `pace_gap`, the gap in words, never a curve drawn on screen (ADR 0023: "never draw what the system
  *  does not know"). The two pieces of arithmetic are a subtraction of two served day counts (days
  *  left before the Manage-by) and a share as a percentage.
  */
@@ -18,6 +18,7 @@ import type { Mode } from "../mode";
 import type { BookModel } from "../placement";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
 import { servedDelta } from "../legs";
+import { paceWords } from "../pace";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
 export type DeskRow =
@@ -43,8 +44,6 @@ export interface DeskColumn {
 const points = (n: number | null | undefined) => (n === null || n === undefined ? DASH : n.toFixed(2));
 const delta = (n: number | null | undefined) => (n === null || n === undefined ? DASH : n.toFixed(3));
 const share = (n: number | null) => (n === null ? DASH : `${Math.round(n * 100)}%`);
-const signed = (n: number | null | undefined) =>
-  n === null || n === undefined ? DASH : `${n > 0 ? "+" : ""}${n.toFixed(2)}`;
 
 const MONEY = new Intl.NumberFormat("en-US", {
   style: "currency", currency: "USD", maximumFractionDigits: 0, signDisplay: "exceptZero",
@@ -238,9 +237,10 @@ const ON_PACE: DeskColumn = {
 };
 
 const PACE_GAP: DeskColumn = {
-  // Cost to close less on-pace: positive is BEHIND, costing more than the plan (ADR 0011)
+  // Cost to close less on-pace, said in words (CONTEXT.md: Pace gap): BEHIND is costing more than
+  // the plan, and a bare sign beside a P&L invites reading it the wrong way round (ADR 0011)
   key: "pace_gap", label: "pace gap",
-  text: holdingOnly((h) => h.schedule ? signed(h.schedule.pace_gap) : DASH),
+  text: holdingOnly((h) => h.schedule ? paceWords(h.schedule.pace_gap) : DASH),
 };
 
 const TO_MANAGE: DeskColumn = {

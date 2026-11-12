@@ -10,7 +10,7 @@ import type { Entry, Holding } from "../api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 
 /** Every request the page made, as `METHOD path body`. */
 let asked: string[] = [];
@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     asked.push(`${init?.method ?? "GET"} ${path}${init?.body ? ` ${String(init.body)}` : ""}`);
-    const body = payoffAnswer(path);
+    const body = payoffAnswer(path) ?? volAnswer(path);
     return Promise.resolve(body
       ? { ok: true, status: 200, json: () => Promise.resolve(body) }
       : { ok: false, status: 404, json: () => Promise.resolve({ detail: "not served here" }) });
