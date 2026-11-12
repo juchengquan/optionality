@@ -59,7 +59,12 @@ export interface SpreadBody {
   entry?: number | null;
   contracts?: number;
   opened_at?: string | null;
-  monitors: { option_type?: OptionType; strike?: number; threshold: number }[];
+  /** a leg named watches that contract — on `field`, `option_delta` when not given (the one-contract
+   *  form names all three, #331); none named watches the spread's value */
+  monitors: {
+    option_type?: OptionType; strike?: number; field?: string; threshold: number;
+    direction?: "above" | "below"; compare?: "abs" | "signed";
+  }[];
 }
 
 export interface SpreadsBody {
@@ -315,7 +320,7 @@ function planned(d: AddDraft, s: SpreadDraft): { code: string; field: string }[]
 }
 
 /** A rule in words, the way the form names one it will replace. */
-function ruleWords(m: Monitor): string {
+export function ruleWords(m: Monitor): string {
   const op = m.direction === "below" ? "≤" : "≥";
   const at = m.threshold.toFixed(2);
   if (m.legs) return `${m.code} ${m.field === "mid_price" ? "value" : m.field} ${op} ${at}`;

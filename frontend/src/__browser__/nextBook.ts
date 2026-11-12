@@ -211,3 +211,56 @@ export function serveAdding(spreads: { status: number; body: object }): unknown[
   }) as unknown as typeof fetch;
   return sent;
 }
+
+/** The page's every route, for the one-contract suites (#331): the book empty until a holding is
+ *  recorded, the draft payoff worked out, and `POST /spreads` answered as `spreads` says (what was
+ *  made, by default). A held spread posted is then served by `/positions/values`, valued, so a suite
+ *  can see it reach the book — built from what was POSTED, which is enough to draw it; what the
+ *  route itself does with the body is the door scenarios'. Every write is kept, as `METHOD path`
+ *  and its body. Any route not named is a 404 in the error shape. */
+export function serveContract(spreads?: { status: number; body: object }): { what: string; body: unknown }[] {
+  const writes: { what: string; body: unknown }[] = [];
+  const held: object[] = [];
+  const reply = (status: number, body: unknown) =>
+    Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
+  window.fetch = ((url: string, init?: RequestInit) => {
+    const path = String(url).replace(/^.*\/api/, "");
+    const method = init?.method ?? "GET";
+    const body = init?.body ? JSON.parse(String(init.body)) as never : null;
+    if (method === "POST" && path === "/positions/payoff") return reply(200, draftPayoff(body!));
+    if (method !== "GET") writes.push({ what: `${method} ${path}`, body });
+    if (method === "POST" && path === "/spreads") {
+      const sent = body as unknown as {
+        strike_date: string;
+        spreads: { name: string; held: boolean; legs: object[]; entry?: number | null; contracts?: number;
+          opened_at?: string | null; monitors: { field?: string }[] }[];
+      };
+      const s = sent.spreads[0]!;
+      const answer = spreads ?? {
+        status: 201,
+        body: {
+          positions: s.held ? [{ id: "p9", name: s.name }] : [],
+          monitors: s.monitors.map((m, i) => ({ id: `m${writes.length}-${i}`, code: s.name, field: m.field ?? "option_delta" })),
+          replaced: [],
+        },
+      };
+      if (answer.status < 400 && s.held) {
+        held.push({
+          id: "p9", name: s.name, strategy: null, strike_date: sent.strike_date, contracts: s.contracts ?? 1,
+          entry: s.entry ?? null, legs: s.legs, created_at: null, opened_at: s.opened_at ?? null, closed_on: null,
+          exit: null, realized_points: null, cost_to_close: 2.1, pnl: 30, contract_size: 100, greeks: {},
+          fetched_at: "x", dte: 36, schedule: null, captured: 0.125,
+        });
+      }
+      return reply(answer.status, answer.body);
+    }
+    if (method === "GET") {
+      if (path === "/health") return reply(200, health);
+      if (path === "/positions/values") return reply(200, held);
+      // `/positions` is REVIEW's closed trades (#296), which the page reads when the clock says REVIEW
+      if (["/quotes", "/monitors", "/references", "/positions"].includes(path)) return reply(200, []);
+    }
+    return reply(404, { detail: `${method} ${path} is not served here` });
+  }) as unknown as typeof fetch;
+  return writes;
+}
