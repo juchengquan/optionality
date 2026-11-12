@@ -69,9 +69,9 @@ describe("changing a holding from the inspector", () => {
     const fix = within(result).getByRole("form", { name: "correct the close of 1231_IC" });
     await userEvent.fill(within(fix).getByLabelText("exit, per contract"), "1.1");
     await userEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
-    await waitFor(() => expect(writes(s)[2]).toEqual(["PATCH /positions/h-ic", { exit: 1.1, closed_on: "2026-11-12" }]));
+    await waitFor(() => expect(writes(s)[2]).toEqual(["PATCH /positions/h-ic", { exit: 1.1 }]));
     // (5.2 − 1.1) × 2, as the service answered the correction
-    await waitFor(() => expect(within(result).getByTestId("realized").textContent).toBe("8.20 pts"));
+    await waitFor(() => expect(within(result).getByTestId("realized").textContent).toBe("8.2 pts"));
     await userEvent.click(within(result).getByRole("button", { name: "Done" }));
 
     insp = await inspect("h-puts");

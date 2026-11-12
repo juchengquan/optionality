@@ -197,8 +197,9 @@ export const deletePosition = (id: string) =>
   sent(client.positions[":id"].$delete({ param: { id } }), `/positions/${id}`);
 
 /** Every holding on record, held or CLOSED (ADR 0022), as stored — no live figures, no market
- *  call. Asked for only when the closed list is opened: nothing else on the page needs it, and the
- *  held ones' figures are `/positions/values`' to give. */
+ *  call. Asked for only when a closed list is shown — `/opt`'s when it is opened, and `/opt/next`'s
+ *  journal on entering REVIEW and after a write that changes it (#296), never polled: nothing else
+ *  on the page needs it, and the held ones' figures are `/positions/values`' to give. */
 export type Recorded = Awaited<ReturnType<typeof fetchPositions>>[number];
 export const fetchPositions = () =>
   read<Exclude<Infer<typeof client.positions.$get>, { detail: string }>>(
@@ -229,7 +230,7 @@ export async function closePosition(
  *  in the service's own `realized_points` rather than working it out. */
 export type Corrected = Exclude<Infer<typeof client.positions[":id"]["$patch"]>, { detail: string }>;
 export async function correctClose(
-  id: string, given: { exit: number | null; closed_on: string },
+  id: string, given: { exit?: number | null; closed_on?: string },
 ): Promise<Corrected> {
   const response = await client.positions[":id"].$patch({ param: { id }, json: given });
   const body: unknown = await response.json().catch(() => null);

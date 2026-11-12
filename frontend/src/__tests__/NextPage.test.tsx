@@ -88,7 +88,9 @@ function serve() {
       : path === "/monitors" ? [quarantined]
         : path === "/health" ? health
           : path === "/references" ? [reference]
-            : path === "/positions/values" ? [holding] : null;
+            : path === "/positions/values" ? [holding]
+              // every holding on record, as stored: REVIEW's closed trades read it (#296)
+              : path === "/positions" ? [holding] : null;
     return reply(true, body);
   }) as unknown as typeof fetch;
 }
@@ -133,7 +135,7 @@ describe("what it asks for in each mode", () => {
     calls = [];
     await act(async () => { vi.advanceTimersByTime(15_000); });
     await waitFor(() => expect(calls).toContain("/health"));
-    expect(new Set(calls)).toEqual(new Set(["/quotes", "/monitors", "/health"]));
+    expect(new Set(calls), JSON.stringify(calls)).toEqual(new Set(["/quotes", "/monitors", "/health"]));
   });
 });
 

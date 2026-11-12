@@ -302,8 +302,13 @@ export function DayField({ value, onChange }: { value: string; onChange: (v: str
   );
 }
 
-function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onDeleted }: {
-  id: string; holding: Holding; watching: number; onCancel: () => void; onCloseInstead: () => void;
+/** The question a delete asks first, of a held holding here and of a closed one in REVIEW's journal
+ *  (#296, ADR 0022: the closed list carries both remedies). A closed one has no "close it instead":
+ *  it is closed, and what keeps its record is not deleting it. */
+export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onDeleted }: {
+  id: string; holding: Pick<Holding, "id" | "name">; watching: number; onCancel: () => void;
+  /** absent for a closed holding */
+  onCloseInstead?: () => void;
   onDeleted: () => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -329,13 +334,18 @@ function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onDeleted 
         {"to close, IV, vega and delta — and cannot be re-entered: no later sweep can rebuild them."}
         {watching > 0 ? " Its Monitors are kept: deleting a holding never deletes a rule." : ""}
       </p>
-      <p>If this was a real trade, close it instead: closing keeps all of it.</p>
+      <p>
+        {onCloseInstead
+          ? "If this was a real trade, close it instead: closing keeps all of it."
+          : "If this was a real trade, keep it: its record is what REVIEW reads, and a mistyped close is corrected above."}
+      </p>
       {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
       <div className="nx-hold-row">
         <button type="button" className="nx-hold-danger" disabled={saving} onClick={() => void remove()}>
           {saving ? "deleting…" : "Delete for good"}
         </button>
-        <button type="button" className="nx-hold-primary" onClick={onCloseInstead}>Close it instead</button>
+        {onCloseInstead
+          ? <button type="button" className="nx-hold-primary" onClick={onCloseInstead}>Close it instead</button> : null}
         <button ref={keep} type="button" onClick={onCancel}>Keep it</button>
       </div>
     </div>
