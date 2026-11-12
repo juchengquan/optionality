@@ -127,7 +127,9 @@ there is no volatility figure for a structure, and an average of its legs' can p
 _Avoid_: vol adjustment (it adjusts nothing — On-pace is never moved by it), IV of the position
 
 **The rest**:
-A Pace gap less its Vol part. Named and left unattributed on purpose: spot, skew and the decay
+A Pace gap less its Vol part, both at the sample the Vol part runs to — the last one recorded, so
+the three figures are one sum at one instant, and the gap split is that sample's rather than the
+live one. Named and left unattributed on purpose: spot, skew and the decay
 shape's own approximation are all in it, and it is usually the larger half. Calling it noise would
 claim knowledge of it.
 _Avoid_: residual, unexplained, error, noise

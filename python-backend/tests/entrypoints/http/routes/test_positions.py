@@ -126,11 +126,16 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
             "to": "2026-10-07",
             "days": 1,
             "reason": None,
+            # a row with no observed time is said as one, never claimed as the close
             "at": "2026-10-07",
+            "timing": "unrecorded",
             "gap": gap,
+            "gap_reason": None,
             "rest": gap - 4,
+            # the legs' flat vegas cancel: no cover, and why
             "vega": 0,
             "cover": None,
+            "cover_reason": "its legs' vegas cancel out, so no move in vol would cover the gap",
         }
 
     async def test_says_so_plainly_when_there_is_no_baseline_rather_than_guessing_one(self, start):
@@ -153,7 +158,7 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
         }
         # and says why, in the service's words, for the dashboard to say as they are (#333)
         assert got["reason"] == (
-            "its samples begin on 2026-10-12, not on 2026-10-06 when it was Opened: "
+            "its samples begin on 12 Oct, not on 6 Oct when it was Opened: "
             "the vol it was sold at was never recorded"
         )
 
@@ -1729,7 +1734,21 @@ class TestWhatOnlyThePythonCanGetWrong:
         h = start_with(start)
         id_ = created201(await post(h, condor(opened_at="2026-10-06")))
         resp = await h.call(f"/positions/{id_}/vol")
-        assert list(resp.json()) == ["vol", "from", "to", "days", "reason", "at", "gap", "rest", "vega", "cover"]
+        assert list(resp.json()) == [
+            "vol",
+            "from",
+            "to",
+            "days",
+            "reason",
+            "at",
+            "timing",
+            "gap",
+            "gap_reason",
+            "rest",
+            "vega",
+            "cover",
+            "cover_reason",
+        ]
 
     async def test_answers_a_method_no_route_serves_on_these_paths_as_hono_does(self, start):
         # `/{id}` is routed for PATCH and DELETE only, and `/values` for GET only: Starlette would

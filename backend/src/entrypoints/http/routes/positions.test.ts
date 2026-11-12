@@ -85,7 +85,10 @@ describe("what vol did to a holding, over its own samples", () => {
     const gap = 3.0 - 3.0 * Math.sqrt(44 / 73);
     expect(await body(resp)).toEqual({
       vol: 4, from: "2026-10-06", to: "2026-10-07", days: 1, reason: null,
-      at: "2026-10-07", gap, rest: gap - 4, vega: 0, cover: null,
+      // a row with no observed time is said as one, never claimed as the close
+      at: "2026-10-07", timing: "unrecorded", gap, gap_reason: null, rest: gap - 4,
+      // the legs' flat vegas cancel: no cover, and why
+      vega: 0, cover: null, cover_reason: "its legs' vegas cancel out, so no move in vol would cover the gap",
     });
   });
 
@@ -101,7 +104,7 @@ describe("what vol did to a holding, over its own samples", () => {
     expect(await body(resp)).toMatchObject({
       vol: null, from: null, to: null, days: null, rest: null,
       // and says why, in the service's words, for the dashboard to say as they are (#333)
-      reason: "its samples begin on 2026-10-12, not on 2026-10-06 when it was Opened: "
+      reason: "its samples begin on 12 Oct, not on 6 Oct when it was Opened: "
         + "the vol it was sold at was never recorded",
       at: "2026-10-13",
     });

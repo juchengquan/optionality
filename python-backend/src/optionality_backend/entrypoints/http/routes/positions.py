@@ -201,10 +201,13 @@ class VolOut(BaseModel):
     days: float | None
     reason: str | None
     at: str | None
+    timing: Literal["close", "in-hours", "before-open", "after-close", "unrecorded"] | None
     gap: float | None
+    gap_reason: str | None
     rest: float | None
     vega: float | None
     cover: float | None
+    cover_reason: str | None
 
 
 class SampleOut(BaseModel):
@@ -470,13 +473,14 @@ def position_routes(deps: Deps) -> APIRouter:
                 observed_on=s["observed_on"],
                 dte=s["dte"],
                 cost_to_close=s["cost_to_close"],
+                observed_at=s["observed_at"],
                 # a corrupt map costs the figure, never the request: the whole sheet would fail to load
                 legs_iv=_parse_map(s["legs_iv"]),
                 legs_vega=_parse_map(s["legs_vega"]),
             )
             for s in list_position_samples(db, id_)
         ]
-        return pace_explained(samples, to_position(row)).model_dump(by_alias=True)
+        return pace_explained(samples, to_position(row), deps.now()).model_dump(by_alias=True)
 
     @router.get(
         "/{id}/samples",

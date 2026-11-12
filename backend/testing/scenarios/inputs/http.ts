@@ -71,6 +71,15 @@ const day = (observed_on: string, dte: number, ivs: number[]) => sample({
   legs_vega: Object.fromEntries(codes.map((c) => [c, 4.25])),
 });
 
+/** A day with its own Cost to close, each leg's own vega and the instant it was observed (#333). */
+const dayAt = (observed_on: string, dte: number, cost: number, ivs: number[], vegas: number[],
+  observed_at: string) => sample({
+  position_id: "pos-1", observed_on, dte, cost_to_close: cost, observed_at,
+  legs_iv: Object.fromEntries(codes.map((c, i) => [c, ivs[i]])),
+  legs_vega: Object.fromEntries(codes.map((c, i) => [c, vegas[i]])),
+});
+const VEGAS = [5.5, 4.75, 4.25, 3.5];
+
 const single = { strike_date: EXPIRY, option_type: "CALL", strike: 7300, threshold: 0.3 };
 const comboBody = {
   name: "dec-calls", strike_date: EXPIRY, threshold: 4,
@@ -692,6 +701,51 @@ export const HTTP: readonly HttpInput[] = [
       tables: {
         positions: [opened],
         position_samples: [day("2026-11-08", 40, [15, 14.25, 19, 20])],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/vol"),
+  },
+  {
+    // the legs' vegas do not cancel, so it says what would cover the gap; and today's row was
+    // observed at 09:45 with New York's hours still running, so it is no close yet (#333)
+    name: "GET /positions/{id}/vol splits the gap and covers it, at a row in hours that are still running",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [
+          dayAt("2026-11-06", 42, 6.4, [14.5, 14, 19.25, 20], VEGAS, "2026-11-06 21:05:00.000000"),
+          dayAt("2026-11-07", 41, 6.1, [14.75, 14, 19.5, 20.25], VEGAS, "2026-11-07 21:05:00.000000"),
+          dayAt("2026-11-08", 40, 6.25, [15, 14.25, 19, 20], VEGAS, "2026-11-08 21:05:00.000000"),
+          dayAt("2026-11-09", 39, 6.3, [15.25, 14.5, 19.5, 20.5], VEGAS, "2026-11-09 14:45:00.000000"),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/vol"),
+  },
+  {
+    // opened this morning: one row, a true zero and no measurement
+    name: "GET /positions/{id}/vol says nothing has moved on the day it was opened",
+    world: world({
+      tables: {
+        positions: [position({ id: "pos-1", opened_at: "2026-11-09" })],
+        position_samples: [
+          dayAt("2026-11-09", 39, 6.4, [15.25, 14.5, 19.5, 20.5], VEGAS, "2026-11-09 14:45:00.000000"),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/vol"),
+  },
+  {
+    // the 7th is missing: the chain is broken and the reason names the two days around it; the
+    // 8th's row from 16:05 New York is that day's close
+    name: "GET /positions/{id}/vol names a missing day, and still covers the gap at the last close",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [
+          dayAt("2026-11-06", 42, 6.4, [14.5, 14, 19.25, 20], VEGAS, "2026-11-06 21:05:00.000000"),
+          dayAt("2026-11-08", 40, 6.25, [15, 14.25, 19, 20], VEGAS, "2026-11-08 21:05:00.000000"),
+        ],
       },
     }),
     request: request("GET", "/positions/pos-1/vol"),

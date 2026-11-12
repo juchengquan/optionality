@@ -130,16 +130,24 @@ const VolOut = z.object({
   days: z.number().nullable(),
   /** why the vol part is not to be read, in words; null when it is */
   reason: z.string().nullable(),
-  /** the last sample's day: the close `gap`, `rest` and `vega` are at */
+  /** the last sample's day: the one `gap`, `rest` and `vega` are at */
   at: z.string().nullable(),
-  /** Cost to close less On-pace at that close: positive is BEHIND */
+  /** what that sample is: the day's close, a reading in hours that are still running, or one from
+   *  before the open or after the close, or one whose time was never recorded */
+  timing: z.enum(["close", "in-hours", "before-open", "after-close", "unrecorded"]).nullable(),
+  /** Cost to close less On-pace at that sample: positive is BEHIND */
   gap: z.number().nullable(),
-  /** the gap less the vol part, left unattributed (CONTEXT.md: The rest); null with a `reason` */
+  /** why there is no gap, and so no rest; null when there is one */
+  gap_reason: z.string().nullable(),
+  /** the gap less the vol part, left unattributed (CONTEXT.md: The rest); null with either reason */
   rest: z.number().nullable(),
-  /** the structure's vega at that close, exposure-signed as a holding's position vega */
+  /** the structure's vega at that sample, exposure-signed as a holding's position vega; 0 below
+   *  display precision */
   vega: z.number().nullable(),
   /** the IV points that would account for the whole gap, |gap ÷ vega| */
   cover: z.number().nullable(),
+  /** why there is no cover; null when there is one */
+  cover_reason: z.string().nullable(),
 });
 
 /** The payoff at expiry, in POINTS across the contracts (`payoffAtExpiry`, #291): the P&L at each
@@ -361,11 +369,12 @@ export function positionRoutes(deps: Deps) {
         observed_on: s.observed_on,
         dte: s.dte,
         cost_to_close: s.cost_to_close,
+        observed_at: s.observed_at,
         // a corrupt map costs the figure, never the request: the whole sheet would fail to load
         legs_iv: parseMap(s.legs_iv),
         legs_vega: parseMap(s.legs_vega),
       }));
-      return vol.reply(c, 200, paceExplained(samples, toPosition(row)));
+      return vol.reply(c, 200, paceExplained(samples, toPosition(row), deps.now()));
     })
 
     /** A holding's daily samples, open or closed (#295): what REVIEW's burndown and IV chart draw.

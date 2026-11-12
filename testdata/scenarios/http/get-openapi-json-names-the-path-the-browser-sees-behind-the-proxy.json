@@ -2258,9 +2258,32 @@
                               "null"
                             ]
                           },
+                          "timing": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "close",
+                                  "in-hours",
+                                  "before-open",
+                                  "after-close",
+                                  "unrecorded"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "gap": {
                             "type": [
                               "number",
+                              "null"
+                            ]
+                          },
+                          "gap_reason": {
+                            "type": [
+                              "string",
                               "null"
                             ]
                           },
@@ -2281,6 +2304,12 @@
                               "number",
                               "null"
                             ]
+                          },
+                          "cover_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -2290,10 +2319,13 @@
                           "days",
                           "reason",
                           "at",
+                          "timing",
                           "gap",
+                          "gap_reason",
                           "rest",
                           "vega",
-                          "cover"
+                          "cover",
+                          "cover_reason"
                         ]
                       }
                     }

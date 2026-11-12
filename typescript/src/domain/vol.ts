@@ -12,6 +12,7 @@
  *  move apart.
  */
 import { dteAtOpen, onPace } from "./exit.ts";
+import { inSampleHours, marketDate, sampleTiming } from "./expiry.ts";
 import { positionLegCodes, type Position } from "./position.ts";
 
 /** One market day's readings, as the sampler stored them. */
@@ -69,8 +70,8 @@ function measure(samples: readonly VolSample[], position: Position): VolAttribut
   }
   if (samples.length === 0) return "no day has been recorded for it yet";
   if (samples[0]!.observed_on !== position.opened_at) {
-    return `its samples begin on ${samples[0]!.observed_on}, not on ${position.opened_at} when it was `
-      + "Opened: the vol it was sold at was never recorded";
+    return `its samples begin on ${dayWords(samples[0]!.observed_on)}, not on ${dayWords(position.opened_at)} `
+      + "when it was Opened: the vol it was sold at was never recorded";
   }
 
   const codes = positionLegCodes(position);
@@ -80,7 +81,7 @@ function measure(samples: readonly VolSample[], position: Position): VolAttribut
   for (const s of samples) {
     const whole = s.legs_iv !== null && s.legs_vega !== null
       && codes.every((code) => reading(s.legs_iv![code]) && reading(s.legs_vega![code]));
-    if (!whole) return `${s.observed_on} has no vol reading for every leg`;
+    if (!whole) return `${dayWords(s.observed_on)} has no vol reading for every leg`;
   }
 
   let vol = 0;
@@ -96,7 +97,7 @@ function measure(samples: readonly VolSample[], position: Position): VolAttribut
     // Needing no holiday calendar is the point: a DTE step cannot tell a holiday from an outage,
     // and a calendar-day step does not have to.
     if (prev.dte - cur.dte !== 1) {
-      return `the record skips from ${prev.observed_on} to ${cur.observed_on}: a day is missing`;
+      return `the record skips from ${dayWords(prev.observed_on)} to ${dayWords(cur.observed_on)}: a day is missing`;
     }
     for (const [i, c] of codes.entries()) {
       // the vega held GOING INTO the move, which is the sensitivity you were actually carrying
@@ -118,17 +119,27 @@ function measure(samples: readonly VolSample[], position: Position): VolAttribut
   };
 }
 
-/** One day's sample as the vol route reads it: the readings, and that day's Cost to close. */
+/** One day's sample as the vol route reads it: the readings, that day's Cost to close, and when
+ *  it was observed (UTC as stored, null on rows from before observation times were kept). */
 export interface PacedSample extends VolSample {
   cost_to_close: number | null;
+  observed_at: string | null;
 }
 
+/** What the last sample is, said of the instant it was observed (`sampleTiming`, with the clock):
+ *  `close` only once its day's hours are over — a row observed in the hours of a day still in them
+ *  is rewritten by every sweep (`takesSample`) and is `in-hours` until they end. */
+export type PacedTiming = "close" | "in-hours" | "before-open" | "after-close" | "unrecorded";
+
 /** A pace gap explained, as far as the samples can explain it (#333): what `GET /positions/{id}/vol`
- *  serves, so every figure the dashboard says about the split is the service's own.
+ *  serves, so every figure and every sentence the dashboard says about the split is the service's.
  *
- *  The gap it splits is the one at the LAST sample's close — the day the vol part runs to — so
+ *  The gap it splits is the one at the LAST sample — the day the vol part runs to — so
  *  `vol + rest = gap` holds of three figures from one instant. A live gap minus a vol part measured
- *  to yesterday's close would charge today's vol moves to the rest.
+ *  to the last sample would charge the day's own vol moves to the rest (ADR 0011, 2026-11-12).
+ *
+ *  Each figure that can be absent says why when it is: `reason` for the vol part, `gap_reason` for
+ *  the gap and so the rest, `cover_reason` for the cover. Dates in them are written "9 Nov".
  */
 export interface PaceExplained {
   /** `volAttribution`'s four, null together where it gives nothing */
@@ -141,33 +152,73 @@ export interface PaceExplained {
   reason: string | null;
   /** the day `gap`, `rest` and `vega` are at: the last sample's */
   at: string | null;
-  /** that day's Cost to close less On-pace at its DTE: positive is BEHIND */
+  /** what that sample is: the day's close, or a reading in or out of the hours */
+  timing: PacedTiming | null;
+  /** that sample's Cost to close less On-pace at its DTE: positive is BEHIND */
   gap: number | null;
-  /** the gap less the vol part, left unattributed on purpose (CONTEXT.md: The rest); null
-   *  wherever `reason` is set */
+  /** why there is no gap, and so no rest; null when there is one */
+  gap_reason: string | null;
+  /** the gap less the vol part, left unattributed on purpose (CONTEXT.md: The rest); null wherever
+   *  `reason` or `gap_reason` is set */
   rest: number | null;
-  /** the structure's vega that day, exposure-signed as a holding's position vega is */
+  /** the structure's vega that day, exposure-signed as a holding's position vega is; 0 when it
+   *  nets below display precision, where a sign or a quotient of it would be noise */
   vega: number | null;
   /** how many points of IV would account for the whole gap, |gap ÷ vega|: what can still be said
-   *  where the vol part cannot. Null for a zero vega, which would be an infinity. */
+   *  where the vol part cannot */
   cover: number | null;
+  /** why there is no cover; null when there is one */
+  cover_reason: string | null;
 }
 
-export function paceExplained(samples: readonly PacedSample[], position: Position): PaceExplained {
+/** A net vega smaller than this is zero: it is the precision every vega is shown at, and legs
+ *  that cancel to 2.8e-17 would otherwise cover a gap with 1e17 vol points. */
+export const VEGA_FLOOR = 0.005;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "9 Nov": a stored YYYY-MM-DD as the dashboard writes a day, by string, with no zone to move it. */
+function dayWords(iso: string): string {
+  return `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
+}
+
+export function paceExplained(
+  samples: readonly PacedSample[], position: Position, now: Date,
+): PaceExplained {
   const m = measure(samples, position);
   const measured = typeof m === "string" ? null : m;
   const reason = typeof m === "string" ? m
     : m.days === 0
-      ? `only ${m.from}, the day it was Opened, is recorded: nothing has moved yet`
+      ? `only ${dayWords(m.from)}, the day it was Opened, is recorded: nothing has moved yet`
       : null;
 
   const last = samples.length === 0 ? null : samples[samples.length - 1]!;
+
+  let timing: PacedTiming | null = null;
+  if (last !== null) {
+    const t = sampleTiming(last.observed_at);
+    timing = t === "close" && last.observed_on === marketDate(now) && inSampleHours(now) ? "in-hours" : t;
+  }
+
+  // the gap, or the first thing missing for one
   const openedDte = position.opened_at ? dteAtOpen(position.strike_date, position.opened_at) : null;
-  const pace = last === null ? null : onPace(position.entry, openedDte, last.dte);
-  const gap = last === null || pace === null || last.cost_to_close === null ? null : last.cost_to_close - pace;
+  let gap: number | null = null;
+  let gapReason: string | null = null;
+  if (openedDte === null) gapReason = "Opened is not recorded, so there is no On-pace to measure a gap from";
+  else if (last === null) gapReason = "no day has been recorded for it yet";
+  else if (position.entry === null) gapReason = "Entry is not recorded, so there is no On-pace to measure a gap from";
+  else {
+    const pace = onPace(position.entry, openedDte, last.dte);
+    if (pace === null) {
+      gapReason = `there is no On-pace at ${last.dte} DTE for a holding opened at ${openedDte} DTE`;
+    } else if (last.cost_to_close === null) {
+      gapReason = `${dayWords(last.observed_on)} has no Cost to close`;
+    } else {
+      gap = last.cost_to_close - pace;
+    }
+  }
 
   // exposure-signed, short −1, as `positionGreek` signs a holding's: the figure the inspector
-  // already calls position vega, at this close rather than now
+  // already calls position vega, at that sample rather than now
   let vega: number | null = null;
   if (last !== null && last.legs_vega !== null) {
     const codes = positionLegCodes(position);
@@ -176,8 +227,16 @@ export function paceExplained(samples: readonly PacedSample[], position: Positio
       for (const [i, c] of codes.entries()) {
         vega += (position.legs[i]!.side === "short" ? -1 : 1) * last.legs_vega[c]!;
       }
+      if (Math.abs(vega) < VEGA_FLOOR) vega = 0;
     }
   }
+
+  let cover: number | null = null;
+  let coverReason: string | null = null;
+  if (gap === null) coverReason = gapReason;
+  else if (vega === null) coverReason = `${dayWords(last!.observed_on)} has no vega for every leg`;
+  else if (vega === 0) coverReason = "its legs' vegas cancel out, so no move in vol would cover the gap";
+  else cover = Math.abs(gap / vega);
 
   return {
     vol: measured?.vol ?? null,
@@ -186,9 +245,12 @@ export function paceExplained(samples: readonly PacedSample[], position: Positio
     days: measured?.days ?? null,
     reason,
     at: last?.observed_on ?? null,
+    timing,
     gap,
+    gap_reason: gapReason,
     rest: reason === null && gap !== null ? gap - measured!.vol : null,
     vega,
-    cover: gap === null || vega === null || vega === 0 ? null : Math.abs(gap / vega),
+    cover,
+    cover_reason: coverReason,
   };
 }

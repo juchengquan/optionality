@@ -136,7 +136,15 @@ const chain = [
   sample("2026-10-08", 43, [19.8, 18.7, 11.9, 11.2], [1.9, 3.0, 3.2, 2.3]),
 ];
 /** the same days with each close's Cost to close, as the vol route reads them (#333) */
-const paced = chain.map((s, i): PacedSample => ({ ...s, cost_to_close: [3.0, 3.05, 2.91][i]! }));
+const paced = chain.map((s, i): PacedSample =>
+  ({ ...s, cost_to_close: [3.0, 3.05, 2.91][i]!, observed_at: `${s.observed_on} 20:00:00` }));
+/** after every one of those days' hours: each row is that day's close */
+const paceLater = new Date("2026-10-20T15:00:00Z");
+/** the last row's own day, while its hours still run: 15:00 New York on 8 Oct */
+const paceInHours = new Date("2026-10-08T19:00:00Z");
+/** the last row with its readings' vegas netting to 2.8e-17, which display precision calls zero */
+const cancelling = (s: PacedSample): PacedSample =>
+  ({ ...s, legs_vega: { [LP]: 0.2, [SP]: 0.1, [SC]: 0.3, [LC]: 0.2 } });
 
 const at = (iso: string) => new Date(iso);
 /** A day's vol readings for `takesSample`: both maps, or one withheld. */
@@ -1004,19 +1012,32 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "volAttribution", name: "no sample from the day it was opened", args: [chain.slice(1), condor] },
     { fn: "volAttribution", name: "a market day missing", args: [[chain[0], chain[2]], condor] },
     { fn: "volAttribution", name: "a day without vega", args: [[chain[0], { ...chain[1]!, legs_vega: null }], condor] },
-    { fn: "paceExplained", name: "the gap at the last close, split", args: [paced, condor] },
-    { fn: "paceExplained", name: "only the day it was opened", args: [paced.slice(0, 1), condor] },
+    { fn: "paceExplained", name: "the gap at the last close, split", args: [paced, condor, paceLater] },
+    { fn: "paceExplained", name: "the last row in hours while they run", args: [paced, condor, paceInHours] },
+    { fn: "paceExplained", name: "the last row before the open",
+      args: [[paced[0], paced[1], { ...paced[2]!, observed_at: "2026-10-08 04:05:00" }], condor, paceLater] },
+    { fn: "paceExplained", name: "the last row after the close",
+      args: [[paced[0], paced[1], { ...paced[2]!, observed_at: "2026-10-09 00:30:00" }], condor, paceLater] },
+    { fn: "paceExplained", name: "the last row with no observed time",
+      args: [[paced[0], paced[1], { ...paced[2]!, observed_at: null }], condor, paceLater] },
+    { fn: "paceExplained", name: "only the day it was opened", args: [paced.slice(0, 1), condor, paceLater] },
     { fn: "paceExplained", name: "samples that begin after the open: what would cover the gap",
-      args: [paced.slice(1), condor] },
-    { fn: "paceExplained", name: "a day missing, named", args: [[paced[0], paced[2]], condor] },
-    { fn: "paceExplained", name: "a day without IV, named", args: [[paced[0], { ...paced[1]!, legs_iv: null }], condor] },
-    { fn: "paceExplained", name: "nothing recorded", args: [[], condor] },
-    { fn: "paceExplained", name: "Opened never declared", args: [paced, { ...condor, opened_at: null }] },
+      args: [paced.slice(1), condor, paceLater] },
+    { fn: "paceExplained", name: "a day missing, named", args: [[paced[0], paced[2]], condor, paceLater] },
+    { fn: "paceExplained", name: "a day without IV, named",
+      args: [[paced[0], { ...paced[1]!, legs_iv: null }], condor, paceLater] },
+    { fn: "paceExplained", name: "nothing recorded", args: [[], condor, paceLater] },
+    { fn: "paceExplained", name: "Opened never declared", args: [paced, { ...condor, opened_at: null }, paceLater] },
     { fn: "paceExplained", name: "no Cost to close at the last close",
-      args: [[paced[0], { ...paced[1]!, cost_to_close: null }], condor] },
+      args: [[paced[0], { ...paced[1]!, cost_to_close: null }], condor, paceLater] },
+    { fn: "paceExplained", name: "no Entry, so no On-pace and no gap", args: [paced, { ...condor, entry: null }, paceLater] },
+    { fn: "paceExplained", name: "no On-pace at a DTE beyond the open's",
+      args: [[{ ...paced[0]!, dte: 46 }], condor, paceLater] },
     { fn: "paceExplained", name: "a net vega of zero covers nothing",
-      args: [paced.slice(0, 2).map((s) => ({ ...s, legs_vega: Object.fromEntries(Object.keys(s.legs_vega!).map((c) => [c, 2])) })), condor] },
+      args: [paced.slice(0, 2).map((s) => ({ ...s, legs_vega: Object.fromEntries(Object.keys(s.legs_vega!).map((c) => [c, 2])) })), condor, paceLater] },
+    { fn: "paceExplained", name: "a net vega below display precision covers nothing",
+      args: [paced.slice(0, 2).map(cancelling), condor, paceLater] },
     { fn: "paceExplained", name: "a leg's vega missing at the last close",
-      args: [[paced[0], { ...paced[1]!, legs_vega: { [LP]: 2, [SP]: 3.1 } }], condor] },
+      args: [[paced[0], { ...paced[1]!, legs_vega: { [LP]: 2, [SP]: 3.1 } }], condor, paceLater] },
   ],
 };
