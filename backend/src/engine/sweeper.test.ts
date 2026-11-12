@@ -15,6 +15,8 @@ import {
   SINGLE_CODE as CODE, SWEEP_SETTINGS as BASE, insertCombo, insertMonitor, monitorState, quoting,
 } from "../../testing/sweep.ts";
 import { MonitorSweeper } from "./sweeper.ts";
+import { findMonitor, updateMonitorFields } from "../db/queries/index.ts";
+import { editedMonitor } from "../monitors.ts";
 
 /** A contract the Provider cannot price. How it SAYS so is its own business and is tested in
  *  `opend/client.test.ts`; what reaches the sweep is the code, named in the batch (#168).
@@ -170,6 +172,31 @@ describe("a breach", () => {
     await s.sweep(); // -3.95 back above
     expect(sent).toHaveLength(2);
     expect(row(id)!.triggered).toBe(0);
+  });
+});
+
+describe("an edited rule (#292)", () => {
+  it("says it crossed when a ringing rule is edited onto a figure already past the new threshold", async () => {
+    // ringing on its delta, then edited to watch its mid ≥ 4 while the mid is 5: a new rule,
+    // breached from its first sweep, so the owner is told — the old rule's bell must not swallow it
+    const id = monitor();
+    const s = sweeper(quoting("option_delta", { [CODE]: 0.7 }));
+    await s.sweep();
+    expect(sent).toHaveLength(1);
+    updateMonitorFields(db, id, editedMonitor(findMonitor(db, id)!, { field: "mid_price", threshold: 4 }));
+    const after = sweeper(quoting("mid_price", { [CODE]: 5 }));
+    await tick(after);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain("crossed ≥");
+  });
+
+  it("says nothing when a ringing rule is edited onto a rule that never breached", async () => {
+    const id = monitor();
+    await sweeper(quoting("option_delta", { [CODE]: 0.7 })).sweep();
+    updateMonitorFields(db, id, editedMonitor(findMonitor(db, id)!, { field: "mid_price", threshold: 30 }));
+    await tick(sweeper(quoting("mid_price", { [CODE]: 5 })));
+    // not "back below 30" about a rule that was never above it
+    expect(sent).toHaveLength(1);
   });
 });
 

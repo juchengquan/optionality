@@ -21,7 +21,7 @@ import { fromSqliteBool, toSqliteBool } from "../../../db/values.ts";
 import { exitPolicy } from "optionality/domain/exit";
 import { comboFieldError } from "optionality/domain/monitor";
 import { httpError, notFound, providerFailed } from "../errors.ts";
-import { applyTotalEntry, watchlistQuotes } from "../../../monitors.ts";
+import { applyTotalEntry, editedMonitor, watchlistQuotes } from "../../../monitors.ts";
 import {
   ComboMonitorIn, MonitorCreateIn, MonitorIn, MonitorPatch, TotalEntryIn, isCombo,
   monitorCreateMember, patchThresholdError, thresholdError,
@@ -200,7 +200,7 @@ export function monitorRoutes(deps: Deps) {
         // sweeper's own quarantine and expiry notices are not overwritten by a manual toggle
         changes.disabled_reason = given.enabled ? null : "manual";
       }
-      return update.reply(c, 200, one(updateMonitorFields(db, id, changes)));
+      return update.reply(c, 200, one(updateMonitorFields(db, id, editedMonitor(row, changes))));
     })
 
     .post("/:id/total-entry", totalEntry, valid("json", TotalEntryIn), async (c) => {
