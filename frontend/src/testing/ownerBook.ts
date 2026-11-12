@@ -167,8 +167,9 @@ export function payoffAnswer(path: string): Payoff | null {
 const daysBetween = (from: string, to: string) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
-/** One stored day, as `/positions/{id}/samples` serves it (#295). */
-type Day = [on: string, cost: number, timing: Sample["timing"], ivs: number[] | null];
+/** One stored day, as `/positions/{id}/samples` serves it (#295), with SPX's price as its sweep
+ *  derived it (ADR 0024) — null on a row stored before SPX was recorded, or where it could not be. */
+type Day = [on: string, cost: number, timing: Sample["timing"], ivs: number[] | null, spx?: number | null];
 
 /** A holding's samples as the service would serve them: its Levels under the default policy (take
  *  half, stop at twice, manage by 21 DTE), the planned decay at every DTE from the open — `onPace`,
@@ -182,7 +183,7 @@ function history(h: Holding, days: Day[]): Samples {
   return {
     levels: { dte_at_open: d0, target: entry / 2, stop: entry * 2, target_dte: Math.round(d0 / 4), manage_by_dte: 21 },
     plan: Array.from({ length: d0 + 1 }, (_, i) => ({ dte: d0 - i, on_pace: pace(d0 - i) })),
-    samples: days.map(([on, cost, timing, ivs]) => {
+    samples: days.map(([on, cost, timing, ivs, spx = null]) => {
       const dte = daysBetween(on, h.strike_date);
       // in Singapore, as DISPLAY_TZ serves it: 16:00 and 20:30 New York are the next morning there
       const next = new Date(Date.parse(`${on}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
@@ -192,7 +193,7 @@ function history(h: Holding, days: Day[]): Samples {
       return {
         observed_on: on, observed_at, timing, dte, cost_to_close: cost, on_pace: pace(dte),
         legs_iv: ivs === null ? null : Object.fromEntries(codes.map((c, i) => [c, ivs[i]!])),
-        legs_vega: null, legs_delta: null, spx: null,
+        legs_vega: null, legs_delta: null, spx,
       };
     }),
   };
@@ -202,22 +203,24 @@ const [H_PUTS, H_CALLS, H_IC] = HOLDINGS as [Holding, Holding, Holding];
 
 /** `/positions/{id}/samples` for each holding: a week from the day each was opened. The call
  *  spread is behind pace, and its week has a day recorded that evening, an overnight fill nothing
- *  replaced and a row from before observation times were kept. */
+ *  replaced and a row from before observation times were kept. SPX's price (#298): the put spread's
+ *  week has one day without it, the call spread's every day, and the 4-leg condor's first day was
+ *  stored before SPX was recorded. */
 export const SAMPLES: Record<string, Samples> = {
   "h-puts": history(H_PUTS, [
-    ["2026-11-03", 1.95, "close", [19.5, 20.25]], ["2026-11-04", 1.85, "close", [19.25, 20]],
-    ["2026-11-05", 1.8, "close", [19, 19.75]], ["2026-11-06", 1.6, "close", [18.5, 19.5]],
-    ["2026-11-07", 1.6, "close", [18.5, 19.5]], ["2026-11-08", 1.6, "close", [18.5, 19.5]],
-    ["2026-11-09", 1.4, "close", [18, 19]],
+    ["2026-11-03", 1.95, "close", [19.5, 20.25], 6812.4], ["2026-11-04", 1.85, "close", [19.25, 20], 6840.1],
+    ["2026-11-05", 1.8, "close", [19, 19.75], null], ["2026-11-06", 1.6, "close", [18.5, 19.5], 6871.25],
+    ["2026-11-07", 1.6, "close", [18.5, 19.5], 6871.25], ["2026-11-08", 1.6, "close", [18.5, 19.5], 6880],
+    ["2026-11-09", 1.4, "close", [18, 19], 6895.75],
   ]),
   "h-calls": history(H_CALLS, [
-    ["2026-11-03", 2.05, "after-close", [11.5, 11]], ["2026-11-04", 2.3, "close", [12, 11.5]],
-    ["2026-11-05", 2.9, "close", [12.75, 12]], ["2026-11-06", 3.4, "unrecorded", null],
-    ["2026-11-07", 3.4, "close", [13, 12.5]], ["2026-11-08", 3.5, "before-open", [13.25, 12.5]],
-    ["2026-11-09", 4.1, "close", [14, 13.25]],
+    ["2026-11-03", 2.05, "after-close", [11.5, 11], 6812.4], ["2026-11-04", 2.3, "close", [12, 11.5], 6840.1],
+    ["2026-11-05", 2.9, "close", [12.75, 12], 6861], ["2026-11-06", 3.4, "unrecorded", null, 6871.25],
+    ["2026-11-07", 3.4, "close", [13, 12.5], 6871.25], ["2026-11-08", 3.5, "before-open", [13.25, 12.5], 6880],
+    ["2026-11-09", 4.1, "close", [14, 13.25], 6895.75],
   ]),
   "h-ic": history(H_IC, [
-    ["2026-11-03", 5, "close", [10.5, 10, 21, 22]], ["2026-11-04", 4.85, "close", [10.5, 10, 20.5, 21.5]],
+    ["2026-11-03", 5, "close", [10.5, 10, 21, 22], null], ["2026-11-04", 4.85, "close", [10.5, 10, 20.5, 21.5], 6840.1],
   ]),
 };
 

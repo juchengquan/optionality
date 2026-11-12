@@ -25,6 +25,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { fetchSamples, type Holding, type Sample, type Samples } from "../api";
 import { legCode } from "./legs";
+import { SpxPath } from "./SpxPath";
 import "./history.css";
 
 interface SamplesState {
@@ -161,6 +162,9 @@ export function HoldingHistory({ holding, privacy }: { holding: Holding; privacy
           <IvChart served={served} holding={holding} />
         </section>
       ) : null}
+      {/* where SPX was against the strikes (#298), from the same answer — nothing more is asked —
+          and on the burndown's DTE window, so the days line up */}
+      {blank === null && served ? <SpxPath served={served} holding={holding} span={dteWindow(served)} /> : null}
     </>
   );
 }
