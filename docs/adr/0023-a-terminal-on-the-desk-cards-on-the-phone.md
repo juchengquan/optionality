@@ -94,6 +94,13 @@ The research found three things nobody does, all of which this service can:
 - **The default** follows the clock in `DISPLAY_TZ`, with a visible switch and an override.
 - **Both modes** carry the "needs you" line and every fault. A review mode that hid a firing alarm
   would be a trap.
+- **A holding's Levels in REVIEW** (decided by the owner on 2026-11-13, #354, option (b)): the needs
+  line keeps leaving them out, because REVIEW values the holdings once on entering it rather than
+  polling them (ADR 0012). Every Level chip of a holding (Target, Stop, Manage-by: on its row, in
+  the desk's inspector, on the phone's page and sheet, and in the saved picture) says instead when
+  that valuation was made, from the time the service stamped on it: "at stop · as valued at 21:04".
+  The chip and the line then cannot read as a disagreement. LIVE is unchanged: there both read the
+  same poll.
 
 ### The spread is the unit, and the two lists stay apart
 
