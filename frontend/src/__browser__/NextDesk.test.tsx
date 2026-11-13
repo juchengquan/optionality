@@ -336,11 +336,12 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), a
     await userEvent.hover(mark);
     const said = document.querySelector(".nxd-inspector .nx-hist-said")!;
     expect(said.textContent).toMatch(/not the close: observed 20:30 New York, after the 16:15 close/);
-    // and anywhere on the chart picks the nearest day: the right-hand end is the last one
+    // and anywhere on the chart picks the nearest stop: the right-hand end is the last one, which
+    // is today's valuation, drawn after the days (#360)
     const svg = document.querySelector<SVGSVGElement>(".nxd-inspector .nx-hist svg")!;
     const box = svg.getBoundingClientRect();
     await userEvent.hover(svg, { position: { x: box.width - 12, y: 10 } });
-    expect(said.textContent).toMatch(/^9 Nov · 39 DTE/);
+    expect(said.textContent).toMatch(/^valued now, 38 DTE/);
   });
 
   it("is one tab stop, whose arrow keys move from day to day", async () => {

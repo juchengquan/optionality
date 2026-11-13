@@ -70,6 +70,17 @@ async function inspect(id: string, name: string, over: Partial<BookProps> = {}) 
 const burndownOf = (root: HTMLElement) => within(root).findByRole("group", { name: "burndown" });
 const ivOf = (root: HTMLElement) => within(root).findByRole("group", { name: "IV by leg" });
 
+/** A pointer at a day's x — a mouse resting there unless said otherwise — offset by `by` pixels,
+ *  which the crosshair snaps back to the day. jsdom lays nothing out, so the drawing's own x is the
+ *  pointer's: its box is at 0 with no width. */
+function pointAt(chart: HTMLElement, day: Element, { by = 0, type = "mouse" } = {}) {
+  const x = Number(day.querySelector("circle")!.getAttribute("cx")) + by;
+  const svg = chart.querySelector(".nx-bd svg")!;
+  fireEvent.pointerMove(svg, { clientX: x, pointerType: type });
+}
+const dayOf = (chart: HTMLElement, selector: string) => chart.querySelector(`[data-sample]${selector}`)!;
+const tipOf = (chart: HTMLElement) => chart.querySelector<HTMLElement>("[data-tip]");
+
 /** The x and y of each point a path or polyline joins. */
 function corners(el: Element | null): [number, number][] {
   const text = el?.getAttribute("d") ?? el?.getAttribute("points") ?? "";
@@ -118,23 +129,23 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     expect(evening.querySelector("[data-mark]")?.getAttribute("data-mark")).toBe("off-close");
     expect(chart.querySelector("[data-sample][data-timing='close'] [data-mark]")?.getAttribute("data-mark"))
       .toBe("close");
-    fireEvent.mouseEnter(evening);
+    pointAt(chart, evening);
     const said = within(chart).getByRole("status");
     expect(said.textContent).toMatch(/3 Nov · 45 DTE/);
     // the rule is New York's, so the time is said on New York's clock: 09:30 in Singapore is 20:30
     expect(said.textContent).toMatch(/not the close: observed 20:30 New York, after the 16:15 close/);
-    // and a native tooltip, for a pointer that rests on it
-    expect(evening.querySelector("title")?.textContent).toMatch(/not the close/);
+    // and in the crosshair's tooltip, shorter
+    expect(tipOf(chart)?.textContent).toMatch(/not the close: 20:30 New York, after the 16:15 close/);
   });
 
   it("says what an overnight fill and a row from before observed times are", async () => {
     const { insp } = await inspect("h-calls", "1218_C7300");
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
-    fireEvent.mouseEnter(chart.querySelector("[data-sample][data-timing='before-open']")!);
+    pointAt(chart, dayOf(chart, "[data-timing='before-open']"));
     expect(within(chart).getByRole("status").textContent)
       .toMatch(/not the close: observed 00:05 New York, before the 09:30 open/);
-    fireEvent.mouseEnter(chart.querySelector("[data-sample][data-timing='unrecorded']")!);
+    pointAt(chart, dayOf(chart, "[data-timing='unrecorded']"));
     expect(within(chart).getByRole("status").textContent).toMatch(/whether it was the close is not known/);
   });
 
@@ -159,8 +170,13 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     spacing(kept).forEach((f, i) => expect(f).toBeCloseTo(spacing(shape)[i]!, 2));
     expect(chart.querySelector("[data-axis='y']")).toBeNull();
     expect(chart.textContent).not.toMatch(/\$\d|\d\.\d\d/);
-    fireEvent.mouseEnter(chart.querySelector("[data-sample]")!);
+    pointAt(chart, dayOf(chart, ""));
     expect(within(chart).getByRole("status").textContent).toMatch(/\$•••/);
+    // the tooltip too: its money masked, and its Pace gap said in points, which are no money
+    expect(tipOf(chart)?.textContent).toMatch(/to close: \$•••/);
+    expect(tipOf(chart)?.textContent).toMatch(/on pace \$•••/);
+    expect(tipOf(chart)?.textContent).not.toMatch(/\$\d/);
+    expect(tipOf(chart)?.querySelector("[data-outcome]")?.textContent).toMatch(/^(behind|ahead) by \d\.\d\d$/);
   });
 
   it("never polls the samples: a new valuation of the same holding asks nothing more", async () => {
@@ -177,8 +193,10 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     const { insp } = await inspect("h-calls", "1218_C7300");
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
-    fireEvent.mouseEnter(chart.querySelector("[data-sample][data-timing='close']")!);
+    pointAt(chart, dayOf(chart, "[data-timing='close']"));
     expect(within(chart).getByRole("status").textContent).toMatch(/— in hours \(observed 16:00 New York\)$/);
+    // a close says nothing about the close in the tooltip
+    expect(tipOf(chart)?.querySelector(".nx-bd-tip-why")).toBeNull();
   });
 
   it("says its money's scope, so it cannot read as the inspector's cost to close per contract", async () => {
@@ -188,8 +206,10 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     await waitFor(() => expect(chart.querySelector("[data-level='target']")).toBeTruthy());
     expect(chart.querySelector("[data-level='target']")?.textContent).toBe("target $500");
     expect(within(chart).getByText("$ to close, 2 contracts")).toBeTruthy();
-    fireEvent.mouseEnter(chart.querySelector("[data-sample]")!);
-    expect(within(chart).getByRole("status").textContent).toMatch(/· to close, 2 contracts: \$1,000 · on pace \$1,000 —/);
+    pointAt(chart, dayOf(chart, ""));
+    expect(within(chart).getByRole("status").textContent)
+      .toMatch(/· to close, 2 contracts: \$1,000 · on pace \$1,000 · ahead by 0\.00 —/);
+    expect(tipOf(chart)?.textContent).toMatch(/to close, 2 contracts: \$1,000/);
   });
 
   it("says no count and no $ under privacy", async () => {
@@ -197,8 +217,9 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(2));
     expect(within(chart).queryByText(/contracts/)).toBeNull();
-    fireEvent.mouseEnter(chart.querySelector("[data-sample]")!);
-    expect(within(chart).getByRole("status").textContent).toMatch(/· to close: \$••• · on pace \$••• —/);
+    pointAt(chart, dayOf(chart, ""));
+    expect(within(chart).getByRole("status").textContent).toMatch(/· to close: \$••• · on pace \$••• · ahead by 0\.00 —/);
+    expect(tipOf(chart)?.textContent).not.toMatch(/contract/);
   });
 
   it("is one stop for the keyboard, its arrows moving from day to day and the line saying each", async () => {
@@ -219,14 +240,17 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     fireEvent.keyDown(days, { key: "ArrowLeft" });
     expect(said()).toMatch(/^3 Nov/);
     fireEvent.keyDown(days, { key: "End" });
-    expect(said()).toMatch(/^9 Nov · 39 DTE/);
+    // the last stop is today's valuation (#360), and the day before it the last sample
+    expect(said()).toMatch(/^valued now, 38 DTE/);
     fireEvent.keyDown(days, { key: "ArrowRight" });
-    expect(said()).toMatch(/^9 Nov/);
+    expect(said()).toMatch(/^valued now/);
+    fireEvent.keyDown(days, { key: "ArrowLeft" });
+    expect(said()).toMatch(/^9 Nov · 39 DTE/);
     fireEvent.keyDown(days, { key: "Home" });
     expect(said()).toMatch(/^3 Nov/);
   });
 
-  it("names each value on its axis once, for a debit whose every figure is below zero", async () => {
+  it("names each tick on its axis once, for a debit whose every figure is below zero", async () => {
     const debit = HOLDINGS.map((h) => (h.id === "h-calls" ? { ...h, entry: -2, cost_to_close: -1.5 } : h) as Holding);
     serveSamples({
       levels: { dte_at_open: 45, target: null, stop: null, target_dte: null, manage_by_dte: 21 },
@@ -237,7 +261,11 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelector("[data-axis='y']")).toBeTruthy());
     const labels = [...chart.querySelectorAll("[data-axis='y'] text")].map((t) => t.textContent);
-    expect(labels).toEqual(["$0", "-$410"]);
+    // each value once: with every figure at or below zero the top IS zero, and named twice it was
+    // two "$0" drawn over each other
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels.at(-1)).toBe("$0");
+    expect(labels[0]).toMatch(/^-\$\d/);
   });
 
   it("breaks the line across a missed session rather than joining the days either side", async () => {
@@ -274,6 +302,230 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     serveSamples(null);
     const { insp } = await inspect("h-calls", "1218_C7300");
     expect(await within(insp).findByText(/the samples could not be read — .*404/)).toBeTruthy();
+  });
+});
+
+describe("the crosshair (#360)", () => {
+  async function chartOf(id = "h-calls", name = "1218_C7300", over: Partial<BookProps> = {}) {
+    const { insp } = await inspect(id, name, over);
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]").length).toBeGreaterThan(0));
+    return chart;
+  }
+  const crossed = (chart: HTMLElement) => chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair");
+  const said = (chart: HTMLElement) => within(chart).getByRole("status").textContent;
+
+  it("snaps to the day nearest the pointer, from either side of it", async () => {
+    const chart = await chartOf();
+    const fourth = dayOf(chart, "[data-sample='2026-11-04']");
+    const gap = Number(dayOf(chart, "[data-sample='2026-11-05']").querySelector("circle")!.getAttribute("cx"))
+      - Number(fourth.querySelector("circle")!.getAttribute("cx"));
+    expect(crossed(chart)).toBeUndefined();
+    pointAt(chart, fourth, { by: gap * 0.4 });
+    expect(crossed(chart)).toBe("2026-11-04");
+    pointAt(chart, fourth, { by: -gap * 0.4 });
+    expect(crossed(chart)).toBe("2026-11-04");
+    pointAt(chart, fourth, { by: gap * 0.6 });
+    expect(crossed(chart)).toBe("2026-11-05");
+    // the day crossed is the day marked, the day said and the day the tooltip says
+    expect(chart.querySelector("[data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-05");
+    expect(said(chart)).toMatch(/^5 Nov · 43 DTE/);
+    expect(tipOf(chart)?.textContent).toMatch(/^5 Nov · 43 DTE/);
+  });
+
+  it("says the day's cost, on pace and the gap in the outcome colour, in the tooltip", async () => {
+    const chart = await chartOf();
+    pointAt(chart, dayOf(chart, "[data-sample='2026-11-09']"));
+    const tip = tipOf(chart)!;
+    expect(tip.getAttribute("aria-hidden")).toBe("true");
+    const lines = [...tip.children].map((l) => l.textContent);
+    // h-calls is a single call spread with a contract size of 100, behind pace
+    expect(lines[0]).toBe("9 Nov · 39 DTE");
+    expect(lines[1]).toMatch(/^to close, 1 contract: \$410$/);
+    expect(lines[2]).toMatch(/^on pace \$\d+ · behind by \d\.\d\d$/);
+    const gap = tip.querySelector("[data-outcome]")!;
+    expect(gap.getAttribute("data-outcome")).toBe("loss");
+    // the status line says the same gap, for whoever cannot see the tooltip
+    expect(said(chart)).toContain(` · ${gap.textContent} — `);
+  });
+
+  it("lets go when a mouse leaves, and keeps the day when a finger lifts", async () => {
+    const chart = await chartOf();
+    const svg = chart.querySelector(".nx-bd svg")!;
+    pointAt(chart, dayOf(chart, "[data-sample='2026-11-04']"));
+    fireEvent.pointerLeave(svg, { pointerType: "mouse" });
+    expect(crossed(chart)).toBeUndefined();
+    expect(tipOf(chart)).toBeNull();
+    expect(said(chart)).toMatch(/point at a day/);
+    // a finger dragged across: once it has gone sideways each move scrubs to the day under it,
+    // and lifting keeps the last
+    const xOf = (on: string) => Number(dayOf(chart, `[data-sample='${on}']`).querySelector("circle")!.getAttribute("cx"));
+    fireEvent.pointerDown(svg, { clientX: xOf("2026-11-03"), clientY: 50, pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    fireEvent.pointerMove(svg, { clientX: xOf("2026-11-04"), clientY: 50, pointerType: "touch" });
+    fireEvent.pointerMove(svg, { clientX: xOf("2026-11-06"), clientY: 50, pointerType: "touch" });
+    expect(crossed(chart)).toBe("2026-11-06");
+    fireEvent.pointerUp(svg, { pointerType: "touch" });
+    fireEvent.pointerLeave(svg, { pointerType: "touch" });
+    expect(crossed(chart)).toBe("2026-11-06");
+  });
+
+  it("chooses no day for a finger that touches down and scrolls the page", async () => {
+    const chart = await chartOf();
+    const svg = chart.querySelector(".nx-bd svg")!;
+    fireEvent.pointerDown(svg, { clientX: 100, clientY: 100, pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    // up the page, a little sideways as a thumb goes: the page's, not a scrub
+    fireEvent.pointerMove(svg, { clientX: 112, clientY: 70, pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    fireEvent.pointerCancel(svg, { pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    expect(tipOf(chart)).toBeNull();
+    // and a day chosen before is let go of when a scroll starts on the chart: it was not chosen
+    // for the page to carry its tooltip away up the screen
+    fireEvent.pointerDown(svg, { clientX: 100, clientY: 50, pointerType: "touch" });
+    fireEvent.click(svg, { clientX: 100, clientY: 50 });
+    expect(crossed(chart)).toBeDefined();
+    fireEvent.pointerDown(svg, { clientX: 100, clientY: 100, pointerType: "touch" });
+    fireEvent.pointerCancel(svg, { pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+  });
+
+  it("chooses a day on a tap, lets go of it on a second tap or a tap outside the chart", async () => {
+    const chart = await chartOf();
+    const svg = chart.querySelector(".nx-bd svg")!;
+    const x = Number(dayOf(chart, "[data-sample='2026-11-05']").querySelector("circle")!.getAttribute("cx"));
+    const tap = (at: number) => {
+      fireEvent.pointerDown(svg, { clientX: at, clientY: 50, pointerType: "touch" });
+      fireEvent.pointerUp(svg, { clientX: at, clientY: 50, pointerType: "touch" });
+      fireEvent.click(svg, { clientX: at, clientY: 50 });
+    };
+    tap(x + 1);
+    expect(crossed(chart)).toBe("2026-11-05");
+    tap(x);
+    expect(crossed(chart)).toBeUndefined();
+    tap(x);
+    expect(crossed(chart)).toBe("2026-11-05");
+    fireEvent.pointerDown(document.body, { pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    expect(tipOf(chart)).toBeNull();
+  });
+
+  it("is driven by the keys too, and Escape lets go", async () => {
+    const chart = await chartOf();
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    fireEvent.keyDown(days, { key: "ArrowRight" });
+    expect(crossed(chart)).toBe("2026-11-03");
+    expect(tipOf(chart)?.textContent).toMatch(/^3 Nov/);
+    fireEvent.keyDown(days, { key: "End" });
+    expect(crossed(chart)).toBe("now");
+    fireEvent.keyDown(days, { key: "Escape" });
+    expect(crossed(chart)).toBeUndefined();
+    expect(tipOf(chart)).toBeNull();
+  });
+});
+
+describe("the crosshair and the inspector's Escape (#360)", () => {
+  const inspector = () => screen.queryByRole("complementary", { name: /inspector/ });
+
+  it("lets Escape through to close the inspector when no day is pointed at", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    days.focus();
+    fireEvent.keyDown(days, { key: "Escape" });
+    expect(inspector()).toBeNull();
+  });
+
+  it("takes the first Escape to let go of a day, and lets the second close the inspector", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    days.focus();
+    fireEvent.keyDown(days, { key: "ArrowRight" });
+    fireEvent.keyDown(days, { key: "Escape" });
+    expect(chart.querySelector("[data-crosshair]")).toBeNull();
+    expect(inspector()).toBeTruthy();
+    fireEvent.keyDown(days, { key: "Escape" });
+    expect(inspector()).toBeNull();
+  });
+});
+
+describe("today's valuation on the crosshair (#360)", () => {
+  async function chartOf(over: Partial<BookProps> = {}) {
+    const { insp } = await inspect("h-calls", "1218_C7300", over);
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    return chart;
+  }
+
+  it("is the last stop for the keys, and says it is the valuation now", async () => {
+    const chart = await chartOf();
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    fireEvent.keyDown(days, { key: "End" });
+    expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("now");
+    expect(chart.querySelector("[data-now]")?.hasAttribute("data-pointed")).toBe(true);
+    // h-calls is valued at 4.40 with 38 days to go, one contract at a size of 100
+    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close, 1 contract: $440");
+    expect(tipOf(chart)?.textContent).toBe("valued now · 38 DTEto close, 1 contract: $440");
+    fireEvent.keyDown(days, { key: "ArrowLeft" });
+    expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("2026-11-09");
+  });
+
+  it("is reached by a pointer at its x", async () => {
+    const chart = await chartOf();
+    const at = chart.querySelector("[data-now] rect:not(.nx-bd-halo)")!;
+    const x = Number(at.getAttribute("x")) + 4.5;
+    fireEvent.pointerMove(chart.querySelector(".nx-bd svg")!, { clientX: x, pointerType: "mouse" });
+    expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("now");
+  });
+
+  it("is masked under privacy", async () => {
+    const chart = await chartOf({ privacy: true });
+    fireEvent.keyDown(within(chart).getByRole("group", { name: /cost to close by day/ }), { key: "End" });
+    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close: $•••");
+    expect(tipOf(chart)?.textContent).not.toMatch(/\$\d|contract/);
+  });
+});
+
+describe("the value axis (#360)", () => {
+  /** The y of the plot's top: the highest gridline. */
+  const topOf = (chart: HTMLElement) =>
+    Math.min(...[...chart.querySelectorAll("[data-grid] line")].map((l) => Number(l.getAttribute("y1"))));
+
+  it("is the days' and the Target's, and marks a Stop beyond it at the top edge with its figure", async () => {
+    // h-puts never went near its Stop at twice the Entry
+    const { insp } = await inspect("h-puts", "1218_P6400");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelector("[data-level='stop']")).toBeTruthy());
+    const stop = chart.querySelector("[data-level='stop']")!;
+    expect(stop.getAttribute("data-off")).toBe("above");
+    expect(stop.textContent).toMatch(/^▲ stop \$\d/);
+    expect(Number(stop.querySelector("line")!.getAttribute("y1"))).toBe(topOf(chart));
+    // no tick reaches it: the scale stops short of the Stop
+    const stopAt = SAMPLES["h-puts"]!.levels!.stop! * 100;
+    const ticks = [...chart.querySelectorAll("[data-axis='y'] text")].map((t) => Number(t.textContent!.replace(/[$,]/g, "")));
+    expect(Math.max(...ticks)).toBeLessThan(stopAt);
+  });
+
+  it("draws a Stop the days reached where it is", async () => {
+    // h-calls' week ran up through its Stop at 4.00
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelector("[data-level='stop']")).toBeTruthy());
+    const stop = chart.querySelector("[data-level='stop']")!;
+    expect(stop.hasAttribute("data-off")).toBe(false);
+    expect(stop.textContent).toBe("stop $400");
+    expect(Number(stop.querySelector("line")!.getAttribute("y1"))).toBeGreaterThan(topOf(chart));
+  });
+
+  it("marks it without its figure under privacy", async () => {
+    const { insp } = await inspect("h-puts", "1218_P6400", { privacy: true });
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelector("[data-level='stop']")).toBeTruthy());
+    expect(chart.querySelector("[data-level='stop']")?.textContent).toBe("▲ stop");
   });
 });
 
@@ -370,9 +622,17 @@ describe("on the phone's one-holding REVIEW page", () => {
     draw();
     const chart = await burndownOf(page("h-calls"));
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
-    fireEvent.click(chart.querySelector("[data-sample][data-timing='before-open']")!);
+    const svg = chart.querySelector(".nx-bd svg")!;
+    const x = Number(dayOf(chart, "[data-timing='before-open']").querySelector("circle")!.getAttribute("cx"));
+    // a tap: down, up and the click it makes
+    fireEvent.pointerDown(svg, { clientX: x + 2, pointerType: "touch" });
+    fireEvent.pointerUp(svg, { clientX: x + 2, pointerType: "touch" });
+    fireEvent.click(svg, { clientX: x + 2 });
     expect(within(chart).getByRole("status").textContent)
       .toMatch(/not the close: observed 00:05 New York, before the 09:30 open/);
+    // lifting the finger off leaves it said, where a mouse leaving lets it go
+    fireEvent.pointerLeave(svg, { pointerType: "touch" });
+    expect(tipOf(chart)).toBeTruthy();
   });
 
   it("hides the $ axis under privacy", async () => {

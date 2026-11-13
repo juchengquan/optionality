@@ -13,19 +13,24 @@
  *    at most once a market day, and no poll reads it, in either mode (ADR 0023). A new valuation of
  *    the same holding asks nothing more.
  *  - **A point that is not a close is drawn hollow**, and says why when pointed at — hovered on the
- *    desk, tapped on the phone, or focused — in the line beneath the chart, and in a native tooltip
- *    too. The whole chart is the target: a pointer anywhere on it picks the nearest day, because
- *    days a few pixels apart cannot each have a finger's width of their own. A row written before
+ *    desk, tapped or scrubbed on the phone, or stepped to with the keys — in the crosshair's
+ *    tooltip and in the status line beneath the chart (`BurndownChart.tsx`, #360). A row written before
  *    observation times were kept is drawn faint: nothing says whether it was the close, so it is
  *    claimed neither way.
  *  - **Privacy** keeps the shape and drops every $ figure: the value axis and the Levels' figures
  *    go, the lines stay. The IV chart is in %, which privacy keeps.
  *
- *  Hand-written SVG at its measured width, as `Payoff.tsx` is, for the reasons that file gives.
+ *  The burndown is drawn on visx (`BurndownChart.tsx`, #360). The IV chart here and SPX's path
+ *  (`SpxPath.tsx`) stay hand-written SVG at their measured width, as `Payoff.tsx` is: they have no
+ *  crosshair to want visx for, and what keeps a day at one x down all three is not the library but
+ *  the margins they share (`Gutters`) and the one mapping they all use, DTE from `span` at the left
+ *  margin to 0 at the right.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { fetchSamples, type Holding, type Sample, type Samples } from "../shared/api";
+import { fetchSamples, type Holding, type Samples } from "../shared/api";
+import { scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
+import { Burndown, runsOf, useWidth } from "./BurndownChart";
 import { legCode } from "./legs";
 import { SpxPath, spxGutter } from "./SpxPath";
 import "./history.css";
@@ -64,88 +69,6 @@ function isSamples(body: unknown): body is Samples {
   return typeof body === "object" && body !== null && Array.isArray((body as { samples?: unknown }).samples);
 }
 
-/** The width of the box, measured, so the drawing's text is the size it says wherever it sits. */
-function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
-  const box = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(320);
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const measure = () => { if (el.clientWidth > 0) setWidth(el.clientWidth); };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [box, width];
-}
-
-/** How a Cost to close is said: money across the contracts at the contract size the valuation
- *  served, points per contract without one, and nothing a stranger could read under privacy. */
-interface Unit {
-  size: number;
-  contracts: number;
-  money: boolean;
-  hidden: boolean;
-}
-
-const MONEY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-
-function say(points: number, unit: Unit): string {
-  if (unit.hidden) return "$•••";
-  if (unit.money) return MONEY.format(points * unit.contracts * unit.size);
-  return `${points.toFixed(2)} pts`;
-}
-
-const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-/** "3 Nov": a market date as a day to read, read in UTC so the device's zone cannot move it. */
-const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
-
-const NEW_YORK = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-});
-/** "20:30": the instant the service served in DISPLAY_TZ, on New York's clock — the clock the
- *  rule about closes is written in, so the reason says the time that rule reads. */
-function newYorkTime(served: string | null): string | null {
-  if (served === null) return null;
-  const when = new Date(served.replace(" ", "T"));
-  return Number.isNaN(when.getTime()) ? null : NEW_YORK.format(when);
-}
-
-/** Why a row is or is not the day's close (`sampleTiming`, ADR 0011's amendment), in words. A row
- *  observed in the hours is said to be IN HOURS rather than the close: the hours are the rule, and
- *  a weekday row from 11:00 is in them too (decision 2 in #323). */
-function whyWords(s: Sample): string {
-  const at = newYorkTime(s.observed_at);
-  if (s.timing === "unrecorded" || at === null) {
-    return "written before observation times were kept: whether it was the close is not known";
-  }
-  switch (s.timing) {
-    case "close": return `in hours (observed ${at} New York)`;
-    case "after-close":
-      return `not the close: observed ${at} New York, after the 16:15 close — recorded that evening, or a missed session filled later`;
-    case "before-open":
-      return `not the close: observed ${at} New York, before the 09:30 open — an overnight fill no later sweep replaced`;
-  }
-}
-
-/** What the chart's money is: across the contracts at the contract size, or per contract in points
- *  — said beside every figure, so it cannot read as the inspector's per-contract Cost to close in
- *  another unit. Nothing under privacy, where the count would give the size away. */
-function scopeWords(unit: Unit): string | null {
-  if (unit.hidden) return null;
-  if (!unit.money) return "per contract";
-  return `${unit.contracts} contract${unit.contracts === 1 ? "" : "s"}`;
-}
-
-const MARK: Record<Sample["timing"], "close" | "off-close" | "unrecorded"> = {
-  close: "close", "after-close": "off-close", "before-open": "off-close", unrecorded: "unrecorded",
-};
-
-/** A label's width at the charts' 11px tabular figures, near enough to leave it room. */
-const textWidth = (text: string) => text.length * 6.6;
-
 /** What the charts draw a holding from: its legs and its count, and — only while it is held and
  *  valued — today's figures. A closed holding (#296) is drawn from `GET /positions`, which carries
  *  none of them: no contract size, so its money is points per contract, and no "now". */
@@ -168,13 +91,16 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
         : "no daily samples for this trade: it closed before its first sample, or its close was backdated before all of them")
         : null;
   // one pair of margins for all three charts, so a DTE is at the same x in each (#298)
-  const gutters: Gutters | null = blank !== null || !served ? null : (() => {
+  const axis = blank !== null || !served ? null : valueAxis(served, holding, unit);
+  const gutters: Gutters | null = axis === null || !served ? null : (() => {
     const iv = ivAxis(served, holding);
     return {
-      L: Math.max(burndownAxis(served, holding, unit).L, iv?.L ?? 0, spxGutter(holding)),
+      L: Math.max(axis.L, iv?.L ?? 0, spxGutter(holding)),
       R: Math.max(R, iv?.RL ?? 0),
     };
   })();
+  // a closed holding's last day: the service serves no sample after it (ADR 0022), and this says where
+  const closeDte = holding.closed_on === null ? null : daysTo(holding.closed_on, holding.strike_date);
   return (
     <>
       <section className="nx-hist" role="group" aria-label="burndown">
@@ -184,7 +110,14 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
             : <span className="nx-hist-unit">{`${unit.money ? "$" : "points"} to close, ${scopeWords(unit)}`}</span>}
         </h4>
         {blank !== null || !served ? <p className="nx-meta">{blank}</p>
-          : <Burndown served={served} holding={holding} unit={unit} gutters={gutters!} />}
+          : (
+            <>
+              <Burndown served={served} unit={unit} axis={axis!} span={dteWindow(served)} gutters={gutters!}
+                        closeDte={closeDte} />
+              {served.levels === null
+                ? <p className="nx-meta">no plan: Opened not recorded, so there is no schedule to draw</p> : null}
+            </>
+          )}
       </section>
       {blank === null && served ? (
         <section className="nx-hist" role="group" aria-label="IV by leg">
@@ -199,28 +132,14 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
   );
 }
 
-/** Points in runs of consecutive days: a day with no row at all — the service down for a whole New
- *  York day — breaks the line, as a day without a reading does, rather than being drawn across. */
-function runsOf<T extends { dte: number }>(points: (T | null)[]): T[][] {
-  const runs: T[][] = [[]];
-  for (const p of points) {
-    const run = runs.at(-1)!;
-    const last = run.at(-1);
-    if (p === null || (last !== undefined && last.dte - p.dte > 1)) {
-      if (run.length > 0) runs.push([]);
-    }
-    if (p !== null) runs.at(-1)!.push(p);
-  }
-  return runs.filter((r) => r.length > 0);
-}
-
 /** The DTE window both charts draw: from the open (or the first sample, if earlier) on the left to
  *  expiry on the right, as time runs. */
 function dteWindow(served: Samples): number {
   return Math.max(1, served.levels?.dte_at_open ?? 0, ...served.samples.map((s) => s.dte));
 }
 
-const H = 188, T = 10, B = 22, R = 10;
+/** The IV chart's top and bottom margins, and the right margin every chart has at least. */
+const T = 10, B = 22, R = 10;
 
 /** The plot's margins, the SAME for every chart of one holding (#298): the burndown, the IV chart
  *  and where SPX was all put a DTE at the same x, so a day reads straight down the three. Each is
@@ -230,30 +149,6 @@ export interface Gutters {
   R: number;
 }
 
-/** The burndown's value axis, and the left margin its labels need. */
-function burndownAxis(served: Samples, holding: Charted, unit: Unit) {
-  const { levels, plan, samples } = served;
-  // today's valuation, from REVIEW's one batch: drawn apart from the closes, and only while held
-  const now = holding.closed_on === null && holding.cost_to_close != null && holding.dte !== undefined
-    && holding.dte >= 0 ? { dte: holding.dte, cost: holding.cost_to_close } : null;
-
-  const values = [
-    0, ...samples.map((s) => s.cost_to_close), ...plan.map((p) => p.on_pace),
-    ...(levels?.target === null || levels?.target === undefined ? [] : [levels.target]),
-    ...(levels?.stop === null || levels?.stop === undefined ? [] : [levels.stop]),
-    ...(now ? [now.cost] : []),
-  ];
-  const hi = Math.max(...values), lo = Math.min(...values);
-  const pad = (hi - lo || 1) * 0.08;
-  const [top, bottom] = [hi + pad, lo - pad];
-  // each value once: with every figure at or below zero the top IS zero, and named twice it was
-  // two "$0" drawn over each other
-  const axis = unit.hidden ? null : [...new Set([hi, ...(lo < 0 ? [lo] : []), 0])];
-  // no gutter under privacy: one as wide as the labels would be would say how many digits they hid
-  const L = axis === null ? 8 : Math.ceil(Math.max(...axis.map((v) => textWidth(say(v, unit))), 16)) + 10;
-  return { now, top, bottom, axis, L };
-}
-
 /** A market date in its dashed spelling: an expiry is stored either way, 2026-12-18 or 20261218,
  *  as `daysToExpiry` and `dteAtOpen` read it (`normalizeStrikeDate`). */
 const dashed = (iso: string) => iso.replace(/^(\d{4})-?(\d{2})-?(\d{2})$/, "$1-$2-$3");
@@ -261,143 +156,6 @@ const dashed = (iso: string) => iso.replace(/^(\d{4})-?(\d{2})-?(\d{2})$/, "$1-$
 /** Calendar days from a market date to the expiry: the samples' own DTE (`dte` on each row). */
 const daysTo = (on: string, expiry: string) =>
   Math.round((Date.parse(`${dashed(expiry)}T00:00:00Z`) - Date.parse(`${dashed(on)}T00:00:00Z`)) / 86_400_000);
-
-function Burndown({ served, holding, unit, gutters }: {
-  served: Samples; holding: Charted; unit: Unit; gutters: Gutters;
-}) {
-  const [box, W] = useWidth();
-  const [pointed, setPointed] = useState<number | null>(null);
-  const { levels, plan, samples } = served;
-  const span = dteWindow(served);
-  const { now, top, bottom, axis } = burndownAxis(served, holding, unit);
-  // a closed holding's last day: the service serves no sample after it (ADR 0022), and this says where
-  const closeDte = holding.closed_on === null ? null : daysTo(holding.closed_on, holding.strike_date);
-  // shared with the other charts; under privacy no wider than they need, so it says nothing
-  const { L, R } = gutters;
-  const x = (dte: number) => L + ((span - dte) / span) * (W - L - R);
-  const y = (v: number) => T + ((top - v) / (top - bottom)) * (H - T - B);
-  const pts = (rows: { dte: number; v: number }[]) =>
-    rows.map(({ dte, v }) => `${x(dte).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-
-  const level = (kind: "target" | "stop", v: number | null | undefined) => v === null || v === undefined ? null : (
-    <g data-level={kind} className={`nx-hist-${kind}`}>
-      <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
-      <text x={W - R} y={y(v) - 4} textAnchor="end">{unit.hidden ? kind : `${kind} ${say(v, unit)}`}</text>
-    </g>
-  );
-  const manageX = levels ? x(levels.manage_by_dte) : null;
-  // Manage-by is named on the bottom line between the window's two ends, and never over either:
-  // at the top it sat on the Stop's label, which is the highest line drawn
-  const [startWords, endWords] = [`${span} DTE`, "expiry"];
-  const manageWords = levels ? `manage-by ${levels.manage_by_dte}` : "";
-  const half = textWidth(manageWords) / 2;
-  const manageLabelX = manageX === null ? null : Math.min(
-    Math.max(manageX, L + textWidth(startWords) + 6 + half), W - 4 - textWidth(endWords) - 6 - half);
-  const point = pointed === null ? null : samples[pointed] ?? null;
-  /** The day nearest the pointer, across the width: what a hover or a tap anywhere on the chart
-   *  means. A day's own mark answers for itself, so its events are not taken twice. */
-  const nearest = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => {
-    if (samples.length === 0) return;
-    const at = e.clientX - e.currentTarget.getBoundingClientRect().left;
-    let best = 0;
-    samples.forEach((s, i) => {
-      if (Math.abs(x(s.dte) - at) < Math.abs(x(samples[best]!.dte) - at)) best = i;
-    });
-    setPointed(best);
-  };
-  /** The arrows move a day at a time, Home and End to either end; the line beneath says each. */
-  const onKey = (e: React.KeyboardEvent) => {
-    const last = samples.length - 1;
-    const next = e.key === "ArrowRight" ? (pointed === null ? 0 : Math.min(last, pointed + 1))
-      : e.key === "ArrowLeft" ? (pointed === null ? last : Math.max(0, pointed - 1))
-        : e.key === "Home" ? 0 : e.key === "End" ? last : null;
-    if (next === null || last < 0) return;
-    e.preventDefault();
-    setPointed(next);
-  };
-  const own = (e: React.SyntheticEvent) => e.target instanceof Element && e.target.closest("[data-sample]") !== null;
-  const offClose = samples.some((s) => s.timing !== "close");
-
-  return (
-    <>
-      {/* ONE stop for the keyboard: the days are reached with the arrows and said by the status
-          line, since inside an image they would be presentational and each a tab stop besides */}
-      <div className="nx-hist-chart" ref={box} role="group" tabIndex={0} onKeyDown={onKey}
-           aria-label={`cost to close by day, ${samples.length} days, against the plan: arrow keys move from day to day`}>
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true"
-             onPointerMove={(e) => { if (e.pointerType === "mouse" && !own(e)) nearest(e); }}
-             onClick={(e) => { if (!own(e)) nearest(e); }}>
-          {level("stop", levels?.stop)}
-          {level("target", levels?.target)}
-          {manageX === null || levels!.manage_by_dte > span ? null : (
-            <g data-level="manage-by" className="nx-hist-manage">
-              <line x1={manageX} x2={manageX} y1={T} y2={H - B} />
-              <text x={manageLabelX!} y={H - 6} textAnchor="middle">{manageWords}</text>
-            </g>
-          )}
-          {closeDte === null || !Number.isFinite(closeDte) || closeDte < 0 || closeDte > span ? null : (
-            <g data-close="" className="nx-hist-close">
-              <line x1={x(closeDte)} x2={x(closeDte)} y1={T} y2={H - B} />
-              {/* to the left of its line, where the days it ends are; to the right if that would
-                  run into the value axis */}
-              {x(closeDte) - textWidth("closed") - 4 < L
-                ? <text x={x(closeDte) + 4} y={T + 10} textAnchor="start">closed</text>
-                : <text x={x(closeDte) - 4} y={T + 10} textAnchor="end">closed</text>}
-            </g>
-          )}
-          {axis === null ? null : (
-            <g data-axis="y">
-              {axis.map((v) => <text key={v} x={L - 6} y={y(v) + 4} textAnchor="end">{say(v, unit)}</text>)}
-            </g>
-          )}
-          <line className="nx-hist-zero" x1={L} x2={W - R} y1={y(0)} y2={y(0)} />
-          {plan.length > 1 ? (
-            <polyline data-plan="" className="nx-hist-plan"
-                      points={pts(plan.map((p) => ({ dte: p.dte, v: p.on_pace })))} />
-          ) : null}
-          {runsOf(samples.map((s) => ({ dte: s.dte, v: s.cost_to_close }))).map((run) => (
-            <polyline key={run[0]!.dte} data-costs="" className="nx-hist-costs" points={pts(run)} />
-          ))}
-          {samples.map((s, i) => {
-            const why = sampleWords(s, unit);
-            return (
-              <g key={s.observed_on} data-sample={s.observed_on} data-timing={s.timing}
-                 data-pointed={pointed === i ? "" : undefined} className="nx-hist-point"
-                 onMouseEnter={() => setPointed(i)} onClick={() => setPointed(i)}>
-                <title>{why}</title>
-                <circle data-mark={MARK[s.timing]} cx={x(s.dte)} cy={y(s.cost_to_close)} r={3.25} />
-              </g>
-            );
-          })}
-          {now ? (
-            <g data-now="" className="nx-hist-now">
-              <title>{`valued now, ${now.dte} DTE: ${say(now.cost, unit)}`}</title>
-              <rect x={x(now.dte) - 4} y={y(now.cost) - 4} width={8} height={8}
-                    transform={`rotate(45 ${x(now.dte)} ${y(now.cost)})`} />
-            </g>
-          ) : null}
-          <text x={L} y={H - 6} textAnchor="start">{startWords}</text>
-          {/* in the margin, as the IV chart writes it: the shared right margin is the leg names' room */}
-          <text x={W - 4} y={H - 6} textAnchor="end">{endWords}</text>
-        </svg>
-      </div>
-      <p className="nx-hist-said" role="status">
-        {point ? sampleWords(point, unit)
-          : offClose ? "● in hours · ○ not the close · point at a day to see why"
-            : "● each day in hours · point at a day for its figures"}
-      </p>
-      {levels === null ? <p className="nx-meta">no plan: Opened not recorded, so there is no schedule to draw</p> : null}
-    </>
-  );
-}
-
-/** One day, said in full: its date and DTE, its figures, and whether it was the close. */
-function sampleWords(s: Sample, unit: Unit): string {
-  const pace = s.on_pace === null ? "" : ` · on pace ${say(s.on_pace, unit)}`;
-  const scope = scopeWords(unit);
-  const cost = `to close${scope === null ? "" : `, ${scope}`}: ${say(s.cost_to_close, unit)}`;
-  return `${dayWords(s.observed_on)} · ${s.dte} DTE · ${cost}${pace} — ${whyWords(s)}`;
-}
 
 const IV_H = 132;
 
