@@ -141,6 +141,33 @@ def _width(cell: str) -> int:
     return len(cell.encode("utf-16-le")) // 2
 
 
+#: The widest a table row may be (CLAUDE.md: about forty monospace characters). 42, not 40, because
+#: `/monitors` already writes 41 with a twelve-character contract, and that row is not to change.
+TABLE_WIDTH = 42
+#: The narrowest a shortened name is made, whatever the other columns take.
+_FIT_FLOOR = 12
+
+
+def fit_cell(cell: str, room: int) -> str:
+    """`cell` in at most `room` UTF-16 units — what every width here counts — shortened in its MIDDLE: the
+    head names it and the last third keeps its end, where /quotes puts the 🔔. Cut by code point, so a
+    surrogate pair is never split. `fitCell` in the TypeScript."""
+    if _width(cell) <= room:
+        return cell
+    chars = list(cell)
+    budget = room - 1  # the ellipsis is one unit
+    tail_max = budget // 3
+    tail_n = tail_w = 0
+    while tail_n < len(chars) and tail_w + _width(chars[-1 - tail_n]) <= tail_max:
+        tail_w += _width(chars[-1 - tail_n])
+        tail_n += 1
+    head_n = head_w = 0
+    while head_n < len(chars) - tail_n and head_w + _width(chars[head_n]) <= budget - tail_w:
+        head_w += _width(chars[head_n])
+        head_n += 1
+    return "".join(chars[:head_n]) + "…" + "".join(chars[len(chars) - tail_n :])
+
+
 def table(headers: list[str], rows: list[list[str]]) -> str:
     """A `<pre>` table with space-aligned columns.
 
@@ -148,9 +175,24 @@ def table(headers: list[str], rows: list[list[str]]) -> str:
     five characters of width for one character of content — but it is what shipped, and a contract
     code contains no escapable character, so the only rows it could affect are ones that do not occur.
     Faithful, and noted.
+
+    A row the FIRST column would push past `TABLE_WIDTH` has that cell shortened (`fit_cell`): it is the
+    name, and a derived name keeps every leg (#351). The figures beside it are never cut.
     """
-    escaped = [[escape_html(js_text(cell)) for cell in row] for row in [headers, *rows]]
-    widths = [max(_width(row[i]) if i < len(row) else 0 for row in escaped) for i in range(len(headers))]
+
+    def measure(cells: list[list[str]]) -> list[list[str]]:
+        return [[escape_html(js_text(cell)) for cell in row] for row in cells]
+
+    def widths_of(all_rows: list[list[str]]) -> list[int]:
+        return [max(_width(row[i]) if i < len(row) else 0 for row in all_rows) for i in range(len(headers))]
+
+    escaped = measure([headers, *rows])
+    if len(headers) > 1:
+        w = widths_of(escaped)
+        room = max(_FIT_FLOOR, TABLE_WIDTH - (sum(w[1:]) + 2 * (len(headers) - 1)))
+        if w[0] > room:
+            escaped = measure([headers, *[[fit_cell(js_text(row[0]) if row else "", room), *row[1:]] for row in rows]])
+    widths = widths_of(escaped)
     lines = [
         "  ".join(
             cell + " " * max(0, (widths[i] if i < len(widths) else 0) - _width(cell)) for i, cell in enumerate(row)

@@ -74,16 +74,60 @@ export function escapeHtml(value: string): string {
     .replaceAll("'", "&#x27;");
 }
 
+/** The widest a table row may be (CLAUDE.md: about forty monospace characters). 42, not 40, because
+ *  `/monitors` already writes 41 with a twelve-character contract, and that row is not to change. */
+export const TABLE_WIDTH = 42;
+/** The narrowest a shortened name is made, whatever the other columns take: past this a name says
+ *  nothing, and a row a little too wide is better than one that names nothing. */
+const FIT_FLOOR = 12;
+
+/** `cell` in at most `room` UTF-16 units — JavaScript's `length`, which every width here counts —
+ *  shortened in its MIDDLE: the head names it (the expiry, the first leg) and the last third keeps
+ *  its end, where `/quotes` puts the 🔔. Cut by code point, so a surrogate pair is never split. */
+export function fitCell(cell: string, room: number): string {
+  if (cell.length <= room) return cell;
+  const chars = Array.from(cell);
+  const budget = room - 1; // the ellipsis is one unit
+  const tailMax = Math.floor(budget / 3);
+  let tailN = 0;
+  let tailW = 0;
+  while (tailN < chars.length && tailW + chars[chars.length - 1 - tailN]!.length <= tailMax) {
+    tailW += chars[chars.length - 1 - tailN]!.length;
+    tailN++;
+  }
+  let headN = 0;
+  let headW = 0;
+  while (headN < chars.length - tailN && headW + chars[headN]!.length <= budget - tailW) {
+    headW += chars[headN]!.length;
+    headN++;
+  }
+  return `${chars.slice(0, headN).join("")}…${chars.slice(chars.length - tailN).join("")}`;
+}
+
 /** A `<pre>` table with space-aligned columns.
  *
  *  Widths are measured on the ESCAPED text, as the Python does. That is arguably wrong — `&amp;` is
  *  five characters of width for one character of content — but it is what the Python ships, and a
  *  contract code contains no escapable character, so the only rows it could affect are ones that do
  *  not occur. Faithful, and noted.
+ *
+ *  A row the FIRST column would push past `TABLE_WIDTH` has that cell shortened (`fitCell`): it is
+ *  the name — a rule's code, a holding's — and a derived name keeps every leg (#351), so six legs
+ *  with quantities run to some fifty characters. The figures beside it are never cut.
  */
 export function table(headers: string[], rows: string[][]): string {
-  const escaped = [headers, ...rows].map((row) => row.map((cell) => escapeHtml(String(cell))));
-  const widths = headers.map((_, i) => Math.max(...escaped.map((row) => (row[i] ?? "").length)));
+  const measure = (cells: string[][]) => cells.map((row) => row.map((cell) => escapeHtml(String(cell))));
+  let escaped = measure([headers, ...rows]);
+  const widthsOf = (all: string[][]) =>
+    headers.map((_, i) => Math.max(...all.map((row) => (row[i] ?? "").length)));
+  if (headers.length > 1) {
+    const w = widthsOf(escaped);
+    const room = Math.max(FIT_FLOOR, TABLE_WIDTH - (w.slice(1).reduce((a, b) => a + b, 0) + 2 * (headers.length - 1)));
+    if (w[0]! > room) {
+      escaped = measure([headers, ...rows.map((row) => [fitCell(String(row[0] ?? ""), room), ...row.slice(1)])]);
+    }
+  }
+  const widths = widthsOf(escaped);
   const lines = escaped.map((row) =>
     row.map((cell, i) => cell.padEnd(widths[i]!)).join("  ").replace(/\s+$/, ""),
   );

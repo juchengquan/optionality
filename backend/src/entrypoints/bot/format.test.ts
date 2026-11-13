@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BOT_COMMANDS, HELP_TEXT, escapeHtml, fmtValue, hasFormat, pyNumber, ruleText, table,
+  BOT_COMMANDS, HELP_TEXT, TABLE_WIDTH, escapeHtml, fitCell, fmtValue, hasFormat, pyNumber, ruleText, table,
   thresholdError,
 } from "./format.ts";
 
@@ -82,6 +82,36 @@ describe("table", () => {
     ).replace("<pre>", "").replace("</pre>", "").split("\n")[1]!;
     expect(row).toBe("261030 C8100  delta  0.046  ≥0.6  armed");
     expect(row.length).toBe(39);
+  });
+});
+
+describe("a name too long for the table (#351)", () => {
+  const LONG = "1218_+P7050_+P7100_-2P7150_-C7700_+2C7750_+C7800";
+  const lines = (out: string) => out.replace("<pre>", "").replace("</pre>", "").split("\n");
+
+  it("shortens the first column in its middle, so every row stays within the table's width", () => {
+    const out = table(["contract", "field", "last", "thr", "state"], [
+      [LONG, "mid", "-1.0000", "≥4.0", "armed"], ["261218 C7300", "delta", "0.312", "≥0.3", "🔔"],
+    ]);
+    expect(Math.max(...lines(out).map((l) => l.length))).toBeLessThanOrEqual(TABLE_WIDTH);
+    expect(lines(out)[1]).toMatch(/^1218_\+P7…7800  mid/);
+  });
+
+  it("keeps a bell at the end of a shortened name", () => {
+    const out = table(["contract", "mid", "bid/ask"], [[`${LONG} 🔔`, "1.5", "1.45/1.55"]]);
+    expect(lines(out)[1]).toMatch(/…C7800 🔔 +1\.5/);
+    expect(Math.max(...lines(out).map((l) => l.length))).toBeLessThanOrEqual(TABLE_WIDTH);
+  });
+
+  it("leaves every table that already fits exactly as it was", () => {
+    const rows = [["dec-calls", "mid", "-1.0000", "≥4.0", "armed"]];
+    expect(lines(table(["contract", "field", "last", "thr", "state"], rows))[1]).toBe("dec-calls  mid    -1.0000  ≥4.0  armed");
+    expect(fitCell("short", 10)).toBe("short");
+  });
+
+  it("cuts by code point, never through a surrogate pair, and counts UTF-16 units as the width", () => {
+    expect(fitCell("abcdefghij🔔", 8)).toBe("abcde…🔔");
+    expect(fitCell("abcdefghij", 5)).toBe("abc…j");
   });
 });
 

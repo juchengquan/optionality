@@ -170,6 +170,15 @@ export const BOT: readonly BotInput[] = [
     update: message("/combo dec-ratio"),
   },
   {
+    // a derived name keeps every leg (#351), and the table shortens one it cannot fit in its middle
+    // rather than letting the row wrap on the phone
+    name: "/monitors shortens a name too long for the table",
+    world: world({
+      tables: { monitors: [combo({ id: "mon-long", code: "1218_+P6350_-2P6400_-C7300_+2C7350" })] },
+    }),
+    update: message("/monitors"),
+  },
+  {
     name: "/combo names nothing it cannot find",
     world: world({ tables: held }),
     update: message("/combo dec-puts"),
