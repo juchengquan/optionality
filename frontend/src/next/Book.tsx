@@ -39,7 +39,6 @@ export interface BookProps {
  *  (#290) replace it. */
 export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
-  const watchlist = quotes.filter(isEntrySignal);
   const unplaced = placed.unplaced;
 
   return (
@@ -78,7 +77,7 @@ export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, mo
 
       <section aria-labelledby="nx-watchlist">
         <h2 id="nx-watchlist">Watchlist</h2>
-        {watchlist.length === 0 ? <p className="nx-meta">nothing watched</p> : null}
+        {placed.watchlist.length === 0 ? <p className="nx-meta">nothing watched</p> : null}
         {placed.watchlist.map(({ expiry, items }) => (
           <div key={expiry} className="nx-expiry">
             <h3>{expiry}</h3>

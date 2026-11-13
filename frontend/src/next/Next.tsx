@@ -214,9 +214,10 @@ export function Next() {
   const shortcut = paletteShortcut();
 
   // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once
-  // in REVIEW, so in REVIEW their Levels are left to Settings, which asks again and says when
+  // in REVIEW, so in REVIEW their Levels are left to Settings, which asks again and says when. The
+  // book is still DRAWN with them in REVIEW, so they still say which combos are drawn apart (#346)
   const items = useMemo(
-    () => needsYou(book.quotes, book.monitors, book.health, mode === "live" ? holdings : null),
+    () => needsYou(book.quotes, book.monitors, book.health, mode === "live" ? holdings : null, holdings),
     [book.quotes, book.monitors, book.health, holdings, mode],
   );
   const everything = useMemo(

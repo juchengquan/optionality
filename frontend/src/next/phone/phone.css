@@ -5,6 +5,8 @@
 .nxp-book { display: flex; flex-direction: column; gap: 1.5rem; }
 .nxp-book h2 { font-size: 1.0625rem; font-weight: 650; margin-bottom: 0.25rem; }
 .nxp-meta { color: var(--muted-foreground); font-size: 0.875rem; }
+/* what a watched spread shares with a holding (#346): wraps rather than pushing the card wider */
+.nxp-overlap { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
 .nxp-expiry { margin-top: 0.75rem; }
 .nxp-expiry h3, .nxp-expiry-head {

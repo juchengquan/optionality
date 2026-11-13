@@ -1,5 +1,6 @@
 import type { Entry, Health, Holding, Monitor } from "../shared/api";
 import { shortContract, shortDate } from "../shared/format";
+import { overlapOf } from "./placement";
 
 /** What needs you, for the redesigned page (ADR 0012, amended by ADR 0023).
  *
@@ -57,10 +58,14 @@ export function monitorName(monitor: Monitor): string {
   return `${shortDate(monitor.strike_date)} ${monitor.strike}${monitor.option_type[0]}`;
 }
 
-/** @param holdings what the page has valued, or null where it has not asked: in LIVE they are
- *  polled with the watchlist, so their Levels are already paid for; in REVIEW nothing is. */
+/** @param holdings the holdings whose Levels the line says, or null where it says none: in LIVE
+ *  they are polled with the watchlist, so their Levels are already paid for; in REVIEW nothing is.
+ *  @param placedBy the holdings the book is DRAWN with, which decide which combos are drawn apart
+ *  from their holding (#346) — in REVIEW, the ones valued once on entering it, whose Levels the
+ *  line still does not say. The same as `holdings` unless given. */
 export function needsYou(
   quotes: Entry[], monitors: Monitor[], health: Health | null, holdings: Holding[] | null,
+  placedBy: Holding[] | null = holdings,
 ): Need[] {
   const out: Need[] = [];
   if (health && !health.provider.ok) {
@@ -69,17 +74,24 @@ export function needsYou(
   if (health?.monitor.alarms.bad) {
     out.push({ kind: "fault", text: `alarms ${health.monitor.alarms.label}` });
   }
+  // A combo the book draws in the watchlist because it only partly overlaps a holding (#346) does
+  // not speak for that holding's Levels: the holding is drawn on its own, and says them itself.
+  // Without the holdings nothing is compared, and the rule speaks as before.
+  const apart = new Set(placedBy === null ? []
+    : quotes.filter((e) => overlapOf(e, placedBy) !== null).map((e) => e.id));
   for (const e of quotes) {
     const name = entryName(e);
     if (e.error) out.push({ kind: "fault", text: `${name} — ${e.error}`, ref: e.id });
-    if (e.schedule?.reached === "stop") out.push({ kind: "stop", text: `${name} at stop`, ref: e.id });
+    // the Levels are the holding's to say when this rule is drawn apart from it
+    const schedule = apart.has(e.id) ? null : e.schedule;
+    if (schedule?.reached === "stop") out.push({ kind: "stop", text: `${name} at stop`, ref: e.id });
     if (e.triggered) {
       out.push(isEntrySignal(e)
         ? { kind: "entry", text: `${name} entry signal`, ref: e.id }
         : { kind: "alarm", text: `${name} ringing`, ref: e.id });
     }
-    if (e.schedule?.reached === "target") out.push({ kind: "target", text: `${name} at target`, ref: e.id });
-    if (e.schedule?.manage_by_due) {
+    if (schedule?.reached === "target") out.push({ kind: "target", text: `${name} at target`, ref: e.id });
+    if (schedule?.manage_by_due) {
       out.push({ kind: "manage", text: `${name} at its manage-by`, ref: e.id });
     }
   }
@@ -91,7 +103,8 @@ export function needsYou(
     if (why) out.push({ kind: "fault", text: `${monitorName(m)} ${what} quarantined — ${why}` });
   }
   const spokenFor = new Set(
-    quotes.map((e) => e.schedule?.position_id).filter((id): id is string => Boolean(id)),
+    quotes.filter((e) => !apart.has(e.id)).map((e) => e.schedule?.position_id)
+      .filter((id): id is string => Boolean(id)),
   );
   for (const h of holdings ?? []) {
     if (spokenFor.has(h.id)) continue;

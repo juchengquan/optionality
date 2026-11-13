@@ -11,6 +11,7 @@ import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
+import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 /** Every request the page made, as `METHOD path body`. */
 let asked: string[] = [];
@@ -211,5 +212,39 @@ describe("in the phone's detail sheet", () => {
     fireEvent.click(within(card("w-dec18")).getByRole("button", { name: /details of 1218_P7150/ }));
     const payoff = await payoffOf(await screen.findByRole("dialog"));
     expect(within(payoff).getByText(/drawn at its current value, 2\.40, as the credit/)).toBeTruthy();
+  });
+});
+
+describe("a combo drawn in the Watchlist because it names a contract its holding does not hold (#346)", () => {
+  const overlap = { quotes: OVERLAP_QUOTES, holdings: OVERLAP_HOLDINGS, monitors: OVERLAP_MONITORS };
+
+  it("is a watched spread in the desk's inspector: its payoff at its value, and not 'on something held'", async () => {
+    const insp = await inspect("r-8100", "1231_8100", overlap);
+    const payoff = await payoffOf(insp);
+    expect(within(payoff).getByText("no Entry: drawn at its current value, 0.60, as the credit")).toBeTruthy();
+    expect(insp.textContent).not.toContain("on something held");
+    // neither held nor watch only: the note under it says what it shares, and with whom
+    expect(within(insp).getByText("2026-12-31 · 38 DTE")).toBeTruthy();
+    expect(insp.querySelector("[data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");
+  });
+
+  it("leaves a wing of a held condor a rule on something held, with no payoff of its own", () => {
+    render(<DeskBook {...props(overlap)} />);
+    fireEvent.click(within(deskRow("r-ic-calls")).getByRole("button", { name: "1231_C7400" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1231_C7400" });
+    expect(insp.textContent).toContain("on something held");
+    expect(within(insp).queryByRole("group", { name: "payoff at expiry" })).toBeNull();
+    expect(insp.querySelector("[data-overlap]")).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it("is a watched spread in the phone's sheet: its payoff at its value, with its note", async () => {
+    render(<div className="nx"><PhoneBook {...props(overlap)} /></div>);
+    const card = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === "w-7700")!;
+    fireEvent.click(within(card).getByRole("button", { name: /details of 1231_C7700/ }));
+    const sheet = await screen.findByRole("dialog");
+    const payoff = await payoffOf(sheet);
+    expect(within(payoff).getByText(/drawn at its current value, 1\.50, as the credit/)).toBeTruthy();
+    expect(sheet.querySelector("[data-overlap]")!.textContent).toBe("contains 1231_7700's C7700");
   });
 });

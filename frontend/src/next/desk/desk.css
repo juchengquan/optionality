@@ -73,6 +73,16 @@
 }
 .nxd-note { padding: 0.25rem 0.75ch; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
 
+/* what a spread in the watchlist shares with a holding (#346): under its row, in the row's indent,
+   wrapping rather than widening the table */
+.nxd-overlap {
+  margin: 0;
+  padding: 0.1rem 0.75ch 0.3rem 2.75ch;
+  border-bottom: 1px solid var(--nxd-line);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  overflow-wrap: anywhere;
+}
+
 .nxd-row {
   min-height: var(--nxd-row);
   border-bottom: 1px solid var(--nxd-line);

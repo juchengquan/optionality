@@ -23,8 +23,9 @@ import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
 export type DeskRow =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
-  /** a rule as `/quotes` serves it; `nested` when it sits under a spread or a holding */
-  | { kind: "rule"; entry: Entry; nested: boolean }
+  /** a rule as `/quotes` serves it; `nested` when it sits under a spread or a holding; `overlap`,
+   *  the note of a combo drawn in the watchlist because it only partly overlaps a holding (#346) */
+  | { kind: "rule"; entry: Entry; nested: boolean; overlap?: string | null }
   /** a rule the service switched off because it cannot evaluate it: only `/monitors` has it */
   | { kind: "quarantined"; monitor: Monitor };
 
@@ -122,7 +123,7 @@ export function tableRows(placed: BookModel): DeskRow[] {
   for (const entry of placed.unplaced) out.push({ kind: "rule", entry, nested: false });
   for (const g of placed.watchlist) {
     for (const i of g.items) {
-      out.push({ kind: "rule", entry: i.entry, nested: false });
+      out.push({ kind: "rule", entry: i.entry, nested: false, overlap: i.overlap });
       for (const entry of i.under) out.push({ kind: "rule", entry, nested: true });
     }
   }
@@ -175,11 +176,17 @@ const LEGS: DeskColumn = {
 };
 
 const VALUE: DeskColumn = {
-  // a holding's Cost to close; a watched spread's value; a single contract's mid
+  // a holding's Cost to close; a rule on held contracts, the cost to close of the contracts it
+  // names; a watched spread's value — one drawn in the watchlist because it names a contract its
+  // holding does not hold included (#346). The service serves that one no cost to close
+  // (`costToCloseOf` is null unless every contract it names is held), except a ratio, whose repeated
+  // contract it counts once: drawn as a watched spread, it shows its value. A single contract's mid
   key: "value", label: "value",
   text: (r) => r.kind === "holding" ? points(r.holding.cost_to_close)
     : r.kind === "rule"
-      ? points(r.entry.legs ? (r.entry.cost_to_close ?? r.entry.combo_value) : quoted(r.entry, "mid_price"))
+      ? points(r.entry.legs
+        ? (r.overlap ? r.entry.combo_value : (r.entry.cost_to_close ?? r.entry.combo_value))
+        : quoted(r.entry, "mid_price"))
       : "",
 };
 

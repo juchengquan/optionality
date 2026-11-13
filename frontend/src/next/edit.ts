@@ -9,6 +9,7 @@ import type { Added, Entry, Holding, Monitor } from "../shared/api";
 import { contractCode, type OptionType, type Side, type SpreadsBody } from "./add";
 import { contractBody, contractName, type ContractSpot } from "./contract";
 import { entryName, fieldWords, monitorName, ruleWords } from "./needs";
+import { namesUnheldContract } from "./placement";
 
 /** A rule as the editor needs it, from either door: a row of `/quotes` (on, with figures) or of
  *  `/monitors` (any state, no figures). */
@@ -329,8 +330,10 @@ export interface HoldLinks {
   /** the watch rules the save deletes and makes again as the holding's */
   replaced: Monitor[];
   /** every OTHER rule linked to no holding that the new holding takes, and as what: the whole of
-   *  it, or one leg of something larger */
-  linked: { monitor: Monitor; scope: "all" | "leg" }[];
+   *  it, or one leg of something larger — and whether the page will then draw it in the Watchlist,
+   *  as a combo naming a contract the holdings it is linked to do not hold (`namesUnheldContract`,
+   *  #346) */
+  linked: { monitor: Monitor; scope: "all" | "leg"; watchlist: boolean }[];
   /** false where the holdings have not been read: which rules it takes depends on all of them */
   known: boolean;
 }
@@ -365,7 +368,12 @@ export function holdLinks(
     const watched = new Set(codes);
     const covered = [...found].every((id) => id === NEW
       ? watched.has(r.code) : legCodes(holdings.find((h) => h.id === id)!).every((c) => watched.has(c)));
-    linked.push({ monitor: m, scope: covered ? "all" : "leg" });
+    // what each holding it is linked to holds, the new one as the contract the rule is on
+    const held = [...found].map((id) => id === NEW
+      ? { strike_date: r.strike_date, legs: contractOfCode(r.code) ? [contractOfCode(r.code)!] : [] }
+      : holdings.find((h) => h.id === id)!);
+    const watchlist = Boolean(m.legs) && namesUnheldContract({ strike_date: m.strike_date, legs: m.legs! }, held);
+    linked.push({ monitor: m, scope: covered ? "all" : "leg", watchlist });
   }
   return { replaced, linked, known: true };
 }

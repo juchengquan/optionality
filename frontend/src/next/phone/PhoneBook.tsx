@@ -103,9 +103,9 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
           <section key={expiry} className="nxp-expiry" data-expiry={expiry}>
             <ExpiryHead expiry={expiry} dte={items[0]!.entry.dte} />
             <ul className="nxp-cards">
-              {items.map(({ entry, under }) => (
+              {items.map(({ entry, under, overlap }) => (
                 <li key={entry.id}>
-                  <RuleCard entry={entry} under={under} onOpen={() => setOpenId(entry.id)} />
+                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} />
                 </li>
               ))}
             </ul>

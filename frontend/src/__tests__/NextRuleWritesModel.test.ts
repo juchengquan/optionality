@@ -269,6 +269,18 @@ describe("what recording a holding does to the other rules (#336)", () => {
     expect(links.known).toBe(true);
   });
 
+  it("says which of them the page will draw in the Watchlist: a combo not on exactly what is held (#346)", () => {
+    const s = scenario(CS);
+    const book = bookOf(s);
+    const rule = ruleOfMonitor(book.monitors.find((m) => m.id === "mon-c7300")!);
+    const links = holdLinks(rule, book.monitors, book.holdings);
+    expect(links.linked.length).toBeGreaterThan(0);
+    expect(links.linked.map((l) => [l.monitor.id, l.watchlist]))
+      .toEqual(links.linked.map((l) => [l.monitor.id, Boolean(l.monitor.legs)]));
+    // a combo on exactly the new holding's one contract cannot be: a combo has two legs or more
+    expect(links.linked.some((l) => l.watchlist)).toBe(true);
+  });
+
   it("links nothing to it where another holding holds the contract too: the service calls that ambiguous", () => {
     const book = bookOf(scenario(CS));
     const rule = ruleOfMonitor(book.monitors.find((m) => m.id === "mon-c7300")!);

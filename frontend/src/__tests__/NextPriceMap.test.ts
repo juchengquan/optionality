@@ -8,6 +8,7 @@ import type { Entry, Holding } from "../shared/api";
 import { placeBook } from "../next/placement";
 import { bandWords, domainOf, priceMapOf, slotRows, spxOfBook, spxWords, ticksOf } from "../next/pricemap";
 import { HOLDINGS, MONITORS, QUOTES, served } from "../testing/ownerBook";
+import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const REASON = "the Provider gives no option premium to derive it from";
 function bare<T extends Entry | Holding>(row: T): T {
@@ -184,5 +185,18 @@ describe("slotting spreads into rows", () => {
     expect(slotRows([[0, 10], [5, 15], [11, 20], [16, 30]])).toEqual([0, 1, 0, 1]);
     expect(slotRows([[0, 10], [2, 8], [4, 6]])).toEqual([0, 1, 2]);
     expect(slotRows([])).toEqual([]);
+  });
+});
+
+describe("a combo that only partly overlaps a holding (#346)", () => {
+  it("is a watched spread on the map, as the table draws it, and its holding a held one", () => {
+    const placed = placeBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS, OVERLAP_MONITORS);
+    const map = priceMapOf(placed, spxOfBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS));
+    const kinds = map.lanes.flatMap((l) => l.spreads.map((s) => [s.id, s.kind]));
+    // the wing of the held condor stays the condor's: no spread of its own on the map
+    expect(kinds).toEqual([
+      ["h-8050", "held"], ["h-7700", "held"], ["h-ic", "held"], ["h-7200", "held"],
+      ["r-8100", "watched"], ["w-7700", "watched"], ["r-ratio", "watched"],
+    ]);
   });
 });

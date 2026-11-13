@@ -297,9 +297,10 @@ function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
         <div key={expiry} className="nxd-expiry">
           <h3 className="nxd-group">{`${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`}</h3>
           <ul>
-            {items.map(({ entry, under }) => (
+            {items.map(({ entry, under, overlap }) => (
               <li key={entry.id}>
-                <Row row={{ kind: "rule", entry, nested: false }} ctx={ctx} />
+                <Row row={{ kind: "rule", entry, nested: false, overlap }} ctx={ctx} />
+                <OverlapNote overlap={overlap} />
                 {under.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
               </li>
             ))}
@@ -319,6 +320,12 @@ function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
       ) : null}
     </section>
   );
+}
+
+/** What a spread in the watchlist shares with a holding it only partly overlaps (#346), under its
+ *  row: names and contracts only, so privacy has nothing to hide in it. */
+export function OverlapNote({ overlap }: { overlap: string | null | undefined }) {
+  return overlap ? <p className="nx-meta nxd-overlap" data-overlap="">{overlap}</p> : null;
 }
 
 /** Muted by hand, expired, or off with their holding: not news, so folded away, as `/opt`'s muted
@@ -466,7 +473,7 @@ function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose, 
       {/* the heading and its close stay outside: a detail that cannot be drawn can still be shut */}
       <DetailBoundary key={subject} what={row.kind === "holding" ? "holding" : "rule"}>
         {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} privacy={privacy} partners={partners} onSelect={onSelect} />
-          : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} />
+          : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null} />
             : <QuarantinedDetail row={row} />}
         <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
         {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
@@ -557,17 +564,22 @@ function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holdi
   return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
-function RuleDetail({ entry, rows }: { entry: Entry; rows: DeskRow[] }) {
+function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; overlap: string | null }) {
   const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
     r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
   return (
     <>
+      {/* a combo drawn in the watchlist because it names a contract its holding does not hold is a
+          watched spread here too (#346): its note says what it shares, in place of "on something
+          held", and its payoff is drawn at its current value */}
       <p className="nx-meta">
-        {`${entry.strike_date} · ${entry.dte} DTE · ${entry.held ? "on something held" : "watch only"}`}
+        {`${entry.strike_date} · ${entry.dte} DTE`
+          + (overlap ? "" : ` · ${entry.held ? "on something held" : "watch only"}`)}
       </p>
+      {overlap ? <p className="nx-meta" data-overlap="">{overlap}</p> : null}
       {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"} ${l.option_type} ${l.strike}`)} /> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-      {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
+      {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} /> : null}
       {/* every figure of its contract or combo, the reason beside each dash (#332) */}
       <RuleFigures entry={entry} className="nxd-kv" />
       {entry.error ? <p className="nxd-why">{entry.error}</p> : null}

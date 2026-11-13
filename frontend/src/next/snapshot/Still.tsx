@@ -24,7 +24,7 @@ import { readHidden } from "../../shared/prefs";
 import { ReferenceStrip } from "../../shared/ReferenceStrip";
 import type { Arrangement } from "../arrangement";
 import { Money, type BookProps } from "../Book";
-import { AttentionChip, Cell, Fill, tableRows } from "../desk/DeskBook";
+import { AttentionChip, Cell, Fill, OverlapNote, tableRows } from "../desk/DeskBook";
 import {
   attentionOf, charsOf, COLUMNS, PINNED, rowId, rowName, type DeskColumn, type DeskRow,
 } from "../desk/columns";
@@ -136,9 +136,11 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
           {placed.watchlist.map(({ expiry, items }) => (
             <div key={expiry} className="nxd-expiry">
               <h3 className="nxd-group">{`${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`}</h3>
-              {items.map(({ entry, under }) => (
+              {items.map(({ entry, under, overlap }) => (
                 <div key={entry.id}>
-                  <StillRow row={{ kind: "rule", entry, nested: false }} columns={columns} privacy={privacy} />
+                  <StillRow row={{ kind: "rule", entry, nested: false, overlap }} columns={columns}
+                            privacy={privacy} />
+                  <OverlapNote overlap={overlap} />
                   {under.map((e) => (
                     <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: true }} columns={columns} privacy={privacy} />
                   ))}
@@ -231,7 +233,9 @@ function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, mod
           <section key={expiry} className="nxp-expiry">
             <ExpiryHead expiry={expiry} dte={items[0]!.entry.dte} />
             <ul className="nxp-cards">
-              {items.map(({ entry, under }) => <li key={entry.id}><RuleCard entry={entry} under={under} /></li>)}
+              {items.map(({ entry, under, overlap }) => (
+                <li key={entry.id}><RuleCard entry={entry} under={under} overlap={overlap} /></li>
+              ))}
             </ul>
           </section>
         ))}

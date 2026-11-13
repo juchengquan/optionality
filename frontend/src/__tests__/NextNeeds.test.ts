@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Entry, Health, Holding, Monitor } from "../shared/api";
 import { isEntrySignal, needsYou, sentence, toneOf } from "../next/needs";
+import { OVERLAP_HOLDINGS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const health = (over: Partial<{ ok: boolean; bad: boolean }> = {}) => ({
   db: true,
@@ -148,6 +149,38 @@ describe("holdings, when the page has them", () => {
         schedule: { reached: "stop", manage_by_due: false, position_id: "p2" } }),
     ], [], health(), [holding({ schedule: { reached: "stop", manage_by_due: false } })]);
     expect(items.map((n) => n.text)).toEqual(["1231_7000P at stop"]);
+  });
+});
+
+describe("a combo drawn in the watchlist because it only partly overlaps a holding (#346)", () => {
+  const STOP = { reached: "stop", manage_by_due: false } as const;
+  const spread = { ...OVERLAP_QUOTES.find((q) => q.id === "w-7700")!,
+    schedule: { ...STOP, position_id: "h-7700" } } as unknown as Entry;
+  const holdings = OVERLAP_HOLDINGS.map((h) => (h.id === "h-7700" ? { ...h, schedule: STOP } : h)) as Holding[];
+
+  it("leaves the holding's Level to the holding, which is where the book draws it", () => {
+    const items = needsYou([spread], [], health(), holdings);
+    expect(items).toEqual([{ kind: "stop", text: "1231_7700 at stop", ref: "h-7700" }]);
+  });
+
+  it("is placed by the valued holdings even where their Levels are not the line's to say (REVIEW)", () => {
+    const due = { ...spread, schedule: { reached: null, manage_by_due: true, position_id: "h-7700" } } as Entry;
+    // REVIEW: no Levels from the holdings, but the page has valued them and drawn the rule apart
+    expect(needsYou([due], [], health(), null, holdings)).toEqual([]);
+    // LIVE: the holding says its own
+    const dueHolding = holdings.map((h) => (h.id === "h-7700"
+      ? { ...h, schedule: { reached: null, manage_by_due: true } } : h)) as Holding[];
+    expect(needsYou([due], [], health(), dueHolding).map((n) => n.text)).toEqual(["1231_7700 at its manage-by"]);
+  });
+
+  it("says it as the rule's own while the holdings are not valued, as before", () => {
+    const items = needsYou([spread], [], health(), null);
+    expect(items).toEqual([{ kind: "stop", text: "1231_C7700 at stop", ref: "w-7700" }]);
+  });
+
+  it("still says its own bell, leading to it where it is drawn", () => {
+    const items = needsYou([{ ...spread, schedule: null, triggered: true }], [], health(), holdings);
+    expect(items.filter((n) => n.ref === "w-7700").map((n) => n.text)).toEqual(["1231_C7700 ringing"]);
   });
 });
 
