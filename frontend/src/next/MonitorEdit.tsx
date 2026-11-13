@@ -22,15 +22,17 @@
  *  or a page that cannot write — draws no controls rather than controls that do nothing.
  */
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import type { Added, Entry, Holding, Monitor } from "../api";
 import { Button } from "@/components/ui/button";
 import { DASH, marketDay } from "../format";
-import type { SpreadsBody } from "./add";
+import { ruleWords as replacedWords, type SpreadsBody } from "./add";
 import { refusalSpot, type ContractSpot } from "./contract";
 import {
-  deletesOn, draftOf, draftWords, fieldsFor, holdBody, holdDraft, holdOffered, holdReplaces, patchOf,
-  QUARANTINE_WHY, renameNote, ruleLabel, splitOffered, splitPreview, spotOf, stateOf, totalOf,
+  deletesOn, draftOf, draftWords, fieldsFor, holdBody, holdDraft, holdLinks, holdOffered, patchOf,
+  QUARANTINE_WHY, renameNote, ruleLabel, ruleOfMonitor, splitCounts, splitOffered, splitPreview, spotOf, stateOf,
+  totalOf, uniqueName,
   type Draft, type HoldDraft, type PatchBody, type Rule, type Spot,
 } from "./edit";
 import { fieldWords, sentence } from "./needs";
@@ -44,6 +46,9 @@ export interface MonitorActions {
   totalEntry?: (id: string, entry: number) => Promise<void>;
   /** a holding recorded through `POST /spreads` (#336): what was made; throws the refusal */
   hold?: (body: SpreadsBody) => Promise<Added>;
+  /** every holding's name on record, closed ones too (`GET /positions`, no market data): a new
+   *  holding's name must be none of them */
+  holdingNames?: () => Promise<string[]>;
   /** what those two read: every rule as `/monitors` gave them, the valued holdings (null where the
    *  page has none), and whether the owner's privacy is on */
   book?: { monitors: Monitor[]; holdings: Holding[] | null; privacy: boolean };
@@ -66,6 +71,9 @@ type Mode = "idle" | "editing" | "deleting" | "enabling" | "splitting" | "holdin
 function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Rule; served: Entry | null }) {
   const [mode, setMode] = useState<Mode>("idle");
   const [draft, setDraft] = useState<Draft>(() => draftOf(rule));
+  // the rule as it was when the editor opened: the draft is a change to THAT, so a poll serving a
+  // rename made elsewhere meanwhile is not sent back as the old name (#336)
+  const [opened, setOpened] = useState<Rule>(rule);
   const [error, setError] = useState<{ text: string; at: Spot } | null>(null);
   const [busy, setBusy] = useState(false);
   const [saidSplit, setSaidSplit] = useState(false);
@@ -116,20 +124,23 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     const home = homeOf(root.current);
     try {
       await actions.hold!(body);
-    } finally {
+    } catch (e) {
       setBusy(false);
+      throw e;
     }
-    to("idle");
+    // committed NOW, not batched: the focus below goes to the edit button, which is disabled until
+    // `busy` is drawn false, and a batch landing after the timer left the focus on the body
+    flushSync(() => { setBusy(false); to("idle"); });
     setTimeout(() => settleFocus(root.current, editButton.current, home), 0);
   };
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
-    const out = patchOf(rule, draft);
+    const out = patchOf(opened, draft);
     if ("error" in out) { setError({ text: out.error, at: out.at }); return; }
     if (out.body === null) { close(); return; }
     const body = out.body;
-    void run(() => actions.patch(rule.id, body), close, false, (text) => spotOf(text, body, rule));
+    void run(() => actions.patch(rule.id, body), close, false, (text) => spotOf(text, body, opened));
   };
 
   // the whole reason, while the rule is still quarantined: a write lands and the page reloads before
@@ -154,7 +165,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
       <div className="nx-mon-actions">
         <button ref={editButton} type="button" className="nx-mon-button" aria-label={`edit ${label}`}
                 disabled={busy} aria-expanded={mode === "editing"}
-                onClick={() => { if (mode === "editing") { close(); return; } setDraft(draftOf(rule)); to("editing"); }}>
+                onClick={() => { if (mode === "editing") { close(); return; } setOpened(rule); setDraft(draftOf(rule)); to("editing"); }}>
           edit
         </button>
         {toggle ? (
@@ -215,11 +226,12 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         <SplitForm rule={rule} label={label} book={book} busy={busy} error={error}
                    onError={(text) => setError(text === null ? null : { text, at: "threshold" })}
                    onCancel={() => back(splitButton)}
-                   onSave={(entry) => void run(() => actions.totalEntry!(rule.id, entry),
+                   onSave={(entry) => run(() => actions.totalEntry!(rule.id, entry),
                      () => { back(splitButton); setSaidSplit(true); }, false, () => "threshold")} />
       ) : null}
       {mode === "holding" && book && actions.hold ? (
         <HoldForm rule={rule} label={label} book={book} today={marketDay(now)} busy={busy}
+                  holdingNames={actions.holdingNames}
                   onCancel={() => back(holdButton)}
                   onSave={holdIt} />
       ) : null}
@@ -355,8 +367,10 @@ function points(n: number | null | undefined): string {
 
 /** Escape is the form's: it cancels and goes no further, so neither the desk's inspector nor the
  *  phone's sheet — whose dismissal does not ask whether the key was handled — closes under it. */
-const escapeCancels = (onCancel: () => void) => (e: React.KeyboardEvent) => {
-  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel(); }
+const escapeCancels = (onCancel: () => void, busy = false) => (e: React.KeyboardEvent) => {
+  // and while a save is on its way it cancels nothing: the form stays to say how the save went,
+  // a refusal included, rather than going and leaving a late refusal nowhere to be said
+  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (!busy) onCancel(); }
 };
 
 /** A total entry across the holdings a rule covers (#336), with what each gets before it is saved.
@@ -364,10 +378,13 @@ const escapeCancels = (onCancel: () => void) => (e: React.KeyboardEvent) => {
 function SplitForm({ rule, label, book, busy, error, onError, onSave, onCancel }: {
   rule: Rule; label: string; book: NonNullable<MonitorActions["book"]>; busy: boolean;
   error: { text: string } | null; onError: (text: string | null) => void;
-  onSave: (entry: number) => void; onCancel: () => void;
+  onSave: (entry: number) => Promise<void>; onCancel: () => void;
 }) {
   const id = useId();
   const [text, setText] = useState("");
+  // a REF as well as `busy`: two submits in one tick both read `busy` from before either set it
+  const sending = useRef(false);
+  const counts = splitCounts(rule, book.holdings, book.privacy);
   const box = useRef<HTMLInputElement>(null);
   useEffect(() => { box.current?.focus(); }, []);
   const total = totalOf(text);
@@ -376,11 +393,13 @@ function SplitForm({ rule, label, book, busy, error, onError, onSave, onCancel }
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     if ("error" in total) { onError(total.error); return; }
-    onSave(total.entry);
+    if (sending.current) return;
+    sending.current = true;
+    void onSave(total.entry).finally(() => { sending.current = false; });
   };
   return (
     <form className="nx-mon-form" aria-label={`split a total entry across ${label}`} data-poll="hold" noValidate
-          onSubmit={save} onKeyDown={escapeCancels(onCancel)}>
+          onSubmit={save} onKeyDown={escapeCancels(onCancel, busy)}>
       <div className="nx-mon-fields">
         <div className="nx-mon-field">
           <label htmlFor={`${id}-total`}>total entry, per contract</label>
@@ -406,6 +425,7 @@ function SplitForm({ rule, label, book, busy, error, onError, onSave, onCancel }
           ))}
         </tbody>
       </table>
+      {counts ? <p className="nx-mon-note" data-testid="split-counts">{counts}</p> : null}
       {preview.why ? (
         <p className="nx-mon-note" data-testid="split-why">{`The service will refuse this: ${preview.why}.`}</p>
       ) : null}
@@ -415,7 +435,7 @@ function SplitForm({ rule, label, book, busy, error, onError, onSave, onCancel }
       </p>
       <div className="nx-mon-actions">
         <Button type="submit" size="sm" disabled={busy}>{busy ? "saving…" : "save the split"}</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>cancel</Button>
+        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>cancel</Button>
       </div>
     </form>
   );
@@ -428,20 +448,36 @@ const holdSpot = (at: ContractSpot): "entry" | "contracts" | "opened" | "name" |
 /** Recording a holding of a watched contract (#336): what the add form's one-contract draft would
  *  post held, with THIS rule as it is saved, so the route replaces the watch rule with the
  *  holding's own in the same request (`edit.ts`'s `holdBody`). */
-function HoldForm({ rule, label, book, today, busy, onSave, onCancel }: {
+function HoldForm({ rule, label, book, today, busy, holdingNames, onSave, onCancel }: {
   rule: Rule; label: string; book: NonNullable<MonitorActions["book"]>; today: string; busy: boolean;
+  holdingNames?: () => Promise<string[]>;
   /** throws the service's refusal, which this form files beside the box it is about */
   onSave: (body: SpreadsBody) => Promise<void>; onCancel: () => void;
 }) {
   const id = useId();
-  const [draft, setDraft] = useState<HoldDraft>(() => holdDraft(rule, today));
+  // named apart from every holding open now, and once they are read, from every one on record
+  const [draft, setDraft] = useState<HoldDraft>(() => {
+    const d = holdDraft(rule, today);
+    return { ...d, name: uniqueName(d.name, (book.holdings ?? []).map((h) => h.name)) };
+  });
+  const named = useRef(false);
+  useEffect(() => {
+    let live = true;
+    holdingNames?.().then((names) => {
+      if (!live || named.current) return;
+      setDraft((d) => ({ ...d, name: uniqueName(holdDraft(rule, today).name, names) }));
+    }).catch(() => undefined);
+    return () => { live = false; };
+    // asked once, when the form opens
+  }, []);
   const [error, setError] = useState<{ text: string; at: ReturnType<typeof holdSpot> } | null>(null);
   // a REF as well as `busy`: two presses in one tick both read `busy` from before either set it
   const sending = useRef(false);
   const first = useRef<HTMLSelectElement>(null);
   useEffect(() => { first.current?.focus(); }, []);
   const set = (change: Partial<HoldDraft>) => { setDraft((d) => ({ ...d, ...change })); setError(null); };
-  const replaced = holdReplaces(rule, book.monitors);
+  const links = holdLinks(rule, book.monitors, book.holdings);
+  const replaced = links.replaced.map(replacedWords);
   const tie = (spot: string) => error?.at === spot
     ? { "aria-invalid": true, "aria-describedby": `${id}-${spot}-error` } : {};
   const said = (spot: string) => error?.at === spot ? <Refusal id={`${id}-${spot}-error`} text={error.text} /> : null;
@@ -466,12 +502,21 @@ function HoldForm({ rule, label, book, today, busy, onSave, onCancel }: {
 
   return (
     <form className="nx-mon-form" aria-label={`record a holding of ${label}`} data-poll="hold" noValidate
-          onSubmit={(e) => void save(e)} onKeyDown={escapeCancels(onCancel)}>
+          onSubmit={(e) => void save(e)} onKeyDown={escapeCancels(onCancel, busy)}>
+      {/* the same field, direction and compare, on a rule that is on: the route keeps its alarm
+          (`editedMonitor`'s rule, #292) */}
       <p className="nx-mon-note" data-testid="hold-replaces">
-        {replaced.length > 0
-          ? `Replaces the watch rule: ${replaced.join(", ")} — with the holding's own, the same rule, linked to it. `
-            + "Its alarm starts afresh."
-          : "Replaces this watch rule with the holding's own, the same rule, linked to it. Its alarm starts afresh."}
+        {`Replaces the watch rule ${replaced.length > 0 ? replaced.join(", ") : "on it"} with the holding's own, `
+          + "the same rule, linked to it: its alarm carries over, so a ringing rule does not say it crossed again."}
+      </p>
+      <p className="nx-mon-note" data-testid="hold-links">
+        {!links.known
+          ? "The holdings have not been read, so which other Monitors it takes is the service's to say once it is saved."
+          : links.linked.length === 0 ? "No other Monitor is linked to it."
+            : "Also linked to it, by the service, as it links every rule no holding owns: "
+              + links.linked.map(({ monitor, scope }) => `${ruleLabel(ruleOfMonitor(monitor))} — ${scope === "all"
+                ? "as covering the whole of it, so that row reads this holding's Entry and P&L" : "as one leg of it"}`)
+                .join("; ") + "."}
       </p>
       <div className="nx-mon-fields">
         <div className="nx-mon-field">
@@ -508,19 +553,19 @@ function HoldForm({ rule, label, book, today, busy, onSave, onCancel }: {
         </div>
         <div className="nx-mon-field">
           <label htmlFor={`${id}-name`}>name</label>
-          <input id={`${id}-name`} autoComplete="off" value={draft.name} onChange={(e) => set({ name: e.target.value })}
-                 {...tie("name")} />
+          <input id={`${id}-name`} autoComplete="off" value={draft.name}
+                 onChange={(e) => { named.current = true; set({ name: e.target.value }); }} {...tie("name")} />
           {said("name")}
         </div>
       </div>
       <p className="nx-meta">
         One request, all of it or none, through the add form&apos;s route: the holding of this one contract,
-        and this rule made again as its own. A Monitor on this contract that no holding owns is linked to it too.
+        and this rule made again as its own.
       </p>
       {said("form")}
       <div className="nx-mon-actions">
         <Button type="submit" size="sm" disabled={busy}>{busy ? "recording…" : "Record holding"}</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>cancel</Button>
+        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>cancel</Button>
       </div>
     </form>
   );

@@ -1250,6 +1250,31 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
+    // the 7300 call sold from a watchlist that also watches the 7300/7350 call spread `cs` and the
+    // 6400 put: the call's watch rule is replaced, and the ADOPTION that follows every POST /spreads
+    // links `cs` to the new holding as covering all of it — the spread's row then reads the one
+    // call's Entry. The dashboard names both before the save (#336); this is what it is held to.
+    name: "POST /spreads records one contract held, and a watched spread holding it is linked to it",
+    world: world({
+      tables: {
+        monitors: [
+          combo({ id: "mon-cs", code: "cs" }),
+          monitor({ id: "mon-c7300" }),
+          monitor({ id: "mon-p6400", option_type: "PUT", strike: 6400, threshold: 0.15 }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{
+        name: "1218_C7300", held: true, entry: 2.75, contracts: 1, opened_at: "2026-11-06",
+        legs: [{ side: "short", option_type: "CALL", strike: 7300 }],
+        monitors: [{ option_type: "CALL", strike: 7300, field: "option_delta", threshold: 0.3, direction: "above", compare: "abs" }],
+      }],
+    }),
+  },
+  {
     // the condor already holds the 6400 put: the lone holding's rule is linked to IT, never to the
     // condor, and the condor gains no rule nobody asked for
     name: "POST /spreads links one contract's rule to its own holding when another holding holds that strike",

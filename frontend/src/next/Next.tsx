@@ -3,7 +3,8 @@ import { ImageDown, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
 
 import "./next.css";
 import {
-  addReference, addSpreads, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes, fetchReferences,
+  addReference, addSpreads, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchPositions, fetchQuotes,
+  fetchReferences,
   patchMonitor, removeReference, setTotalEntry,
   type Added, type Entry, type Health, type Holding, type Monitor, type Reference,
 } from "../api";
@@ -29,6 +30,7 @@ import { useJournal } from "./journal";
 import { rowId, tableRows } from "./desk/columns";
 import { holdOnDesk, NOTHING_SELECTED, type DeskSelection } from "./desk/keys";
 import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
+import { holdToast } from "./edit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
 import { clockMode, useSessionClock, type Mode } from "./mode";
@@ -124,12 +126,13 @@ export function Next() {
     totalEntry: async (id, entry) => { await setTotalEntry(id, entry); await reload(); },
     hold: async (body) => {
       const added = await addSpreads(body);
-      const r = added.replaced.length;
-      const replacing = r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : "";
-      toast.add({ title: `recorded ${added.positions.map((p) => p.name).join(", ")}${replacing}`, type: "success" });
       await reload();
+      // what it linked, as the service now links it — read back, never the form's prediction
+      const after = await fetchMonitors().catch(() => null);
+      toast.add({ title: holdToast(added, after), type: "success" });
       return added;
     },
+    holdingNames: () => fetchPositions().then((all) => all.map((p) => p.name)),
     book: { monitors: ruleMonitors, holdings, privacy },
     retentionDays,
   }), [reload, retentionDays, ruleMonitors, holdings, privacy]);

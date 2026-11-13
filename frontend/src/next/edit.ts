@@ -5,9 +5,9 @@
  *  all — a draft that is not one has nothing to send — and the refusals the service words (a signed
  *  0, a combo on IV, a duplicate) are its own, filed beside the field they are about.
  */
-import type { Entry, Holding, Monitor } from "../api";
+import type { Added, Entry, Holding, Monitor } from "../api";
 import { contractCode, type OptionType, type Side, type SpreadsBody } from "./add";
-import { contractBody, contractName, contractReplaces, type ContractSpot } from "./contract";
+import { contractBody, contractName, type ContractSpot } from "./contract";
 import { entryName, fieldWords, monitorName, ruleWords } from "./needs";
 
 /** A rule as the editor needs it, from either door: a row of `/quotes` (on, with figures) or of
@@ -179,12 +179,10 @@ export const QUARANTINE_WHY: Record<string, (r: Rule) => string> = {
  *  holding recorded under the same name — as #293 records a held spread's — keeps it. Null for a
  *  combo no holding is linked to. */
 export function renameNote(r: Rule): string | null {
-  if (!r.combo || r.holdings.length === 0) return null;
-  const names = r.holdings.map((h) => h.name);
-  const listed = names.length === 1 ? names[0]! : `${names.slice(0, -1).join(", ")} and ${names.at(-1)!}`;
-  return names.length === 1
-    ? `Renames this Monitor only: the holding ${listed} keeps its name — the service never renames a holding.`
-    : `Renames this Monitor only: the holdings ${listed} keep their names — the service never renames a holding.`;
+  const sharing = r.combo ? r.holdings.find((h) => h.name === r.code) : undefined;
+  return sharing
+    ? `Renames this Monitor only: the holding ${sharing.name} keeps its name — the service never renames a holding.`
+    : null;
 }
 
 // ---- splitting a total entry (#336), through `POST /monitors/{id}/total-entry`
@@ -248,6 +246,17 @@ export function splitPreview(
   };
 }
 
+/** Whether the holdings a split spans are held in different numbers of contracts, said in words —
+ *  the counts named only where privacy is off, since a count times points is the money it hides.
+ *  The service adds their per-contract Entries as they are (`applyTotalEntry`), whatever the count. */
+export function splitCounts(r: Rule, holdings: Holding[] | null, privacy: boolean): string | null {
+  const held = r.holdings.map((h) => holdings?.find((x) => x.id === h.id)).filter((h) => h !== undefined);
+  if (new Set(held.map((h) => h.contracts)).size < 2) return null;
+  const counts = privacy ? "" : ` (${held.map((h) => `${h.name} ×${h.contracts}`).join(", ")})`;
+  return `These holdings are held in different numbers${counts}: the total is per contract, `
+    + "and the service adds their Entries as they are, whatever the count.";
+}
+
 // ---- recording a holding of a watched contract (#336), through `POST /spreads`
 
 /** The Contract a single-leg rule watches, read back from its code as the service builds it
@@ -297,14 +306,79 @@ export function holdBody(
   }, today);
 }
 
-/** The watch rules a save replaces, in the add form's words: this rule, read from `/monitors`. */
-export function holdReplaces(r: Rule, monitors: Monitor[]): string[] {
-  const c = contractOfCode(r.code);
-  if (!c) return [];
-  const code = contractCode(r.strike_date, c.option_type, c.strike);
-  return code === r.code ? contractReplaces({
-    held: true, rule: true, expiry: r.strike_date, opened: "", option_type: c.option_type,
-    strike: String(c.strike), field: r.field, direction: "above", compare: "abs", threshold: "",
-    side: "short", entry: "", contracts: "1", name: "",
-  }, monitors) : [];
+
+/** `name`, or the first of `name-2`, `name-3`… that no holding on record has: a holding's name is
+ *  unique across closed ones too, so a closed `1231_C8000` makes the next one `1231_C8000-2`. */
+export function uniqueName(name: string, taken: string[]): string {
+  const names = new Set(taken);
+  if (!names.has(name)) return name;
+  let n = 2;
+  while (names.has(`${name}-${n}`)) n += 1;
+  return `${name}-${n}`;
+}
+
+/** The Contracts a holding's legs are, as the service codes them. */
+const legCodes = (h: Pick<Holding, "strike_date" | "legs">) =>
+  h.legs.map((l) => contractCode(h.strike_date, l.option_type as OptionType, l.strike));
+
+/** The Contracts a rule watches (`monitorLegCodes`): its legs, or its one contract. */
+const ruleCodes = (m: Monitor) => m.legs
+  ? m.legs.map((l) => contractCode(m.strike_date, l.option_type as OptionType, l.strike)) : [m.code];
+
+export interface HoldLinks {
+  /** the watch rules the save deletes and makes again as the holding's */
+  replaced: Monitor[];
+  /** every OTHER rule linked to no holding that the new holding takes, and as what: the whole of
+   *  it, or one leg of something larger */
+  linked: { monitor: Monitor; scope: "all" | "leg" }[];
+  /** false where the holdings have not been read: which rules it takes depends on all of them */
+  known: boolean;
+}
+
+/** What recording the holding does to the rules besides its own, worked out as the service works
+ *  it, so the form can say it before the save. `POST /spreads` replaces the watch rule on the same
+ *  (contract, field), then ADOPTS every rule linked to no holding (`adoptOrphanMonitors`), each by
+ *  `positionsHolding` against every open holding, the new one included: a rule whose Contracts any
+ *  holding holds twice is linked to nothing; otherwise to every holding holding one of them, as
+ *  covering the whole where it watches every leg of each. A watched spread containing the contract
+ *  is therefore linked to a lone-contract holding as covering all of it (#336). Held to the backend
+ *  by the door scenarios (`NextRuleWritesModel.test.ts`). */
+export function holdLinks(
+  r: Rule, monitors: Monitor[], holdings: Pick<Holding, "id" | "strike_date" | "legs">[] | null,
+): HoldLinks {
+  const replaced = monitors.filter((m) => m.code === r.code && m.field === r.field && m.positions.length === 0);
+  if (holdings === null) return { replaced, linked: [], known: false };
+  const NEW = "\u0000new";
+  const owners = new Map<string, string[]>();
+  for (const h of [...holdings, { id: NEW, strike_date: r.strike_date, legs: [] }]) {
+    const codes = h.id === NEW ? [r.code] : legCodes(h);
+    for (const c of codes) owners.set(c, [...(owners.get(c) ?? []), h.id]);
+  }
+  const gone = new Set(replaced.map((m) => m.id));
+  const linked: HoldLinks["linked"] = [];
+  for (const m of monitors) {
+    if (m.positions.length > 0 || gone.has(m.id)) continue;
+    const codes = ruleCodes(m);
+    if (codes.some((c) => (owners.get(c)?.length ?? 0) > 1)) continue;
+    const found = new Set(codes.flatMap((c) => owners.get(c) ?? []));
+    if (!found.has(NEW)) continue;
+    const watched = new Set(codes);
+    const covered = [...found].every((id) => id === NEW
+      ? watched.has(r.code) : legCodes(holdings.find((h) => h.id === id)!).every((c) => watched.has(c)));
+    linked.push({ monitor: m, scope: covered ? "all" : "leg" });
+  }
+  return { replaced, linked, known: true };
+}
+
+/** What a recorded holding made, in the toast: the service's answer, and the rules linked to the new
+ *  holding as `/monitors` reads AFTER the save — the service's word for what it adopted, never the
+ *  preview's. Null for `after` where that read failed. */
+export function holdToast(added: Added, after: Monitor[] | null): string {
+  const r = added.replaced.length;
+  const made = new Set(added.monitors.map((m) => m.id));
+  const ids = new Set(added.positions.map((p) => p.id));
+  const linked = (after ?? []).filter((m) => !made.has(m.id) && m.positions.some((p) => ids.has(p.id)));
+  return `recorded ${added.positions.map((p) => p.name).join(", ")}`
+    + (r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : "")
+    + (linked.length ? `; also linked to it: ${linked.map((m) => ruleLabel(ruleOfMonitor(m))).join(", ")}` : "");
 }

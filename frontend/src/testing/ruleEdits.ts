@@ -51,6 +51,13 @@ export function splitBook(): { quotes: Entry[]; monitors: Monitor[]; holdings: H
 
 export interface Write { what: string; body: unknown }
 
+/** A watched 8000/8050 call spread holding the lone watched contract, as `/quotes` serves it. */
+export const CS: Entry = {
+  ...QUOTES.find((q) => q.id === "w-dec31")!,
+  id: "m-cs", code: "cs",
+  legs: [{ sign: -1, option_type: "CALL", strike: 8000 }, { sign: 1, option_type: "CALL", strike: 8050 }],
+} as Entry;
+
 export interface Refusals {
   /** the service's refusal for a PATCH, as [status, words], or null to take it */
   patch?: (id: string, body: Record<string, unknown>) => [number, string] | null;
@@ -58,10 +65,12 @@ export interface Refusals {
   spreads?: (body: unknown) => [number, string] | null;
 }
 
-export function serveRuleEdits(refuse: Refusals = {}): Write[] {
+/** @param extra rules served beside the book: `CS`, to see a holding take a watched spread */
+export function serveRuleEdits(refuse: Refusals = {}, extra: Entry[] = []): Write[] {
   const writes: Write[] = [];
   const book = splitBook();
-  let { quotes, monitors } = book;
+  let quotes = [...book.quotes, ...structuredClone(extra)];
+  let monitors = [...book.monitors, ...monitorsOf(structuredClone(extra))];
   const holdings = book.holdings;
   const reply = (status: number, body: unknown) =>
     Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
@@ -148,6 +157,15 @@ export function serveRuleEdits(refuse: Refusals = {}): Write[] {
           direction: n.direction, compare: n.compare, held: true, scope: "all", positions: linked } as Entry;
         quotes.push(row);
         monitors = [...monitors, ...monitorsOf([row])];
+      }
+      // the adoption that follows (`adoptOrphanMonitors`), as this book needs it: a rule linked to
+      // nothing whose legs hold the contract is linked to the new holding
+      for (const m of monitors) {
+        const legs = m.legs?.map((l) => `US.SPXW${m.strike_date.slice(2).replaceAll("-", "")}${l.option_type[0]}${l.strike}000`);
+        if (m.positions.length === 0 && legs?.includes(code)) {
+          m.positions = [{ id: holding.id, name: holding.name }];
+          m.scope = "all";
+        }
       }
       return reply(201, {
         positions: [{ id: holding.id, name: holding.name }], monitors: made,
