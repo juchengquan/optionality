@@ -164,3 +164,88 @@ def test_states_the_same_constant(module, name, expected):
 def test_reproduces_the_typescript(module, case):
     actual = call(module, case["fn"], case["args"])
     assert same(actual, case["expect"]), f"got {actual!r}, the TypeScript says {case['expect']!r}"
+
+
+#: every public function of the package that NO golden case holds, each with what holds it instead.
+#: CLAUDE.md used to state these as counts ("N of the package's M", "the other K"), corrected by
+#: hand in five PRs running and never by a gate (#366); this table is the list, and the test below
+#: fails on a function that is in neither the cases nor here — so a new one is cased or explained.
+UNCASED = {
+    # held by their own tests and no corpus, because they mirror no domain function
+    **dict.fromkeys(
+        [
+            "api.agrees",
+            "api.closed_positions",
+            "api.monitors",
+            "api.positions",
+            "api.references",
+            "quotes.verify_contracts",
+            "opend.quotes",
+        ],
+        "its own tests: it mirrors no domain function",
+    ),
+    # held to testdata/vendors/ instead: the Yahoo port and IB Gateway's field readers
+    **dict.fromkeys(
+        ["yahoo.to_record", "yahoo.quotes", "ibkr.grade", "ibkr.greek_fields", "ibkr.with_mid", "ibkr.has_figures"],
+        "testdata/vendors/",
+    ),
+    # held by the recorded IB Gateway conversations and their own tests
+    **dict.fromkeys(["ibkr.contract_for", "ibkr.quotes"], "testdata/vendors/ibkr-gateway/"),
+    # a lint, held by fixture sources (tests/test_no_trading.py)
+    **dict.fromkeys(
+        [
+            "no_trading.an_int",
+            "no_trading.breaches_in",
+            "no_trading.docstrings",
+            "no_trading.every_string",
+            "no_trading.folded",
+            "no_trading.message_sent",
+            "no_trading.statement_strings",
+            "no_trading.strings_in",
+        ],
+        "fixture sources",
+    ),
+    # cased by nothing by design (ADR 0020)
+    **dict.fromkeys(
+        ["research.yahoo.daily_bars", "research.yahoo.expirations", "research.yahoo.option_chain"],
+        "nothing, by design (ADR 0020)",
+    ),
+    # mirrors no TypeScript function: the TypeScript interpolates a number where the Python must
+    # spell the conversion out
+    "js.js_string": "its own tests (test_js_string.py)",
+}
+
+PACKAGE = Path(__file__).resolve().parents[1] / "src" / "optionality"
+
+
+def public_functions() -> set[str]:
+    """Every public function a public module of the package defines, as `module.name` — the
+    research subpackage's as `research.module.name`. Defines: a name imported from elsewhere is the
+    other module's."""
+    names = set()
+    for path in sorted(PACKAGE.rglob("*.py")):
+        parts = path.relative_to(PACKAGE).with_suffix("").parts
+        if any(p.startswith("_") for p in parts):
+            continue
+        module = "optionality." + ".".join(parts)
+        for name, value in vars(importlib.import_module(module)).items():
+            if not name.startswith("_") and inspect.isfunction(value) and value.__module__ == module:
+                names.add(f"{'.'.join(parts)}.{name}")
+    return names
+
+
+def cased_functions() -> set[str]:
+    return {f"{module}.{snake(case['fn'])}" for module, case in (p.values for p in ALL)}
+
+
+def test_every_public_function_is_cased_or_says_what_holds_it():
+    public, cased = public_functions(), cased_functions()
+    # the walk found the package: an empty set would pass the comparison below
+    assert len(public) >= len(cased) > 0
+    assert sorted(public - cased - UNCASED.keys()) == [], "case it, or add it to UNCASED with what holds it"
+
+
+def test_uncased_names_only_uncased_functions_that_exist():
+    public, cased = public_functions(), cased_functions()
+    assert sorted(UNCASED.keys() - public) == [], "UNCASED names a function the package no longer defines"
+    assert sorted(UNCASED.keys() & cased) == [], "UNCASED names a function a golden case now holds"
