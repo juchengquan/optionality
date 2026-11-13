@@ -103,9 +103,16 @@ export function Next() {
   // A write made before the fold was ever opened reads nothing: the first opening reads it all
   const [journalOpen, setJournalOpen] = useState(false);
   const [journalOpened, setJournalOpened] = useState(false);
-  const toggleJournal = useCallback(() => { setJournalOpen((o) => !o); setJournalOpened(true); }, []);
   const [journalAsk, setJournalAsk] = useState(0);
   const journal = useJournal(journalOpened, journalAsk);
+  // opened again on nothing but a failed read, it asks again: the latch would otherwise leave
+  // "could not be read" there until some write. Rows it has, even beside an error, ask nothing
+  const journalFailed = journal.trades === null && journal.error !== null;
+  const toggleJournal = useCallback(() => {
+    if (!journalOpen && journalFailed) setJournalAsk((n) => n + 1);
+    setJournalOpen(!journalOpen);
+    setJournalOpened(true);
+  }, [journalOpen, journalFailed]);
   const rereadJournal = useCallback(() => setJournalAsk((n) => n + 1), []);
   // a closed trade deleted from the journal leaves it at once, and the re-read says the rest
   const { drop: dropTrade } = journal;

@@ -90,6 +90,19 @@ describe("the closed trades on the phone", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
+  it("does not scroll when it is drawn again already open: Settings and back", async () => {
+    await review();
+    window.scrollTo(0, 0);
+    const tabs = screen.getByRole("navigation", { name: "views" });
+    await userEvent.click(within(tabs).getByRole("button", { name: "Settings" }));
+    await settle();
+    await userEvent.click(within(tabs).getByRole("button", { name: "Live" }));
+    const journal = await screen.findByRole("region", { name: "closed trades" });
+    expect(within(journal).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded")).toBe("true");
+    await settle();
+    expect(window.scrollY).toBe(0);
+  });
+
   it("opens on a tap into view: its first trade on the screen, above the tab bar", async () => {
     const { journal } = await review();
     expect(inView(journal.querySelector("[data-closed]")!)).toBe(true);

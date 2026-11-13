@@ -28,7 +28,7 @@ import {
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
 import { joinStrips, stripOfEntry, stripOfHolding } from "../strip";
-import { NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
+import { inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
 import { PriceMapPanel } from "./PriceMapPanel";
 import { RuleFigures } from "../RuleFigures";
@@ -113,6 +113,8 @@ export function DeskBook({ selection, ...props }: BookProps & {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       const t = e.target;
       if (t instanceof Node && t !== document && t !== document.body && !root.current?.contains(t)) return;
+      // nor one pressed in the closed trades' fold (#373), which is in the book but not the table
+      if (inFold(t)) return;
       close();
     };
     document.addEventListener("keydown", onKey);

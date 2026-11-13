@@ -118,4 +118,29 @@ describe("the closed trades' fold on the desk", () => {
       expect(overflowsSideways()).toBe(false);
     });
   }
+
+  it("leaves the page where the reader scrolled it while the first read was out", async () => {
+    await page.viewport(1280, 500);
+    // the read held until the test lets it go
+    const s = closedBookService();
+    let release: () => void = () => undefined;
+    window.fetch = ((url: string, init?: RequestInit) => {
+      const answer = s.fetch(url, init);
+      if (String(url).replace(/^.*\/api/, "") !== "/positions") return answer;
+      return new Promise((resolve) => { release = () => resolve(answer); });
+    }) as unknown as typeof window.fetch;
+    document.cookie = "ui_arrangement=desk;path=/";
+    render(<Next />);
+    await settle();
+    const journal = screen.getByRole("region", { name: "closed trades" });
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    fireEvent.click(within(journal).getByRole("button", { name: "Closed trades" }));
+    // the reader goes back up before the rows come
+    window.scrollTo(0, 0);
+    await settle();
+    release();
+    await waitFor(() => expect(journal.querySelectorAll("[data-closed]")).toHaveLength(3));
+    await settle();
+    expect(window.scrollY).toBe(0);
+  });
 });

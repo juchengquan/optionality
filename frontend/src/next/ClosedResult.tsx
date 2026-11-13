@@ -146,8 +146,19 @@ export function Correction({ id, name, closedOn, exit, onSaved }: {
     }
   };
 
+  // Escape cancels an edit: the boxes back to the close as the service has it. Taken only when there
+  // is an edit to cancel, so an Escape with nothing typed is still whatever holds this form's
+  const edited = draft.exit !== exitPrefill(exit) || draft.closedOn !== closedOn;
+  const cancel = (e: React.KeyboardEvent) => {
+    if (e.key !== "Escape" || e.defaultPrevented || !edited) return;
+    e.preventDefault();
+    setDraft({ exit: exitPrefill(exit), closedOn });
+    setError(null);
+  };
+
   return (
-    <form className="nx-hold-form" aria-label={`correct the close of ${name}`} data-poll="hold" noValidate onSubmit={(e) => void save(e)}>
+    <form className="nx-hold-form" aria-label={`correct the close of ${name}`} data-poll="hold" noValidate
+          onSubmit={(e) => void save(e)} onKeyDown={cancel}>
       <h3>Mistyped?</h3>
       <p className="nx-meta">Correct the Exit or the day here; the holding and its samples are kept either way.</p>
       <div className="nx-hold-row">

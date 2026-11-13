@@ -7,6 +7,7 @@
  *  `__browser__/NextJournal.iphone.test.tsx`.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
@@ -74,6 +75,8 @@ const rowOf = (id: string) => document.querySelector<HTMLElement>(`[aria-label="
 
 /** 1231_IC closed from its live detail in REVIEW, at `exit`: the close's account, once it is drawn. */
 async function closeHeld(arrangement: "desk" | "phone", exit?: string): Promise<HTMLElement> {
+  // drawn, not only asked for: a loaded runner answers the valuation after `open` returns
+  await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
   if (arrangement === "desk") {
     const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="h-ic"]')!;
     fireEvent.click(row.querySelector(".nxd-name")!);
@@ -464,10 +467,11 @@ describe("folded at the bottom of the book (#373)", () => {
       expect(asked(s, "/positions")).toBe(1);
       await polls(4);
       expect(asked(s, "/positions")).toBe(1);
-      // shut: the rows go, and nothing is asked
+      // shut: the rows are hidden — kept, with whatever is open in them — and nothing is asked
       fireEvent.click(fold());
       expect(fold().getAttribute("aria-expanded")).toBe("false");
-      expect(region.querySelector("[data-closed]")).toBeNull();
+      expect(document.getElementById(fold().getAttribute("aria-controls")!)!.hidden).toBe(true);
+      expect(within(region).queryAllByRole("button", { name: /1120_P6000/ })).toEqual([]);
       await polls(2);
       // opened again: the rows it read, and still nothing asked
       fireEvent.click(fold());
@@ -542,3 +546,92 @@ describe("folded at the bottom of the book (#373)", () => {
     expect(asked(s, "/positions")).toBe(1);
   });
 });
+
+/** The desk's cursor: the row j and k are on. */
+const cursor = () => document.querySelector<HTMLElement>(".nxd-row[data-cursor]")?.dataset.ref ?? null;
+const inspector = () => screen.queryByRole("complementary", { name: /^inspector:/ });
+
+describe("the fold beside the desk's own keys", () => {
+  it("leaves j to the table while a trade is open in the fold and the focus is outside it", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    await openTrade("1120_P6000");
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(cursor()).toBeNull();
+    fireEvent.keyDown(document.body, { key: "j" });
+    await waitFor(() => expect(cursor()).not.toBeNull());
+  });
+
+  it("leaves j alone while the focus is inside the fold's correction", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    const trade = await openTrade("1120_P6000");
+    const save = within(trade).getByRole("button", { name: "Save correction" });
+    save.focus();
+    fireEvent.keyDown(save, { key: "j" });
+    expect(cursor()).toBeNull();
+  });
+
+  it("lets the palette land on a row while a trade is open in the fold", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    await openTrade("1120_P6000");
+    const user = userEvent.setup();
+    (document.activeElement as HTMLElement | null)?.blur();
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = screen.getByRole("dialog", { name: "commands" });
+    await user.type(within(palette).getByRole("combobox"), "1231_IC holding");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
+    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1231_IC"));
+  });
+
+  it("keeps the inspector open on an Escape inside the fold, and the correction's Escape puts its figures back", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    fireEvent.click(document.querySelector<HTMLElement>('.nxd-row[data-ref="h-ic"] .nxd-name')!);
+    await waitFor(() => expect(inspector()).not.toBeNull());
+    const trade = await openTrade("1120_P6000");
+    const fix = within(trade).getByRole("form", { name: "correct the close of 1120_P6000" });
+    const exit = within(fix).getByLabelText("exit, per contract") as HTMLInputElement;
+    typeIn(exit, "0.9");
+    exit.focus();
+    fireEvent.keyDown(exit, { key: "Escape" });
+    // the edit cancelled, to the close as the service has it, and the inspector left open
+    expect(exit.value).toBe("0.5");
+    expect(inspector()).not.toBeNull();
+    // and an Escape with nothing to cancel is still not the inspector's
+    fireEvent.keyDown(exit, { key: "Escape" });
+    expect(inspector()).not.toBeNull();
+    expect(s.writes()).toEqual([]);
+  });
+
+  it("keeps a correction's draft and the open trade across a shut, and reads nothing for it", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    const trade = await openTrade("1120_P6000");
+    typeIn(within(trade).getByLabelText("exit, per contract"), "0.9");
+    fireEvent.click(fold());
+    expect(fold().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(fold());
+    const again = screen.getByRole("region", { name: "closed trade 1120_P6000" });
+    expect((within(again).getByLabelText("exit, per contract") as HTMLInputElement).value).toBe("0.9");
+    expect(asked(s, "/positions")).toBe(1);
+  });
+});
+
+for (const arrangement of ["desk", "phone"] as const) {
+  it(`reads again on reopening, on the ${arrangement}, when the first read failed and nothing was drawn`, async () => {
+    const s = service();
+    s.refuse.set("GET /positions", { status: 503, detail: "busy" });
+    await open(arrangement, s);
+    const j = await journal();
+    await waitFor(() => expect(j.textContent).toMatch(/could not be read/));
+    s.refuse.delete("GET /positions");
+    fireEvent.click(fold());
+    fireEvent.click(fold());
+    await waitFor(() => expect(j.querySelectorAll("[data-closed]")).toHaveLength(3));
+    expect(asked(s, "/positions")).toBe(2);
+    expect(j.textContent).not.toMatch(/could not be read/);
+  });
+}
