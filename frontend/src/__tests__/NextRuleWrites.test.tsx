@@ -2,7 +2,7 @@
  *  rule's controls (#336) — in the desk's inspector and the phone's sheet alike. Behaviour: what is
  *  sent, what is said before and after, and where a refusal is said. That it is VISIBLE, 16px and
  *  44pt on a phone is the browser suites' (`__browser__/NextRuleWrites*.test.tsx`). */
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { Added, Entry } from "../api";
@@ -266,7 +266,8 @@ describe("recording a holding of a watched contract", () => {
     controls(LONE, { hold });
     fireEvent.click(screen.getByRole("button", { name: `I hold ${LABEL}` }));
     const form = screen.getByRole("form", { name: `record a holding of ${LABEL}` });
-    fireEvent.click(within(form).getByRole("button", { name: "Record holding" }));
+    // two submits in one tick — an Enter's key repeat — both before the button is drawn disabled
+    act(() => { fireEvent.submit(form); fireEvent.submit(form); });
     fireEvent.click(within(form).getByRole("button", { name: /^Record|^recording/ }));
     expect(hold).toHaveBeenCalledOnce();
     land();
