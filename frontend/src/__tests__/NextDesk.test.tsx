@@ -446,7 +446,7 @@ describe("the columns", () => {
       ...placed.quarantined.map((monitor: Monitor) => ({ kind: "quarantined" as const, monitor })),
     ];
     for (const mode of ["live", "review"] as const) {
-      const width = (key: string) => charsOf(COLUMNS[mode].find((c) => c.key === key)!, rows, false);
+      const width = (key: string) => charsOf(COLUMNS[mode].find((c) => c.key === key)!, rows, false, mode);
       const order = PRIORITY[mode];
       expect(Math.max(...order.map(width))).toBe(width(order[order.length - 1]!));
       // and every column but the pinned name is in the order exactly once

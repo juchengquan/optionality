@@ -71,7 +71,7 @@ export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
                 <div className="nxp-hero">
                   <Money value={holding.pnl} privacy={privacy} />
                   <span className="nxp-hero-sub">unrealised</span>
-                  <LevelChip holding={holding} />
+                  <LevelChip holding={holding} mode="review" />
                 </div>
                 <HoldingHistory holding={holding} privacy={privacy} />
                 <dl className="nxp-facts">

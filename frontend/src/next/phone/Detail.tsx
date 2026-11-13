@@ -15,6 +15,7 @@ import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome, paceWords } from "../pace";
 import { entryName, fieldWords, sentence } from "../needs";
+import type { Mode } from "../mode";
 import { LevelChip, Progress, RuleLine } from "./Cards";
 import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
@@ -30,7 +31,7 @@ export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
   | { kind: "rule"; entry: Entry; under: Entry[]; overlap?: string | null };
 
-export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes, mode = "live" }: {
+export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes, mode }: {
   /** what is open, from the figures as they are NOW, or null for nothing */
   subject: Subject | null;
   onClose: () => void;
@@ -40,8 +41,9 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   entryStyle: EntryStyle;
   /** editing, closing and deleting a holding (#294) */
   writes?: HoldingWrites;
-  /** REVIEW's pages draw a holding's history already; LIVE's sheet offers it on demand (#353) */
-  mode?: Mode;
+  /** REVIEW's pages draw a holding's history already, so LIVE's sheet offers it on demand (#353);
+   *  and in REVIEW a holding's Level says which valuation it is from (#354) */
+  mode: Mode;
 }) {
   const open = subject !== null;
   useDismissOnBack(open, onClose);
@@ -104,7 +106,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, mode }: {
         <div className="nxp-hero">
           <Money value={holding.pnl} privacy={privacy} />
           <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
-          <LevelChip holding={holding} />
+          <LevelChip holding={holding} mode={mode} />
         </div>
         <HoldingStrip holding={holding} />
         <HoldingPayoff holding={holding} privacy={privacy} />

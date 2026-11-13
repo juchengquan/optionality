@@ -45,7 +45,7 @@ export function useDeskFit(mode: Mode, rows: readonly DeskRow[], hidden: Readonl
   const ready = available > 0 && charWidth > 0;
   const widths = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const c of COLUMNS[mode]) out[c.key] = Math.ceil(charsOf(c, rows, privacy) * charWidth);
+    for (const c of COLUMNS[mode]) out[c.key] = Math.ceil(charsOf(c, rows, privacy, mode) * charWidth);
     return out;
   }, [mode, rows, privacy, charWidth]);
   const widthOf = (key: string) => widths[key] ?? 0;

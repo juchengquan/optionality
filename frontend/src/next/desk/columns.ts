@@ -19,6 +19,7 @@ import type { BookModel } from "../placement";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
 import { servedDelta } from "../legs";
 import { paceWords } from "../pace";
+import { LEVEL_WORDS, levelWords } from "../levels";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
 export type DeskRow =
@@ -158,9 +159,19 @@ export function attentionOf(row: DeskRow): Attention | null {
 
 /** The chip's words, which are also what the measuring counts. */
 export const ATTENTION_WORDS: Record<Attention, string> = {
-  fault: "fault", entry: "entry signal", alarm: "ringing", stop: "at stop", target: "at target",
-  manage: "manage-by",
+  fault: "fault", entry: "entry signal", alarm: "ringing", ...LEVEL_WORDS,
 };
+
+/** The words a row's chip draws, or null for no chip: a holding's Level says, in REVIEW, which
+ *  valuation it is from (`levelWords`, #354). */
+export function chipWords(row: DeskRow, mode: Mode): string | null {
+  const a = attentionOf(row);
+  if (a === null) return null;
+  if (row.kind === "holding" && (a === "stop" || a === "target" || a === "manage")) {
+    return levelWords(a, row.holding, mode);
+  }
+  return ATTENTION_WORDS[a];
+}
 
 // ---- the columns
 
@@ -288,14 +299,14 @@ const PAD_CH = 1.5;
 
 /** How many characters a column needs, from the longest thing it will draw, its header included.
  *  The name cell also carries its chip and, nested, an indent; the rule cell its fill bar. */
-export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: boolean): number {
+export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: boolean, mode: Mode): number {
   let longest = column.label.length;
   for (const r of rows) {
     let n = column.text(r, privacy).length;
     if (column.key === "name") {
-      const a = attentionOf(r);
+      const words = chipWords(r, mode);
       // a chip is smaller type than the cell, but carries a glyph and its own padding
-      if (a) n += ATTENTION_WORDS[a].length + 4;
+      if (words !== null) n += words.length + 4;
       if (r.kind === "rule" && r.nested) n += 2;
     }
     if (column.key === "alarm" && n > 0) n += 6; // the fill bar beside the sentence

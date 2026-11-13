@@ -7,6 +7,8 @@ import { OctagonAlert } from "lucide-react";
 import type { Entry, Holding, Monitor } from "../../shared/api";
 import { legSummary } from "../../shared/format";
 import { Chip, Money } from "../Book";
+import { levelWords } from "../levels";
+import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName, QUARANTINED, sentence } from "../needs";
 import type { PlacedHolding } from "../placement";
@@ -23,12 +25,13 @@ function OpenCard({ name, onOpen }: { name: string; onOpen: () => void }) {
   return <button type="button" className="nxp-open" aria-label={`details of ${name}`} onClick={onOpen} />;
 }
 
-/** A Level reached is attention, drawn as attention is: a filled chip with a glyph. */
-export function LevelChip({ holding }: { holding: Holding }) {
+/** A Level reached is attention, drawn as attention is: a filled chip with a glyph — in REVIEW
+ *  saying which valuation it is from (`levelWords`, #354). */
+export function LevelChip({ holding, mode }: { holding: Holding; mode: Mode }) {
   const level = holding.schedule?.reached ?? null;
   if (!level) return null;
   const kind = level === "stop" ? "stop" : "target";
-  return <span className="nx-chip" data-kind={kind}><Glyph kind={kind} />{`at ${level}`}</span>;
+  return <span className="nx-chip" data-kind={kind}><Glyph kind={kind} />{levelWords(kind, holding, mode)}</span>;
 }
 
 /** One rule as a line: what it watches in its own sentence, and its state's chip when it has one. */
@@ -70,7 +73,8 @@ export function HoldingCard({ placed, quotes, monitors, privacy, onOpen }: {
       <div className="nxp-hero">
         <Money value={holding.pnl} privacy={privacy} />
         <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
-        <LevelChip holding={holding} />
+        {/* LIVE's card: REVIEW draws its own page (Review.tsx) */}
+        <LevelChip holding={holding} mode="live" />
       </div>
       <dl className="nxp-facts">
         <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
