@@ -19,7 +19,7 @@ async function show(refuse?: Refusals) {
   const writes = serveRuleEdits(refuse);
   render(<Next />);
   await settle();
-  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Live" }));
+  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Book" }));
   await settle();
   return writes;
 }

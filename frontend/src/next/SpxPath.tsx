@@ -1,6 +1,6 @@
 /** "Where SPX was against my strikes" (#298, ADR 0023): a holding's Daily samples as SPX's price per
- *  day, against every strike it holds, in REVIEW — in the desk's inspector and on the phone's
- *  one-holding page, beneath the burndown and the IV chart, on the same DTE axis as both.
+ *  day, against every strike it holds — in the desk's inspector and the phone's holding sheet,
+ *  beneath the burndown and the IV chart, on the same DTE axis as both.
  *
  *  - **Every figure is the service's.** Each day's price is the sample's own `spx`, derived by the
  *    sweep that wrote it from its batch (ADR 0024); SPX now is the valuation's `spx`, from REVIEW's

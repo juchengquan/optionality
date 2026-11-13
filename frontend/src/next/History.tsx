@@ -1,6 +1,6 @@
 /** A holding's recorded history, drawn (#295, ADR 0023): the burndown and the IV chart, in the desk's
- *  inspector in REVIEW and as the main chart of the phone's one-holding REVIEW page — and in LIVE,
- *  on demand, behind `HistoryOnDemand` (#353).
+ *  inspector in REVIEW — and in LIVE and the phone's holding sheet, on demand, behind
+ *  `HistoryOnDemand` (#353), which the sheet opens from the start outside the session (#374).
  *
  *  Everything drawn is the service's (`/positions/{id}/samples`): each day's Cost to close, the
  *  planned decay at every DTE from the open (`onPace`, ADR 0011), the Target, the Stop and

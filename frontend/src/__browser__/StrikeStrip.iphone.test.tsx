@@ -61,7 +61,7 @@ async function show(priced = true) {
   serve(priced ? [...QUOTES, DEBIT] : QUOTES.map(bare), priced ? HOLDINGS : HOLDINGS.map(bare));
   render(<Next />);
   await settle();
-  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Live" }));
+  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Book" }));
   await settle();
   window.scrollTo(0, 0);
 }

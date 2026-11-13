@@ -63,7 +63,7 @@ describe("under the iPhone profile", () => {
     serveOverlap();
     render(<Next />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
+    fireEvent.click(screen.getByRole("button", { name: "Book" }));
     await settle();
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("phone");
     expect(document.documentElement.clientWidth).toBe(390);
@@ -85,7 +85,7 @@ describe("under the iPhone profile", () => {
     serveOverlap();
     render(<Next />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
+    fireEvent.click(screen.getByRole("button", { name: "Book" }));
     await settle();
     fireEvent.click(within(card("r-8100")).getByRole("button", { name: /details of 1231_8100/ }));
     const sheet = await screen.findByRole("dialog");

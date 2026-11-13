@@ -23,8 +23,8 @@ async function show() {
   serveBook();
   render(<Next />);
   await settle();
-  // the cards are LIVE's: the tab picks it, whatever the pinned clock (session.setup.ts) defaults to
-  await userEvent.click(tab("Live"));
+  // the cards are the Book's, whatever the hour (#374)
+  await userEvent.click(tab("Book"));
   await settle();
 }
 const tab = (name: string) =>

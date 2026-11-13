@@ -8,7 +8,7 @@
  *  the page may push it sideways.
  *
  *  Measured in session (the suite's pinned clock) and outside it, where every reading also carries
- *  the time it was read (#371) and the strip is longest. The Live tab is still pressed, as before.
+ *  the time it was read (#371) and the strip is longest. The Book tab is pressed, as Live was.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
@@ -22,7 +22,7 @@ async function show() {
   serveReferences();
   render(<Next />);
   await settle();
-  fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Live" }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Book" }));
   await settle();
 }
 

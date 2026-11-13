@@ -555,7 +555,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
   an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history
-  is drawn — REVIEW's inspector and pages, or its history section opened by hand (#353) — and never
+  is drawn — REVIEW's inspector, a phone sheet opened outside the session (#374), or a history
+  section opened by hand (#353) — and never
   polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
