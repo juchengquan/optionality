@@ -20,7 +20,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { shortDate } from "../../shared/format";
-import type { Mode } from "../mode";
 import {
   bandWords, domainOf, slotRows, spxWords, ticksOf, type MapSpread, type PriceMap,
 } from "../pricemap";
@@ -61,8 +60,8 @@ function spreadWords(s: MapSpread): string {
 }
 
 /** `note` says what is missing from the map, as while the holdings are not valued. */
-export function PriceMapPanel({ id, map, mode, note, selected, onSelect }: {
-  id: string; map: PriceMap; mode: Mode; note: string | null; selected: string | null;
+export function PriceMapPanel({ id, map, session, note, selected, onSelect }: {
+  id: string; map: PriceMap; session: boolean; note: string | null; selected: string | null;
   onSelect: (id: string) => void;
 }) {
   const [box, W] = useWidth();
@@ -99,7 +98,7 @@ export function PriceMapPanel({ id, map, mode, note, selected, onSelect }: {
 
   return (
     <section id={id} className="nxm" role="region" aria-label="price map">
-      <p className="nxm-why">{spxWords(map, mode)}</p>
+      <p className="nxm-why">{spxWords(map, session)}</p>
       {note ? <p className="nxm-why">{note}</p> : null}
       {/* the box is ALWAYS drawn, so it is measured from the start and kept measured: drawn only
           once there were lanes, a panel opened on an empty book kept its first guess for good */}

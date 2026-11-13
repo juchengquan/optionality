@@ -1,5 +1,5 @@
 import type { Reference } from "./api";
-import { DASH } from "./format";
+import { DASH, servedClock } from "./format";
 
 /** The market, read beside the strikes — and nothing more (ADR 0018).
  *
@@ -80,7 +80,13 @@ function changeText(change: number | null): string | null {
   return `${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%`;
 }
 
-function ReferenceReading({ reference }: { reference: Reference }) {
+/** "21:04": when the service read it, to the minute, from its own stamp in DISPLAY_TZ — the clock
+ *  a holding's chip and the market-closed line state too — or null where it carries none. */
+export function readAt(reference: Reference): string | null {
+  return servedClock(reference.fetched_at)?.slice(0, 5) ?? null;
+}
+
+function ReferenceReading({ reference, at }: { reference: Reference; at: string | null }) {
   const change = changeText(reference.change);
   return (
     // `reference` matches no CSS rule and is kept anyway: the layout suite measures each ITEM by
@@ -97,17 +103,24 @@ function ReferenceReading({ reference }: { reference: Reference }) {
           this page is a mid, and a last can be a session old — SPY's read 755.72 against a live
           mid of 758.73 (ADR 0018). The usual case says nothing, so the strip stays quiet. */}
       {reference.field === "last_price" ? <span className="reference-field">last</span> : null}
+      {at ? <span className="reference-time">{`read at ${at}`}</span> : null}
     </span>
   );
 }
 
-export function ReferenceStrip({ references }: { references: Reference[] }) {
+/** @param stamped whether every reading must say when it was read: outside New York's session,
+ *  where the page reads the strip once rather than polling it (#371). ADR 0018's concern is a
+ *  frozen figure that looks live, and the time is what answers it — so a reading with no time is
+ *  NOT DRAWN there, rather than drawn bare. In session the strip is polled with the book, and says
+ *  no time, as it always has. */
+export function ReferenceStrip({ references, stamped = false }: { references: Reference[]; stamped?: boolean }) {
+  const drawn = stamped ? references.filter((r) => readAt(r) !== null) : references;
   // nothing kept, nothing drawn: a backdrop nobody asked for would be a line that is always the
   // same with nothing in it
-  if (references.length === 0) return null;
+  if (drawn.length === 0) return null;
   return (
     <div className="references">
-      {references.map((r) => <ReferenceReading key={r.id} reference={r} />)}
+      {drawn.map((r) => <ReferenceReading key={r.id} reference={r} at={stamped ? readAt(r) : null} />)}
     </div>
   );
 }

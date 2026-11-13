@@ -21,7 +21,7 @@ import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/o
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "live", privacy: false, entryStyle: "opportunity", ...over,
+    mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -406,9 +406,17 @@ describe("REVIEW", () => {
     expect(cell("h-calls", "value")).toBeNull();
   });
 
-  it("says when the holdings were valued, where nothing re-values them", () => {
+  it("says when the holdings were valued, outside the session, where nothing re-values them", () => {
     render(<DeskBook {...props({ mode: "review", holdingsAt: "23:14:05" })} />);
-    expect(screen.getByText("valued at 23:14:05")).toBeTruthy();
+    expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
+  });
+
+  it("says it by the session, whichever mode: in Live outside it, and not in Review in it (#371)", () => {
+    render(<DeskBook {...props({ mode: "live", session: false, holdingsAt: "23:14:05" })} />);
+    expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
+    cleanup();
+    render(<DeskBook {...props({ mode: "review", session: true, holdingsAt: "23:14:05" })} />);
+    expect(document.querySelector(".nx-closed")).toBeNull();
   });
 });
 
@@ -446,7 +454,7 @@ describe("the columns", () => {
       ...placed.quarantined.map((monitor: Monitor) => ({ kind: "quarantined" as const, monitor })),
     ];
     for (const mode of ["live", "review"] as const) {
-      const width = (key: string) => charsOf(COLUMNS[mode].find((c) => c.key === key)!, rows, false, mode);
+      const width = (key: string) => charsOf(COLUMNS[mode].find((c) => c.key === key)!, rows, false, mode === "live");
       const order = PRIORITY[mode];
       expect(Math.max(...order.map(width))).toBe(width(order[order.length - 1]!));
       // and every column but the pinned name is in the order exactly once

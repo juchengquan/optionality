@@ -6,7 +6,8 @@
 import { describe, expect, it } from "vitest";
 
 import { arrangementFor, DESK_FROM } from "../next/arrangement";
-import { clockMode, inSession } from "../next/mode";
+import { clockMode } from "../next/mode";
+import { inSession } from "../next/session";
 
 describe("the measured width chooses the arrangement", () => {
   it("puts the cards on anything narrower than the desk and the terminal on the rest", () => {

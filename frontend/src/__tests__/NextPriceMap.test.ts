@@ -83,14 +83,14 @@ describe("SPX's price", () => {
       .toEqual({ spx: 6900.5, reason: null, source: "watchlist", at: newer });
   });
 
-  it("says which batch the line is, and when; in REVIEW, as last valued", () => {
+  it("says which batch the line is, and when; outside the session, as last valued (#371)", () => {
     const at = "2026-11-10 23:14:35+08:00";
     const line = { spx: 6911.25, reason: null, source: "holdings" as const, at };
-    expect(spxWords(line, "live")).toBe("SPX 6911.25 · from the holdings' batch, 23:14:35");
-    expect(spxWords({ ...line, source: "watchlist" }, "live")).toBe("SPX 6911.25 · from the watchlist's batch, 23:14:35");
-    expect(spxWords(line, "review")).toBe("SPX 6911.25 · as last valued, 23:14:35");
-    expect(spxWords({ ...line, at: null }, "live")).toBe("SPX 6911.25 · from the holdings' batch");
-    expect(spxWords({ spx: null, reason: REASON, source: null, at: null }, "live")).toBe(`SPX — ${REASON}`);
+    expect(spxWords(line, true)).toBe("SPX 6911.25 · from the holdings' batch, 23:14:35");
+    expect(spxWords({ ...line, source: "watchlist" }, true)).toBe("SPX 6911.25 · from the watchlist's batch, 23:14:35");
+    expect(spxWords(line, false)).toBe("SPX 6911.25 · as last valued, 23:14:35");
+    expect(spxWords({ ...line, at: null }, true)).toBe("SPX 6911.25 · from the holdings' batch");
+    expect(spxWords({ spx: null, reason: REASON, source: null, at: null }, true)).toBe(`SPX — ${REASON}`);
   });
 });
 

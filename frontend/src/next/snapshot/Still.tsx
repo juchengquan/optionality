@@ -28,7 +28,7 @@ import { AttentionChip, Cell, Fill, OverlapNote, tableRows } from "../desk/DeskB
 import {
   attentionOf, charsOf, chipWords, COLUMNS, PINNED, rowId, rowName, type DeskColumn, type DeskRow,
 } from "../desk/columns";
-import type { Mode } from "../mode";
+import { ClosedLine } from "../ClosedLine";
 import { NeedsLine } from "../NeedsLine";
 import { paceOutcome, paceWords } from "../pace";
 import { fieldWords, monitorName, QUARANTINED, type Need } from "../needs";
@@ -48,12 +48,13 @@ export interface StillProps extends BookProps {
   polledAt: string | null;
   /** why the figures may be stale, when they may */
   error: string | null;
-  /** the market beside the strikes, as LIVE polls it; REVIEW draws none */
+  /** the market beside the strikes, as the page draws it: outside the session with the time each
+   *  reading was read, and never without it (#371) */
   references: Reference[];
 }
 
 export function Still(props: StillProps) {
-  const { arrangement, needs, health, polledAt, error, mode, entryStyle, references } = props;
+  const { arrangement, needs, health, polledAt, error, mode, session, entryStyle, references } = props;
   return (
     <div className={STILL} data-arrangement={arrangement}>
       <header className="nx-still-head">
@@ -66,9 +67,11 @@ export function Still(props: StillProps) {
                  sweepSeconds={health?.settings.sweep_seconds ?? null} />
       {/* the desk's one-line form in both: the phone's banners are buttons */}
       <NeedsLine items={needs} arrangement="desk" entryStyle={entryStyle} />
-      {/* as the page draws it, in LIVE only: the one place the picture states the market's level,
-          from a figure the page already polls. the old page's picture had none. */}
-      {mode === "live" ? <ReferenceStrip references={references} /> : null}
+      {/* as the page draws it, whichever mode: the one place the picture states the market's level.
+          Outside the session each reading carries the time it was read, as on screen (#371): a
+          picture is looked at long after, and a figure with no time would be taken for current.
+          the old page's picture had none. */}
+      <ReferenceStrip references={references} stamped={!session} />
       {arrangement === "desk" ? <StillDesk {...props} /> : <StillCards {...props} />}
     </div>
   );
@@ -80,7 +83,7 @@ export function Still(props: StillProps) {
  *  widened to read what an ellipsis took, so it errs wide. */
 const SLACK_CH = 1;
 
-function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy }: BookProps) {
+function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, session, privacy }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const rows = tableRows(placed);
   // the viewer's column choice, as the table on screen reads it; the room on screen, not at all
@@ -89,7 +92,7 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
   const flexible = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
   // in `ch` of the table's own monospace, which is what the screen's fitting measures in pixels
   const template = columns.map((c) => {
-    const w = `${Math.ceil(charsOf(c, rows, privacy, mode)) + SLACK_CH}ch`;
+    const w = `${Math.ceil(charsOf(c, rows, privacy, session)) + SLACK_CH}ch`;
     return c.key === flexible ? `minmax(${w}, 1fr)` : w;
   }).join(" ");
 
@@ -101,7 +104,7 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
         </div>
         <section>
           <div className="nxd-section"><h2>Holdings</h2></div>
-          <HoldingsStatus holdings={holdings} error={holdingsError} at={mode === "review" ? holdingsAt : null}
+          <HoldingsStatus holdings={holdings} error={holdingsError} at={holdingsAt} session={session}
                           className="nx-meta nxd-note" />
           {placed.holdings.map(({ expiry, rows: brackets }) => (
             <div key={expiry} className="nxd-expiry">
@@ -111,11 +114,11 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
                 return (
                   <div key={holding.id} data-bracket={paired ? "condor" : undefined}>
                     <StillRow row={{ kind: "holding", holding, rules }} columns={columns} privacy={privacy}
-                              bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} mode={mode} />
+                              bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} session={session} />
                     {rules.map((e) => (
                       <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: true }} columns={columns}
                                 privacy={privacy} bracket={paired && i === 0 ? "through" : undefined}
-                                mode={mode} />
+                                session={session} />
                     ))}
                   </div>
                 );
@@ -127,7 +130,7 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
               <h3 className="nxd-group">rules on held contracts</h3>
               {placed.unplaced.map((e) => (
                 <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: false }} columns={columns}
-                          privacy={privacy} mode={mode} />
+                          privacy={privacy} session={session} />
               ))}
             </div>
           ) : null}
@@ -142,11 +145,11 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
               {items.map(({ entry, under, overlap }) => (
                 <div key={entry.id}>
                   <StillRow row={{ kind: "rule", entry, nested: false, overlap }} columns={columns}
-                            privacy={privacy} mode={mode} />
+                            privacy={privacy} session={session} />
                   <OverlapNote overlap={overlap} />
                   {under.map((e) => (
                     <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: true }} columns={columns}
-                              privacy={privacy} mode={mode} />
+                              privacy={privacy} session={session} />
                   ))}
                 </div>
               ))}
@@ -157,7 +160,7 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
               <h3 className="nxd-group">quarantined — switched off by the service</h3>
               {placed.quarantined.map((m) => (
                 <StillRow key={m.id} row={{ kind: "quarantined", monitor: m }} columns={columns}
-                          privacy={privacy} mode={mode} />
+                          privacy={privacy} session={session} />
               ))}
             </div>
           ) : null}
@@ -168,10 +171,10 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
 }
 
 /** DeskBook's row with the pressing taken out: the name is words, not a button. */
-function StillRow({ row, columns, privacy, bracket, mode }: {
+function StillRow({ row, columns, privacy, bracket, session }: {
   row: DeskRow; columns: DeskColumn[]; privacy: boolean; bracket?: "top" | "through" | "bottom";
-  /** a holding's Level says, in REVIEW, which valuation it is from (#354) */
-  mode: Mode;
+  /** a holding's Level says, outside the session, which valuation it is from (#354, #371) */
+  session: boolean;
 }) {
   const a = attentionOf(row);
   const barIn = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
@@ -184,7 +187,7 @@ function StillRow({ row, columns, privacy, bracket, mode }: {
           {c.key === "name" ? (
             <>
               <span className="nxd-name">{rowName(row)}</span>
-              {a ? <AttentionChip kind={a} words={chipWords(row, mode)} /> : null}
+              {a ? <AttentionChip kind={a} words={chipWords(row, session)} /> : null}
             </>
           ) : <Cell row={row} column={c} privacy={privacy} />}
           {barIn === c.key && row.kind === "rule" ? <Fill entry={row.entry} /> : null}
@@ -196,30 +199,34 @@ function StillRow({ row, columns, privacy, bracket, mode }: {
 
 // ---- B: the cards
 
-function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy }: BookProps) {
+function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, session, privacy }: BookProps) {
   const placed: BookModel = placeBook(quotes, holdings, monitors);
   return (
     <div className="nx-book nxp-book">
       <section>
         <h2>{mode === "live" ? "Holdings" : "Review"}</h2>
-        <HoldingsStatus holdings={holdings} error={holdingsError} at={mode === "review" ? holdingsAt : null}
+        <HoldingsStatus holdings={holdings} error={holdingsError} at={holdingsAt} session={session}
                         className="nxp-meta" />
         {placed.holdings.map(({ expiry, rows }) => (
           <section key={expiry} className="nxp-expiry">
             <ExpiryHead expiry={expiry} dte={rows[0]![0]!.holding.dte} />
             <ul className="nxp-cards">
               {mode === "review" ? rows.flat().map((p) => (
-                <li key={p.holding.id}><ReviewCard placed={p} quotes={quotes} monitors={monitors} privacy={privacy} /></li>
+                <li key={p.holding.id}>
+                  <ReviewCard placed={p} quotes={quotes} monitors={monitors} privacy={privacy} session={session} />
+                </li>
               )) : rows.map((row) => (
                 <li key={row.map((p) => p.holding.id).join("+")}>
                   {row.length === 2 ? (
                     <Condor row={row} privacy={privacy}>
                       {row.map((p) => (
-                        <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors} privacy={privacy} />
+                        <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors} privacy={privacy}
+                                     session={session} />
                       ))}
                     </Condor>
                   ) : row.map((p) => (
-                    <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors} privacy={privacy} />
+                    <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors} privacy={privacy}
+                                 session={session} />
                   ))}
                 </li>
               ))}
@@ -263,8 +270,8 @@ function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, mod
 
 /** REVIEW's page for one holding (phone/Review.tsx) with what a picture cannot carry left out: the
  *  charts, which read the samples, and the button to the detail. */
-function ReviewCard({ placed: { holding, rules }, quotes, monitors, privacy }: {
-  placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean;
+function ReviewCard({ placed: { holding, rules }, quotes, monitors, privacy, session }: {
+  placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
 }) {
   const s = holding.schedule;
   return (
@@ -280,7 +287,7 @@ function ReviewCard({ placed: { holding, rules }, quotes, monitors, privacy }: {
       <div className="nxp-hero">
         <Money value={holding.pnl} privacy={privacy} />
         <span className="nxp-hero-sub">unrealised</span>
-        <LevelChip holding={holding} mode="review" />
+        <LevelChip holding={holding} session={session} />
       </div>
       <dl className="nxp-facts">
         <div><dt>captured</dt><dd>{percent(holding.captured)}</dd></div>
@@ -313,12 +320,18 @@ function Quarantined({ monitors }: { monitors: Monitor[] }) {
   );
 }
 
-/** Where the holdings stand when there are no figures to draw, said as the page says it. */
-function HoldingsStatus({ holdings, error, at, className }: {
-  holdings: Holding[] | null; error: string | null; at: string | null; className: string;
+/** Where the holdings stand, said as the page says it: outside the session the market-closed line
+ *  with the service's time (#371), and no button, since nothing in a picture can be pressed; then
+ *  why there are no figures, when there are none. */
+function HoldingsStatus({ holdings, error, at, session, className }: {
+  holdings: Holding[] | null; error: string | null; at: string | null; session: boolean; className: string;
 }) {
-  if (error !== null) return <p className={className}>{`the holdings could not be valued — ${error}`}</p>;
-  if (holdings === null) return <p className={className}>valuing…</p>;
-  if (holdings.length === 0) return <p className={className}>nothing held</p>;
-  return at ? <p className={className}>{`valued at ${at}`}</p> : null;
+  return (
+    <>
+      {!session ? <ClosedLine at={holdings !== null ? at : null} className={className} /> : null}
+      {error !== null ? <p className={className}>{`the holdings could not be valued — ${error}`}</p>
+        : holdings === null ? <p className={className}>valuing…</p>
+          : holdings.length === 0 ? <p className={className}>nothing held</p> : null}
+    </>
+  );
 }

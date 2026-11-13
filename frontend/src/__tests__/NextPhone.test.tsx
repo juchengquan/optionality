@@ -18,7 +18,7 @@ afterEach(cleanup);
 function draw(over: Partial<BookProps> = {}) {
   const props: BookProps = {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null,
-    holdingsAt: "23:14:05", mode: "live", privacy: false, entryStyle: "opportunity", ...over,
+    holdingsAt: "23:14:05", mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
   };
   return render(<div className="nx"><PhoneBook {...props} /></div>);
 }
@@ -190,7 +190,7 @@ describe("the detail sheet", () => {
     expect(within(sheet).getByText("-$240")).toBeTruthy();
     const moved = HOLDINGS.map((h) => h.id === "h-calls" ? { ...h, pnl: -300 } : h);
     rerender(<div className="nx"><PhoneBook quotes={QUOTES} monitors={MONITORS} holdings={moved}
-      holdingsError={null} holdingsAt={null} mode="live" privacy={false} entryStyle="opportunity" /></div>);
+      holdingsError={null} holdingsAt={null} mode="live" session privacy={false} entryStyle="opportunity" /></div>);
     expect(within(screen.getByRole("dialog")).getByText("-$300")).toBeTruthy();
   });
 });
@@ -198,7 +198,7 @@ describe("the detail sheet", () => {
 describe("the detail sheet, beyond opening and closing", () => {
   const props = (over: Partial<BookProps> = {}): BookProps => ({
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null,
-    holdingsAt: null, mode: "live", privacy: false, entryStyle: "opportunity", ...over,
+    holdingsAt: null, mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
   });
 
   it("hides its $ amount under privacy", async () => {
@@ -285,7 +285,15 @@ describe("REVIEW", () => {
     expect(within(page).getByText("-$240")).toBeTruthy();
     expect(within(page).getByText("captured")).toBeTruthy();
     expect(within(page).getByText("pace gap")).toBeTruthy();
-    expect(within(region("Review")).getByText(/valued at 23:14:05/)).toBeTruthy();
+    expect(within(region("Review")).getByText("market closed — valued at 23:14")).toBeTruthy();
+  });
+
+  it("says when they were valued by the session, whichever tab (#371)", () => {
+    draw({ mode: "live", session: false });
+    expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
+    cleanup();
+    draw({ mode: "review", session: true });
+    expect(document.querySelector(".nx-closed")).toBeNull();
   });
 
   it("hides the contract count on its pages under privacy, and shows it otherwise", () => {

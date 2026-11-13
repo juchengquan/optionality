@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Holding, Samples } from "../shared/api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
+import { HistoryOnDemand } from "../next/HistoryOnDemand";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
@@ -36,7 +37,7 @@ afterEach(() => {
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "review", privacy: false, entryStyle: "opportunity", ...over,
+    mode: "review", session: (over.mode ?? "review") === "live", privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -813,4 +814,38 @@ describe("in LIVE, on demand (#353): the phone's holding sheet", () => {
     const sheet = screen.getByRole("dialog");
     expect(within(sheet).queryByRole("button", { name: "history" })).toBeNull();
   });
+});
+
+describe("HistoryOnDemand opened by default (#371, for #372 and #374)", () => {
+  /** every samples read, by path */
+  let reads: string[] = [];
+  beforeEach(() => {
+    reads = [];
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      const path = String(url).replace(/^.*\/api/, "");
+      if (path.endsWith("/samples")) reads.push(path);
+      const body = samplesAnswer(path);
+      return Promise.resolve({ ok: body !== null, status: body ? 200 : 404, json: () => Promise.resolve(body) });
+    }));
+  });
+
+  it("starts open and reads the samples once, at once, when told to", async () => {
+    render(<HistoryOnDemand holding={HOLDINGS[0]!} privacy={false} defaultOpen />);
+    expect(screen.getByRole("button", { name: "history" }).getAttribute("aria-expanded")).toBe("true");
+    await waitFor(() => expect(reads).toEqual(["/positions/h-puts/samples"]));
+    // shut and opened again, it asks nothing more
+    fireEvent.click(screen.getByRole("button", { name: "history" }));
+    fireEvent.click(screen.getByRole("button", { name: "history" }));
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(reads).toEqual(["/positions/h-puts/samples"]);
+  });
+
+  for (const given of [{}, { defaultOpen: false }]) {
+    it(`starts shut and reads nothing ${"defaultOpen" in given ? "when told not to open" : "by default"}`, async () => {
+      render(<HistoryOnDemand holding={HOLDINGS[0]!} privacy={false} {...given} />);
+      expect(screen.getByRole("button", { name: "history" }).getAttribute("aria-expanded")).toBe("false");
+      await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+      expect(reads).toEqual([]);
+    });
+  }
 });

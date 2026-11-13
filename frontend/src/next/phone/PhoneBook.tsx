@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import "./phone.css";
 import type { BookProps } from "../Book";
 import { Money } from "../Book";
+import { ClosedLine } from "../ClosedLine";
 import { placeBook, type BookModel, type PlacedHolding } from "../placement";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
@@ -17,7 +18,10 @@ import { ReviewPager } from "./Review";
  *  up in each render's figures, so the sheet follows the poll rather than freezing the moment it
  *  was opened, and closes itself if what it shows is gone.
  */
-export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy, entryStyle, writes, journal }: BookProps) {
+export function PhoneBook({
+  quotes, monitors, holdings, holdingsError, holdingsAt, mode, session, onRevalue, revaluing, privacy, entryStyle, writes,
+  journal,
+}: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
@@ -31,6 +35,10 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
 
   const status = (
     <>
+      {/* outside the session, whichever tab (#371): when the service valued what is drawn, and the
+          refresh that values it again */}
+      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} onRefresh={onRevalue}
+                              refreshing={revaluing} className="nxp-meta" /> : null}
       {holdingsError !== null ? <p className="nxp-meta">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nxp-meta">nothing held</p> : null}
@@ -69,12 +77,12 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
                       <Condor row={row} privacy={privacy}>
                         {row.map((p) => (
                           <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                       privacy={privacy} onOpen={() => setOpenId(p.holding.id)} />
+                                       privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
                         ))}
                       </Condor>
                     ) : row.map((p) => (
                       <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                   privacy={privacy} onOpen={() => setOpenId(p.holding.id)} />
+                                   privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
                     ))}
                   </li>
                 ))}
@@ -87,8 +95,8 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
         <section aria-labelledby="nxp-review">
           <h2 id="nxp-review">Review</h2>
           {status}
-          {holdings !== null && holdingsAt ? <p className="nxp-meta">{`valued at ${holdingsAt}`}</p> : null}
-          <ReviewPager placed={flat} quotes={quotes} monitors={monitors} privacy={privacy} onOpen={setOpenId} />
+          <ReviewPager placed={flat} quotes={quotes} monitors={monitors} privacy={privacy} session={session}
+                       onOpen={setOpenId} />
           {unplaced}
         </section>
       )}
@@ -121,7 +129,7 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
       ) : null}
 
       <DetailSheet subject={subject} onClose={close} quotes={quotes} monitors={monitors}
-                   privacy={privacy} entryStyle={entryStyle} writes={writes} mode={mode} />
+                   privacy={privacy} entryStyle={entryStyle} writes={writes} mode={mode} session={session} />
     </div>
   );
 }

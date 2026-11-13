@@ -110,6 +110,9 @@ th:first-child, td:first-child {
 .reference-change { font-variant-numeric: tabular-nums; margin-left: 0.35rem; }
 /* said only when the figure is a last trade, which is the weaker claim */
 .reference-field { margin-left: 0.35rem; font-size: 0.8125rem; opacity: 0.8; }
+/* when the service read it, outside the session (#371): kept whole, as the figure is */
+.reference-time { margin-left: 0.35rem; font-size: 0.8125rem; white-space: nowrap; }
+.reference-time::before { content: "· "; }
 
 /* the meta line now holds a control, so it needs to align its contents */
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }

@@ -34,7 +34,8 @@ import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { holdToast } from "./edit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
-import { clockMode, useSessionClock, type Mode } from "./mode";
+import { clockMode, type Mode } from "./mode";
+import { inSession, useSessionClock } from "./session";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
@@ -51,6 +52,10 @@ import { useSaveImage } from "./snapshot/useSaveImage";
  *  A shell first: the arrangement, the mode, the colours, the needs-you line and Settings, around a
  *  plain list of the book that the desk table and the phone cards replace. Modes and arrangements
  *  are state, never routes (ADR 0005), so this is one page whichever is showing.
+ *
+ *  What the page FETCHES, and what its needs-you line says, follow New York's session instead of
+ *  the mode (#371; ADR 0023 amended 2026-11-13): `session` is computed here, once, and handed to
+ *  everything that asks. The mode still picks the columns and views until #372–#375 remove it.
  */
 export function Next() {
   const [up, setUp] = useState(readUp);
@@ -68,18 +73,22 @@ export function Next() {
     return () => { delete document.documentElement.dataset.nxArrangement; };
   }, [arrangement]);
 
+  // New York's session, read off the clock every 15 s and on coming back into view: what the page
+  // fetches and what the needs-you line says follow it, whichever mode is on screen (#371).
+  const now = useSessionClock();
+  const session = inSession(now);
   // The clock's mode unless the owner chose one. A choice lasts until the clock's own mode next
-  // changes: LIVE picked at 08:00 New York becomes the clock's at the open and REVIEW at the close,
-  // rather than polling the Provider all night. LIVE picked AFTER a close therefore lasts until
-  // the next open — over a weekend, until Monday — polling as LIVE does. Choosing what the clock
-  // would pick hands the page straight back to it.
-  const byClock = clockMode(useSessionClock());
+  // changes: LIVE picked at 08:00 New York becomes the clock's at the open and REVIEW at the
+  // close. Choosing what the clock would pick hands the page straight back to it. Since #371 the
+  // choice changes only what is DRAWN: LIVE picked at 21:00 New York draws LIVE's columns from
+  // one valuation, and polls nothing more than the line, until #375 removes the switch.
+  const byClock = clockMode(now);
   const [chosen, setChosen] = useState<Mode | null>(null);
   useEffect(() => { setChosen(null); }, [byClock]);
   const mode = chosen ?? byClock;
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
-  const book = useBook(mode);
+  const book = useBook(session);
   // the picture (#300): the press, and the page's figures as they were at it — the off-screen tree
   // is drawn from that copy, so a poll landing mid-capture cannot make one picture two moments
   const { frame: pictured, stageRef, save } = useSaveImage<StillProps>();
@@ -150,14 +159,15 @@ export function Next() {
   );
 
   // Settings is the one surface that may say "nothing needs you" (ADR 0012), and where References
-  // are kept or dropped. LIVE polls both already; REVIEW polls neither, so opening Settings there
-  // asks for them afresh — otherwise they are as old as the mode. The mode is read through a ref:
-  // a switch of mode with Settings open asks for them anyway, and must not ask twice.
+  // are kept or dropped. In session both are polled already; outside it neither is, so opening
+  // Settings there asks for them afresh — otherwise they are as old as the last valuation. The
+  // session is read through a ref: a change of session with Settings open asks for them anyway,
+  // and must not ask twice.
   const { loadHoldings, loadReferences } = book;
-  const modeNow = useRef(mode);
-  modeNow.current = mode;
+  const sessionNow = useRef(session);
+  sessionNow.current = session;
   useEffect(() => {
-    if (settingsOpen && modeNow.current === "review") void Promise.all([loadHoldings(), loadReferences()]);
+    if (settingsOpen && !sessionNow.current) void Promise.all([loadHoldings(), loadReferences()]);
   }, [settingsOpen, loadHoldings, loadReferences]);
 
   // A banner tapped from the phone's Settings tab leads to a row that is not drawn there: back to
@@ -216,15 +226,15 @@ export function Next() {
   }, [adding, panelId, desk.id, setDesk, pickMode, mode, chooseArrangement]);
   const shortcut = paletteShortcut();
 
-  // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once
-  // in REVIEW, so in REVIEW it says no holding's Levels — not even through a rule linked to one,
-  // whose schedule `/quotes` serves (#354): each holding's chip says them, as valued, and Settings
-  // asks again and says when. The book is still DRAWN with them in REVIEW, so they still say which
-  // combos are drawn apart (#346)
-  const live = mode === "live";
+  // the line uses only what is polled (ADR 0012): holdings are polled in session and valued once
+  // outside it, so outside it the line says no holding's Levels — not even through a rule linked
+  // to one, whose schedule `/quotes` serves (#354, re-keyed to the session by #371): each holding's
+  // chip says them, "as valued at", and the market-closed line says when. Whichever mode is on
+  // screen. The book is still DRAWN with them outside the session, so they still say which combos
+  // are drawn apart (#346)
   const items = useMemo(
-    () => needsYou(book.quotes, book.monitors, book.health, live ? holdings : null, holdings, live),
-    [book.quotes, book.monitors, book.health, holdings, live],
+    () => needsYou(book.quotes, book.monitors, book.health, session ? holdings : null, holdings, session),
+    [book.quotes, book.monitors, book.health, holdings, session],
   );
   const everything = useMemo(
     () => needsYou(book.quotes, book.monitors, book.health, holdings),
@@ -234,7 +244,8 @@ export function Next() {
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
     quotes: book.quotes, monitors: book.monitors, holdings,
-    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, mode, privacy, entryStyle, writes,
+    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, mode, session, privacy, entryStyle, writes,
+    onRevalue: () => void book.refreshNow(), revaluing: book.refreshing,
     journal: mode === "review" && phone
       ? <PhoneJournal journal={journal} privacy={privacy} entryStyle={entryStyle} onCorrected={rereadJournal}
                       onDeleted={tradeDeleted} />
@@ -259,8 +270,8 @@ export function Next() {
 
   // the picture (#300), from the header's button and the palette alike: one press
   const saveView = () => void save({
-    // the book, without REVIEW's closed trades: a journal is not the book
-    ...bookProps, journal: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
+    // the book, without REVIEW's closed trades: a journal is not the book; and nothing to press
+    ...bookProps, journal: undefined, onRevalue: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
     error: book.error, references: book.references,
   });
   const saveViewNow = useRef(saveView);
@@ -306,9 +317,10 @@ export function Next() {
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
                    sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
         <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={revealRow} />
-        {/* the market as it is now, so only in LIVE: in REVIEW nothing re-reads it, and a strip
-            frozen at the moment the mode was entered would be read as current (ADR 0018) */}
-        {mode === "live" ? <ReferenceStrip references={book.references} /> : null}
+        {/* the market, in either mode (#371): polled in session; outside it read once with the
+            holdings, and every reading says when — a figure frozen at a read would otherwise be
+            taken for current (ADR 0018) */}
+        <ReferenceStrip references={book.references} stamped={!session} />
         {/* a close's account (#294): the holding has left the book, and its detail with it */}
         {/* one per close, newest first, each until its own Done: a second close never discards the
             first's account, nor a correction half typed into it */}
@@ -485,19 +497,21 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>,
   return { holdings, writes, outcomes, dismissOutcome };
 }
 
-/** What the page reads, and when.
+/** What the page reads, and when: by New York's session, never by the mode on screen (#371; ADR
+ *  0023 amended 2026-11-13).
  *
- *  The LINE's inputs — the watchlist, the rules and health — are polled in both modes: REVIEW
- *  carries the needs-you line and every fault, and a line can only do that if what it reads keeps
- *  coming. Each is read on its own, so a Provider outage that fails `/quotes` still lets health
- *  say so and the rules' quarantines through.
+ *  The LINE's inputs — the watchlist, the rules and health — are polled at every hour: the
+ *  needs-you line carries every alarm and every fault, and a line can only do that if what it
+ *  reads keeps coming. Each is read on its own, so a Provider outage that fails `/quotes` still
+ *  lets health say so and the rules' quarantines through.
  *
- *  Beyond the line, LIVE also polls the holdings' valuation and the References: three market-data
- *  calls per poll where the old page made two (ADR 0010), the cost of holdings leading the page; with
- *  nothing held the valuation asks the Provider nothing. REVIEW asks for the holdings once, on
- *  entering it, and not for the References, which it does not show.
+ *  Beyond the line, IN SESSION the poll also asks for the holdings' valuation and the References:
+ *  three market-data calls per poll where the old page made two (ADR 0010), the cost of holdings
+ *  leading the page; with nothing held the valuation asks the Provider nothing. OUTSIDE the
+ *  session both are asked ONCE — on opening, at each change of session, and by a refresh — and
+ *  the poll asks only for the line.
  */
-function useBook(mode: Mode) {
+function useBook(session: boolean) {
   const [quotes, setQuotes] = useState<Entry[]>([]);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
@@ -510,7 +524,6 @@ function useBook(mode: Mode) {
   const [refresh, setRefresh] = useState(15);
   const [refreshing, setRefreshing] = useState(false);
   const [pollFrom, setPollFrom] = useState(0);
-  const live = mode === "live";
 
   // The line's answers land as the holdings' do (below): unless a NEWER one already has. A poll
   // asked before a save and answered after its reload put the saved-over rows back (#292).
@@ -537,9 +550,10 @@ function useBook(mode: Mode) {
     }
   }, []);
 
-  // An answer lands unless a NEWER one already has. A valuation asked for by a LIVE poll can land
-  // after the switch to REVIEW, which asks again, and that older answer — success or failure —
-  // must not replace the newer one, or REVIEW, which does not poll, keeps it for good. Not "only
+  // An answer lands unless a NEWER one already has. A valuation asked for by the session's last
+  // poll can land after the close, which asks again, and that older answer — success or failure —
+  // must not replace the newer one, or the page, which does not poll it after the close, keeps it
+  // for good. Not "only
   // the latest ASK lands": with a Provider slower than the poll (OpenD's 10 s request limit
   // against a 5 s or 15 s poll) every answer has a newer ask behind it, none ever landed, and
   // the page went on drawing the last figures with no error at all.
@@ -578,25 +592,25 @@ function useBook(mode: Mode) {
   // until then is from before the write, and a second press would make the same change twice
   const [referencesPending, setReferencesPending] = useState(0);
 
-  /** `rest`: the market data beyond the line, the holdings; `references` with them, which is
-   *  LIVE's poll, and any change the owner made — a Reference kept or dropped in Settings must be
-   *  seen to have been, in REVIEW too.
+  /** `rest`: the market data beyond the line, the holdings; `references` with them unless said
+   *  otherwise — the session's poll, the one valuation outside it, a refresh, and any change the
+   *  owner made: a Reference kept or dropped in Settings must be seen to have been, at any hour.
    *
    *  The References are ASKED here and never awaited (#335, as the old page did since #308): what this
    *  returns settles when the line and the holdings land, so a save, a refresh or a poll finishes
    *  on its own reads and the strip catches up when its slowest source answers. Awaited, a mute
    *  said "saving…" for the whole of a silent source's 8 s. */
   const load = useCallback(
-    (rest: boolean, references: boolean = rest && live) => {
+    (rest: boolean, references: boolean = rest) => {
       if (references) void loadReferences();
       return Promise.all([loadLine(), rest ? loadHoldings() : null]).then(() => undefined);
     },
-    [loadLine, loadHoldings, loadReferences, live],
+    [loadLine, loadHoldings, loadReferences],
   );
 
-  // everything once on opening and on every change of mode: entering REVIEW is when it asks
-  // (`load` changes with the mode, so this runs once per mode)
-  useEffect(() => { void load(true); }, [load]);
+  // everything once on opening and at every change of session: the open starts the poll of it, and
+  // the close is when the page values the book the last time it will without being asked
+  useEffect(() => { void load(true); }, [load, session]);
 
   // the viewer's cadence if chosen, the service's sweep if not (prefs.readRefresh)
   useEffect(() => {
@@ -605,11 +619,15 @@ function useBook(mode: Mode) {
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (!beingOperated(document.activeElement)) void load(live);
+      // the line at every hour; the holdings and the References only in session
+      if (!beingOperated(document.activeElement)) void load(session);
     }, refresh * 1000);
     return () => clearInterval(id);
-  }, [refresh, load, live, pollFrom]);
+  }, [refresh, load, session, pollFrom]);
 
+  /** Everything once, from the header's button and the market-closed line's alike: outside the
+   *  session that is one valuation and one read of the References, and the poll goes on asking
+   *  only for the line. */
   const refreshNow = useCallback(async () => {
     setRefreshing(true);
     try {

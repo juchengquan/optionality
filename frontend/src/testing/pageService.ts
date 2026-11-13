@@ -35,7 +35,7 @@ export interface PageService {
 export const SPX_REFERENCE: Reference = {
   id: "r1", code: "US.SPY", label: "SPX", source: "moomoo", name: "SPDR S&P 500 ETF Trust",
   figure: 7587.3, field: "mid_price", change: 0.003982956650611325, error: null,
-  delayed: null, last_known: null, delayed_by_minutes: null,
+  delayed: null, last_known: null, delayed_by_minutes: null, fetched_at: "2026-11-10 21:04:11+08:00",
 };
 
 /** when this service says a Reference was kept */
@@ -69,7 +69,7 @@ export function servePage(references: Reference[] = []): PageService {
       const row = { id: `kept-${svc.writes.length}`, code, label: label ?? null, source, created_at: KEPT_AT };
       svc.references = [...svc.references, {
         id: row.id, code, label: row.label, source, name: null, figure: null, field: null, change: null,
-        error: null, delayed: null, last_known: null, delayed_by_minutes: null,
+        error: null, delayed: null, last_known: null, delayed_by_minutes: null, fetched_at: "2026-11-10 21:04:11+08:00",
       }];
       return reply(201, row);
     }

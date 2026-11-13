@@ -197,7 +197,7 @@ describe("the price map panel", () => {
     await page.viewport(2560, 1000);
     document.cookie = "ui_price_map=open;path=/";
     const book = { quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-      mode: "live" as const, privacy: false, entryStyle: "opportunity" as const };
+      mode: "live" as const, session: true, privacy: false, entryStyle: "opportunity" as const };
     const view = render(<DeskBook {...book} quotes={[]} holdings={[]} />);
     await settle();
     view.rerender(<DeskBook {...book} />);

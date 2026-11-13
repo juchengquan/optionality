@@ -133,7 +133,7 @@ describe("the strip as drawn", () => {
 function deskProps(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "live", privacy: false, entryStyle: "opportunity", ...over,
+    mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 

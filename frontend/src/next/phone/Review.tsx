@@ -13,8 +13,10 @@ import type { PlacedHolding } from "../placement";
 import { LevelChip, RuleLine } from "./Cards";
 import { contractsWords, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 
-export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
+export function ReviewPager({ placed, quotes, monitors, privacy, session, onOpen }: {
   placed: PlacedHolding[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean;
+  /** a Level says which valuation it is from outside the session, whichever mode (#371) */
+  session: boolean;
   onOpen: (id: string) => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -71,7 +73,7 @@ export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
                 <div className="nxp-hero">
                   <Money value={holding.pnl} privacy={privacy} />
                   <span className="nxp-hero-sub">unrealised</span>
-                  <LevelChip holding={holding} mode="review" />
+                  <LevelChip holding={holding} session={session} />
                 </div>
                 <HoldingHistory holding={holding} privacy={privacy} />
                 <dl className="nxp-facts">

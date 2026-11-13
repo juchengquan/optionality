@@ -51,6 +51,18 @@ const reference = {
   id: "ref1", code: "US..SPX", label: "S&P 500", source: "moomoo", figure: 7612.25, change: 0.0042,
   field: "mid_price", name: "S&P 500", error: null, last_known: false,
 };
+/** a Reference its source could not price: a dash, read at a time like any other */
+const unread = {
+  id: "ref2", code: "VIX", label: null, source: "ibkr", figure: null, change: null, field: null,
+  name: null, error: "no ibkr client in this build", last_known: null,
+};
+/** what the fake service serves, and the stamps it writes on them in DISPLAY_TZ (+08:00) — never
+ *  the zone this suite runs in (TZ=UTC), so a time drawn from the device's clock would differ */
+let references: object[] = [];
+let referenceStamp = "";
+let holdingStamp = "";
+/** the market-closed line, wherever the arrangement draws it */
+const closedLine = () => document.querySelector<HTMLElement>(".nx-closed");
 
 /** the GETs the page made, by path; writes are kept apart in `writes` */
 let calls: string[] = [];
@@ -79,6 +91,9 @@ function serve() {
   refusing = new Set();
   quotes = [spread, shortLeg];
   held = null;
+  references = [reference, unread];
+  referenceStamp = "2026-11-09 21:04:11+08:00";
+  holdingStamp = "x";
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     if (init?.method && init.method !== "GET") {
@@ -92,15 +107,15 @@ function serve() {
     if (path === "/positions/values" && held) {
       const queue = held;
       return answered(new Promise((resolve) => {
-        queue.push({ settle: (ok, body = [holding]) => resolve(reply(ok, body)) });
+        queue.push({ settle: (ok, body = [{ ...holding, fetched_at: holdingStamp }]) => resolve(reply(ok, body)) });
       }));
     }
     if (refusing.has(path)) return answered(reply(false, null));
     const body = path === "/quotes" ? quotes
       : path === "/monitors" ? [quarantined]
         : path === "/health" ? health
-          : path === "/references" ? [reference]
-            : path === "/positions/values" ? [holding]
+          : path === "/references" ? references.map((r) => ({ fetched_at: referenceStamp, ...r }))
+            : path === "/positions/values" ? [{ ...holding, fetched_at: holdingStamp }]
               // every holding on record, as stored: REVIEW's closed trades read it (#296)
               : path === "/positions" ? [holding]
                 // its days, an empty week: the shape the service answers, so the history drawn
@@ -151,37 +166,220 @@ afterEach(() => {
   for (const n of COOKIES) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
-describe("what it asks for in each mode", () => {
-  it("polls the watchlist, the rules, health, References and the holdings in LIVE", async () => {
-    at(SESSION);
-    await open();
-    await quiet();
-    calls = [];
+/** How many times each path was asked, since the last reset of `calls`. */
+const count = (path: string) => calls.filter((c) => c === path).length;
+const LINE = ["/quotes", "/monitors", "/health"];
+const VALUED = ["/positions/values", "/references"];
+/** Monday 18:00 New York, after the close */
+const EVENING = "2026-11-09T23:00:00Z";
+
+/** `n` polls of the page's interval, each waited out until the page has stopped asking. */
+async function polls(n: number) {
+  for (let i = 0; i < n; i++) {
     await act(async () => { vi.advanceTimersByTime(15_000); });
     await quiet();
-    expect(new Set(calls), said()).toEqual(
-      new Set(["/quotes", "/monitors", "/health", "/references", "/positions/values"]));
+  }
+}
+
+/** The owner's choice of mode, by hand: the desk's switch, or the phone's tab. */
+function pick(mode: "Live" | "Review") {
+  const tabs = screen.queryByRole("navigation", { name: "views" });
+  fireEvent.click(tabs ? within(tabs).getByRole("button", { name: mode })
+    : within(screen.getByRole("group", { name: "mode" })).getByRole("button", { name: mode }));
+}
+
+/** The session clock read again now, as a phone woken or a window focused reads it. */
+async function readClock(iso: string) {
+  vi.setSystemTime(new Date(iso));
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+}
+
+describe("what it asks for, by New York's session and not by the mode (#371)", () => {
+  for (const where of ["desk", "phone"] as const) {
+    for (const mode of [null, "Review"] as const) {
+      it(`polls the line, the holdings and the References in session on the ${where}${mode ? ", with Review picked" : ""}`,
+        async () => {
+          document.cookie = `ui_arrangement=${where};path=/`;
+          at(SESSION);
+          await open();
+          if (mode) pick(mode);
+          await quiet();
+          calls = [];
+          await polls(3);
+          for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}, each poll\n${said()}`).toBe(3);
+        });
+    }
+  }
+
+  for (const [when, now] of [["an evening", EVENING], ["a Sunday", SUNDAY]] as const) {
+    for (const mode of [null, "Live"] as const) {
+      it(`outside the session on ${when}${mode ? ", with Live picked" : ""}: values once on opening, then polls only the line`,
+        async () => {
+          document.cookie = "ui_arrangement=desk;path=/";
+          at(now);
+          await open();
+          if (mode) pick(mode);
+          await quiet();
+          for (const path of VALUED) expect(count(path), `${path}, once on opening\n${said()}`).toBe(1);
+          calls = [];
+          await polls(3);
+          for (const path of LINE) expect(count(path), `${path}, each poll\n${said()}`).toBe(3);
+          for (const path of VALUED) expect(count(path), `${path}, never by the poll\n${said()}`).toBe(0);
+        });
+    }
+  }
+
+  it("at the open, asks everything at once and polls it from then on", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T14:29:30Z"); // Monday 09:29:30 New York
+    await open();
+    await quiet();
+    await polls(1);
+    calls = [];
+    await readClock("2026-11-09T14:30:05Z"); // 09:30:05
+    await quiet();
+    for (const path of VALUED) expect(count(path), `${path}, once at the open\n${said()}`).toBe(1);
+    calls = [];
+    await polls(2);
+    for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}, each poll\n${said()}`).toBe(2);
   });
 
-  it("polls only what the needs-you line reads in REVIEW, having asked for the rest once", async () => {
+  it("crosses the night by the clock: from 16:14:59 to 09:30 the next day", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T21:14:59Z"); // Monday 16:14:59, the session's last second but one
+    await open();
+    await quiet();
+    calls = [];
+    await polls(1); // 16:15:14: the clock is read past the close
+    calls = [];
+    await polls(3);
+    for (const path of VALUED) expect(count(path), `${path}, after the close\n${said()}`).toBe(0);
+    vi.setSystemTime(new Date("2026-11-10T14:29:50Z")); // Tuesday 09:29:50
+    await polls(1); // 09:30:05: the clock reads the open
+    calls = [];
+    await polls(2);
+    for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}, from the open\n${said()}`).toBe(2);
+  });
+
+  it("the close stops polling the holdings and the References", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T21:14:00Z"); // Monday 16:14
+    await open();
+    await quiet();
+    await readClock("2026-11-09T21:16:00Z"); // 16:16
+    await quiet();
+    calls = [];
+    await polls(3);
+    for (const path of LINE) expect(count(path), `${path}\n${said()}`).toBe(3);
+    for (const path of VALUED) expect(count(path), `${path}\n${said()}`).toBe(0);
+  });
+});
+
+describe("the market-closed line and its refresh (#371)", () => {
+  for (const where of ["desk", "phone"] as const) {
+    it(`says when the service valued the holdings outside the session on the ${where}`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(EVENING);
+      holdingStamp = "2026-11-10 07:00:12+08:00";
+      await open();
+      await until(() => expect(closedLine()?.textContent).toContain("market closed — valued at 07:00"));
+    });
+
+    it(`is not drawn in session on the ${where}, whichever mode`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(SESSION);
+      await open();
+      await quiet();
+      expect(closedLine()).toBeNull();
+      pick("Review");
+      await quiet();
+      expect(closedLine()).toBeNull();
+    });
+  }
+
+  it("says no time when the valuation failed", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(EVENING);
+    refusing.add("/positions/values");
+    await open();
+    await until(() => expect(screen.getByText(/could not be valued/)).toBeTruthy());
+    expect(closedLine()?.textContent).toMatch(/^market closed/);
+    expect(closedLine()?.textContent).not.toMatch(/valued at/);
+  });
+
+  for (const where of ["desk", "phone"] as const) {
+    it(`re-values once on the ${where}, and starts no poll of it`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(SUNDAY);
+      await open();
+      await quiet();
+      calls = [];
+      fireEvent.click(within(closedLine()!).getByRole("button", { name: "refresh the valuation" }));
+      await quiet();
+      for (const path of VALUED) expect(count(path), `${path}, once by the press\n${said()}`).toBe(1);
+      calls = [];
+      await polls(3);
+      for (const path of VALUED) expect(count(path), `${path}, never after\n${said()}`).toBe(0);
+    });
+  }
+
+  it("is disabled while its valuation is out", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
     at(SUNDAY);
     await open();
-    // Everything REVIEW asks for on entering it is asked before the poll: the holding's samples
-    // are asked only once its page is drawn, after the line `open` waits for, and anything still
-    // to come when `calls` is reset would count as the poll's. `quiet` waits for whatever the page
-    // asks, named nowhere here. (#347: a `waitFor` on `calls` sat out its timeout with all three
-    // in, because `at` fakes the interval waitFor polls on, so it re-checked only on a DOM change
-    // and the samples' answer made none.)
     await quiet();
-    // the rest WAS asked for, once, on entering REVIEW: the valuation, the closed trades (#296)
-    // and the holding's samples
-    for (const once of ["/positions/values", "/positions", "/positions/p1/samples"]) {
-      expect(calls.filter((c) => c === once), `${once}, once\n${said()}`).toHaveLength(1);
-    }
-    calls = [];
-    await act(async () => { vi.advanceTimersByTime(15_000); });
-    await quiet();
-    expect(new Set(calls), said()).toEqual(new Set(["/quotes", "/monitors", "/health"]));
+    held = [];
+    const button = within(closedLine()!).getByRole("button", { name: "refresh the valuation" });
+    fireEvent.click(button);
+    await until(() => expect(held!.length).toBe(1));
+    expect(button.hasAttribute("disabled")).toBe(true);
+    await act(async () => { held![0]!.settle(true); });
+    await until(() => expect(button.hasAttribute("disabled")).toBe(false));
+  });
+});
+
+describe("the References strip outside the session (#371)", () => {
+  for (const where of ["desk", "phone"] as const) {
+    it(`is drawn on the ${where} with the service's time on every reading`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(EVENING);
+      await open();
+      await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(2));
+      for (const r of document.querySelectorAll(".references .reference")) {
+        expect(r.textContent, "every reading says when").toContain("read at 21:04");
+      }
+    });
+  }
+
+  it("never draws a reading without its time", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(EVENING);
+    references = [reference, { ...unread, fetched_at: undefined }];
+    await open();
+    await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(1));
+    expect(document.querySelector(".references")!.textContent).toContain("read at 21:04");
+    expect(document.querySelector(".references")!.textContent).not.toContain("VIX");
+  });
+
+  it("is drawn in session as it was, with no time", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(2));
+    expect(document.querySelector(".references")!.textContent).not.toContain("read at");
+    // and Review picked by hand keeps it: the mode no longer hides it
+    pick("Review");
+    expect(document.querySelectorAll(".references .reference")).toHaveLength(2);
+  });
+
+  it("is read again by the refresh, with its new time", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(EVENING);
+    await open();
+    await until(() => expect(document.querySelector(".references")!.textContent).toContain("read at 21:04"));
+    referenceStamp = "2026-11-10 07:09:30+08:00";
+    fireEvent.click(within(closedLine()!).getByRole("button", { name: "refresh the valuation" }));
+    await until(() => expect(document.querySelector(".references")!.textContent).toContain("read at 07:09"));
   });
 });
 
@@ -212,19 +410,18 @@ describe("a holding's history in LIVE (#353)", () => {
 });
 
 describe("asking again", () => {
-  it("asks for the holdings, and not the References, on switching into REVIEW", async () => {
+  it("asks for nothing more on switching mode: the mode decides no fetching", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(SESSION);
     await open();
     await quiet();
     calls = [];
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    pick("Review");
     await quiet();
-    expect(calls, said()).toContain("/positions/values");
-    expect(calls, said()).not.toContain("/references");
+    for (const path of VALUED) expect(count(path), `${path}\n${said()}`).toBe(0);
   });
 
-  it("values the holdings and reads the References afresh when Settings opens, in REVIEW too", async () => {
+  it("values the holdings and reads the References afresh when Settings opens outside the session", async () => {
     at(SUNDAY);
     await open();
     await quiet();
@@ -232,14 +429,26 @@ describe("asking again", () => {
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await quiet();
     expect(calls, said()).toContain("/positions/values");
-    // REVIEW polls neither, and Settings is where References are kept or dropped
+    // nothing polls either outside the session, and Settings is where References are kept or dropped
     expect(calls, said()).toContain("/references");
     expect(screen.getByText(/holdings valued at/)).toBeTruthy();
+  });
+
+  it("values them afresh when Settings opens outside the session with Live picked", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SUNDAY);
+    await open();
+    pick("Live");
+    await quiet();
+    calls = [];
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    await quiet();
+    for (const path of VALUED) expect(count(path), `${path}\n${said()}`).toBe(1);
   });
 });
 
 describe("what is read again, and when", () => {
-  it("reads the References again after one is kept from Settings, in REVIEW too", async () => {
+  it("reads the References again after one is kept from Settings, outside the session too", async () => {
     at(SUNDAY);
     await open();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -253,25 +462,27 @@ describe("what is read again, and when", () => {
     expect(calls, said()).toContain("/references");
   });
 
-  it("does not ask again on opening Settings in LIVE, which polls both already", async () => {
-    at(SESSION);
-    await open();
-    await quiet();
-    calls = [];
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    await quiet();
-    expect(calls, said()).toEqual([]);
-  });
-
-  it("keeps the newer valuation when an older one lands after the switch to REVIEW", async () => {
+  it("does not ask again on opening Settings in session, which polls both already", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(SESSION);
     await open();
+    pick("Review");
+    await quiet();
+    calls = [];
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    await quiet();
+    for (const path of VALUED) expect(count(path), `${path}\n${said()}`).toBe(0);
+  });
+
+  it("keeps the newer valuation when an older one lands after the close", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T21:14:00Z"); // Monday 16:14 New York
+    await open();
     await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
     held = [];
-    await act(async () => { vi.advanceTimersByTime(15_000); }); // LIVE's poll asks: #0
+    await act(async () => { vi.advanceTimersByTime(15_000); }); // the session's poll asks: #0
     await until(() => expect(held!.length).toBe(1));
-    fireEvent.click(screen.getByRole("button", { name: "Review" })); // REVIEW asks: #1
+    await readClock("2026-11-09T21:16:00Z"); // the close: asked once more, #1
     await until(() => expect(held!.length).toBe(2));
     await act(async () => { held![1]!.settle(true); });
     await act(async () => { held![0]!.settle(false); }); // the older one fails, late
@@ -282,13 +493,13 @@ describe("what is read again, and when", () => {
 
   it("keeps the newer figures when an older valuation succeeds late", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
-    at(SESSION);
+    at("2026-11-09T21:14:00Z");
     await open();
     await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
     held = [];
     await act(async () => { vi.advanceTimersByTime(15_000); });
     await until(() => expect(held!.length).toBe(1));
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    await readClock("2026-11-09T21:16:00Z");
     await until(() => expect(held!.length).toBe(2));
     await act(async () => { held![1]!.settle(true, [{ ...holding, pnl: 180 }]); });
     await act(async () => { held![0]!.settle(true, [{ ...holding, pnl: 999 }]); });
@@ -319,24 +530,6 @@ describe("what is read again, and when", () => {
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await waitFor(() => expect(screen.getByText(/not valued/)).toBeTruthy());
     expect(screen.queryByText(/holdings valued at/)).toBeNull();
-  });
-});
-
-describe("REVIEW and LIVE draw different things", () => {
-  it("shows the References strip in LIVE only", async () => {
-    document.cookie = "ui_arrangement=desk;path=/";
-    at(SESSION);
-    await open();
-    await waitFor(() => expect(document.querySelector(".references")).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    expect(document.querySelector(".references")).toBeNull();
-  });
-
-  it("says when the holdings were valued, in REVIEW, where nothing re-values them", async () => {
-    at(SUNDAY);
-    await open();
-    await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
-    expect(document.querySelector(".nx-book")!.textContent).toMatch(/valued at \d\d:\d\d:\d\d/);
   });
 });
 
