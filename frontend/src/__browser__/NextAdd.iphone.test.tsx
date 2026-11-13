@@ -46,7 +46,7 @@ const addTab = () => within(screen.getByRole("navigation", { name: "views" })).g
 
 async function openSheet() {
   await userEvent.click(addTab());
-  const sheet = await screen.findByRole("dialog", { name: "Add a spread" });
+  const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
   await animationsDone();
   return sheet;
 }
@@ -76,7 +76,7 @@ describe("adding a condor on the phone", () => {
     const sent = await openPhone();
     const { n, tap, type } = counter();
     await tap(addTab());
-    const sheet = await screen.findByRole("dialog", { name: "Add a spread" });
+    const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
     await animationsDone();
     await type("expiry", "2026-12-18");
     await type("spread 1, leg 1 strike", "7150");
@@ -95,7 +95,7 @@ describe("adding a condor on the phone", () => {
     const body = sent[0] as { strike_date: string; spreads: { held: boolean; monitors: unknown[] }[] };
     expect(body.strike_date).toBe("2026-12-18");
     expect(body.spreads.map((s) => [s.held, s.monitors.length])).toEqual([[true, 2], [true, 2]]);
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
   });
 });
 
@@ -144,7 +144,7 @@ describe("the Add sheet", () => {
     await openPhone();
     await openSheet();
     history.back();
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     expect(document.querySelector(".nx")).toBeTruthy();
   });
 });

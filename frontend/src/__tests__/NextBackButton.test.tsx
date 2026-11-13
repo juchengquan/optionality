@@ -43,7 +43,7 @@ const SHEETS = [
   {
     name: "the phone's Add sheet", arrangement: "phone",
     open: () => fireEvent.click(tab("Add")),
-    find: () => screen.queryByRole("dialog", { name: "Add a spread" }),
+    find: () => screen.queryByRole("dialog", { name: "Add a spread or contract" }),
   },
   {
     name: "the desk's Settings", arrangement: "desk",

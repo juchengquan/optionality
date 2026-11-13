@@ -37,7 +37,7 @@ async function openDesk(width = 1440, spreads = { status: 201, body: ADDED as ob
   return sent;
 }
 
-const panel = () => screen.getByRole("region", { name: "adding a spread" });
+const panel = () => screen.getByRole("region", { name: "add a spread or contract" });
 /** What a spread's preview says its maximum loss is. */
 const maxLoss = (n: number) => [...document.querySelectorAll(`[data-spread="${n}"] .nx-payoff-kv div`)]
   .find((d) => d.querySelector("dt")?.textContent === "max loss")?.querySelector("dd")?.textContent ?? null;
@@ -48,7 +48,7 @@ describe("adding a condor on the desk", () => {
   it("takes 3 clicks and 7 typed fields where the audit measured 34 and 16, the expiry typed once", async () => {
     const sent = await openDesk();
     const { n, click, type } = counter();
-    await click(screen.getByRole("button", { name: "add a spread" }));
+    await click(screen.getByRole("button", { name: "add" }));
     await type("expiry", "2026-12-18");
     await type("spread 1, leg 1 strike", "7150");
     await type("spread 1, leg 2 strike", "7100");
@@ -67,7 +67,7 @@ describe("adding a condor on the desk", () => {
     expect(body.strike_date).toBe("2026-12-18");
     expect(body.spreads.map((s) => [s.held, s.monitors.length])).toEqual([[true, 2], [true, 2]]);
     // saved: the panel closes and the page says what it made
-    await waitFor(() => expect(screen.queryByRole("region", { name: "adding a spread" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull());
     expect(await screen.findByText("added 2 holdings and 4 Monitors")).toBeTruthy();
   });
 });
@@ -75,7 +75,7 @@ describe("adding a condor on the desk", () => {
 describe("the preview beside the form", () => {
   it("draws as the legs are typed, and turns over when a leg's side is flipped", async () => {
     await openDesk();
-    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
     await userEvent.fill(screen.getByLabelText("spread 1, leg 1 strike"), "7150");
     await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7100");
     await userEvent.fill(screen.getByLabelText("spread 1 entry"), "1.50");
@@ -116,7 +116,7 @@ describe("combos of 3 to 6 legs on the desk (#334)", () => {
   for (const n of [3, 5, 6]) {
     it(`adds a ${n}-leg combo, its preview drawn over every leg`, async () => {
       const sent = await openDesk();
-      await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+      await userEvent.click(screen.getByRole("button", { name: "add" }));
       await enterCombo(panel(), n);
       await waitFor(() => expect(curveOf(1)).not.toBeNull());
       // a short call with nothing above it: the preview says so, which it can only do over all n
@@ -131,7 +131,7 @@ describe("combos of 3 to 6 legs on the desk (#334)", () => {
 
   it("fits six legs in the panel at 900px, every remove button inside it", async () => {
     await openDesk(900);
-    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
     await enterCombo(panel(), 6);
     await settle();
     expect(overflowsSideways()).toBe(false);
@@ -146,7 +146,7 @@ describe("combos of 3 to 6 legs on the desk (#334)", () => {
 describe("a refused request", () => {
   it("is said in the form, on top, where it can be read", async () => {
     await openDesk(1440, { status: 409, body: { detail: "position '1218_P7150_P7100' already exists" } });
-    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
     await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
     await userEvent.fill(screen.getByLabelText("spread 1, leg 1 strike"), "7150");
     await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7100");
@@ -166,7 +166,7 @@ describe("the panel's fit", () => {
   for (const width of [900, 1280, 1920]) {
     it(`pushes nothing sideways at ${width}px, with two spreads open`, async () => {
       await openDesk(width);
-      await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+      await userEvent.click(screen.getByRole("button", { name: "add" }));
       await userEvent.click(within(panel()).getByRole("button", { name: "condor as one holding" }));
       await userEvent.fill(screen.getByLabelText("spread 2, leg 1 strike"), "7150");
       await settle();
@@ -180,7 +180,7 @@ describe("the panel's fit", () => {
 
   it("sets each spread's payoff beside its fields when there is room", async () => {
     await openDesk(1440);
-    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
     const spread = document.querySelector<HTMLElement>('[data-spread="1"]')!;
     const fields = spread.querySelector(".nx-add-fields")!.getBoundingClientRect();
     const payoff = within(spread).getByRole("group", { name: "payoff at expiry" }).getBoundingClientRect();
@@ -195,7 +195,7 @@ describe("privacy", () => {
   it("draws the contract count as dots, not digits", async () => {
     document.cookie = "ui_privacy=on;path=/";
     await openDesk();
-    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
     const count = screen.getByLabelText("spread 1 contracts") as HTMLInputElement;
     await userEvent.fill(count, "12");
     expect(count.value).toBe("12");
@@ -204,7 +204,7 @@ describe("privacy", () => {
 
   it("leaves it readable with privacy off", async () => {
     await openDesk();
-    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
     expect(getComputedStyle(screen.getByLabelText("spread 1 contracts")).getPropertyValue("-webkit-text-security")).toBe("none");
   });
 });

@@ -32,12 +32,12 @@ async function openPhone(spreads?: Parameters<typeof serveContract>[0]) {
 }
 
 const addTab = () => within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Add" });
-const sheet = () => screen.getByRole("dialog", { name: "Add a spread" });
+const sheet = () => screen.getByRole("dialog", { name: "Add a spread or contract" });
 
 /** The Add tab, then one contract: the expiry, the strike, the threshold. */
 async function startContract(threshold = "0.15") {
   await userEvent.click(addTab());
-  await screen.findByRole("dialog", { name: "Add a spread" });
+  await screen.findByRole("dialog", { name: "Add a spread or contract" });
   await animationsDone();
   await userEvent.click(within(sheet()).getByRole("button", { name: "one contract" }));
   await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
@@ -72,7 +72,7 @@ describe("a single-contract Monitor on the phone", () => {
       await startContract();
       await userEvent.selectOptions(screen.getByLabelText("what it watches"), words);
       await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 Monitor" }));
-      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread" })).toBeNull());
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
       expect(writes.at(-1)).toEqual({
         what: "POST /spreads",
         body: {
@@ -101,7 +101,7 @@ describe("a lone contract held, on the phone", () => {
     await userEvent.click(within(sheet()).getByRole("button", { name: "long" }));
     await userEvent.fill(screen.getByLabelText("entry"), "5.20");
     await userEvent.click(within(sheet()).getByRole("button", { name: "Record holding + 1 Monitor" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]);
     expect((writes[0]!.body as { spreads: object[] }).spreads[0])
       .toMatchObject({ held: true, entry: -5.2, legs: [{ side: "long", option_type: "PUT", strike: 7150 }] });

@@ -189,7 +189,7 @@ describe("when they do nothing", () => {
   });
 
   it("does nothing while the add panel is open", () => {
-    render(<><DeskBook {...props()} /><section className="nx-add-panel" aria-label="adding a spread" /></>);
+    render(<><DeskBook {...props()} /><section className="nx-add-panel" aria-label="add a spread or contract" /></>);
     expect(press("j", document.body)).toBe(true);
     expect(cursor()).toBeNull();
   });

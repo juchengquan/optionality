@@ -46,7 +46,7 @@ describe("what opening a sheet does to the poll, on a phone", () => {
   it("does not hold it with the Add sheet merely open", async () => {
     await show();
     await userEvent.click(tab("Add"));
-    const sheet = await screen.findByRole("dialog", { name: "Add a spread" });
+    const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
     await settle();
     expect(sheet.contains(document.activeElement), "the focus never moved into the sheet").toBe(true);
     expect(beingOperated(document.activeElement), `focus landed on ${document.activeElement?.outerHTML.slice(0, 80)}`).toBe(false);

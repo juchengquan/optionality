@@ -122,7 +122,7 @@ describe("its actions", () => {
 
   it("offers every one, in a stable order", () => {
     expect(paletteActions({ mode: "live", choice: "auto", selected: null }).map((a) => a.label)).toEqual([
-      "Add a spread", "Edit the selected Monitor", "Close the selected holding", "Save the view as an image",
+      "Add a spread or contract", "Edit the selected Monitor", "Close the selected holding", "Save the view as an image",
       "Switch to Review",
       "Arrangement: desk", "Arrangement: phone", "Arrangement: by the screen's width",
     ]);

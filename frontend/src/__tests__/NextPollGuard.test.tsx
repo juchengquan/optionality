@@ -100,7 +100,7 @@ describe.each(arrangements)("on the %s, the poll", (arrangement) => {
 
   it("waits while the add form is being filled in", async () => {
     const svc = await open(arrangement);
-    if (arrangement === "desk") fireEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    if (arrangement === "desk") fireEvent.click(screen.getByRole("button", { name: "add" }));
     else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Add" }));
     const form = await screen.findByRole("form", { name: "add a spread" });
     // the desk's panel focuses its first box; the phone's sheet waits for a finger, so it is put there
