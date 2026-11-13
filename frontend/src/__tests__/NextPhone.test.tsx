@@ -331,11 +331,15 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("is a card in the watchlist with its note, and the holding's card keeps its own rules", () => {
     overlap();
-    expect(refs(region("Holdings"))).toEqual(["h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700"]);
-    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700"]);
+    // a wing of a held condor names nothing unheld, and stays on the condor's card
+    expect(refs(region("Holdings")))
+      .toEqual(["h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200"]);
+    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700", "r-ratio"]);
     expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
     expect(note("w-7700")).toBe("contains 1231_7700's C7700");
+    expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
     expect(card("h-8050").querySelector("[data-overlap]")).toBeNull();
+    expect(card("h-ic").querySelector("[data-overlap]")).toBeNull();
   });
 
   it("says it in the detail sheet too, and under privacy", async () => {
@@ -348,7 +352,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("is on its holding's REVIEW page no more, and still in the watchlist there", () => {
     overlap({ mode: "review" });
-    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700"]);
+    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700", "r-ratio"]);
     expect(refs(region("Review"))).not.toContain("r-8100");
+    expect(refs(region("Review"))).toContain("r-ic-calls");
   });
 });

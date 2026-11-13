@@ -504,19 +504,21 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   it("is drawn in the watchlist with its note, and the holding keeps its own rules", () => {
     render(<DeskBook {...overlap()} />);
     expect(order()).toEqual([
-      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700",
-      "r-8100", "w-8150-delta", "w-7700",
+      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
+      "r-8100", "w-8150-delta", "w-7700", "r-ratio",
     ]);
     const watchlist = screen.getByRole("region", { name: "Watchlist" });
     const holdings = screen.getByRole("region", { name: "Holdings" });
-    expect(watchlist.contains(row("r-8100"))).toBe(true);
-    expect(watchlist.contains(row("w-7700"))).toBe(true);
-    expect(holdings.contains(row("r-8050"))).toBe(true);
-    expect(holdings.contains(row("r-8050-delta"))).toBe(true);
+    // each names a contract its holding does not hold: C8150, C7750, a second C7250
+    for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(watchlist.contains(row(id))).toBe(true);
+    // the holding's own value rule, a single contract on its leg, and a wing of a held condor
+    for (const id of ["r-8050", "r-8050-delta", "r-ic-calls"]) expect(holdings.contains(row(id))).toBe(true);
     expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
     expect(note("w-7700")).toBe("contains 1231_7700's C7700");
+    expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
     // and no note on a rule that is drawn where it always was
     expect(note("r-8050")).toBeNull();
+    expect(note("r-ic-calls")).toBeNull();
     expect(row("r-8100").dataset.nested).toBeUndefined();
   });
 
@@ -524,8 +526,13 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     render(<DeskBook {...overlap()} />);
     expect(cellText("r-8100", "value")).toBe("-0.60");
     expect(cellText("w-7700", "value")).toBe("-1.50");
-    // the holding's own value rule still reads its holding's cost to close
+    // a ratio IS served a cost to close (its contracts counted once each): drawn as a watched
+    // spread, it shows its own value instead
+    expect(cellText("r-ratio", "value")).toBe("-0.40");
+    // the holding's own value rule still reads its holding's cost to close, and a wing of a held
+    // condor its own two contracts' cost to close, not its signed value
     expect(cellText("r-8050", "value")).toBe("1.20");
+    expect(cellText("r-ic-calls", "value")).toBe("1.30");
   });
 
   it("says it in the inspector too, and the note survives privacy, having no $ and no count in it", () => {

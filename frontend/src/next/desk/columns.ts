@@ -176,8 +176,11 @@ const LEGS: DeskColumn = {
 };
 
 const VALUE: DeskColumn = {
-  // a holding's Cost to close; a watched spread's value — one that only partly overlaps a holding
-  // included, whose cost to close is the shared contracts' alone (#346); a single contract's mid
+  // a holding's Cost to close; a rule on held contracts, the cost to close of the contracts it
+  // names; a watched spread's value — one drawn in the watchlist because it names a contract its
+  // holding does not hold included (#346). The service serves that one no cost to close
+  // (`costToCloseOf` is null unless every contract it names is held), except a ratio, whose repeated
+  // contract it counts once: drawn as a watched spread, it shows its value. A single contract's mid
   key: "value", label: "value",
   text: (r) => r.kind === "holding" ? points(r.holding.cost_to_close)
     : r.kind === "rule"

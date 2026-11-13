@@ -28,6 +28,7 @@ function sectionOf(ref: string): string | null {
   return null;
 }
 
+const NOTES = ["shares C8100 with 1231_8050", "contains 1231_7700's C7700", "contains 1231_7200's C7200 and C7250"];
 const notes = () => [...document.querySelectorAll("[data-overlap]")].map((n) => n.textContent);
 
 describe.each(["desk", "phone"] as Arrangement[])("the picture from the %s", (arrangement) => {
@@ -38,11 +39,14 @@ describe.each(["desk", "phone"] as Arrangement[])("the picture from the %s", (ar
     expect(sectionOf("r-8050")).toBe("Holdings");
     expect(sectionOf("r-8050-delta")).toBe("Holdings");
     expect(sectionOf("r-7700")).toBe("Holdings");
-    expect(notes()).toEqual(["shares C8100 with 1231_8050", "contains 1231_7700's C7700"]);
+    // a wing of a held condor names nothing unheld; a ratio's second C7250 is held by nobody
+    expect(sectionOf("r-ic-calls")).toBe("Holdings");
+    expect(sectionOf("r-ratio")).toBe("Watchlist");
+    expect(notes()).toEqual(NOTES);
   });
 
   it("keeps the notes under privacy, which have no $ in them", () => {
     picture(arrangement, true);
-    expect(notes()).toEqual(["shares C8100 with 1231_8050", "contains 1231_7700's C7700"]);
+    expect(notes()).toEqual(NOTES);
   });
 });

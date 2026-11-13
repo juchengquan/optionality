@@ -10,12 +10,13 @@
  *    or two holdings share its contract, as on a roll day — is still shown, unplaced;
  *  - a condor held as two spreads on one expiry is BRACKETED: one call vertical and one put
  *    vertical, the calls first. A 4-leg holding is already one row and is never split;
- *  - a COMBO linked to a holding whose contracts are not exactly that holding's (`coversExactly`)
- *    only partly overlaps it — the holding holds part of it (scope `leg`), or it holds the whole
- *    holding and more (scope `all`) — and is drawn in the watchlist with a note naming the
- *    contracts it shares and with whom (#346, the owner's decision in #338). The service's link is
- *    untouched: only where the rule is DRAWN changes. A single-contract rule and a combo on exactly
- *    the holding's contracts stay under it.
+ *  - a COMBO that names a contract its linked holdings do not hold (`namesUnheldContract`) is only
+ *    PARTLY held — the holding holds part of it (scope `leg`), or the whole holding and more (scope
+ *    `all`) — and is drawn in the watchlist, as the watched spread it mostly is, with a note naming
+ *    the contracts it shares and with whom (#346, the owner's decision in #338). The service's link
+ *    is untouched: only where the rule is DRAWN changes. A single-contract rule, and a combo on
+ *    nothing but held contracts — the holding's own value rule, or a wing of a held condor, which
+ *    watches risk on something held — stay under it.
  */
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { isEntrySignal, QUARANTINED } from "./needs";
@@ -102,15 +103,23 @@ type Leg = { option_type: string; strike: number };
 const keyOf = (date: string, l: Leg) => `${date} ${l.option_type} ${l.strike}`;
 const label = (l: Leg) => `${l.option_type[0]}${l.strike}`;
 
-/** Whether a combo's contracts are EXACTLY the contracts of the holdings it is linked to, taken
- *  together: the same set, whatever the signs either is written with (leg conventions differ,
- *  #97). The one predicate every surface asks about a linked combo (#346): true, it is the holding's
- *  own rule and sits under it; false, it only partly overlaps and is drawn in the watchlist. A
- *  condor rule over a condor held as two spreads covers both whole, and stays. */
-export function coversExactly(rule: Contracts, holdings: readonly Contracts[]): boolean {
-  const own = new Set(rule.legs.map((l) => keyOf(rule.strike_date, l)));
-  const held = new Set(holdings.flatMap((h) => h.legs.map((l) => keyOf(h.strike_date, l))));
-  return own.size === held.size && [...own].every((k) => held.has(k));
+/** Whether a combo names a contract the holdings it is linked to do not hold, taken together —
+ *  counted as MULTISETS, so a 1×2 ratio over a 1×1 holding names one contract more than is held.
+ *  Signs play no part (leg conventions differ, #97). The one predicate every surface asks about a
+ *  linked combo (#346): false, every contract it names is held and it sits under its holding — the
+ *  holding's own value rule, a wing of a held condor, a condor rule over a condor held as two
+ *  spreads; true, it is only partly held and is drawn in the watchlist. */
+export function namesUnheldContract(rule: Contracts, holdings: readonly Contracts[]): boolean {
+  const held = new Map<string, number>();
+  for (const h of holdings) {
+    for (const l of h.legs) held.set(keyOf(h.strike_date, l), (held.get(keyOf(h.strike_date, l)) ?? 0) + 1);
+  }
+  for (const l of rule.legs) {
+    const left = held.get(keyOf(rule.strike_date, l)) ?? 0;
+    if (left === 0) return true;
+    held.set(keyOf(rule.strike_date, l), left - 1);
+  }
+  return false;
 }
 
 /** A rule as `/quotes` or `/monitors` serves it: its legs where it is a combo, and its links. */
@@ -120,12 +129,14 @@ interface Linked {
   positions: readonly { id: string; name: string }[];
 }
 
-/** For a COMBO linked to holdings whose contracts it does not cover exactly, the note it is drawn
- *  with in the watchlist — which contracts it shares, and with which holding, never a figure, so
+/** For a COMBO naming a contract its linked holdings do not hold, the note it is drawn with in the
+ *  watchlist — which contracts it shares, and with which holding, never a figure, so
  *  privacy has nothing to hide in it: "shares C8100 with 1231_8050" where the holding holds part of
- *  it, "contains 1231_7700's C7700" where it holds the whole holding and more. Null for a single
- *  contract, a rule linked to nothing, a combo covering exactly its holdings, and one linked to a
- *  holding the page has not valued, which cannot be compared and is drawn as before. */
+ *  it, "contains 1231_7700's C7700" where it holds the whole holding and more, "linked to X" where
+ *  it shares nothing with X, one clause per holding joined by "; ". Null for a single contract, a
+ *  rule linked to nothing, a combo on nothing but held contracts, and one linked to ANY holding the
+ *  page has not valued: what that one holds is unknown, so it is drawn as before rather than moved
+ *  on half the evidence. */
 export function overlapOf(
   rule: Linked, holdings: readonly (Contracts & { id: string; name: string })[],
 ): string | null {
@@ -134,7 +145,7 @@ export function overlapOf(
   if (linked.some((h) => h === undefined)) return null;
   const mine = { strike_date: rule.strike_date, legs: rule.legs };
   const ofHoldings = linked as (Contracts & { name: string })[];
-  if (coversExactly(mine, ofHoldings)) return null;
+  if (!namesUnheldContract(mine, ofHoldings)) return null;
   const own = new Set(rule.legs.map((l) => keyOf(rule.strike_date, l)));
   return ofHoldings.map((h) => {
     const shared = h.legs.filter((l) => own.has(keyOf(h.strike_date, l))).map(label);

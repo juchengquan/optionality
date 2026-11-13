@@ -193,6 +193,10 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     const placed = placeBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS, OVERLAP_MONITORS);
     const map = priceMapOf(placed, spxOfBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS));
     const kinds = map.lanes.flatMap((l) => l.spreads.map((s) => [s.id, s.kind]));
-    expect(kinds).toEqual([["h-8050", "held"], ["h-7700", "held"], ["r-8100", "watched"], ["w-7700", "watched"]]);
+    // the wing of the held condor stays the condor's: no spread of its own on the map
+    expect(kinds).toEqual([
+      ["h-8050", "held"], ["h-7700", "held"], ["h-ic", "held"], ["h-7200", "held"],
+      ["r-8100", "watched"], ["w-7700", "watched"], ["r-ratio", "watched"],
+    ]);
   });
 });
