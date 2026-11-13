@@ -70,7 +70,7 @@ export function newContract(today: string): ContractDraft {
 /** `1218_P7150`: named as `add.ts` names a spread, with its one leg — the strike as the NUMBER it
  *  parses to, so "+7150", "7150.0" and "07150" all name the one contract they mean. */
 export const contractName = (expiry: string, type: OptionType, strike: number) =>
-  derivedName(expiry, [{ side: "short", option_type: type, strike: String(strike) }]);
+  derivedName(expiry, [{ option_type: type, strike: String(strike) }]);
 
 /** A plain decimal only, as the Monitor editor reads one (`edit.ts`): Number() also reads "0x10" as
  *  16 and "1e-2" as 0.01, none of which is a figure anybody typed on purpose. */

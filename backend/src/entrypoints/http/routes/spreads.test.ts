@@ -379,9 +379,14 @@ describe("what a spread may not say", () => {
     start(fetch);
     const six = Array.from({ length: 6 }, (_, i) => ({ name: `w${i}`, legs: SIX, held: false, monitors: [{ threshold: 2 }] }));
     expect(await refused({ strike_date: EXPIRY, spreads: six }))
-      .toBe("this request has 36 legs: at most 32 can be asked of the Provider in one call");
+      .toBe("this request has 36 legs: at most 32 in one request");
     expect(asked).toEqual([]);
     nothingWritten();
+    // decided FIRST in the request's own checks: a name given twice, which is refused in step 1
+    // too, is not what a request this size is told
+    const twice = six.map((sp, i) => ({ ...sp, name: `w${i % 2}` }));
+    expect(await refused({ strike_date: EXPIRY, spreads: twice }))
+      .toBe("this request has 36 legs: at most 32 in one request");
     // 32 exactly is within it
     const legs32 = [...six.slice(0, 5), { ...six[5]!, legs: SIX.slice(0, 2) }];
     expect((await post({ strike_date: EXPIRY, spreads: legs32 })).status).toBe(201);

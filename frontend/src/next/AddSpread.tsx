@@ -16,7 +16,7 @@ import { addSpreads, type Added, type Monitor, type Payoff } from "../api";
 import { Button } from "@/components/ui/button";
 import { marketDay } from "../format";
 import {
-  addLeg, addSpread, deltaEnabled, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
+  addLeg, addSpread, deltaEnabled, isCreditStop, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
   removeLeg, removeSpread, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, valueEnabled,
   valueHint, valueShown, type AddDraft, type Preset, type SpreadDraft,
 } from "./add";
@@ -166,6 +166,13 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
   const valueOn = valueEnabled(held, s);
   const deltaOn = deltaEnabled(s);
   const shorts = s.legs.filter((l) => l.side === "short").length;
+  const addLegButton = useRef<HTMLButtonElement>(null);
+  const [focusAdd, setFocusAdd] = useState(false);
+  useEffect(() => {
+    if (!focusAdd) return;
+    addLegButton.current?.focus();
+    setFocusAdd(false);
+  }, [focusAdd]);
   return (
     <fieldset className="nx-add-spread" data-spread={n}>
       <legend>{`spread ${n}`}</legend>
@@ -178,7 +185,7 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
           </label>
           <ol className="nx-add-legs">
             {s.legs.map((l, j) => (
-              <li key={j} className="nx-add-leg" data-side={l.side}>
+              <li key={l.key} className="nx-add-leg" data-side={l.side}>
                 <button type="button" className="nx-add-toggle" data-side={l.side}
                         aria-label={`spread ${n}, leg ${j + 1} side: ${l.side} — flip`}
                         onClick={() => onChange(flipSide(draft, s.key, j))}>{l.side}</button>
@@ -191,7 +198,11 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
                        placeholder="strike" onChange={(e) => onChange(setLeg(draft, s.key, j, { strike: e.target.value }))} />
                 {s.legs.length > MIN_LEGS ? (
                   <button type="button" className="nx-add-toggle nx-add-unleg" aria-label={`remove spread ${n}, leg ${j + 1}`}
-                          onClick={() => onChange(removeLeg(draft, s.key, j))}>
+                          onClick={(e) => {
+                            // the button that had the focus goes with its leg: + leg takes it
+                            if (e.currentTarget === document.activeElement) setFocusAdd(true);
+                            onChange(removeLeg(draft, s.key, j));
+                          }}>
                     <X aria-hidden="true" />
                   </button>
                 ) : null}
@@ -199,7 +210,7 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
             ))}
           </ol>
           {s.legs.length < MAX_LEGS ? (
-            <button type="button" className="nx-add-ghost" aria-label={`spread ${n}: add a leg`}
+            <button ref={addLegButton} type="button" className="nx-add-ghost" aria-label={`spread ${n}: add a leg`}
                     onClick={() => onChange(addLeg(draft, s.key))}>
               <Plus aria-hidden="true" />leg
             </button>
@@ -222,7 +233,8 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
           ) : null}
           <div className="nx-add-monitors" role="group" aria-label={`spread ${n}'s Monitors`}>
             <MonitorLine on={valueOn} onToggle={() => set({ valueOn: !valueOn })} label={`spread ${n} value Monitor`}
-                         words="spread value ≥" hint={valueHint(held, s)}
+                         words={isCreditStop(held, s) ? "cost to close ≥" : "spread value ≥"}
+                         hint={valueHint(held, s)}
                          value={valueShown(held, s)} onValue={(v) => set({ valueAt: v })}
                          inputLabel={`spread ${n} value threshold`} />
             <MonitorLine on={deltaOn} onToggle={() => set({ deltaOn: !deltaOn })} label={`spread ${n} delta Monitor`}

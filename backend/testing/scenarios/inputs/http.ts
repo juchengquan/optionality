@@ -1284,12 +1284,14 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
-    // six-leg spreads, each within the schema, but 36 legs in all: refused before the one probe
-    name: "POST /spreads refuses more than 32 legs in all, asking the Provider nothing",
+    // six-leg spreads, each within the schema, but 36 legs in all: refused before the one probe,
+    // and before anything else the request says about itself — two of them share a name, which
+    // is refused too, but not first
+    name: "POST /spreads refuses more than 32 legs in all, first and asking the Provider nothing",
     world: world({ provider: { quotes: SIX_BOOK } }),
     request: request("POST", "/spreads", {
       strike_date: EXPIRY,
-      spreads: Array.from({ length: 6 }, (_, i) => ({ ...PUT_SPREAD, name: `dec-six-${i}`, legs: SIX_LEGS, monitors: [] })),
+      spreads: Array.from({ length: 6 }, (_, i) => ({ ...PUT_SPREAD, name: `dec-six-${i % 5}`, legs: SIX_LEGS, monitors: [] })),
     }),
   },
   {

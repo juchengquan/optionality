@@ -133,6 +133,16 @@ export function fieldWords(field: string, combo: boolean): string {
  *  away does not read "0.00 away", and gamma to four rather than the six a table once showed. */
 const PLACES: Record<string, number> = { option_delta: 3, option_gamma: 4 };
 
+/** Whether a rule is a spread's cost to close at or above a figure: its signed mid at or below a
+ *  negative one, since a combo's value is minus what closing it costs (ADR 0013). That is how the
+ *  add form posts a held credit's stop (review of #343), and it is said that way rather than as a
+ *  negative value. */
+export function isCostToClose(
+  field: string, combo: boolean, compare: string, direction: string, threshold: number,
+): boolean {
+  return combo && field === "mid_price" && compare === "signed" && direction === "below" && threshold < 0;
+}
+
 /** "|spread value| ≥ 6.01": a rule in words, with no figure — the sentence's first half, and the
  *  whole of what the editor's draft says as it is typed (#292), so the two cannot word it apart.
  *  The threshold is printed as given: typed text in a draft, the stored number in a sentence. */
@@ -144,7 +154,8 @@ export function ruleWords(
   return `${compare === "abs" ? `|${words}|` : words} ${sign} ${threshold}`;
 }
 
-/** "|spread value| ≥ 6.01 — now -2.00, 4.01 away".
+/** "|spread value| ≥ 6.01 — now -2.00, 4.01 away"; "cost to close ≥ 11 — now 2.00, 9.00 away" for a
+ *  held credit's signed stop (`isCostToClose`).
  *
  *  Every figure in it is the service's: `watched` is the very figure the bell and the fill bar were
  *  drawn from, and `distance` is the domain's `thresholdDistance` (ADR 0005 — nothing is assembled
@@ -155,10 +166,14 @@ export function ruleWords(
  *  so "now -2.00, 4.01 away" reads true beside `|spread value| ≥ 6.01` where it would not beside a
  *  bare "spread value ≥ 6.01". The figure itself is shown as served, never made absolute here. */
 export function sentence(entry: Entry): string {
-  const rule = ruleWords(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
+  // a signed stop is said as the cost to close it watches, and its figure as that cost: the
+  // distance is the same either way round
+  const cost = isCostToClose(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
+  const rule = cost ? `cost to close ≥ ${-entry.threshold}`
+    : ruleWords(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
   if (entry.watched === null) return `${rule} — no figure`;
   const places = PLACES[entry.field] ?? 2;
-  const now = `now ${entry.watched.toFixed(places)}`;
+  const now = `now ${(cost ? -entry.watched : entry.watched).toFixed(places)}`;
   const d = entry.distance;
   if (d === null) return `${rule} — ${now}`;
   const where = d > 0 ? `${d.toFixed(places)} away`

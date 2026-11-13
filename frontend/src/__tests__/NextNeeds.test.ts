@@ -175,6 +175,17 @@ describe("a rule said as a sentence", () => {
       .toBe("delta ≤ -0.3 — now -0.250, 0.050 away");
   });
 
+  it("says a held credit's signed stop as the cost to close it watches, not as a negative value", () => {
+    // the add form's stop (review of #343): the value at or below -11, which is closing at 11 or more
+    expect(sentence(entry({ threshold: -11, direction: "below", compare: "signed", watched: -2, distance: 9 })))
+      .toBe("cost to close ≥ 11 — now 2.00, 9.00 away");
+    expect(sentence(entry({ threshold: -11, direction: "below", compare: "signed", watched: -12.5, distance: -1.5 })))
+      .toBe("cost to close ≥ 11 — now 12.50, past it by 1.50");
+    // a signed rule ABOVE, or on a leg, is said as it is
+    expect(sentence(entry({ threshold: -11, direction: "above", compare: "signed", watched: -2, distance: 9 })))
+      .toBe("spread value ≥ -11 — now -2.00, 9.00 away");
+  });
+
   it("says a breached rule is past its threshold, or at it", () => {
     expect(sentence(entry({ watched: 6.2, distance: -0.19 })))
       .toBe("|spread value| ≥ 6.01 — now 6.20, past it by 0.19");

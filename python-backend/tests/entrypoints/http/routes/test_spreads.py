@@ -507,10 +507,16 @@ class TestWhatASpreadMayNotSay:
         h = start(fetch_quotes=fetch)
         six = [{"name": f"w{i}", "legs": SIX, "held": False, "monitors": [{"threshold": 2}]} for i in range(6)]
         assert await self.refused(h, {"strike_date": EXPIRY, "spreads": six}) == (
-            "this request has 36 legs: at most 32 can be asked of the Provider in one call"
+            "this request has 36 legs: at most 32 in one request"
         )
         assert asked == []
         nothing_written(h)
+        # decided FIRST in the request's own checks: a name given twice, which is refused in step 1
+        # too, is not what a request this size is told
+        twice = [{**sp, "name": f"w{i % 2}"} for i, sp in enumerate(six)]
+        assert await self.refused(h, {"strike_date": EXPIRY, "spreads": twice}) == (
+            "this request has 36 legs: at most 32 in one request"
+        )
         # 32 exactly is within it
         legs32 = [*six[:5], {**six[5], "legs": SIX[:2]}]
         assert (await post(h, {"strike_date": EXPIRY, "spreads": legs32})).status_code == 201

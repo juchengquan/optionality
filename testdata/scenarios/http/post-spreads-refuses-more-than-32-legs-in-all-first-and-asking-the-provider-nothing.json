@@ -1,5 +1,5 @@
 {
-  "name": "POST /spreads refuses more than 32 legs in all, asking the Provider nothing",
+  "name": "POST /spreads refuses more than 32 legs in all, first and asking the Provider nothing",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -312,7 +312,7 @@
           "monitors": []
         },
         {
-          "name": "dec-six-5",
+          "name": "dec-six-0",
           "held": true,
           "entry": 2.25,
           "opened_at": "2026-11-06",
@@ -357,7 +357,7 @@
     "response": {
       "status": 422,
       "body": {
-        "detail": "this request has 36 legs: at most 32 can be asked of the Provider in one call"
+        "detail": "this request has 36 legs: at most 32 in one request"
       }
     },
     "rows": {},

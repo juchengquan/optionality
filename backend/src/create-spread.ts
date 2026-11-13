@@ -216,7 +216,7 @@ export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Prom
   // 1. what the request says about itself, starting with its size: the one probe is bounded
   const legCount = input.spreads.reduce((n, s) => n + s.legs.length, 0);
   if (legCount > MAX_PROBE_LEGS) {
-    return refuse(`this request has ${legCount} legs: at most ${MAX_PROBE_LEGS} can be asked of the Provider in one call`);
+    return refuse(`this request has ${legCount} legs: at most ${MAX_PROBE_LEGS} in one request`);
   }
   const names = new Set<string>();
   const planned: Planned[][] = [];

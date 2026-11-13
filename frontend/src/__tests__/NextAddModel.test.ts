@@ -27,6 +27,11 @@ function condor(held = true): AddDraft {
   };
 }
 
+/** A held credit spread's stop as posted: its cost to close at 2x the Entry or more. The value is
+ *  signed (minus is short), so that is the value at or BELOW minus 2x the Entry — never its size,
+ *  which a spread past its max profit reaches too (review of #343). */
+const stop = (t: number) => ({ threshold: -t, direction: "below", compare: "signed" });
+
 const bodyOf = (d: AddDraft) => {
   const out = spreadsBody(d);
   if ("error" in out) throw new Error(out.error);
@@ -67,7 +72,7 @@ describe("the body a save posts", () => {
             { side: "long", option_type: "PUT", strike: 7100 },
           ],
           // the stop at 2x the Entry, and the short leg's delta at 0.30
-          monitors: [{ threshold: 3 }, { option_type: "PUT", strike: 7150, threshold: 0.3 }],
+          monitors: [stop(3), { option_type: "PUT", strike: 7150, threshold: 0.3 }],
         },
         {
           name: "1218_C7700_C7750", held: true, entry: 1.25, contracts: 1, opened_at: "2026-11-11",
@@ -75,7 +80,7 @@ describe("the body a save posts", () => {
             { side: "short", option_type: "CALL", strike: 7700 },
             { side: "long", option_type: "CALL", strike: 7750 },
           ],
-          monitors: [{ threshold: 2.5 }, { option_type: "CALL", strike: 7700, threshold: 0.3 }],
+          monitors: [stop(2.5), { option_type: "CALL", strike: 7700, threshold: 0.3 }],
         },
       ],
     });
@@ -87,7 +92,7 @@ describe("the body a save posts", () => {
     const body = bodyOf(off);
     expect(body.spreads.map((s) => s.monitors)).toEqual([
       [{ option_type: "PUT", strike: 7150, threshold: 0.3 }],
-      [{ threshold: 2.5 }],
+      [stop(2.5)],
     ]);
   });
 
@@ -95,7 +100,7 @@ describe("the body a save posts", () => {
     const d = condor();
     const typed = { ...d, spreads: d.spreads.map((s) => ({ ...s, valueAt: "4", deltaAt: "0.25" })) };
     expect(bodyOf(typed).spreads[0]!.monitors).toEqual([
-      { threshold: 4 }, { option_type: "PUT", strike: 7150, threshold: 0.25 },
+      stop(4), { option_type: "PUT", strike: 7150, threshold: 0.25 },
     ]);
   });
 
@@ -120,10 +125,30 @@ describe("the body a save posts", () => {
     ["7150", "7100", "7700", "7750"].forEach((k, i) => { d = setLeg(d, key, i, { strike: k }); });
     d = { ...d, spreads: [{ ...d.spreads[0]!, entry: "2.75" }] };
     expect(bodyOf(d).spreads[0]!.monitors).toEqual([
-      { threshold: 5.5 },
+      stop(5.5),
       { option_type: "PUT", strike: 7150, threshold: 0.3 },
       { option_type: "CALL", strike: 7700, threshold: 0.3 },
     ]);
+  });
+
+  it("posts a held credit's stop as its cost to close, so it never rings at max profit", () => {
+    // the review's demo: an iron condor taken in for 5.50, whose value reaches +30 past its call
+    // side — the size of which, compared abs, rang the old ">= 11" stop at max profit
+    let d = addSpread({ ...newDraft("2026-11-11"), expiry: "2026-12-18", spreads: [] }, "condor");
+    const key = d.spreads[0]!.key;
+    ["7000", "6990", "7230", "7200"].forEach((k, i) => { d = setLeg(d, key, i, { strike: k }); });
+    d = { ...d, spreads: [{ ...d.spreads[0]!, entry: "5.50" }] };
+    const body = bodyOf(d);
+    expect(SpreadsIn.safeParse(body).success).toBe(true);
+    expect(body.spreads[0]!.monitors[0]).toEqual({ threshold: -11, direction: "below", compare: "signed" });
+  });
+
+  it("keeps a watched spread's value rule as the size typed, and a debit's typed by hand as given", () => {
+    expect(bodyOf({ ...condor(false), spreads: [{ ...condor(false).spreads[0]!, valueAt: "1.8", deltaOn: false }] })
+      .spreads[0]!.monitors).toEqual([{ threshold: 1.8 }]);
+    const d = condor();
+    const debit = { ...d, spreads: [{ ...d.spreads[0]!, entry: "-1.50", valueOn: true, valueAt: "0.5", deltaOn: false }] };
+    expect(bodyOf(debit).spreads[0]!.monitors).toEqual([{ threshold: 0.5 }]);
   });
 
   it("names a spread by its expiry and strikes unless a name was typed", () => {
@@ -302,7 +327,12 @@ describe("legs added and removed (#334)", () => {
       d = addLeg(d, key);
       expect(d.spreads[0]!.legs).toHaveLength(n);
     }
-    expect(d.spreads[0]!.legs.slice(2)).toEqual(Array(4).fill({ side: "long", option_type: "PUT", strike: "" }));
+    expect(d.spreads[0]!.legs.slice(2).map(({ key: _, ...l }) => l))
+      .toEqual(Array(4).fill({ side: "long", option_type: "PUT", strike: "" }));
+    // each leg its own key, kept when legs around it come and go, so the form's focus follows it
+    const keys = d.spreads[0]!.legs.map((l) => l.key);
+    expect(new Set(keys).size).toBe(6);
+    expect(removeLeg(d, key, 1).spreads[0]!.legs.map((l) => l.key)).toEqual(keys.filter((_, i) => i !== 1));
     expect(addLeg(d, key)).toBe(d);
   });
 
@@ -325,17 +355,30 @@ describe("legs added and removed (#334)", () => {
       d = { ...d, spreads: [{ ...d.spreads[0]!, entry: "3" }] };
       const body = bodyOf(d);
       expect(SpreadsIn.safeParse(body).success).toBe(true);
-      expect(body.spreads[0]!.legs).toEqual(d.spreads[0]!.legs.map((l) => ({ ...l, strike: Number(l.strike) })));
+      expect(body.spreads[0]!.legs).toEqual(d.spreads[0]!.legs.map(({ key: _, ...l }) => ({ ...l, strike: Number(l.strike) })));
       // the value, and a delta Monitor on EACH short leg
       const shorts = d.spreads[0]!.legs.filter((l) => l.side === "short");
       expect(body.spreads[0]!.monitors).toEqual([
-        { threshold: 6 }, ...shorts.map((l) => ({ option_type: l.option_type, strike: Number(l.strike), threshold: 0.3 })),
+        stop(6), ...shorts.map((l) => ({ option_type: l.option_type, strike: Number(l.strike), threshold: 0.3 })),
       ]);
     });
   }
 
-  it("names six legs as it names two: the expiry, then each leg's type and strike", () => {
-    expect(derivedName("2026-12-18", sixLegs().spreads[0]!.legs)).toBe("1218_P7150_P7100_C7700_C7750_P7050_C7800");
+  it("names two legs as before, and three to six compactly: each type's lowest and highest strike", () => {
+    const d = sixLegs();
+    const legs = d.spreads[0]!.legs;
+    const name = (n: number) => derivedName("2026-12-18", legs.slice(0, n));
+    expect(derivedName("2026-12-18", [legs[0]!])).toBe("1218_P7150");
+    expect(name(2)).toBe("1218_P7150_P7100");
+    expect(name(3)).toBe("1218_P7100-7150_C7700");
+    expect(name(4)).toBe("1218_P7100-7150_C7700-7750");
+    expect(name(5)).toBe("1218_P7050-7150_C7700-7750");
+    expect(name(6)).toBe("1218_P7050-7150_C7700-7800");
+    // short enough that a bot table widens by ten characters over a two-leg name, not twenty-four
+    for (let n = 3; n <= 6; n++) expect(name(n).length).toBeLessThanOrEqual(26);
+    // one type only, and a strike not yet typed
+    expect(derivedName("2026-12-18", legs.filter((l) => l.option_type === "PUT"))).toBe("1218_P7050-7150");
+    expect(derivedName("", [...legs.slice(0, 2), { ...legs[2]!, strike: "" }])).toBe("spread_P7100-7150_C");
   });
 
   it("draws the preview of every leg, however many", () => {
@@ -401,6 +444,11 @@ describe("the watch rules a held spread will replace", () => {
     expect(replaces(d, [value, delta])).toEqual([
       ["1218_P7150_P7100 value ≥ 1.80", "7150 put |Δ| ≥ 0.15"], [],
     ]);
+  });
+
+  it("say a signed stop as the cost to close it watches, not as a negative value", () => {
+    const signed = { ...value, threshold: -11, direction: "below" as const, compare: "signed" as const };
+    expect(replaces(condor(), [signed])[0]).toEqual(["1218_P7150_P7100 cost to close ≥ 11.00"]);
   });
 
   it("are none for a rule another holding owns, a default switched off, or a watched spread", () => {

@@ -5,7 +5,10 @@
  *
  *  - The expiry is typed ONCE for the whole draft: a condor entered as two spreads shares it, and
  *    typing it again per spread and per rule was most of what the old form's 34 clicks were.
- *  - Held: the spread's value at 2x its Entry (the stop) and the short leg's delta at 0.30.
+ *  - Held: the spread's cost to close at 2x its Entry (the stop) and the short leg's delta at 0.30.
+ *    The stop is posted SIGNED — the value at or below minus 2x the Entry, the value being minus
+ *    the cost to close — because compared by size it also rang at max profit, where the value of a
+ *    condor past its far wing is positive and large (review of #343).
  *    Watched: the same two, at the thresholds typed — an entry signal, not a risk (ADR 0023).
  *    Either can be switched off, and a switched-off one is simply not sent. A structure with no
  *    short leg starts with no delta Monitor: there is no sold leg to watch (#334).
@@ -16,11 +19,15 @@
  *    without a word (ADR 0011).
  */
 import type { DraftPayoff, Monitor, Payoff } from "../api";
+import { isCostToClose } from "./needs";
 
 export type Side = "short" | "long";
 export type OptionType = "CALL" | "PUT";
 
 export interface LegDraft {
+  /** the leg's own, kept while legs around it come and go: what the form keys its row by, so a
+   *  box the owner is typing in stays theirs when a leg above it is removed */
+  key: string;
   side: Side;
   option_type: OptionType;
   /** as typed */
@@ -89,7 +96,7 @@ export const HELD_DELTA = "0.30";
 let keys = 0;
 const nextKey = () => `s${++keys}`;
 
-const leg = (side: Side, option_type: OptionType): LegDraft => ({ side, option_type, strike: "" });
+const leg = (side: Side, option_type: OptionType): LegDraft => ({ key: `l${++keys}`, side, option_type, strike: "" });
 
 const LEGS: Record<Preset, () => LegDraft[]> = {
   put: () => [leg("short", "PUT"), leg("long", "PUT")],
@@ -153,10 +160,21 @@ export function flipSide(d: AddDraft, key: string, index: number): AddDraft {
   return l ? setLeg(d, key, index, { side: l.side === "short" ? "long" : "short" }) : d;
 }
 
-/** `1218_P7150_P7100`: the expiry's month and day, then each leg's type and strike in order. */
-export function derivedName(expiry: string, legs: LegDraft[]): string {
+/** `1218_P7150_P7100`: the expiry's month and day, then each leg's type and strike in order — for
+ *  one leg or two. From three legs, each type once with its lowest and highest strike,
+ *  `1218_P7050-7150_C7700-7800`: every leg spelled out made a six-leg name 40 characters, and the
+ *  name is the bot's "contract" cell, which its ~40-column tables cannot carry (review of #343).
+ *  26 characters at most for four-digit strikes, whatever the count; the legs themselves are on the
+ *  holding and in the rule. */
+export function derivedName(expiry: string, legs: Pick<LegDraft, "option_type" | "strike">[]): string {
   const day = expiry.length >= 10 ? `${expiry.slice(5, 7)}${expiry.slice(8, 10)}` : "spread";
-  return [day, ...legs.map((l) => `${l.option_type[0]}${l.strike.trim()}`)].join("_");
+  if (legs.length <= 2) return [day, ...legs.map((l) => `${l.option_type[0]}${l.strike.trim()}`)].join("_");
+  const types = [...new Set(legs.map((l) => l.option_type))];
+  return [day, ...types.map((t) => {
+    const ks = [...new Set(legs.filter((l) => l.option_type === t).map((l) => l.strike.trim()).filter((k) => k !== ""))]
+      .sort((a, b) => Number(a) - Number(b));
+    return `${t[0]}${ks.length <= 1 ? (ks[0] ?? "") : `${ks[0]}-${ks.at(-1)}`}`;
+  })].join("_");
 }
 
 /** A number as typed, or null for blank or not a number. */
@@ -170,6 +188,10 @@ const cents = (n: number) => Math.round(n * 100) / 100;
 
 /** A held spread whose Entry was a DEBIT: paid, typed negative as a Position's Entry is. */
 const isDebit = (held: boolean, s: SpreadDraft) => held && (typed(s.entry) ?? 0) < 0;
+
+/** Whether the value Monitor is a held credit spread's stop — its cost to close at or above the
+ *  figure, posted signed — rather than a watched spread's value, or a debit's set by hand. */
+export const isCreditStop = (held: boolean, s: SpreadDraft) => held && !isDebit(held, s);
 
 /** The value Monitor's default: 2x a credit's Entry when held — the stop — and none when watched,
  *  where the threshold is the owner's entry signal. None for a debit either: its value FALLS as it
@@ -282,7 +304,10 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
           ? `${which}: type the Entry, or the value its Monitor watches for`
           : `${which}: type the value its Monitor watches for` };
       }
-      monitors.push({ threshold: at });
+      // a held credit's stop is its cost to close at `at` or more: the signed value at or below
+      // minus `at`. A watched spread's is the size typed, and a debit's, set by hand, as typed
+      monitors.push(isCreditStop(d.held, s)
+        ? { threshold: -at, direction: "below", compare: "signed" } : { threshold: at });
     }
     if (deltaEnabled(s)) {
       const shorts = legs.filter((l) => l.side === "short");
@@ -364,6 +389,9 @@ function planned(d: AddDraft, s: SpreadDraft): { code: string; field: string }[]
 export function ruleWords(m: Monitor): string {
   const op = m.direction === "below" ? "≤" : "≥";
   const at = m.threshold.toFixed(2);
+  if (m.legs && isCostToClose(m.field, true, m.compare, m.direction, m.threshold)) {
+    return `${m.code} cost to close ≥ ${(-m.threshold).toFixed(2)}`;
+  }
   if (m.legs) return `${m.code} ${m.field === "mid_price" ? "value" : m.field} ${op} ${at}`;
   const what = m.field === "option_delta" ? (m.compare === "abs" ? "|Δ|" : "Δ") : m.field;
   return `${m.strike} ${m.option_type.toLowerCase()} ${what} ${op} ${at}`;

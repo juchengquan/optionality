@@ -92,7 +92,7 @@ describe("the add form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record 2 holdings + 3 Monitors" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     const body = posted()[0]!.body as { spreads: { monitors: unknown[] }[] };
-    expect(body.spreads[1]!.monitors).toEqual([{ threshold: 2.5 }]);
+    expect(body.spreads[1]!.monitors).toEqual([{ threshold: -2.5, direction: "below", compare: "signed" }]);
   });
 
   it("says a refusal from the service IN the form, and keeps what was typed", async () => {
@@ -143,6 +143,14 @@ describe("the add form", () => {
     cleanup();
     open({ privacy: false });
     expect(screen.getByLabelText("spread 1 contracts").classList.contains("nx-private")).toBe(false);
+  });
+
+  it("words a held credit's stop as its cost to close, and a watched spread's as its value", () => {
+    open();
+    const line = () => screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!.textContent;
+    expect(line()).toMatch(/^on\s*cost to close ≥/);
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    expect(line()).toMatch(/^on\s*spread value ≥/);
   });
 
   it("starts a debit spread's stop switched off, and says why", () => {
@@ -220,7 +228,7 @@ describe("legs added and removed (#334)", () => {
         "sP7150", "lP7100", ...strikes.slice(2, n - 1).map((k) => `lP${k}`), `sC${strikes[n - 1]}`,
       ]);
       expect(sent.monitors).toEqual([
-        { threshold: 6 },
+        { threshold: -6, direction: "below", compare: "signed" },
         { option_type: "PUT", strike: 7150, threshold: 0.3 },
         { option_type: "CALL", strike: Number(strikes[n - 1]), threshold: 0.3 },
       ]);
@@ -238,6 +246,34 @@ describe("legs added and removed (#334)", () => {
     expect(legs()).toHaveLength(5);
     expect((legs()[1] as HTMLInputElement).value).toBe("7050");
     expect(screen.getByRole("button", { name: "spread 1: add a leg" })).toBeTruthy();
+  });
+
+  it("keeps the focus with its leg when a leg above it is removed", () => {
+    open();
+    addLeg(); addLeg();
+    ["7150", "7100", "7050", "7000"].forEach((k, i) => type(`spread 1, leg ${i + 1} strike`, k));
+    const third = screen.getByLabelText("spread 1, leg 3 strike") as HTMLInputElement;
+    third.focus();
+    fireEvent.click(screen.getByRole("button", { name: "remove spread 1, leg 2" }));
+    // the box the owner was in is still the 7050 leg's, now the second, and still focused
+    expect(document.activeElement).toBe(third);
+    expect(third.value).toBe("7050");
+    expect(third.getAttribute("aria-label")).toBe("spread 1, leg 2 strike");
+  });
+
+  it("gives the focus to + leg when the remove button that had it goes with its leg", () => {
+    open();
+    addLeg(); addLeg();
+    const remove = screen.getByRole("button", { name: "remove spread 1, leg 4" });
+    remove.focus();
+    fireEvent.click(remove);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "spread 1: add a leg" }));
+    // down to two, every remove button gone: the focus is not left on nothing
+    const last = screen.getByRole("button", { name: "remove spread 1, leg 3" });
+    last.focus();
+    fireEvent.click(last);
+    expect(screen.queryByRole("button", { name: /^remove spread 1, leg/ })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "spread 1: add a leg" }));
   });
 
   it("gives a structure with no short leg no |Δ| Monitor, and saves it without one", async () => {

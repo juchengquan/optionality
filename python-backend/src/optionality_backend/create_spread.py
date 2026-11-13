@@ -233,9 +233,7 @@ async def create_spreads(deps: SpreadDeps, given: SpreadsIn) -> Added | SpreadFa
     # 1. what the request says about itself, starting with its size: the one probe is bounded
     leg_count = sum(len(spread.legs) for spread in given.spreads)
     if leg_count > MAX_PROBE_LEGS:
-        return _refuse(
-            f"this request has {leg_count} legs: at most {MAX_PROBE_LEGS} can be asked of the Provider in one call"
-        )
+        return _refuse(f"this request has {leg_count} legs: at most {MAX_PROBE_LEGS} in one request")
     names: set[str] = set()
     planned: list[list[_Planned]] = []
     watched: set[tuple[str, str]] = set()
