@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Reference } from "../shared/api";
 import { Next } from "../next/Next";
 import { serveEditing } from "../testing/editBook";
+import { until } from "../testing/until";
 
 afterEach(() => {
   cleanup();
@@ -127,7 +128,7 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     await screen.findByRole("button", { name: "unmute 261218 7150P delta", hidden: true });
     // and the mute has FINISHED: it hands the focus on only once its write and its reads are done,
     // here to the heading of the surface the rule has left. Awaiting the References, it never would.
-    await waitFor(() => expect(home.contains(document.activeElement)
+    await until(() => expect(home.contains(document.activeElement)
       && document.activeElement?.matches("h2, h3, h4")).toBe(true));
     // the save's reload wants the References too: not a second call beside the silent one, but
     // one more once it has answered
@@ -166,7 +167,7 @@ describe.each(arrangements)("on the %s, a Reference source that refuses", (arran
     fireEvent.click(mute);
     await waitFor(() => expect(writes).toHaveLength(1));
     await screen.findByRole("button", { name: "unmute 261218 7150P delta", hidden: true });
-    await waitFor(() => expect(home.contains(document.activeElement)
+    await until(() => expect(home.contains(document.activeElement)
       && document.activeElement?.matches("h2, h3, h4")).toBe(true));
     await drain();
     // the strip goes away rather than showing figures it cannot vouch for, and that is all:

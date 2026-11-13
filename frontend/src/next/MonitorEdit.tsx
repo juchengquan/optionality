@@ -108,7 +108,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     try {
       await write();
       after();
-      if (refocus) setTimeout(() => settleFocus(root.current, editButton.current, home), 0);
+      if (refocus) settleWhenDrawn(root, editButton, home);
     } catch (e: unknown) {
       const text = e instanceof Error ? e.message : String(e);
       setError({ text, at: spot(text) });
@@ -242,6 +242,26 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
 /** The surface a rule's controls are drawn in: the phone's sheet, the desk's inspector, a section. */
 function homeOf(el: HTMLElement | null): HTMLElement | null {
   return el?.closest<HTMLElement>('[role="dialog"], aside, details, section') ?? null;
+}
+
+/** `settleFocus` once the write's outcome is DRAWN. The timer used to settle it on the next turn,
+ *  which raced the render that ends `busy` — and with it the reload's, asked before it in the same
+ *  lane, so drawn no later. When the timer won, the rule was still drawn here with every button
+ *  disabled, `edit.focus()` did nothing, and the render then took the rule and left the focus on
+ *  the body: captured under load (#350), `settleFocus` found the root connected and the edit button
+ *  disabled, every time. So while this rule's edit button is drawn disabled — and only `busy`
+ *  disables it — it waits another turn. */
+function settleWhenDrawn(
+  root: React.RefObject<HTMLElement | null>, edit: React.RefObject<HTMLButtonElement | null>,
+  home: HTMLElement | null, turns = 100,
+) {
+  setTimeout(() => {
+    if (turns > 0 && root.current?.isConnected && edit.current?.disabled) {
+      settleWhenDrawn(root, edit, home, turns - 1);
+      return;
+    }
+    settleFocus(root.current, edit.current, home);
+  }, 0);
 }
 
 /** Where the focus goes after a write that may have moved the rule: its own edit button while it is

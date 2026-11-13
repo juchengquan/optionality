@@ -16,6 +16,7 @@ import {
 import { sentence } from "../next/needs";
 import { Next } from "../next/Next";
 import { serveEditing } from "../testing/editBook";
+import { until } from "../testing/until";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
@@ -330,7 +331,7 @@ describe("while a write is in flight, and after it", () => {
     const mute = screen.getByRole("button", { name: "mute 261218 7150P delta" });
     mute.focus();
     fireEvent.click(mute);
-    await waitFor(() =>
+    await until(() =>
       expect(document.activeElement).toBe(screen.getByRole("button", { name: "edit 261218 7150P delta" })));
   });
 
@@ -344,7 +345,7 @@ describe("while a write is in flight, and after it", () => {
     fireEvent.click(within(sheet).getByRole("button", { name: "delete 261218 7150P delta" }));
     fireEvent.click(within(sheet).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toHaveLength(1));
-    await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
+    await until(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
   });
 });
 
