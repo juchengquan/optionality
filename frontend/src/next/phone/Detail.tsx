@@ -11,6 +11,8 @@ import { useDismissOnBack } from "../../useDismissOnBack";
 import { Chip, Money } from "../Book";
 import { HoldingActions, type HoldingWrites } from "../HoldingActions";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
+import { PaceExplained } from "../PaceExplained";
+import { paceOutcome, paceWords } from "../pace";
 import { entryName, fieldWords, sentence } from "../needs";
 import { LevelChip, Progress, RuleLine } from "./Cards";
 import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
@@ -113,10 +115,11 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
             <div><dt>target</dt><dd>{points(s.target)}</dd></div>
             <div><dt>stop</dt><dd>{points(s.stop)}</dd></div>
             <div><dt>on pace</dt><dd>{points(s.on_pace)}</dd></div>
-            <div><dt>pace gap</dt><dd>{points(s.pace_gap)}</dd></div>
+            <div><dt>pace gap</dt><dd data-outcome={paceOutcome(s.pace_gap)}>{paceWords(s.pace_gap)}</dd></div>
             <div><dt>manage-by</dt><dd>{`${s.manage_by_dte} DTE`}</dd></div>
           </dl>
         ) : <p className="nxp-meta">no schedule — Opened not recorded</p>}
+        <PaceExplained holding={holding} />
         <h3 className="nxp-h">Monitors</h3>
         {rules.length > 0
           ? <ul className="nxp-rules">{rules.map((r) => <EditableLine key={r.id} entry={r} />)}</ul>

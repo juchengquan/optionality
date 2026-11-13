@@ -9,7 +9,7 @@
  *  Plain data: a test that wants the page serves it (`serveBook` in `__browser__/nextBook.ts` for
  *  the layout suites), and the model's tests read it directly.
  */
-import type { Entry, Holding, Monitor, Payoff, Sample, Samples } from "../api";
+import type { Entry, Holding, Monitor, Payoff, Sample, Samples, Vol } from "../api";
 
 /** SPX's price as the service derives it (ADR 0024), on every row of both responses. */
 const SPX = 6900.5;
@@ -228,4 +228,28 @@ export const SAMPLES: Record<string, Samples> = {
 export function samplesAnswer(path: string): Samples | null {
   const m = /^\/positions\/([^/]+)\/samples$/.exec(path);
   return m ? SAMPLES[decodeURIComponent(m[1]!)] ?? null : null;
+}
+
+/** `/positions/{id}/vol` for each holding (#333), as the service's `paceExplained` serves it: the
+ *  put spread's split whole, the call spread's declined — its 6 Nov row has no IV, as its samples
+ *  above say — with what would cover its gap, and the 4-leg condor's on the day after it opened.
+ *  Each gap is at its LAST close, so none is the schedule's live `pace_gap` a test gives it: a
+ *  page that split the live gap would say other figures than these. */
+export const VOLS: Record<string, Vol> = {
+  "h-puts": { vol: 0.31, from: "2026-11-03", to: "2026-11-09", days: 6, reason: null,
+    at: "2026-11-09", timing: "close", gap: -0.42, gap_reason: null, rest: -0.73, vega: -0.86,
+    cover: 0.4883720930232558, cover_reason: null },
+  "h-calls": { vol: null, from: null, to: null, days: null,
+    reason: "6 Nov has no vol reading for every leg",
+    at: "2026-11-09", timing: "close", gap: 2.27, gap_reason: null, rest: null, vega: -1.25,
+    cover: 1.816, cover_reason: null },
+  "h-ic": { vol: -0.05, from: "2026-11-03", to: "2026-11-04", days: 1, reason: null,
+    at: "2026-11-04", timing: "close", gap: 0.12, gap_reason: null, rest: 0.17, vega: -2.1,
+    cover: 0.05714285714285714, cover_reason: null },
+};
+
+/** `/positions/{id}/vol` as a test service answers it, or null for any other path. */
+export function volAnswer(path: string): Vol | null {
+  const m = /^\/positions\/([^/]+)\/vol$/.exec(path);
+  return m ? VOLS[decodeURIComponent(m[1]!)] ?? null : null;
 }

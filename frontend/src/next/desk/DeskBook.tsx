@@ -12,6 +12,8 @@ import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { monitorName, fieldWords } from "../needs";
 import { HoldingHistory } from "../History";
+import { PaceExplained } from "../PaceExplained";
+import { paceOutcome } from "../pace";
 import { HoldingActions, type HoldingWrites } from "../HoldingActions";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
@@ -419,9 +421,8 @@ export function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColum
   if (column.key === "pnl" && row.kind === "holding") {
     return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Money value={row.holding.pnl} privacy={privacy} /></span></>;
   }
-  const outcome = column.key === "pace_gap" && row.kind === "holding" && row.holding.schedule?.pace_gap
-    // positive is BEHIND the plan: costing more to close than it should by now
-    ? (row.holding.schedule.pace_gap > 0 ? "loss" : "gain") : undefined;
+  // positive is BEHIND the plan: costing more to close than it should by now
+  const outcome = column.key === "pace_gap" && row.kind === "holding" ? paceOutcome(row.holding.schedule?.pace_gap) : undefined;
   return (
     <>
       <span className="sr-only">{`${label} `}</span>
@@ -537,6 +538,7 @@ function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
       {mode === "review" ? <HoldingHistory holding={h} privacy={privacy} /> : null}
       <HoldingPayoff holding={h} privacy={privacy} />
       <Figures row={row} privacy={privacy} extra={extra} />
+      <PaceExplained holding={h} />
       <Monitors entries={row.rules} />
     </>
   );

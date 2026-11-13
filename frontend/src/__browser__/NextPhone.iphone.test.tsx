@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { overflowsSideways, settle } from "./nextBook";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
 afterEach(cleanup);
 
@@ -28,12 +28,14 @@ const health = {
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 };
 
-function serveOwnerBook(quotes: object[] = QUOTES): void {
+function serveOwnerBook(quotes: object[] = QUOTES, holdings: object[] = HOLDINGS): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     // the payoff's POST is a read, and is answered (#291)
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
     // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
-    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""));
+    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""))
+      // and the pace split (#333), read once when a holding is opened
+      ?? volAnswer(String(url).replace(/^.*\/api/, ""));
     if (read) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(read) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({
@@ -42,13 +44,13 @@ function serveOwnerBook(quotes: object[] = QUOTES): void {
     }
     const path = String(url).replace(/^.*\/api/, "");
     const body = path === "/quotes" ? quotes : path === "/monitors" ? MONITORS
-      : path === "/health" ? health : path === "/positions/values" ? HOLDINGS : [];
+      : path === "/health" ? health : path === "/positions/values" ? holdings : [];
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
 }
 
-async function show(view: "Live" | "Review" = "Live", quotes: object[] = QUOTES) {
-  serveOwnerBook(quotes);
+async function show(view: "Live" | "Review" = "Live", quotes: object[] = QUOTES, holdings: object[] = HOLDINGS) {
+  serveOwnerBook(quotes, holdings);
   render(<Next />);
   await settle();
   // the mode follows the real clock here; the tab makes it this test's
@@ -221,6 +223,34 @@ describe("the detail sheet", () => {
     // the entry it pushed was taken back off: the page is on the entry it was on before
     await waitFor(() => expect(history.state?.before).toBe("the sheet"));
   });
+});
+
+describe("the pace explained, in a holding's sheet (#333)", () => {
+  /** every holding with an exit schedule, so each sheet has a gap to explain */
+  const scheduled = HOLDINGS.map((h) => ({ ...h, schedule: { dte_at_open: 45, on_pace: 1.84, pace_gap: 0.47,
+    target: 1, stop: 4, target_dte: 11, manage_by_dte: 21, reached: null, manage_by_due: false } }));
+
+  // the call spread's split is declined with the route's longest sentence and what would cover it;
+  // the put spread's is split whole
+  for (const ref of ["h-calls", "h-puts"]) {
+    it(`fits ${ref}'s inside the screen, scrolling nothing sideways`, async () => {
+      await show("Live", QUOTES, scheduled);
+      await userEvent.click(within(card(ref)).getByRole("button", { name: /details of/ }));
+      const sheet = await screen.findByRole("dialog");
+      await animationsDone();
+      const pace = within(sheet).getByRole("region", { name: "the pace explained" });
+      await waitFor(() => expect(pace.querySelector("[data-split]")).toBeTruthy());
+      // worth nothing unless it is there to be measured, across the sheet rather than squeezed
+      expect(pace.getBoundingClientRect().width).toBeGreaterThan(300);
+      expect(pace.textContent).toMatch(/opened at 45 DTE/);
+      expect(pastTheEdge(sheet)).toEqual([]);
+      expect(sheet.scrollWidth).toBeLessThanOrEqual(sheet.clientWidth);
+      expect(overflowsSideways()).toBe(false);
+      // it adds no control, and leaves every one on the sheet a finger's width
+      expect(pace.querySelectorAll("button, a, input, select")).toHaveLength(0);
+      expect(tooSmall()).toEqual([]);
+    });
+  }
 });
 
 describe("REVIEW", () => {

@@ -10,7 +10,7 @@
  *  Any route it does not serve is a 404 in the error shape, never an empty list a page could draw.
  */
 import type { Entry, Holding, Monitor, Samples } from "../api";
-import { HOLDINGS, MONITORS, QUOTES, payoffAnswer, samplesAnswer } from "./ownerBook";
+import { HOLDINGS, MONITORS, QUOTES, payoffAnswer, samplesAnswer, volAnswer } from "./ownerBook";
 
 const health = {
   db: true, provider: { name: "moomoo", ok: true },
@@ -95,6 +95,8 @@ export function holdingService(over: {
       if (payoff) return reply(200, payoff);
       const samples = samplesOf(path);
       if (samples) return reply(200, samples);
+      const vol = volAnswer(path);
+      if (vol) return reply(200, vol);
     }
     if (method === "POST" && path === "/positions/payoff") return reply(200, payoffAnswer(path));
 

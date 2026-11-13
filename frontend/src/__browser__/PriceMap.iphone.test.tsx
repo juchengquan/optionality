@@ -7,7 +7,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 const health = {
@@ -24,7 +24,7 @@ function serve(): void {
     const path = String(url).replace(/^.*\/api/, "");
     const method = init?.method ?? "GET";
     const ok = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
-    const read = payoffAnswer(path) ?? samplesAnswer(path);
+    const read = payoffAnswer(path) ?? samplesAnswer(path) ?? volAnswer(path);
     if (read) return ok(read);
     if (method === "GET") {
       if (path === "/quotes") return ok(QUOTES);

@@ -143,7 +143,16 @@
         "vol": 1.0625,
         "from": "2026-11-06",
         "to": "2026-11-07",
-        "days": 1
+        "days": 1,
+        "reason": null,
+        "at": "2026-11-07",
+        "timing": "unrecorded",
+        "gap": -3.073350528379864,
+        "gap_reason": null,
+        "rest": -4.135850528379864,
+        "vega": 0,
+        "cover": null,
+        "cover_reason": "its legs' vegas cancel out, so no move in vol would cover the gap"
       }
     },
     "rows": {},

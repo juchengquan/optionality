@@ -6,7 +6,8 @@ Date: 2026-10-12
 
 Accepted. Decided with the owner on 2026-10-12. Amended 2026-11-10: the daily sample is the day's
 close (or marked as not one), and records each leg's delta (last section). Amended 2026-11-11 by
-ADR 0024: the sample also records SPX's price, derived from the sweep's batch (last section).
+ADR 0024: the sample also records SPX's price, derived from the sweep's batch. Amended 2026-11-12:
+the vol split is of the gap at the last sample, served whole by the route (last section).
 
 ## Context
 
@@ -223,3 +224,22 @@ written before migration 0010; never a Reference's figure. It is written and com
 row's other figures — in the hours, a move in SPX alone rewrites the day's row — and plays no part
 in `takesSample`'s completion rule, so a row's SPX is whatever the sweep that last wrote it saw:
 a day whose final in-hours sweep had no premiums keeps a null.
+
+## Amended 2026-11-12: the split is of the gap at the last sample, and the service says it (#333)
+
+`GET /positions/{id}/vol` once returned the vol part alone and told its caller to subtract it from
+the gap the caller was showing. That gap was LIVE and the vol part runs to the last stored sample,
+so the remainder charged the day's own vol moves to "the rest": two instants in one sum. The route
+now serves the whole split (`paceExplained`), every figure at ONE instant, the last sample's: its
+gap (Cost to close less On-pace at its DTE), the vol part, the rest, the structure's vega that day
+and how many vol points would cover the gap. The caller subtracts nothing and divides nothing.
+
+Each absent figure carries the service's reason — for the vol part, for the gap (and so the rest),
+and for the cover — and the last sample says what it is: the day's close only once its hours are
+over, otherwise a row in hours still running, before the open, after the close, or unrecorded. A
+net vega below display precision (0.005) is zero, and covers nothing: legs that cancel to 1e-17
+would otherwise claim a cover of 1e17 vol points.
+
+The dashboard shows that split dated, beside the live gap, and does not reconcile the two: they are
+different instants and say so. `/opt`'s row sheet still subtracts from its live gap until #301
+deletes it.

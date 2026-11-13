@@ -8,6 +8,7 @@ import type { Entry, Monitor } from "../../api";
 import { DASH } from "../../format";
 import { Money } from "../Book";
 import { HoldingHistory } from "../History";
+import { paceOutcome, paceWords } from "../pace";
 import type { PlacedHolding } from "../placement";
 import { LevelChip, RuleLine } from "./Cards";
 import { contractsWords, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
@@ -77,7 +78,7 @@ export function ReviewPager({ placed, quotes, monitors, privacy, onOpen }: {
                   <div><dt>captured</dt><dd>{percent(holding.captured)}</dd></div>
                   <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
                   <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
-                  <div><dt>pace gap</dt><dd>{points(s?.pace_gap)}</dd></div>
+                  <div><dt>pace gap</dt><dd data-outcome={paceOutcome(s?.pace_gap)}>{paceWords(s?.pace_gap)}</dd></div>
                   <div><dt>manage-by</dt><dd>{s ? `at ${s.manage_by_dte} DTE` : DASH}</dd></div>
                   <div><dt>short Δ</dt><dd>{shortDeltaWords(shortDeltas(holding, quotes, monitors))}</dd></div>
                 </dl>

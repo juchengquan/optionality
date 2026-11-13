@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Entry, Holding } from "../api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
 let asked: string[] = [];
 
@@ -19,7 +19,7 @@ beforeEach(() => {
     const path = String(url).replace(/^.*\/api/, "");
     asked.push(`${init?.method ?? "GET"} ${path}`);
     // the inspector's two reads, answered explicitly; anything else is a request this panel made
-    const body = samplesAnswer(path) ?? payoffAnswer(path);
+    const body = samplesAnswer(path) ?? payoffAnswer(path) ?? volAnswer(path);
     return Promise.resolve(body
       ? { ok: true, status: 200, json: () => Promise.resolve(body) }
       : { ok: false, status: 404, json: () => Promise.resolve({ detail: "not served here" }) });

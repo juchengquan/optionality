@@ -29,7 +29,7 @@ import type { MonitorRow, PositionRow } from "../../../db/rows.ts";
 import { newId, toSqliteBool, toSqliteJson } from "../../../db/values.ts";
 import { toSqlDatetime } from "../../../db/time.ts";
 import { httpError, notFound, providerFailed } from "../errors.ts";
-import { volAttribution, type VolSample } from "optionality/domain/vol";
+import { paceExplained, type PacedSample } from "optionality/domain/vol";
 import { toMonitor, toPosition } from "../../../hydrate.ts";
 import { adoptOrphanMonitors } from "../../../monitors.ts";
 import { verifyContracts } from "optionality/quotes";
@@ -120,13 +120,34 @@ const PositionValues = PositionOut.extend({
   schedule: ScheduleOut,
 });
 
-/** What of a pace gap vol accounts for, measured over this holding's own samples — every field
- *  null together where the chain is not whole enough to say (ADR 0011). */
+/** What of a pace gap vol accounts for, measured over this holding's own samples — the first
+ *  four null together where the chain is not whole enough to say (ADR 0011) — and the gap it
+ *  splits, at the close it runs to (`paceExplained`, #333). */
 const VolOut = z.object({
   vol: z.number().nullable(),
   from: z.string().nullable(),
   to: z.string().nullable(),
   days: z.number().nullable(),
+  /** why the vol part is not to be read, in words; null when it is */
+  reason: z.string().nullable(),
+  /** the last sample's day: the one `gap`, `rest` and `vega` are at */
+  at: z.string().nullable(),
+  /** what that sample is: the day's close, a reading in hours that are still running, or one from
+   *  before the open or after the close, or one whose time was never recorded */
+  timing: z.enum(["close", "in-hours", "before-open", "after-close", "unrecorded"]).nullable(),
+  /** Cost to close less On-pace at that sample: positive is BEHIND */
+  gap: z.number().nullable(),
+  /** why there is no gap, and so no rest; null when there is one */
+  gap_reason: z.string().nullable(),
+  /** the gap less the vol part, left unattributed (CONTEXT.md: The rest); null with either reason */
+  rest: z.number().nullable(),
+  /** the structure's vega at that sample, exposure-signed as a holding's position vega; 0 below
+   *  display precision */
+  vega: z.number().nullable(),
+  /** the IV points that would account for the whole gap, |gap ÷ vega| */
+  cover: z.number().nullable(),
+  /** why there is no cover; null when there is one */
+  cover_reason: z.string().nullable(),
 });
 
 /** The payoff at expiry, in POINTS across the contracts (`payoffAtExpiry`, #291): the P&L at each
@@ -334,23 +355,26 @@ export function positionRoutes(deps: Deps) {
      *  service comes from one live batch. Separate from `/quotes` on purpose: the dashboard polls that every 15 seconds per
      *  open tab and this changes once a market day, so the detail sheet asks for it when opened.
      *
-     *  The remainder is NOT returned, because it is not ours to compute: a caller subtracts this
-     *  from the gap it is showing, which keeps the gap and the vol part from being measured
-     *  against two different instants (ADR 0010).
+     *  The remainder IS returned since #333, with the gap it is the remainder of: both at the
+     *  close the vol part runs to, so the three are measured at one instant and the dashboard
+     *  computes none of them. It once said the caller should subtract this from the gap it was
+     *  showing — a live gap less a vol part measured to the last close, which charged the day's
+     *  own vol moves to the rest.
      */
     .get("/:id/vol", vol, (c) => {
       const id = c.req.param("id");
       const row = findPosition(db, id);
       if (!row) throw notFound("position");
-      const samples: VolSample[] = listPositionSamples(db, id).map((s) => ({
+      const samples: PacedSample[] = listPositionSamples(db, id).map((s) => ({
         observed_on: s.observed_on,
         dte: s.dte,
+        cost_to_close: s.cost_to_close,
+        observed_at: s.observed_at,
         // a corrupt map costs the figure, never the request: the whole sheet would fail to load
         legs_iv: parseMap(s.legs_iv),
         legs_vega: parseMap(s.legs_vega),
       }));
-      const a = volAttribution(samples, toPosition(row));
-      return vol.reply(c, 200, a ?? { vol: null, from: null, to: null, days: null });
+      return vol.reply(c, 200, paceExplained(samples, toPosition(row), deps.now()));
     })
 
     /** A holding's daily samples, open or closed (#295): what REVIEW's burndown and IV chart draw.

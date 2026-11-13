@@ -101,7 +101,16 @@
         "vol": null,
         "from": null,
         "to": null,
-        "days": null
+        "days": null,
+        "reason": "its samples begin on 8 Nov, not on 6 Nov when it was Opened: the vol it was sold at was never recorded",
+        "at": "2026-11-08",
+        "timing": "unrecorded",
+        "gap": -2.995760466870613,
+        "gap_reason": null,
+        "rest": null,
+        "vega": 0,
+        "cover": null,
+        "cover_reason": "its legs' vegas cancel out, so no move in vol would cover the gap"
       }
     },
     "rows": {},

@@ -14,7 +14,7 @@ import { Next } from "../next/Next";
 import { DeskBook } from "../next/desk/DeskBook";
 import { SpxPath, spxGutter } from "../next/SpxPath";
 import type { Entry } from "../api";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, served } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 const health = {
@@ -44,7 +44,7 @@ function serve(): void {
     const method = init?.method ?? "GET";
     const ok = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
     // the payoff (POST for a draft, GET for a holding) and REVIEW's samples: reads, answered
-    const read = payoffAnswer(path) ?? samplesAnswer(path);
+    const read = payoffAnswer(path) ?? samplesAnswer(path) ?? volAnswer(path);
     if (read) return ok(read);
     if (method === "GET") {
       if (path === "/quotes") return ok(quotes);

@@ -117,7 +117,26 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
         resp = await h.call(f"/positions/{id_}/vol")
         assert resp.status_code == 200
         # the 8050 call is SOLD, so a point on its vol costs its vega to buy back
-        assert resp.json() == {"vol": 4, "from": "2026-10-06", "to": "2026-10-07", "days": 1}
+        # and the gap it splits, at that same close (#333): 3.00 to close against 3.00 x sqrt(44 / 73)
+        # on pace, so the rest is what is left of it once vol's 4 is taken out
+        gap = 3.0 - 3.0 * math.sqrt(44 / 73)
+        assert resp.json() == {
+            "vol": 4,
+            "from": "2026-10-06",
+            "to": "2026-10-07",
+            "days": 1,
+            "reason": None,
+            # a row with no observed time is said as one, never claimed as the close
+            "at": "2026-10-07",
+            "timing": "unrecorded",
+            "gap": gap,
+            "gap_reason": None,
+            "rest": gap - 4,
+            # the legs' flat vegas cancel: no cover, and why
+            "vega": 0,
+            "cover": None,
+            "cover_reason": "its legs' vegas cancel out, so no move in vol would cover the gap",
+        }
 
     async def test_says_so_plainly_when_there_is_no_baseline_rather_than_guessing_one(self, start):
         # the live condor's case, and the shape every Position declared after the fact is in
@@ -128,7 +147,19 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
 
         resp = await h.call(f"/positions/{id_}/vol")
         assert resp.status_code == 200
-        assert resp.json() == {"vol": None, "from": None, "to": None, "days": None}
+        got = resp.json()
+        assert {k: got[k] for k in ("vol", "from", "to", "days", "rest", "at")} == {
+            "vol": None,
+            "from": None,
+            "to": None,
+            "days": None,
+            "rest": None,
+            "at": "2026-10-13",
+        }
+        # and says why, in the service's words, for the dashboard to say as they are (#333)
+        assert got["reason"] == (
+            "its samples begin on 12 Oct, not on 6 Oct when it was Opened: the vol it was sold at was never recorded"
+        )
 
     async def test_survives_a_sample_whose_stored_reading_is_not_a_number(self, start):
         # The route's own comment promises "a corrupt map costs the figure, never the request", and only
@@ -1702,7 +1733,21 @@ class TestWhatOnlyThePythonCanGetWrong:
         h = start_with(start)
         id_ = created201(await post(h, condor(opened_at="2026-10-06")))
         resp = await h.call(f"/positions/{id_}/vol")
-        assert list(resp.json()) == ["vol", "from", "to", "days"]
+        assert list(resp.json()) == [
+            "vol",
+            "from",
+            "to",
+            "days",
+            "reason",
+            "at",
+            "timing",
+            "gap",
+            "gap_reason",
+            "rest",
+            "vega",
+            "cover",
+            "cover_reason",
+        ]
 
     async def test_answers_a_method_no_route_serves_on_these_paths_as_hono_does(self, start):
         # `/{id}` is routed for PATCH and DELETE only, and `/values` for GET only: Starlette would

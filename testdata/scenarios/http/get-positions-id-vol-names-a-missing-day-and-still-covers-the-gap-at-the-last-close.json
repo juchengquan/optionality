@@ -1,0 +1,140 @@
+{
+  "name": "GET /positions/{id}/vol names a missing day, and still covers the gap at the last close",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-11-06",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-06",
+          "dte": 42,
+          "cost_to_close": 6.4,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 5.5,
+            "US.SPXW261218C7350000": 4.75,
+            "US.SPXW261218P6400000": 4.25,
+            "US.SPXW261218P6350000": 3.5
+          },
+          "legs_delta": null,
+          "observed_at": "2026-11-06 21:05:00.000000",
+          "spx": null
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-08",
+          "dte": 40,
+          "cost_to_close": 6.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 15,
+            "US.SPXW261218C7350000": 14.25,
+            "US.SPXW261218P6400000": 19,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 5.5,
+            "US.SPXW261218C7350000": 4.75,
+            "US.SPXW261218P6400000": 4.25,
+            "US.SPXW261218P6350000": 3.5
+          },
+          "legs_delta": null,
+          "observed_at": "2026-11-08 21:05:00.000000",
+          "spx": null
+        }
+      ],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/positions/pos-1/vol",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "the record skips from 6 Nov to 8 Nov: a day is missing",
+        "at": "2026-11-08",
+        "timing": "close",
+        "gap": 0.004239533129386963,
+        "gap_reason": null,
+        "rest": null,
+        "vega": -1.5,
+        "cover": 0.0028263554195913088,
+        "cover_reason": null
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

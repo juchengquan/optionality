@@ -15,7 +15,7 @@ import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, type DeskRow } from 
 import { Next } from "../next/Next";
 import { placeBook } from "../next/placement";
 import { readHidden } from "../prefs";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
@@ -364,7 +364,7 @@ describe("with the inspector open, the table stays live", () => {
       const path = String(url).replace(/^.*\/api/, "");
       const body = path === "/quotes" ? QUOTES : path === "/monitors" ? MONITORS
         : path === "/health" ? health : path === "/positions/values" ? holdings
-          : payoffAnswer(path) ?? [];
+          : payoffAnswer(path) ?? volAnswer(path) ?? [];
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
     }) as unknown as typeof fetch;
     render(<Next />);
@@ -395,7 +395,7 @@ describe("REVIEW", () => {
     const mixed = scheduled.map((h) => h.id === "h-ic" ? { ...h, schedule: null } : h);
     render(<DeskBook {...props({ mode: "review", holdings: mixed })} />);
     expect(cellText("h-calls", "on_pace")).toBe("1.23");
-    expect(cellText("h-calls", "pace_gap")).toBe("+0.47");
+    expect(cellText("h-calls", "pace_gap")).toBe("behind by 0.47");
     expect(cellText("h-calls", "captured")).toBe("50%");
     expect(cellText("h-calls", "to_manage")).toBe("38 → 21");
     // no Opened, no schedule: nothing is drawn in its place

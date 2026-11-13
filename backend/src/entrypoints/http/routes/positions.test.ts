@@ -80,7 +80,16 @@ describe("what vol did to a holding, over its own samples", () => {
     const resp = await h.call(`/positions/${id}/vol`);
     expect(resp.status).toBe(200);
     // the 8050 call is SOLD, so a point on its vol costs its vega to buy back
-    expect(await body(resp)).toEqual({ vol: 4, from: "2026-10-06", to: "2026-10-07", days: 1 });
+    // and the gap it splits, at that same close (#333): 3.00 to close against 3.00 × √(44 ÷ 73)
+    // on pace, so the rest is what is left of it once vol's 4 is taken out
+    const gap = 3.0 - 3.0 * Math.sqrt(44 / 73);
+    expect(await body(resp)).toEqual({
+      vol: 4, from: "2026-10-06", to: "2026-10-07", days: 1, reason: null,
+      // a row with no observed time is said as one, never claimed as the close
+      at: "2026-10-07", timing: "unrecorded", gap, gap_reason: null, rest: gap - 4,
+      // the legs' flat vegas cancel: no cover, and why
+      vega: 0, cover: null, cover_reason: "its legs' vegas cancel out, so no move in vol would cover the gap",
+    });
   });
 
   it("says so plainly when there is no baseline, rather than guessing one", async () => {
@@ -92,7 +101,13 @@ describe("what vol did to a holding, over its own samples", () => {
 
     const resp = await h.call(`/positions/${id}/vol`);
     expect(resp.status).toBe(200);
-    expect(await body(resp)).toEqual({ vol: null, from: null, to: null, days: null });
+    expect(await body(resp)).toMatchObject({
+      vol: null, from: null, to: null, days: null, rest: null,
+      // and says why, in the service's words, for the dashboard to say as they are (#333)
+      reason: "its samples begin on 12 Oct, not on 6 Oct when it was Opened: "
+        + "the vol it was sold at was never recorded",
+      at: "2026-10-13",
+    });
   });
 
   it("survives a sample whose stored reading is not a number", async () => {

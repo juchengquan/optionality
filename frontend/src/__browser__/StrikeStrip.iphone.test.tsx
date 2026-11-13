@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { Entry, Holding } from "../api";
 import { Next } from "../next/Next";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, served } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 afterEach(cleanup);
@@ -34,7 +34,9 @@ function serve(quotes: object[], holdings: object[]): void {
     // the payoff beside the strip is a read, POST included, and is answered (#291)
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
     // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
-    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""));
+    const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""))
+      // and the pace split (#333), read once when a holding is opened
+      ?? volAnswer(String(url).replace(/^.*\/api/, ""));
     if (read) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(read) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });

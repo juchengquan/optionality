@@ -21,10 +21,10 @@ and not on a Monitor.
   null, and so does `PositionPatch` (`schemas/zod.py`), so None here can only mean "not sent" — which is
   what the TypeScript's `!== undefined` asks.
 - **The vol figure is answered under `from`**, a word Python cannot name a field: the library's
-  `VolAttribution` keeps it as `from_` with `from` as its alias, and `VolOut` likewise.
+  `PaceExplained` keeps it as `from_` with `from` as its alias, and `VolOut` likewise.
 - **A sample's map is checked for its shape before the library sees it**, as the TypeScript's is, and
-  here it is also what keeps the request alive: the library's `VolSample` takes a map or None and
-  refuses anything else, where the TypeScript's `volAttribution` would read an array as a map of
+  here it is also what keeps the request alive: the library's `PacedSample` takes a map or None and
+  refuses anything else, where the TypeScript's `paceExplained` would read an array as a map of
   nothing and answer null.
 - **Hydrating validates** (`hydrate.py`, issue #266): a stored holding whose legs parse but are not legs
   is refused where it is read, so `/values` answers it with its 502 (`holdings.py` says why), and a
@@ -56,7 +56,7 @@ from optionality.position import (
 )
 from optionality.quote import derived_spx, strike_distances
 from optionality.timefmt import display_time
-from optionality.vol import VolSample, vol_attribution
+from optionality.vol import PacedSample, pace_explained
 from pydantic import BaseModel, ConfigDict, Field
 
 from ....db.open import atomic
@@ -189,8 +189,9 @@ class PositionValues(PositionOut):
 
 
 class VolOut(BaseModel):
-    """What of a pace gap vol accounts for, measured over this holding's own samples — every field None
-    together where the chain is not whole enough to say (ADR 0011)."""
+    """What of a pace gap vol accounts for, measured over this holding's own samples — the first four
+    None together where the chain is not whole enough to say (ADR 0011) — and the gap it splits, at
+    the close it runs to (`pace_explained`, #333)."""
 
     model_config = _AS_ZOD
 
@@ -198,6 +199,15 @@ class VolOut(BaseModel):
     from_: str | None = Field(alias="from")
     to: str | None
     days: float | None
+    reason: str | None
+    at: str | None
+    timing: Literal["close", "in-hours", "before-open", "after-close", "unrecorded"] | None
+    gap: float | None
+    gap_reason: str | None
+    rest: float | None
+    vega: float | None
+    cover: float | None
+    cover_reason: str | None
 
 
 class SampleOut(BaseModel):
@@ -298,7 +308,7 @@ def _parse_map(text: str | None) -> dict[str, Any] | None:
         return None
     # SHAPE only. A map holding a non-numeric reading used to give vol: NaN, which zod rejects, so the
     # route answered 500 where its own comment promises the figure costs nothing but itself. That is
-    # fixed in vol_attribution, which requires every reading to be a finite number — and a value check
+    # fixed in the library's vol measurement, which requires every reading to be a finite number — and a value check
     # here as well was unobservable: a mutation sweep removed it and nothing failed, because the domain
     # guard catches the same values. One gate, where the rule lives, rather than two where only one is
     # tested.
@@ -451,27 +461,26 @@ def position_routes(deps: Deps) -> APIRouter:
         service comes from one live batch. Separate from `/quotes` on purpose: the dashboard polls that every 15 seconds per open
         tab and this changes once a market day, so the detail sheet asks for it when opened.
 
-        The remainder is NOT returned, because it is not ours to compute: a caller subtracts this from
-        the gap it is showing, which keeps the gap and the vol part from being measured against two
-        different instants (ADR 0010).
+        The remainder IS returned since #333, with the gap it is the remainder of: both at the close
+        the vol part runs to, so the three are measured at one instant and the dashboard computes none
+        of them.
         """
         row = find_position(db, id_)
         if row is None:
             raise not_found("position")
         samples = [
-            VolSample(
+            PacedSample(
                 observed_on=s["observed_on"],
                 dte=s["dte"],
+                cost_to_close=s["cost_to_close"],
+                observed_at=s["observed_at"],
                 # a corrupt map costs the figure, never the request: the whole sheet would fail to load
                 legs_iv=_parse_map(s["legs_iv"]),
                 legs_vega=_parse_map(s["legs_vega"]),
             )
             for s in list_position_samples(db, id_)
         ]
-        a = vol_attribution(samples, to_position(row))
-        if a is None:
-            return {"vol": None, "from": None, "to": None, "days": None}
-        return a.model_dump(by_alias=True)
+        return pace_explained(samples, to_position(row), deps.now()).model_dump(by_alias=True)
 
     @router.get(
         "/{id}/samples",
