@@ -12,8 +12,8 @@
  *  does not know"). The two pieces of arithmetic are a subtraction of two served day counts (days
  *  left before the Manage-by) and a share as a percentage.
  */
-import type { Entry, Holding, Monitor } from "../../api";
-import { DASH, legSummary } from "../../format";
+import type { Entry, Holding, Monitor } from "../../shared/api";
+import { DASH, legSummary } from "../../shared/format";
 import type { Mode } from "../mode";
 import type { BookModel } from "../placement";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";

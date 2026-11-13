@@ -17,11 +17,11 @@
 import { OctagonAlert } from "lucide-react";
 
 import "./still.css";
-import type { Entry, Health, Holding, Monitor, Reference } from "../../api";
-import { DASH, shortDate } from "../../format";
-import { Freshness } from "../../Freshness";
-import { readHidden } from "../../prefs";
-import { ReferenceStrip } from "../../ReferenceStrip";
+import type { Entry, Health, Holding, Monitor, Reference } from "../../shared/api";
+import { DASH, shortDate } from "../../shared/format";
+import { Freshness } from "../../shared/Freshness";
+import { readHidden } from "../../shared/prefs";
+import { ReferenceStrip } from "../../shared/ReferenceStrip";
 import type { Arrangement } from "../arrangement";
 import { Money, type BookProps } from "../Book";
 import { AttentionChip, Cell, Fill, tableRows } from "../desk/DeskBook";

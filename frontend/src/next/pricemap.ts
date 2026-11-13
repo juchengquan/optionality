@@ -16,7 +16,7 @@
  *  disagree about what is held and what watched. Each spread carries the id of the table row it
  *  is, which is how a selection in one is a selection in the other.
  */
-import type { Entry, Holding } from "../api";
+import type { Entry, Holding } from "../shared/api";
 import { entryName } from "./needs";
 import type { BookModel } from "./placement";
 import { strikeName, stripOfEntry, stripOfHolding, type LongStrike, type ShortStrike } from "./strip";

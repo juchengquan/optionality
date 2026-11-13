@@ -1,5 +1,5 @@
 /** A holding's legs as the service names them, and the delta it serves for each (#318). */
-import type { Holding } from "../api";
+import type { Holding } from "../shared/api";
 
 type Leg = Holding["legs"][number];
 

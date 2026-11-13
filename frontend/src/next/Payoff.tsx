@@ -20,7 +20,7 @@
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
-import { fetchDraftPayoff, fetchPayoff, type DraftPayoff, type Entry, type Holding, type Payoff } from "../api";
+import { fetchDraftPayoff, fetchPayoff, type DraftPayoff, type Entry, type Holding, type Payoff } from "../shared/api";
 import { fieldWords } from "./needs";
 import "./payoff.css";
 

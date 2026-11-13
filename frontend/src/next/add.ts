@@ -18,7 +18,7 @@
  *    the two differ, and a holding whose Opened is not its first sample's day loses its vol figure
  *    without a word (ADR 0011).
  */
-import type { DraftPayoff, Monitor, Payoff } from "../api";
+import type { DraftPayoff, Monitor, Payoff } from "../shared/api";
 import { isCostToClose } from "./needs";
 
 export type Side = "short" | "long";

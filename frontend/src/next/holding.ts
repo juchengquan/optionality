@@ -11,8 +11,8 @@
  *  - the same PATCH takes `exit` and `closed_on` on a CLOSED holding, which is how a mistyped close
  *    is corrected without losing the samples a delete would take.
  */
-import type { Holding, Monitor } from "../api";
-import { GROUPS } from "../MutedTables";
+import type { Holding, Monitor } from "../shared/api";
+import { GROUPS } from "../shared/groups";
 
 /** A number as typed: null for blank, NaN for something that is not one. */
 function typed(text: string): number | null {

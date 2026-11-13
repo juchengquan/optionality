@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchPositions, type Recorded } from "../api";
+import { fetchPositions, type Recorded } from "../shared/api";
 
 /** A holding no longer held: its close day is known. */
 export type ClosedTrade = Recorded & { closed_on: string };

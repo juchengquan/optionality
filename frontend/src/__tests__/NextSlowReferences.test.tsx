@@ -14,7 +14,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Reference } from "../api";
+import type { Reference } from "../shared/api";
 import { Next } from "../next/Next";
 import { serveEditing } from "../testing/editBook";
 

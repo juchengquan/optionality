@@ -3,13 +3,14 @@
  *  `useDismissOnBack` today's sheet at `/opt` uses. */
 import { useEffect, useRef } from "react";
 
-import type { Entry, Holding, Monitor } from "../../api";
+import type { Entry, Holding, Monitor } from "../../shared/api";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DASH, legSummary } from "../../format";
-import { readUp, type EntryStyle } from "../../prefs";
-import { useDismissOnBack } from "../../useDismissOnBack";
+import { DASH, legSummary } from "../../shared/format";
+import { readUp, type EntryStyle } from "../../shared/prefs";
+import { useDismissOnBack } from "../../shared/useDismissOnBack";
 import { Chip, Money } from "../Book";
 import { HoldingActions, type HoldingWrites } from "../HoldingActions";
+import { DetailBoundary } from "../DetailBoundary";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome, paceWords } from "../pace";
@@ -60,15 +61,19 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
       {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:
           .nx-tokens) and the two settings they read */}
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={readUp()} data-entry={entryStyle}>
-        {shown?.kind === "holding" ? (
-          <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
-                         privacy={privacy} />
-        ) : shown?.kind === "rule" ? <RuleDetail entry={shown.entry} under={shown.under} /> : null}
-        {shown?.kind === "holding" && writes ? (
-          <div className="nxp-sheet-body">
-            <HoldingActions key={shown.holding.id} holding={shown.holding} monitors={monitors} rules={shown.rules}
-                            privacy={privacy} writes={writes} />
-          </div>
+        {shown ? (
+          <DetailBoundary key={shown.kind === "holding" ? shown.holding.id : shown.entry.id} what={shown.kind}>
+            {shown.kind === "holding" ? (
+              <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
+                             privacy={privacy} />
+            ) : <RuleDetail entry={shown.entry} under={shown.under} />}
+            {shown.kind === "holding" && writes ? (
+              <div className="nxp-sheet-body">
+                <HoldingActions key={shown.holding.id} holding={shown.holding} monitors={monitors} rules={shown.rules}
+                                privacy={privacy} writes={writes} />
+              </div>
+            ) : null}
+          </DetailBoundary>
         ) : null}
       </SheetContent>
     </Sheet>

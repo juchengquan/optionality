@@ -26,7 +26,7 @@ import { useCallback, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
 
 import { toast } from "@/components/ui/toast";
-import { captureBox, deliver, snapshotName } from "./snapshot";
+import { captureBox, deliver, snapshotName } from "./shared/snapshot";
 
 export function useSnapshot(loadHoldings: () => Promise<void>): {
   /** true while the off-screen tree must be mounted — the caller renders it on this */

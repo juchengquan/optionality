@@ -24,7 +24,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
 
 import { toast } from "@/components/ui/toast";
-import { captureBox, deliver, snapshotName } from "../../snapshot";
+import { captureBox, deliver, snapshotName } from "../../shared/snapshot";
 
 /** The class of the node the picture is taken of, inside the stage. */
 export const STILL = "nx-still";

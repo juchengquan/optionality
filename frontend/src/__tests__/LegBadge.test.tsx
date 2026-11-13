@@ -2,8 +2,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { COMBO_COLUMNS, identityBadges, widthsFromContent } from "../columns";
-import type { Entry } from "../api";
+import { COMBO_COLUMNS, identityBadges, widthsFromContent } from "../shared/columns";
+import type { Entry } from "../shared/api";
 
 /** A rule watching PART of a holding said so only by what it did NOT draw.
  *

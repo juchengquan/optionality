@@ -19,7 +19,7 @@
  */
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { shortDate } from "../../format";
+import { shortDate } from "../../shared/format";
 import type { Mode } from "../mode";
 import {
   bandWords, domainOf, slotRows, spxWords, ticksOf, type MapSpread, type PriceMap,

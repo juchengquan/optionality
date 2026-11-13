@@ -23,7 +23,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { fetchSamples, type Holding, type Sample, type Samples } from "../api";
+import { fetchSamples, type Holding, type Sample, type Samples } from "../shared/api";
 import { legCode } from "./legs";
 import { SpxPath, spxGutter } from "./SpxPath";
 import "./history.css";

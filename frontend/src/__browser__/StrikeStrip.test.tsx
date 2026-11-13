@@ -8,7 +8,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { Entry, Holding } from "../api";
+import type { Entry, Holding } from "../shared/api";
 import { Next } from "../next/Next";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";

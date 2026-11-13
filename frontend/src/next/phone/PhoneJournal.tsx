@@ -8,8 +8,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { readUp, type EntryStyle } from "../../prefs";
-import { useDismissOnBack } from "../../useDismissOnBack";
+import { readUp, type EntryStyle } from "../../shared/prefs";
+import { useDismissOnBack } from "../../shared/useDismissOnBack";
 import { ClosedTradeDetail, tradeLegs } from "../ClosedTrade";
 import { madeWords, storedWords, type ClosedTrade, type Journal } from "../journal";
 

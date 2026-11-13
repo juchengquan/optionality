@@ -15,8 +15,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import {
   closePosition, deletePosition, fetchMonitors, patchPosition, type Closed, type Entry, type Holding,
   type Monitor,
-} from "../api";
-import { marketDay } from "../format";
+} from "../shared/api";
+import { marketDay } from "../shared/format";
 import {
   closeBody, closeDay, editBody, editDraft, exitPrefill, fates, type CloseDraft, type EditDraft,
   type Fate, type Watching,

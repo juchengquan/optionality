@@ -1,4 +1,4 @@
-import { fmt } from "./format";
+import { fmt } from "./shared/format";
 
 /** Where a holding stands against its On-pace line, in words (ADR 0011).
  *

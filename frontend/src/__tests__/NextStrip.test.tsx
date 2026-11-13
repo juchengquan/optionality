@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { Entry, Holding } from "../api";
+import type { Entry, Holding } from "../shared/api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { COLUMNS, type DeskRow } from "../next/desk/columns";

@@ -4,8 +4,8 @@
 import { useCallback, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import type { Entry, Monitor } from "../../api";
-import { DASH } from "../../format";
+import type { Entry, Monitor } from "../../shared/api";
+import { DASH } from "../../shared/format";
 import { Money } from "../Book";
 import { HoldingHistory } from "../History";
 import { paceOutcome, paceWords } from "../pace";

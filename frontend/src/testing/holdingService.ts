@@ -9,7 +9,7 @@
  *
  *  Any route it does not serve is a 404 in the error shape, never an empty list a page could draw.
  */
-import type { Entry, Holding, Monitor, Samples } from "../api";
+import type { Entry, Holding, Monitor, Samples } from "../shared/api";
 import { HOLDINGS, MONITORS, QUOTES, payoffAnswer, samplesAnswer, volAnswer } from "./ownerBook";
 
 const health = {

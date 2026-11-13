@@ -11,7 +11,7 @@
  *  - a condor held as two spreads on one expiry is BRACKETED: one call vertical and one put
  *    vertical, the calls first. A 4-leg holding is already one row and is never split.
  */
-import type { Entry, Holding, Monitor } from "../api";
+import type { Entry, Holding, Monitor } from "../shared/api";
 import { isEntrySignal, QUARANTINED } from "./needs";
 
 /** A holding and the rules about it. */

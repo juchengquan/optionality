@@ -1,5 +1,5 @@
-import type { Entry, Health, Holding, Monitor } from "../api";
-import { shortContract, shortDate } from "../format";
+import type { Entry, Health, Holding, Monitor } from "../shared/api";
+import { shortContract, shortDate } from "../shared/format";
 
 /** What needs you, for the redesigned page (ADR 0012, amended by ADR 0023).
  *

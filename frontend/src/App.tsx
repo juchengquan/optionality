@@ -1,29 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImageDown, RefreshCw, Settings2 } from "lucide-react";
 
-import "./app.css";
+import "./shared/app.css";
 import {
   addReference, createWatch, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors,
   fetchQuotes, fetchReferences, recordHolding, patchMonitor, patchPosition, removeReference,
   setTotalEntry,
   type Entry, type Health, type Holding, type Monitor, type Reference,
-} from "./api";
+} from "./shared/api";
 import { Button } from "@/components/ui/button";
 import { Toaster, toast } from "@/components/ui/toast";
 import { AddPanel, AddTrigger, type Adding } from "./AddPanel";
-import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./columns";
+import { COMBO_COLUMNS, SINGLE_COLUMNS } from "./shared/columns";
 import {
   readBand, readGrouping, readHidden, readRefresh, readSignal, writeBand, writeGrouping,
   writeHidden, writeRefresh, writeSignal,
-} from "./prefs";
-import { ColumnPicker } from "./ColumnPickers";
+} from "./shared/prefs";
+import { ColumnPicker } from "./shared/ColumnPickers";
 import { MutedTables } from "./MutedTables";
 import { Holdings } from "./Holdings";
 import { RowDetail, type DetailTarget } from "./RowDetail";
-import { clockTime } from "./format";
-import { Freshness } from "./Freshness";
+import { clockTime } from "./shared/format";
+import { Freshness } from "./shared/Freshness";
 import { SnapshotView } from "./SnapshotView";
-import { ReferenceStrip } from "./ReferenceStrip";
+import { ReferenceStrip } from "./shared/ReferenceStrip";
 import { TopLine } from "./TopLine";
 import { ServicePanel } from "./ServicePanel";
 import { useSnapshot } from "./useSnapshot";

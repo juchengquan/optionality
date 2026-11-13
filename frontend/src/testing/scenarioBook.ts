@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import type { Holding, Monitor } from "../api";
+import type { Holding, Monitor } from "../shared/api";
 
 type Row = Record<string, unknown>;
 

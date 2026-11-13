@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/sheet";
 
 import { AddCombo, AddMonitor } from "./AddForms";
-import { useDismissOnBack } from "./useDismissOnBack";
+import { useDismissOnBack } from "./shared/useDismissOnBack";
 
 export type Adding = "monitor" | "combo" | null;
 

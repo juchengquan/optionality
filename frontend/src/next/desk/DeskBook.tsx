@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
-import type { Entry, Holding, Monitor } from "../../api";
-import { ColumnPicker } from "../../ColumnPickers";
-import type { Column } from "../../columns";
-import { shortDate } from "../../format";
-import { GROUPS } from "../../MutedTables";
-import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../prefs";
+import type { Entry, Holding, Monitor } from "../../shared/api";
+import { ColumnPicker } from "../../shared/ColumnPickers";
+import type { Column } from "../../shared/columns";
+import { shortDate } from "../../shared/format";
+import { GROUPS } from "../../shared/groups";
+import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../shared/prefs";
 import { Chip, Money, type BookProps } from "../Book";
 import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
@@ -15,6 +15,7 @@ import { HoldingHistory } from "../History";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome } from "../pace";
 import { HoldingActions, type HoldingWrites } from "../HoldingActions";
+import { DetailBoundary } from "../DetailBoundary";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
@@ -462,16 +463,19 @@ function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose, 
           <X aria-hidden="true" />
         </button>
       </div>
-      {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} privacy={privacy} partners={partners} onSelect={onSelect} />
-        : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} />
-          : <QuarantinedDetail row={row} />}
-      <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
-      {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
-          carried to the next row selected */}
-      {row.kind === "holding" && writes ? (
-        <HoldingActions key={row.holding.id} holding={row.holding} monitors={monitors} rules={row.rules}
-                        privacy={privacy} writes={writes} />
-      ) : null}
+      {/* the heading and its close stay outside: a detail that cannot be drawn can still be shut */}
+      <DetailBoundary key={subject} what={row.kind === "holding" ? "holding" : "rule"}>
+        {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} privacy={privacy} partners={partners} onSelect={onSelect} />
+          : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} />
+            : <QuarantinedDetail row={row} />}
+        <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
+        {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
+            carried to the next row selected */}
+        {row.kind === "holding" && writes ? (
+          <HoldingActions key={row.holding.id} holding={row.holding} monitors={monitors} rules={row.rules}
+                          privacy={privacy} writes={writes} />
+        ) : null}
+      </DetailBoundary>
     </aside>
   );
 }

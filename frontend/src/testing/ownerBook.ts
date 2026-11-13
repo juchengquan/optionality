@@ -9,7 +9,7 @@
  *  Plain data: a test that wants the page serves it (`serveBook` in `__browser__/nextBook.ts` for
  *  the layout suites), and the model's tests read it directly.
  */
-import type { Entry, Holding, Monitor, Payoff, Sample, Samples, Vol } from "../api";
+import type { Entry, Holding, Monitor, Payoff, Sample, Samples, Vol } from "../shared/api";
 
 /** SPX's price as the service derives it (ADR 0024), on every row of both responses. */
 const SPX = 6900.5;

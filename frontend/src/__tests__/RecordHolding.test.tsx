@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { positionPatchBody, recordHolding } from "../api";
+import { positionPatchBody, recordHolding } from "../shared/api";
 
 /** Recording a holding against a rule.
  *

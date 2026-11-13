@@ -15,9 +15,9 @@ import { NumberField } from "@/components/ui/number-field";
 import {
   closePosition, deletePosition, fetchPositions, patchPosition, positionPatchBody, type Holding,
   type Recorded,
-} from "./api";
-import { ConfirmDelete } from "./ConfirmDelete";
-import { fmt, marketDay } from "./format";
+} from "./shared/api";
+import { ConfirmDelete } from "./shared/ConfirmDelete";
+import { fmt, marketDay } from "./shared/format";
 import { PaceLine } from "./PaceLine";
 
 /** What you actually HOLD, as distinct from what is watched.

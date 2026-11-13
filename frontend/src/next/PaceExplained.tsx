@@ -22,8 +22,8 @@
  */
 import { useEffect, useState } from "react";
 
-import { fetchVol, type Holding, type Vol } from "../api";
-import { DASH } from "../format";
+import { fetchVol, type Holding, type Vol } from "../shared/api";
+import { DASH } from "../shared/format";
 import { paceOutcome, paceWords } from "./pace";
 import "./pace.css";
 

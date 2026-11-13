@@ -8,13 +8,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Entry, Holding, Monitor } from "../api";
+import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, type DeskRow } from "../next/desk/columns";
 import { Next } from "../next/Next";
 import { placeBook } from "../next/placement";
-import { readHidden } from "../prefs";
+import { readHidden } from "../shared/prefs";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 
 function props(over: Partial<BookProps> = {}): BookProps {

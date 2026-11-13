@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { Entry } from "../api";
-import { SINGLE_COLUMNS, widthsFromContent } from "../columns";
-import { DASH, shortStamp } from "../format";
+import type { Entry } from "../shared/api";
+import { SINGLE_COLUMNS, widthsFromContent } from "../shared/columns";
+import { DASH, shortStamp } from "../shared/format";
 
 /** The widest column on the single-leg table, and six of its characters say nothing.
  *

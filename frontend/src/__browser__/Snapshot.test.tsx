@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../App";
 import { SnapshotView } from "../SnapshotView";
-import { COMBO_COLUMNS } from "../columns";
-import type { Entry, Health, Holding } from "../api";
-import { AREA_LIMIT, SIDE_LIMIT, captureBox } from "../snapshot";
+import { COMBO_COLUMNS } from "../shared/columns";
+import type { Entry, Health, Holding } from "../shared/api";
+import { AREA_LIMIT, SIDE_LIMIT, captureBox } from "../shared/snapshot";
 
 /** The image, measured end to end.
  *

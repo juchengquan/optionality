@@ -5,7 +5,7 @@
  *  positive is BEHIND — costing more to buy back than time alone accounts for — and anything else
  *  is ahead, to two places. One home here, because `PaceLine` goes with `/opt` (#301).
  */
-import { DASH } from "../format";
+import { DASH } from "../shared/format";
 
 export function paceWords(gap: number | null | undefined): string {
   if (gap === null || gap === undefined) return DASH;

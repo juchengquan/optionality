@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ClosePositionIn, PositionPatch } from "backend/schemas";
-import type { Holding, Monitor } from "../api";
+import type { Holding, Monitor } from "../shared/api";
 import {
   closeBody, closeDay, correctionBody, editBody, editDraft, exitPrefill, fates, type Watching,
 } from "../next/holding";

@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { HoldingList } from "../Holdings";
 import { SnapshotView } from "../SnapshotView";
-import type { Health, Holding } from "../api";
+import type { Health, Holding } from "../shared/api";
 
 const holding = {
   id: "p1", name: "1204_BS_6950", entry: 2.72, cost_to_close: 1.02, pnl: 1.7, dte: 37,

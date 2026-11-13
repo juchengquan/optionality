@@ -2,8 +2,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { Reference } from "../api";
-import { ReferenceStrip, referenceTitle } from "../ReferenceStrip";
+import type { Reference } from "../shared/api";
+import { ReferenceStrip, referenceTitle } from "../shared/ReferenceStrip";
 
 const spx = (over: Partial<Reference> = {}): Reference => ({
   id: "r1", code: "US.SPY", label: "SPX", source: "moomoo",

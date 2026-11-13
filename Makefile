@@ -158,7 +158,7 @@ build-ui:
 # The rm was there for a real bug: Tailwind skips .gitignore'd paths, frontend/dist is deliberately
 # not ignored, so a build with a dist in place was scanning its own previous output and emitting
 # 3KB of utilities that existed only because a former build mentioned them. That cause is gone —
-# app.css pins `@import "tailwindcss" source(".")`, which scopes the scan to frontend/src — and the
+# shared/app.css pins `@import "tailwindcss" source("..")`, which scopes the scan to frontend/src — and the
 # rm with it: measured 2026-10-31, a build with a dist present and one without are byte-identical,
 # same content hashes in both filenames.
 #

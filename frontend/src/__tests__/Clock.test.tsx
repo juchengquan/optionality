@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { clockTime } from "../format";
+import { clockTime } from "../shared/format";
 
 /** The one clock on this page the SERVICE does not format.
  *

@@ -4,8 +4,8 @@
  *  it (NeedsLine.tsx: `reveal`). */
 import { OctagonAlert } from "lucide-react";
 
-import type { Entry, Holding, Monitor } from "../../api";
-import { legSummary } from "../../format";
+import type { Entry, Holding, Monitor } from "../../shared/api";
+import { legSummary } from "../../shared/format";
 import { Chip, Money } from "../Book";
 import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName, QUARANTINED, sentence } from "../needs";

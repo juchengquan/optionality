@@ -9,8 +9,8 @@ const toBlob = vi.fn();
 vi.mock("html-to-image", () => ({ toBlob: (...a: unknown[]) => toBlob(...a) }));
 
 const delivered: string[] = [];
-vi.mock("../snapshot", async (orig) => ({
-  ...(await orig<typeof import("../snapshot")>()),
+vi.mock("../shared/snapshot", async (orig) => ({
+  ...(await orig<typeof import("../shared/snapshot")>()),
   deliver: (_blob: Blob, name: string) => { delivered.push(name); return Promise.resolve("downloaded"); },
 }));
 

@@ -9,7 +9,7 @@ import {
   CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces,
   contractSaveWords, newContract, refusalSpot, thresholdFault, type ContractDraft,
 } from "../next/contract";
-import type { Monitor } from "../api";
+import type { Monitor } from "../shared/api";
 
 /** The New York trading day the form is opened on. */
 const TODAY = "2026-11-11";

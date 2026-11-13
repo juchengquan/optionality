@@ -2,7 +2,7 @@
    Tailwind, shadcn's tokens and the shared pieces this page reuses (the freshness line, the
    References strip). Everything this page decides is scoped under .nx, so nothing here can leak
    into the page at /opt, which never loads this file. */
-@import "../app.css";
+@import "../shared/app.css";
 
 /* app.css gives the old page a margin; this one draws edge to edge and pads its own regions */
 body { margin: 0; }

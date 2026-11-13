@@ -15,7 +15,7 @@
  *    be two signs for one fact, so a minus is refused rather than guessed at.
  *  - Opened starts as the New York trading day, never the local one (ADR 0011), as #293's does.
  */
-import type { DraftPayoff, Monitor } from "../api";
+import type { DraftPayoff, Monitor } from "../shared/api";
 import {
   contractCode, derivedName, ruleWords as replacedWords, type OptionType, type Side, type SpreadsBody,
 } from "./add";

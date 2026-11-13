@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { type Entry } from "../api";
-import { groupRows, rowKind } from "../columns";
-import { readGrouping } from "../prefs";
+import { type Entry } from "../shared/api";
+import { groupRows, rowKind } from "../shared/columns";
+import { readGrouping } from "../shared/prefs";
 
 const row = (over: Partial<Entry> & { id: string }) => ({
   code: over.id, strike_date: "2026-11-30", option_type: "CALL", dte: 42, field: "option_delta",
