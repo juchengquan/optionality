@@ -122,7 +122,10 @@ class ComboLegIn(Shape):
     strike: Annotated[float, Number()]
     #: REFUSED, in words (#351): a Shape drops a key it does not declare, so a `qty: 2` was answered 201
     #: with a 1×1 rule. A quantity is POST /spreads' to take.
-    qty: Annotated[object | None, Never(error="a combo here takes no quantity: record a ratio or a butterfly through POST /spreads")] = None
+    qty: Annotated[
+        object | None,
+        Never(error="a combo here takes no quantity: record a ratio or a butterfly through POST /spreads"),
+    ] = None
 
 
 class ComboMonitorIn(Shape):

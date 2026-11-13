@@ -213,7 +213,10 @@ class TestCombos:
         legs = [COMBO["legs"][0], {**COMBO["legs"][1], "qty": 2}]
         resp = await post(h, combo(name="ratio", legs=legs))
         assert resp.status_code == 422
-        assert resp.json()["detail"] == "✖ a combo here takes no quantity: record a ratio or a butterfly through POST /spreads\n  → at legs[1].qty"
+        assert (
+            resp.json()["detail"]
+            == "✖ a combo here takes no quantity: record a ratio or a butterfly through POST /spreads\n  → at legs[1].qty"
+        )
         assert (await h.call("/monitors")).json() == []
 
     async def test_needs_at_least_two_legs_to_be_a_combo_at_all(self, start):
