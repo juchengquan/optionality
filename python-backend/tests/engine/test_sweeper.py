@@ -11,6 +11,7 @@ What only the Python can get wrong is at the end.
 """
 
 import asyncio
+import json
 import logging
 import re
 import sqlite3
@@ -1075,6 +1076,52 @@ class TestARuleMutedWhileTheSweepIsOut:
 
         assert len(t.said("crossed")) == 0, "it alarmed on a muted rule"
         assert t.row(id_)["triggered"] == 0, "and latched the flag on a disabled row"
+
+
+class TestARuleRedefinedWhileTheSweepIsOut:
+    """A rule REDEFINED while the sweep is out (#359's review): a held 1×3 corrected to a 1×2 takes its value
+    rule with it, and a PATCH to /monitors may change a rule's field (#292). The batch was valued against the
+    row read BEFORE the fetch, so an answer to the old definition must not be written onto, or alarmed for,
+    the new one: the next sweep reads the rule as it now is."""
+
+    @staticmethod
+    def ratio(qty: int) -> list[dict[str, Any]]:
+        return [
+            {"sign": 1, "option_type": "CALL", "strike": 8100},
+            {"sign": -1, "option_type": "CALL", "strike": 8150, "qty": qty},
+        ]
+
+    @staticmethod
+    def mids(codes: list[str]) -> list[dict[str, Any]]:
+        """the 8100 at 2.00 and the 8150 at 1.00: the 1×3 is worth −1, the 1×2 nothing"""
+        return [{"code": c, "name": c, "mid_price": 2 if c.endswith("C8100000") else 1} for c in codes]
+
+    async def test_is_not_alarmed_on_the_old_definitions_figure_when_its_legs_change(self, t: Sweeps) -> None:
+        id_ = t.combo(code="ratio", threshold=0.8, direction="above", compare="abs", legs=self.ratio(3))
+
+        def racing(codes: list[str]) -> list[dict[str, Any]]:
+            t.db.execute("update monitors set legs = ? where id = ?", (json.dumps(self.ratio(2)), id_))
+            return self.mids(codes)
+
+        await t.sweeper(racing).sweep()
+        assert t.sent == [], "it alarmed a 1×2 on the 1×3's value"
+        assert (t.row(id_)["triggered"], t.row(id_)["last_value"]) == (0, None)
+
+        # the next sweep values the rule as it now is: 0, inside 0.8
+        await t.sweeper(self.mids).sweep()
+        assert t.sent == []
+        assert t.row(id_)["last_value"] == 0
+
+    async def test_is_not_alarmed_on_the_old_fields_figure_when_its_field_changes(self, t: Sweeps) -> None:
+        id_ = t.monitor(threshold=0.6)
+
+        def racing(codes: list[str]) -> list[dict[str, Any]]:
+            t.db.execute("update monitors set field = 'mid_price' where id = ?", (id_,))
+            return [{"code": c, "name": c, "option_delta": 0.9, "mid_price": 0.1} for c in codes]
+
+        await t.sweeper(racing).sweep()
+        assert len(t.said("crossed")) == 0
+        assert (t.row(id_)["triggered"], t.row(id_)["last_value"]) == (0, None)
 
 
 class TestWhatOnlyThePythonCanGetWrong:

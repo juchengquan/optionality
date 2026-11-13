@@ -62,6 +62,16 @@ export interface SweeperDeps {
   now?: () => Date;
 }
 
+/** What makes a rule the rule it is: the contract or legs it values, the figure, and the line. */
+const DEFINITION = [
+  "code", "strike_date", "option_type", "strike", "legs", "field", "threshold", "direction", "compare",
+] as const;
+
+/** Whether a rule changed what it watches between the read a batch was valued for and now. */
+function redefined(before: MonitorRow, now: MonitorRow): boolean {
+  return DEFINITION.some((k) => before[k] !== now[k]);
+}
+
 /** The date a sweep reckons expiry against: the UTC day, as the Python's `utcnow().date()` gives.
  *
  *  Deliberately NOT the market date, even though `dte` on the dashboard is. The two genuinely differ
@@ -408,6 +418,11 @@ export class MonitorSweeper {
           // eventual unmute re-fired it (review 2026-11-01). Deleted and muted are the same answer
           // here: this reading is about a rule that is no longer being watched.
           if (!current.enabled) continue;
+          // ...and whether it is still the rule this batch was valued for. A held leg's quantity
+          // corrected (#359) rewrites its value rule's legs, and a PATCH may change its field or
+          // threshold (#292); the figure above answers the OLD definition, and writing or alarming
+          // it onto the new one says a 1×2 crossed on a 1×3's value. The next sweep reads it anew.
+          if (redefined(row, current)) continue;
 
           const changes: Partial<MonitorRow> = { last_value: value, last_checked_at: stamp };
           // the Provider's name for the contract where it has one: a combo's code IS its name,
