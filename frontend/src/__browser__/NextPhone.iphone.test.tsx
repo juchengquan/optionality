@@ -225,6 +225,44 @@ describe("the detail sheet", () => {
   });
 });
 
+describe("a holding's history, on demand in its LIVE sheet (#353)", () => {
+  for (const [ref, days] of [["h-calls", 7], ["h-ic", 2]] as const) {
+    it(`draws ${ref}'s three charts inside the screen when opened, every target still 44pt`, async () => {
+      await show();
+      await userEvent.click(within(card(ref)).getByRole("button", { name: /details of/ }));
+      const sheet = await screen.findByRole("dialog");
+      await animationsDone();
+      const toggle = within(sheet).getByRole("button", { name: "history" });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(sheet.querySelector(".nx-hist")).toBeNull();
+      await userEvent.click(toggle);
+      await waitFor(() => expect(sheet.querySelectorAll(".nx-hist svg")).toHaveLength(3));
+      await settle();
+      expect(sheet.querySelectorAll("[data-sample]")).toHaveLength(days);
+      for (const svg of sheet.querySelectorAll<SVGSVGElement>(".nx-hist svg")) {
+        const r = svg.getBoundingClientRect();
+        // across the sheet, not a thumbnail of it
+        expect(r.width).toBeGreaterThan(300);
+        const labels = [...svg.querySelectorAll("text")].filter((t) => t.textContent);
+        for (const t of labels) {
+          const q = t.getBoundingClientRect();
+          expect(q.left >= r.left - 0.5 && q.right <= r.right + 0.5, t.textContent ?? "").toBe(true);
+          for (const u of labels) {
+            if (u === t) continue;
+            const p = u.getBoundingClientRect();
+            const over = q.left < p.right - 1 && p.left < q.right - 1 && q.top < p.bottom - 1 && p.top < q.bottom - 1;
+            expect(over, `${t.textContent} / ${u.textContent}`).toBe(false);
+          }
+        }
+      }
+      expect(pastTheEdge(sheet)).toEqual([]);
+      expect(sheet.scrollWidth).toBeLessThanOrEqual(sheet.clientWidth);
+      expect(overflowsSideways()).toBe(false);
+      expect(tooSmall()).toEqual([]);
+    });
+  }
+});
+
 describe("the pace explained, in a holding's sheet (#333)", () => {
   /** every holding with an exit schedule, so each sheet has a gap to explain */
   const scheduled = HOLDINGS.map((h) => ({ ...h, schedule: { dte_at_open: 45, on_pace: 1.84, pace_gap: 0.47,

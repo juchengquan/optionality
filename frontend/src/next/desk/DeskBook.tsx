@@ -11,6 +11,7 @@ import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { monitorName, fieldWords } from "../needs";
 import { HoldingHistory } from "../History";
+import { HistoryOnDemand } from "../HistoryOnDemand";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome } from "../pace";
 import { HoldingActions, type HoldingWrites } from "../HoldingActions";
@@ -541,8 +542,8 @@ function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
       ) : null}
       <Legs legs={h.legs.map((l) => `${l.side} ${l.option_type} ${l.strike}`)} />
       <InspectorStrip holding={h} partner={partner} />
-      {/* REVIEW's charts (ADR 0023, #295): the recorded days, read once when opened */}
-      {mode === "review" ? <HoldingHistory holding={h} privacy={privacy} /> : null}
+      {/* the recorded days (ADR 0023, #295): open in REVIEW, on demand in LIVE (#353), read once */}
+      {mode === "review" ? <HoldingHistory holding={h} privacy={privacy} /> : <HistoryOnDemand holding={h} privacy={privacy} />}
       <HoldingPayoff holding={h} privacy={privacy} />
       <Figures row={row} privacy={privacy} extra={extra} />
       <PaceExplained holding={h} />

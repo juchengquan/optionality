@@ -102,7 +102,10 @@ function serve() {
           : path === "/references" ? [reference]
             : path === "/positions/values" ? [holding]
               // every holding on record, as stored: REVIEW's closed trades read it (#296)
-              : path === "/positions" ? [holding] : null;
+              : path === "/positions" ? [holding]
+                // its days, an empty week: the shape the service answers, so the history drawn
+                // in LIVE (#353) is drawn from samples rather than said to be unreadable
+                : path === "/positions/p1/samples" ? { levels: null, plan: [], samples: [] } : null;
     return answered(reply(true, body));
   }) as unknown as typeof fetch;
 }
@@ -180,6 +183,32 @@ describe("what it asks for in each mode", () => {
     await quiet();
     expect(new Set(calls), said()).toEqual(new Set(["/quotes", "/monitors", "/health"]));
   });
+});
+
+describe("a holding's history in LIVE (#353)", () => {
+  for (const where of ["desk", "phone"] as const) {
+    it(`is read once when opened on the ${where}, and never by the poll`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(SESSION);
+      await open();
+      await quiet();
+      fireEvent.click(await screen.findByRole("button",
+        { name: where === "desk" ? "1231_7000P" : "details of 1231_7000P" }));
+      await quiet();
+      expect(calls.filter((c) => c.endsWith("/samples")), `shut, nothing\n${said()}`).toEqual([]);
+      fireEvent.click(screen.getByRole("button", { name: "history" }));
+      await quiet();
+      expect(calls.filter((c) => c === "/positions/p1/samples"), `opened, once\n${said()}`).toHaveLength(1);
+      // three polls with it open, each its own new valuation of the holding
+      calls = [];
+      for (let i = 0; i < 3; i++) {
+        await act(async () => { vi.advanceTimersByTime(15_000); });
+        await quiet();
+      }
+      expect(new Set(calls), said()).toEqual(
+        new Set(["/quotes", "/monitors", "/health", "/references", "/positions/values"]));
+    });
+  }
 });
 
 describe("asking again", () => {
