@@ -438,7 +438,7 @@ export function DayField({ value, onChange }: { value: string; onChange: (v: str
   );
 }
 
-/** The question a delete asks first, of a held holding here and of a closed one in REVIEW's journal
+/** The question a delete asks first, of a held holding here and of a closed one in the closed trades
  *  (#296, ADR 0022: the closed list carries both remedies). A closed one has no "close it instead":
  *  it is closed, and what keeps its record is not deleting it. */
 export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onDeleted }: {
@@ -473,7 +473,7 @@ export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onD
       <p>
         {onCloseInstead
           ? "If this was a real trade, close it instead: closing keeps all of it."
-          : "If this was a real trade, keep it: its record is what REVIEW reads, and a mistyped close is corrected above."}
+          : "If this was a real trade, keep it: its record is what the closed trades show, and a mistyped close is corrected above."}
       </p>
       {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
       <div className="nx-hold-row">

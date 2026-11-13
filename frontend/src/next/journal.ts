@@ -1,15 +1,16 @@
-/** The closed trades' journal in REVIEW (#296, ADR 0022): every holding the service keeps after its
- *  close, newest first, with what it made in POINTS.
+/** The closed trades' journal (#296, ADR 0022), folded at the bottom of the book (#373): every
+ *  holding the service keeps after its close, newest first, with what it made in POINTS.
  *
  *  Read from `GET /positions`, which lists every holding on record — held or closed — as stored, with
  *  `closed_on`, `exit` and `realized_points`, and asks the Provider nothing. Nothing here works a
  *  figure out: what a trade made is the service's `realized_points`, and a figure nobody recorded is
  *  said as unknown rather than as 0, which would read as a trade that broke even.
  *
- *  - **Read once, on entering REVIEW**, and again only after a write that changes it — a close, a
- *    correction, a delete. Never polled: a closed holding does not move (ADR 0023).
- *  - **Never in LIVE.** The page asks for it only in REVIEW, and LIVE draws `/positions/values`,
- *    which values open holdings alone (`openPositions`).
+ *  - **Read on first opening the section**, at any hour and in either mode, and again only after a
+ *    write that changes it — a close, a correction, a delete. Never polled: a closed holding does
+ *    not move (ADR 0023). Shutting the section and opening it again asks nothing.
+ *  - **Never before it is opened.** A page nobody opens the section on never asks for it; the book
+ *    draws `/positions/values`, which values open holdings alone (`openPositions`).
  */
 import { useCallback, useEffect, useState } from "react";
 

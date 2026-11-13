@@ -198,6 +198,8 @@ export function DeskBook({ selection, ...props }: BookProps & {
 
       {current ? <Inspector id={inspectorId} row={current} mode={mode} session={session} privacy={privacy} rows={rows} partners={partners}
                             onSelect={setSelected} onClose={close} monitors={monitors} writes={props.writes} /> : null}
+      {/* the closed trades' fold (#373): the last thing in the book, across the whole width */}
+      {props.journal}
     </div>
   );
 }

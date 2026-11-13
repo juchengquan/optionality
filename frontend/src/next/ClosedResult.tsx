@@ -2,8 +2,8 @@
  *  service's POINTS (ADR 0022), and what became of each Monitor — handed to an open holding that
  *  still holds its contracts, or switched off as `holding-closed` — as the service reported it.
  *
- *  It also offers the correction where the mistake was just made, as REVIEW's journal of closed
- *  trades does for any close later (#296, `ClosedTrade.tsx`) — the one form, `Correction`, in both. It
+ *  It also offers the correction where the mistake was just made, as the closed trades' fold
+ *  does for any close later (#296, `ClosedTrade.tsx`) — the one form, `Correction`, in both. It
  *  goes by the PATCH ADR 0022 gives, and keeps every sample a delete would take.
  *
  *  Drawn by the page rather than by the inspector or the sheet that closed it, both of which go
@@ -44,8 +44,9 @@ export function ClosedResult({ outcome, privacy, onDone, onCorrected, served }: 
   onDone: () => void;
   /** the page reads the book again after a correction */
   onCorrected: () => void;
-  /** this close as REVIEW's journal last read it (#296), where it has: a correction made there is
-   *  the service's word too, and this account must not go on saying the figures it replaced */
+  /** this close as the closed trades' journal last read it (#296), where it has — null until the
+   *  fold is first opened (#373), when the close's own answer is all there is: a correction made
+   *  there is the service's word too, and this account must not go on saying the figures it replaced */
   served?: { closed_on: string; exit: number | null; realized_points: number | null } | null;
 }) {
   const { holding, fates, fatesError } = outcome;
@@ -101,7 +102,7 @@ export function ClosedResult({ outcome, privacy, onDone, onCorrected, served }: 
 }
 
 /** A mistyped close corrected, by PATCH (ADR 0022): drawn under a close's account and under each
- *  trade in REVIEW's journal. */
+ *  trade in the closed trades' fold. */
 export function Correction({ id, name, closedOn, exit, onSaved }: {
   id: string; name: string; closedOn: string; exit: number | null;
   onSaved: (c: { closed_on: string | null; exit: number | null; realized_points: number | null }) => void;

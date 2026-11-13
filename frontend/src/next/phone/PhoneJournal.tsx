@@ -1,5 +1,5 @@
-/** REVIEW's closed trades on the phone (#296, ADR 0023's arrangement B): a list of cards, newest
- *  first, each ONE target that opens its trade on a screen of its own — a bottom sheet, closed by
+/** The closed trades on the phone (#296, ADR 0023's arrangement B): the body of the fold at the
+ *  bottom of the book (`JournalFold`, #373), a list of cards, newest first, each ONE target that opens its trade on a screen of its own — a bottom sheet, closed by
  *  Back, as every detail on the phone is — with its charts to the close and the correction.
  *
  *  What is open is held as an id and looked up in each render's journal, so the sheet shows the
@@ -27,8 +27,7 @@ export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDele
   useEffect(() => { if (gone) setOpenId(null); }, [gone]);
 
   return (
-    <section className="nx-journal nxj-phone" aria-label="closed trades">
-      <h2>Closed trades</h2>
+    <div className="nxj-phone">
       {/* said BESIDE the rows a re-read failed to replace, which stay, as the open trade does */}
       {error !== null ? <p className="nx-hold-error" role="alert">{`the closed trades could not be read — ${error}`}</p> : null}
       {trades === null ? (error === null ? <p className="nxp-meta">reading the closed trades…</p> : null)
@@ -64,7 +63,7 @@ export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDele
             )}
       <TradeSheet trade={trade} privacy={privacy} entryStyle={entryStyle} onClose={close} onCorrected={onCorrected}
                   onDeleted={onDeleted} />
-    </section>
+    </div>
   );
 }
 
@@ -74,8 +73,8 @@ function TradeSheet({ trade, privacy, entryStyle, onClose, onCorrected, onDelete
 }) {
   const open = trade !== null;
   useDismissOnBack(open, onClose);
-  // Unmounted while open — REVIEW left for LIVE, or the phone turned into the desk — it takes its
-  // Back entry with it, as the book's detail sheet does (Detail.tsx)
+  // Unmounted while open — Settings opened, or the phone turned into the desk — it takes its Back
+  // entry with it, as the book's detail sheet does (Detail.tsx)
   const openNow = useRef(open);
   openNow.current = open;
   useEffect(() => () => {

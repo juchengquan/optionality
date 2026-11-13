@@ -28,6 +28,7 @@ import type { BookProps } from "./Book";
 import { DeskBook } from "./desk/DeskBook";
 import { DeskJournal } from "./desk/DeskJournal";
 import { useJournal } from "./journal";
+import { JournalFold } from "./JournalFold";
 import { rowId, tableRows } from "./desk/columns";
 import { holdOnDesk, NOTHING_SELECTED, type DeskSelection } from "./desk/keys";
 import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
@@ -96,10 +97,15 @@ export function Next() {
   // is drawn from that copy, so a poll landing mid-capture cannot make one picture two moments
   const { frame: pictured, stageRef, save } = useSaveImage<StillProps>();
   const shooting = pictured !== null;
-  // REVIEW's closed trades (#296): read on entering REVIEW and after each write that changes them —
-  // a close, a correction, a delete — and never polled; LIVE never asks for them
+  // the closed trades (#296), folded at the bottom of the book (#373): shut on every load, read
+  // the first time the fold is opened and then after each write that changes them — a close, a
+  // correction, a delete — whether it is open or shut by then; never polled, at any hour or mode.
+  // A write made before the fold was ever opened reads nothing: the first opening reads it all
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [journalOpened, setJournalOpened] = useState(false);
+  const toggleJournal = useCallback(() => { setJournalOpen((o) => !o); setJournalOpened(true); }, []);
   const [journalAsk, setJournalAsk] = useState(0);
-  const journal = useJournal(mode === "review", journalAsk);
+  const journal = useJournal(journalOpened, journalAsk);
   const rereadJournal = useCallback(() => setJournalAsk((n) => n + 1), []);
   // a closed trade deleted from the journal leaves it at once, and the re-read says the rest
   const { drop: dropTrade } = journal;
@@ -249,10 +255,14 @@ export function Next() {
     quotes: book.quotes, monitors: book.monitors, holdings,
     holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, mode, session, privacy, entryStyle, writes,
     onRevalue: () => void book.refreshNow(), revaluing: book.refreshing,
-    journal: mode === "review" && phone
-      ? <PhoneJournal journal={journal} privacy={privacy} entryStyle={entryStyle} onCorrected={rereadJournal}
-                      onDeleted={tradeDeleted} />
-      : undefined,
+    journal: (
+      <JournalFold open={journalOpen} onToggle={toggleJournal}>
+        {phone
+          ? <PhoneJournal journal={journal} privacy={privacy} entryStyle={entryStyle} onCorrected={rereadJournal}
+                          onDeleted={tradeDeleted} />
+          : <DeskJournal journal={journal} privacy={privacy} onCorrected={rereadJournal} onDeleted={tradeDeleted} />}
+      </JournalFold>
+    ),
   };
 
   const settings = (
@@ -273,7 +283,7 @@ export function Next() {
 
   // the picture (#300), from the header's button and the palette alike: one press
   const saveView = () => void save({
-    // the book, without REVIEW's closed trades: a journal is not the book; and nothing to press
+    // the book, without the closed trades: a journal is not the book; and nothing to press
     ...bookProps, journal: undefined, onRevalue: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
     error: book.error, references: book.references,
   });
@@ -341,9 +351,6 @@ export function Next() {
         ) : null}
         {phone && settingsOpen ? settings : phone ? <PhoneBook {...bookProps} />
           : <DeskBook {...bookProps} selection={deskSelection} />}
-        {mode === "review" && !phone
-          ? <DeskJournal journal={journal} privacy={privacy} onCorrected={rereadJournal} onDeleted={tradeDeleted} />
-          : null}
       </main>
 
       {phone ? (

@@ -1,9 +1,9 @@
-/** One closed trade, opened from REVIEW's journal (#296): its figures, its burndown and IV through
- *  `/positions/{id}/samples` — which serves no day after the close (ADR 0022), so the charts end
- *  there — the correction a mistyped close takes, the same form a close's account offers
- *  (`ClosedResult.tsx`), and the delete a trade recorded by mistake takes, behind the question a
- *  held holding's delete asks (ADR 0022: the closed list carries both remedies). Drawn under the
- *  desk's journal and in the phone's sheet alike.
+/** One closed trade, opened from the closed trades' fold (#296, #373): its figures, its burndown
+ *  and IV through `/positions/{id}/samples` — which serves no day after the close (ADR 0022), so
+ *  the charts end there — the correction a mistyped close takes, the same form a close's account
+ *  offers (`ClosedResult.tsx`), and the delete a trade recorded by mistake takes, behind the
+ *  question a held holding's delete asks (ADR 0022: the closed list carries both remedies). Drawn
+ *  under the desk's journal and in the phone's sheet alike.
  *
  *  The figures are the journal's, read from `GET /positions` as the service has them NOW: a
  *  correction asks the page to read the journal again rather than drawing what was typed, and the
