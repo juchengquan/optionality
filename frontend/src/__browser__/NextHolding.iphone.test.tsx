@@ -10,7 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { holdingService, type HoldingService } from "../testing/holdingService";
-import { HOLDINGS } from "../testing/ownerBook";
+import type { Monitor } from "../shared/api";
+import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 afterEach(() => {
@@ -21,9 +22,18 @@ afterEach(() => {
 /** Noon in New York, in the session, so the phone opens on LIVE's cards whatever the clock says. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
-async function openPhone(): Promise<HoldingService> {
+/** The rules as `/monitors` serves them, the condor's own value rule carrying its legs and its scope. */
+const withValueRule = () => MONITORS.map((m) => {
+  const q = QUOTES.find((e) => e.id === m.id);
+  const linked = q && q.positions.length > 0 ? { ...m, positions: q.positions } : m;
+  return m.id === "r-ic" ? { ...linked, legs: q!.legs, scope: "all" } : linked;
+}) as Monitor[];
+
+async function openPhone(monitors?: Monitor[]): Promise<HoldingService> {
   vi.useFakeTimers({ toFake: ["Date"], now: IN_SESSION });
-  const s = holdingService({ holdings: HOLDINGS.map((h) => h.id === "h-ic" ? { ...h, cost_to_close: 1.225 } : h) });
+  const s = holdingService({
+    holdings: HOLDINGS.map((h) => h.id === "h-ic" ? { ...h, cost_to_close: 1.225 } : h), monitors,
+  });
   window.fetch = s.fetch;
   render(<Next />);
   await settle();
@@ -101,6 +111,28 @@ describe("changing a holding from the phone's sheet", () => {
     await userEvent.click(within(sheet).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(writes(s)).toHaveLength(1));
     expect((writes(s)[0]![1] as { legs: { qty?: number }[] }).legs.map((l) => l.qty ?? 1)).toEqual([1, 1, 2, 1]);
+  });
+
+  it("offers the rename of the rule that followed with 44pt targets, inside the screen (#359's review)", async () => {
+    const s = await openPhone(withValueRule());
+    const sheet = await sheetOf("h-ic");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Edit" }));
+    await userEvent.fill(within(sheet).getByLabelText("quantity, short PUT 6300"), "2");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(writes(s)).toHaveLength(1));
+    const renames = await within(sheet).findByRole("group", { name: "rename the rules that followed" });
+    await settle();
+    expect(renames.textContent).toMatch(/Its alarms still call it 1231_IC/);
+    expect(tooSmall(renames)).toEqual([]);
+    expect(smallText(renames)).toEqual([]);
+    expect(pastTheEdge(sheet)).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+    // its editor opens there, and is as usable as the sheet
+    await userEvent.click(within(renames).getByRole("button", { name: /^edit / }));
+    await settle();
+    expect(tooSmall(renames)).toEqual([]);
+    expect(smallText(renames)).toEqual([]);
+    expect(pastTheEdge(sheet)).toEqual([]);
   });
 
   it("cancels the close form with Escape and keeps the sheet open, the focus back on Close…", async () => {

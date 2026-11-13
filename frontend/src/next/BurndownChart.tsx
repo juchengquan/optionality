@@ -16,6 +16,10 @@
  *    inspector it closes. ONE tab stop, as the days inside an image would each be one otherwise.
  *    The tooltip is for the eye and is hidden from a screen reader; the status line beneath says
  *    the same stop in full, and is what is announced.
+ *  - **A leg's quantity corrected** (#359): the days summed before it are another structure's Cost
+ *    to close, kept as they were. Their points and their stretch of the line are drawn faint and
+ *    dashed, no gap to the plan is shaded over them, a rule marks the New York day it was corrected,
+ *    and the tooltip and the status line say "summed before a leg's quantity was corrected".
  *  - **Privacy** keeps the shape and drops every $ figure: no value axis and no gutter for one, the
  *    Levels named without their figures, the tooltip's money masked. The Pace gap is in points,
  *    which privacy keeps.
@@ -32,8 +36,8 @@ import { Threshold } from "@visx/threshold";
 
 import type { Sample, Samples } from "../shared/api";
 import {
-  nearestDay, nowLines, nowWords, sampleWords, say, stepDay, textWidth, tipLines, tipPlace, valueAxis,
-  type Unit,
+  CORRECTED_WORDS, correctionDte, costRuns, nearestDay, nowLines, nowWords, sampleWords, say, stepDay,
+  textWidth, tipLines, tipPlace, valueAxis, type Unit,
 } from "./burndown";
 
 export const H = 196, T = 16, B = 22;
@@ -127,9 +131,11 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
     Math.max(x(manage), L + textWidth(startWords) + 6 + half), W - 4 - textWidth(endWords) - 6 - half);
   const missed = missedDays(samples);
   const dayW = (W - L - R) / span;
-  // the gap to the plan is shaded only where a day has its own On-pace
-  const paced = runsOf(samples.map((s) =>
-    (s.on_pace === null ? null : { dte: s.dte, cost: s.cost_to_close, pace: s.on_pace })));
+  // the gap to the plan is shaded only where a day has its own On-pace, and a Cost to close summed
+  // under the quantities as they now are (#359)
+  const paced = runsOf(samples.map((s) => (s.on_pace === null || s.before_correction
+    ? null : { dte: s.dte, cost: s.cost_to_close, pace: s.on_pace })));
+  const corrected = correctionDte(served);
 
   const at = pointed === null ? null : samples[pointed] ?? null;
   const atNow = pointed !== null && pointed === samples.length && now !== null ? now : null;
@@ -191,10 +197,11 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   const tip = at === null && atNow === null ? null : (() => {
     const tipW = Math.min(TIP_W, W);
     const [px, py] = at ? [x(at.dte), y(at.cost_to_close)] : [x(atNow!.dte), y(atNow!.cost)];
-    const lines = at ? tipLines(at, unit) : { ...nowLines(atNow!, unit), pace: null, gap: null, why: null };
+    const lines = at ? tipLines(at, unit) : { ...nowLines(atNow!, unit), pace: null, gap: null, why: null, corrected: null };
     return { tipW, lines, ...tipPlace({ x: px, y: py, W, H, tipW, tipH }) };
   })();
   const offClose = samples.some((s) => s.timing !== "close");
+  const anyBefore = samples.some((s) => s.before_correction);
 
   return (
     <>
@@ -273,16 +280,29 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
                 : <text x={x(closeDte) - 4} y={T + 10} textAnchor="end">closed</text>}
             </g>
           )}
+          {corrected === null || corrected < 0 || corrected > span ? null : (
+            <g data-corrected-on="" className="nx-hist-corrected">
+              <line x1={x(corrected)} x2={x(corrected)} y1={T} y2={H - B} />
+              {/* at the foot of the plot, clear of the Levels' labels along its top and the "closed"
+                  label's line: to the right of its rule — the days after it are the ones summed as
+                  recorded now — or to the left where the right has no room */}
+              {x(corrected) + 4 + textWidth("qty corrected") > W - R
+                ? <text x={x(corrected) - 4} y={H - B - 4} textAnchor="end">qty corrected</text>
+                : <text x={x(corrected) + 4} y={H - B - 4} textAnchor="start">qty corrected</text>}
+            </g>
+          )}
           {plan.length > 1 ? (
             <LinePath data-plan="" className="nx-hist-plan" data={plan}
                       x={(p) => x(p.dte)} y={(p) => y(p.on_pace)} />
           ) : null}
-          {runsOf(samples).map((run) => (
-            <LinePath key={run[0]!.dte} data-costs="" className="nx-hist-costs" data={run}
+          {costRuns(samples).map(({ before, run }) => (
+            <LinePath key={`${run[0]!.dte}${before}`} data-costs={before ? "before-correction" : ""}
+                      className="nx-hist-costs" data={run}
                       x={(s) => x(s.dte)} y={(s) => y(s.cost_to_close)} />
           ))}
           {samples.map((s, i) => (
             <g key={s.observed_on} data-sample={s.observed_on} data-timing={s.timing}
+               data-before-correction={s.before_correction ? "" : undefined}
                data-pointed={pointed === i ? "" : undefined} className="nx-hist-point">
               <circle data-mark={MARK[s.timing]} cx={x(s.dte)} cy={y(s.cost_to_close)} r={3.25} />
             </g>
@@ -335,13 +355,16 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
               </div>
             )}
             {tip.lines.why === null ? null : <div className="nx-bd-tip-why">{tip.lines.why}</div>}
+            {tip.lines.corrected !== null
+              ? <div className="nx-bd-tip-why" data-corrected="">{tip.lines.corrected}</div> : null}
           </div>
         )}
       </div>
       <p className="nx-hist-said" role="status">
         {at ? sampleWords(at, unit) : atNow ? nowWords(atNow, unit)
-          : offClose ? "● in hours · ○ not the close · point at a day to see why"
-            : "● each day in hours · point at a day for its figures"}
+          : (offClose ? "● in hours · ○ not the close · point at a day to see why"
+            : "● each day in hours · point at a day for its figures")
+            + (anyBefore ? ` · faint: ${CORRECTED_WORDS}` : "")}
       </p>
     </>
   );

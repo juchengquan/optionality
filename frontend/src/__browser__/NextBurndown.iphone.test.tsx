@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { overflowsSideways, settle } from "./nextBook";
+import type { Samples } from "../shared/api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
 afterEach(cleanup);
@@ -21,11 +22,23 @@ const health = {
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 };
 
-/** The owner-shaped book, every write refused (as `NextPhone.iphone.test.tsx` serves it). */
-function serveOwnerBook(): void {
+/** A holding's days with a leg's quantity corrected on its fourth (#359): the three before it summed
+ *  under the quantities first recorded. */
+function corrected(served: Samples): Samples {
+  const on = served.samples[3]?.observed_on ?? served.samples.at(-1)!.observed_on;
+  return {
+    ...served, qty_corrected_at: `${on} 13:00:00+08:00`,
+    samples: served.samples.map((s) => ({ ...s, before_correction: s.observed_on < on })),
+  };
+}
+
+/** The owner-shaped book, every write refused (as `NextPhone.iphone.test.tsx` serves it); every
+ *  holding's days with a quantity corrected where `correcting`. */
+function serveOwnerBook(correcting = false): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
-    const read = payoffAnswer(path) ?? samplesAnswer(path) ?? volAnswer(path);
+    const days = samplesAnswer(path);
+    const read = payoffAnswer(path) ?? (days && correcting ? corrected(days) : days) ?? volAnswer(path);
     if (read) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(read) });
     if (init?.method && init.method !== "GET") {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
@@ -37,8 +50,8 @@ function serveOwnerBook(): void {
 }
 
 /** The phone's REVIEW page for the first holding, scrolled so its burndown is on the screen. */
-async function review() {
-  serveOwnerBook();
+async function review(correcting = false) {
+  serveOwnerBook(correcting);
   render(<Next />);
   await settle();
   const views = screen.getByRole("navigation", { name: "views" });
@@ -86,6 +99,24 @@ async function tap(at: { x: number; y: number }) {
 const crossed = (chart: HTMLElement) => chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair");
 
 describe("the burndown on the phone's REVIEW page", () => {
+  it("draws a corrected quantity's rule and its faint days inside the screen, saying so for each (#359)", async () => {
+    const { chart, svg } = await review(true);
+    const box = svg.getBoundingClientRect();
+    expect(box.right).toBeLessThanOrEqual(window.innerWidth);
+    const marker = svg.querySelector("[data-corrected-on] text")!;
+    const m = marker.getBoundingClientRect();
+    expect(m.left).toBeGreaterThanOrEqual(box.left - 0.5);
+    expect(m.right).toBeLessThanOrEqual(box.right + 0.5);
+    const faint = svg.querySelector<SVGGElement>("[data-before-correction]")!;
+    const p = centreOf(faint.querySelector("circle")!);
+    await userEvent.click(svg, { position: { x: p.x - box.left, y: 12 } });
+    expect(chart.querySelector("[data-tip] [data-corrected]")?.textContent).toBe("summed before a leg's quantity was corrected");
+    const t = chart.querySelector("[data-tip]")!.getBoundingClientRect(), c = chart.getBoundingClientRect();
+    expect(t.left >= c.left - 0.5 && t.right <= c.right + 0.5 && t.top >= c.top - 0.5 && t.bottom <= c.bottom + 0.5).toBe(true);
+    expect(within(chart.parentElement!).getByRole("status").textContent).toMatch(/summed before a leg's quantity was corrected$/);
+    expect(overflowsSideways()).toBe(false);
+  });
+
   it("is inside the screen, and its tooltip inside the chart and off its point, for every day", async () => {
     const { page1, chart, svg } = await review();
     const box = svg.getBoundingClientRect();

@@ -27,6 +27,20 @@ const MISSED: Samples = {
   ...SAMPLES["h-calls"]!, samples: SAMPLES["h-calls"]!.samples.filter((s) => s.observed_on !== "2026-11-05"),
 };
 
+/** The call spread's week with a leg's quantity corrected on 6 Nov (#359): the three days before it
+ *  summed under the quantities first recorded, drawn faint, and the day marked "qty corrected". */
+const CORRECTED: Samples = {
+  ...SAMPLES["h-calls"]!, qty_corrected_at: "2026-11-06 13:00:00+08:00",
+  samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, before_correction: s.observed_on < "2026-11-06" })),
+};
+
+/** ...and corrected on its expiry day, every day before it, whose rule is at the plot's right edge:
+ *  its label goes to the left of it rather than off the chart. */
+const CORRECTED_LATE: Samples = {
+  ...SAMPLES["h-calls"]!, qty_corrected_at: "2026-12-18 23:00:00+08:00",
+  samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, before_correction: true })),
+};
+
 /** The samples served for `id`, or `samples` in their place. */
 function serve(id: string, samples: Samples = SAMPLES[id]!) {
   window.fetch = ((url: string) => {
@@ -97,12 +111,19 @@ async function tipFaults(chart: HTMLElement, svg: SVGSVGElement): Promise<string
 }
 
 describe("the burndown fits, and its tooltip stays inside it", () => {
-  const cases = [["h-calls", undefined], ["h-puts", undefined], ["h-ic", undefined], ["h-calls", MISSED]] as const;
+  const cases = [
+    ["h-calls", undefined], ["h-puts", undefined], ["h-ic", undefined], ["h-calls", MISSED], ["h-calls", CORRECTED],
+    ["h-calls", CORRECTED_LATE],
+  ] as const;
   for (const width of [272, 400, 900]) for (const [id, samples] of cases) for (const privacy of [false, true]) {
-    const what = `${id}${samples ? " with a missed day" : ""}${privacy ? ", privacy on" : ""}`;
+    const what = `${id}${samples === MISSED ? " with a missed day" : samples === CORRECTED ? " with a quantity corrected"
+      : samples === CORRECTED_LATE ? " corrected on its expiry day" : ""}`
+      + `${privacy ? ", privacy on" : ""}`;
     it(`at ${width}px: ${what}`, async () => {
       const { chart, svg } = await draw(id, width, { samples, privacy });
       expect(svg.getBoundingClientRect().width).toBe(width);
+      // the correction's rule is drawn, inside the plot, wherever the chart is this wide (#359)
+      if (samples === CORRECTED || samples === CORRECTED_LATE) expect(svg.querySelector("[data-corrected-on] text")?.textContent).toBe("qty corrected");
       for (const s of document.querySelectorAll<SVGSVGElement>(".nx-hist svg")) {
         expect(labelFaults(s).join("; ")).toBe("");
       }
