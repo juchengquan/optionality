@@ -339,11 +339,11 @@ describe("the crosshair (#360)", () => {
     // h-calls is a single call spread with a contract size of 100, behind pace
     expect(lines[0]).toBe("9 Nov · 39 DTE");
     expect(lines[1]).toMatch(/^to close, 1 contract: \$410$/);
-    expect(lines[2]).toMatch(/^on pace \$\d+$/);
-    expect(lines[3]).toMatch(/^behind by \d\.\d\d$/);
-    expect(tip.querySelector("[data-outcome]")?.getAttribute("data-outcome")).toBe("loss");
+    expect(lines[2]).toMatch(/^on pace \$\d+ · behind by \d\.\d\d$/);
+    const gap = tip.querySelector("[data-outcome]")!;
+    expect(gap.getAttribute("data-outcome")).toBe("loss");
     // the status line says the same gap, for whoever cannot see the tooltip
-    expect(said(chart)).toContain(lines[3]!);
+    expect(said(chart)).toContain(` · ${gap.textContent} — `);
   });
 
   it("lets go when a mouse leaves, and keeps the day when a finger lifts", async () => {

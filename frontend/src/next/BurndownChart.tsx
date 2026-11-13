@@ -91,6 +91,13 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   const [box, W] = useWidth();
   const id = useId().replace(/:/g, "");
   const [pointed, setPointed] = useState<number | null>(null);
+  // the tooltip's height, measured once drawn: how much room it needs above or below its day
+  const tipBox = useRef<HTMLDivElement>(null);
+  const [tipH, setTipH] = useState(96);
+  useLayoutEffect(() => {
+    const h = tipBox.current?.offsetHeight;
+    if (h && h !== tipH) setTipH(h);
+  });
   const { levels, plan, samples } = served;
   const { now } = axis;
   const x = scaleLinear<number>({ domain: [span, 0], range: [L, W - R] });
@@ -130,7 +137,7 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   };
   const tip = at === null ? null : (() => {
     const tipW = Math.min(TIP_W, W);
-    return { tipW, lines: tipLines(at, unit), ...tipPlace({ x: x(at.dte), y: y(at.cost_to_close), W, tipW, top: T, bottom: H - B }) };
+    return { tipW, lines: tipLines(at, unit), ...tipPlace({ x: x(at.dte), y: y(at.cost_to_close), W, H, tipW, tipH }) };
   })();
   const offClose = samples.some((s) => s.timing !== "close");
 
@@ -239,13 +246,21 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
           <text x={W - 4} y={H - 6} textAnchor="end">{endWords}</text>
         </svg>
         {tip === null ? null : (
-          <div className="nx-bd-tip" data-tip="" aria-hidden="true" data-below={tip.below ? "" : undefined}
+          <div className="nx-bd-tip" ref={tipBox} data-tip="" aria-hidden="true"
                style={{ left: tip.left, top: tip.top, width: tip.tipW }}>
             <div className="nx-bd-tip-h">{tip.lines.day}</div>
             <div>{tip.lines.cost}</div>
-            {tip.lines.pace === null ? null : <div>{tip.lines.pace}</div>}
-            {tip.lines.gap === null ? null
-              : <div className="nx-bd-tip-gap" data-outcome={tip.lines.gap.outcome ?? undefined}>{tip.lines.gap.words}</div>}
+            {tip.lines.pace === null ? null : (
+              <div>
+                {tip.lines.pace}
+                {tip.lines.gap === null ? null : (
+                  <>
+                    {" · "}
+                    <span className="nx-bd-tip-gap" data-outcome={tip.lines.gap.outcome ?? undefined}>{tip.lines.gap.words}</span>
+                  </>
+                )}
+              </div>
+            )}
             {tip.lines.why === null ? null : <div className="nx-bd-tip-why">{tip.lines.why}</div>}
           </div>
         )}

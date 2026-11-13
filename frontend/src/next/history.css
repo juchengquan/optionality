@@ -86,14 +86,13 @@
 .nx-bd-cross-day[data-mark="off-close"] { fill: var(--background); stroke: var(--foreground); }
 .nx-bd-cross-day[data-mark="unrecorded"] { opacity: 0.6; }
 /* the tooltip: for the eye only (the status line is what is announced), and never in the way of
-   the pointer it follows. `data-below` hangs it above the plot's bottom edge */
+   the pointer it follows. Placed by hand inside the chart (`tipPlace`) */
 .nx-bd-tip {
   position: absolute; pointer-events: none; box-sizing: border-box; padding: 0.375rem 0.5rem;
   border: 1px solid var(--border); border-radius: 0.375rem; background: var(--popover);
   color: var(--popover-foreground); box-shadow: 0 2px 8px color-mix(in oklch, var(--foreground) 15%, transparent);
   font-size: 11px; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
 }
-.nx-bd-tip[data-below] { transform: translateY(-100%); }
 .nx-bd-tip-h { font-weight: 600; }
 .nx-bd-tip-gap { font-weight: 600; }
 .nx-bd-tip-why { margin-top: 0.125rem; padding-top: 0.125rem; border-top: 1px solid var(--border); color: var(--muted-foreground); }

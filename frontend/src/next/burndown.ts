@@ -179,15 +179,23 @@ export function valueAxis(served: Samples, holding: Valued, unit: Unit) {
   return { lo: bottom, hi: top, ticks, labels, stop, now, L };
 }
 
-/** Where the tooltip goes, placed by hand: centred on the day and kept inside the chart, and in the
- *  half of the plot the day's point is not in, so it never covers the point it describes. Visx's
- *  `TooltipWithBounds` flipped to the left at the 272px inspector and ran off it, since a tooltip
- *  that wide has room on NEITHER side of a day there (the prototype, #360). `top` is the plot's top
- *  edge or its bottom one; `below` says the tooltip hangs ABOVE that bottom edge. */
-export function tipPlace({ x, y, W, tipW, top, bottom }: {
-  x: number; y: number; W: number; tipW: number; top: number; bottom: number;
-}) {
-  const left = Math.min(Math.max(0, x - tipW / 2), Math.max(0, W - tipW));
-  const low = y > (top + bottom) / 2;
-  return { left, top: low ? top : bottom, below: !low };
+/** Where the tooltip goes, placed by hand, as `left` and `top` inside the chart's W × H box (#360).
+ *  Visx's `TooltipWithBounds` flipped to the left at the 272px inspector and ran off it, since a
+ *  tooltip that wide has room on NEITHER side of a day there (the prototype). So: centred on the
+ *  day, kept inside the box, at its top edge or its bottom one — whichever is further from the
+ *  day's point, so it does not cover the point it describes. Only where that side is still too
+ *  short for it (`tipH`, measured) is it put beside the day instead, if either side has the room;
+ *  and where neither has, it stays at the edge, inside the chart, which the status line beneath
+ *  says in full anyway. `r` is the point's radius. */
+export function tipPlace({ x, y, W, H, tipW, tipH, r = 6 }: {
+  x: number; y: number; W: number; H: number; tipW: number; tipH: number; r?: number;
+}): { left: number; top: number } {
+  const centred = Math.min(Math.max(0, x - tipW / 2), Math.max(0, W - tipW));
+  const [above, below] = [y - r, H - y - r];
+  const top = above >= below ? 0 : H - tipH;
+  if (Math.max(above, below) >= tipH) return { left: centred, top };
+  const level = Math.min(Math.max(0, y - tipH / 2), Math.max(0, H - tipH));
+  if (x + r + 4 + tipW <= W) return { left: x + r + 4, top: level };
+  if (x - r - 4 - tipW >= 0) return { left: x - r - 4 - tipW, top: level };
+  return { left: centred, top };
 }

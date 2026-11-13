@@ -116,16 +116,33 @@ describe("the value axis", () => {
 });
 
 describe("where the tooltip goes", () => {
-  const plot = { W: 272, tipW: 184, top: 16, bottom: 174 };
-  it("sits in the half the day is not in, above a low point and below a high one", () => {
-    expect(tipPlace({ ...plot, x: 136, y: 150 })).toMatchObject({ below: false, top: 16 });
-    expect(tipPlace({ ...plot, x: 136, y: 30 })).toMatchObject({ below: true, top: 174 });
+  const box = { W: 272, H: 208, tipW: 192, tipH: 80 };
+  it("is at the edge further from the day's point: the top over a low point, the bottom under a high one", () => {
+    expect(tipPlace({ ...box, x: 136, y: 150 }).top).toBe(0);
+    expect(tipPlace({ ...box, x: 136, y: 40 }).top).toBe(208 - 80);
   });
 
   it("is centred on the day and never leaves the chart, at either end", () => {
-    expect(tipPlace({ ...plot, x: 136, y: 150 }).left).toBe(136 - 92);
-    expect(tipPlace({ ...plot, x: 20, y: 150 }).left).toBe(0);
-    expect(tipPlace({ ...plot, x: 260, y: 150 }).left).toBe(272 - 184);
+    expect(tipPlace({ ...box, x: 136, y: 150 }).left).toBe(136 - 96);
+    expect(tipPlace({ ...box, x: 20, y: 150 }).left).toBe(0);
+    expect(tipPlace({ ...box, x: 260, y: 150 }).left).toBe(272 - 192);
+  });
+
+  it("goes beside the day where neither edge leaves room above or below its point", () => {
+    // a tooltip taller than either side of a point in the middle, on a wide chart
+    const tall = { W: 900, H: 208, tipW: 192, tipH: 110 };
+    const right = tipPlace({ ...tall, x: 300, y: 104 });
+    expect(right.left).toBeGreaterThan(300);
+    expect(right.top).toBe(104 - 55);
+    const left = tipPlace({ ...tall, x: 800, y: 104 });
+    expect(left.left + 192).toBeLessThan(800);
+  });
+
+  it("stays at the edge, inside the chart, where there is no room beside either", () => {
+    const place = tipPlace({ W: 272, H: 208, tipW: 192, tipH: 110, x: 136, y: 104 });
+    expect(place.left).toBe(40);
+    expect(place.top + 110).toBeLessThanOrEqual(208);
+    expect(place.top).toBeGreaterThanOrEqual(0);
   });
 });
 
