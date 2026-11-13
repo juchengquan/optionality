@@ -3,7 +3,7 @@ import { DASH } from "./format";
 
 /** The market, read beside the strikes — and nothing more (ADR 0018).
  *
- *  It sits BELOW `TopLine` on purpose. That line appears rather than reports, and its own comment
+ *  It sits BELOW the needs-you line on purpose. That line appears rather than reports, and its own comment
  *  says why: "a line that is almost always the same becomes furniture and stops being read, which
  *  fails on the one day it matters". This strip IS that furniture by design — it is almost always
  *  the same, and being glanceable is the whole of its job — so it must not occupy the position that

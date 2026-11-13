@@ -2,7 +2,7 @@
    .nx-still-stage and .nx-still, so nothing here reaches the page on screen. */
 
 /* OFF SCREEN rather than `display: none` — a node with no layout paints as nothing — and fixed, so
-   it cannot lengthen the page or move its scroll while the picture is taken (app.css: .snapshot-stage) */
+   it cannot lengthen the page or move its scroll while the picture is taken */
 .nx-still-stage { position: fixed; top: 0; left: -10000px; pointer-events: none; }
 
 /* An explicit ground and ink, or the PNG is transparent wherever the page's own shows through —
@@ -24,7 +24,7 @@
 .nx-still .nx-needs { margin-bottom: 0; }
 
 /* the table, as a picture: nothing to scroll, so nothing clipped and nothing sticky. Sticky would
-   resolve against the page, and the stage sits 10000px to the left of it (app.css: .snapshot) */
+   resolve against the page, and the stage sits 10000px to the left of it */
 .nx-still .nxd { display: block; }
 .nx-still .nxd-table { overflow: visible; }
 .nx-still .nxd-head { position: static; }

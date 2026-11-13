@@ -15,8 +15,8 @@ export default defineConfig({
   // absence itself, verified by running the components with the stubs removed, so the stubs were
   // dropped rather than shipped dead. If a later change crashes inside a positioning engine, that
   // is what this note is for. (`Setup.test.tsx` carried it, around a smoke test of a `Select` the
-  // dashboard does not use; `Columns.test.tsx` opens a real `Popover` and finds its content
-  // through the portal with `screen.findByRole`, which is the same claim about live code.)
+  // dashboard does not use; `NextDesk.test.tsx` opens the column picker's real `Popover` and finds
+  // its content through the portal with `screen.findByRole`, which is the same claim about live code.)
   test: {
     environment: "jsdom",
     globals: true,

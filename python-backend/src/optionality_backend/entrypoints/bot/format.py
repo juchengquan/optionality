@@ -166,8 +166,8 @@ def standing_note(v: HoldingValue) -> str:
     A Level reached outranks a pace gap: a Target or a Stop is a decision already made, while the gap
     is only a reading. The gap is said in WORDS, never as a bare sign — CONTEXT.md: "behind" is bad
     while a positive P&L is good, and a sign beside one invites reading the other. That rule is
-    PaceLine's on the dashboard, and this is its second home on purpose: forty characters cannot hold
-    the sentence that one writes.
+    the dashboard's too (`frontend/src/next/pace.ts`), and this is its second home on purpose: forty
+    characters cannot hold the sentence that one writes.
     """
     s = v.schedule
     if s is None:

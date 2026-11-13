@@ -12,8 +12,9 @@ import { marketClock } from "./format";
  *  zone the dashboard is in. It is the FIGURES' time that gets the twin, not the screen's: the
  *  browser's own clock says nothing about the trading day.
  *
- *  One component rather than two copies: App had this markup and SnapshotView had it again, so
- *  the image could have told a different story about its own freshness than the page did.
+ *  One component rather than two copies: the old page's App had this markup and its SnapshotView
+ *  had it again, so the image could have told a different story about its own freshness than the
+ *  page did.
  */
 export function Freshness({ fetchedAt, polledAt, sweepSeconds }: {
   fetchedAt: string | null;

@@ -1,6 +1,6 @@
 /** The phone's detail sheet (ADR 0023): a bottom sheet over the cards, with a card's detail and
  *  its Monitors. Back closes it — a history entry, never a route (ADR 0005) — through the same
- *  `useDismissOnBack` today's sheet at `/opt` uses. */
+ *  `useDismissOnBack` the old page's sheet used. */
 import { useEffect, useRef } from "react";
 
 import type { Entry, Holding, Monitor } from "../../shared/api";

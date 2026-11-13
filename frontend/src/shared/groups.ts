@@ -1,5 +1,5 @@
-/** The groups a disabled rule is shown under, by its `disabled_reason` — both pages read them
- *  (ADR 0023): today's muted tables and `/opt/next`'s book and holding detail. */
+/** The groups a disabled rule is shown under, by its `disabled_reason` (ADR 0023): the book's
+ *  muted section and a holding's detail. */
 
 /** Most alarming first: the two Quarantines — the service's own doing, where a rule cannot be
  *  evaluated at all — then expiry, then the rules you muted yourself.

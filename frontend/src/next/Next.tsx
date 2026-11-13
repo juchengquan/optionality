@@ -44,7 +44,8 @@ import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
 
-/** The redesigned dashboard, at `/opt/next` beside today's (ADR 0023, #287).
+/** The dashboard, at `/opt` (ADR 0023): built at `/opt/next` beside the old page from #287, and
+ *  in its place since the swap (#301).
  *
  *  A shell first: the arrangement, the mode, the colours, the needs-you line and Settings, around a
  *  plain list of the book that the desk table and the phone cards replace. Modes and arrangements
@@ -93,7 +94,8 @@ export function Next() {
   const { holdings, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.reload, rereadJournal);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
-  // adding a spread (#293): a panel above the desk's table, a bottom sheet from the phone's Add tab
+  // adding a spread or a contract (#293, #331; named for both since #301): a panel above the desk's
+  // table, a bottom sheet from the phone's Add tab
   const [adding, setAdding] = useState(false);
   const panelId = useId();
   const plusButton = useRef<HTMLButtonElement>(null);
@@ -119,7 +121,7 @@ export function Next() {
   // refusal thrown back to the form that sent it rather than toasted underneath it
   const retentionDays = book.health?.settings.expired_retention_days ?? null;
   // and the two writes that start from a rule (#336): a total entry split across its holdings, by
-  // the route today's page uses, and a watched contract recorded as held, by `POST /spreads`
+  // the route the old page used, and a watched contract recorded as held, by `POST /spreads`
   const ruleMonitors = book.monitors;
   const monitorActions = useMemo<MonitorActions>(() => ({
     patch: async (id, body) => { await patchMonitor(id, body as Record<string, unknown>); await reload(); },
@@ -283,7 +285,7 @@ export function Next() {
           </Button>
         )}
         {phone ? null : (
-          <Button ref={plusButton} variant="ghost" size="sm" aria-label="add a spread" aria-expanded={adding}
+          <Button ref={plusButton} variant="ghost" size="sm" aria-label="add" aria-expanded={adding}
                   aria-controls={adding ? panelId : undefined} onClick={() => setAdding((a) => !a)}>
             <Plus />
           </Button>
@@ -312,9 +314,9 @@ export function Next() {
                         served={journal.trades?.find((t) => t.id === o.closed.id) ?? null} />
         ))}
         {adding && !phone ? (
-          <section id={panelId} className="nx-add-panel" aria-label="adding a spread"
+          <section id={panelId} className="nx-add-panel" aria-label="add a spread or contract"
                    onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(); } }}>
-            <h2>Add a spread</h2>
+            <h2>Add a spread or contract</h2>
             {addForm}
           </section>
         ) : null}
@@ -412,8 +414,8 @@ function AddSheet({ open, onClose, up, entryStyle, children }: {
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}>
         <SheetHeader>
-          <SheetTitle>Add a spread</SheetTitle>
-          <SheetDescription>The spread and the Monitors it starts with, saved together.</SheetDescription>
+          <SheetTitle>Add a spread or contract</SheetTitle>
+          <SheetDescription>A spread or one contract, and the Monitors it starts with, saved together.</SheetDescription>
         </SheetHeader>
         <div className="nxp-sheet-body">{children}</div>
       </SheetContent>
@@ -487,7 +489,7 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>,
  *  say so and the rules' quarantines through.
  *
  *  Beyond the line, LIVE also polls the holdings' valuation and the References: three market-data
- *  calls per poll where `/opt` makes two (ADR 0010), the cost of holdings leading the page; with
+ *  calls per poll where the old page made two (ADR 0010), the cost of holdings leading the page; with
  *  nothing held the valuation asks the Provider nothing. REVIEW asks for the holdings once, on
  *  entering it, and not for the References, which it does not show.
  */
@@ -551,7 +553,7 @@ function useBook(mode: Mode) {
     } catch (e: unknown) {
       if (mine < landed.current) return;
       landed.current = mine;
-      // CLEARED, unlike `/opt`, which keeps the rows and relies on drawing the error first: here
+      // CLEARED, unlike the old page, which kept the rows and relied on drawing the error first: here
       // the needs-you line reads them too, and must not go on saying a Level from a valuation
       // that has since failed — nor a time it was valued at
       setHoldings(null);
@@ -575,7 +577,7 @@ function useBook(mode: Mode) {
    *  LIVE's poll, and any change the owner made — a Reference kept or dropped in Settings must be
    *  seen to have been, in REVIEW too.
    *
-   *  The References are ASKED here and never awaited (#335, as `/opt` since #308): what this
+   *  The References are ASKED here and never awaited (#335, as the old page did since #308): what this
    *  returns settles when the line and the holdings land, so a save, a refresh or a poll finishes
    *  on its own reads and the strip catches up when its slowest source answers. Awaited, a mute
    *  said "saving…" for the whole of a silent source's 8 s. */

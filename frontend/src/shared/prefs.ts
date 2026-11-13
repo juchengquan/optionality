@@ -1,13 +1,11 @@
-import { DEFAULT_BAND, isPinned, type Grouping, type Signal } from "./columns";
-
 /** What the browser remembers for this viewer, and nothing else.
  *
- *  Six preferences for the dashboard at `/opt`, and five more for the redesigned one at `/opt/next`
- *  (ADR 0023), at the end. The six: which reading earns the second colour and the band it must clear, how the rows
- *  are divided, which columns each table hides, and how often the screen polls. They are here
- *  rather than in `columns.ts` because only two of them are about columns at all — the other four
- *  sat in that module for company, between the column definitions and the fitting arithmetic, and
- *  the cadence sat inline in `App.tsx`, which is why it was the one preference with no test.
+ *  Seven preferences: how often the screen polls, which columns the desk's book hides, which way is
+ *  up, how a fired entry rule looks, privacy, the arrangement and the desk's price map. The old
+ *  page at `/opt` had five more — the signal and its band (the near-firing highlight), the
+ *  grouping and the single-leg table's columns — and they went with it (#301, ADR 0023); their
+ *  cookies are simply never read again. The ones kept keep their names, so a choice made on either
+ *  page before the swap is still the choice after it.
  *
  *  Cookies by decision, not localStorage: CLAUDE.md draws the line at behaviour versus preference —
  *  behaviour knobs live in `.env`, viewer preferences live in the browser, and there is no DB
@@ -42,50 +40,19 @@ function writeCookie(name: string, value: string): void {
   document.cookie = `${name}=${value};path=/;max-age=31536000;samesite=lax`;
 }
 
-/** The signal and its band. Out-of-range or unparseable falls back rather than throwing: a cookie
- *  is user-editable, and a band of NaN would flag every row or none with nothing on screen to
- *  explain it. */
-export function readSignal(): Signal {
-  return readCookie("ui_signal") === "pressure" ? "pressure" : "distance";
-}
-
-export function writeSignal(signal: Signal): void {
-  writeCookie("ui_signal", signal);
-}
-
-export function readBand(): number {
-  const n = Number(readCookie("ui_band"));
-  return Number.isFinite(n) && n >= 1 && n <= 100 ? n : DEFAULT_BAND;
-}
-
-export function writeBand(band: number): void {
-  writeCookie("ui_band", String(band));
-}
-
-export function readGrouping(): Grouping {
-  const raw = readCookie("ui_group");
-  return raw === "type" || raw === "expiry" ? raw : "none";
-}
-
-export function writeGrouping(grouping: Grouping): void {
-  writeCookie("ui_group", grouping);
-}
-
-/** The cookie stores what is HIDDEN, not what is kept, so a column added later shows up by
- *  default instead of staying invisible. "." separates because a comma makes the value
- *  quote-escaped and it stops round-tripping.
+/** The columns the desk's book hides (ADR 0008, ADR 0023). The cookie stores what is HIDDEN, not
+ *  what is kept, so a column added later shows up by default instead of staying invisible. "."
+ *  separates because a comma makes the value quote-escaped and it stops round-tripping.
  *
- *  Per TABLE, and `isPinned` is asked per table too: `delta` is pinned on the single-leg table and
- *  an ordinary column on a combo, and a union across both silently discarded `delta` from the
- *  combo cookie — so the one column the owner asked to see there was the one that could not be
- *  controlled. */
-export function readHidden(table: "single" | "combo"): Set<string> {
-  const value = readCookie(`ui_cols_${table}`);
-  return new Set(value.split(".").filter((k) => k && !isPinned(table, k)));
+ *  `ui_cols_combo` because it was the old page's combo table's cookie, and the desk took its
+ *  column keys where the two tables shared one, so the choice made there carried over. It also
+ *  holds keys the desk never offers (gamma, expiry…), which the desk leaves alone. */
+export function readHidden(): Set<string> {
+  return new Set(readCookie("ui_cols_combo").split(".").filter((k) => k));
 }
 
-export function writeHidden(table: "single" | "combo", hidden: Set<string>): void {
-  writeCookie(`ui_cols_${table}`, [...hidden].sort().join("."));
+export function writeHidden(hidden: Set<string>): void {
+  writeCookie("ui_cols_combo", [...hidden].sort().join("."));
 }
 
 /** How often the screen asks, in seconds.

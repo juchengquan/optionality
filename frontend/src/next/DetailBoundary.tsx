@@ -2,7 +2,7 @@ import { Component, type ReactNode } from "react";
 
 /** One holding's or one rule's detail — the desk's inspector, the phone's sheet — drawn so that if
  *  it throws, it alone says so and the page stays up. Without it a single row the page could not
- *  draw unmounted the whole of `/opt/next`: React drops a tree that throws while rendering and,
+ *  draw unmounted the whole page: React drops a tree that throws while rendering and,
  *  with no boundary above, that tree is the page (#337, found as a row with no `spx` at all).
  *
  *  Keyed by the row at each place it is used, so the next row selected is drawn afresh. */

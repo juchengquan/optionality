@@ -1,13 +1,13 @@
-/** Saving the redesigned page as an image (#300): `/opt`'s press (useSnapshot.ts), for this page.
+/** Saving the page as an image (#300): the old page's press (its useSnapshot.ts), for this page.
  *
  *  The caller mounts the picture's own tree off screen while `shooting` is true (Still.tsx), and
  *  this photographs what is there; it never names that tree, so the picture is free to differ
- *  from the screen. What it keeps from `/opt` is everything that was a bug once: two frames
+ *  from the screen. What it kept from that page is everything that was a bug once: two frames
  *  between mounting and painting, the INNER node captured rather than the stage, the scroll size
  *  at a resolution a device will paint (`captureBox`), and never silence — a press answers with a
  *  picture, a "saved", or the reason it could not.
  *
- *  What it drops is `/opt`'s fetch. That page asked for the holdings on the press because its
+ *  What it dropped is that page's fetch. It asked for the holdings on the press because its
  *  panel might never have been opened; this one already holds every figure it draws — LIVE polls
  *  them and REVIEW read them on entering — so the picture is drawn from what the page has and the
  *  press asks the service for nothing.

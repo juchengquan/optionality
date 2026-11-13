@@ -69,7 +69,7 @@ export interface Draft {
 export const draftOf = (r: Rule): Draft =>
   ({ name: r.code, field: r.field, direction: r.direction, compare: r.compare, threshold: String(r.threshold) });
 
-/** The figures a rule may watch, as `/opt`'s add forms offer them. A combo is a signed sum of its
+/** The figures a rule may watch, as the old page's add forms offered them. A combo is a signed sum of its
  *  legs, and IV is intensive — two 20% legs are not a 40% spread — so a combo is never offered it
  *  (CLAUDE.md: Combos; the route refuses it too). A field this list does not know, on a row made
  *  some other way, is kept so the select can still say what the rule watches. */
@@ -188,7 +188,7 @@ export function renameNote(r: Rule): string | null {
 
 // ---- splitting a total entry (#336), through `POST /monitors/{id}/total-entry`
 
-/** Offered on a rule covering more than one WHOLE holding, as today's page offers the total: a
+/** Offered on a rule covering more than one WHOLE holding, as the old page offered the total: a
  *  rule over one holding has that holding's own Entry, edited on the holding (#294), and a rule over
  *  part of one has none — its figure would be a fraction of someone else's credit. */
 export const splitOffered = (r: Rule) => r.scope === "all" && r.holdings.length > 1;

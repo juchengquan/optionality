@@ -2,7 +2,7 @@
  *
  *  Pure: no React, no DOM. The table draws these, the inspector lists every one of them whether the
  *  table had room or not, and the fitting counts their characters — three readers of one text, as
- *  `columns.ts` arranges it for `/opt`, so the three cannot drift.
+ *  the old page's `columns.ts` arranged it, so the three cannot drift.
  *
  *  ONE table for the holdings and the watchlist, so one set of columns: a cell a row has nothing
  *  for is blank, not a dash, because a dash reads as "the figure has not arrived".
@@ -30,8 +30,8 @@ export type DeskRow =
   | { kind: "quarantined"; monitor: Monitor };
 
 export interface DeskColumn {
-  /** Where a key is one `/opt`'s combo table also has, it IS that column, so the column choice
-   *  made there (the `ui_cols_combo` cookie) carries over: hiding P&L there hides it here. */
+  /** Where a key is one the old page's combo table also had, it IS that column, so the column
+   *  choice made there (the `ui_cols_combo` cookie) carried over the swap (#301). */
   key: string;
   label: string;
   align?: "left";
@@ -260,7 +260,7 @@ const TO_MANAGE: DeskColumn = {
 };
 
 const ALARM: DeskColumn = {
-  // `/opt` calls its rule column "alarm", and so does its cookie
+  // the old page called its rule column "alarm", and so does the cookie
   key: "alarm", label: "rule", align: "left",
   text: (r) => r.kind === "rule" ? sentence(r.entry) : r.kind === "quarantined" ? quarantineSentence(r.monitor) : "",
 };
@@ -307,7 +307,7 @@ export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: b
 
 /** Which columns to draw: the pinned name, then by priority while there is room, STOPPING at the
  *  first that does not fit — skipping it for a narrower one made widening a window lose a column
- *  (ADR 0008). Unlike `/opt`'s table this one has no sideways budget: the desk is wide, and the
+ *  (ADR 0008). Unlike the old page's tables this one has no sideways budget: the desk is wide, and the
  *  inspector beside it is where every figure is said whole. The hidden ones are the viewer's
  *  choice and are never drawn. Returned in the drawing order. */
 export function fitColumns(

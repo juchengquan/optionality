@@ -20,10 +20,12 @@ export default defineConfig({
   // off the deploy path mattered when one process served both; it matters more now, because
   // a failed build would leave Caddy with nothing at all to serve.
   //
-  // TWO pages in one build (ADR 0023): today's dashboard at `/opt` and the redesign at `/opt/next`,
-  // beside it until the swap. One build rather than two, so they share the hashed assets, the API
-  // base and the deploy — and `next/index.html`, not `next.html`, so the page is a directory Caddy
-  // serves at `/next` without a redirect (deploy/Caddyfile says why a redirect cannot work here).
+  // TWO entries: the dashboard at `/opt`, and `next/index.html`, which only sends a bookmark of
+  // `/opt/next` — where the redesign was built beside the old page until it replaced it (ADR 0023,
+  // #301) — on to `/opt/`. It is a page and not a redirect because deploy/Caddyfile says why a
+  // redirect cannot work here, and `next/index.html` rather than `next.html` so Caddy serves it at
+  // `/next` as a directory, again without a redirect. Until 2026-12-31: `next/index.html` says
+  // what goes with it then.
   build: {
     outDir: "dist", emptyOutDir: true,
     rollupOptions: {

@@ -1,5 +1,5 @@
 /** The page as it goes into the saved image (#300): a SECOND React tree, mounted off screen only
- *  while the picture is taken, at a width of its own — `/opt`'s SnapshotView, for this page.
+ *  while the picture is taken, at a width of its own — as the old page's SnapshotView was.
  *
  *  Not a copy of the screen, and that is the design. The desk's table fits its columns to the room
  *  it has (ADR 0008), so with the inspector open, or in a narrow window, the screen is a subset;
@@ -66,7 +66,7 @@ export function Still(props: StillProps) {
       {/* the desk's one-line form in both: the phone's banners are buttons */}
       <NeedsLine items={needs} arrangement="desk" entryStyle={entryStyle} />
       {/* as the page draws it, in LIVE only: the one place the picture states the market's level,
-          from a figure the page already polls. `/opt`'s picture has none; this one is a step on. */}
+          from a figure the page already polls. the old page's picture had none. */}
       {mode === "live" ? <ReferenceStrip references={references} /> : null}
       {arrangement === "desk" ? <StillDesk {...props} /> : <StillCards {...props} />}
     </div>
@@ -83,7 +83,7 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
   const placed = placeBook(quotes, holdings, monitors);
   const rows = tableRows(placed);
   // the viewer's column choice, as the table on screen reads it; the room on screen, not at all
-  const hidden = readHidden("combo");
+  const hidden = readHidden();
   const columns = COLUMNS[mode].filter((c) => c.key === PINNED || !hidden.has(c.key));
   const flexible = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
   // in `ch` of the table's own monospace, which is what the screen's fitting measures in pixels

@@ -7,7 +7,7 @@ import { charsOf, COLUMNS, fitColumns, offerable, type DeskColumn, type DeskRow 
  *  columns to both (ADR 0008): the container's width is why columns drop at all, the character's is
  *  why they keep dropping correctly when the reader bumps their text size, which no breakpoint can
  *  see. Resizing the window, opening the inspector beside the table and changing the text size all
- *  re-measure. `useTableFit.ts` is `/opt`'s version of the same hook, for its two tables. */
+ *  re-measure. The old page's `useTableFit.ts` did the same for its two tables (#301 deleted it). */
 export function useDeskFit(mode: Mode, rows: readonly DeskRow[], hidden: ReadonlySet<string>, privacy: boolean) {
   // a callback ref, so the measuring starts when the node exists rather than on the first render
   const [node, setNode] = useState<HTMLDivElement | null>(null);

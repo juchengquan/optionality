@@ -4,31 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-import type { Column } from "./columns";
-
-/** One table's column choices, shown beside that table's heading.
+/** The desk book's column choices, shown beside its heading (ADR 0008, ADR 0023).
  *
- *  Both pickers used to sit in a row above the watchlist, which put a per-table control in
- *  the page's global chrome — and a global "settings" panel holding them would have needed
- *  sub-headings to explain which table each section governed, which is a sign the grouping
- *  is wrong. A control belongs next to the thing it changes.
- *
- *  The trigger keeps the accessible name "<table> columns" even though it now draws an icon:
- *  that name is how the control is found by anyone not looking at it.
+ *  A control belongs next to the thing it changes: the old page's two pickers sat in a row above
+ *  its tables, which put a per-table control in the page's global chrome. The trigger keeps the
+ *  accessible name "<label> columns" even though it draws an icon: that name is how the control is
+ *  found by anyone not looking at it.
  */
 export function ColumnPicker({
-  table, label, all, hidden, onToggle, onReset,
+  label, all, hidden, onToggle, onReset,
 }: {
-  table: "single" | "combo";
   label: string;
-  /** exactly the columns ticking would draw, which is what `offerable` answers — and that skips
-   *  the always-columns, so a pinned one cannot arrive here. This filtered them out a second time
-   *  for itself, which meant neither guard was the one being checked (Columns.test.tsx now holds
-   *  the surviving one). */
-  all: readonly Column[];
+  /** exactly the columns ticking would draw: the desk passes what its fit offers, or hides, and
+   *  never the pinned name column */
+  all: readonly { key: string; label: string }[];
   hidden: Set<string>;
-  onToggle: (table: "single" | "combo", key: string, shown: boolean) => void;
-  onReset: (table: "single" | "combo") => void;
+  onToggle: (key: string, shown: boolean) => void;
+  onReset: () => void;
 }) {
   return (
     <Popover>
@@ -40,19 +32,19 @@ export function ColumnPicker({
         }
       />
       {/* the poll must not land while this is open: which columns are OFFERED comes from the
-          measured fit, so a reload can reflow this very list under the pointer (App.beingOperated) */}
+          measured fit, so a reload can reflow this very list under the pointer (next/poll.ts) */}
       <PopoverContent data-poll="hold">
         <div role="group" aria-label={`${label} columns`} className="flex flex-col gap-2">
           {all.map((c) => (
             <label className="flex items-center gap-2 cursor-pointer" key={c.key}>
               <Checkbox
                 checked={!hidden.has(c.key)}
-                onCheckedChange={(shown) => onToggle(table, c.key, shown)}
+                onCheckedChange={(shown) => onToggle(c.key, shown)}
               />
               {c.label}
             </label>
           ))}
-          <Button variant="ghost" size="sm" onClick={() => onReset(table)}>
+          <Button variant="ghost" size="sm" onClick={onReset}>
             show all
           </Button>
         </div>

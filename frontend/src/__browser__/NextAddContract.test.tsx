@@ -25,11 +25,11 @@ async function openDesk(width = 1440, spreads?: Parameters<typeof serveContract>
   return writes;
 }
 
-const panel = () => screen.getByRole("region", { name: "adding a spread" });
+const panel = () => screen.getByRole("region", { name: "add a spread or contract" });
 
 /** "+", then one contract: the expiry, the strike, the threshold. */
 async function startContract(threshold = "0.15") {
-  await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+  await userEvent.click(screen.getByRole("button", { name: "add" }));
   await userEvent.click(within(panel()).getByRole("button", { name: "one contract" }));
   await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
   await userEvent.fill(screen.getByLabelText("strike"), "7150");
@@ -43,7 +43,7 @@ describe("a single-contract Monitor on the desk", () => {
       await startContract();
       await userEvent.selectOptions(screen.getByLabelText("what it watches"), words);
       await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 Monitor" }));
-      await waitFor(() => expect(screen.queryByRole("region", { name: "adding a spread" })).toBeNull());
+      await waitFor(() => expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull());
       expect(writes.at(-1)).toEqual({
         what: "POST /spreads",
         body: {
@@ -67,7 +67,7 @@ describe("a lone contract held, on the desk", () => {
     await userEvent.click(within(panel()).getByRole("button", { name: "I hold it" }));
     await userEvent.fill(screen.getByLabelText("entry"), "2.40");
     await userEvent.click(within(panel()).getByRole("button", { name: "Record holding + 1 Monitor" }));
-    await waitFor(() => expect(screen.queryByRole("region", { name: "adding a spread" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull());
     expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]);
     expect(await screen.findByText("added 1 holding and 1 Monitor")).toBeTruthy();
     // the book read again: the holding is a row of it, by the name the form gave it

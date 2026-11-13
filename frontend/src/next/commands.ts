@@ -156,7 +156,7 @@ export function paletteActions(s: {
   // a form action is fine while ITS form is the one open: that is landing on it again
   const held = (mine: Hold) => (hold !== null && hold !== mine ? HOLD_WHY : null);
   const out: Omit<PaletteAction, "words">[] = [
-    { key: "add", label: "Add a spread", detail: "", why: null },
+    { key: "add", label: "Add a spread or contract", detail: "", why: null },
     {
       key: "edit-monitor", label: "Edit the selected Monitor", detail: isMonitor ? name : "",
       why: kind === null ? "nothing is selected"

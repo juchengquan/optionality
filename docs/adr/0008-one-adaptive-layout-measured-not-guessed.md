@@ -4,7 +4,10 @@ Date: 2026-09-24
 
 ## Status
 
-Accepted. Amended after use: the table's sideways swipe became a mechanism (last section).
+Accepted. Amended after use: the table's sideways swipe became a mechanism (below). Amended again
+by ADR 0023, built 2026-11-13 (#301): "one design at two sizes" became two designs over one
+capability, and the page this ADR was written for was deleted. What is still in force is in the
+last section.
 
 ## Decision
 
@@ -54,3 +57,20 @@ number (a date field, a form) lives in the detail sheet — and the identity col
 The swipe the owner liked existed only because a bug measured the combo column at a third of its
 width; it is deliberate now. The same finding retired the second line inside a cell, which every
 other figure would have had to earn: `legs` and `expiry` are ordinary columns that drop by priority.
+
+## What holds since ADR 0023 (2026-11-13)
+
+The swap (#301) deleted the single-leg and combo tables this ADR designed, and with them
+`SCROLL_BUDGET`, the sideways swipe, the sticky identity column's reason to exist and the phone's
+column picker (the owner confirmed the last, #338). Still in force, on the desk's table:
+
+- **Columns are fitted by measuring** the container and the character, never by breakpoints, and
+  fitting still stops at the first column that does not fit. The desk has no sideways budget: it
+  is wide, and its inspector says every figure whole.
+- **The picker is still a wish list**, offering only what could appear at the current width. Its
+  choice is the old combo table's cookie, `ui_cols_combo`, so it carried over.
+- **The detail shows every figure** the table had no room for: the desk's inspector and the phone's
+  sheet, from one list (`next/quotefigures.ts`).
+- **Phone parity** holds, and the phone's sheet still consumes its history entry (ADR 0005).
+- **The browser suite** still measures in a real layout engine with the page's own styling, now at
+  desk width and under Playwright's iPhone profile.

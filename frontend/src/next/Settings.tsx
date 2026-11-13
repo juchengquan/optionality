@@ -7,7 +7,7 @@ import { References } from "../shared/References";
 import { Glyph } from "./NeedsLine";
 import type { Need } from "./needs";
 
-/** The cadences offered, as the Service panel at `/opt` offers them. */
+/** The cadences offered, as the old page's Service panel offered them. */
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 
 export interface SettingsProps {

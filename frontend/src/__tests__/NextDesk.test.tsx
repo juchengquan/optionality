@@ -462,7 +462,7 @@ describe("the column choice is shared with /opt, and only the desk's part of it 
     await userEvent.click(screen.getByRole("button", { name: "book columns" }));
     const picker = await screen.findByRole("group", { name: "book columns" });
     await userEvent.click(within(picker).getByText("show all"));
-    expect([...readHidden("combo")].sort()).toEqual(["expiry", "gamma", "theta", "vega"]);
+    expect([...readHidden()].sort()).toEqual(["expiry", "gamma", "theta", "vega"]);
     expect(headers()).toContain("pnl");
   });
 
@@ -473,7 +473,7 @@ describe("the column choice is shared with /opt, and only the desk's part of it 
     await userEvent.click(screen.getByRole("button", { name: "book columns" }));
     const picker = await screen.findByRole("group", { name: "book columns" });
     await userEvent.click(within(picker).getByRole("checkbox", { name: "Δ" }));
-    expect([...readHidden("combo")].sort()).toEqual(["delta", "gamma", "pnl"]);
+    expect([...readHidden()].sort()).toEqual(["delta", "gamma", "pnl"]);
   });
 });
 

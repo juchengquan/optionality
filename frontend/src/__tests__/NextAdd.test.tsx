@@ -331,14 +331,14 @@ describe("the desk's panel", () => {
 
   it("takes the focus into the form, names itself from +, and gives it back on Escape", async () => {
     render(<Next />);
-    const plus = screen.getByRole("button", { name: "add a spread" });
+    const plus = screen.getByRole("button", { name: "add" });
     fireEvent.click(plus);
-    const panel = screen.getByRole("region", { name: "adding a spread" });
+    const panel = screen.getByRole("region", { name: "add a spread or contract" });
     expect(plus.getAttribute("aria-controls")).toBe(panel.id);
     expect(panel.id).not.toBe("");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("expiry")));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    expect(screen.queryByRole("region", { name: "adding a spread" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull();
     expect(document.activeElement).toBe(plus);
   });
 });

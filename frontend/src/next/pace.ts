@@ -1,9 +1,9 @@
-/** A Pace gap in words (CONTEXT.md: Pace gap; ADR 0011), for every place `/opt/next` shows one.
+/** A Pace gap in words (CONTEXT.md: Pace gap; ADR 0011), for every place the page shows one.
  *
  *  "Said in words wherever it is shown, because 'behind' is bad while a positive P&L is good and a
- *  bare sign beside one invites reading the other." The rule is `/opt`'s `PaceLine`, exactly:
+ *  bare sign beside one invites reading the other." The rule is the old page's `PaceLine`, exactly:
  *  positive is BEHIND — costing more to buy back than time alone accounts for — and anything else
- *  is ahead, to two places. One home here, because `PaceLine` goes with `/opt` (#301).
+ *  is ahead, to two places. One home here, since `PaceLine` went with that page (#301).
  */
 import { DASH } from "../shared/format";
 

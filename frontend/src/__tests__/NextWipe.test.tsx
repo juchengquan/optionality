@@ -71,7 +71,7 @@ describe.each(arrangements)("on the %s, a reload landing mid-edit", (arrangement
 
   it("keeps what is typed into the add form", async () => {
     const svc = await open(arrangement);
-    if (arrangement === "desk") fireEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    if (arrangement === "desk") fireEvent.click(screen.getByRole("button", { name: "add" }));
     else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Add" }));
     const form = await screen.findByRole("form", { name: "add a spread" });
     fireEvent.change(within(form).getByLabelText("expiry"), { target: { value: "2026-12-18" } });
