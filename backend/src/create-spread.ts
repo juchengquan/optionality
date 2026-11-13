@@ -6,9 +6,10 @@
  *  until everything has passed. The order is create-monitor.ts's, for its reason — everything free
  *  comes before the one step that leaves the machine:
  *
- *    1. what the request says about itself: a spread that would record nothing, a watched spread
- *       carrying a holding's figures, a rule on a leg the spread does not have, a threshold the
- *       rule refuses, a combo field that does not add up, a name or a rule given twice;
+ *    1. what the request says about itself: more legs in all than one probe may ask for
+ *       (`MAX_PROBE_LEGS`), a spread that would record nothing, a watched spread carrying a
+ *       holding's figures, a rule on a leg the spread does not have, a threshold the rule
+ *       refuses, a combo field that does not add up, a name or a rule given twice;
  *    2. the database: a holding of that name, a Monitor on that (code, field) already there;
  *    3. ONE probe of every leg of every spread, deduplicated — strict as POST /positions and
  *       POST /monitors are, so one Contract the Provider refuses refuses the whole request;
@@ -42,6 +43,7 @@ import {
   DEFAULT_COMBO_FIELD, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_SINGLE_FIELD, thresholdError,
 } from "./schemas/monitor.ts";
 import { DEFAULT_CONTRACTS } from "./schemas/position.ts";
+import { MAX_PROBE_LEGS } from "./schemas/spread.ts";
 
 export interface SpreadDeps {
   db: DatabaseSync;
@@ -211,7 +213,11 @@ export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Prom
   const { db } = deps;
   const date = input.strike_date;
 
-  // 1. what the request says about itself
+  // 1. what the request says about itself, starting with its size: the one probe is bounded
+  const legCount = input.spreads.reduce((n, s) => n + s.legs.length, 0);
+  if (legCount > MAX_PROBE_LEGS) {
+    return refuse(`this request has ${legCount} legs: at most ${MAX_PROBE_LEGS} can be asked of the Provider in one call`);
+  }
   const names = new Set<string>();
   const planned: Planned[][] = [];
   const watched = new Set<string>();

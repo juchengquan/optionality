@@ -29,8 +29,9 @@ export const SpreadMonitorIn = z.object({
 export const SpreadIn = z.object({
   /** the holding's name when held, and the value Monitor's code either way */
   name: z.string().min(1),
-  /** a condor at most: with the eight spreads below, the one probe asks for no more than 32 codes */
-  legs: z.array(LegIn).min(1).max(4),
+  /** six at most, as the old dashboard's combo builder took (#334); the request's legs in all are
+   *  held to `MAX_PROBE_LEGS` by `create-spread.ts`, so the one probe stays small */
+  legs: z.array(LegIn).min(1).max(6),
   /** true records a Position; false records only the Monitors */
   held: z.boolean(),
   /** a holding's, as POST /positions takes them; refused on a spread that is only watched */
@@ -40,6 +41,11 @@ export const SpreadIn = z.object({
   /** the Monitors it starts with: a default switched off is simply not sent */
   monitors: z.array(SpreadMonitorIn),
 });
+
+/** The most legs one request may carry in all: what its ONE probe asks for at most. 32 is the bound
+ *  #322's review set, eight spreads of four legs; six legs to a spread (#334) did not move it, so
+ *  eight six-leg spreads are refused rather than asked of the Provider as 48 codes. */
+export const MAX_PROBE_LEGS = 32;
 
 export const SpreadsIn = z.object({
   strike_date: StrikeDate,

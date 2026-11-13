@@ -18,6 +18,6 @@ export {
 } from "./monitor.ts";
 export { ClosePositionIn, LegIn, PayoffIn, PositionIn, PositionPatch } from "./position.ts";
 export { ReferenceIn, type Source, SOURCES } from "./reference.ts";
-export { SpreadIn, SpreadMonitorIn, SpreadsIn } from "./spread.ts";
+export { MAX_PROBE_LEGS, SpreadIn, SpreadMonitorIn, SpreadsIn } from "./spread.ts";
 // and `backend/schemas/sources` publishes that list ALONE, which is what the dashboard's box
 // imports: this entry carries the schemas and therefore zod, which a page must not pay for.

@@ -99,17 +99,17 @@ class TestWhatZodDoesByBeingZod:
         assert refusal(SpreadsIn, {"strike_date": "2026-12-18", "spreads": [spread] * 9}).startswith(
             "✖ Too big: expected array to have <=8 items\n  → at spreads\n"
         )
-        assert refusal(SpreadIn, {**spread, "legs": [leg] * 5}) == (
-            "✖ Too big: expected array to have <=4 items\n  → at legs"
+        assert refusal(SpreadIn, {**spread, "legs": [leg] * 7}) == (
+            "✖ Too big: expected array to have <=6 items\n  → at legs"
         )
         # guarded like `.min`: run on a value whose type was refused, and on an object with a "length"
-        assert refusal(SpreadIn, {**spread, "legs": "xxxxx"}) == (
+        assert refusal(SpreadIn, {**spread, "legs": "xxxxxxx"}) == (
             "✖ Invalid input: expected array, received string\n  → at legs\n"
-            "✖ Too big: expected string to have <=4 characters\n  → at legs"
+            "✖ Too big: expected string to have <=6 characters\n  → at legs"
         )
-        assert refusal(SpreadIn, {**spread, "legs": {"length": 5}}) == (
+        assert refusal(SpreadIn, {**spread, "legs": {"length": 7}}) == (
             "✖ Invalid input: expected array, received object\n  → at legs\n"
-            "✖ Too big: expected unknown to be <=4\n  → at legs"
+            "✖ Too big: expected unknown to be <=6\n  → at legs"
         )
 
     def test_a_json_number_is_a_javascript_number(self):

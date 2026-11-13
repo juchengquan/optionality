@@ -37,8 +37,9 @@ class SpreadMonitorIn(Shape):
 class SpreadIn(Shape):
     #: the holding's name when held, and the value Monitor's code either way
     name: Annotated[str, String(min=1)]
-    #: a condor at most: with the eight spreads below, the one probe asks for no more than 32 codes
-    legs: Annotated[list[LegIn], Array(min=1, max=4)]
+    #: six at most, as the old dashboard's combo builder took (#334); the request's legs in all are held to
+    #: `MAX_PROBE_LEGS` by `create_spread.py`, so the one probe stays small
+    legs: Annotated[list[LegIn], Array(min=1, max=6)]
     #: True records a Position; False records only the Monitors
     held: Annotated[bool, Boolean()]
     #: a holding's, as POST /positions takes them; refused on a spread that is only watched
@@ -47,6 +48,12 @@ class SpreadIn(Shape):
     opened_at: Annotated[str | None, StrikeDate.nullish()] = None
     #: the Monitors it starts with: a default switched off is simply not sent
     monitors: Annotated[list[SpreadMonitorIn], Array()]
+
+
+#: The most legs one request may carry in all: what its ONE probe asks for at most. 32 is the bound #322's
+#: review set, eight spreads of four legs; six legs to a spread (#334) did not move it, so eight six-leg
+#: spreads are refused rather than asked of the Provider as 48 codes.
+MAX_PROBE_LEGS = 32
 
 
 class SpreadsIn(Shape):
