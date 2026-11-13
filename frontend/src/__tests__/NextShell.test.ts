@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { arrangementFor, DESK_FROM } from "../next/arrangement";
 import { clockMode } from "../next/mode";
-import { inSession } from "../next/session";
+import { inSession, sessionEdge } from "../next/session";
 
 describe("the measured width chooses the arrangement", () => {
   it("puts the cards on anything narrower than the desk and the terminal on the rest", () => {
@@ -70,5 +70,45 @@ describe("the clock chooses the mode", () => {
     expect(clockMode(at("2026-11-09T15:00:00Z"))).toBe("live");
     // 21:00 in Singapore, before the open: the ADR's own example of when the override is needed
     expect(clockMode(at("2026-11-09T13:00:00Z"))).toBe("review");
+  });
+});
+
+/** WHICH session the clock is in, or after: the last open or close at or before now (#371's
+ *  review). A boolean cannot tell Monday evening from Tuesday evening, and a tab asleep through a
+ *  whole session (iOS suspends timers) woke to the same `false` and never valued the book again. */
+describe("the last edge of the session", () => {
+  const at = (iso: string) => new Date(iso);
+  const edge = (iso: string) => sessionEdge(at(iso)).toISOString();
+
+  it("is the day's open from 09:30:00 to 16:15:00, and its close from 16:15:01", () => {
+    // Monday 2026-11-09, EST (UTC-5)
+    expect(edge("2026-11-09T14:30:00Z")).toBe("2026-11-09T14:30:00.000Z");
+    expect(edge("2026-11-09T21:15:00Z")).toBe("2026-11-09T14:30:00.000Z");
+    expect(edge("2026-11-09T21:15:01Z")).toBe("2026-11-09T21:15:01.000Z");
+    expect(edge("2026-11-10T01:00:00Z")).toBe("2026-11-09T21:15:01.000Z"); // Monday 20:00
+  });
+
+  it("is the day before's close until the open, and Friday's all weekend", () => {
+    expect(edge("2026-11-10T14:29:59Z")).toBe("2026-11-09T21:15:01.000Z"); // Tuesday 09:29:59
+    expect(edge("2026-11-07T15:00:00Z")).toBe("2026-11-06T21:15:01.000Z"); // Saturday
+    expect(edge("2026-11-08T23:00:00Z")).toBe("2026-11-06T21:15:01.000Z"); // Sunday 18:00
+    expect(edge("2026-11-09T14:29:59Z")).toBe("2026-11-06T21:15:01.000Z"); // Monday 09:29:59
+  });
+
+  it("changes across a whole session slept through, though the session reads false at both ends", () => {
+    // Monday 20:00 and Tuesday 20:00 New York: out of session both times, a session apart
+    expect(inSession(at("2026-11-10T01:00:00Z"))).toBe(inSession(at("2026-11-11T01:00:00Z")));
+    expect(edge("2026-11-10T01:00:00Z")).not.toBe(edge("2026-11-11T01:00:00Z"));
+    // and Friday evening to Monday evening
+    expect(edge("2026-11-07T01:00:00Z")).not.toBe(edge("2026-11-10T01:00:00Z"));
+  });
+
+  it("is New York's wall clock across the November clock change", () => {
+    // Friday 2026-10-30 is EDT (UTC-4): its close is 20:15:01 UTC; Monday 2026-11-02 is EST
+    expect(edge("2026-11-01T12:00:00Z")).toBe("2026-10-30T20:15:01.000Z");
+    expect(edge("2026-11-02T14:30:00Z")).toBe("2026-11-02T14:30:00.000Z");
+    // and March's: Friday 2027-03-12 is EST, Monday 2027-03-15 EDT
+    expect(edge("2027-03-14T12:00:00Z")).toBe("2027-03-12T21:15:01.000Z");
+    expect(edge("2027-03-15T13:30:00Z")).toBe("2027-03-15T13:30:00.000Z");
   });
 });

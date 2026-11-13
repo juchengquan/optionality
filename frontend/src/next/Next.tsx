@@ -35,7 +35,7 @@ import { holdToast } from "./edit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
 import { clockMode, type Mode } from "./mode";
-import { inSession, useSessionClock } from "./session";
+import { inSession, sessionEdge, useSessionClock } from "./session";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
@@ -77,6 +77,9 @@ export function Next() {
   // fetches and what the needs-you line says follow it, whichever mode is on screen (#371).
   const now = useSessionClock();
   const session = inSession(now);
+  // and WHICH session it is in or after: a tab asleep from Monday 20:00 to Tuesday 20:00 New York
+  // reads `false` at both ends, and must still value the book again when it wakes
+  const edge = sessionEdge(now).getTime();
   // The clock's mode unless the owner chose one. A choice lasts until the clock's own mode next
   // changes: LIVE picked at 08:00 New York becomes the clock's at the open and REVIEW at the
   // close. Choosing what the clock would pick hands the page straight back to it. Since #371 the
@@ -88,7 +91,7 @@ export function Next() {
   const mode = chosen ?? byClock;
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
-  const book = useBook(session);
+  const book = useBook(session, edge);
   // the picture (#300): the press, and the page's figures as they were at it — the off-screen tree
   // is drawn from that copy, so a poll landing mid-capture cannot make one picture two moments
   const { frame: pictured, stageRef, save } = useSaveImage<StillProps>();
@@ -508,10 +511,14 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>,
  *  Beyond the line, IN SESSION the poll also asks for the holdings' valuation and the References:
  *  three market-data calls per poll where the old page made two (ADR 0010), the cost of holdings
  *  leading the page; with nothing held the valuation asks the Provider nothing. OUTSIDE the
- *  session both are asked ONCE — on opening, at each change of session, and by a refresh — and
+ *  session both are asked ONCE — on opening, at each edge of the session, and by a refresh — and
  *  the poll asks only for the line.
+ *
+ *  @param edge the session's last edge (`sessionEdge`), as a number: what the one-off read is keyed
+ *  on, so ANY open or close passed — while the tab was awake, or slept through with its timers
+ *  suspended and noticed when it comes back into view (`useSessionClock`) — values the book again.
  */
-function useBook(session: boolean) {
+function useBook(session: boolean, edge: number) {
   const [quotes, setQuotes] = useState<Entry[]>([]);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
@@ -610,9 +617,11 @@ function useBook(session: boolean) {
     [loadLine, loadHoldings, loadReferences],
   );
 
-  // everything once on opening and at every change of session: the open starts the poll of it, and
-  // the close is when the page values the book the last time it will without being asked
-  useEffect(() => { void load(true); }, [load, session]);
+  // everything once on opening and at every edge of the session: the open starts the poll of it, the
+  // close is when the page values the book the last time it will without being asked, and an edge
+  // slept through is one the page woke after (#371's review: keyed on `session` alone, a tab asleep
+  // from one evening to the next read false at both ends and was never valued again)
+  useEffect(() => { void load(true); }, [load, edge]);
 
   // the viewer's cadence if chosen, the service's sweep if not (prefs.readRefresh)
   useEffect(() => {

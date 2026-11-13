@@ -261,6 +261,35 @@ describe("what it asks for, by New York's session and not by the mode (#371)", (
     for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}, from the open\n${said()}`).toBe(2);
   });
 
+  for (const [what, from, to] of [
+    ["a whole session", "2026-11-10T01:00:00Z", "2026-11-11T01:00:00Z"], // Monday 20:00 → Tuesday 20:00
+    ["a weekend and a session", "2026-11-07T01:00:00Z", "2026-11-10T01:00:00Z"], // Friday 20:00 → Monday 20:00
+  ] as const) {
+    it(`values the book once on waking from ${what} slept through, out of session at both ends`, async () => {
+      // iOS suspends a tab's timers: nothing ticks between the two, and the session reads false at
+      // both ends, so only WHICH session it is after can say the valuation is a session old
+      document.cookie = "ui_arrangement=desk;path=/";
+      at(from);
+      await open();
+      await quiet();
+      calls = [];
+      vi.setSystemTime(new Date(to));
+      const visible = Object.getOwnPropertyDescriptor(Document.prototype, "visibilityState");
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+      try {
+        await act(async () => {
+          window.dispatchEvent(new Event("focus"));
+          document.dispatchEvent(new Event("visibilitychange"));
+        });
+      } finally {
+        delete (document as unknown as { visibilityState?: unknown }).visibilityState;
+        if (visible) Object.defineProperty(Document.prototype, "visibilityState", visible);
+      }
+      await quiet();
+      for (const path of VALUED) expect(count(path), `${path}, once on waking\n${said()}`).toBe(1);
+    });
+  }
+
   it("the close stops polling the holdings and the References", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at("2026-11-09T21:14:00Z"); // Monday 16:14

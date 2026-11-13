@@ -24,18 +24,61 @@ const CLOSE = (16 * 60 + 15) * 60;
 
 /** Fields, not a formatted string: `formatToParts` cannot be misread by a locale's punctuation,
  *  and `hourCycle: "h23"` is the spelling that cannot render midnight as 24. */
-const NEW_YORK = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit",
-  second: "2-digit", hourCycle: "h23",
+const DAY_FIELDS = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
 });
+
+/** New York's wall clock at an instant: its calendar day (as a UTC midnight, for arithmetic), its
+ *  weekday and the seconds since its midnight. */
+function newYork(at: Date): { day: number; weekday: string; second: number } {
+  const parts = DAY_FIELDS.formatToParts(at);
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return {
+    day: Date.UTC(Number(part("year")), Number(part("month")) - 1, Number(part("day"))),
+    weekday: part("weekday"),
+    second: (Number(part("hour")) * 60 + Number(part("minute"))) * 60 + Number(part("second")),
+  };
+}
 
 /** 09:30:00 to 16:15:00 New York, Monday to Friday. */
 export function inSession(now: Date): boolean {
-  const parts = NEW_YORK.formatToParts(now);
-  const part = (type: string) => parts.find((p) => p.type === type)!.value;
-  if (part("weekday") === "Sat" || part("weekday") === "Sun") return false;
-  const second = (Number(part("hour")) * 60 + Number(part("minute"))) * 60 + Number(part("second"));
+  const { weekday, second } = newYork(now);
+  if (weekday === "Sat" || weekday === "Sun") return false;
   return second >= OPEN && second <= CLOSE;
+}
+
+/** The instant New York's wall clock reads `second` on the calendar `day` (a UTC midnight). Found
+ *  by correcting a guess by the offset it lands on, twice: once is enough except across a change of
+ *  clocks, and the edges here (09:30, 16:15) are never inside the hour a change skips or repeats. */
+function atNewYork(day: number, second: number): Date {
+  const wall = day + second * 1000;
+  let t = wall + 5 * 3_600_000;
+  for (let i = 0; i < 2; i++) {
+    const seen = newYork(new Date(t));
+    t += wall - (seen.day + seen.second * 1000);
+  }
+  return new Date(t);
+}
+
+/** The last edge of the session at or before `now`: today's open (09:30:00) while it is open, its
+ *  close (16:15:01, the first second out) after it, and before a weekday's open — or all weekend —
+ *  the last weekday's close.
+ *
+ *  WHICH session the page is in or after, where `inSession` says only whether: Monday 20:00 and
+ *  Tuesday 20:00 New York are both out of session, a whole session apart. The page re-values the
+ *  book when this changes, so a tab asleep through a session (iOS suspends its timers) is valued
+ *  again when it wakes rather than drawing the day before's valuation (#371's review). The same
+ *  instant says whether a served stamp predates the session's last edge (`servedWhen`). */
+export function sessionEdge(now: Date): Date {
+  const { day, weekday, second } = newYork(now);
+  const weekend = weekday === "Sat" || weekday === "Sun";
+  if (!weekend && second > CLOSE) return atNewYork(day, CLOSE + 1);
+  if (!weekend && second >= OPEN) return atNewYork(day, OPEN);
+  // the last weekday before today, at its close
+  let back = day - 86_400_000;
+  while ([0, 6].includes(new Date(back).getUTCDay())) back -= 86_400_000;
+  return atNewYork(back, CLOSE + 1);
 }
 
 /** The clock, read every 15 seconds and again whenever the page comes back into view: a phone
