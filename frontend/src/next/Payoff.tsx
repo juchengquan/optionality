@@ -140,7 +140,7 @@ export function WatchedPayoff({ entry }: { entry: Entry }) {
  *  Asked for again as the legs change, a moment after the typing stops — one POST, no Provider —
  *  with the last curve kept on screen, marked as updating, until the next one arrives. Per
  *  contract and in points (`add.ts`, `previewOf`), so it says nothing privacy hides. */
-export function DraftPreview({ subject, draft, blank, note, spx, spxReason }: {
+export function DraftPreview({ subject, draft, blank, note, spx, spxReason, onDrawn }: {
   /** which draft spread this is, so another one's curve is never shown as this one's */
   subject: string;
   draft: DraftPayoff | null;
@@ -149,10 +149,20 @@ export function DraftPreview({ subject, draft, blank, note, spx, spxReason }: {
   note?: string;
   spx: number | null;
   spxReason: string | null;
+  /** told the payoff on screen and the draft it was served for (its JSON), or null when none is:
+   *  the add form reads what the legs can cost to close from it rather than working it out again */
+  onDrawn?: (drawn: { key: string; payoff: Payoff } | null) => void;
 }) {
   const raw = draft === null ? null : JSON.stringify(draft);
   const key = useSettled(raw, 200);
   const asked = usePayoff(subject, key, () => fetchDraftPayoff(JSON.parse(key!) as DraftPayoff));
+  const told = useRef(onDrawn);
+  told.current = onDrawn;
+  const payoff = asked?.payoff ?? null;
+  const shown = asked?.shown ?? null;
+  useEffect(() => {
+    told.current?.(payoff && shown !== null ? { key: shown, payoff } : null);
+  }, [payoff, shown]);
   // updating from the moment the draft changes, not from when the pause ends: a side flipped a
   // moment ago must not leave the old curve standing as current
   const state = asked && raw !== null && asked.shown !== raw ? { ...asked, updating: true } : asked;

@@ -7,12 +7,15 @@
  *    typing it again per spread and per rule was most of what the old form's 34 clicks were.
  *  - Held: the spread's value at 2x its Entry (the stop) and the short leg's delta at 0.30.
  *    Watched: the same two, at the thresholds typed — an entry signal, not a risk (ADR 0023).
- *    Either can be switched off, and a switched-off one is simply not sent.
+ *    Either can be switched off, and a switched-off one is simply not sent. A structure with no
+ *    short leg starts with no delta Monitor: there is no sold leg to watch (#334).
+ *  - A spread has two legs to six, each its own side, type and strike (#334): the old dashboard's
+ *    combo builder took six, and `POST /spreads` takes six.
  *  - Opened starts as the New York trading day, never the local one: through the Singapore morning
  *    the two differ, and a holding whose Opened is not its first sample's day loses its vol figure
  *    without a word (ADR 0011).
  */
-import type { DraftPayoff, Monitor } from "../api";
+import type { DraftPayoff, Monitor, Payoff } from "../api";
 
 export type Side = "short" | "long";
 export type OptionType = "CALL" | "PUT";
@@ -37,7 +40,8 @@ export interface SpreadDraft {
   valueOn: boolean | null;
   /** null follows the default: 2x the Entry when held, nothing when watched */
   valueAt: string | null;
-  deltaOn: boolean;
+  /** null follows the default: on when the spread has a short leg to watch, off when it has none */
+  deltaOn: boolean | null;
   /** null follows the default: 0.30 when held, nothing when watched */
   deltaAt: string | null;
 }
@@ -74,6 +78,11 @@ export interface SpreadsBody {
 
 export type Preset = "put" | "call" | "condor";
 
+/** A spread's legs, fewest and most: a single contract is the "one contract" form's (#331), and six
+ *  is what `POST /spreads` takes (#334). */
+export const MIN_LEGS = 2;
+export const MAX_LEGS = 6;
+
 /** A held spread's short-leg delta Monitor, unless another is typed (ADR 0023). */
 export const HELD_DELTA = "0.30";
 
@@ -92,7 +101,7 @@ const LEGS: Record<Preset, () => LegDraft[]> = {
 function spread(preset: Preset): SpreadDraft {
   return {
     key: nextKey(), legs: LEGS[preset](), name: "", entry: "", contracts: "1",
-    valueOn: null, valueAt: null, deltaOn: true, deltaAt: null,
+    valueOn: null, valueAt: null, deltaOn: null, deltaAt: null,
   };
 }
 
@@ -120,6 +129,21 @@ export function setLeg(d: AddDraft, key: string, index: number, change: Partial<
       ...s, legs: s.legs.map((l, i) => (i === index ? { ...l, ...change } : l)),
     })),
   };
+}
+
+/** One more leg, long and of the last leg's type until changed — a wing bought further out is the
+ *  commonest leg added — or the draft as it was at six. */
+export function addLeg(d: AddDraft, key: string): AddDraft {
+  const s = d.spreads.find((x) => x.key === key);
+  if (!s || s.legs.length >= MAX_LEGS) return d;
+  return setSpread(d, key, { legs: [...s.legs, leg("long", s.legs.at(-1)?.option_type ?? "PUT")] });
+}
+
+/** The leg at `index` taken out, the others kept in their order — or the draft as it was at two. */
+export function removeLeg(d: AddDraft, key: string, index: number): AddDraft {
+  const s = d.spreads.find((x) => x.key === key);
+  if (!s || s.legs.length <= MIN_LEGS) return d;
+  return setSpread(d, key, { legs: s.legs.filter((_, i) => i !== index) });
 }
 
 /** Short becomes long and long short: the mistake the preview exists to show (ADR 0023). */
@@ -169,7 +193,8 @@ export function valueHint(held: boolean, s: SpreadDraft): string {
 }
 
 /** What closing the legs would cost at expiry with SPX at `x`: the short legs' worth less the
- *  long ones', per contract. Its most is what a credit spread can cost to close. */
+ *  long ones', per contract. Used only to SIGN a watched spread's preview, which must be decided
+ *  before the payoff can be asked for; the warning below reads the served payoff instead. */
 function costAt(legs: { side: Side; option_type: OptionType; strike: number }[], x: number): number {
   return legs.reduce((sum, l) => {
     const worth = l.option_type === "CALL" ? Math.max(0, x - l.strike) : Math.max(0, l.strike - x);
@@ -177,7 +202,8 @@ function costAt(legs: { side: Side; option_type: OptionType; strike: number }[],
   }, 0);
 }
 
-/** The most the legs can cost to close at expiry, and the least; null where it has no ceiling. */
+/** The most the legs can cost to close at expiry, and the least; null where it has no ceiling. The
+ *  cost bends only at the strikes, so those, zero and one point past the top are all of it. */
 function costRange(legs: { side: Side; option_type: OptionType; strike: number }[]): { most: number | null; least: number } {
   const ks = legs.map((l) => l.strike);
   const top = Math.max(...ks);
@@ -194,14 +220,23 @@ const legsOf = (s: SpreadDraft) => {
 };
 
 /** A held credit spread's stop that can never fire: 2x a rich credit is past what the spread can
- *  ever cost to close. Said, and left on — the owner may mean it. */
-export function stopWarning(held: boolean, s: SpreadDraft): string | null {
-  if (!held || !valueEnabled(held, s) || isDebit(held, s)) return null;
-  const legs = legsOf(s);
-  const at = typed(valueShown(held, s));
-  if (legs === null || at === null) return null;
-  const { most } = costRange(legs);
-  if (most === null || at < most) return null;
+ *  ever cost to close. Said, and left on — the owner may mean it.
+ *
+ *  What it can cost to close is read from the payoff the preview was SERVED (`drawn`, from
+ *  `POST /positions/payoff`, `payoffAtExpiry`): its Entry less its max loss, for any number of legs,
+ *  rather than worked out again here. Nothing is said until that payoff is this draft's own — a
+ *  curve still drawn for the legs before a change warns of nothing — and nothing where it has no
+ *  floor (#334). */
+export function stopWarning(
+  d: AddDraft, s: SpreadDraft, drawn: { key: string; payoff: Payoff } | null,
+): string | null {
+  if (!d.held || !valueEnabled(d.held, s) || isDebit(d.held, s)) return null;
+  const preview = previewOf(d, s);
+  const at = typed(valueShown(d.held, s));
+  if (preview === null || at === null || drawn === null || drawn.key !== JSON.stringify(preview)) return null;
+  if (drawn.payoff.max_loss === null) return null;
+  const most = cents(preview.entry - drawn.payoff.max_loss);
+  if (at < most) return null;
   return `the stop at ${at.toFixed(2)} can never fire: this spread costs at most ${most.toFixed(2)} to close`;
 }
 
@@ -211,6 +246,12 @@ export function stopWarning(held: boolean, s: SpreadDraft): string | null {
 function soldForCredit(legs: { side: Side; option_type: OptionType; strike: number }[]): boolean {
   const { most, least } = costRange(legs);
   return !(least < 0 && most !== null && most <= 0);
+}
+
+/** Whether the delta Monitor is on: as switched, or by default on when there is a short leg to
+ *  watch. A structure with no short leg starts with it off rather than refused (#334). */
+export function deltaEnabled(s: SpreadDraft): boolean {
+  return s.deltaOn ?? s.legs.some((l) => l.side === "short");
 }
 
 export function deltaDefault(held: boolean): string {
@@ -243,7 +284,7 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
       }
       monitors.push({ threshold: at });
     }
-    if (s.deltaOn) {
+    if (deltaEnabled(s)) {
       const shorts = legs.filter((l) => l.side === "short");
       if (shorts.length === 0) return { error: `${which} has no short leg to watch the delta of: switch that Monitor off` };
       const at = typed(deltaShown(d.held, s));
@@ -292,7 +333,7 @@ export function saveWords(d: AddDraft): string {
   const out = spreadsBody(d);
   const monitors = "error" in out
     ? d.spreads.reduce((n, s) => n + (valueEnabled(d.held, s) ? 1 : 0)
-      + (s.deltaOn ? s.legs.filter((l) => l.side === "short").length : 0), 0)
+      + (deltaEnabled(s) ? s.legs.filter((l) => l.side === "short").length : 0), 0)
     : out.body.spreads.reduce((n, s) => n + s.monitors.length, 0);
   const m = `${monitors} Monitor${monitors === 1 ? "" : "s"}`;
   if (!d.held) return `Watch ${d.spreads.length === 1 ? "it" : `${d.spreads.length} spreads`} + ${m}`;
@@ -311,7 +352,7 @@ function planned(d: AddDraft, s: SpreadDraft): { code: string; field: string }[]
   if (legs === null || d.expiry.length < 10) return [];
   const out: { code: string; field: string }[] = [];
   if (valueEnabled(d.held, s)) out.push({ code: s.name.trim() || derivedName(d.expiry, s.legs), field: "mid_price" });
-  if (s.deltaOn) {
+  if (deltaEnabled(s)) {
     for (const l of legs.filter((x) => x.side === "short")) {
       out.push({ code: contractCode(d.expiry, l.option_type, l.strike), field: "option_delta" });
     }

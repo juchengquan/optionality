@@ -12,13 +12,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 
-import { addSpreads, type Added, type Monitor } from "../api";
+import { addSpreads, type Added, type Monitor, type Payoff } from "../api";
 import { Button } from "@/components/ui/button";
 import { marketDay } from "../format";
 import {
-  addSpread, derivedName, deltaShown, flipSide, newDraft, previewOf, removeSpread, replaces, saveWords,
-  setLeg, setSpread, spreadsBody, stopWarning, valueEnabled, valueHint, valueShown, type AddDraft,
-  type Preset, type SpreadDraft,
+  addLeg, addSpread, deltaEnabled, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
+  removeLeg, removeSpread, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, valueEnabled,
+  valueHint, valueShown, type AddDraft, type Preset, type SpreadDraft,
 } from "./add";
 import { AddContract } from "./AddContract";
 import { newContract, type ContractDraft } from "./contract";
@@ -160,8 +160,12 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
   const set = (change: Partial<SpreadDraft>) => onChange(setSpread(draft, s.key, change));
   const preview = previewOf(draft, s);
   const credit = preview?.entry ?? 0;
-  const warning = stopWarning(held, s);
+  // the payoff the preview was served, which the stop's warning reads its ceiling from
+  const [drawn, setDrawn] = useState<{ key: string; payoff: Payoff } | null>(null);
+  const warning = stopWarning(draft, s, drawn);
   const valueOn = valueEnabled(held, s);
+  const deltaOn = deltaEnabled(s);
+  const shorts = s.legs.filter((l) => l.side === "short").length;
   return (
     <fieldset className="nx-add-spread" data-spread={n}>
       <legend>{`spread ${n}`}</legend>
@@ -185,9 +189,21 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
                 </button>
                 <input aria-label={`spread ${n}, leg ${j + 1} strike`} inputMode="decimal" value={l.strike}
                        placeholder="strike" onChange={(e) => onChange(setLeg(draft, s.key, j, { strike: e.target.value }))} />
+                {s.legs.length > MIN_LEGS ? (
+                  <button type="button" className="nx-add-toggle nx-add-unleg" aria-label={`remove spread ${n}, leg ${j + 1}`}
+                          onClick={() => onChange(removeLeg(draft, s.key, j))}>
+                    <X aria-hidden="true" />
+                  </button>
+                ) : null}
               </li>
             ))}
           </ol>
+          {s.legs.length < MAX_LEGS ? (
+            <button type="button" className="nx-add-ghost" aria-label={`spread ${n}: add a leg`}
+                    onClick={() => onChange(addLeg(draft, s.key))}>
+              <Plus aria-hidden="true" />leg
+            </button>
+          ) : null}
           {held ? (
             <div className="nx-add-row">
               <label className="nx-add-field">
@@ -209,9 +225,9 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
                          words="spread value ≥" hint={valueHint(held, s)}
                          value={valueShown(held, s)} onValue={(v) => set({ valueAt: v })}
                          inputLabel={`spread ${n} value threshold`} />
-            <MonitorLine on={s.deltaOn} onToggle={() => set({ deltaOn: !s.deltaOn })} label={`spread ${n} delta Monitor`}
-                         words={`short leg${s.legs.filter((l) => l.side === "short").length === 1 ? "'s" : "s'"} |Δ| ≥`}
-                         hint={held ? "risk" : "an entry signal"}
+            <MonitorLine on={deltaOn} onToggle={() => set({ deltaOn: !deltaOn })} label={`spread ${n} delta Monitor`}
+                         words={`short leg${shorts === 1 ? "'s" : "s'"} |Δ| ≥`}
+                         hint={shorts === 0 ? "no short leg to watch" : held ? "risk" : "an entry signal"}
                          value={deltaShown(held, s)} onValue={(v) => set({ deltaAt: v })}
                          inputLabel={`spread ${n} delta threshold`} />
           </div>
@@ -225,7 +241,7 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
             </button>
           ) : null}
         </div>
-        <DraftPreview subject={`${id}-${s.key}`} draft={preview} spx={spx} spxReason={spxReason}
+        <DraftPreview subject={`${id}-${s.key}`} draft={preview} spx={spx} spxReason={spxReason} onDrawn={setDrawn}
                       blank="type the strikes to see its payoff at expiry"
                       note={`per contract, at ${Math.abs(credit).toFixed(2)} ${credit < 0 ? "debit" : "credit"}${held ? "" : ": the value it watches for"}`} />
       </div>

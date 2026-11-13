@@ -5,10 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import { SpreadsIn } from "backend/schemas";
 import {
-  addSpread, contractCode, derivedName, flipSide, newDraft, previewOf, replaces, setLeg, spreadsBody,
-  stopWarning, valueDefault, valueEnabled, valueHint, type AddDraft,
+  addLeg, addSpread, contractCode, deltaEnabled, derivedName, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
+  removeLeg, replaces, saveWords, setLeg, spreadsBody, stopWarning, valueDefault, valueEnabled, valueHint,
+  type AddDraft, type SpreadDraft,
 } from "../next/add";
-import type { Monitor } from "../api";
+import type { Monitor, Payoff } from "../api";
 
 /** The condor the audit timed: two spreads on one expiry, each with its credit. */
 function condor(held = true): AddDraft {
@@ -40,7 +41,7 @@ describe("a new draft", () => {
     expect(d.expiry).toBe("");
     expect(d.spreads).toHaveLength(1);
     expect(d.spreads[0]!.legs.map((l) => [l.side, l.option_type])).toEqual([["short", "PUT"], ["long", "PUT"]]);
-    expect([valueEnabled(d.held, d.spreads[0]!), d.spreads[0]!.deltaOn]).toEqual([true, true]);
+    expect([valueEnabled(d.held, d.spreads[0]!), deltaEnabled(d.spreads[0]!)]).toEqual([true, true]);
   });
 
   it("adds a call spread, and a condor as ONE four-leg holding", () => {
@@ -232,26 +233,142 @@ describe("a debit spread's stop", () => {
 });
 
 describe("a stop that can never fire", () => {
-  it("is warned of when 2x the credit is at or past what the spread can cost to close", () => {
+  /** What `POST /positions/payoff` answers for the spread's preview: the most it can cost to close
+   *  is its Entry less its max loss, which is all the warning reads (`payoffAtExpiry`'s figure). */
+  const drawn = (d: AddDraft, s: SpreadDraft, maxLoss: number | null) => ({
+    key: JSON.stringify(previewOf(d, s)),
+    payoff: { at_strikes: [], slope_below: 0, slope_above: 0, breakevens: [], max_profit: null, max_loss: maxLoss } as Payoff,
+  });
+  const at = (d: AddDraft, s: SpreadDraft, maxLoss: number | null) => stopWarning(d, s, drawn(d, s, maxLoss));
+
+  it("is warned of when 2x the credit is at or past what the served payoff says it can cost to close", () => {
     const d = condor();
     const wide = { ...d.spreads[0]!, entry: "1.50" };
-    expect(stopWarning(true, wide)).toBeNull();
+    expect(at(d, wide, -48.5)).toBeNull();
     const rich = { ...d.spreads[0]!, entry: "25" };
-    expect(stopWarning(true, rich)).toBe("the stop at 50.00 can never fire: this spread costs at most 50.00 to close");
-    // a condor as one holding costs at most its wider side
+    expect(at(d, rich, -25)).toBe("the stop at 50.00 can never fire: this spread costs at most 50.00 to close");
+    // a condor as one holding costs at most its wider side: whatever the payoff route says it is
     let c = addSpread({ ...newDraft("2026-11-11"), expiry: "2026-12-18", spreads: [] }, "condor");
     ["7150", "7100", "7700", "7800"].forEach((k, i) => { c = setLeg(c, c.spreads[0]!.key, i, { strike: k }); });
-    expect(stopWarning(true, { ...c.spreads[0]!, entry: "60" })).toBe(
-      "the stop at 120.00 can never fire: this spread costs at most 100.00 to close");
+    const s = { ...c.spreads[0]!, entry: "60" };
+    expect(at(c, s, -40)).toBe("the stop at 120.00 can never fire: this spread costs at most 100.00 to close");
   });
 
-  it("is not warned of for a watched spread, a debit, a stop switched off, or a naked leg", () => {
+  it("reads any number of legs from the served figure, not from the legs (#334)", () => {
+    const d = sixLegs();
+    const s = { ...d.spreads[0]!, entry: "30" };
+    // six legs whose worst case is 75 to close: 2x30 = 60 can fire, and a richer 40 cannot
+    expect(at(d, s, -45)).toBeNull();
+    const rich = { ...s, entry: "40" };
+    expect(at(d, rich, -35)).toBe("the stop at 80.00 can never fire: this spread costs at most 75.00 to close");
+  });
+
+  it("is not warned of before the payoff is served, or from a curve drawn for other legs", () => {
     const d = condor();
-    expect(stopWarning(false, { ...d.spreads[0]!, entry: "25", valueAt: "60" })).toBeNull();
-    expect(stopWarning(true, { ...d.spreads[0]!, entry: "25", valueOn: false })).toBeNull();
-    expect(stopWarning(true, { ...d.spreads[0]!, entry: "-25" })).toBeNull();
-    const naked = { ...d.spreads[1]!, entry: "25", legs: [d.spreads[1]!.legs[0]!] };
-    expect(stopWarning(true, naked)).toBeNull();
+    const rich = { ...d.spreads[0]!, entry: "25" };
+    expect(stopWarning(d, rich, null)).toBeNull();
+    // a payoff served for other legs, whose figure WOULD warn were it this draft's
+    const narrow = { ...rich, legs: [rich.legs[0]!, { ...rich.legs[1]!, strike: "7140" }] };
+    const stale = drawn(d, narrow, -15);
+    expect(stopWarning(d, narrow, stale)).toBe("the stop at 50.00 can never fire: this spread costs at most 40.00 to close");
+    expect(stopWarning(d, rich, stale)).toBeNull();
+  });
+
+  it("is not warned of for a watched spread, a debit, a stop switched off, or no floor", () => {
+    const d = condor();
+    const w = condor(false);
+    expect(at(w, { ...w.spreads[0]!, valueAt: "60" }, -10)).toBeNull();
+    expect(at(d, { ...d.spreads[0]!, entry: "25", valueOn: false }, -25)).toBeNull();
+    expect(at(d, { ...d.spreads[0]!, entry: "-25" }, -25)).toBeNull();
+    expect(at(d, { ...d.spreads[1]!, entry: "25", legs: [d.spreads[1]!.legs[0]!] }, null)).toBeNull();
+  });
+});
+
+/** A six-leg spread on one expiry: the condor with a further wing bought on each side. */
+function sixLegs(): AddDraft {
+  let d = addSpread({ ...newDraft("2026-11-11"), expiry: "2026-12-18", spreads: [] }, "condor");
+  const key = d.spreads[0]!.key;
+  d = addLeg(addLeg(d, key), key);
+  ["7150", "7100", "7700", "7750", "7050", "7800"].forEach((k, i) => { d = setLeg(d, key, i, { strike: k }); });
+  return setLeg(d, key, 4, { option_type: "PUT" });
+}
+
+describe("legs added and removed (#334)", () => {
+  it("adds a leg up to six, each a long of the last leg's type until changed", () => {
+    let d = { ...newDraft("2026-11-11"), expiry: "2026-12-18" };
+    const key = d.spreads[0]!.key;
+    expect([MIN_LEGS, MAX_LEGS]).toEqual([2, 6]);
+    for (let n = 3; n <= 6; n++) {
+      d = addLeg(d, key);
+      expect(d.spreads[0]!.legs).toHaveLength(n);
+    }
+    expect(d.spreads[0]!.legs.slice(2)).toEqual(Array(4).fill({ side: "long", option_type: "PUT", strike: "" }));
+    expect(addLeg(d, key)).toBe(d);
+  });
+
+  it("removes any leg down to two, keeping the others in their order", () => {
+    const d = sixLegs();
+    const key = d.spreads[0]!.key;
+    const less = removeLeg(d, key, 1);
+    expect(less.spreads[0]!.legs.map((l) => `${l.side[0]}${l.option_type[0]}${l.strike}`))
+      .toEqual(["sP7150", "sC7700", "lC7750", "lP7050", "lC7800"]);
+    let two = d;
+    while (two.spreads[0]!.legs.length > 2) two = removeLeg(two, key, 0);
+    expect(removeLeg(two, key, 0)).toBe(two);
+  });
+
+  for (const n of [3, 5, 6]) {
+    it(`posts a ${n}-leg spread the route accepts, each leg its own side, type and strike`, () => {
+      let d = sixLegs();
+      const key = d.spreads[0]!.key;
+      while (d.spreads[0]!.legs.length > n) d = removeLeg(d, key, d.spreads[0]!.legs.length - 1);
+      d = { ...d, spreads: [{ ...d.spreads[0]!, entry: "3" }] };
+      const body = bodyOf(d);
+      expect(SpreadsIn.safeParse(body).success).toBe(true);
+      expect(body.spreads[0]!.legs).toEqual(d.spreads[0]!.legs.map((l) => ({ ...l, strike: Number(l.strike) })));
+      // the value, and a delta Monitor on EACH short leg
+      const shorts = d.spreads[0]!.legs.filter((l) => l.side === "short");
+      expect(body.spreads[0]!.monitors).toEqual([
+        { threshold: 6 }, ...shorts.map((l) => ({ option_type: l.option_type, strike: Number(l.strike), threshold: 0.3 })),
+      ]);
+    });
+  }
+
+  it("names six legs as it names two: the expiry, then each leg's type and strike", () => {
+    expect(derivedName("2026-12-18", sixLegs().spreads[0]!.legs)).toBe("1218_P7150_P7100_C7700_C7750_P7050_C7800");
+  });
+
+  it("draws the preview of every leg, however many", () => {
+    const d = sixLegs();
+    expect(previewOf(d, d.spreads[0]!)!.legs).toHaveLength(6);
+  });
+});
+
+describe("a structure with no short leg", () => {
+  /** Two long puts and a long call: nothing sold, so no short leg's delta to watch. */
+  const allLong = (): AddDraft => {
+    let d = sixLegs();
+    const key = d.spreads[0]!.key;
+    d = removeLeg(removeLeg(removeLeg(d, key, 5), key, 3), key, 2);
+    d = flipSide(d, key, 0);
+    return { ...d, spreads: [{ ...d.spreads[0]!, entry: "-4" }] };
+  };
+
+  it("gets no |Δ| Monitor by default, and saves without one rather than being refused", () => {
+    const d = allLong();
+    expect(d.spreads[0]!.legs.every((l) => l.side === "long")).toBe(true);
+    expect(deltaEnabled(d.spreads[0]!)).toBe(false);
+    expect(spreadsBody(d)).not.toHaveProperty("error");
+    expect(bodyOf(d).spreads[0]!.monitors).toEqual([]);
+    expect(saveWords(d)).toBe("Record holding + 0 Monitors");
+  });
+
+  it("gets one again once a leg is made short, and keeps a switch the owner set", () => {
+    const d = allLong();
+    const key = d.spreads[0]!.key;
+    expect(deltaEnabled(flipSide(d, key, 0).spreads[0]!)).toBe(true);
+    const on = { ...d, spreads: [{ ...d.spreads[0]!, deltaOn: true }] };
+    expect(spreadsBody(on)).toEqual({ error: "spread 1 has no short leg to watch the delta of: switch that Monitor off" });
   });
 });
 

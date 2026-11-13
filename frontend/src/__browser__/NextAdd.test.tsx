@@ -96,6 +96,53 @@ describe("the preview beside the form", () => {
   });
 });
 
+/** A combo of `n` legs, entered in `root` as the owner would: legs added to two, each strike typed,
+ *  the last leg made a short call — its own side and type — and the Entry. */
+async function enterCombo(root: HTMLElement, n: number): Promise<void> {
+  await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
+  for (let i = 2; i < n; i++) await userEvent.click(within(root).getByRole("button", { name: "spread 1: add a leg" }));
+  const strikes = ["7150", "7100", "7050", "7000", "6950"].slice(0, n - 1).concat("7700");
+  for (const [i, k] of strikes.entries()) await userEvent.fill(screen.getByLabelText(`spread 1, leg ${i + 1} strike`), k);
+  await userEvent.click(within(root).getByRole("button", { name: `spread 1, leg ${n} side: long — flip` }));
+  await userEvent.click(within(root).getByRole("button", { name: `spread 1, leg ${n} type: PUT — change` }));
+  await userEvent.fill(screen.getByLabelText("spread 1 entry"), "3");
+}
+
+/** The legs a body sent, as side, type and strike. */
+const legsSent = (body: unknown) => (body as { spreads: { legs: { side: string; option_type: string; strike: number }[] }[] })
+  .spreads[0]!.legs.map((l) => `${l.side[0]}${l.option_type[0]}${l.strike}`);
+
+describe("combos of 3 to 6 legs on the desk (#334)", () => {
+  for (const n of [3, 5, 6]) {
+    it(`adds a ${n}-leg combo, its preview drawn over every leg`, async () => {
+      const sent = await openDesk();
+      await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+      await enterCombo(panel(), n);
+      await waitFor(() => expect(curveOf(1)).not.toBeNull());
+      // a short call with nothing above it: the preview says so, which it can only do over all n
+      await waitFor(() => expect(maxLoss(1)).toBe("no floor"));
+      await userEvent.click(within(panel()).getByRole("button", { name: "Record holding + 3 Monitors" }));
+      await waitFor(() => expect(sent).toHaveLength(1));
+      expect(legsSent(sent[0])).toEqual([
+        "sP7150", "lP7100", ...["7050", "7000", "6950"].slice(0, n - 3).map((k) => `lP${k}`), "sC7700",
+      ]);
+    });
+  }
+
+  it("fits six legs in the panel at 900px, every remove button inside it", async () => {
+    await openDesk(900);
+    await userEvent.click(screen.getByRole("button", { name: "add a spread" }));
+    await enterCombo(panel(), 6);
+    await settle();
+    expect(overflowsSideways()).toBe(false);
+    expect(within(panel()).queryByRole("button", { name: "spread 1: add a leg" })).toBeNull();
+    const box = panel().getBoundingClientRect();
+    for (const el of panel().querySelectorAll("input, button, svg")) {
+      expect(el.getBoundingClientRect().right, el.outerHTML.slice(0, 80)).toBeLessThanOrEqual(box.right + 0.5);
+    }
+  });
+});
+
 describe("a refused request", () => {
   it("is said in the form, on top, where it can be read", async () => {
     await openDesk(1440, { status: 409, body: { detail: "position '1218_P7150_P7100' already exists" } });
