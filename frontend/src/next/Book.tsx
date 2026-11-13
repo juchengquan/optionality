@@ -18,7 +18,7 @@ export interface BookProps {
   /** every rule, enabled or not: the muted and quarantined ones are only here */
   monitors: Monitor[];
   /** null while not valued, and after a valuation failed: the error is said INSTEAD of figures
-   *  nobody can vouch for, as at `/opt` */
+   *  nobody can vouch for, as the old page did (#301) */
   holdings: Holding[] | null;
   holdingsError: string | null;
   /** when this screen last valued them, said in REVIEW, where they are not polled */

@@ -3,7 +3,7 @@
  *  and the phone's sheet alike, so either can do what the other can (ADR 0023's parity).
  *
  *  And two writes that are not the rule's own but start from it (#336), each through the route
- *  today's page uses for it or the one #340 settled on:
+ *  the old page used for it (#301) or the one #340 settled on:
  *  - a rule over several holdings takes a TOTAL entry, split by `POST /monitors/{id}/total-entry`,
  *    what each holding gets shown before it is saved (`edit.ts`'s `splitPreview`);
  *  - a watched single contract can be recorded as HELD, through `POST /spreads` as a spread of one
@@ -515,7 +515,7 @@ function HoldForm({ rule, label, book, today, busy, holdingNames, onSave, onCanc
           : links.linked.length === 0 ? "No other Monitor is linked to it."
             : "Also linked to it, by the service, as it links every rule no holding owns: "
               // a combo naming a contract the new holding does not hold is drawn in the Watchlist,
-              // where the book will draw it (placement.ts, #346); /opt/next shows no rule row's
+              // where the book will draw it (placement.ts, #346); the page shows no rule row's
               // Entry or P&L, so nothing here claims one
               + links.linked.map(({ monitor, scope, watchlist }) => `${ruleLabel(ruleOfMonitor(monitor))} — `
                 + (watchlist ? "drawn in the Watchlist, with a note of the contracts it shares with it"

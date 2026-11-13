@@ -10,9 +10,8 @@ import { overlapOf } from "./placement";
  *  nothing now watches what it watched. And a fired rule on the WATCHLIST is an entry signal —
  *  a spread worth selling — which is good news and must not be filed as an alarm.
  *
- *  This is a second `needs()` beside `TopLine.tsx`'s, for as long as both pages exist: `/opt` must
- *  behave exactly as before while this one is built, and that one has neither input. The swap
- *  (#301) deletes the old.
+ *  It was a second `needs()` beside the old page's `TopLine.tsx`, while both pages existed; the
+ *  swap (#301) deleted that one.
  */
 export type NeedKind = "fault" | "stop" | "alarm" | "entry" | "target" | "manage";
 
@@ -42,7 +41,7 @@ export const QUARANTINED: Record<string, string> = {
  *  Not `positions`, the link to ONE holding, which is empty on a roll day — two holdings share a
  *  contract, so it names neither — and that read a held spread's stop as good news. A candidate
  *  sharing a strike with a holding is `held` too, so its signal reads as an alarm: the safe way to
- *  be wrong, and how `/opt` has always read every rule. */
+ *  be wrong, and how the old page always read every rule. */
 export function isEntrySignal(entry: Entry): boolean {
   return !entry.held;
 }

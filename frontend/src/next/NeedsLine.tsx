@@ -5,7 +5,7 @@ import type { Arrangement } from "./arrangement";
 import { toneOf, type Need, type NeedKind } from "./needs";
 
 /** How many the desk's line names before it counts the rest: a bad day must not become a
- *  paragraph, and a count without names makes you hunt (TopLine.tsx, where this was decided). */
+ *  paragraph, and a count without names makes you hunt (decided for the old page's top line, #301). */
 const NAMED = 3;
 
 /** Each kind's glyph. Attention is told apart from the "down" colour by its shape as well as its
@@ -23,7 +23,7 @@ export function Glyph({ kind }: { kind: NeedKind }) {
 
 /** The needs-you line: one line on the desk, a banner per item on the phone (ADR 0023).
  *
- *  It APPEARS rather than reports, as the line at `/opt` does, and for its reason: a line that is
+ *  It APPEARS rather than reports, as the old page's top line did, and for its reason: a line that is
  *  almost always the same becomes furniture and stops being read. So with nothing to say it is not
  *  drawn at all — and that is not an all-clear, which only Settings' full list can give.
  */

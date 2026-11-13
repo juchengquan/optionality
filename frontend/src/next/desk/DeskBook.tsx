@@ -3,7 +3,6 @@ import { X } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../../shared/api";
 import { ColumnPicker } from "../../shared/ColumnPickers";
-import type { Column } from "../../shared/columns";
 import { shortDate } from "../../shared/format";
 import { GROUPS } from "../../shared/groups";
 import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../shared/prefs";
@@ -41,7 +40,7 @@ import "./desk.css";
  *    and stays operable while one row is studied. What it shows is read from the CURRENT props on
  *    every render — only the selected id is kept — so it is as live as the row it describes.
  *  - The columns are fitted to the room by measurement (ADR 0008), and the viewer's column choice
- *    is `/opt`'s combo-table cookie, so a choice made there holds here.
+ *    is kept in the old page's combo-table cookie, so a choice made there before the swap held.
  */
 export function DeskBook({ selection, ...props }: BookProps & {
   /** the selection, when the page owns it (#299): the palette reads it and lands on a row */
@@ -55,21 +54,21 @@ export function DeskBook({ selection, ...props }: BookProps & {
     .flatMap(([a, b]) => [[a!.holding.id, b!.holding], [b!.holding.id, a!.holding]] as [string, Holding][])),
   [placed]);
 
-  // The cookie is `/opt`'s combo table's too, and it hides columns the desk never offers (gamma,
-  // expiry…). So every change is made to the cookie as it stands NOW — another tab may have written
-  // it since this one read it — and touches only the desk's own keys.
-  const [hidden, setHidden] = useState(() => readHidden("combo"));
+  // The cookie was the old page's combo table's too, and it hides columns the desk never offers
+  // (gamma, expiry…). So every change is made to the cookie as it stands NOW — another tab may have
+  // written it since this one read it — and touches only the desk's own keys.
+  const [hidden, setHidden] = useState(() => readHidden());
   const fit = useDeskFit(mode, rows, hidden, privacy);
-  const onToggle = useCallback((_: "single" | "combo", key: string, shown: boolean) => {
-    const next = readHidden("combo");
+  const onToggle = useCallback((key: string, shown: boolean) => {
+    const next = readHidden();
     if (shown) next.delete(key); else next.add(key);
-    writeHidden("combo", next);
+    writeHidden(next);
     setHidden(next);
   }, []);
   const onReset = useCallback(() => {
-    const next = readHidden("combo");
+    const next = readHidden();
     for (const key of DESK_KEYS) next.delete(key);
-    writeHidden("combo", next);
+    writeHidden(next);
     setHidden(next);
   }, []);
 
@@ -185,8 +184,8 @@ export function DeskBook({ selection, ...props }: BookProps & {
                     aria-controls={mapOpen ? mapId : undefined} onClick={toggleMap}>
               price map
             </button>
-            <ColumnPicker table="combo" label="book" hidden={hidden} onToggle={onToggle} onReset={onReset}
-                          all={pickable.map(asPickable)} />
+            <ColumnPicker label="book" hidden={hidden} onToggle={onToggle} onReset={onReset}
+                          all={pickable} />
           </>
         } />
         <Watchlist placed={placed} ctx={ctx} />
@@ -215,14 +214,11 @@ interface Ctx {
   inspectorId: string;
 }
 
-/** Every key the desk draws: all it may change in the column cookie it shares with `/opt`. */
+/** Every key the desk draws: all it may change in the column cookie (`readHidden`). */
 const DESK_KEYS = new Set([...COLUMNS.live, ...COLUMNS.review].map((c) => c.key));
 
 /** `tableRows` lives with the columns (`columns.ts`); the still (#300) reads it from here. */
 export { tableRows } from "./columns";
-
-/** The picker draws a label and a key; the rest of `/opt`'s column descriptor is its table's. */
-const asPickable = (c: DeskColumn): Column => ({ key: c.key, label: c.label, estimate: 0, text: () => "" });
 
 // ---- the sections
 
@@ -328,8 +324,8 @@ export function OverlapNote({ overlap }: { overlap: string | null | undefined })
   return overlap ? <p className="nx-meta nxd-overlap" data-overlap="">{overlap}</p> : null;
 }
 
-/** Muted by hand, expired, or off with their holding: not news, so folded away, as `/opt`'s muted
- *  tables are — with `/opt`'s words for why each is off. */
+/** Muted by hand, expired, or off with their holding: not news, so folded away, as the old page's
+ *  muted tables were — with its words for why each is off. */
 function Muted({ monitors }: { monitors: Monitor[] }) {
   if (monitors.length === 0) return null;
   const reason = (m: Monitor) =>

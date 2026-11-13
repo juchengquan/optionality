@@ -1,4 +1,4 @@
-/** Changing a holding from `/opt/next` (#294): editing what was recorded, closing it, correcting a
+/** Changing a holding from the page (#294): editing what was recorded, closing it, correcting a
  *  close, and saying what became of its Monitors. Pure, so what each form posts is decided and
  *  tested here; `HoldingActions.tsx` and `ClosedResult.tsx` only draw it.
  *

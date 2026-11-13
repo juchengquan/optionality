@@ -20,7 +20,7 @@ import {
   contractCode, derivedName, ruleWords as replacedWords, type OptionType, type Side, type SpreadsBody,
 } from "./add";
 
-/** What `POST /monitors` lets one Contract watch, as today's form offers it. IV is offered here and
+/** What `POST /monitors` lets one Contract watch, as the old page's form offered it. IV is offered here and
  *  not to a spread: a spread's figure is a sum and IV is not additive, but one contract's is its own. */
 export const CONTRACT_FIELDS = [
   "option_delta", "mid_price", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
@@ -58,7 +58,7 @@ export interface ContractDraft {
 export type ContractSpot =
   "expiry" | "opened" | "strike" | "threshold" | "field" | "entry" | "contracts" | "name" | "form";
 
-/** A put's delta, watched — the common case on today's page — opened `today`, a New York trading
+/** A put's delta, watched — the common case on the old page — opened `today`, a New York trading
  *  day the caller supplies. */
 export function newContract(today: string): ContractDraft {
   return {

@@ -1,10 +1,10 @@
-/* The redesigned page's own look (ADR 0023), over the same base as `/opt`: app.css brings
-   Tailwind, shadcn's tokens and the shared pieces this page reuses (the freshness line, the
-   References strip). Everything this page decides is scoped under .nx, so nothing here can leak
-   into the page at /opt, which never loads this file. */
+/* The page's own look (ADR 0023), over app.css: that brings Tailwind, shadcn's tokens and the
+   shared pieces this page reuses (the freshness line, the References strip). Everything this page
+   decides is scoped under .nx — from when it was built beside the old page, which never loaded
+   this file (#301 deleted that page). */
 @import "../shared/app.css";
 
-/* app.css gives the old page a margin; this one draws edge to edge and pads its own regions */
+/* app.css gives body a margin; this page draws edge to edge and pads its own regions */
 body { margin: 0; }
 
 /* THREE COLOUR FAMILIES, and the rule between them.

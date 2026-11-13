@@ -1,8 +1,8 @@
 /** Every figure of a rule's contract or combo, as the inspector and the sheet list them (#332).
  *
- *  Today's sheet at `/opt` lists a contract's bid, ask, last trade, IV and every greek, and a
+ *  The old page's sheet listed a contract's bid, ask, last trade, IV and every greek, and a
  *  combo's greeks, whatever the table had room for (ADR 0008: "the sheet shows every figure").
- *  This is that list for `/opt/next`, ONE list for both arrangements so the desk and the phone
+ *  This is that list for the page, ONE list for both arrangements so the desk and the phone
  *  cannot say different things about the same rule.
  *
  *  Pure, and nothing here is computed. Every figure is one `/quotes` already serves on the row:

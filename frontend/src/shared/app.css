@@ -20,10 +20,10 @@
 h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.2rem; }
 h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.3rem; }
 
-/* The dashboard's OWN colours, the ones shadcn has no opinion about because no design
-   system does: how a breached threshold looks, how far a value has travelled toward
-   firing, what a quarantined contract's badge says. Everything generic -- surfaces,
-   borders, focus rings -- comes from shadcn's tokens below. See ADR 0007. */
+/* The base the page builds on (ADR 0007): shadcn's tokens for everything generic -- surfaces,
+   borders, focus rings -- and the grid a table of figures needs. The page's own colours, the
+   ones no design system has an opinion about, are next/next.css's (ADR 0023). The old page's
+   alarm ramp and badge colours lived here and went with it (#301). */
 :root {
   color-scheme: light dark;
   /* The table's own gridlines, deliberately heavier than shadcn's --border. That token is
@@ -31,39 +31,14 @@ h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.3rem; }
      let the eye track along a row. */
   --grid: #aaa;
 
-  /* The alarm colours: one hue ramp, in the same colour space as every other token here.
-     They were Bootstrap's alert backgrounds (#fff3cd, #f8d7da) — carried in by the first
-     htmx version and never revisited, so the most loaded thing on the screen was the only
-     part still dressed by a framework this project does not use.
-     Each state is a pale TRACK and a saturated BAR of the same hue, and the hues step
-     yellow -> orange -> red so the three read as a progression. The fired hue is exactly
-     --destructive's, so a firing row and an error message are the same red. */
-
-  /* watching: the alarm is live and the value is travelling */
-  --hl: oklch(0.96 0.04 90); --fill-bar: oklch(0.87 0.13 90);
-  /* imminent: within IMMINENT_FILL of the threshold */
-  --imm-hl: oklch(0.95 0.05 55); --imm-fill: oklch(0.82 0.15 55);
-  /* fired: the row's own tint, the track inside its fill cell, and the bar */
-  --trig: oklch(0.95 0.04 27.325);
-  --trig-hl: oklch(0.92 0.06 27.325);
-  --trig-fill: oklch(0.78 0.15 27.325);
-  /* a quarantined contract's badge — the same red as everything else that has gone wrong */
-  --badge-bg: var(--destructive); --badge-fg: oklch(1 0 0); --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.97 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent: oklch(0.97 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
+  --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.97 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent: oklch(0.97 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
 }
 /* the US session runs 21:30-04:00 in DISPLAY_TZ=Asia/Singapore — read at night */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* the same ramp on the dark ground: tracks barely lit, bars readable but not
-       glaring — this is read at night, the US session runs 21:30-04:00 here */
-    --hl: oklch(0.29 0.04 90); --fill-bar: oklch(0.52 0.10 90);
-    --imm-hl: oklch(0.29 0.05 55); --imm-fill: oklch(0.52 0.12 55);
-    --trig: oklch(0.28 0.04 22.216);
-    --trig-hl: oklch(0.32 0.05 22.216);
-    --trig-fill: oklch(0.50 0.13 22.216);
     /* shadcn's dark border is a translucent white that sits closer to the ground
        than this does; at night the grid mattered more than the consistency */
     --grid: #383d46;
-    --badge-bg: var(--destructive); --badge-fg: oklch(1 0 0);
     /* shadcn's dark palette, kept in the media query rather than a .dark class:
        no toggle, no provider, follows the system as this dashboard always has */
     --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0); --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0); --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0); --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0); --accent-foreground: oklch(0.985 0 0); --destructive: oklch(0.704 0.191 22.216); --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%); --ring: oklch(0.556 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --sidebar: oklch(0.205 0 0); --sidebar-foreground: oklch(0.985 0 0); --sidebar-primary: oklch(0.488 0.243 264.376); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.269 0 0); --sidebar-accent-foreground: oklch(0.985 0 0); --sidebar-border: oklch(1 0 0 / 10%); --sidebar-ring: oklch(0.556 0 0);
@@ -76,31 +51,16 @@ h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.3rem; }
 body { font-family: -apple-system, "Helvetica Neue", sans-serif; margin: 1.5rem; }
 @media (max-width: 40rem) { body { margin: 0.75rem; } }
 .meta { color: var(--muted-foreground); font-size: 0.875rem; margin: 0 0 1rem; }
-.banner { background: color-mix(in oklch, var(--destructive) 12%, var(--background));
-          border: 1px solid var(--destructive); border-radius: var(--radius-md);
-          padding: 0.5rem 1rem; margin-bottom: 1rem; }
 table { border-collapse: collapse; margin-bottom: 1.5rem; }
-/* The safety valve, not the mechanism. Columns drop by priority so this should never be
-   reached — but the identity column is never dropped, and a long enough contract name can
-   exceed the screen on its own. Scrolling INSIDE the table beats what this all started as:
-   the whole page, heading and status strip included, sliding sideways. */
-.table-scroll { overflow-x: auto; }
-/* The muted tables are four columns and rarely populated, so they get a plain rule rather
-   than the watchlist's measuring: which rule is muted and why is the whole content, and
-   the field and threshold behind it live in the detail the row opens. */
-@media (max-width: 40rem) { .hide-narrow { display: none; } }
 /* tabular-nums: ragged decimals defeat scanning a column */
 th, td { border: 1px solid var(--grid); padding: 4px 10px; text-align: right;
          white-space: nowrap; font-variant-numeric: tabular-nums; }
 th.left, td.left { text-align: left; }
-/* The name stays put while the rest of the row is swiped: the table is allowed to be wider
-   than the screen now (SCROLL_BUDGET), and a swipe that carries the name away costs you the
-   one thing that says which row you are reading.
-   The cell needs a background or the row would show through it while scrolling, and a
-   breached row's colour must still win. It does, by SPECIFICITY rather than source order:
-   "tr.triggered td" is (0,1,2) against this rule's (0,1,1). An earlier comment here claimed
-   order was what settled it, which was wrong — moving this block to the end of the file
-   changes nothing. Raising its specificity would. */
+/* The name stays put while the rest of the row is swiped: a table may be wider than the
+   screen, and a swipe that carries the name away costs you the one thing that says which row
+   you are reading. The cell needs a background or the row would show through it while
+   scrolling. Written for the old page's tables (#301 deleted them); the page's two remaining
+   tables — the journal's and a split's — still draw under these element rules. */
 th:first-child, td:first-child {
   position: sticky; left: 0; z-index: 1; background: var(--background);
   /* The right edge is drawn with a SHADOW, not a border.
@@ -117,8 +77,7 @@ th:first-child, td:first-child {
    time, which is the opposite of the point.
 
    Capped and allowed to WRAP rather than truncated: the name is the identity column and
-   half an identity is worse than a tall row. WatchlistTable inserts break opportunities at
-   the separators so it folds at "1016_ bs_ 8050" rather than mid-token. */
+   half an identity is worse than a tall row. */
 @media (max-width: 60rem) {
   /* min-width, NOT max-width. Allowing the cell to wrap lets the table's auto layout shrink
      it to its narrowest unbreakable token — so a cap never binds, and the column collapses
@@ -129,53 +88,8 @@ th:first-child, td:first-child {
      Wider buys no height back, narrower buys 4% at the cost of a line. */
   th:first-child, td:first-child { min-width: 5.5rem; white-space: normal; }
 }
-td.hl { background: linear-gradient(to right, var(--fill-bar) var(--fill, 0%), var(--hl) var(--fill, 0%));
-        font-weight: 600; }
-/* (0,2,1), so it beats td.hl and loses to tr.triggered td.hl at (0,2,2) — a fired row keeps
-   its own colour without needing this to be guarded in CSS as well as in the markup */
-td.hl.imminent { background: linear-gradient(to right, var(--imm-fill) var(--fill, 0%),
-                                             var(--imm-hl) var(--fill, 0%)); }
-tr.triggered td { background: var(--trig); }
-tr.triggered td.hl { background: linear-gradient(to right, var(--trig-fill) var(--fill, 0%),
-                                                 var(--trig-hl) var(--fill, 0%)); }
-/* A group heading inside the table (calls/puts, or one expiry). A label, not a row: no grid
-   lines, left-aligned, and the same small uppercase treatment the column headers use.
-
-   position: static UNDOES the sticky first-child rule above, which this cell would otherwise
-   inherit — it IS the first child, and freezing a heading that spans the whole width pins it
-   over the figures as they are swiped past it. Nothing about it needs to stay put: it names
-   the rows under it, which are what moves. */
-tr.group td {
-  position: static; box-shadow: none; border-left: none; border-right: none;
-  text-align: left; white-space: nowrap;
-  padding: 10px 10px 3px; background: var(--background);
-  font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--muted-foreground); font-weight: 600;
-}
-/* no rule above the first one: the table header is already a line, and two together read as
-   an empty band */
-tr.group:first-child td { padding-top: 4px; border-top: none; }
-.legs { font-size: 0.75rem; color: var(--muted-foreground); font-weight: 400; }
-.badge { background: var(--badge-bg); color: var(--badge-fg); font-size: 0.75rem;
-         padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
-         margin-left: 0.3rem; }
-/* Information, not a fault. The red above belongs to a contract that has gone wrong; a rule
-   watching part of a holding is working exactly as designed, and red beside its name would say
-   the opposite. Muted, and a shade smaller than the name it qualifies. */
-.badge.quiet { background: var(--muted); color: var(--muted-foreground); font-size: 0.6875rem;
-               font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; }
-/* The top line. Prominent without shouting: it only exists when it has something to say, so it
-   does not need to compete for attention with anything. `.bad` is added only for a fault or a
-   stop — a target reached is good news and red would read as the opposite. */
-.topline { border: 1px solid var(--border); border-left: 4px solid var(--muted-foreground);
-           border-radius: var(--radius-md); padding: 0.5rem 0.9rem; margin-bottom: 1rem;
-           font-size: 0.9375rem; }
-.topline.bad { border-color: var(--destructive); border-left-color: var(--destructive);
-               background: color-mix(in oklch, var(--destructive) 10%, var(--background)); }
-
 /* The Reference strip (ADR 0018): the market, read beside the strikes.
-   Quieter than the top line and never coloured by urgency — it is furniture by design, and the
-   one position that has to stay conspicuous is the line above it. Wraps rather than scrolls: at
+   Quieter than the needs-you line and never coloured by urgency — it is furniture by design. Wraps rather than scrolls: at
    390px three References take two rows, and nothing here may push the page sideways. */
 .references { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin-bottom: 1rem;
               font-size: 0.875rem; color: var(--muted-foreground); }
@@ -197,28 +111,11 @@ tr.group:first-child td { padding-top: 4px; border-top: none; }
 /* said only when the figure is a last trade, which is the weaker claim */
 .reference-field { margin-left: 0.35rem; font-size: 0.8125rem; opacity: 0.8; }
 
-/* No `.health` rules here. That strip — the status line and the refresh selector on one row —
-   became `TopLine` and the Service panel, and nothing has carried the class since. `.bad` survives
-   as `.topline.bad` above; only the `.health`-scoped copies went. */
-.pending { color: var(--muted-foreground); }
-/* the page's name and the two things you can create, on one line. Same idea as the table
-   headings below: a control sits with what it belongs to rather than in a band of its own. */
-.page-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem;
-             margin-bottom: 0.2rem; }
-.page-head h2 { margin-bottom: 0; }
-
-/* a table's name and its column control on one line, the control sitting on the
-   heading's baseline rather than floating above the table */
-.table-head { display: flex; align-items: center; gap: 0.25rem; }
-.table-head h3 { margin-bottom: 0; }
 /* the meta line now holds a control, so it needs to align its contents */
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 /* form.inline is gone: it was written when these forms sat in a table cell holding only
    inline elements. NumberField renders a block wrapper, so an inline form dropped its
    button onto the next line. They are flex rows now, stated where they are used. */
-/* No `td.actions` either: no element carries that class, and the only `actions` left in the
-   markup is the word inside a muted table's `<th className="left">` (columns.ts says the same —
-   "actions" was a column until the detail sheet took the controls). */
 /* No `fieldset` rule here. There was one -- `display: inline-block` for side-by-side
    placement, from when both add-forms sat permanently on the page. The forms live in a
    Sheet now and only one is ever open, so the placement had nothing left to do, but the
@@ -230,13 +127,6 @@ tr.group:first-child td { padding-top: 4px; border-top: none; }
    state layout where the component is used. */
 button { cursor: pointer; }
 
-/* The alarm figure is the threshold, and tapping the row opens the box that edits it. A dotted
-   underline is the lightest thing that says so: it spends no column (ADR 0008) and does not make
-   the cell look like a button sitting inside a clickable row. Reported twice as "no way to edit
-   the threshold for combos" — the way was there, nothing pointed at it. */
-.editable { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px;
-            text-decoration-color: var(--muted-foreground); }
-
 @theme inline { --font-heading: var(--font-sans); --font-sans: -apple-system, "Helvetica Neue", sans-serif; --color-sidebar-ring: var(--sidebar-ring); --color-sidebar-border: var(--sidebar-border); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground); --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground); --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-foreground: var(--sidebar-foreground); --color-sidebar: var(--sidebar); --color-chart-5: var(--chart-5); --color-chart-4: var(--chart-4); --color-chart-3: var(--chart-3); --color-chart-2: var(--chart-2); --color-chart-1: var(--chart-1); --color-ring: var(--ring); --color-input: var(--input); --color-border: var(--border); --color-destructive: var(--destructive); --color-accent-foreground: var(--accent-foreground); --color-accent: var(--accent); --color-muted-foreground: var(--muted-foreground); --color-muted: var(--muted); --color-secondary-foreground: var(--secondary-foreground); --color-secondary: var(--secondary); --color-primary-foreground: var(--primary-foreground); --color-primary: var(--primary); --color-popover-foreground: var(--popover-foreground); --color-popover: var(--popover); --color-card-foreground: var(--card-foreground); --color-card: var(--card); --color-foreground: var(--foreground); --color-background: var(--background); --radius-sm: calc(var(--radius) * 0.6); --radius-md: calc(var(--radius) * 0.8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --radius-2xl: calc(var(--radius) * 1.8); --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6); }
 
 
@@ -247,60 +137,3 @@ button { cursor: pointer; }
     @apply bg-background text-foreground; }
   html {
     @apply font-sans; } }
-
-/* The snapshot stage: the page rendered again, off screen, for the camera.
-   OFF SCREEN rather than `display: none` — a node with no layout paints as nothing. Fixed so it
-   cannot lengthen the real page or move its scroll position while a picture is taken. The width
-   is the picture's own business, below. */
-.snapshot-stage { position: fixed; top: 0; left: -10000px; }
-/* The picture itself. Three things are deliberate here.
-   An explicit `background`, or the PNG is transparent wherever the page's own ground shows
-   through — which in a chat is whatever colour that app happens to use.
-   `width: max-content` is the ONE width mechanism, and it does two jobs: the tables are never
-   clipped (their `.table-scroll` box has nothing left to scroll, so no `overflow` rule is needed
-   here — one was written and a mutation sweep reverted it with every test still green), and the
-   picture does not shrink to the device it was taken on, so every ticked column fits whatever
-   the fitting would have dropped on a phone (ADR 0008).
-   And `.table-scroll` must not clip inside it. Nothing in a picture can be scrolled, so the
-   scroll box here is a window onto figures with no way to move it — and it is the one thing that
-   can silently drop a column. The guarantee used to rest on `max-content` carrying the table's
-   width up THROUGH that box, which both engines happen to do; when anything makes the stage
-   narrower than its widest table, 161px of a 13-column combo table landed outside the image in
-   Chromium and 204px in WebKit, the squeezed columns wrapped, and the taller page then crossed
-   the canvas cap and lost its bottom as well. One cause, all three truncations. Removing the
-   clipping makes it impossible rather than unlikely, and lets the capture ask for the scroll size
-   and get the real extent (App.saveImage, snapshot.captureBox).
-   `min-width` is a FLOOR, not a fixed width: 1000px even for a short watchlist, so two days'
-   images are the same size — but no more than a floor, because measured against the owner's own
-   book the 13-column combo table wants 1012px, and a fixed width clipped it, which is the very
-   thing this feature exists to prevent. */
-.snapshot { min-width: 1000px; width: max-content;
-            padding: 16px 16px 4px; background: var(--background); }
-.snapshot .table-scroll { overflow: visible; }
-/* And with that box no longer scrolling, the frozen first column must stop being frozen.
-   `position: sticky` resolves against the nearest SCROLLING ancestor. That was `.table-scroll`,
-   inside which a picture has nothing to scroll, so sticky did nothing. Removing the clipping
-   promoted the PAGE to that role — and the stage sits at `left: -10000px`, so every table is far
-   to the left of the scrollport and each first cell was pushed as far right as its row allowed:
-   measured at x=873 in a 1016px row, the names painted over the last four columns. That is the
-   overlap the owner reported, and it is the same failure `tr.group td` above already undoes
-   sticky for. Nothing in a picture can be swiped, so static simply puts the column back where
-   the table put it.
-   The box-shadow above stays: it stood in for the collapsed border a swipe carries away, and with
-   the column static it lands on that border's own line, in that border's own colour. */
-.snapshot th:first-child, .snapshot td:first-child { position: static; }
-/* And the narrow-screen rules do not come with it either.
-   `@media (max-width: 60rem)` keys off the VIEWPORT, so a picture taken on a phone is laid out by
-   the phone's rules although it is 1161px wide: the identity column becomes `white-space: normal`
-   and the holdings grid halves to two columns. The second is only ugly — the same book photographed
-   on an iPad and on a phone did not look alike. The first took the picture apart. In the live
-   layout the name still fits on one line and the row measures 33px, and html-to-image copies every
-   computed style onto its clone, that 33px with it; inside the SVG the cell comes out a hair
-   narrower, the name takes a second line, and the row cannot grow. The overflow lands on whatever
-   is beneath — measured on an iPhone profile (393px, dpr 3): the Combos table across the last two
-   single-leg rows, "holdings" across the last combo row. One wrapped name is enough, and nothing
-   in the file says so.
-   A picture is never narrow, so nothing in it should fold for a reason that belongs to a screen.
-   The live table keeps the rule it needs (th:first-child, above): this undoes it HERE only. */
-.snapshot th:first-child, .snapshot td:first-child { white-space: nowrap; min-width: 0; }
-.snapshot dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }

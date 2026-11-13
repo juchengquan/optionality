@@ -1,24 +1,21 @@
 /** The preferences the browser remembers, and the one cookie they all go through.
  *
- *  Six viewer preferences were written by hand in five places — four in `columns.ts` beside the
- *  column definitions they have nothing to do with, and the refresh cadence inline in `App.tsx`,
- *  which is why that one had no test at all. Each spelled out its own
+ *  The old page's viewer preferences were written by hand in five places — four in its `columns.ts`
+ *  beside the column definitions they had nothing to do with, and the refresh cadence inline in its
+ *  `App.tsx`, which is why that one had no test at all. Each spelled out its own
  *  `document.cookie.split("; ").find(...)` and its own attribute string, and the attributes are
  *  the part that cannot be seen to be wrong: a missing `max-age` makes a session cookie, which
  *  reads back correctly all day and is gone tomorrow. One helper, asserted once.
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_BAND } from "../shared/columns";
 import {
-  readArrangement, readBand, readEntryStyle, readGrouping, readHidden, readPriceMap, readPrivacy, readRefresh,
-  readSignal, readUp, writeArrangement, writeBand, writeEntryStyle, writeGrouping, writeHidden,
-  writePriceMap, writePrivacy, writeRefresh, writeSignal, writeUp,
+  readArrangement, readEntryStyle, readHidden, readPriceMap, readPrivacy, readRefresh, readUp,
+  writeArrangement, writeEntryStyle, writeHidden, writePriceMap, writePrivacy, writeRefresh, writeUp,
 } from "../shared/prefs";
 
 const NAMES = [
-  "ui_cols_single", "ui_cols_combo", "ui_signal", "ui_band", "ui_group", "ui_refresh",
-  "ui_up", "ui_entry", "ui_privacy", "ui_arrangement", "ui_price_map",
+  "ui_cols_combo", "ui_refresh", "ui_up", "ui_entry", "ui_privacy", "ui_arrangement", "ui_price_map",
 ];
 const clear = () => { for (const n of NAMES) document.cookie = `${n}=;path=/`; };
 afterEach(clear);
@@ -40,26 +37,11 @@ function written(fn: () => void): string[] {
 }
 
 describe("a preference survives being set", () => {
-  it("remembers which reading earns the colour", () => {
-    writeSignal("pressure");
-    expect(readSignal()).toBe("pressure");
-  });
-
-  it("remembers the band it has to clear", () => {
-    writeBand(72);
-    expect(readBand()).toBe(72);
-  });
-
-  it("remembers how the rows are divided", () => {
-    writeGrouping("expiry");
-    expect(readGrouping()).toBe("expiry");
-  });
-
-  it("remembers the hidden columns of each table separately", () => {
-    writeHidden("single", new Set(["gamma", "vega"]));
-    writeHidden("combo", new Set(["legs"]));
-    expect([...readHidden("single")].sort()).toEqual(["gamma", "vega"]);
-    expect([...readHidden("combo")]).toEqual(["legs"]);
+  it("remembers the hidden columns, in the cookie the old page's combo table kept them in", () => {
+    writeHidden(new Set(["pnl", "legs"]));
+    expect([...readHidden()].sort()).toEqual(["legs", "pnl"]);
+    // the name is the point: a choice made before the swap is still the choice after it
+    expect(document.cookie).toContain("ui_cols_combo=legs.pnl");
   });
 
   it("remembers the poll cadence", () => {
@@ -70,10 +52,7 @@ describe("a preference survives being set", () => {
 
 describe("every preference is written to outlive the tab", () => {
   const writes: [string, () => void][] = [
-    ["the signal", () => writeSignal("pressure")],
-    ["the band", () => writeBand(72)],
-    ["the grouping", () => writeGrouping("type")],
-    ["the hidden columns", () => writeHidden("combo", new Set(["legs"]))],
+    ["the hidden columns", () => writeHidden(new Set(["legs"]))],
     ["the cadence", () => writeRefresh(30)],
     ["which way is up", () => writeUp("red")],
     ["how a fired entry rule looks", () => writeEntryStyle("risk")],
@@ -129,40 +108,23 @@ describe("reading a cookie somebody else wrote", () => {
     // a comma forces quoting, which is why the hidden columns are separated by "." — and the
     // quotes are what the owner pastes back in when they edit the cookie by hand
     document.cookie = 'ui_cols_combo="legs.vega";path=/';
-    expect([...readHidden("combo")].sort()).toEqual(["legs", "vega"]);
+    expect([...readHidden()].sort()).toEqual(["legs", "vega"]);
   });
 
   it("decodes a percent-encoded value", () => {
-    document.cookie = "ui_group=%65xpiry;path=/";
-    expect(readGrouping()).toBe("expiry");
+    document.cookie = "ui_up=%72ed;path=/";
+    expect(readUp()).toBe("red");
   });
 
   it("does not take the page down over a stray percent sign", () => {
     // decodeURIComponent throws on this, and these readers run in useState initialisers — so the
     // alternative to validating it is a blank dashboard from one character typed into devtools
-    document.cookie = "ui_band=50%;path=/";
-    expect(readBand()).toBe(DEFAULT_BAND);
+    document.cookie = "ui_refresh=50%;path=/";
+    expect(readRefresh(15)).toBe(15);
   });
 });
 
-describe("a preference that cannot be honoured", () => {
-  it("takes the default band rather than flagging every row or none", () => {
-    document.cookie = "ui_band=400;path=/";
-    expect(readBand()).toBe(DEFAULT_BAND);
-  });
-
-  it("reads an unknown grouping as no grouping", () => {
-    document.cookie = "ui_group=sideways;path=/";
-    expect(readGrouping()).toBe("none");
-  });
-
-  it("reads an unknown signal as the distance", () => {
-    document.cookie = "ui_signal=vibes;path=/";
-    expect(readSignal()).toBe("distance");
-  });
-});
-
-/** The redesigned page's four (ADR 0023). Each is read where nothing has been chosen, and each has
+/** The redesigned page's own (ADR 0023). Each is read where nothing has been chosen, and each has
  *  a default that is the design's, not the browser's: green-up, an entry rule that fires looks like
  *  the good news it is, figures shown, and the width deciding the arrangement. */
 describe("the redesigned page's preferences", () => {

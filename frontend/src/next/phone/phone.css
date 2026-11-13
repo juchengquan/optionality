@@ -1,6 +1,6 @@
 /* The phone's cards (ADR 0023, arrangement B). Every colour is a token from next.css — the three
    families are decided there, once — and everything here is scoped under .nxp-, so nothing can
-   reach the desk's table or the page at /opt. */
+   reach the desk's table. */
 
 .nxp-book { display: flex; flex-direction: column; gap: 1.5rem; }
 .nxp-book h2 { font-size: 1.0625rem; font-weight: 650; margin-bottom: 0.25rem; }
