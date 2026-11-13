@@ -1,5 +1,6 @@
 /** The burndown and the IV chart in REVIEW (#295, ADR 0023): in the desk's inspector and as the main
- *  chart of the phone's one-holding page, drawn from `/positions/{id}/samples`. Behaviour only —
+ *  chart of the phone's one-holding page, drawn from `/positions/{id}/samples` — and in LIVE, on
+ *  demand, in the inspector and the phone's holding sheet (#353). Behaviour only —
  *  what is asked for and when, what is drawn from what was served, what an off-close point says
  *  and what privacy hides. That the charts FIT is measured by the browser suite. */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -253,13 +254,6 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     expect([...runs].map((r) => corners(r).length)).toEqual([2, 3]);
   });
 
-  it("is not drawn in LIVE, which asks for no samples", async () => {
-    const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
-    await within(insp).findByRole("group", { name: "payoff at expiry" });
-    expect(within(insp).queryByRole("group", { name: "burndown" })).toBeNull();
-    expect(samplesAsked()).toEqual([]);
-  });
-
   it("draws the costs with no plan, and says why, for a holding with no Opened", async () => {
     serveSamples({ ...SAMPLES["h-calls"]!, levels: null, plan: [],
       samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, on_pace: null })) });
@@ -387,5 +381,121 @@ describe("on the phone's one-holding REVIEW page", () => {
     await waitFor(() => expect(chart.querySelector("[data-costs]")).toBeTruthy());
     expect(chart.querySelector("[data-axis='y']")).toBeNull();
     expect(chart.textContent).not.toMatch(/\$\d/);
+  });
+});
+
+/** The section that opens a holding's history in LIVE (#353), wherever it is drawn. */
+const toggleOf = (root: HTMLElement) => within(root).getByRole("button", { name: "history" });
+
+/** Its toggle's state, and the box it controls: named by `aria-controls`, and there to be named
+ *  whether it is open or shut. */
+function disclosure(root: HTMLElement) {
+  const toggle = toggleOf(root);
+  const body = document.getElementById(toggle.getAttribute("aria-controls") ?? "");
+  expect(body, "aria-controls names the box it opens").toBeTruthy();
+  return { expanded: toggle.getAttribute("aria-expanded"), body: body! };
+}
+
+describe("in LIVE, on demand (#353): the desk's inspector", () => {
+  it("is drawn when opened, and not before: shut, it asks for nothing", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+    await within(insp).findByRole("group", { name: "payoff at expiry" });
+    expect(disclosure(insp).expanded).toBe("false");
+    expect(disclosure(insp).body.hidden).toBe(true);
+    expect(within(insp).queryByRole("group", { name: "burndown" })).toBeNull();
+    expect(samplesAsked()).toEqual([]);
+
+    fireEvent.click(toggleOf(insp));
+    expect(disclosure(insp).expanded).toBe("true");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    // the three charts REVIEW draws, from the same one answer
+    expect(await ivOf(insp)).toBeTruthy();
+    expect(await within(insp).findByRole("group", { name: "SPX against the strikes" })).toBeTruthy();
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
+  });
+
+  it("asks nothing more when shut and opened again, or when a poll brings a new valuation", async () => {
+    const { view, insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+    fireEvent.click(toggleOf(insp));
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    fireEvent.click(toggleOf(insp));
+    expect(disclosure(insp).expanded).toBe("false");
+    expect(disclosure(insp).body.hidden).toBe(true);
+    fireEvent.click(toggleOf(insp));
+    expect(disclosure(insp).body.hidden).toBe(false);
+    expect((await burndownOf(insp)).querySelectorAll("[data-sample]")).toHaveLength(7);
+    // a poll: the same holdings, as new objects
+    view.rerender(<DeskBook {...props({ mode: "live", holdings: HOLDINGS.map((h) => ({ ...h })) })} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
+  });
+
+  it("hides the $ axis under privacy, as REVIEW does", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live", privacy: true });
+    fireEvent.click(toggleOf(insp));
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelector("[data-costs]")).toBeTruthy());
+    expect(chart.querySelector("[data-axis='y']")).toBeNull();
+    expect(chart.textContent).not.toMatch(/\$\d/);
+  });
+
+  it("starts shut for the next holding selected, and draws it, not the last, when the last answers late", async () => {
+    const waiting = new Map<string, () => void>();
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const path = String(url).replace(/^.*\/api/, "");
+      asked.push(`${init?.method ?? "GET"} ${path}`);
+      const samples = samplesAnswer(path);
+      if (!samples) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoffAnswer(path) ?? volAnswer(path)) });
+      return new Promise((resolve) => waiting.set(path, () =>
+        resolve({ ok: true, status: 200, json: () => Promise.resolve(samples) })));
+    }));
+    const answer = async (path: string) => { await act(async () => { waiting.get(path)!(); await Promise.resolve(); }); };
+    const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+    fireEvent.click(toggleOf(insp));
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
+    fireEvent.click(within(deskRow("h-puts")).getByRole("button", { name: "1218_P6400" }));
+    const next = screen.getByRole("complementary", { name: "inspector: 1218_P6400" });
+    expect(disclosure(next).expanded).toBe("false");
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
+    fireEvent.click(toggleOf(next));
+    await answer("/positions/h-puts/samples");
+    await answer("/positions/h-calls/samples");
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples", "GET /positions/h-puts/samples"]);
+    const chart = await burndownOf(next);
+    // h-puts' week is all closes; h-calls' has a day recorded that evening
+    expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7);
+    expect(chart.querySelector("[data-timing='after-close']")).toBeNull();
+  });
+});
+
+describe("in LIVE, on demand (#353): the phone's holding sheet", () => {
+  const draw = (over: Partial<BookProps> = {}) =>
+    render(<div className="nx"><PhoneBook {...props({ mode: "live", ...over })} /></div>);
+
+  it("is shut until opened, then reads the samples once, however often it is shut and opened", async () => {
+    draw();
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_C7300" }));
+    const sheet = screen.getByRole("dialog");
+    expect(disclosure(sheet).expanded).toBe("false");
+    expect(within(sheet).queryByRole("group", { name: "burndown" })).toBeNull();
+    expect(samplesAsked()).toEqual([]);
+    fireEvent.click(toggleOf(sheet));
+    const chart = await burndownOf(sheet);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    expect(await ivOf(sheet)).toBeTruthy();
+    fireEvent.click(toggleOf(sheet));
+    expect(disclosure(sheet).body.hidden).toBe(true);
+    fireEvent.click(toggleOf(sheet));
+    expect(disclosure(sheet).body.hidden).toBe(false);
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
+  });
+
+  it("is not offered in REVIEW's sheet, whose page already draws the history", async () => {
+    draw({ mode: "review" });
+    fireEvent.click(screen.getAllByRole("button", { name: "detail and Monitors" })[0]!);
+    const sheet = screen.getByRole("dialog");
+    expect(within(sheet).queryByRole("button", { name: "history" })).toBeNull();
   });
 });

@@ -121,7 +121,7 @@ export function PhoneBook({ quotes, monitors, holdings, holdingsError, holdingsA
       ) : null}
 
       <DetailSheet subject={subject} onClose={close} quotes={quotes} monitors={monitors}
-                   privacy={privacy} entryStyle={entryStyle} writes={writes} />
+                   privacy={privacy} entryStyle={entryStyle} writes={writes} mode={mode} />
     </div>
   );
 }

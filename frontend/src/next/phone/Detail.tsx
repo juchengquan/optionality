@@ -23,12 +23,14 @@ import { stripOfEntry } from "../strip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry } from "../edit";
 import { RuleFigures } from "../RuleFigures";
+import { HistoryOnDemand } from "../HistoryOnDemand";
+import type { Mode } from "../mode";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
   | { kind: "rule"; entry: Entry; under: Entry[]; overlap?: string | null };
 
-export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes }: {
+export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes, mode = "live" }: {
   /** what is open, from the figures as they are NOW, or null for nothing */
   subject: Subject | null;
   onClose: () => void;
@@ -38,6 +40,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   entryStyle: EntryStyle;
   /** editing, closing and deleting a holding (#294) */
   writes?: HoldingWrites;
+  /** REVIEW's pages draw a holding's history already; LIVE's sheet offers it on demand (#353) */
+  mode?: Mode;
 }) {
   const open = subject !== null;
   useDismissOnBack(open, onClose);
@@ -65,7 +69,7 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
           <DetailBoundary key={shown.kind === "holding" ? shown.holding.id : shown.entry.id} what={shown.kind}>
             {shown.kind === "holding" ? (
               <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
-                             privacy={privacy} />
+                             privacy={privacy} mode={mode} />
             ) : <RuleDetail entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null} />}
             {shown.kind === "holding" && writes ? (
               <div className="nxp-sheet-body">
@@ -83,8 +87,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
 const greek = (n: number | null | undefined, places: number) =>
   n === null || n === undefined ? DASH : n.toFixed(places);
 
-function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
-  holding: Holding; rules: Entry[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean;
+function HoldingDetail({ holding, rules, quotes, monitors, privacy, mode }: {
+  holding: Holding; rules: Entry[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; mode: Mode;
 }) {
   const s = holding.schedule;
   const g = holding.greeks;
@@ -104,6 +108,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
         </div>
         <HoldingStrip holding={holding} />
         <HoldingPayoff holding={holding} privacy={privacy} />
+        {mode === "live" ? <HistoryOnDemand holding={holding} privacy={privacy} /> : null}
         <dl className="nxp-facts">
           <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
           <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
