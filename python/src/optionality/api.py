@@ -20,7 +20,7 @@ client (`hc`) already holds to the routes. Standard library only, for two GET re
 import json
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -84,9 +84,11 @@ def _rows[T: BaseModel](model: type[T], body: Any, path: str) -> list[T]:
     The models must stay faithful to the domain's types, which notebooks and the golden cases also
     build by hand. So the strictness lives HERE, at the boundary, where the promise was made: the
     API sends all of these on every row, and the check is derived from the model so a field added
-    later is guarded without anyone remembering to.
+    later is guarded without anyone remembering to. A model names the one kind of exception itself,
+    in `MAY_BE_ABSENT`: a field the service started sending later, which an older service lacks.
     """
-    optional = {name for name, field in model.model_fields.items() if not field.is_required()}
+    absent = getattr(model, "MAY_BE_ABSENT", frozenset())
+    optional = {name for name, field in model.model_fields.items() if not field.is_required()} - absent
     if isinstance(body, list):
         for row in body:
             if not isinstance(row, dict):
@@ -106,13 +108,19 @@ class Reference(BaseModel):
     module. `reference.ReferenceReading` is the DECISION — which field is true and what the day's
     move is — and this is the service's answer carrying it.
 
-    Every field is required-but-nullable, faithfully: the service's `ReadingOut` declares each one
-    `.nullable()` rather than `.optional()`, so all twelve arrive on every row and a MISSING one is
-    a shape that has moved. `_rows` below only guards fields a model would silently default, so
-    requiredness here is what makes that guard unnecessary rather than absent.
+    Every field but one is required-but-nullable, faithfully: the service's `ReadingOut` declares
+    each `.nullable()` rather than `.optional()`, so those twelve arrive on every row and a MISSING
+    one is a shape that has moved. `_rows` below only guards fields a model would silently default,
+    so requiredness here is what makes that guard unnecessary rather than absent.
+
+    The exception is `fetched_at`, which the service has sent on every row since #371 and a service
+    from before it does not: optional, None when absent, so a notebook pinned to this release still
+    reads an older service.
     """
 
     model_config = ConfigDict(frozen=True)
+    #: the fields an older service does not send, exempt from `_rows`' guard
+    MAY_BE_ABSENT: ClassVar[frozenset[str]] = frozenset({"fetched_at"})
     id: str
     code: str
     label: str | None
@@ -134,6 +142,9 @@ class Reference(BaseModel):
     last_known: bool | None
     #: minutes, where the vendor states them: Yahoo does, IBKR does not
     delayed_by_minutes: float | None
+    #: when the service's call for it answered, in DISPLAY_TZ (`2026-11-13 21:04:19+08:00`), or None
+    #: from a service older than #371. The time of the read, not of the figure.
+    fetched_at: str | None = None
 
 
 class ClosedPosition(Position):

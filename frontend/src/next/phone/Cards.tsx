@@ -8,7 +8,6 @@ import type { Entry, Holding, Monitor } from "../../shared/api";
 import { legSummary } from "../../shared/format";
 import { Chip, Money } from "../Book";
 import { levelWords } from "../levels";
-import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName, QUARANTINED, sentence } from "../needs";
 import type { PlacedHolding } from "../placement";
@@ -25,14 +24,14 @@ function OpenCard({ name, onOpen }: { name: string; onOpen: () => void }) {
   return <button type="button" className="nxp-open" aria-label={`details of ${name}`} onClick={onOpen} />;
 }
 
-/** A Level reached is attention, drawn as attention is: a filled chip with a glyph — in REVIEW
- *  saying which valuation it is from (`levelWords`, #354). */
-export function LevelChip({ holding, mode }: { holding: Holding; mode: Mode }) {
+/** A Level reached is attention, drawn as attention is: a filled chip with a glyph — outside the
+ *  session saying which valuation it is from (`levelWords`, #354, #371). */
+export function LevelChip({ holding, session }: { holding: Holding; session: boolean }) {
   const level = holding.schedule?.reached ?? null;
   if (!level) return null;
   const kind = level === "stop" ? "stop" : "target";
   return (
-    <span className="nx-chip" data-kind={kind}><Glyph kind={kind} />{levelWords(kind, holding, mode)}</span>
+    <span className="nx-chip" data-kind={kind}><Glyph kind={kind} />{levelWords(kind, holding, session)}</span>
   );
 }
 
@@ -57,8 +56,8 @@ export function RuleLine({ entry, marked = true, children }: {
   );
 }
 
-export function HoldingCard({ placed, quotes, monitors, privacy, onOpen }: {
-  placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean;
+export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen }: {
+  placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
   /** absent in the saved picture (#300), where nothing can be pressed */
   onOpen?: () => void;
 }) {
@@ -75,8 +74,8 @@ export function HoldingCard({ placed, quotes, monitors, privacy, onOpen }: {
       <div className="nxp-hero">
         <Money value={holding.pnl} privacy={privacy} />
         <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
-        {/* LIVE's card: REVIEW draws its own page (Review.tsx) */}
-        <LevelChip holding={holding} mode="live" />
+        {/* LIVE's card: REVIEW draws its own page (Review.tsx); its chip by the session (#371) */}
+        <LevelChip holding={holding} session={session} />
       </div>
       <dl className="nxp-facts">
         <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>

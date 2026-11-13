@@ -160,13 +160,13 @@ export const ATTENTION_WORDS: Record<Attention, string> = {
   fault: "fault", entry: "entry signal", alarm: "ringing", ...LEVEL_WORDS,
 };
 
-/** The words a row's chip draws, or null for no chip: a holding's Level says, in REVIEW, which
- *  valuation it is from (`levelWords`, #354). */
-export function chipWords(row: DeskRow, mode: Mode): string | null {
+/** The words a row's chip draws, or null for no chip: a holding's Level says, outside the session,
+ *  which valuation it is from (`levelWords`, #354, #371). */
+export function chipWords(row: DeskRow, session: boolean): string | null {
   const a = attentionOf(row);
   if (a === null) return null;
   if (row.kind === "holding" && (a === "stop" || a === "target" || a === "manage")) {
-    return levelWords(a, row.holding, mode);
+    return levelWords(a, row.holding, session);
   }
   return ATTENTION_WORDS[a];
 }
@@ -297,12 +297,12 @@ const PAD_CH = 1.5;
 
 /** How many characters a column needs, from the longest thing it will draw, its header included.
  *  The name cell also carries its chip and, nested, an indent; the rule cell its fill bar. */
-export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: boolean, mode: Mode): number {
+export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: boolean, session: boolean): number {
   let longest = column.label.length;
   for (const r of rows) {
     let n = column.text(r, privacy).length;
     if (column.key === "name") {
-      const words = chipWords(r, mode);
+      const words = chipWords(r, session);
       // a chip is smaller type than the cell, but carries a glyph and its own padding
       if (words !== null) n += words.length + 4;
       if (r.kind === "rule" && r.nested) n += 2;

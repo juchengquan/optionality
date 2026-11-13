@@ -95,6 +95,15 @@ body { margin: 0; }
 .nx-spacer { flex: 1; }
 .nx-main { padding: 0.75rem var(--nx-gutter) 1.5rem; }
 .nx-meta { color: var(--muted-foreground); font-size: 0.875rem; }
+/* "market closed — valued at 21:04" and its refresh (#371): the words may wrap, the button not */
+.nx-mkt-closed { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; }
+.nx-mkt-closed-refresh {
+  display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;
+  padding: 0.125rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-md);
+  color: var(--foreground); font-size: 0.8125rem;
+}
+.nx-mkt-closed-refresh svg { width: 0.875rem; height: 0.875rem; }
+.nx-mkt-closed-refresh:disabled { opacity: 0.6; }
 .nx-banner {
   margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
   border: 1px solid var(--fault);

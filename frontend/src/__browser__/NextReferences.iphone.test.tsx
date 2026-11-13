@@ -7,12 +7,12 @@
  *  line. This is the measurement, not a reading of the CSS — the strip must WRAP, and nothing on
  *  the page may push it sideways.
  *
- *  The strip is drawn in LIVE only, so the page is put there by the Live tab: the browser's clock
- *  is the real one, and outside the session it says REVIEW.
+ *  Measured in session (the suite's pinned clock) and outside it, where every reading also carries
+ *  the time it was read (#371) and the strip is longest. The Live tab is still pressed, as before.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { overflowsSideways, settle } from "./nextBook";
@@ -29,12 +29,17 @@ async function show() {
 afterEach(async () => { cleanup(); await page.viewport(390, 664); });
 
 describe("the strip on a phone", () => {
-  for (const [name, w, h] of [["iPhone 13", 390, 664], ["narrow phone", 320, 568]] as const) {
+  for (const [name, w, h, outside] of [
+    ["iPhone 13", 390, 664, false], ["narrow phone", 320, 568, false],
+    ["iPhone 13, outside the session", 390, 664, true], ["narrow phone, outside the session", 320, 568, true],
+  ] as const) {
     it(`wraps rather than reaching past the edge — ${name}`, async () => {
+      if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday
       await page.viewport(w, h);
       await show();
       const { items, lines } = stripLines();
       expect(items).toHaveLength(3);
+      if (outside) for (const item of items) expect(item.textContent).toMatch(/read at 01:00$/);
       // each one whole, inside the page: a figure clipped at the edge is the shape of bug a green
       // suite hides
       for (const item of items) {
@@ -47,6 +52,7 @@ describe("the strip on a phone", () => {
     });
 
     it(`does not push the page sideways — ${name}`, async () => {
+      if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z"));
       await page.viewport(w, h);
       await show();
       expect(overflowsSideways()).toBe(false);

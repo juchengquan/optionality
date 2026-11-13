@@ -8,6 +8,7 @@ import { shortDate } from "../../shared/format";
 import { GROUPS } from "../../shared/groups";
 import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../shared/prefs";
 import { Chip, Money, type BookProps } from "../Book";
+import { ClosedLine } from "../ClosedLine";
 import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { monitorName, fieldWords } from "../needs";
@@ -49,7 +50,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
   /** the selection, when the page owns it (#299): the palette reads it and lands on a row */
   selection?: [DeskSelection, (s: DeskSelection) => void];
 }) {
-  const { quotes, monitors, holdings, mode, privacy } = props;
+  const { quotes, monitors, holdings, mode, session, privacy } = props;
   const placed = useMemo(() => placeBook(quotes, holdings, monitors), [quotes, holdings, monitors]);
   const rows = useMemo(() => tableRows(placed), [placed]);
   const partners = useMemo(() => new Map(placed.holdings.flatMap((g) => g.rows)
@@ -61,7 +62,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
   // (gamma, expiry…). So every change is made to the cookie as it stands NOW — another tab may have
   // written it since this one read it — and touches only the desk's own keys.
   const [hidden, setHidden] = useState(() => readHidden());
-  const fit = useDeskFit(mode, rows, hidden, privacy);
+  const fit = useDeskFit(mode, rows, hidden, privacy, session);
   const onToggle = useCallback((key: string, shown: boolean) => {
     const next = readHidden();
     if (shown) next.delete(key); else next.add(key);
@@ -165,13 +166,13 @@ export function DeskBook({ selection, ...props }: BookProps & {
   const inspectorId = useId();
   const ctx: Ctx = {
     columns: fit.columns, privacy, selected: current ? rowId(current) : null, cursor: sel.id, select: setSelected,
-    inspectorId, mode,
+    inspectorId, session,
   };
   const pickable = COLUMNS[mode].filter((c) => c.key !== "name" && (fit.offered.has(c.key) || hidden.has(c.key)));
 
   return (
     <div className="nx-book nxd" ref={root} data-inspecting={current ? "" : undefined}>
-      {mapOpen ? <PriceMapPanel id={mapId} map={map} mode={mode} note={mapNote}
+      {mapOpen ? <PriceMapPanel id={mapId} map={map} session={session} note={mapNote}
                                  selected={current ? rowId(current) : null} onSelect={pickOnMap} /> : null}
       <div className="nxd-table" ref={fit.ref} style={{ "--nxd-cols": fit.template } as React.CSSProperties}>
         <div className="nxd-head nxd-grid">
@@ -195,7 +196,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
         <Muted monitors={placed.muted} />
       </div>
 
-      {current ? <Inspector id={inspectorId} row={current} mode={mode} privacy={privacy} rows={rows} partners={partners}
+      {current ? <Inspector id={inspectorId} row={current} mode={mode} session={session} privacy={privacy} rows={rows} partners={partners}
                             onSelect={setSelected} onClose={close} monitors={monitors} writes={props.writes} /> : null}
     </div>
   );
@@ -215,8 +216,8 @@ interface Ctx {
   cursor: string | null;
   select: (id: string) => void;
   inspectorId: string;
-  /** a holding's chip says, in REVIEW, which valuation it is from (#354) */
-  mode: Mode;
+  /** a holding's chip says, outside the session, which valuation it is from (#354, #371) */
+  session: boolean;
 }
 
 /** Every key the desk draws: all it may change in the column cookie (`readHidden`). */
@@ -227,7 +228,7 @@ export { tableRows } from "./columns";
 
 // ---- the sections
 
-function Holdings({ placed, holdings, holdingsError, holdingsAt, mode, ctx, picker }: BookProps & {
+function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed, session, onRevalue, revaluing, ctx, picker }: BookProps & {
   placed: BookModel; ctx: Ctx; picker: React.ReactNode;
 }) {
   return (
@@ -240,8 +241,10 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, mode, ctx, pick
         ? <p className="nx-meta nxd-note">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
       {holdings === null && holdingsError === null ? <p className="nx-meta nxd-note">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nx-meta nxd-note">nothing held</p> : null}
-      {mode === "review" && holdings !== null && holdingsAt
-        ? <p className="nx-meta nxd-note">{`valued at ${holdingsAt}`}</p> : null}
+      {/* outside the session, whichever mode (#371): when the service valued what is drawn, and the
+          refresh that values it again */}
+      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} onRefresh={onRevalue}
+                              refreshing={revaluing} className="nx-meta nxd-note" /> : null}
       {placed.holdings.map(({ expiry, rows }) => (
         <div key={expiry} className="nxd-expiry">
           <h3 className="nxd-group">{`${shortDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`}</h3>
@@ -392,7 +395,7 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
               onClick={(e) => { e.stopPropagation(); ctx.select(rowId(row)); }}>
         {rowName(row)}
       </button>
-      {a ? <AttentionChip kind={a} words={chipWords(row, ctx.mode)} /> : null}
+      {a ? <AttentionChip kind={a} words={chipWords(row, ctx.session)} /> : null}
     </>
   );
 }
@@ -457,8 +460,8 @@ export function Fill({ entry }: { entry: Entry }) {
 
 // ---- the inspector
 
-function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose, monitors, writes }: {
-  id: string; row: DeskRow; mode: Mode; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
+function Inspector({ id, row, mode, session, privacy, rows, partners, onSelect, onClose, monitors, writes }: {
+  id: string; row: DeskRow; mode: Mode; session: boolean; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
   onSelect: (id: string) => void; onClose: () => void; monitors: Monitor[]; writes?: HoldingWrites;
 }) {
   const name = rowName(row);
@@ -476,10 +479,11 @@ function Inspector({ id, row, mode, privacy, rows, partners, onSelect, onClose, 
       </div>
       {/* the heading and its close stay outside: a detail that cannot be drawn can still be shut */}
       <DetailBoundary key={subject} what={row.kind === "holding" ? "holding" : "rule"}>
-        {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} privacy={privacy} partners={partners} onSelect={onSelect} />
+        {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} session={session} privacy={privacy} partners={partners} onSelect={onSelect} />
           : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null} />
             : <QuarantinedDetail row={row} />}
-        <p className="nx-meta nxd-note">{mode === "live" ? "live: updates with every poll" : "as last valued"}</p>
+        {/* by the session, not the mode (#371): what is polled is what updates */}
+        <p className="nx-meta nxd-note">{session ? "live: updates with every poll" : "as last valued"}</p>
         {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
             carried to the next row selected */}
         {row.kind === "holding" && writes ? (
@@ -514,8 +518,8 @@ function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean;
   );
 }
 
-function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
-  row: Extract<DeskRow, { kind: "holding" }>; mode: Mode; privacy: boolean; partners: Map<string, Holding>;
+function HoldingDetail({ row, mode, session, privacy, partners, onSelect }: {
+  row: Extract<DeskRow, { kind: "holding" }>; mode: Mode; session: boolean; privacy: boolean; partners: Map<string, Holding>;
   onSelect: (id: string) => void;
 }) {
   const h: Holding = row.holding;
@@ -537,12 +541,12 @@ function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
   }
   // the condor's other spread, when placement bracketed the two
   const partner = partners.get(h.id) ?? null;
-  // its Level, as the row's chip says it: bare in LIVE, and in REVIEW with the valuation it is
-  // from (#354)
+  // its Level, as the row's chip says it: bare in session, and outside it with the valuation it
+  // is from (#354, #371)
   const a = attentionOf(row);
   return (
     <>
-      {a ? <p><AttentionChip kind={a} words={chipWords(row, mode)} /></p> : null}
+      {a ? <p><AttentionChip kind={a} words={chipWords(row, session)} /></p> : null}
       <p className="nx-meta">
         {`${h.strike_date} · ${h.dte} DTE${h.opened_at ? ` · opened ${h.opened_at}` : " · Opened not recorded"}`}
       </p>

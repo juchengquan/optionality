@@ -496,7 +496,7 @@ describe("from both arrangements", () => {
   function book(over: Partial<BookProps> = {}): BookProps {
     return {
       quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-      mode: "live", privacy: false, entryStyle: "opportunity", ...over,
+      mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
     };
   }
   const wrap = (a: MonitorActions, ui: React.ReactNode) =>

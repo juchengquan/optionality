@@ -18,7 +18,7 @@ async function review(width: number): Promise<HTMLElement> {
   document.cookie = "ui_arrangement=desk;path=/";
   render(<Next />);
   await settle();
-  // the mode follows the real clock here; the switch makes it this test's
+  // the clock is pinned in session (session.setup.ts); the switch picks this test's mode
   fireEvent.click(screen.getByRole("button", { name: "Review" }));
   const journal = await screen.findByRole("region", { name: "closed trades" });
   await waitFor(() => expect(journal.querySelectorAll("[data-closed]")).toHaveLength(3));

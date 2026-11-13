@@ -8,7 +8,9 @@ import { charsOf, COLUMNS, fitColumns, offerable, type DeskColumn, type DeskRow 
  *  why they keep dropping correctly when the reader bumps their text size, which no breakpoint can
  *  see. Resizing the window, opening the inspector beside the table and changing the text size all
  *  re-measure. The old page's `useTableFit.ts` did the same for its two tables (#301 deleted it). */
-export function useDeskFit(mode: Mode, rows: readonly DeskRow[], hidden: ReadonlySet<string>, privacy: boolean) {
+export function useDeskFit(
+  mode: Mode, rows: readonly DeskRow[], hidden: ReadonlySet<string>, privacy: boolean, session: boolean,
+) {
   // a callback ref, so the measuring starts when the node exists rather than on the first render
   const [node, setNode] = useState<HTMLDivElement | null>(null);
   const ref = useCallback((el: HTMLDivElement | null) => setNode(el), []);
@@ -45,9 +47,9 @@ export function useDeskFit(mode: Mode, rows: readonly DeskRow[], hidden: Readonl
   const ready = available > 0 && charWidth > 0;
   const widths = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const c of COLUMNS[mode]) out[c.key] = Math.ceil(charsOf(c, rows, privacy, mode) * charWidth);
+    for (const c of COLUMNS[mode]) out[c.key] = Math.ceil(charsOf(c, rows, privacy, session) * charWidth);
     return out;
-  }, [mode, rows, privacy, charWidth]);
+  }, [mode, rows, privacy, session, charWidth]);
   const widthOf = (key: string) => widths[key] ?? 0;
 
   // before the first measurement, every ticked column: a flash of too many is recoverable, a flash

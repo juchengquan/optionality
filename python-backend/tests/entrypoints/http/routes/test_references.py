@@ -9,6 +9,8 @@ What only the Python can get wrong is at the end.
 """
 
 import math
+import re
+from datetime import UTC, datetime
 
 import pytest
 from harness import json_body, quoting
@@ -197,6 +199,49 @@ class TestReadingThem:
             field="mid_price",
             error=None,
         )
+
+    async def test_stamps_every_reading_with_when_the_service_read_it_in_display_tz_371(self, begin):
+        # outside the session the page reads the strip once and must say when (ADR 0023, amended
+        # 2026-11-13): the service's own clock, as a holding's valuation carries it
+        h = begin()
+        await created(h, {"code": "US.SPY", "label": "SPY", "source": "moomoo"})
+        h.now = datetime(2026, 11, 13, 13, 4, 11, tzinfo=UTC)
+        rows = (await h.call("/references")).json()
+        assert rows[0]["fetched_at"] == "2026-11-13 21:04:11+08:00"
+
+    async def test_stamps_a_reading_when_its_source_answered_not_when_it_was_asked_371(self, start):
+        # a source can take its whole timeout: the reading is as old as its answer, so the clock is read
+        # after the call. `/positions/values` reads it BEFORE its call, so the two stamps can differ by a
+        # call's length; this holds which one `/references` is
+        box: dict = {}
+        answer = quoting({"US.SPY": SPY})
+
+        async def slow(codes: list[str]) -> Batch:
+            box["h"].now = datetime(2026, 11, 13, 13, 4, 19, tzinfo=UTC)  # eight seconds pass inside the call
+            return await answer(codes)
+
+        h = box["h"] = start(fetch_quotes=slow)
+        h.db.execute(
+            """insert into reference_securities (id, code, label, source, created_at)
+               values (?, 'US.SPY', 'SPY', 'moomoo', '2026-11-02 00:00:00.000000')""",
+            ("r" * 32,),
+        )
+        h.now = datetime(2026, 11, 13, 13, 4, 11, tzinfo=UTC)
+        rows = (await h.call("/references")).json()
+        assert rows[0]["fetched_at"] == "2026-11-13 21:04:19+08:00"
+
+    async def test_stamps_a_reading_that_has_no_figure_too_the_dash_was_read_at_that_time_as_well(self, start):
+        async def down(codes: list[str]) -> Batch:
+            raise RuntimeError("Client connection failed!")
+
+        h = start(fetch_quotes=down)
+        h.db.execute(
+            """insert into reference_securities (id, code, label, source, created_at)
+               values (?, 'US.SPY', 'SPY', 'moomoo', '2026-11-02 00:00:00.000000')""",
+            ("r" * 32,),
+        )
+        rows = (await h.call("/references")).json()
+        assert re.fullmatch(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\+08:00", rows[0]["fetched_at"])
 
     async def test_answers_200_with_a_dash_while_the_provider_is_wholly_down(self, start):
         # the one surface here that cannot fail: the page it decorates must still draw, and a backdrop

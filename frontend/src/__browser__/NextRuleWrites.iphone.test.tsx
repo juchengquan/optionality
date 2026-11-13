@@ -12,7 +12,7 @@ import { Next } from "../next/Next";
 import { serveRuleEdits, type Refusals } from "../testing/ruleEdits";
 import { overflowsSideways, settle } from "./nextBook";
 
-beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") }); });
+beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); document.cookie = "ui_privacy=; max-age=0; path=/"; });
 
 async function show(refuse?: Refusals) {

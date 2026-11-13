@@ -30,7 +30,7 @@ const IN_SESSION = new Date("2026-11-12T17:00:00Z");
  *  page's own detection both ways rather than asking it which chord to press. */
 async function openDesk(height = 900, platform = "MacIntel"): Promise<HoldingService> {
   vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
-  vi.useFakeTimers({ toFake: ["Date"], now: IN_SESSION });
+  vi.setSystemTime(IN_SESSION);
   await page.viewport(1440, height);
   const s = holdingService();
   window.fetch = s.fetch;

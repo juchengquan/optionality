@@ -12,17 +12,21 @@ export const REFERENCES = [
     // the longest line the strip can draw: a vendor AND both freshness flags
     delayed: true, last_known: true, delayed_by_minutes: null,
     figure: 7587.3, field: "mid_price", change: 0.003982956650611325, error: null,
+    // when the service read it (#371): drawn on every reading outside the session
+    fetched_at: "2026-11-16 01:00:15+08:00",
   },
   {
     id: "r2", code: "^NDX", label: "Nasdaq 100", source: "yahoo", name: "NASDAQ-100",
     // and the other long shape: stated minutes rather than a bare tier
     delayed: true, last_known: true, delayed_by_minutes: 15,
     figure: 14962.5, field: "last_price", change: -0.0123, error: null,
+    fetched_at: "2026-11-16 01:00:15+08:00",
   },
   {
     id: "r3", code: "US.VIXY", label: null, source: "moomoo", name: "ProShares VIX Short-Term",
     delayed: null, last_known: null, delayed_by_minutes: null,
     figure: 42.18, field: "mid_price", change: 0.0415, error: null,
+    fetched_at: "2026-11-16 01:00:15+08:00",
   },
 ];
 

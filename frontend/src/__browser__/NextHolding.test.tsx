@@ -22,7 +22,7 @@ afterEach(() => {
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
 async function openDesk(width = 1440): Promise<HoldingService> {
-  vi.useFakeTimers({ toFake: ["Date"], now: IN_SESSION });
+  vi.setSystemTime(IN_SESSION);
   await page.viewport(width, 900);
   document.cookie = "ui_arrangement=desk;path=/";
   const s = holdingService({ holdings: HOLDINGS.map((h) => h.id === "h-ic" ? { ...h, cost_to_close: 1.225 } : h) });

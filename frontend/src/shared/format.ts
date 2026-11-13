@@ -90,6 +90,15 @@ export function marketDay(now: Date = new Date()): string {
   return MARKET_DAY.format(now);
 }
 
+/** "21:04:37": the wall clock the service wrote on something it served (`fetched_at`, rendered in
+ *  DISPLAY_TZ as `2026-11-12 21:04:37+08:00`), read as written — the zone the owner reads every
+ *  time the service states, and never the device's — or null where the stamp says no time. A
+ *  holding's valuation and a Reference's reading both carry one (#354, #371). */
+export function servedClock(served: string | null | undefined): string | null {
+  const m = /^\d{4}-\d{2}-\d{2}[ T](\d{2}:\d{2}:\d{2})/.exec(served ?? "");
+  return m ? m[1]! : null;
+}
+
 /** A wall clock as `HH:MM:SS`, built from the fields rather than formatted by locale.
  *
  *  `toLocaleTimeString()` with no arguments renders in whatever language the DEVICE is set to:

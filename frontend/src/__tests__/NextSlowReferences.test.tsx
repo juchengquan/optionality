@@ -28,7 +28,7 @@ afterEach(() => {
 const SPX: Reference = {
   id: "r1", code: "SPX", label: "SPX", source: "ibkr", name: null,
   figure: 7376.86, field: "last_price", change: 0.0031, error: null,
-  delayed: null, last_known: null, delayed_by_minutes: null,
+  delayed: null, last_known: null, delayed_by_minutes: null, fetched_at: "2026-11-10 21:04:11+08:00",
 };
 
 /** One call to `/references`, answered when the test chooses: with rows, or with a refusal. */

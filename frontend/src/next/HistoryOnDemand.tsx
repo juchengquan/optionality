@@ -11,6 +11,11 @@
  *    its id, so this is drawn afresh, shut, for each; the charts of the one before go with it, and
  *    an answer for it lands nowhere (`useSamples`' guard).
  *
+ *  - **Or opened from the start** (`defaultOpen`, #371): drawn open, it reads the samples at once,
+ *    once, as an opening by hand would. Wired nowhere yet: the desk's inspector (#372) and the
+ *    phone's sheet (#374) open it outside the session, and it landed first so the two do not edit
+ *    this file in parallel.
+ *
  *  Privacy is `HoldingHistory`'s, as in REVIEW. The saved image does not carry it: the still draws
  *  neither mode's history. */
 import { useId, useState } from "react";
@@ -18,11 +23,15 @@ import { ChevronRight } from "lucide-react";
 
 import { HoldingHistory, type Charted } from "./History";
 
-export function HistoryOnDemand({ holding, privacy }: { holding: Charted; privacy: boolean }) {
+export function HistoryOnDemand({ holding, privacy, defaultOpen = false }: {
+  holding: Charted; privacy: boolean;
+  /** drawn open, its samples read at once; read once, when first drawn, not on a later change */
+  defaultOpen?: boolean;
+}) {
   const body = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   // once opened, the charts stay mounted, so shutting and opening again asks nothing more
-  const [opened, setOpened] = useState(false);
+  const [opened, setOpened] = useState(defaultOpen);
   return (
     <section className="nx-hist-od" data-open={open ? "" : undefined}>
       <button type="button" className="nx-hist-od-toggle" aria-expanded={open} aria-controls={body}

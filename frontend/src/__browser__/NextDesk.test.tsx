@@ -6,7 +6,7 @@
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { page, userEvent } from "@vitest/browser/context";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
@@ -127,11 +127,14 @@ describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => 
 });
 
 /** A holding's Level chip says, in REVIEW, when the holding was valued (#354), so it is longer
- *  there: every holding at a Level — the longest, "manage-by · as valued at 23:14", among them —
+ *  there: every holding at a Level — the longest, "manage-by · as valued at 00:59", among them —
  *  and the table still fits, the chip drawn whole inside its cell, and in the inspector too. */
-describe("a Level's chip in REVIEW, with its valuation's time, fits", () => {
+/** A Sunday, 12:00 New York: outside the session, at an hour that would be in it on a weekday. */
+const SUNDAY = new Date("2026-11-15T17:00:00Z");
+
+describe("a Level's chip outside the session, with its valuation's time, fits", () => {
   const levelled = scheduled.map((h) => ({
-    ...h, fetched_at: "2026-11-10 23:14:05+08:00",
+    ...h, fetched_at: "2026-11-16 00:59:05+08:00",
     schedule: { ...h.schedule, reached: h.id === "h-calls" ? "stop" : h.id === "h-puts" ? "target" : null,
       manage_by_due: h.id === "h-ic" },
   }));
@@ -152,10 +155,12 @@ describe("a Level's chip in REVIEW, with its valuation's time, fits", () => {
   for (const mode of ["live", "review"] as const) {
     for (const width of [900, 1280, 2560]) {
       it(`at ${width}px in ${mode}, with the inspector shut and open`, async () => {
+        // the session decides the chip's words (#371): REVIEW is measured outside it, LIVE in it
+        if (mode === "review") vi.setSystemTime(SUNDAY);
         await show(mode, width);
         const chip = (id: string) => rowOf(id).querySelector(".nx-chip")!.textContent;
-        expect(chip("h-calls")).toBe(mode === "review" ? "at stop · as valued at 23:14" : "at stop");
-        expect(chip("h-ic")).toBe(mode === "review" ? "manage-by · as valued at 23:14" : "manage-by");
+        expect(chip("h-calls")).toBe(mode === "review" ? "at stop · as valued at 00:59" : "at stop");
+        expect(chip("h-ic")).toBe(mode === "review" ? "manage-by · as valued at 00:59" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
         expect(misfits()).toEqual([]);
@@ -164,7 +169,7 @@ describe("a Level's chip in REVIEW, with its valuation's time, fits", () => {
         await inspect("h-ic");
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
         expect(insp.querySelector(".nx-chip")!.textContent)
-          .toBe(mode === "review" ? "manage-by · as valued at 23:14" : "manage-by");
+          .toBe(mode === "review" ? "manage-by · as valued at 00:59" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(misfits()).toEqual([]);
         expect(cutChips(table())).toEqual([]);
@@ -172,6 +177,53 @@ describe("a Level's chip in REVIEW, with its valuation's time, fits", () => {
       });
     }
   }
+});
+
+/** "market closed — valued at 01:00" and its refresh (#371), above the holdings outside the session:
+ *  whole, on one box that nothing pushes sideways, at every desk width, in either mode, with the
+ *  inspector shut and open. */
+describe("the market-closed line fits", () => {
+  beforeEach(() => {
+    vi.setSystemTime(SUNDAY);
+    valued = scheduled.map((h) => ({ ...h, fetched_at: "2026-11-16 01:00:12+08:00" }));
+  });
+  afterEach(() => { valued = scheduled; });
+
+  /** The line's words or its button cut, or reaching past the line's own box or the window. */
+  function clipped(line: HTMLElement): string[] {
+    const box = line.getBoundingClientRect();
+    const edge = document.documentElement.clientWidth;
+    return [line, ...line.querySelectorAll<HTMLElement>("*")].flatMap((el) => {
+      const r = el.getBoundingClientRect();
+      const out = r.left < box.left - 0.5 || r.right > box.right + 0.5 || r.right > edge + 0.5
+        || (el.tagName !== "svg" && el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0);
+      return out ? [`${el.tagName.toLowerCase()} "${el.textContent}" ${Math.round(r.left)}–${Math.round(r.right)}`] : [];
+    });
+  }
+
+  for (const mode of ["live", "review"] as const) {
+    for (const width of [900, 1280, 2560]) {
+      it(`at ${width}px in ${mode}, with the inspector shut and open`, async () => {
+        await show(mode, width);
+        const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
+        expect(line.textContent).toBe("market closed — valued at 01:00refresh");
+        const button = within(line).getByRole("button", { name: "refresh the valuation" });
+        expect(button.getBoundingClientRect().width).toBeGreaterThan(0);
+        expect(clipped(line)).toEqual([]);
+        expect(overflowsSideways()).toBe(false);
+
+        await inspect("h-ic");
+        expect(clipped(document.querySelector<HTMLElement>(".nx-mkt-closed")!)).toEqual([]);
+        expect(overflowsSideways()).toBe(false);
+      });
+    }
+  }
+
+  it("is not drawn in session", async () => {
+    vi.setSystemTime(new Date("2026-11-12T17:00:00Z"));
+    await show("review", 1280);
+    expect(document.querySelector(".nx-mkt-closed")).toBeNull();
+  });
 });
 
 describe("the pace explained fits in the inspector (#333)", () => {

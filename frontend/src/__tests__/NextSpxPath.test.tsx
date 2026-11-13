@@ -39,7 +39,7 @@ afterEach(() => {
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "review", privacy: false, entryStyle: "opportunity", ...over,
+    mode: "review", session: (over.mode ?? "review") === "live", privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 

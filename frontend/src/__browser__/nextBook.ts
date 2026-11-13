@@ -94,7 +94,12 @@ const samples = {
     observed_on: on, observed_at: "2026-11-07 05:00:00+08:00", timing, dte, cost_to_close: cost,
     on_pace: 3 * Math.sqrt(Number(dte) / 58), legs_iv: { "US.SPXW261231P7000000": 18.5,
       "US.SPXW261231P6950000": 19.25 }, legs_vega: null, legs_delta: null, spx: null,
+    before_correction: false,
   })),
+  // as the service answers since #359: none of these days was summed before a correction. Missing,
+  // the burndown read `undefined` as a correction and threw — unseen while this suite ran in
+  // session, where REVIEW's pages (which draw it) only appeared by hand
+  qty_corrected_at: null,
 };
 
 /** Every write is refused, as the service refuses one it will not take: a layout suite never

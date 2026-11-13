@@ -3,6 +3,7 @@ import { BellRing, OctagonAlert, Sparkles } from "lucide-react";
 import type { Entry, Holding, Monitor } from "../shared/api";
 import type { EntryStyle } from "../shared/prefs";
 import { DASH, heldLegs, legSummary } from "../shared/format";
+import { ClosedLine } from "./ClosedLine";
 import type { HoldingWrites } from "./HoldingActions";
 import type { Mode } from "./mode";
 import { Glyph } from "./NeedsLine";
@@ -21,9 +22,22 @@ export interface BookProps {
    *  nobody can vouch for, as the old page did (#301) */
   holdings: Holding[] | null;
   holdingsError: string | null;
-  /** when this screen last valued them, said in REVIEW, where they are not polled */
+  /** when the service last valued them, from its own stamp: said outside the session, where they
+   *  are not polled ("market closed — valued at 21:04", #371) */
   holdingsAt: string | null;
+  /** the same stamp whole, with its date (`valuedStamp`): the market-closed line dates a valuation
+   *  from another day by it (#371's review). Absent, the line says `holdingsAt`'s time alone. */
+  holdingsServed?: string | null;
+  /** the on-screen mode, which since #371 decides only which columns and views are drawn */
   mode: Mode;
+  /** whether New York's session is open (`session.ts`): what is fetched, what the needs-you line
+   *  says and whether a figure carries its time all follow this, never the mode (#371) */
+  session: boolean;
+  /** values the book once more, from the market-closed line: the header's refresh. Absent where
+   *  nothing can be pressed, as in the saved picture. */
+  onRevalue?: () => void;
+  /** a valuation asked by `onRevalue` or the header is still out */
+  revaluing?: boolean;
   privacy: boolean;
   entryStyle: EntryStyle;
   /** editing, closing and deleting a holding (#294); absent, its detail offers none of them */
@@ -37,7 +51,7 @@ export interface BookProps {
  *  both by expiry (ADR 0023: the spread is the unit, grouped by expiry). Which rule sits where is
  *  `placeBook`'s; this only draws it, plainly, until the desk table (#289) and the phone cards
  *  (#290) replace it. */
-export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, privacy }: BookProps) {
+export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, privacy }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const unplaced = placed.unplaced;
 
@@ -50,8 +64,7 @@ export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, mo
           : null}
         {holdings === null && holdingsError === null ? <p className="nx-meta">valuing…</p> : null}
         {holdings !== null && holdings.length === 0 ? <p className="nx-meta">nothing held</p> : null}
-        {mode === "review" && holdings !== null && holdingsAt
-          ? <p className="nx-meta">{`valued at ${holdingsAt}`}</p> : null}
+        {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} className="nx-meta" /> : null}
         {placed.holdings.map(({ expiry, rows }) => (
           <div key={expiry} className="nx-expiry">
             <h3>{expiry}</h3>

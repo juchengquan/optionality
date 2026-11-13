@@ -9,7 +9,7 @@
  */
 import { userEvent } from "@vitest/browser/context";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { overflowsSideways, settle } from "./nextBook";
@@ -53,7 +53,7 @@ async function show(view: "Live" | "Review" = "Live", quotes: object[] = QUOTES,
   serveOwnerBook(quotes, holdings);
   render(<Next />);
   await settle();
-  // the mode follows the real clock here; the tab makes it this test's
+  // the clock is pinned in session (session.setup.ts); the tab picks this test's mode
   await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: view }));
   await settle();
   window.scrollTo(0, 0);
@@ -389,21 +389,50 @@ describe("REVIEW", () => {
   });
 });
 
-/** REVIEW's Level chips say when the holding was valued (#354), and got longer for it: measured on
- *  the page, in the sheet and with the longest of the three Levels, at the iPhone's 390px. */
-describe("a Level's chip in REVIEW, with its valuation's time", () => {
+/** "market closed — valued at 01:00" and its refresh (#371), on either tab outside the session: not
+ *  clipped, nothing pushed sideways, and the button a 44pt target. */
+describe("the market-closed line on the phone", () => {
+  const stamped = HOLDINGS.map((h) => ({ ...h, fetched_at: "2026-11-16 01:00:12+08:00" }));
+  for (const view of ["Live", "Review"] as const) {
+    it(`fits on the ${view} tab, with its refresh a 44pt target`, async () => {
+      vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
+      await show(view, QUOTES, stamped);
+      const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
+      expect(line.textContent).toBe("market closed — valued at 01:00refresh");
+      const button = within(line).getByRole("button", { name: "refresh the valuation" });
+      const b = button.getBoundingClientRect();
+      expect(b.width, "the refresh's width").toBeGreaterThanOrEqual(44);
+      expect(b.height, "the refresh's height").toBeGreaterThanOrEqual(44);
+      const box = line.getBoundingClientRect();
+      for (const el of [line, ...line.querySelectorAll<HTMLElement>("*")]) {
+        const r = el.getBoundingClientRect();
+        expect(r.left >= box.left - 0.5 && r.right <= box.right + 0.5, `${el.tagName} inside the line`).toBe(true);
+      }
+      expect(line.scrollWidth).toBeLessThanOrEqual(line.clientWidth);
+      expect(pastTheEdge(line)).toEqual([]);
+      expect(tooSmall()).toEqual([]);
+      expect(overflowsSideways()).toBe(false);
+    });
+  }
+});
+
+/** Outside the session the Level chips say when the holding was valued (#354, #371), and got longer
+ *  for it: measured on the page, in the sheet and with the longest of the three Levels, at the
+ *  iPhone's 390px. */
+describe("a Level's chip outside the session, with its valuation's time", () => {
   const levelled = HOLDINGS.map((h) => ({
-    ...h, fetched_at: "2026-11-10 23:14:05+08:00",
+    ...h, fetched_at: "2026-11-16 00:59:05+08:00",
     schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4, target_dte: 11,
       manage_by_dte: 21, reached: h.id === "h-ic" ? "target" : "stop", manage_by_due: false },
   }));
   const pageOf = (ref: string) => document.querySelector<HTMLElement>(`[data-page][data-ref="${ref}"]`)!;
 
   it("fits on each page and in the sheet, pushing nothing sideways", async () => {
+    vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
     await show("Review", QUOTES, levelled);
     for (const ref of ["h-calls", "h-puts", "h-ic"]) {
       const chip = pageOf(ref).querySelector<HTMLElement>(".nx-chip")!;
-      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 23:14$/);
+      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 00:59$/);
       const card = pageOf(ref).querySelector(".nxp-card")!.getBoundingClientRect();
       const r = chip.getBoundingClientRect();
       expect(r.left >= card.left && r.right <= card.right, `${ref}'s chip inside its card`).toBe(true);
@@ -413,7 +442,7 @@ describe("a Level's chip in REVIEW, with its valuation's time", () => {
     await userEvent.click(within(pageOf("h-calls")).getByRole("button", { name: "detail and Monitors" }));
     const sheet = await screen.findByRole("dialog");
     await animationsDone();
-    expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 23:14");
+    expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 00:59");
     expect(pastTheEdge(sheet)).toEqual([]);
     expect(overflowsSideways()).toBe(false);
   });
