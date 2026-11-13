@@ -490,7 +490,9 @@ export const HTTP: readonly HttpInput[] = [
       tables: {
         positions: [position({
           id: "pos-calls", name: "dec-calls",
-          legs: [{ side: "short", option_type: "CALL", strike: 7300 }, { side: "long", option_type: "CALL", strike: 7350 }],
+          legs: [
+            { side: "short", option_type: "CALL", strike: 7300 }, { side: "long", option_type: "CALL", strike: 7350 },
+          ],
         })],
         monitors: [combo({ id: "mon-2", code: "dec-calls", scope: "all" })],
         monitor_positions: [link("mon-2", "pos-calls")],

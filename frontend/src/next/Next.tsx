@@ -125,10 +125,8 @@ export function Next() {
     hold: async (body) => {
       const added = await addSpreads(body);
       const r = added.replaced.length;
-      toast.add({
-        title: `recorded ${added.positions.map((p) => p.name).join(", ")}${r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : ""}`,
-        type: "success",
-      });
+      const replacing = r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : "";
+      toast.add({ title: `recorded ${added.positions.map((p) => p.name).join(", ")}${replacing}`, type: "success" });
       await reload();
       return added;
     },

@@ -164,8 +164,9 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
           </button>
         ) : null}
         {splits ? (
-          <button ref={splitButton} type="button" className="nx-mon-button" aria-label={`split a total entry across ${label}`}
-                  disabled={busy} aria-expanded={mode === "splitting"}
+          <button ref={splitButton} type="button" className="nx-mon-button"
+                  aria-label={`split a total entry across ${label}`} disabled={busy}
+                  aria-expanded={mode === "splitting"}
                   onClick={() => (mode === "splitting" ? back(splitButton) : to("splitting"))}>
             split entry
           </button>
@@ -296,8 +297,8 @@ function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, on
         {rule.combo ? (
           <div className="nx-mon-field nx-mon-name">
             <label htmlFor={`${id}-name`}>name</label>
-            <input id={`${id}-name`} autoComplete="off" value={draft.name} onChange={(e) => set({ name: e.target.value })}
-                   {...tie("name")} />
+            <input id={`${id}-name`} autoComplete="off" value={draft.name}
+                   onChange={(e) => set({ name: e.target.value })} {...tie("name")} />
             {said("name")}
             {renameNote(rule) ? <small className="nx-meta">{renameNote(rule)}</small> : null}
           </div>
@@ -405,7 +406,9 @@ function SplitForm({ rule, label, book, busy, error, onError, onSave, onCancel }
           ))}
         </tbody>
       </table>
-      {preview.why ? <p className="nx-mon-note" data-testid="split-why">{`The service will refuse this: ${preview.why}.`}</p> : null}
+      {preview.why ? (
+        <p className="nx-mon-note" data-testid="split-why">{`The service will refuse this: ${preview.why}.`}</p>
+      ) : null}
       <p className="nx-meta">
         The service writes one holding: the one no rule watches alone takes the total less the others&apos;
         Entries, so each holding&apos;s own Entry stays the one record of what it took in.
@@ -466,13 +469,15 @@ function HoldForm({ rule, label, book, today, busy, onSave, onCancel }: {
           onSubmit={(e) => void save(e)} onKeyDown={escapeCancels(onCancel)}>
       <p className="nx-mon-note" data-testid="hold-replaces">
         {replaced.length > 0
-          ? `Replaces the watch rule: ${replaced.join(", ")} — with the holding's own, the same rule, linked to it. Its alarm starts afresh.`
+          ? `Replaces the watch rule: ${replaced.join(", ")} — with the holding's own, the same rule, linked to it. `
+            + "Its alarm starts afresh."
           : "Replaces this watch rule with the holding's own, the same rule, linked to it. Its alarm starts afresh."}
       </p>
       <div className="nx-mon-fields">
         <div className="nx-mon-field">
           <label htmlFor={`${id}-side`}>side</label>
-          <select ref={first} id={`${id}-side`} value={draft.side} onChange={(e) => set({ side: e.target.value as HoldDraft["side"] })}>
+          <select ref={first} id={`${id}-side`} value={draft.side}
+                  onChange={(e) => set({ side: e.target.value as HoldDraft["side"] })}>
             <option value="short">short — sold</option>
             <option value="long">long — bought</option>
           </select>
@@ -482,7 +487,9 @@ function HoldForm({ rule, label, book, today, busy, onSave, onCancel }: {
           <input id={`${id}-entry`} inputMode="decimal" autoComplete="off" value={draft.entry} placeholder="unknown"
                  onChange={(e) => set({ entry: e.target.value })} {...tie("entry")} />
           {said("entry")}
-          <small className="nx-meta">{`${draft.side === "short" ? "received" : "paid"}, per contract — the side signs it`}</small>
+          <small className="nx-meta">
+            {`${draft.side === "short" ? "received" : "paid"}, per contract — the side signs it`}
+          </small>
         </div>
         <div className="nx-mon-field">
           <label htmlFor={`${id}-contracts`}>contracts</label>

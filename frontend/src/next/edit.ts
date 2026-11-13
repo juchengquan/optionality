@@ -277,14 +277,17 @@ export interface HoldDraft {
 /** A short, opened today, named as the add form names one contract (`contractName`). */
 export function holdDraft(r: Rule, today: string): HoldDraft {
   const c = contractOfCode(r.code)!;
-  return { side: "short", entry: "", contracts: "1", opened: today, name: contractName(r.strike_date, c.option_type, c.strike) };
+  const name = contractName(r.strike_date, c.option_type, c.strike);
+  return { side: "short", entry: "", contracts: "1", opened: today, name };
 }
 
 /** The holding, as the add form's one-contract draft would post it (`contractBody`): a spread of
  *  one leg, held, carrying THIS rule as it is saved — its field, direction, compare and threshold —
  *  so the route replaces the watch rule with the holding's own, in one transaction, linked to the
  *  new holding alone (#322, #340). Its refusals are that form's, at the same boxes. */
-export function holdBody(r: Rule, d: HoldDraft, today: string): { body: SpreadsBody } | { error: string; at: ContractSpot } {
+export function holdBody(
+  r: Rule, d: HoldDraft, today: string,
+): { body: SpreadsBody } | { error: string; at: ContractSpot } {
   const c = contractOfCode(r.code)!;
   return contractBody({
     held: true, rule: true, expiry: r.strike_date, opened: d.opened, option_type: c.option_type,

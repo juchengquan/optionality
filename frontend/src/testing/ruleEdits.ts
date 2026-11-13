@@ -85,7 +85,8 @@ export function serveRuleEdits(refuse: Refusals = {}): Write[] {
       const { name, ...fields } = body!;
       if (name !== undefined) {
         if (m.legs === null) {
-          return reply(422, { detail: "only combo monitors can be renamed; a single-leg code is derived from its contract" });
+          const why = "only combo monitors can be renamed; a single-leg code is derived from its contract";
+          return reply(422, { detail: why });
         }
         if (name !== m.code && monitors.some((r) => r.id !== id && r.code === name && r.field === m.field)) {
           return reply(409, { detail: `monitor for (${String(name)}, ${m.field}) already exists` });
