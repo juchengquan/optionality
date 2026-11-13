@@ -26,25 +26,9 @@ export const REFERENCES = [
   },
 ];
 
-/** The layout book (`serveBook`) as the service serves it today: every row of `/quotes` and
- *  `/positions/values` carries SPX's derived price (ADR 0024), null here where the layout book
- *  predates it and leaves it out. A payoff chart drawn for a row with no `spx` at all reads
- *  `undefined` as a price and throws (`Payoff.tsx`'s `pnlAt`), which the service never sends. */
-export function serveServedBook(): void {
-  serveBook();
-  const book = window.fetch;
-  window.fetch = (async (url: string, init?: RequestInit) => {
-    const answer = await book(url, init);
-    if (!/\/(quotes|positions\/values)$/.test(String(url))) return answer;
-    const rows = await answer.json() as Record<string, unknown>[];
-    const served = rows.map((r) => ({ spx: null, spx_reason: "no derived price in this fixture", ...r }));
-    return { ok: answer.ok, status: answer.status, json: () => Promise.resolve(served) } as Response;
-  }) as typeof fetch;
-}
-
-/** The served book, with `REFERENCES` as what `/references` answers. */
+/** The layout book (`serveBook`), with `REFERENCES` as what `/references` answers. */
 export function serveReferences(): void {
-  serveServedBook();
+  serveBook();
   const book = window.fetch;
   window.fetch = ((url: string, init?: RequestInit) => (String(url).endsWith("/references")
     ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(REFERENCES) })

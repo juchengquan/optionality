@@ -16,7 +16,7 @@ function spread(id: string, date: string, short: number, long: number, over: obj
     legs: [{ sign: -1, option_type: "PUT", strike: short }, { sign: 1, option_type: "PUT", strike: long }],
     combo_value: 2.35, combo_greeks: {}, dte: 38, scope: null, positions: [], cost_to_close: null,
     entry: null, pnl: null, fill: 39, schedule: null, watched: 2.35, distance: 3.66, in_combos: [],
-    held: false,
+    held: false, spx: null, spx_reason: null,
     ...over,
   };
 }
@@ -50,7 +50,7 @@ const holdings = [{
   legs: [{ side: "short", option_type: "PUT", strike: 7000 }, { side: "long", option_type: "PUT", strike: 6950 }],
   created_at: null, opened_at: "2026-11-03", closed_on: null, exit: null, realized_points: null,
   cost_to_close: 1.2, pnl: 180, contract_size: 100, greeks: {}, fetched_at: "x", dte: 51,
-  schedule: null, captured: 0.6,
+  schedule: null, captured: 0.6, spx: null, spx_reason: null,
 }];
 
 const references = [

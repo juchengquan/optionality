@@ -16,12 +16,11 @@ import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
-import { settle } from "./nextBook";
 import { beingOperated } from "../next/poll";
-import { serveServedBook } from "./nextCarried";
+import { serveBook, settle } from "./nextBook";
 
 async function show() {
-  serveServedBook();
+  serveBook();
   render(<Next />);
   await settle();
   // the cards are LIVE's: the browser's clock is the real one, and outside the session it says REVIEW
