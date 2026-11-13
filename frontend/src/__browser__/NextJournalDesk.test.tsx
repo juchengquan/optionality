@@ -45,12 +45,16 @@ afterEach(() => { document.cookie = "ui_arrangement=;path=/;max-age=0"; });
 
 describe("the closed trades' fold on the desk", () => {
   for (const width of WIDTHS) {
-    it(`is shut at ${width}px, the last thing in the book and across its width, pushing nothing sideways`, async () => {
+    it(`is shut at ${width}px, the last thing in the book and across its width, inspector open, pushing nothing sideways`, async () => {
       const journal = await desk(width);
       const book = document.querySelector<HTMLElement>(".nx-book")!;
       expect(book.lastElementChild).toBe(journal);
       expect(journal.querySelector("[data-closed]")).toBeNull();
-      // across the whole book, under the table, whatever the inspector does beside it
+      // across the whole book, under the table AND the inspector beside it
+      fireEvent.click(document.querySelector('.nxd-row[data-ref="h-ic"] .nxd-name')!);
+      await screen.findByRole("complementary", { name: /^inspector:/ });
+      await settle();
+      expect(book.lastElementChild).toBe(journal);
       expect(Math.abs(journal.getBoundingClientRect().width - book.getBoundingClientRect().width)).toBeLessThan(1);
       const table = book.querySelector(".nxd-table")!.getBoundingClientRect();
       expect(journal.getBoundingClientRect().top).toBeGreaterThanOrEqual(table.bottom - 0.5);

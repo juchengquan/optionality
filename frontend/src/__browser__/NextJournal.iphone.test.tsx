@@ -93,6 +93,13 @@ describe("the closed trades on the phone", () => {
   it("opens on a tap into view: its first trade on the screen, above the tab bar", async () => {
     const { journal } = await review();
     expect(inView(journal.querySelector("[data-closed]")!)).toBe(true);
+    // brought up to the top of the screen, under its margin, or as far as the page scrolls
+    const root = document.documentElement;
+    const top = journal.getBoundingClientRect().top;
+    const margin = parseFloat(getComputedStyle(journal).scrollMarginTop);
+    const atEnd = window.scrollY + window.innerHeight >= root.scrollHeight - 1;
+    expect(Math.abs(top - margin) < 2 || atEnd, `top ${top}, scrolled ${window.scrollY} of ${root.scrollHeight}`).toBe(true);
+    expect(window.scrollY).toBeGreaterThan(0);
     expect(within(journal).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded")).toBe("true");
     expect(overflowsSideways()).toBe(false);
   });
