@@ -514,10 +514,11 @@ function HoldForm({ rule, label, book, today, busy, holdingNames, onSave, onCanc
           ? "The holdings have not been read, so which other Monitors it takes is the service's to say once it is saved."
           : links.linked.length === 0 ? "No other Monitor is linked to it."
             : "Also linked to it, by the service, as it links every rule no holding owns: "
-              + links.linked.map(({ monitor, scope, watchlist }) => `${ruleLabel(ruleOfMonitor(monitor))} — ${scope === "all"
-                ? "as covering the whole of it, so that row reads this holding's Entry and P&L" : "as one leg of it"}${watchlist
+              + links.linked.map(({ monitor, scope, watchlist }) => `${ruleLabel(ruleOfMonitor(monitor))} — `
+                + (scope === "all"
+                  ? "as covering the whole of it, so that row reads this holding's Entry and P&L" : "as one leg of it")
                 // drawn where the book will draw it (placement.ts, #346)
-                ? "; it is drawn in the Watchlist, with a note of the contracts it shares" : ""}`)
+                + (watchlist ? "; it is drawn in the Watchlist, with a note of the contracts it shares" : ""))
                 .join("; ") + "."}
       </p>
       <div className="nx-mon-fields">

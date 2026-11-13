@@ -78,7 +78,8 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
     holdings: byExpiry(holdings ?? []).map(([expiry, group]) => ({
       expiry,
       rows: brackets(group).map((row) => row.map((holding) => ({
-        holding, rules: quotes.filter((e) => overlap(e) === null && e.positions.some((p) => p.id === holding.id)),
+        holding,
+        rules: quotes.filter((e) => overlap(e) === null && e.positions.some((p) => p.id === holding.id)),
       }))),
     })),
     unplaced,
@@ -97,8 +98,9 @@ interface Contracts {
 }
 
 /** A contract as a key and as the page writes it: `C8100`. */
-const keyOf = (date: string, l: { option_type: string; strike: number }) => `${date} ${l.option_type} ${l.strike}`;
-const label = (l: { option_type: string; strike: number }) => `${l.option_type[0]}${l.strike}`;
+type Leg = { option_type: string; strike: number };
+const keyOf = (date: string, l: Leg) => `${date} ${l.option_type} ${l.strike}`;
+const label = (l: Leg) => `${l.option_type[0]}${l.strike}`;
 
 /** Whether a combo's contracts are EXACTLY the contracts of the holdings it is linked to, taken
  *  together: the same set, whatever the signs either is written with (leg conventions differ,
@@ -124,7 +126,9 @@ interface Linked {
  *  it, "contains 1231_7700's C7700" where it holds the whole holding and more. Null for a single
  *  contract, a rule linked to nothing, a combo covering exactly its holdings, and one linked to a
  *  holding the page has not valued, which cannot be compared and is drawn as before. */
-export function overlapOf(rule: Linked, holdings: readonly (Contracts & { id: string; name: string })[]): string | null {
+export function overlapOf(
+  rule: Linked, holdings: readonly (Contracts & { id: string; name: string })[],
+): string | null {
   if (!rule.legs || rule.legs.length === 0 || rule.positions.length === 0) return null;
   const linked = rule.positions.map((p) => holdings.find((h) => h.id === p.id));
   if (linked.some((h) => h === undefined)) return null;

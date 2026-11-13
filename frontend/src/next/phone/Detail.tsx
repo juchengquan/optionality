@@ -134,7 +134,9 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
   );
 }
 
-function RuleDetail({ entry, under, overlap = null }: { entry: Entry; under: Entry[]; overlap?: string | null }) {
+function RuleDetail({ entry, under, overlap = null }: {
+  entry: Entry; under: Entry[]; overlap?: string | null;
+}) {
   const state = ruleState(entry);
   return (
     <>

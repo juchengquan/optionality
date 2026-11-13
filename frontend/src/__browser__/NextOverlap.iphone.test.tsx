@@ -20,8 +20,9 @@ const health = {
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 };
 
-/** A holding named as long as the owner names one, so the note has to wrap at 390px. */
-const LONG = "1231_C8050_rolled_from_1218";
+/** A holding named longer than a card is wide, in one unbroken word, so the note can only fit
+ *  at 390px by wrapping — a note that widened its card instead, or was cut, fails below. */
+const LONG = "1231_C8050_rolled_from_1218_after_the_CPI_print_then_again_on_the_FOMC_day";
 const holdings = OVERLAP_HOLDINGS.map((h) => (h.id === "h-8050" ? { ...h, name: LONG } : h));
 const rename = (p: { id: string; name: string }) => (p.id === "h-8050" ? { ...p, name: LONG } : p);
 const quotes = OVERLAP_QUOTES.map((q) => ({ ...q, positions: q.positions.map(rename) }));
@@ -69,6 +70,8 @@ describe("under the iPhone profile", () => {
       const note = card(ref!).querySelector<HTMLElement>("[data-overlap]")!;
       expect(note.textContent).toBe(words);
       expect(note.getBoundingClientRect().height).toBeGreaterThan(0);
+      // the long one is said whole, on more than one line
+      if (ref === "r-8100") expect(note.getBoundingClientRect().height).toBeGreaterThan(30);
       expect(note.scrollWidth).toBeLessThanOrEqual(note.clientWidth + 0.5);
       expect(inside(note, card(ref!))).toBe(true);
     }

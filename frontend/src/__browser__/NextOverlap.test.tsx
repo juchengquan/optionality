@@ -23,7 +23,7 @@ const health = {
 };
 
 /** The overlap book served, every write refused: a layout suite never changes it. */
-function serveOverlap(): void {
+function serveOverlap(quotes: object[] = OVERLAP_QUOTES, holdings: object[] = OVERLAP_HOLDINGS): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     if (init?.method && init.method !== "GET" && !/\/payoff$/.test(String(url))) {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
@@ -33,8 +33,8 @@ function serveOverlap(): void {
     if (/\/samples$/.test(path)) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(SAMPLES) });
     }
-    const body = path === "/quotes" ? OVERLAP_QUOTES : path === "/monitors" ? OVERLAP_MONITORS
-      : path === "/health" ? health : path === "/positions/values" ? OVERLAP_HOLDINGS : [];
+    const body = path === "/quotes" ? quotes : path === "/monitors" ? OVERLAP_MONITORS
+      : path === "/health" ? health : path === "/positions/values" ? holdings : [];
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
 }
@@ -90,5 +90,27 @@ it("says the note in the inspector, which stays inside the page", async () => {
   const note = insp.querySelector<HTMLElement>("[data-overlap]")!;
   expect(note.textContent).toBe("shares C8100 with 1231_8050");
   expect(inside(note, insp)).toBe(true);
+  expect(overflowsSideways()).toBe(false);
+});
+
+it("wraps a note too long for the table rather than widening it or cutting it, inspector open", async () => {
+  // a holding named longer than the table is wide once the inspector takes its share of 900px
+  const LONG = "1231_C8050_rolled_from_1218_after_the_CPI_print_then_again_on_the_FOMC_day_and_once_more";
+  const rename = (p: { id: string; name: string }) => (p.id === "h-8050" ? { ...p, name: LONG } : p);
+  const quotes = OVERLAP_QUOTES.map((q) => ({ ...q, positions: q.positions.map(rename) }));
+  const holdings = OVERLAP_HOLDINGS.map((h) => (h.id === "h-8050" ? { ...h, name: LONG } : h));
+  await page.viewport(900, 900);
+  serveOverlap(quotes, holdings);
+  render(<Next />);
+  await settle();
+  fireEvent.click(screen.getByRole("button", { name: "Live" }));
+  await settle();
+  fireEvent.click(within(rowOf("w-7700")).getByRole("button", { name: "1231_C7700" }));
+  await settle();
+  const note = noteOf("r-8100");
+  expect(note.textContent).toBe(`shares C8100 with ${LONG}`);
+  expect(note.scrollWidth).toBeLessThanOrEqual(note.clientWidth + 0.5);
+  expect(note.getBoundingClientRect().height).toBeGreaterThan(30);
+  expect(inside(note, document.querySelector(".nxd-table")!)).toBe(true);
   expect(overflowsSideways()).toBe(false);
 });

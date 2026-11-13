@@ -138,7 +138,8 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
               <h3 className="nxd-group">{`${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`}</h3>
               {items.map(({ entry, under, overlap }) => (
                 <div key={entry.id}>
-                  <StillRow row={{ kind: "rule", entry, nested: false, overlap }} columns={columns} privacy={privacy} />
+                  <StillRow row={{ kind: "rule", entry, nested: false, overlap }} columns={columns}
+                            privacy={privacy} />
                   <OverlapNote overlap={overlap} />
                   {under.map((e) => (
                     <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: true }} columns={columns} privacy={privacy} />
