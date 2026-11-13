@@ -432,6 +432,21 @@ describe("in LIVE, on demand (#353): the desk's inspector", () => {
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
   });
 
+  // a 200 whose body is not the samples: said, rather than "reading the samples…" for ever (#353)
+  for (const [what, body] of [["null", null], ["a string", "oops"], ["an object with no days", {}]] as const) {
+    it(`says the samples could not be read when the service answers 200 with ${what}`, async () => {
+      vi.stubGlobal("fetch", vi.fn((url: string) => {
+        const path = String(url).replace(/^.*\/api/, "");
+        const answer = /\/samples$/.test(path) ? body : payoffAnswer(path) ?? volAnswer(path);
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer) });
+      }));
+      const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+      fireEvent.click(within(insp).getByRole("button", { name: "history" }));
+      expect(await within(insp).findByText(/the samples could not be read — the service answered without them/))
+        .toBeTruthy();
+    });
+  }
+
   it("hides the $ axis under privacy, as REVIEW does", async () => {
     const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live", privacy: true });
     fireEvent.click(toggleOf(insp));

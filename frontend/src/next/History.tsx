@@ -40,18 +40,28 @@ interface SamplesState {
  *  refresh) asks nothing. What is kept is the last ANSWER, under the id it answered: it is shown
  *  only while that is still the id asked about, so another holding's days are never drawn under
  *  this one while its own are asked for, and an answer for a holding no longer shown lands
- *  nowhere. */
+ *  nowhere. A 200 that carries no days — null, a string, an object without its list — is said as
+ *  a failure: kept as an answer, it left the charts on "reading the samples…" for ever (#353). */
 function useSamples(id: string): SamplesState | null {
   const [state, setState] = useState<SamplesState | null>(null);
   useEffect(() => {
     let live = true;
     fetchSamples(id).then(
-      (samples) => { if (live) setState({ id, samples }); },
+      (samples: unknown) => {
+        if (!live) return;
+        setState(isSamples(samples) ? { id, samples }
+          : { id, error: "the service answered without them" });
+      },
       (err: unknown) => { if (live) setState({ id, error: err instanceof Error ? err.message : String(err) }); },
     );
     return () => { live = false; };
   }, [id]);
   return state?.id === id ? state : null;
+}
+
+/** Whether an answer is the samples at all: an object carrying its list of days. */
+function isSamples(body: unknown): body is Samples {
+  return typeof body === "object" && body !== null && Array.isArray((body as { samples?: unknown }).samples);
 }
 
 /** The width of the box, measured, so the drawing's text is the size it says wherever it sits. */
