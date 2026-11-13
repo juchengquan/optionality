@@ -274,9 +274,12 @@ holidays not detected: the same edges `inSession` and the daily sample use, ADR 
 - **`/quotes` keeps polling in both,** so a rule's alarm and every fault always reach the page, as
   they did in REVIEW (ADR 0012). The bounded-call invariant is unchanged: in session this is the
   three calls per poll LIVE made; outside it, one per poll plus one asked-for valuation.
-- What the Reference strip does outside the session is left to the build issue: today's REVIEW
-  hides it, because a figure frozen at entry would be read as current (ADR 0018), and nothing
-  here changes that reason.
+- **The Reference strip stays on screen outside the session, read once with the rest and labelled
+  with its time** (the owner's choice of 2026-11-13), e.g. "SPX 7,592.40 · last at 16:15", from
+  the service's own stamp on each reading; the same refresh button reads it again. REVIEW hid it
+  because a figure frozen at entry would be read as current (ADR 0018). The time is what answers
+  that here: outside the session no reading is drawn without one. After the close, the last
+  close is the figure the owner wants, and hiding it would send them to another app for it.
 
 **The needs-you line** states holdings' Levels only in session. Outside it, a Level appears only
 on its chip, with "as valued at HH:MM": #354's rule (option (b) and its clarification), keyed by
