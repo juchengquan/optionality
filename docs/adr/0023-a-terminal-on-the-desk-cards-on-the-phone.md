@@ -4,7 +4,8 @@ Date: 2026-11-10
 
 ## Status
 
-Accepted, not built. Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+Built. `/opt` has served the new page since the swap (#301, 2026-11-13), which deleted the old one;
+what the swap dropped is recorded under "What the swap dropped" below. Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -131,15 +132,44 @@ The research found three things nobody does, all of which this service can:
 
 ### How it ships
 
-- **Beside the old, then a swap.** The new dashboard is a second page in the same Vite build. It
-  therefore goes into the committed bundle and is served by the same Caddy on the same API, at
+- **Beside the old, then a swap.** The new dashboard was a second page in the same Vite build. It
+  therefore went into the committed bundle and was served by the same Caddy on the same API, at
   `/opt/next`.
-- **Slice by slice.** It is built in slices while today's dashboard keeps working.
-- **The swap.** When it covers everything today's does, `/opt` swaps over and the old dashboard and
-  its tests are deleted. ADR 0005's "no client-side router" holds: modes and arrangements are
-  state, not routes.
+- **Slice by slice.** It was built in slices (#287 to #346) while the old dashboard kept working.
+- **The swap.** When it covered everything the old one did, `/opt` swapped over and the old
+  dashboard and its tests were deleted (#301, 2026-11-13): what went was listed beforehand in a
+  test held to the import graph (#337), so the deletion was mechanical. `/opt/next` is kept as a
+  page that sends a bookmark on to `/opt/`; it is a page and not a Caddy redirect because tailscale
+  strips the prefix and rewrites no `Location`, so only the build, which knows `UI_BASE`, can name
+  `/opt/`. The source stays in `frontend/src/next/` for now; moving it up into `src/` is a rename
+  of its own. ADR 0005's "no client-side router" holds: modes and arrangements are state, not
+  routes.
 - **The prototype is rewritten, not promoted.** It was written without tests and against a static
   book.
+
+## What the swap dropped
+
+The old page did five things the new one does not, and the owner decided on 2026-11-13 (#338) that
+each was dropped rather than ported:
+
+- **The near-firing highlight** ("flag on" a reading, "flag above" a band): the fill bar already
+  shows how close a rule is to firing. Its two preferences (`ui_signal`, `ui_band`) are no longer
+  read.
+- **Grouping by calls and puts, or not at all:** the page groups by expiry only (`ui_group` is no
+  longer read).
+- **Closed holdings in LIVE:** LIVE shows only what is open. Correcting or deleting an older close
+  is done in REVIEW's journal.
+- **A column picker on the phone:** cards on the phone, and the picker on the desk only. The desk's
+  choice is still the `ui_cols_combo` cookie, so a choice made on the old page's combo table
+  carried over.
+- **Unmuting past expiry**, whatever muted the rule (#324).
+
+One gap is known and deferred rather than dropped: a butterfly or a 1×2 ratio cannot be entered,
+because the add form refuses the same contract twice and carries no quantity per leg. The old
+page's combo builder allowed it through repeated legs. The owner put it after the swap (#351).
+
+The add form was renamed with the swap, since it adds a single contract as well as a spread (#331):
+the desk's `+` is "add", and its panel and the phone's sheet are "Add a spread or contract".
 
 ## What the data supports
 
@@ -167,9 +197,8 @@ From the backend map; each slice says which it needs.
 
 - **Two arrangements to build and test.** The browser suite measures both, at an iPhone profile and
   at desk width, as ADR 0008 required for one.
-- **Double polling during the rollout.** While both pages exist, the old and the new dashboards
-  each poll when open; two open tabs are two batches per poll (ADR 0010). The old one is closed by
-  habit, not by code, until the swap.
+- **Double polling during the rollout.** While both pages existed, the old and the new dashboards
+  each polled when open; two open tabs were two batches per poll (ADR 0010). The swap ended it.
 - **The owner has to accept or override the clock's mode.** A desk opened at 21:00 Singapore time
   shows REVIEW until the session opens; the override exists for exactly that.
 - **The prototype branch will rot,** and that is intended: it answers "what should this look like"

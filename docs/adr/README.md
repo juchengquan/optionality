@@ -13,7 +13,7 @@ still in force. Git holds the full history of each.
 | [5](0005-react-frontend-at-app.md) | A React frontend | in force; serving changed by 6 |
 | [6](0006-frontend-and-api-as-two-services.md) | The frontend and the API are two services | in force |
 | [7](0007-shadcn-on-base-ui-for-the-controls.md) | shadcn/ui on Base UI for the controls | in force |
-| [8](0008-one-adaptive-layout-measured-not-guessed.md) | One adaptive layout, measured rather than guessed | in force, amended after use |
+| [8](0008-one-adaptive-layout-measured-not-guessed.md) | One adaptive layout, measured rather than guessed | in force, amended after use and by 23 (two designs; its tables deleted by #301) |
 | [9](0009-the-backend-moves-to-typescript.md) | The backend moves to TypeScript | complete; its phases are cited in code |
 | [10](0010-the-dashboard-polls-live-quotes.md) | The dashboard polls live quotes | in force |
 | [11](0011-exit-schedules-from-a-decay-shape.md) | Exit schedules come from a decay shape | in force |
@@ -28,7 +28,7 @@ still in force. Git holds the full history of each.
 | [20](0020-delivery-is-an-entrypoint.md) | Delivery is an entrypoint, and the library never depends on it | built; follows the three seams of #235, #239, #240 |
 | [21](0021-the-python-can-run-the-service.md) | The Python can run the service, one backend at a time | accepted, not built; six phases |
 | [22](0022-a-closed-holding-is-kept.md) | A closed holding is kept | built, in both backends |
-| [23](0023-a-terminal-on-the-desk-cards-on-the-phone.md) | A terminal on the desk, cards on the phone | accepted, not built; amends 3, 7, 8 and 12 |
+| [23](0023-a-terminal-on-the-desk-cards-on-the-phone.md) | A terminal on the desk, cards on the phone | built 2026-11-13 (#301); amends 3, 7, 8 and 12 |
 | [24](0024-spx-is-derived-from-the-premiums.md) | SPX's price is derived from the options' premiums | built, in both backends; amends 11 |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained

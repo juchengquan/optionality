@@ -334,16 +334,21 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   spread's own Monitors are linked to IT, never re-inferred against the book (a shared strike made
   that ambiguous), and a UNIQUE clash inside the write is the checks' own 409, not a 500.
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
-  **Two pages in one build until the swap (ADR 0023):** today's (`index.html`, `src/`) and the
-  redesign at `/opt/next` (`next/index.html`, `src/next/`), built beside it slice by slice (#287
-  onward). They share the hashed assets, the API and the deploy; Caddy serves `/next` as a
-  directory (`try_files {path}/index.html`) so it needs no redirect. The swap (#301) deletes the old.
-  What BOTH pages import lives in `src/shared/` (#337: `api.ts`, `format.ts`, `prefs.ts`, the
-  References panel and strip, `Freshness`, the column picker, `app.css` and the rest). What the
-  swap deletes is LISTED in `src/__tests__/OldPage.test.ts` and held to the import graph: the
-  modules at the top of `src/` (all but `vite-env.d.ts`, which `shared/api.ts` needs) and the
-  tests that reach them, by name. Everything else stays — `next/`, `shared/`, `components/`,
-  `testing/`, `vite-env.d.ts`, `next/index.html`, and the `Next*` and shared modules' tests.
+  **One page, the redesign (ADR 0023)**, since the swap of 2026-11-13 (#301) deleted the old one:
+  `index.html` loads `src/next/main.tsx`. It was built at `/opt/next` beside the old page, slice
+  by slice (#287 onward), and `next/index.html` is kept as a second build entry that only sends a
+  bookmark of `/opt/next` on to `/opt/` — a meta refresh and a `location.replace` to `%BASE_URL%`,
+  which Vite fills with `UI_BASE`. A page and not a Caddy redirect because tailscale strips the
+  prefix and rewrites no `Location` (deploy/Caddyfile), and Caddy still serves `/next` as a
+  directory (`try_files {path}/index.html`) so it needs no trailing-slash redirect either;
+  `src/__tests__/Entries.test.ts` holds both entries. The page's source is still `src/next/`, a
+  name left from the rollout — moving it up into `src/` is a rename of its own, not yet done.
+  Beside it, `src/shared/` (`api.ts`, `format.ts`, `prefs.ts`, the References panel and strip,
+  `Freshness`, the column picker, `groups.ts`, `app.css`), `src/components/` (shadcn's),
+  `src/testing/` (the suites' services and books) and `vite-env.d.ts`, which `shared/api.ts` needs
+  for `import.meta.env`. Nothing sits at the top of `src/` but that file. The cookies kept their
+  names through the swap, so a viewer's choices carried over; the old page's signal, band and
+  grouping cookies are simply never read.
 - `entrypoints/http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
   so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
   end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole
