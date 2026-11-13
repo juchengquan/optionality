@@ -6,7 +6,7 @@
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { page, userEvent } from "@vitest/browser/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
@@ -27,6 +27,9 @@ const scheduled = HOLDINGS.map((h) => ({
     target_dte: 11, manage_by_dte: 21, reached: null, manage_by_due: false },
 }));
 
+/** The holdings served: `scheduled`, unless a test levels them (#354). */
+let valued: object[] = scheduled;
+
 /** Every write refused: a layout suite never changes the book. The payoff's POST is a read, and is
  *  answered (#291). */
 function serveOwnerBook(extra: object[] = []): void {
@@ -43,7 +46,7 @@ function serveOwnerBook(extra: object[] = []): void {
     }
     const path = String(url).replace(/^.*\/api/, "");
     const body = path === "/quotes" ? quotes : path === "/monitors" ? MONITORS
-      : path === "/health" ? health : path === "/positions/values" ? scheduled : [];
+      : path === "/health" ? health : path === "/positions/values" ? valued : [];
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
 }
@@ -118,6 +121,53 @@ describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => 
         expect(overflowsSideways()).toBe(false);
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
         expect(misfits()).toEqual([]);
+      });
+    }
+  }
+});
+
+/** A holding's Level chip says, in REVIEW, when the holding was valued (#354), so it is longer
+ *  there: every holding at a Level — the longest, "manage-by · as valued at 23:14", among them —
+ *  and the table still fits, the chip drawn whole inside its cell, and in the inspector too. */
+describe("a Level's chip in REVIEW, with its valuation's time, fits", () => {
+  const levelled = scheduled.map((h) => ({
+    ...h, fetched_at: "2026-11-10 23:14:05+08:00",
+    schedule: { ...h.schedule, reached: h.id === "h-calls" ? "stop" : h.id === "h-puts" ? "target" : null,
+      manage_by_due: h.id === "h-ic" },
+  }));
+  beforeEach(() => { valued = levelled; });
+  afterEach(() => { valued = scheduled; });
+
+  /** Any chip not drawn whole inside its own cell, or its own box. */
+  function cutChips(root: ParentNode): string[] {
+    return [...root.querySelectorAll<HTMLElement>(".nx-chip")].flatMap((chip) => {
+      const box = (chip.closest("[data-col]") ?? chip.parentElement!).getBoundingClientRect();
+      const r = chip.getBoundingClientRect();
+      return r.left < box.left - 0.5 || r.right > box.right + 0.5 || chip.scrollWidth > chip.clientWidth + 1
+        ? [`"${chip.textContent}" ${Math.round(r.left)}–${Math.round(r.right)} in ${Math.round(box.left)}–${Math.round(box.right)}`]
+        : [];
+    });
+  }
+
+  for (const mode of ["live", "review"] as const) {
+    for (const width of [900, 1280, 2560]) {
+      it(`at ${width}px in ${mode}, with the inspector shut and open`, async () => {
+        await show(mode, width);
+        const chip = (id: string) => rowOf(id).querySelector(".nx-chip")!.textContent;
+        expect(chip("h-calls")).toBe(mode === "review" ? "at stop · as valued at 23:14" : "at stop");
+        expect(chip("h-ic")).toBe(mode === "review" ? "manage-by · as valued at 23:14" : "manage-by");
+        expect(overflowsSideways()).toBe(false);
+        expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
+        expect(misfits()).toEqual([]);
+        expect(cutChips(table())).toEqual([]);
+
+        await inspect("h-ic");
+        const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
+        if (mode === "review") expect(insp.querySelector(".nx-chip")!.textContent).toBe("manage-by · as valued at 23:14");
+        expect(overflowsSideways()).toBe(false);
+        expect(misfits()).toEqual([]);
+        expect(cutChips(table())).toEqual([]);
+        expect(cutChips(insp)).toEqual([]);
       });
     }
   }
