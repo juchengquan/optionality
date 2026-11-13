@@ -180,7 +180,10 @@ export function flipSide(d: AddDraft, key: string, index: number): AddDraft {
 /** `1218_+P7100_-P7150`: the expiry's month and day, then EVERY leg in strike order — a put before
  *  a call on one strike — each with its side as a sign and its quantity where it is not 1:
  *  `1218_+C7300_-2C7350_+C7400` for a call butterfly. One contract is named as it always was,
- *  `1218_P7150`, its side being the holding's.
+ *  `1218_P7150`, its side being the holding's; and a two-leg spread of one each EXACTLY as #293
+ *  named it, `1218_P7150_P7100` — type and strike in the order typed, no sign — so the watch rules
+ *  saved under that name are still replaced when the spread is held. The old format never carries a
+ *  sign and the new one carries one on every leg, so the two cannot collide.
  *
  *  UNIQUE per structure, whatever order its legs were typed in (#351). The name is the value rule's
  *  CODE, and a held spread replaces a watch rule of its code (#322), carrying that rule's bell over
@@ -202,6 +205,13 @@ export function derivedName(
     const n = l.qty === undefined ? 1 : quantity(l.qty);
     return n === 1 ? "" : String(n ?? l.qty!.trim());
   };
+  // a two-leg spread of one each is named EXACTLY as #293 named it — each leg's type and strike as
+  // typed, in the order typed — so a watch rule saved under that name since is still the one a held
+  // spread replaces (#322). It carries no sign, and every name below carries one per leg, so the
+  // two formats can never name one rule twice
+  if (legs.length === 2 && legs.every((l) => qty(l) === "")) {
+    return [day, ...legs.map((l) => `${l.option_type[0]}${l.strike.trim()}`)].join("_");
+  }
   const word = (l: (typeof legs)[number]) =>
     `${legs.length === 1 || l.side === undefined ? "" : l.side === "short" ? "-" : "+"}${qty(l)}${l.option_type[0]}${number(l.strike)}`;
   // typed strikes in order, a put before a call on one; a strike not yet typed after them, as typed

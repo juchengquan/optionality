@@ -1484,6 +1484,21 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
+    // a two-leg 1×1 is still named as #293 named it (#351), so the watch rule saved under that name
+    // is the one the held spread replaces: the form posts this name, and the rule goes
+    name: "POST /spreads replaces a watch rule saved under the 1×1 spread's derived name",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-watch-value", code: "1218_P6400_P6350", threshold: 2.5,
+        legs: [{ sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...PUT_SPREAD, name: "1218_P6400_P6350" }],
+    }),
+  },
+  {
     name: "POST /spreads refuses a quantity of none, asking the Provider nothing",
     world: world({ provider: { quotes: BOOK } }),
     request: request("POST", "/spreads", {

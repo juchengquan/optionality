@@ -145,7 +145,7 @@ describe("combos of 3 to 6 legs on the desk (#334)", () => {
 
 describe("a refused request", () => {
   it("is said in the form, on top, where it can be read", async () => {
-    await openDesk(1440, { status: 409, body: { detail: "position '1218_+P7100_-P7150' already exists" } });
+    await openDesk(1440, { status: 409, body: { detail: "position '1218_P7150_P7100' already exists" } });
     await userEvent.click(screen.getByRole("button", { name: "add" }));
     await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
     await userEvent.fill(screen.getByLabelText("spread 1, leg 1 strike"), "7150");
@@ -153,7 +153,7 @@ describe("a refused request", () => {
     await userEvent.fill(screen.getByLabelText("spread 1 entry"), "1.50");
     await userEvent.click(within(panel()).getByRole("button", { name: /^Record/ }));
     const alert = await within(panel()).findByRole("alert");
-    expect(alert.textContent).toBe("position '1218_+P7100_-P7150' already exists");
+    expect(alert.textContent).toBe("position '1218_P7150_P7100' already exists");
     // nothing drawn over it: the point at its centre is the message itself
     alert.scrollIntoView({ block: "center" });
     const r = alert.getBoundingClientRect();
