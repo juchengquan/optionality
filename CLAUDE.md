@@ -338,6 +338,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   redesign at `/opt/next` (`next/index.html`, `src/next/`), built beside it slice by slice (#287
   onward). They share the hashed assets, the API and the deploy; Caddy serves `/next` as a
   directory (`try_files {path}/index.html`) so it needs no redirect. The swap (#301) deletes the old.
+  What BOTH pages import lives in `src/shared/` (#337: `api.ts`, `format.ts`, `prefs.ts`, the
+  References panel and strip, `Freshness`, the column picker, `app.css` and the rest), so the swap
+  deletes `src/` minus `src/next/`, `src/shared/`, `src/components/`, `src/lib/` and `src/testing/`.
 - `entrypoints/http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
   so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
   end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole
