@@ -433,6 +433,14 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/monitors", comboBody),
   },
   {
+    // a quantity is POST /spreads' to take (#351): refused in words here, never dropped into a 1×1
+    name: "POST /monitors refuses a leg's quantity, asking the Provider nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", {
+      ...comboBody, legs: [comboBody.legs[0], { ...comboBody.legs[1], qty: 2 }],
+    }),
+  },
+  {
     // the database before the Provider: a duplicate costs no bounded call
     name: "POST /monitors refuses a duplicate without asking the Provider",
     world: world({ tables: held, provider: { quotes: BOOK } }),

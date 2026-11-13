@@ -298,6 +298,17 @@ class Int(Check):
 
 
 @dataclass(frozen=True, kw_only=True)
+class Never(Check):
+    """`z.never({ error })`: any value at all is refused, with `error` — so `.optional()` lets the key be
+    absent and nothing else, null included."""
+
+    error: str
+
+    def check(self, value: Any) -> tuple[Any, list[str]]:
+        return value, [self.error]
+
+
+@dataclass(frozen=True, kw_only=True)
 class Boolean(Check):
     """`z.boolean()`: true or false, and not 0 or 1."""
 

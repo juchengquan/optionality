@@ -1026,6 +1026,9 @@
                                   },
                                   "strike": {
                                     "type": "number"
+                                  },
+                                  "qty": {
+                                    "not": {}
                                   }
                                 },
                                 "required": [

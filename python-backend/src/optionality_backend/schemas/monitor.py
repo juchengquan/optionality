@@ -15,7 +15,7 @@ from typing import Annotated, Any, Literal
 from optionality.contract import normalize_strike_date
 from optionality.monitor import threshold_fault
 
-from .zod import Array, Boolean, CustomIssue, Enum, Number, Shape, String
+from .zod import Array, Boolean, CustomIssue, Enum, Never, Number, Shape, String
 
 DEFAULT_SINGLE_FIELD = "option_delta"
 DEFAULT_COMBO_FIELD = "mid_price"
@@ -120,6 +120,9 @@ class ComboLegIn(Shape):
     sign: Annotated[Literal[1, -1], Enum()]
     option_type: Annotated[OptionType, Enum()]
     strike: Annotated[float, Number()]
+    #: REFUSED, in words (#351): a Shape drops a key it does not declare, so a `qty: 2` was answered 201
+    #: with a 1×1 rule. A quantity is POST /spreads' to take.
+    qty: Annotated[object | None, Never(error="a combo here takes no quantity: record a ratio or a butterfly through POST /spreads")] = None
 
 
 class ComboMonitorIn(Shape):

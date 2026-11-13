@@ -219,6 +219,15 @@ describe("combos", () => {
     expect((await post(combo())).status).toBe(409); // duplicate name
   });
 
+  it("refuses a leg's quantity in words, rather than dropping it and watching a 1×1 (#351)", async () => {
+    h = harness();
+    const legs = [COMBO.legs[0], { ...COMBO.legs[1], qty: 2 }];
+    const resp = await post(combo({ name: "ratio", legs }));
+    expect(resp.status).toBe(422);
+    expect((await body(resp)).detail).toBe("✖ a combo here takes no quantity: record a ratio or a butterfly through POST /spreads\n  → at legs[1].qty");
+    expect((await body(await h.call("/monitors")))).toEqual([]);
+  });
+
   it("needs at least two legs to be a combo at all", async () => {
     h = harness();
     expect((await post(combo({ name: "x", legs: COMBO.legs.slice(0, 1) }))).status).toBe(422);
