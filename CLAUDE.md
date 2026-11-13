@@ -120,9 +120,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   which grade was asked, and changing the Python port's copy of that number left all 688 of its
   tests passing (#317, 2026-11-11). Recorded here, `test_ibkr.py` compares it like any other shared
   number, in both directions — a constant the corpus states and the port lacks fails too.
-  Deliberately NOT part of the `GOLDEN_CASES` fingerprint: that answers "does this port reproduce the DOMAIN", and
-  the Python package has no vendor ports yet — folding these in would make `py-2026.11.9`, tagged
-  and answering "agrees" today, report disagreement over code it does not contain. Every
+  Deliberately NOT part of the `GOLDEN_CASES` fingerprint: that answers "does this port reproduce
+  the DOMAIN", and the Python package has no vendor ports yet — folding these in would make
+  `py-2026.11.9`, tagged and answering "agrees" today, report disagreement over code it does not
+  contain. Every
   exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
   holds the module list to the DIRECTORY, so a new `domain/` file demands its cases and its Python port.
   The harness refuses a case passing MORE arguments than the port takes — `zip(strict=False)` dropped
@@ -371,8 +372,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   copied in every guard its `GUARDS` names, each with its own `walk`, which is why `.claude` was
   missing from all five at once on 2026-11-10: `.claude/worktrees/<agent>` is a checkout of this
   repository on another branch, live and registered with git, so walking into one lints that
-  branch against this one's rules and `make check` goes red on a clean main. The real fix is one shared walk; until then this holds each list
-  to a floor.
+  branch against this one's rules and `make check` goes red on a clean main. The real fix is one
+  shared walk; until then this holds each list to a floor.
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
   generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
   Gateway conversations (inputs) beside the batches `make cases` generates from them.
@@ -464,9 +465,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   three documents make and nothing checked: the maths imports and computes with NO `opend` extra
   and NO service. Two checks, because they fail differently — a static pass over every pure
   module, derived there as every module not `IMPURE` (it reads the AST, so a lazy import inside a
-  function is seen too), and a subprocess that imports them all with `moomoo` and `ib_async` unimportable and `OPTIONALITY_API` unset. The second is the only
-  one that can catch an import-time dependency no pattern lists, like zone data. Worth having
-  because `moomoo` IS installed in the venv the suite runs in, so a violation was invisible here.
+  function is seen too), and a subprocess that imports them all with `moomoo` and `ib_async`
+  unimportable and `OPTIONALITY_API` unset. The second is the only one that can catch an
+  import-time dependency no pattern lists, like zone data. Worth having because `moomoo` IS
+  installed in the venv the suite runs in, so a violation was invisible here.
   Writing it also corrected a belief: `optionality.opend` imports perfectly well without the SDK —
   it reaches `moomoo` inside the function that connects, so the extra is needed to CONNECT.
   `optionality.ibkr` is held the same way, for `ib_async`.
