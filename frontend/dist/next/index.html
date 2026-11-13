@@ -1,15 +1,17 @@
 <!doctype html>
+<!-- The redesign was served here, at /opt/next, until it replaced the page at /opt (#301, ADR 0023).
+     This sends a bookmark there. In the page and not in deploy/Caddyfile: tailscale serve strips the
+     prefix and does not rewrite a Location header, so Caddy cannot name /opt without writing the
+     prefix down a second time; Vite writes the build's own UI_BASE into this file instead. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
+    <meta http-equiv="refresh" content="0; url=/opt/" />
     <title>optionality</title>
-    <script type="module" crossorigin src="/opt/assets/next-BSr92WVk.js"></script>
-    <link rel="modulepreload" crossorigin href="/opt/assets/snapshot-gdRFihON.js">
-    <link rel="stylesheet" crossorigin href="/opt/assets/next-CIKeQde7.css">
+    <script>location.replace("/opt/" + location.search + location.hash);</script>
   </head>
   <body>
-    <div id="root"></div>
+    <p>The dashboard has moved to <a href="/opt/">/opt/</a>.</p>
   </body>
 </html>
