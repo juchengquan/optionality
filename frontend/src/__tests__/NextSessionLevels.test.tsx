@@ -303,7 +303,7 @@ describe("a valuation from another day says its date (#371's review)", () => {
 
   it("on the phone's card", async () => {
     stamp = "2026-10-30 23:04:11+08:00";
-    await open("phone", SUNDAY, true, "Live");
+    await open("phone", SUNDAY);
     const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
     expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 30 Oct 23:04");
   });
