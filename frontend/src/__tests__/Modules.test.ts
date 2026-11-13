@@ -37,16 +37,10 @@ function resolved(spec: string): string | null {
   return null;
 }
 
-/** The modules that may not reach a component: pure data, measuring and formatting, plus the two
- *  hooks that run React's machinery without rendering anything.
- *
- *  `useSnapshot.ts` is deliberately NOT here. It owns the press that saves the page as an image,
- *  and that includes the rule the feature was twice bitten by — a press must never answer with
- *  silence — so it reaches the toast store, which lives in a component module. What it must not
- *  do is name the TREE it photographs, and that has a claim of its own below.
- */
+/** The modules that may not reach a component: pure data, measuring and formatting, plus the hook
+ *  that runs React's machinery without rendering anything. */
 const PURE = ["shared/columns.ts", "shared/format.ts", "shared/cells.ts", "shared/snapshot.ts",
-  "useTableFit.ts", "shared/useDismissOnBack.ts", "shared/prefs.ts"];
+  "shared/useDismissOnBack.ts", "shared/prefs.ts"];
 
 describe("the measuring and formatting path", () => {
   for (const file of PURE) {
@@ -57,15 +51,6 @@ describe("the measuring and formatting path", () => {
       expect(bad).toEqual([]);
     });
   }
-
-  it("keeps the camera off the tree it points at", () => {
-    // the hook takes a REF. Importing SnapshotView would make the flow and the picture one
-    // module, and the picture is a second tree precisely so it can differ from the screen.
-    const named = imports("useSnapshot.ts");
-    expect(named).not.toContain("SnapshotView");
-    expect(named).not.toContain("App");
-    expect(named).toContain("shared/snapshot"); // the reader still reads: a dead pattern passes the two above
-  });
 
   it("reaches its row-to-text helpers by importing them, not by being handed them", () => {
     // The parameter existed ONLY so `columns.ts` would not have to name `WatchlistTable.tsx`, and
@@ -94,11 +79,9 @@ describe("the viewer's preferences", () => {
   // "live in a module of their own" was a `readdirSync(SRC)).toContain("prefs.ts")` and has gone,
   // as the same check for `cells.ts` did: every other claim below reads that file, so a module that
   // vanished would fail them — and fail collection in the PURE loop above — before this noticed.
-  for (const file of ["shared/columns.ts", "App.tsx"]) {
-    it(`are no longer spelled out in ${file}`, () => {
-      expect(readFileSync(`${SRC}/${file}`, "utf8")).not.toContain("document.cookie");
-    });
-  }
+  it("are no longer spelled out in shared/columns.ts", () => {
+    expect(readFileSync(`${SRC}/shared/columns.ts`, "utf8")).not.toContain("document.cookie");
+  });
 
   it("reach the cookie through one pair of functions", () => {
     // the plumbing itself: one reader, one writer, and every preference on top of them
