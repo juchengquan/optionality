@@ -80,10 +80,12 @@ class ReadingOut(BaseModel):
     last_known: bool | None
     #: minutes, where the vendor states them: Yahoo does, IBKR does not
     delayed_by_minutes: float | None
-    #: when the service read it, in DISPLAY_TZ, as a holding's valuation is stamped (#371): outside the
-    #: session the dashboard reads the strip once and draws no figure without this time, so a frozen
-    #: figure cannot be taken for a live one (ADR 0018, ADR 0023 amended 2026-11-13). The time of the
-    #: READ, not of the figure: no vendor here says when its last trade was.
+    #: when the service's call for it ANSWERED, in DISPLAY_TZ (#371): outside the session the dashboard
+    #: reads the strip once and draws no figure without this time, so a frozen figure cannot be taken for
+    #: a live one (ADR 0018, ADR 0023 amended 2026-11-13). The time of the READ, not of the figure: no
+    #: vendor here says when its last trade was. In the zone and the format of `/positions/values`'
+    #: `fetched_at`, but not the same moment: that one is read when its call is ASKED, so the two can
+    #: differ by a call's length (up to a source's timeout).
     fetched_at: str
 
 
@@ -109,7 +111,8 @@ def reference_routes(deps: Deps) -> APIRouter:
     @router.get("", summary="Live figures for every Reference", response_model=list[ReadingOut])
     async def list_() -> list[dict[str, Any]]:
         readings = await reference_readings(db, sources)
-        # after the call, not before it: a source that takes its whole timeout was read when it answered
+        # after the call, not before it, unlike `/positions/values`: a source that takes its whole timeout
+        # was read when it answered (`test_references.py` holds which)
         fetched = display_time(deps.now(), deps.settings.display_tz)
         return [{**asdict(entry), "fetched_at": fetched} for entry in readings]
 

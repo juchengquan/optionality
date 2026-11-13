@@ -209,6 +209,27 @@ class TestReadingThem:
         rows = (await h.call("/references")).json()
         assert rows[0]["fetched_at"] == "2026-11-13 21:04:11+08:00"
 
+    async def test_stamps_a_reading_when_its_source_answered_not_when_it_was_asked_371(self, start):
+        # a source can take its whole timeout: the reading is as old as its answer, so the clock is read
+        # after the call. `/positions/values` reads it BEFORE its call, so the two stamps can differ by a
+        # call's length; this holds which one `/references` is
+        box: dict = {}
+        answer = quoting({"US.SPY": SPY})
+
+        async def slow(codes: list[str]) -> Batch:
+            box["h"].now = datetime(2026, 11, 13, 13, 4, 19, tzinfo=UTC)  # eight seconds pass inside the call
+            return await answer(codes)
+
+        h = box["h"] = start(fetch_quotes=slow)
+        h.db.execute(
+            """insert into reference_securities (id, code, label, source, created_at)
+               values (?, 'US.SPY', 'SPY', 'moomoo', '2026-11-02 00:00:00.000000')""",
+            ("r" * 32,),
+        )
+        h.now = datetime(2026, 11, 13, 13, 4, 11, tzinfo=UTC)
+        rows = (await h.call("/references")).json()
+        assert rows[0]["fetched_at"] == "2026-11-13 21:04:19+08:00"
+
     async def test_stamps_a_reading_that_has_no_figure_too_the_dash_was_read_at_that_time_as_well(self, start):
         async def down(codes: list[str]) -> Batch:
             raise RuntimeError("Client connection failed!")

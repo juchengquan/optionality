@@ -185,6 +185,23 @@ describe("reading them", () => {
     expect(rows[0]!.fetched_at).toBe("2026-11-13 21:04:11+08:00");
   });
 
+  it("stamps a reading when its source ANSWERED, not when it was asked (#371's review)", async () => {
+    // a source can take its whole timeout: the reading is as old as its answer, so the clock is read
+    // after the call. `/positions/values` reads it BEFORE its call, so the two stamps can differ by a
+    // call's length; this holds which one `/references` is
+    h = harness({ fetchQuotes: (codes) => {
+      h.now = new Date("2026-11-13T13:04:19Z"); // eight seconds pass inside the call
+      return quoting({ "US.SPY": SPY })(codes);
+    } });
+    h.db.prepare(
+      `insert into reference_securities (id, code, label, source, created_at)
+       values (?, 'US.SPY', 'SPY', 'moomoo', '2026-11-02 00:00:00.000000')`,
+    ).run("r".repeat(32));
+    h.now = new Date("2026-11-13T13:04:11Z");
+    const rows = await body(await h.call("/references")) as unknown as Record<string, unknown>[];
+    expect(rows[0]!.fetched_at).toBe("2026-11-13 21:04:19+08:00");
+  });
+
   it("stamps a reading that has no figure too: the dash was read at that time as well", async () => {
     h = harness({ fetchQuotes: () => Promise.reject(new Error("Client connection failed!")) });
     h.db.prepare(

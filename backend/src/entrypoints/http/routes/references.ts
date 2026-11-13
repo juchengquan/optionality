@@ -58,10 +58,12 @@ const ReadingOut = ReferenceOut.omit({ created_at: true }).extend({
   last_known: z.boolean().nullable(),
   /** minutes, where the vendor states them: Yahoo does, IBKR does not */
   delayed_by_minutes: z.number().nullable(),
-  /** when the service read it, in DISPLAY_TZ, as a holding's valuation is stamped (#371): outside
-   *  the session the dashboard reads the strip once and draws no figure without this time, so a
-   *  frozen figure cannot be taken for a live one (ADR 0018, ADR 0023 amended 2026-11-13). The
-   *  time of the READ, not of the figure: no vendor here says when its last trade was. */
+  /** when the service's call for it ANSWERED, in DISPLAY_TZ (#371): outside the session the
+   *  dashboard reads the strip once and draws no figure without this time, so a frozen figure
+   *  cannot be taken for a live one (ADR 0018, ADR 0023 amended 2026-11-13). The time of the READ,
+   *  not of the figure: no vendor here says when its last trade was. In the zone and the format of
+   *  `/positions/values`' `fetched_at`, but not the same moment: that one is read when its call is
+   *  ASKED, so the two can differ by a call's length (up to a source's timeout). */
   fetched_at: z.string(),
 });
 
@@ -85,7 +87,8 @@ export function referenceRoutes(deps: Deps) {
   return new Hono()
     .get("/", list, async (c) => {
       const readings = await referenceReadings(db, sources);
-      // after the call, not before it: a source that takes its whole timeout was read when it answered
+      // after the call, not before it, unlike `/positions/values`: a source that takes its whole
+      // timeout was read when it answered (`references.test.ts` holds which)
       const fetched = displayTime(deps.now(), deps.settings.displayTz)!;
       return list.reply(c, 200, readings.map((r) => ({ ...r, fetched_at: fetched })));
     })
