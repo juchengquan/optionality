@@ -251,17 +251,17 @@ class TestAHoldingsDailySamples:
         assert data["samples"] == [
             {
                 "observed_on": "2026-10-06", "observed_at": "2026-10-07 04:00:00+08:00", "timing": "close",
-                "dte": 73, "cost_to_close": 2.9, "on_pace": 3, "spx": 6612.5,
+                "dte": 73, "cost_to_close": 2.9, "on_pace": 3, "spx": 6612.5, "before_correction": False,
                 "legs_iv": flat(14.5), "legs_vega": flat(4.25), "legs_delta": flat(0.2),
             },
             {
                 "observed_on": "2026-10-07", "observed_at": "2026-10-08 08:30:00+08:00", "timing": "after-close",
-                "dte": 72, "cost_to_close": 2.75, "on_pace": 3 * math.sqrt(72 / 73), "spx": None,
+                "dte": 72, "cost_to_close": 2.75, "on_pace": 3 * math.sqrt(72 / 73), "spx": None, "before_correction": False,
                 "legs_iv": None, "legs_vega": None, "legs_delta": None,
             },
             {
                 "observed_on": "2026-10-08", "observed_at": None, "timing": "unrecorded",
-                "dte": 71, "cost_to_close": 2.5, "on_pace": 3 * math.sqrt(71 / 73), "spx": None,
+                "dte": 71, "cost_to_close": 2.5, "on_pace": 3 * math.sqrt(71 / 73), "spx": None, "before_correction": False,
                 "legs_iv": None, "legs_vega": None, "legs_delta": None,
             },
         ]  # fmt: skip
@@ -943,14 +943,16 @@ class TestRecordingACreditAfterTheFact:
         assert resp.status_code == 422
         assert resp.json()["detail"] == "nothing to update"
 
-    async def test_never_edits_the_legs_a_different_structure_is_a_different_holding(self, start):
+    async def test_never_edits_the_legs_into_another_structure_a_different_structure_is_a_different_holding(
+        self, start
+    ):
         h = start_with(start)
         id_ = (await post(h, condor())).json()["id"]
-        patched = await patch(h, id_, {"legs": [CONDOR_LEGS[0]], "contracts": 3})
-        assert patched.status_code == 200
-        data = patched.json()
-        assert len(data["legs"]) == 4
-        assert data["contracts"] == 3
+        refused = await patch(h, id_, {"legs": [CONDOR_LEGS[0]], "contracts": 3})
+        assert refused.status_code == 422
+        assert refused.json()["detail"].endswith("a different structure is a different holding")
+        [listed] = (await h.call("/positions")).json()
+        assert (len(listed["legs"]), listed["contracts"]) == (4, 1), "and nothing was written"
 
 
 CALL_SPREAD = [
@@ -1787,3 +1789,291 @@ class TestAQuantityPerLeg:
         # below the short strike two puts are owed against one held
         assert payoff["slope_below"] == 1
         assert payoff["at_strikes"] == [{"spx": 7075, "pnl": 25.5}, {"spx": 7100, "pnl": 0.5}]
+
+
+#: a 1×3 typed where a 1×2 was meant: one P7100 bought, the P7075 sold three times over (#359)
+TYPED = [
+    {"side": "long", "option_type": "PUT", "strike": 7100},
+    {"side": "short", "option_type": "PUT", "strike": 7075, "qty": 3},
+]
+MEANT = [
+    {"side": "long", "option_type": "PUT", "strike": 7100},
+    {"side": "short", "option_type": "PUT", "strike": 7075, "qty": 2},
+]
+SHORT = build_spx_code(EXPIRY, "PUT", 7075)
+TAIL = ": only a leg's quantity can be corrected — a different structure is a different holding"
+
+
+class TestCorrectingAHeldLegsQuantity:
+    """#359: a quantity typed wrong is corrected in place, keeping the holding and its samples."""
+
+    @staticmethod
+    async def held(h, legs=TYPED):
+        """The holding recorded through the add form's route, with its value rule and its short leg's Δ."""
+        resp = await h.call(
+            "/spreads",
+            **json_body(
+                {
+                    "strike_date": EXPIRY,
+                    "spreads": [
+                        {
+                            "name": "ratio",
+                            "legs": legs,
+                            "held": True,
+                            "entry": 0.5,
+                            "opened_at": "2026-10-01",
+                            "monitors": [
+                                {"threshold": 1.0},
+                                {"option_type": "PUT", "strike": 7075, "threshold": 0.3},
+                            ],
+                        }
+                    ],
+                }
+            ),
+        )
+        assert resp.status_code == 201, resp.text
+        return h.db.execute("select id from positions where name = 'ratio'").fetchone()[0]
+
+    @staticmethod
+    def rule(h, code):
+        row = h.db.execute(
+            "select id, legs, scope, triggered, last_alarm_at from monitors where code = ?", (code,)
+        ).fetchone()
+        return dict(zip(("id", "legs", "scope", "triggered", "last_alarm_at"), row, strict=True))
+
+    @staticmethod
+    def stored(h, id_):
+        row = h.db.execute("select legs, qty_corrected_at, entry from positions where id = ?", (id_,)).fetchone()
+        return {"legs": json.loads(row[0]), "qty_corrected_at": row[1], "entry": row[2]}
+
+    @staticmethod
+    def ringing(h, code):
+        h.db.execute(
+            "update monitors set triggered = 1, last_alarm_at = '2026-10-01 15:00:00.000000' where code = ?", (code,)
+        )
+
+    @staticmethod
+    def sample_on(h, id_, on, dte, at, cost=1.5):
+        h.db.execute(
+            """insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at)
+               values (?, ?, ?, ?, ?)""",
+            (id_, on, dte, cost, at),
+        )
+
+    @staticmethod
+    async def refused(h, id_, payload):
+        resp = await patch(h, id_, payload)
+        data = resp.json()
+        assert resp.status_code == 422, json.dumps(data)
+        return data["detail"]
+
+    async def test_corrects_a_1x3_to_a_1x2_keeping_every_sample_and_stamping_when(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        self.sample_on(h, id_, "2026-10-01", 78, "2026-10-01 19:59:00.000000", 1.4)
+        resp = await patch(h, id_, {"legs": MEANT})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["legs"] == MEANT
+        assert self.stored(h, id_)["legs"] == MEANT
+        assert self.stored(h, id_)["qty_corrected_at"] == "2026-10-02 05:26:06.299000"
+        # kept as it was: summed under the 1×3, and nothing stored can re-sum it
+        assert h.db.execute(
+            "select observed_on, cost_to_close from position_samples where position_id = ?", (id_,)
+        ).fetchall() == [("2026-10-01", 1.4)]
+
+    async def test_takes_the_legs_in_any_order_and_keeps_them_in_the_order_they_were_recorded(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        assert (await patch(h, id_, {"legs": MEANT[::-1]})).status_code == 200
+        assert self.stored(h, id_)["legs"] == MEANT
+
+    async def test_stores_a_corrected_quantity_of_one_as_none(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        assert (await patch(h, id_, {"legs": [TYPED[0], {**TYPED[1], "qty": 1}]})).status_code == 200
+        assert self.stored(h, id_)["legs"] == [
+            {"side": "long", "option_type": "PUT", "strike": 7100},
+            {"side": "short", "option_type": "PUT", "strike": 7075},
+        ]
+
+    async def test_takes_its_value_rule_with_it_as_a_new_rule_same_name_the_new_quantities_unrung(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        self.ringing(h, "ratio")
+        self.ringing(h, SHORT)
+        assert (await patch(h, id_, {"legs": MEANT})).status_code == 200
+        value = self.rule(h, "ratio")
+        assert json.loads(value["legs"]) == [
+            {"sign": 1, "option_type": "PUT", "strike": 7100},
+            {"sign": -1, "option_type": "PUT", "strike": 7075, "qty": 2},
+        ]
+        assert (value["scope"], value["triggered"], value["last_alarm_at"]) == ("all", 0, None)
+        # the short leg's Δ is one contract's whatever the quantity: nothing about it changed
+        delta = self.rule(h, SHORT)
+        assert (delta["legs"], delta["scope"], delta["triggered"], delta["last_alarm_at"]) == (
+            None,
+            "leg",
+            1,
+            "2026-10-01 15:00:00.000000",
+        )
+        assert links(h, value["id"]) == ([id_], "all")
+
+    async def test_gives_a_rule_that_watched_other_quantities_the_scope_it_now_has(self, start):
+        # a 1×1 watch rule on the same two contracts was `leg` of the 1×3; corrected to a 1×1, the holding
+        # IS what it values. It is not re-quantified: it never valued the holding's structure
+        h = start_with(start)
+        id_ = await self.held(h)
+        watch = await make_monitor(
+            h,
+            name="w11",
+            strike_date=EXPIRY,
+            field="mid_price",
+            threshold=9,
+            legs=[
+                {"sign": 1, "option_type": "PUT", "strike": 7100},
+                {"sign": -1, "option_type": "PUT", "strike": 7075},
+            ],
+        )
+        assert links(h, watch) == ([id_], "leg")
+        self.ringing(h, "w11")
+        assert (await patch(h, id_, {"legs": [TYPED[0], {**TYPED[1], "qty": 1}]})).status_code == 200
+        assert links(h, watch) == ([id_], "all")
+        assert json.loads(self.rule(h, "w11")["legs"]) == [
+            {"sign": 1, "option_type": "PUT", "strike": 7100},
+            {"sign": -1, "option_type": "PUT", "strike": 7075},
+        ]
+        assert self.rule(h, "w11")["triggered"] == 1, "its figure means what it meant"
+        # and the holding's own rule, which followed, is still all of it
+        assert links(h, self.rule(h, "ratio")["id"]) == ([id_], "all")
+
+    async def test_takes_a_rule_spanning_two_holdings_with_it_in_the_wing_that_was_corrected(self, start):
+        h = start_with(start)
+        calls = await make_position(h, "calls", EXPIRY, CONDOR_LEGS[:2])
+        puts = await make_position(h, "puts", EXPIRY, CONDOR_LEGS[2:])
+        condor_rule = await make_monitor(
+            h,
+            name="ic",
+            strike_date=EXPIRY,
+            field="mid_price",
+            threshold=9,
+            legs=[
+                {
+                    "sign": -1 if leg["side"] == "short" else 1,
+                    "option_type": leg["option_type"],
+                    "strike": leg["strike"],
+                }
+                for leg in CONDOR_LEGS
+            ],
+        )
+        assert links(h, condor_rule) == (sorted([calls, puts]), "all")
+        resp = await patch(h, puts, {"legs": [{**CONDOR_LEGS[2], "qty": 2}, CONDOR_LEGS[3]]})
+        assert resp.status_code == 200, resp.text
+        assert [leg.get("qty", 1) for leg in json.loads(self.rule(h, "ic")["legs"])] == [1, 1, 2, 1]
+        assert links(h, condor_rule) == (sorted([calls, puts]), "all")
+
+    async def test_leaves_the_legs_of_a_rule_that_names_a_contract_twice_and_gives_it_the_scope_it_now_has(self, start):
+        # a 1×3 written before #351 as three legs on one contract: no one leg can carry the quantity
+        h = start_with(start)
+        id_ = await self.held(h)
+        legs = [{"sign": 1, "option_type": "PUT", "strike": 7100}] + [
+            {"sign": -1, "option_type": "PUT", "strike": 7075}
+        ] * 3
+        h.db.execute(
+            """insert into monitors (id, code, strike_date, option_type, strike, field, threshold, direction,
+                 compare, legs, scope, enabled, triggered, created_at)
+               values ('old', 'old13', ?, 'CMB', 0, 'mid_price', 9, 'above', 'abs', ?, 'all', 1, 1,
+                 '2026-10-01 00:00:00.000000')""",
+            (EXPIRY, json.dumps(legs)),
+        )
+        h.db.execute("insert into monitor_positions (monitor_id, position_id) values ('old', ?)", (id_,))
+        assert (await patch(h, id_, {"legs": MEANT})).status_code == 200
+        assert json.loads(self.rule(h, "old13")["legs"]) == legs
+        assert (self.rule(h, "old13")["scope"], self.rule(h, "old13")["triggered"]) == ("leg", 1)
+
+    async def test_writes_the_legs_and_the_rest_of_the_patch_together(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        assert (await patch(h, id_, {"legs": MEANT, "entry": 0.75})).status_code == 200
+        assert (self.stored(h, id_)["legs"], self.stored(h, id_)["entry"]) == (MEANT, 0.75)
+
+    async def test_stamps_nothing_and_resets_nothing_when_no_quantity_changed(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        self.ringing(h, "ratio")
+        assert (await patch(h, id_, {"legs": TYPED})).status_code == 200
+        assert self.stored(h, id_)["qty_corrected_at"] is None
+        assert self.rule(h, "ratio")["triggered"] == 1
+
+    async def test_refuses_anything_but_a_quantity_a_different_structure_is_a_different_holding(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        long, short = TYPED
+        assert await self.refused(h, id_, {"legs": [long]}) == f"'ratio' has 2 legs, not 1{TAIL}"
+        assert await self.refused(h, id_, {"legs": [long, {**short, "strike": 7050}]}) == (
+            f"'ratio' has no PUT 7050 leg{TAIL}"
+        )
+        assert await self.refused(h, id_, {"legs": [long, {**short, "option_type": "CALL"}]}) == (
+            f"'ratio' has no CALL 7075 leg{TAIL}"
+        )
+        assert await self.refused(h, id_, {"legs": [long, {**short, "side": "long"}]}) == (
+            f"'ratio' is short PUT 7075, not long{TAIL}"
+        )
+        assert await self.refused(h, id_, {"legs": [long, long]}) == f"'ratio' is given PUT 7100 twice{TAIL}"
+        assert self.stored(h, id_)["legs"] == TYPED, "and nothing was written"
+        assert self.stored(h, id_)["qty_corrected_at"] is None
+
+    async def test_refuses_a_quantity_of_none_of_more_than_ten_or_of_a_part(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        for qty in (0, 11, 1.5):
+            assert "legs[1].qty" in await self.refused(h, id_, {"legs": [TYPED[0], {**TYPED[1], "qty": qty}]})
+        assert self.stored(h, id_)["legs"] == TYPED
+
+    async def test_refuses_a_closed_holding_its_quantities_are_part_of_the_record_it_closed_with(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        assert (await h.call(f"/positions/{id_}/close", **json_body({"exit": 0.2}))).status_code == 200
+        assert await self.refused(h, id_, {"legs": MEANT}) == (
+            "position 'ratio' is closed: a leg's quantity is corrected only while it is held"
+        )
+        assert self.stored(h, id_)["legs"] == TYPED
+
+    async def test_marks_the_samples_observed_before_the_correction_and_says_when_it_was(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        self.sample_on(h, id_, "2026-09-30", 79, None)
+        self.sample_on(h, id_, "2026-10-01", 78, "2026-10-01 19:59:00.000000")
+        assert (await patch(h, id_, {"legs": MEANT})).status_code == 200
+        # the day's row, written by a sweep after the correction, is summed under the 1×2
+        self.sample_on(h, id_, "2026-10-02", 77, "2026-10-02 05:30:00.000000")
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert data["qty_corrected_at"] == "2026-10-02 13:26:06+08:00"
+        assert [(s["observed_on"], s["before_correction"]) for s in data["samples"]] == [
+            ("2026-09-30", True),
+            ("2026-10-01", True),
+            ("2026-10-02", False),
+        ]
+
+    async def test_marks_no_sample_of_a_holding_never_corrected(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        self.sample_on(h, id_, "2026-10-01", 78, None)
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert data["qty_corrected_at"] is None
+        assert data["samples"][0]["before_correction"] is False
+
+    async def test_measures_no_gap_from_a_cost_to_close_summed_before_the_correction(self, start):
+        h = start_with(start)
+        id_ = await self.held(h)
+        self.sample_on(h, id_, "2026-10-01", 78, "2026-10-01 19:59:00.000000")
+        assert (await h.call(f"/positions/{id_}/vol")).json()["gap"] is not None
+        assert (await patch(h, id_, {"legs": MEANT})).status_code == 200
+        after = (await h.call(f"/positions/{id_}/vol")).json()
+        why = "the Cost to close of 2026-10-01 was summed before a leg's quantity was corrected"
+        assert [after[k] for k in ("gap", "gap_reason", "rest", "cover", "cover_reason")] == [
+            None,
+            why,
+            None,
+            None,
+            why,
+        ]

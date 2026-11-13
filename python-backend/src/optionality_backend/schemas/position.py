@@ -82,8 +82,13 @@ class PayoffIn(Shape):
 
 
 class PositionPatch(Shape):
-    """Legs are never edited here — a different structure is a different holding."""
+    """Legs are never edited here — a different structure is a different holding — with one exception: a
+    held leg's QUANTITY, corrected in place, because the other remedy is DELETE and it takes the samples
+    (#359, `correct_legs.py`)."""
 
+    #: the holding's legs as they should have been recorded: the same contracts on the same sides, in any
+    #: order, differing only in `qty`. Refused on a closed holding.
+    legs: Annotated[list[LegIn] | None, Array(min=1)] = None
     entry: Annotated[float | None, Number()] = None
     contracts: Annotated[int | None, Int(min=1)] = None
     strategy: Annotated[str | None, String()] = None
