@@ -2,7 +2,7 @@
  *  inspector and the phone's sheet. Behaviour only — what is sent, what is said and where. That a
  *  refusal is VISIBLE above a sheet, and that the phone's boxes are 16px, is measured by the browser
  *  suite (`NextEdit.test.tsx` and `NextEdit.iphone.test.tsx` under `__browser__/`). */
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { MonitorPatch } from "backend/schemas";
@@ -346,6 +346,78 @@ describe("while a write is in flight, and after it", () => {
     fireEvent.click(within(sheet).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     await until(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
+  });
+
+  /** The race #350 captured under load, made to happen every time: the write lands inside an `act`
+   *  that holds React's render open for `ms` while real timers run, so a focus settled on a timer
+   *  is settled while `busy` is still drawn and every button is disabled. Before the fix the focus
+   *  stayed on the pressed button, disabled, for the render to take away. */
+  async function landHeld(p: ReturnType<typeof pending>, ms: number) {
+    await act(async () => { p.land(); await new Promise((r) => setTimeout(r, ms)); });
+  }
+
+  /** The rule's controls inside a surface with a heading, on a page with one of its own. */
+  function inSurface(over: Partial<MonitorActions>) {
+    const a = actions(over);
+    const ui = (open: boolean) => (
+      <MonitorActionsContext.Provider value={a.value}>
+        <main className="nx-main">
+          <h2>the page</h2>
+          <button type="button">elsewhere</button>
+          {open ? (
+            <aside>
+              <h3>the inspector</h3>
+              <MonitorControls rule={ruleOfEntry(DELTA)} served={DELTA} />
+            </aside>
+          ) : null}
+        </main>
+      </MonitorActionsContext.Provider>
+    );
+    const view = render(ui(true));
+    return { close: () => view.rerender(ui(false)) };
+  }
+
+  it.each(["mute", "delete"] as const)(
+    "hands the focus to the edit button after a %s whose render lands after its timer",
+    async (what) => {
+      const p = pending();
+      controls({ entry: DELTA }, what === "mute" ? { patch: p.write } : { remove: p.write });
+      const pressed = screen.getByRole("button", { name: `${what} 261218 7150P delta` });
+      pressed.focus();
+      fireEvent.click(pressed);
+      if (what === "delete") fireEvent.click(screen.getByRole("button", { name: "delete it" }));
+      await landHeld(p, 30);
+      await until(() => expect(document.activeElement)
+        .toBe(screen.getByRole("button", { name: "edit 261218 7150P delta" })));
+    });
+
+  it("never leaves the focus on a disabled button or the body, however long the render is held", async () => {
+    const p = pending();
+    inSurface({ patch: p.write });
+    const mute = screen.getByRole("button", { name: "mute 261218 7150P delta" });
+    mute.focus();
+    fireEvent.click(mute);
+    // longer than any count of timer turns a settle could wait through
+    await landHeld(p, 500);
+    const edit = screen.getByRole("button", { name: "edit 261218 7150P delta" });
+    const heading = screen.getByRole("heading", { name: "the inspector" });
+    await until(() => expect([edit, heading]).toContain(document.activeElement));
+    expect((document.activeElement as HTMLButtonElement).disabled ?? false).toBe(false);
+  });
+
+  it("takes no focus back when the surface the rule was in closed while its write was out", async () => {
+    const p = pending();
+    const { close } = inSurface({ patch: p.write });
+    const mute = screen.getByRole("button", { name: "mute 261218 7150P delta" });
+    mute.focus();
+    fireEvent.click(mute);
+    // the owner closes the inspector and goes on elsewhere before the write lands
+    close();
+    const elsewhere = screen.getByRole("button", { name: "elsewhere" });
+    elsewhere.focus();
+    await landHeld(p, 30);
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(document.activeElement).toBe(elsewhere);
   });
 });
 
