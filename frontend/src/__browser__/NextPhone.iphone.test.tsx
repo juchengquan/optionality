@@ -388,3 +388,33 @@ describe("REVIEW", () => {
     expect(tooSmall()).toEqual([]);
   });
 });
+
+/** REVIEW's Level chips say when the holding was valued (#354), and got longer for it: measured on
+ *  the page, in the sheet and with the longest of the three Levels, at the iPhone's 390px. */
+describe("a Level's chip in REVIEW, with its valuation's time", () => {
+  const levelled = HOLDINGS.map((h) => ({
+    ...h, fetched_at: "2026-11-10 23:14:05+08:00",
+    schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4, target_dte: 11,
+      manage_by_dte: 21, reached: h.id === "h-ic" ? "target" : "stop", manage_by_due: false },
+  }));
+  const pageOf = (ref: string) => document.querySelector<HTMLElement>(`[data-page][data-ref="${ref}"]`)!;
+
+  it("fits on each page and in the sheet, pushing nothing sideways", async () => {
+    await show("Review", QUOTES, levelled);
+    for (const ref of ["h-calls", "h-puts", "h-ic"]) {
+      const chip = pageOf(ref).querySelector<HTMLElement>(".nx-chip")!;
+      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 23:14$/);
+      const card = pageOf(ref).querySelector(".nxp-card")!.getBoundingClientRect();
+      const r = chip.getBoundingClientRect();
+      expect(r.left >= card.left && r.right <= card.right, `${ref}'s chip inside its card`).toBe(true);
+    }
+    expect(overflowsSideways()).toBe(false);
+
+    await userEvent.click(within(pageOf("h-calls")).getByRole("button", { name: "detail and Monitors" }));
+    const sheet = await screen.findByRole("dialog");
+    await animationsDone();
+    expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 23:14");
+    expect(pastTheEdge(sheet)).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+  });
+});

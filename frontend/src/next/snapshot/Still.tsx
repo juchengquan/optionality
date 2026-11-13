@@ -26,8 +26,9 @@ import type { Arrangement } from "../arrangement";
 import { Money, type BookProps } from "../Book";
 import { AttentionChip, Cell, Fill, OverlapNote, tableRows } from "../desk/DeskBook";
 import {
-  attentionOf, charsOf, COLUMNS, PINNED, rowId, rowName, type DeskColumn, type DeskRow,
+  attentionOf, charsOf, chipWords, COLUMNS, PINNED, rowId, rowName, type DeskColumn, type DeskRow,
 } from "../desk/columns";
+import type { Mode } from "../mode";
 import { NeedsLine } from "../NeedsLine";
 import { paceOutcome, paceWords } from "../pace";
 import { fieldWords, monitorName, QUARANTINED, type Need } from "../needs";
@@ -88,7 +89,7 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
   const flexible = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
   // in `ch` of the table's own monospace, which is what the screen's fitting measures in pixels
   const template = columns.map((c) => {
-    const w = `${Math.ceil(charsOf(c, rows, privacy)) + SLACK_CH}ch`;
+    const w = `${Math.ceil(charsOf(c, rows, privacy, mode)) + SLACK_CH}ch`;
     return c.key === flexible ? `minmax(${w}, 1fr)` : w;
   }).join(" ");
 
@@ -110,10 +111,11 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
                 return (
                   <div key={holding.id} data-bracket={paired ? "condor" : undefined}>
                     <StillRow row={{ kind: "holding", holding, rules }} columns={columns} privacy={privacy}
-                              bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} />
+                              bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} mode={mode} />
                     {rules.map((e) => (
                       <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: true }} columns={columns}
-                                privacy={privacy} bracket={paired && i === 0 ? "through" : undefined} />
+                                privacy={privacy} bracket={paired && i === 0 ? "through" : undefined}
+                                mode={mode} />
                     ))}
                   </div>
                 );
@@ -124,7 +126,8 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
             <div className="nxd-expiry">
               <h3 className="nxd-group">rules on held contracts</h3>
               {placed.unplaced.map((e) => (
-                <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: false }} columns={columns} privacy={privacy} />
+                <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: false }} columns={columns}
+                          privacy={privacy} mode={mode} />
               ))}
             </div>
           ) : null}
@@ -139,10 +142,11 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
               {items.map(({ entry, under, overlap }) => (
                 <div key={entry.id}>
                   <StillRow row={{ kind: "rule", entry, nested: false, overlap }} columns={columns}
-                            privacy={privacy} />
+                            privacy={privacy} mode={mode} />
                   <OverlapNote overlap={overlap} />
                   {under.map((e) => (
-                    <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: true }} columns={columns} privacy={privacy} />
+                    <StillRow key={e.id} row={{ kind: "rule", entry: e, nested: true }} columns={columns}
+                              privacy={privacy} mode={mode} />
                   ))}
                 </div>
               ))}
@@ -152,7 +156,8 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
             <div className="nxd-quarantined">
               <h3 className="nxd-group">quarantined — switched off by the service</h3>
               {placed.quarantined.map((m) => (
-                <StillRow key={m.id} row={{ kind: "quarantined", monitor: m }} columns={columns} privacy={privacy} />
+                <StillRow key={m.id} row={{ kind: "quarantined", monitor: m }} columns={columns}
+                          privacy={privacy} mode={mode} />
               ))}
             </div>
           ) : null}
@@ -163,8 +168,10 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
 }
 
 /** DeskBook's row with the pressing taken out: the name is words, not a button. */
-function StillRow({ row, columns, privacy, bracket }: {
+function StillRow({ row, columns, privacy, bracket, mode }: {
   row: DeskRow; columns: DeskColumn[]; privacy: boolean; bracket?: "top" | "through" | "bottom";
+  /** a holding's Level says, in REVIEW, which valuation it is from (#354) */
+  mode: Mode;
 }) {
   const a = attentionOf(row);
   const barIn = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
@@ -175,7 +182,10 @@ function StillRow({ row, columns, privacy, bracket }: {
       {columns.map((c) => (
         <span key={c.key} data-col={c.key} data-align={c.align}>
           {c.key === "name" ? (
-            <><span className="nxd-name">{rowName(row)}</span>{a ? <AttentionChip kind={a} /> : null}</>
+            <>
+              <span className="nxd-name">{rowName(row)}</span>
+              {a ? <AttentionChip kind={a} words={chipWords(row, mode)} /> : null}
+            </>
           ) : <Cell row={row} column={c} privacy={privacy} />}
           {barIn === c.key && row.kind === "rule" ? <Fill entry={row.entry} /> : null}
         </span>
@@ -270,7 +280,7 @@ function ReviewCard({ placed: { holding, rules }, quotes, monitors, privacy }: {
       <div className="nxp-hero">
         <Money value={holding.pnl} privacy={privacy} />
         <span className="nxp-hero-sub">unrealised</span>
-        <LevelChip holding={holding} />
+        <LevelChip holding={holding} mode="review" />
       </div>
       <dl className="nxp-facts">
         <div><dt>captured</dt><dd>{percent(holding.captured)}</dd></div>

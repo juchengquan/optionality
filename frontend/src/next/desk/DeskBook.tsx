@@ -21,7 +21,8 @@ import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, COLUMNS, rowId, rowName, rowStrip, tableRows, type DeskColumn, type DeskRow,
+  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, rowId, rowName, rowStrip, tableRows,
+  type DeskColumn, type DeskRow,
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
 import { joinStrips, stripOfEntry, stripOfHolding } from "../strip";
@@ -163,7 +164,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
   const inspectorId = useId();
   const ctx: Ctx = {
     columns: fit.columns, privacy, selected: current ? rowId(current) : null, cursor: sel.id, select: setSelected,
-    inspectorId,
+    inspectorId, mode,
   };
   const pickable = COLUMNS[mode].filter((c) => c.key !== "name" && (fit.offered.has(c.key) || hidden.has(c.key)));
 
@@ -213,6 +214,8 @@ interface Ctx {
   cursor: string | null;
   select: (id: string) => void;
   inspectorId: string;
+  /** a holding's chip says, in REVIEW, which valuation it is from (#354) */
+  mode: Mode;
 }
 
 /** Every key the desk draws: all it may change in the column cookie (`readHidden`). */
@@ -388,18 +391,21 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
               onClick={(e) => { e.stopPropagation(); ctx.select(rowId(row)); }}>
         {rowName(row)}
       </button>
-      {a ? <AttentionChip kind={a} /> : null}
+      {a ? <AttentionChip kind={a} words={chipWords(row, ctx.mode)} /> : null}
     </>
   );
 }
 
 /** A rule's state is the attention family's chip (Book.tsx's `Chip`); a holding's Level and its
- *  Manage-by are drawn as the needs-you line draws them, with their kinds' glyphs. */
-export function AttentionChip({ kind }: { kind: NonNullable<ReturnType<typeof attentionOf>> }) {
+ *  Manage-by are drawn as the needs-you line draws them, with their kinds' glyphs — in the words
+ *  `chipWords` gives the row, which in REVIEW say which valuation they are from (#354). */
+export function AttentionChip({ kind, words }: {
+  kind: NonNullable<ReturnType<typeof attentionOf>>; words?: string | null;
+}) {
   if (kind === "fault" || kind === "entry" || kind === "alarm") return <Chip state={kind} />;
   return (
     <span className="nx-chip" data-kind={kind}>
-      <Glyph kind={kind} />{ATTENTION_WORDS[kind]}
+      <Glyph kind={kind} />{words ?? ATTENTION_WORDS[kind]}
     </span>
   );
 }
@@ -530,8 +536,12 @@ function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
   }
   // the condor's other spread, when placement bracketed the two
   const partner = partners.get(h.id) ?? null;
+  // its Level, as the row's chip says it: bare in LIVE, and in REVIEW with the valuation it is
+  // from (#354)
+  const a = attentionOf(row);
   return (
     <>
+      {a ? <p><AttentionChip kind={a} words={chipWords(row, mode)} /></p> : null}
       <p className="nx-meta">
         {`${h.strike_date} · ${h.dte} DTE${h.opened_at ? ` · opened ${h.opened_at}` : " · Opened not recorded"}`}
       </p>

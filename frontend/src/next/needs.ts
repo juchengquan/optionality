@@ -61,10 +61,16 @@ export function monitorName(monitor: Monitor): string {
  *  they are polled with the watchlist, so their Levels are already paid for; in REVIEW nothing is.
  *  @param placedBy the holdings the book is DRAWN with, which decide which combos are drawn apart
  *  from their holding (#346) — in REVIEW, the ones valued once on entering it, whose Levels the
- *  line still does not say. The same as `holdings` unless given. */
+ *  line still does not say. The same as `holdings` unless given.
+ *  @param levels whether the line says any holding's Levels at all. False in REVIEW (#354, the
+ *  owner's decision (b)): not from the holdings, and not from a rule linked to one either, whose
+ *  `schedule` is the holding's, served on the `/quotes` that REVIEW still polls. The holding's own
+ *  chip says them there, as of the valuation it was drawn from; a line saying them from the poll
+ *  would contradict it, or say a Level the row does not show. A rule's own alarm and every fault
+ *  are said in either mode. */
 export function needsYou(
   quotes: Entry[], monitors: Monitor[], health: Health | null, holdings: Holding[] | null,
-  placedBy: Holding[] | null = holdings,
+  placedBy: Holding[] | null = holdings, levels = true,
 ): Need[] {
   const out: Need[] = [];
   if (health && !health.provider.ok) {
@@ -82,7 +88,7 @@ export function needsYou(
     const name = entryName(e);
     if (e.error) out.push({ kind: "fault", text: `${name} — ${e.error}`, ref: e.id });
     // the Levels are the holding's to say when this rule is drawn apart from it
-    const schedule = apart.has(e.id) ? null : e.schedule;
+    const schedule = !levels || apart.has(e.id) ? null : e.schedule;
     if (schedule?.reached === "stop") out.push({ kind: "stop", text: `${name} at stop`, ref: e.id });
     if (e.triggered) {
       out.push(isEntrySignal(e)
@@ -105,7 +111,7 @@ export function needsYou(
     quotes.filter((e) => !apart.has(e.id)).map((e) => e.schedule?.position_id)
       .filter((id): id is string => Boolean(id)),
   );
-  for (const h of holdings ?? []) {
+  for (const h of levels ? holdings ?? [] : []) {
     if (spokenFor.has(h.id)) continue;
     if (h.schedule?.reached === "stop") out.push({ kind: "stop", text: `${h.name} at stop`, ref: h.id });
     if (h.schedule?.reached === "target") out.push({ kind: "target", text: `${h.name} at target`, ref: h.id });
