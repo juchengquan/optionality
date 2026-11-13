@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { servePage, SPX_REFERENCE, type PageService } from "../testing/pageService";
+import { until } from "../testing/until";
 
 afterEach(() => {
   cleanup();
@@ -75,7 +76,7 @@ describe.each(arrangements)("on the %s, the poll", (arrangement) => {
     fireEvent.click(within(home).getByRole("button", { name: "edit 261218 7150P delta" }));
     const form = await within(home).findByRole("form", { name: "editing 261218 7150P delta" });
     // the form puts the focus in its threshold, where the owner types
-    await waitFor(() => expect(form.contains(document.activeElement)).toBe(true));
+    await until(() => expect(form.contains(document.activeElement)).toBe(true));
     expect(await twoPolls(svc), "a poll landed on an open edit").toBe(0);
 
     fireEvent.click(within(form).getByRole("button", { name: "cancel" }));
@@ -93,7 +94,7 @@ describe.each(arrangements)("on the %s, the poll", (arrangement) => {
     const confirm = await screen.findByRole("alertdialog");
     await opened();
     // focus lands a tick after the dialog mounts, so this waits rather than races
-    await waitFor(() => expect(confirm.contains(document.activeElement)).toBe(true));
+    await until(() => expect(confirm.contains(document.activeElement)).toBe(true));
     expect(await twoPolls(svc), "a poll landed under the confirmation").toBe(0);
   });
 
@@ -104,7 +105,7 @@ describe.each(arrangements)("on the %s, the poll", (arrangement) => {
     const form = await screen.findByRole("form", { name: "add a spread" });
     // the desk's panel focuses its first box; the phone's sheet waits for a finger, so it is put there
     if (arrangement === "phone") within(form).getByLabelText("expiry").focus();
-    await waitFor(() => expect(form.contains(document.activeElement)).toBe(true));
+    await until(() => expect(form.contains(document.activeElement)).toBe(true));
     expect(await twoPolls(svc), "a poll landed on a half-filled form").toBe(0);
   });
 });
@@ -116,7 +117,7 @@ describe("on the desk, the poll", () => {
     await userEvent.click(screen.getByRole("button", { name: "book columns" }));
     const picker = await screen.findByRole("group", { name: "book columns" });
     await opened();
-    await waitFor(() => expect(picker.closest('[data-poll="hold"]')?.contains(document.activeElement)).toBe(true));
+    await until(() => expect(picker.closest('[data-poll="hold"]')?.contains(document.activeElement)).toBe(true));
     expect(await twoPolls(svc), "a poll landed under the open picker").toBe(0);
   });
 });
