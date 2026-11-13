@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
+import { until } from "../testing/until";
 
 const health = {
   db: true, provider: { name: "moomoo", ok: true },
@@ -54,6 +55,12 @@ const reference = {
 /** the GETs the page made, by path; writes are kept apart in `writes` */
 let calls: string[] = [];
 let writes: string[] = [];
+/** every GET since the test began, with when — `calls` is reset, this is not — and how many of
+ *  them the fake service has not yet answered */
+let heard: string[] = [];
+let unanswered = 0;
+/** what the page asked for, in order and when, for a failure to say */
+const said = () => `asked since the reset: ${JSON.stringify(calls)}\nall, in ms:\n${heard.join("\n")}`;
 /** paths the fake service refuses, with a 502 as a Provider outage gives */
 let refusing = new Set<string>();
 let quotes: object[] = [spread, shortLeg];
@@ -67,6 +74,8 @@ const reply = (ok: boolean, body: unknown) => Promise.resolve(ok
 function serve() {
   calls = [];
   writes = [];
+  heard = [];
+  unanswered = 0;
   refusing = new Set();
   quotes = [spread, shortLeg];
   held = null;
@@ -77,13 +86,16 @@ function serve() {
       return reply(true, {});
     }
     calls.push(path);
+    heard.push(`${performance.now().toFixed(1)} ${path}`);
+    unanswered += 1;
+    const answered = <T,>(p: Promise<T>) => p.finally(() => { unanswered -= 1; });
     if (path === "/positions/values" && held) {
       const queue = held;
-      return new Promise((resolve) => {
+      return answered(new Promise((resolve) => {
         queue.push({ settle: (ok, body = [holding]) => resolve(reply(ok, body)) });
-      });
+      }));
     }
-    if (refusing.has(path)) return reply(false, null);
+    if (refusing.has(path)) return answered(reply(false, null));
     const body = path === "/quotes" ? quotes
       : path === "/monitors" ? [quarantined]
         : path === "/health" ? health
@@ -91,7 +103,7 @@ function serve() {
             : path === "/positions/values" ? [holding]
               // every holding on record, as stored: REVIEW's closed trades read it (#296)
               : path === "/positions" ? [holding] : null;
-    return reply(true, body);
+    return answered(reply(true, body));
   }) as unknown as typeof fetch;
 }
 
@@ -105,6 +117,23 @@ const SUNDAY = "2026-11-08T15:00:00Z";
 
 /** How long a wait on a condition may take under a full suite's load, well past waitFor's 1s. */
 const SLOW = 10_000;
+
+/** Until the page has stopped asking: every request answered, and none new for QUIET turns of
+ *  the event loop, each drawn through `act` — so a read that an answer sets off (a holding drawn,
+ *  then its samples asked for) has been asked by the next turn. What the page reads is whatever it
+ *  asks for, not a list kept here: a read added to REVIEW is waited for without this test knowing
+ *  its name. Turns, not milliseconds — every request here is answered on microtasks — so load
+ *  cannot make it stop early. */
+const QUIET = 3;
+async function quiet() {
+  let still = 0;
+  let seen = -1;
+  await until(() => {
+    if (unanswered === 0 && heard.length === seen) still += 1;
+    else { still = 0; seen = heard.length; }
+    expect(still, `still asking (${unanswered} unanswered)\n${said()}`).toBeGreaterThanOrEqual(QUIET);
+  });
+}
 
 async function open() {
   render(<Next />);
@@ -123,31 +152,33 @@ describe("what it asks for in each mode", () => {
   it("polls the watchlist, the rules, health, References and the holdings in LIVE", async () => {
     at(SESSION);
     await open();
+    await quiet();
     calls = [];
     await act(async () => { vi.advanceTimersByTime(15_000); });
-    await waitFor(() => expect(calls).toContain("/positions/values"));
-    expect(new Set(calls)).toEqual(
+    await quiet();
+    expect(new Set(calls), said()).toEqual(
       new Set(["/quotes", "/monitors", "/health", "/references", "/positions/values"]));
   });
 
   it("polls only what the needs-you line reads in REVIEW, having asked for the rest once", async () => {
     at(SUNDAY);
     await open();
+    // Everything REVIEW asks for on entering it is asked before the poll: the holding's samples
+    // are asked only once its page is drawn, after the line `open` waits for, and anything still
+    // to come when `calls` is reset would count as the poll's. `quiet` waits for whatever the page
+    // asks, named nowhere here. (#347: a `waitFor` on `calls` sat out its timeout with all three
+    // in, because `at` fakes the interval waitFor polls on, so it re-checked only on a DOM change
+    // and the samples' answer made none.)
+    await quiet();
     // the rest WAS asked for, once, on entering REVIEW: the valuation, the closed trades (#296)
-    // and the holding's samples, which its REVIEW page asks for once it is drawn — after the line
-    // that `open` waits for, so it is waited for too, or it lands in the poll's calls below
-    //
-    // The waits are on CONDITIONS, with room: under a full suite's load the page's first reads took
-    // longer than waitFor's default second and this flaked (seen three times on 2026-11-12, never
-    // alone). Waiting longer for a condition costs nothing when it holds and changes no verdict.
-    await waitFor(() => expect(calls).toEqual(
-      expect.arrayContaining(["/positions/values", "/positions", "/positions/p1/samples"])), { timeout: SLOW });
+    // and the holding's samples
+    for (const once of ["/positions/values", "/positions", "/positions/p1/samples"]) {
+      expect(calls.filter((c) => c === once), `${once}, once\n${said()}`).toHaveLength(1);
+    }
     calls = [];
     await act(async () => { vi.advanceTimersByTime(15_000); });
-    // the poll's last read is /health; every read it makes has landed once the three are in
-    await waitFor(() => expect(calls).toEqual(expect.arrayContaining(["/quotes", "/monitors", "/health"])),
-      { timeout: SLOW });
-    expect(new Set(calls)).toEqual(new Set(["/quotes", "/monitors", "/health"]));
+    await quiet();
+    expect(new Set(calls), said()).toEqual(new Set(["/quotes", "/monitors", "/health"]));
   });
 });
 
@@ -156,20 +187,24 @@ describe("asking again", () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(SESSION);
     await open();
+    await quiet();
     calls = [];
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    await waitFor(() => expect(calls).toContain("/positions/values"));
-    expect(calls).not.toContain("/references");
+    await quiet();
+    expect(calls, said()).toContain("/positions/values");
+    expect(calls, said()).not.toContain("/references");
   });
 
   it("values the holdings and reads the References afresh when Settings opens, in REVIEW too", async () => {
     at(SUNDAY);
     await open();
+    await quiet();
     calls = [];
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    await waitFor(() => expect(calls).toContain("/positions/values"));
+    await quiet();
+    expect(calls, said()).toContain("/positions/values");
     // REVIEW polls neither, and Settings is where References are kept or dropped
-    expect(calls).toContain("/references");
+    expect(calls, said()).toContain("/references");
     expect(screen.getByText(/holdings valued at/)).toBeTruthy();
   });
 });
@@ -179,21 +214,24 @@ describe("what is read again, and when", () => {
     at(SUNDAY);
     await open();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    await waitFor(() => expect(calls).toContain("/references"));
+    await quiet();
+    expect(calls, said()).toContain("/references");
     calls = [];
     fireEvent.change(screen.getByLabelText("code"), { target: { value: "US.QQQ" } });
     fireEvent.click(screen.getByRole("button", { name: "keep it" }));
-    await waitFor(() => expect(writes).toContain("POST /references"));
-    await waitFor(() => expect(calls).toContain("/references"));
+    await until(() => expect(writes).toContain("POST /references"));
+    await quiet();
+    expect(calls, said()).toContain("/references");
   });
 
   it("does not ask again on opening Settings in LIVE, which polls both already", async () => {
     at(SESSION);
     await open();
+    await quiet();
     calls = [];
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    await act(async () => { await Promise.resolve(); });
-    expect(calls).toEqual([]);
+    await quiet();
+    expect(calls, said()).toEqual([]);
   });
 
   it("keeps the newer valuation when an older one lands after the switch to REVIEW", async () => {
@@ -203,9 +241,9 @@ describe("what is read again, and when", () => {
     await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
     held = [];
     await act(async () => { vi.advanceTimersByTime(15_000); }); // LIVE's poll asks: #0
-    await waitFor(() => expect(held!.length).toBe(1));
+    await until(() => expect(held!.length).toBe(1));
     fireEvent.click(screen.getByRole("button", { name: "Review" })); // REVIEW asks: #1
-    await waitFor(() => expect(held!.length).toBe(2));
+    await until(() => expect(held!.length).toBe(2));
     await act(async () => { held![1]!.settle(true); });
     await act(async () => { held![0]!.settle(false); }); // the older one fails, late
     await act(async () => { await Promise.resolve(); });
@@ -220,9 +258,9 @@ describe("what is read again, and when", () => {
     await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
     held = [];
     await act(async () => { vi.advanceTimersByTime(15_000); });
-    await waitFor(() => expect(held!.length).toBe(1));
+    await until(() => expect(held!.length).toBe(1));
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    await waitFor(() => expect(held!.length).toBe(2));
+    await until(() => expect(held!.length).toBe(2));
     await act(async () => { held![1]!.settle(true, [{ ...holding, pnl: 180 }]); });
     await act(async () => { held![0]!.settle(true, [{ ...holding, pnl: 999 }]); });
     await act(async () => { await Promise.resolve(); });
@@ -237,7 +275,7 @@ describe("what is read again, and when", () => {
     await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
     held = [];
     for (let i = 0; i < 3; i++) await act(async () => { vi.advanceTimersByTime(15_000); });
-    await waitFor(() => expect(held!.length).toBe(3));
+    await until(() => expect(held!.length).toBe(3));
     await act(async () => { held![0]!.settle(false); });
     await waitFor(() => expect(screen.getByText(/could not be valued/)).toBeTruthy());
     expect(document.querySelector('[data-ref="p1"]')).toBeNull();

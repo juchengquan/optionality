@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { servePage, type PageService } from "../testing/pageService";
+import { until } from "../testing/until";
 
 afterEach(() => {
   cleanup();
@@ -73,7 +74,7 @@ describe.each(arrangements)("on the %s, the refresh button", (arrangement) => {
     expect(svc.count("/quotes")).toBe(1);
     fireEvent.click(button());
     // no timers advanced: the automatic poll is fifteen seconds away
-    await waitFor(() => expect(svc.count("/quotes")).toBe(2));
+    await until(() => expect(svc.count("/quotes")).toBe(2));
   });
 
   it("will not stack a second fetch on an unfinished one", async () => {
@@ -98,7 +99,7 @@ describe.each(arrangements)("on the %s, the refresh button", (arrangement) => {
     expect(svc.count("/quotes")).toBe(1);
 
     fireEvent.click(button());
-    await waitFor(() => expect(svc.count("/quotes")).toBe(2));
+    await until(() => expect(svc.count("/quotes")).toBe(2));
     await waitFor(() => expect(button().disabled).toBe(false));
     await drain();
 
