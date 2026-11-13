@@ -90,6 +90,9 @@ export function Next() {
   const byClock = clockMode(now);
   const [chosen, setChosen] = useState<Mode | null>(null);
   useEffect(() => { setChosen(null); }, [byClock]);
+  // the phone has no way to pick a mode (#374), so a choice made on the desk does not follow it
+  // there, where nothing could undo it: the phone is the clock's
+  useEffect(() => { if (phone) setChosen(null); }, [phone]);
   const mode = chosen ?? byClock;
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 

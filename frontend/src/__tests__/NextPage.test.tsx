@@ -987,6 +987,25 @@ describe("every item that needs you carries its glyph", () => {
 });
 
 describe("settings", () => {
+  it("is the clock's on the phone, whatever was chosen on the desk before it turned into one (#374)", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-10T02:00:00Z"); // Monday 21:00 New York: REVIEW by the clock
+    await open();
+    const root = document.querySelector(".nx")!;
+    fireEvent.click(screen.getByRole("button", { name: "Live" }));
+    expect(root.getAttribute("data-mode")).toBe("live");
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "phone" } });
+    // nothing on the phone could undo the desk's choice, so the phone does not keep it
+    await waitFor(() => expect(root.getAttribute("data-arrangement")).toBe("phone"));
+    expect(root.getAttribute("data-mode")).toBe("review");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Settings" }));
+    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "desk" } });
+    await waitFor(() => expect(root.getAttribute("data-arrangement")).toBe("desk"));
+    expect(root.getAttribute("data-mode")).toBe("review");
+    expect(screen.getByText("by the clock")).toBeTruthy();
+  });
+
   it("gives its Back entry back when the desk turns into the phone with it open", async () => {
     // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
     const pushed = vi.spyOn(window.history, "pushState");
