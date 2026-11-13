@@ -57,8 +57,3 @@ export function stripLines(): { items: HTMLElement[]; lines: number } {
   return { items, lines: new Set(items.map((i) => Math.round(i.getBoundingClientRect().top))).size };
 }
 
-/** Whether the focus is where the page's poll waits (Next.tsx: `beingOperated`): inside a surface
- *  that marks itself `data-poll="hold"`. */
-export function holdsThePoll(): boolean {
-  return Boolean(document.activeElement?.closest('[data-poll="hold"]'));
-}

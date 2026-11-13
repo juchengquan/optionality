@@ -39,6 +39,7 @@ import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
 import { findables, HOLD_WHY, paletteActions } from "./commands";
 import { placeBook } from "./placement";
+import { beingOperated } from "./poll";
 import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
@@ -475,11 +476,6 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>,
     (id: string) => setOutcomes((all) => all.filter((o) => o.closed.id !== id)), [],
   );
   return { holdings, writes, outcomes, dismissOutcome };
-}
-
-/** Whether a poll would disturb something being operated (App.tsx: `beingOperated`). */
-function beingOperated(el: Element | null): boolean {
-  return Boolean(el?.closest('[data-poll="hold"]'));
 }
 
 /** What the page reads, and when.

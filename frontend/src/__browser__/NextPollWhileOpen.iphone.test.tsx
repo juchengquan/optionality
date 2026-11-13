@@ -17,7 +17,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { settle } from "./nextBook";
-import { holdsThePoll, serveServedBook } from "./nextCarried";
+import { beingOperated } from "../next/poll";
+import { serveServedBook } from "./nextCarried";
 
 async function show() {
   serveServedBook();
@@ -40,7 +41,7 @@ describe("what opening a sheet does to the poll, on a phone", () => {
     await settle();
     // the trap did move it: into the sheet, where a finger opened it
     expect(sheet.contains(document.activeElement), "the focus never moved into the sheet").toBe(true);
-    expect(holdsThePoll(), `focus landed on ${document.activeElement?.outerHTML.slice(0, 80)}`).toBe(false);
+    expect(beingOperated(document.activeElement), `focus landed on ${document.activeElement?.outerHTML.slice(0, 80)}`).toBe(false);
   });
 
   it("does not hold it with the Add sheet merely open", async () => {
@@ -49,6 +50,6 @@ describe("what opening a sheet does to the poll, on a phone", () => {
     const sheet = await screen.findByRole("dialog", { name: "Add a spread" });
     await settle();
     expect(sheet.contains(document.activeElement), "the focus never moved into the sheet").toBe(true);
-    expect(holdsThePoll(), `focus landed on ${document.activeElement?.outerHTML.slice(0, 80)}`).toBe(false);
+    expect(beingOperated(document.activeElement), `focus landed on ${document.activeElement?.outerHTML.slice(0, 80)}`).toBe(false);
   });
 });

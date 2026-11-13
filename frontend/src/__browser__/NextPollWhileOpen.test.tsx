@@ -11,7 +11,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { settle } from "./nextBook";
-import { holdsThePoll, serveServedBook } from "./nextCarried";
+import { beingOperated } from "../next/poll";
+import { serveServedBook } from "./nextCarried";
 
 afterEach(() => { cleanup(); document.cookie = "ui_arrangement=;path=/;max-age=0"; });
 
@@ -26,6 +27,6 @@ describe("what opening Settings does to the poll, at a desk", () => {
     await settle();
     expect(document.activeElement, "the focus never moved into the panel")
       .not.toBe(document.body);
-    expect(holdsThePoll(), `focus landed on ${document.activeElement?.outerHTML.slice(0, 80)}`).toBe(false);
+    expect(beingOperated(document.activeElement), `focus landed on ${document.activeElement?.outerHTML.slice(0, 80)}`).toBe(false);
   });
 });

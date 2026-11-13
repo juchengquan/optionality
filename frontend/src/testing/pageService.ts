@@ -38,6 +38,9 @@ export const SPX_REFERENCE: Reference = {
   delayed: null, last_known: null, delayed_by_minutes: null,
 };
 
+/** when this service says a Reference was kept */
+const KEPT_AT = "2026-11-10 15:00:00.000000";
+
 export function servePage(references: Reference[] = []): PageService {
   const edits = serveEditing();
   const inner = window.fetch;
@@ -60,9 +63,15 @@ export function servePage(references: Reference[] = []): PageService {
     const body: unknown = init?.body ? JSON.parse(String(init.body)) : null;
     if (method === "POST" && path === "/references") {
       svc.writes.push({ what: `POST ${path}`, body });
-      const kept = { ...SPX_REFERENCE, ...(body as object), id: `r${svc.references.length + 2}` } as Reference;
-      svc.references = [...svc.references, kept];
-      return reply(201, kept);
+      // as the route answers it (`routes/references.ts`): the stored row, made from the body and
+      // what the service assigns — never a figure, which only a later `GET /references` reads
+      const { code, label, source } = body as { code: string; label?: string; source: Reference["source"] };
+      const row = { id: `kept-${svc.writes.length}`, code, label: label ?? null, source, created_at: KEPT_AT };
+      svc.references = [...svc.references, {
+        id: row.id, code, label: row.label, source, name: null, figure: null, field: null, change: null,
+        error: null, delayed: null, last_known: null, delayed_by_minutes: null,
+      }];
+      return reply(201, row);
     }
     if (method === "DELETE" && path.startsWith("/references/")) {
       svc.writes.push({ what: `DELETE ${path}`, body });
