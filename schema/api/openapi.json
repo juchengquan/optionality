@@ -2515,6 +2515,9 @@
                               "number",
                               "null"
                             ]
+                          },
+                          "before_correction": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -2527,15 +2530,23 @@
                           "legs_iv",
                           "legs_vega",
                           "legs_delta",
-                          "spx"
+                          "spx",
+                          "before_correction"
                         ]
                       }
+                    },
+                    "qty_corrected_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
                     "levels",
                     "plan",
-                    "samples"
+                    "samples",
+                    "qty_corrected_at"
                   ]
                 }
               }
@@ -3008,6 +3019,42 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "legs": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "side": {
+                          "type": "string",
+                          "enum": [
+                            "short",
+                            "long"
+                          ]
+                        },
+                        "option_type": {
+                          "type": "string",
+                          "enum": [
+                            "CALL",
+                            "PUT"
+                          ]
+                        },
+                        "strike": {
+                          "type": "number"
+                        },
+                        "qty": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10
+                        }
+                      },
+                      "required": [
+                        "side",
+                        "option_type",
+                        "strike"
+                      ]
+                    }
+                  },
                   "entry": {
                     "type": "number"
                   },

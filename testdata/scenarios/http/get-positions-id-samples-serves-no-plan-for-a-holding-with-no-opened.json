@@ -102,9 +102,11 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null
+            "spx": null,
+            "before_correction": false
           }
-        ]
+        ],
+        "qty_corrected_at": null
       }
     },
     "rows": {},

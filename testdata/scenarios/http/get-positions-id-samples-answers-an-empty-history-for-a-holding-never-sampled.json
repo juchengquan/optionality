@@ -258,7 +258,8 @@
             "on_pace": 0
           }
         ],
-        "samples": []
+        "samples": [],
+        "qty_corrected_at": null
       }
     },
     "rows": {},

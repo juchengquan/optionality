@@ -1,0 +1,275 @@
+{
+  "name": "PATCH /positions/{id} corrects a held 1×2 to a 1×1, and a 1×1 rule on it becomes all of it",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-ratio",
+          "name": "dec-ratio",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 0.5,
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 2
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-ratio",
+          "code": "dec-ratio",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": -1,
+          "direction": "below",
+          "compare": "signed",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 2
+            }
+          ],
+          "scope": "all",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-w11",
+          "code": "w11",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "scope": "leg",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 1,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-ratio",
+          "position_id": "pos-ratio"
+        },
+        {
+          "monitor_id": "mon-w11",
+          "position_id": "pos-ratio"
+        }
+      ],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "PATCH",
+    "path": "/positions/pos-ratio",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "legs": [
+        {
+          "side": "long",
+          "option_type": "PUT",
+          "strike": 6400
+        },
+        {
+          "side": "short",
+          "option_type": "PUT",
+          "strike": 6350
+        }
+      ]
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "id": "pos-ratio",
+        "name": "dec-ratio",
+        "strategy": "iron condor",
+        "strike_date": "2026-12-18",
+        "contracts": 1,
+        "entry": 0.5,
+        "legs": [
+          {
+            "side": "long",
+            "option_type": "PUT",
+            "strike": 6400
+          },
+          {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6350
+          }
+        ],
+        "created_at": "2026-11-02 22:30:00+08:00",
+        "opened_at": "2026-10-12",
+        "closed_on": null,
+        "exit": null,
+        "realized_points": null
+      }
+    },
+    "rows": {
+      "positions": {
+        "changed": [
+          {
+            "key": {
+              "id": "pos-ratio"
+            },
+            "from": {
+              "legs": [
+                {
+                  "side": "long",
+                  "option_type": "PUT",
+                  "strike": 6400
+                },
+                {
+                  "side": "short",
+                  "option_type": "PUT",
+                  "strike": 6350,
+                  "qty": 2
+                }
+              ],
+              "qty_corrected_at": null
+            },
+            "to": {
+              "legs": [
+                {
+                  "side": "long",
+                  "option_type": "PUT",
+                  "strike": 6400
+                },
+                {
+                  "side": "short",
+                  "option_type": "PUT",
+                  "strike": 6350
+                }
+              ],
+              "qty_corrected_at": "2026-11-09 15:00:00.000000"
+            }
+          }
+        ]
+      },
+      "monitors": {
+        "changed": [
+          {
+            "key": {
+              "id": "mon-ratio"
+            },
+            "from": {
+              "legs": [
+                {
+                  "sign": 1,
+                  "option_type": "PUT",
+                  "strike": 6400
+                },
+                {
+                  "sign": -1,
+                  "option_type": "PUT",
+                  "strike": 6350,
+                  "qty": 2
+                }
+              ]
+            },
+            "to": {
+              "legs": [
+                {
+                  "sign": 1,
+                  "option_type": "PUT",
+                  "strike": 6400
+                },
+                {
+                  "sign": -1,
+                  "option_type": "PUT",
+                  "strike": 6350
+                }
+              ]
+            }
+          },
+          {
+            "key": {
+              "id": "mon-w11"
+            },
+            "from": {
+              "scope": "leg"
+            },
+            "to": {
+              "scope": "all"
+            }
+          }
+        ]
+      }
+    },
+    "calls": {}
+  }
+}

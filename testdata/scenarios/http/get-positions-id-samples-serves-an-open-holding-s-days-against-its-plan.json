@@ -323,7 +323,8 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null
+            "spx": null,
+            "before_correction": false
           },
           {
             "observed_on": "2026-11-06",
@@ -344,7 +345,8 @@
               "US.SPXW261218C7300000": 0.21,
               "US.SPXW261218P6400000": -0.18
             },
-            "spx": 6812.5
+            "spx": 6812.5,
+            "before_correction": false
           },
           {
             "observed_on": "2026-11-07",
@@ -356,7 +358,8 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null
+            "spx": null,
+            "before_correction": false
           },
           {
             "observed_on": "2026-11-08",
@@ -368,9 +371,11 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null
+            "spx": null,
+            "before_correction": false
           }
-        ]
+        ],
+        "qty_corrected_at": null
       }
     },
     "rows": {},
