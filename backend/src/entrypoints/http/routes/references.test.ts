@@ -175,6 +175,26 @@ describe("reading them", () => {
     });
   });
 
+  it("stamps every reading with when the service read it, in DISPLAY_TZ (#371)", async () => {
+    // outside the session the page reads the strip once and must say when (ADR 0023, amended
+    // 2026-11-13): the service's own clock, as a holding's valuation carries it
+    start();
+    await created({ code: "US.SPY", label: "SPY", source: "moomoo" });
+    h.now = new Date("2026-11-13T13:04:11Z");
+    const rows = await body(await h.call("/references")) as unknown as Record<string, unknown>[];
+    expect(rows[0]!.fetched_at).toBe("2026-11-13 21:04:11+08:00");
+  });
+
+  it("stamps a reading that has no figure too: the dash was read at that time as well", async () => {
+    h = harness({ fetchQuotes: () => Promise.reject(new Error("Client connection failed!")) });
+    h.db.prepare(
+      `insert into reference_securities (id, code, label, source, created_at)
+       values (?, 'US.SPY', 'SPY', 'moomoo', '2026-11-02 00:00:00.000000')`,
+    ).run("r".repeat(32));
+    const rows = await body(await h.call("/references")) as unknown as Record<string, unknown>[];
+    expect(rows[0]!.fetched_at).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\+08:00$/);
+  });
+
   it("answers 200 with a dash while the Provider is wholly down", async () => {
     // the one surface here that cannot fail: the page it decorates must still draw, and a backdrop
     // that can 502 is a backdrop that can take the watchlist's screen with it

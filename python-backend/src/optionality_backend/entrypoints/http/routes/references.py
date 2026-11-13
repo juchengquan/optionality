@@ -22,6 +22,7 @@ from dataclasses import asdict
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Path, Response
+from optionality.timefmt import display_time
 from pydantic import BaseModel, ConfigDict
 
 from ....db.queries import delete_reference_row, find_reference, find_reference_by_code, insert_reference
@@ -79,6 +80,11 @@ class ReadingOut(BaseModel):
     last_known: bool | None
     #: minutes, where the vendor states them: Yahoo does, IBKR does not
     delayed_by_minutes: float | None
+    #: when the service read it, in DISPLAY_TZ, as a holding's valuation is stamped (#371): outside the
+    #: session the dashboard reads the strip once and draws no figure without this time, so a frozen
+    #: figure cannot be taken for a live one (ADR 0018, ADR 0023 amended 2026-11-13). The time of the
+    #: READ, not of the figure: no vendor here says when its last trade was.
+    fetched_at: str
 
 
 def reference_routes(deps: Deps) -> APIRouter:
@@ -102,7 +108,10 @@ def reference_routes(deps: Deps) -> APIRouter:
 
     @router.get("", summary="Live figures for every Reference", response_model=list[ReadingOut])
     async def list_() -> list[dict[str, Any]]:
-        return [asdict(entry) for entry in await reference_readings(db, sources)]
+        readings = await reference_readings(db, sources)
+        # after the call, not before it: a source that takes its whole timeout was read when it answered
+        fetched = display_time(deps.now(), deps.settings.display_tz)
+        return [{**asdict(entry), "fetched_at": fetched} for entry in readings]
 
     @router.post("", summary="Keep a Security on the page", status_code=201, response_model=ReferenceOut)
     async def create(given: Annotated[ReferenceIn, Depends(valid("json", ReferenceIn))]) -> dict[str, Any]:

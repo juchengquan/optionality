@@ -12,6 +12,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
+import { displayTime } from "optionality/domain/timefmt";
 
 import type { Deps } from "../deps.ts";
 import {
@@ -57,6 +58,11 @@ const ReadingOut = ReferenceOut.omit({ created_at: true }).extend({
   last_known: z.boolean().nullable(),
   /** minutes, where the vendor states them: Yahoo does, IBKR does not */
   delayed_by_minutes: z.number().nullable(),
+  /** when the service read it, in DISPLAY_TZ, as a holding's valuation is stamped (#371): outside
+   *  the session the dashboard reads the strip once and draws no figure without this time, so a
+   *  frozen figure cannot be taken for a live one (ADR 0018, ADR 0023 amended 2026-11-13). The
+   *  time of the READ, not of the figure: no vendor here says when its last trade was. */
+  fetched_at: z.string(),
 });
 
 const list = documented("Live figures for every Reference", { 200: z.array(ReadingOut) });
@@ -77,7 +83,12 @@ export function referenceRoutes(deps: Deps) {
   const { sources } = deps;
 
   return new Hono()
-    .get("/", list, async (c) => list.reply(c, 200, await referenceReadings(db, sources)))
+    .get("/", list, async (c) => {
+      const readings = await referenceReadings(db, sources);
+      // after the call, not before it: a source that takes its whole timeout was read when it answered
+      const fetched = displayTime(deps.now(), deps.settings.displayTz)!;
+      return list.reply(c, 200, readings.map((r) => ({ ...r, fetched_at: fetched })));
+    })
 
     .post("/", create, valid("json", ReferenceIn), async (c) => {
       const { code, label, source } = c.req.valid("json");

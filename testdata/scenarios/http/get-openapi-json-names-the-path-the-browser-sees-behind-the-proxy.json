@@ -3533,6 +3533,9 @@
                                 "number",
                                 "null"
                               ]
+                            },
+                            "fetched_at": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -3547,7 +3550,8 @@
                             "error",
                             "delayed",
                             "last_known",
-                            "delayed_by_minutes"
+                            "delayed_by_minutes",
+                            "fetched_at"
                           ]
                         }
                       }
