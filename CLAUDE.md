@@ -432,10 +432,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
   Counted on 2026-11-11 and moved by #297's two (`quote.sigma_distance`, `quote.strike_distances`)
   and #295's one (`expiry.sample_timing`), #298's one (`quote.one_sigma`) and #333's one
-  (`vol.pace_explained`)
+  (`vol.pace_explained`), and #351's one (`monitor.monitor_contracts`)
   — every public function a public module of the package defines, against every `fn` in
-  `testdata/golden/` — that is 67 of the package's 94, which is exactly the 67 of the TypeScript
-  domain's 71 exported ones that have cases: the four `*Policy` readers take the
+  `testdata/golden/` — that is 68 of the package's 95, which is exactly the 68 of the TypeScript
+  domain's 72 exported ones that have cases: the four `*Policy` readers take the
   service's Settings, so the package takes their knobs directly instead. The other 27, none of them
   in `testdata/golden/`:
   - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
@@ -628,7 +628,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
   it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
-  combo); greeks are signed sums of the value; IV is never summed.
+  combo); greeks are signed sums of the value; IV is never summed. A leg may carry a QUANTITY (`qty`, a whole
+  number 1–10, absent is 1, stored only where it is not 1; #351): it multiplies that leg's signed figure in
+  every sum — a combo's value and greeks, Cost to close, `costToCloseOf`, the payoff, the vol split — and a
+  Contract is one leg with a quantity, never repeated, so "held twice" stays a fact about two holdings.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command
   (`/quotes`, `/greeks`, `/vol`), never a fifth column. `<pre>` + `parse_mode: HTML` only for table replies.
 - Timestamps: storage is UTC; display converts via `DISPLAY_TZ`. moomoo `update_time` arrives naive US-Eastern

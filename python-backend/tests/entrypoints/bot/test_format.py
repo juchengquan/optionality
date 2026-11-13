@@ -20,7 +20,9 @@ from typing import Any
 from optionality_backend.entrypoints.bot.format import (
     BOT_COMMANDS,
     HELP_TEXT,
+    TABLE_WIDTH,
     escape_html,
+    fit_cell,
     fixed,
     fmt_value,
     has_format,
@@ -90,6 +92,44 @@ class TestTable:
         )
         assert row == "261030 C8100  delta  0.046  ≥0.6  armed"
         assert len(row) == 39
+
+
+class TestANameTooLongForTheTable:
+    """#351. Port of format.test.ts's "a name too long for the table"."""
+
+    LONG = "1218_+P7050_+P7100_-2P7150_-C7700_+2C7750_+C7800"
+
+    @staticmethod
+    def lines(out: str) -> list[str]:
+        return out.removeprefix("<pre>").removesuffix("</pre>").split("\n")
+
+    @staticmethod
+    def width(line: str) -> int:
+        return len(line.encode("utf-16-le")) // 2
+
+    def test_shortens_the_first_column_in_its_middle_so_every_row_stays_within_the_tables_width(self):
+        out = table(
+            ["contract", "field", "last", "thr", "state"],
+            [[self.LONG, "mid", "-1.0000", "≥4.0", "armed"], ["261218 C7300", "delta", "0.312", "≥0.3", "🔔"]],
+        )
+        assert max(self.width(line) for line in self.lines(out)) <= TABLE_WIDTH
+        assert re.match(r"^1218_\+P7…7800  mid", self.lines(out)[1])
+
+    def test_keeps_a_bell_at_the_end_of_a_shortened_name(self):
+        out = table(["contract", "mid", "bid/ask"], [[f"{self.LONG} 🔔", "1.5", "1.45/1.55"]])
+        assert re.search(r"…C7800 🔔 +1\.5", self.lines(out)[1])
+        assert max(self.width(line) for line in self.lines(out)) <= TABLE_WIDTH
+
+    def test_leaves_every_table_that_already_fits_exactly_as_it_was(self):
+        rows = [["dec-calls", "mid", "-1.0000", "≥4.0", "armed"]]
+        assert self.lines(table(["contract", "field", "last", "thr", "state"], rows))[1] == (
+            "dec-calls  mid    -1.0000  ≥4.0  armed"
+        )
+        assert fit_cell("short", 10) == "short"
+
+    def test_cuts_by_code_point_never_through_a_surrogate_pair_and_counts_utf16_units_as_the_width(self):
+        assert fit_cell("abcdefghij🔔", 8) == "abcde…🔔"
+        assert fit_cell("abcdefghij", 5) == "abc…j"
 
 
 class TestFmtValue:

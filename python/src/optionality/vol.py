@@ -59,7 +59,8 @@ def _measure(samples: list[VolSample], position: Position) -> VolAttribution | s
             "when it was Opened: the vol it was sold at was never recorded"
         )
     codes = position_leg_codes(position)
-    signs = [1 if leg.side == "short" else -1 for leg in position.legs]
+    # times the leg's quantity, as cost_to_close multiplies it (#351); the readings stay per contract
+    signs = [(1 if leg.side == "short" else -1) * leg.qty for leg in position.legs]
     for s in samples:
         whole = (
             s.legs_iv is not None
@@ -165,7 +166,8 @@ def pace_explained(samples: list[PacedSample], position: Position, now: datetime
         if all(_reading(last.legs_vega.get(c)) for c in codes):
             vega = 0.0
             for i, c in enumerate(codes):
-                vega += (-1 if position.legs[i].side == "short" else 1) * last.legs_vega[c]
+                leg = position.legs[i]
+                vega += (-1 if leg.side == "short" else 1) * leg.qty * last.legs_vega[c]
             if abs(vega) < VEGA_FLOOR:
                 vega = 0.0
 

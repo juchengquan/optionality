@@ -189,6 +189,10 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
                 <button type="button" className="nx-add-toggle" data-side={l.side}
                         aria-label={`spread ${n}, leg ${j + 1} side: ${l.side} — flip`}
                         onClick={() => onChange(flipSide(draft, s.key, j))}>{l.side}</button>
+                {/* how many of the contract, "1" until changed: a butterfly's middle, a ratio's 2 (#351) */}
+                <input aria-label={`spread ${n}, leg ${j + 1} quantity`} className="nx-add-qty" inputMode="numeric"
+                       value={l.qty} autoComplete="off"
+                       onChange={(e) => onChange(setLeg(draft, s.key, j, { qty: e.target.value }))} />
                 <button type="button" className="nx-add-toggle"
                         aria-label={`spread ${n}, leg ${j + 1} type: ${l.option_type} — change`}
                         onClick={() => onChange(setLeg(draft, s.key, j, { option_type: l.option_type === "PUT" ? "CALL" : "PUT" }))}>

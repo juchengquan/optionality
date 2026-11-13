@@ -158,6 +158,27 @@ export const BOT: readonly BotInput[] = [
     update: message("/combo dec-calls"),
   },
   {
+    // a quantity per leg (#351): the 7350 sold twice over, said beside its sign and counted twice
+    name: "/combo counts a leg's quantity in the total",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-ratio", code: "dec-ratio",
+        legs: [{ sign: 1, option_type: "CALL", strike: 7300 }, { sign: -1, option_type: "CALL", strike: 7350, qty: 2 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    update: message("/combo dec-ratio"),
+  },
+  {
+    // a derived name keeps every leg (#351), and the table shortens one it cannot fit in its middle
+    // rather than letting the row wrap on the phone
+    name: "/monitors shortens a name too long for the table",
+    world: world({
+      tables: { monitors: [combo({ id: "mon-long", code: "1218_+P6350_-2P6400_-C7300_+2C7350" })] },
+    }),
+    update: message("/monitors"),
+  },
+  {
     name: "/combo names nothing it cannot find",
     world: world({ tables: held }),
     update: message("/combo dec-puts"),

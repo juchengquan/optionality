@@ -221,3 +221,12 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     expect(kind("r-ic-calls")).toBe("Monitor");
   });
 });
+
+describe("a quantity per leg (#351)", () => {
+  it("says each leg's quantity in what it finds, as the book writes legs", () => {
+    const ratio = HOLDINGS.map((h) => (h.id === "h-puts"
+      ? { ...h, legs: h.legs.map((l) => (l.side === "short" ? { ...l, qty: 2 } : l)) } : h));
+    const found = findables(placeBook(QUOTES, ratio, MONITORS)).find((f) => f.ref === "h-puts")!;
+    expect(found.detail).toMatch(/-2P\d+ \+P\d+/);
+  });
+});

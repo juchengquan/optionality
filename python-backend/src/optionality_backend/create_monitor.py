@@ -177,8 +177,8 @@ async def _finish(
 
     `contracts` is what the rule WATCHES — the contract itself for a single, the legs for a combo, whose
     own code is a name. The probe sees them deduplicated and sorted because that is a batch; the link
-    sees them as given, because `link_to_positions` matches Positions by contract and a repeated leg is
-    still the same contract. Every one is built by `build_spx_code`, so it is ASCII, and Python's sort
+    sees them as given — a MULTISET, so a repeated leg counts twice and the rule is "all" of a holding only
+    where it names each contract as many times as the holding holds it (#351). Every one is built by `build_spx_code`, so it is ASCII, and Python's sort
     is JavaScript's on it.
     """
     db = deps.db

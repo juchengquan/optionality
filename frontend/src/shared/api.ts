@@ -111,7 +111,8 @@ export const fetchPayoff = (id: string) =>
 /** The payoff of legs nobody holds, at an Entry: the add form's preview, and a watched spread drawn
  *  at its current value. A POST because legs do not fit a query string; it writes nothing. */
 export interface DraftPayoff {
-  legs: { side: "short" | "long"; option_type: "CALL" | "PUT"; strike: number }[];
+  /** a leg's quantity only where it is not 1 (#351) */
+  legs: { side: "short" | "long"; option_type: "CALL" | "PUT"; strike: number; qty?: number }[];
   entry: number;
   contracts?: number;
 }

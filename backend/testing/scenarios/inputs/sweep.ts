@@ -8,7 +8,7 @@
 import { buildSpxCode } from "optionality/domain/contract";
 import type { World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, EXPIRED, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
+  BOOK, C7300, C7350, C7500, EXPIRED, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
   sample, stored, world,
 } from "./fixtures.ts";
 
@@ -110,6 +110,22 @@ export const SWEEP: readonly SweepInput[] = [
     name: "a combo is the signed sum of its legs from one call",
     outcomes: ["combo-is-a-signed-sum"],
     world: world({ tables: { monitors: [combo({ id: "mon-2" })] }, provider: { quotes: BOOK } }),
+  },
+  {
+    // a quantity per leg (#351): a call butterfly's middle sold twice over, its value 2.75 − 2 × 1.75
+    // + 0.5 = −0.25, so a rule on its size at or below 0.3 rings — counted once a leg, it would read 1.5
+    name: "a butterfly's value counts its middle leg twice",
+    outcomes: ["alarm-fires", "combo-is-a-signed-sum"],
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-fly", code: "dec-fly", threshold: 0.3, direction: "below",
+        legs: [
+          { sign: 1, option_type: "CALL", strike: 7300 }, { sign: -1, option_type: "CALL", strike: 7350, qty: 2 },
+          { sign: 1, option_type: "CALL", strike: 7500 },
+        ],
+      })] },
+      provider: { quotes: { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) } },
+    }),
   },
   {
     name: "a combo with a leg unpriced is not evaluated at all",

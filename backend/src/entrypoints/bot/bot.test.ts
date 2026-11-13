@@ -328,6 +328,22 @@ describe("/watchcombo", () => {
     expect(last()).toContain("—"); // and the missing one says so
   });
 
+  it("counts a leg's quantity in the total and says it beside the sign (#351)", async () => {
+    const a = buildSpxCode(FUTURE, "CALL", 8100);
+    const c = buildSpxCode(FUTURE, "CALL", 8150);
+    const b = bot(prices({ [a]: 26.4, [c]: 19.25 }));
+    db.prepare(
+      `insert into monitors (id, code, strike_date, option_type, strike, field, threshold,
+         direction, compare, legs, enabled, triggered, created_at)
+       values ('m', 'ratio', ?, 'CMB', 0, 'mid_price', 10, 'above', 'abs', ?, 1, 0, '2026-10-01 00:00:00.000000')`,
+    ).run(FUTURE, toSqliteJson([
+      { sign: 1, option_type: "CALL", strike: 8100 }, { sign: -1, option_type: "CALL", strike: 8150, qty: 2 },
+    ]));
+    await b.handleUpdate(update("/combo ratio"));
+    expect(last()).toContain("-2");
+    expect(last()).toContain("-12.1"); // 26.4 − 2 × 19.25
+  });
+
   it("says so for a combo that does not exist", async () => {
     await bot().handleUpdate(update("/combo ghost"));
     expect(last()).toBe("No combo named 'ghost'.");

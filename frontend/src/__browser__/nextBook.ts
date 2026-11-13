@@ -171,11 +171,11 @@ export function contrast(x: string, y: string): number {
 /** A draft's payoff at expiry, worked out here as the service would (`payoffAtExpiry`) — enough
  *  of it for a curve that turns over when a leg's side does. */
 export function draftPayoff(body: {
-  legs: { side: string; option_type: string; strike: number }[]; entry: number; contracts?: number;
+  legs: { side: string; option_type: string; strike: number; qty?: number }[]; entry: number; contracts?: number;
 }): object {
   const n = body.contracts ?? 1;
   const pnl = (s: number) => n * body.legs.reduce((sum, l) => {
-    const worth = l.option_type === "CALL" ? Math.max(0, s - l.strike) : Math.max(0, l.strike - s);
+    const worth = (l.option_type === "CALL" ? Math.max(0, s - l.strike) : Math.max(0, l.strike - s)) * (l.qty ?? 1);
     return sum + (l.side === "long" ? worth : -worth);
   }, body.entry);
   const ks = [...new Set(body.legs.map((l) => l.strike))].sort((a, b) => a - b);

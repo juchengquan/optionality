@@ -328,6 +328,24 @@ class TestWatchcombo:
         assert "26.4" in chat.last()  # the priced leg still shows; only the total refuses
         assert "—" in chat.last()  # and the missing one says so
 
+    async def test_counts_a_legs_quantity_in_the_total_and_says_it_beside_the_sign(self, chat):
+        a = build_spx_code(FUTURE, "CALL", 8100)
+        c = build_spx_code(FUTURE, "CALL", 8150)
+        b = chat.bot(prices({a: 26.4, c: 19.25}))
+        legs = [
+            {"sign": 1, "option_type": "CALL", "strike": 8100},
+            {"sign": -1, "option_type": "CALL", "strike": 8150, "qty": 2},
+        ]
+        chat.db.execute(
+            "insert into monitors (id, code, strike_date, option_type, strike, field, threshold, direction, "
+            "compare, legs, enabled, triggered, created_at) values ('m', 'ratio', ?, 'CMB', 0, 'mid_price', 10, "
+            "'above', 'abs', ?, 1, 0, '2026-10-01 00:00:00.000000')",
+            (FUTURE, to_sqlite_json(legs)),
+        )
+        await b.handle_update(update("/combo ratio"))
+        assert "-2" in chat.last()
+        assert "-12.1" in chat.last()  # 26.4 − 2 × 19.25
+
     async def test_says_so_for_a_combo_that_does_not_exist(self, chat):
         await chat.bot().handle_update(update("/combo ghost"))
         assert chat.last() == "No combo named 'ghost'."

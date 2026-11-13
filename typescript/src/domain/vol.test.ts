@@ -423,3 +423,25 @@ describe("the pace gap explained", () => {
     expect(e.gap).toBe(7.2 - pace(43));
   });
 });
+
+describe("a quantity per leg (#351)", () => {
+  // the condor with two of its short call: the 8200's move counts twice
+  const ratio = (): Position => ({
+    ...condor(), legs: condor().legs.map((l) => (l.strike === 8200 ? { ...l, qty: 2 } : l)),
+  });
+
+  it("weighs a leg's vol move by its quantity", () => {
+    const a = volAttribution([
+      day("2026-10-06", 45, [10, 10, 22, 22], VEGA),
+      day("2026-10-07", 44, [11, 10, 22, 22], VEGA),
+    ], ratio());
+    expect(a?.vol).toBeCloseTo(8, 10);
+  });
+
+  it("weighs a leg's vega by its quantity in the structure's vega", () => {
+    const e = paceExplained([
+      { ...day("2026-10-06", 45, FLAT, VEGA), cost_to_close: 6.86, observed_at: "2026-10-06 20:00:00" },
+    ], ratio(), new Date("2026-10-20T15:00:00Z"));
+    expect(e.vega).toBeCloseTo(-2 * VEGA[0] + VEGA[1] - VEGA[2] + VEGA[3], 10);
+  });
+});

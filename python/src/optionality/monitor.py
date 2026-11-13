@@ -7,7 +7,7 @@ sums: any unpriced leg leaves no value. IV is never summed. The 🔔 flips at th
 import math
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SerializerFunctionWrapHandler, model_serializer
 
 from optionality.contract import build_spx_code
 from optionality.js import number
@@ -24,6 +24,18 @@ class MonitorLeg(BaseModel):
     sign: Literal[1, -1]
     option_type: Literal["CALL", "PUT"]
     strike: float
+    #: how many of this contract one of the combo holds: the 2 of a 1×2 ratio (#351). Absent is 1,
+    #: which is every row written before it; it multiplies the leg's signed figure and nothing else.
+    qty: int = 1
+
+    @model_serializer(mode="wrap")
+    def _as_given(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """`qty` dumped only where it was given, as the TypeScript's optional key is: a leg recorded
+        before #351 has none, and one that says 1 says so."""
+        data = handler(self)
+        if "qty" not in self.model_fields_set:
+            data.pop("qty", None)
+        return data
 
 
 class Monitor(BaseModel):
@@ -48,6 +60,14 @@ def monitor_leg_codes(monitor: Monitor) -> list[str]:
     return [build_spx_code(monitor.strike_date, leg.option_type, leg.strike) for leg in monitor.legs]
 
 
+def monitor_contracts(monitor: Monitor) -> list[str]:
+    """The Contracts a rule watches as a MULTISET: each leg's code as many times as its quantity (#351).
+    What `positions_holding` is asked with. Its own code for a single contract."""
+    if not monitor.legs:
+        return [monitor.code]
+    return [code for leg, code in zip(monitor.legs, monitor_leg_codes(monitor), strict=True) for _ in range(leg.qty)]
+
+
 def combo_field_error(field: str) -> str | None:
     if field in NON_ADDITIVE_FIELDS:
         return f"combos cannot watch {field}: it is not additive across legs"
@@ -67,7 +87,7 @@ def combo_field_sum(monitor: Monitor, by_code: ByCode, field: str) -> float | No
         value = None if record is None else record.get(field)
         if value is None:
             return None
-        total += leg.sign * number(value)
+        total += leg.sign * leg.qty * number(value)
     return total
 
 

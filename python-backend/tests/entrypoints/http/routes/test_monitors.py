@@ -208,6 +208,17 @@ class TestCombos:
 
         assert (await post(h, combo())).status_code == 409  # duplicate name
 
+    async def test_refuses_a_legs_quantity_in_words_rather_than_dropping_it(self, start):
+        h = start()
+        legs = [COMBO["legs"][0], {**COMBO["legs"][1], "qty": 2}]
+        resp = await post(h, combo(name="ratio", legs=legs))
+        assert resp.status_code == 422
+        assert (
+            resp.json()["detail"]
+            == "✖ a combo here takes no quantity: record a ratio or a butterfly through POST /spreads\n  → at legs[1].qty"
+        )
+        assert (await h.call("/monitors")).json() == []
+
     async def test_needs_at_least_two_legs_to_be_a_combo_at_all(self, start):
         h = start()
         assert (await post(h, combo(name="x", legs=COMBO["legs"][:1]))).status_code == 422

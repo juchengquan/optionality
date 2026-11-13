@@ -485,7 +485,9 @@ class TestWhatASpreadMayNotSay:
 
     async def test_one_contract_twice_on_one_side_or_on_both(self, start):
         h = start()
-        assert await self.refused(h, self.one(legs=[PUTS[0], PUTS[0]])) == "'w' names PUT 7150 twice"
+        assert await self.refused(h, self.one(legs=[PUTS[0], PUTS[0]])) == (
+            "'w' names PUT 7150 twice: give the one leg a quantity"
+        )
         assert await self.refused(h, self.one(legs=[PUTS[0], {**PUTS[0], "side": "long"}])) == (
             "'w' is both short and long PUT 7150"
         )
@@ -520,6 +522,122 @@ class TestWhatASpreadMayNotSay:
         # 32 exactly is within it
         legs32 = [*six[:5], {**six[5], "legs": SIX[:2]}]
         assert (await post(h, {"strike_date": EXPIRY, "spreads": legs32})).status_code == 201
+
+
+#: a put butterfly, 1×2×1, the middle sold twice over (#351)
+FLY = [
+    {"side": "long", "option_type": "PUT", "strike": 7100},
+    {"side": "short", "option_type": "PUT", "strike": 7150, "qty": 2},
+    {"side": "long", "option_type": "PUT", "strike": 7200},
+]
+
+
+class TestAQuantityPerLeg:
+    @staticmethod
+    def fly(**over):
+        spread = {
+            "name": "fly",
+            "legs": FLY,
+            "held": True,
+            "entry": -1.2,
+            "opened_at": "2026-10-01",
+            "monitors": [{"threshold": 2.4}, {"option_type": "PUT", "strike": 7150, "threshold": 0.3}],
+            **over,
+        }
+        return {"strike_date": EXPIRY, "spreads": [spread]}
+
+    @staticmethod
+    async def refused(h, payload):
+        resp = await post(h, payload)
+        assert resp.status_code == 422
+        return resp.json()["detail"]
+
+    async def test_records_a_butterfly_as_one_leg_per_contract(self, start):
+        asked, fetch = counting()
+        h = start(fetch_quotes=fetch)
+        resp = await post(h, self.fly())
+        assert resp.status_code == 201, resp.text
+        # three contracts asked, once each: a quantity adds nothing to the probe
+        assert asked == [sorted(code(leg["option_type"], leg["strike"]) for leg in FLY)]
+        held = h.db.execute("select legs from positions").fetchone()[0]
+        assert json.loads(held) == FLY
+        value, scope = h.db.execute("select legs, scope from monitors where code = 'fly'").fetchone()
+        assert json.loads(value) == [
+            {"sign": 1, "option_type": "PUT", "strike": 7100},
+            {"sign": -1, "option_type": "PUT", "strike": 7150, "qty": 2},
+            {"sign": 1, "option_type": "PUT", "strike": 7200},
+        ]
+        assert scope == "all"
+        # the short leg's |Δ| is one contract's, so one rule on it whatever its quantity
+        assert count(h, "monitors") == 2
+
+    async def test_stores_a_quantity_of_one_as_no_quantity(self, start):
+        h = start()
+        ones = [{**leg, "qty": 1} for leg in FLY]
+        assert (await post(h, self.fly(legs=ones))).status_code == 201
+        held = h.db.execute("select legs from positions").fetchone()[0]
+        assert not any("qty" in leg for leg in json.loads(held))
+        value = h.db.execute("select legs from monitors where code = 'fly'").fetchone()[0]
+        assert not any("qty" in leg for leg in json.loads(value))
+
+    async def test_serves_the_quantity_back_on_the_holding_and_on_the_rule(self, start):
+        h = start()
+        assert (await post(h, self.fly())).status_code == 201
+        [position] = (await h.call("/positions")).json()
+        assert position["legs"][1] == {"side": "short", "option_type": "PUT", "strike": 7150, "qty": 2}
+        assert "qty" not in position["legs"][0]
+        monitors = (await h.call("/monitors")).json()
+        value = next(m for m in monitors if m["code"] == "fly")
+        assert value["legs"][1] == {"sign": -1, "option_type": "PUT", "strike": 7150, "qty": 2}
+        assert "qty" not in value["legs"][0]
+
+    async def test_refuses_a_quantity_of_none_of_more_than_ten_or_of_a_part(self, start):
+        asked, fetch = counting()
+        h = start(fetch_quotes=fetch)
+
+        def at(qty):
+            return self.fly(legs=[FLY[0], {**FLY[1], "qty": qty}, FLY[2]])
+
+        assert await self.refused(h, at(0)) == "✖ Too small: expected number to be >=1\n  → at spreads[0].legs[1].qty"
+        assert await self.refused(h, at(11)) == "✖ Too big: expected number to be <=10\n  → at spreads[0].legs[1].qty"
+        assert await self.refused(h, at(1.5)) == (
+            "✖ Invalid input: expected int, received number\n  → at spreads[0].legs[1].qty"
+        )
+        assert asked == []
+        nothing_written(h)
+
+    @staticmethod
+    def scope_of(h, code):
+        return h.db.execute(
+            "select m.scope, group_concat(p.name) from monitors m left join monitor_positions mp on mp.monitor_id = m.id "
+            "left join positions p on p.id = mp.position_id where m.code = ? group by m.id",
+            (code,),
+        ).fetchone()
+
+    async def test_adopts_a_watched_1x1x1_into_a_held_butterfly_as_a_leg_rule(self, start):
+        h = start()
+        one = [{k: v for k, v in leg.items() if k != "qty"} for leg in FLY]
+        watched = {"name": "w", "legs": one, "held": False, "monitors": [{"threshold": 2}]}
+        assert (await post(h, {"strike_date": EXPIRY, "spreads": [watched]})).status_code == 201
+        assert (await post(h, self.fly())).status_code == 201
+        assert self.scope_of(h, "w") == ("leg", "fly")
+        assert self.scope_of(h, "fly") == ("all", "fly")
+
+    async def test_adopts_a_watched_butterfly_into_a_held_1x1x1_as_a_leg_rule(self, start):
+        h = start()
+        one = [{k: v for k, v in leg.items() if k != "qty"} for leg in FLY]
+        watched = {"name": "w", "legs": FLY, "held": False, "monitors": [{"threshold": 2}]}
+        assert (await post(h, {"strike_date": EXPIRY, "spreads": [watched]})).status_code == 201
+        assert (await post(h, self.fly(name="one", legs=one, entry=0.5))).status_code == 201
+        assert self.scope_of(h, "w") == ("leg", "one")
+        assert self.scope_of(h, "one") == ("all", "one")
+
+    async def test_counts_legs_not_contracts_times_quantity_against_the_probes_bound(self, start):
+        h = start()
+        tens = [{**leg, "qty": 10} for leg in SIX]
+        many = [{"name": f"w{i}", "legs": tens, "held": False, "monitors": [{"threshold": 2}]} for i in range(5)]
+        # 30 legs, 300 contracts: 30 codes at most are asked
+        assert (await post(h, {"strike_date": EXPIRY, "spreads": many})).status_code == 201
 
 
 class TestAHeldSpreadReplacingTheWatchRulesItClashesWith:

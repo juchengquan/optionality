@@ -1550,3 +1550,28 @@ describe("closing a holding keeps it (ADR 0022)", () => {
     expect(listed.closed_on, "and nothing was written").toBe("2026-10-02");
   });
 });
+
+describe("a quantity per leg (#351)", () => {
+  const RATIO = [
+    { side: "long", option_type: "PUT", strike: 7100 }, { side: "short", option_type: "PUT", strike: 7075, qty: 2 },
+  ];
+
+  it("records a leg's quantity, and a quantity of one as none", async () => {
+    start();
+    await created201(await post(condor({ name: "ratio", legs: RATIO })));
+    await created201(await post(condor({ name: "ones", legs: RATIO.map((l) => ({ ...l, qty: 1 })) })));
+    const stored = (name: string) =>
+      JSON.parse((h.db.prepare("select legs from positions where name = ?").get(name) as { legs: string }).legs);
+    expect(stored("ratio")).toEqual(RATIO);
+    expect(stored("ones")).toEqual(RATIO.map(({ side, option_type, strike }) => ({ side, option_type, strike })));
+  });
+
+  it("draws a holding's payoff with its quantities", async () => {
+    start();
+    const id = await created201(await post(condor({ name: "ratio", legs: RATIO, entry: 0.5, contracts: 1 })));
+    const payoff = await body(await h.call(`/positions/${id}/payoff`));
+    // below the short strike two puts are owed against one held
+    expect(payoff.slope_below).toBe(1);
+    expect(payoff.at_strikes).toEqual([{ spx: 7075, pnl: 25.5 }, { spx: 7100, pnl: 0.5 }]);
+  });
+});

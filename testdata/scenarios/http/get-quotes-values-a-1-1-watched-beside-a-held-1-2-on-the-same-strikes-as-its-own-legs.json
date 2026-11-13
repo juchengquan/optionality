@@ -1,0 +1,342 @@
+{
+  "name": "GET /quotes values a 1×1 watched beside a held 1×2 on the same strikes as its own legs",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218C7300000": {
+          "name": "SPXW 261218 7300C",
+          "mid_price": 2.75,
+          "bid_price": 2.7,
+          "ask_price": 2.8,
+          "last_price": 2.75,
+          "option_delta": 0.21,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218C7350000": {
+          "name": "SPXW 261218 7350C",
+          "mid_price": 1.75,
+          "bid_price": 1.7,
+          "ask_price": 1.8,
+          "last_price": 1.75,
+          "option_delta": 0.15,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6350000": {
+          "name": "SPXW 261218 6350P",
+          "mid_price": 2.25,
+          "bid_price": 2.2,
+          "ask_price": 2.3,
+          "last_price": 2.25,
+          "option_delta": -0.12,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 20,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6400000": {
+          "name": "SPXW 261218 6400P",
+          "mid_price": 4.5,
+          "bid_price": 4.45,
+          "ask_price": 4.55,
+          "last_price": 4.5,
+          "option_delta": -0.18,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 19.25,
+          "option_contract_size": 100
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-ratio",
+          "name": "dec-ratio",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 0.5,
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 2
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-one",
+          "code": "dec-one",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "scope": "leg",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-ratio",
+          "code": "dec-ratio",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": -1,
+          "direction": "below",
+          "compare": "signed",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 2
+            }
+          ],
+          "scope": "all",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-one",
+          "position_id": "pos-ratio"
+        },
+        {
+          "monitor_id": "mon-ratio",
+          "position_id": "pos-ratio"
+        }
+      ],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/quotes",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": [
+        {
+          "id": "mon-one",
+          "code": "dec-one",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "triggered": false,
+          "quote": null,
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "combo_value": 2.25,
+          "combo_greeks": {
+            "option_delta": -0.06,
+            "option_gamma": 0,
+            "option_theta": 0,
+            "option_vega": 0
+          },
+          "dte": 39,
+          "scope": "leg",
+          "positions": [
+            {
+              "id": "pos-ratio",
+              "name": "dec-ratio"
+            }
+          ],
+          "held": true,
+          "in_combos": [],
+          "cost_to_close": 0,
+          "schedule": null,
+          "entry": null,
+          "pnl": null,
+          "fill": 56,
+          "watched": 2.25,
+          "distance": 1.75,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218P6350000",
+              "option_type": "PUT",
+              "strike": 6350,
+              "delta": -0.12,
+              "points": null,
+              "sigma": null,
+              "one_sigma": null
+            }
+          ]
+        },
+        {
+          "id": "mon-ratio",
+          "code": "dec-ratio",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "field": "mid_price",
+          "threshold": -1,
+          "direction": "below",
+          "compare": "signed",
+          "triggered": false,
+          "quote": null,
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 2
+            }
+          ],
+          "combo_value": 0,
+          "combo_greeks": {
+            "option_delta": 0.06,
+            "option_gamma": -0.00012,
+            "option_theta": 0.85,
+            "option_vega": -4.25
+          },
+          "dte": 39,
+          "scope": "all",
+          "positions": [
+            {
+              "id": "pos-ratio",
+              "name": "dec-ratio"
+            }
+          ],
+          "held": true,
+          "in_combos": [],
+          "cost_to_close": 0,
+          "schedule": {
+            "dte_at_open": 67,
+            "position_id": "pos-ratio",
+            "on_pace": 0.3814739677352853,
+            "pace_gap": -0.3814739677352853,
+            "target": 0.25,
+            "stop": 1,
+            "target_dte": 17,
+            "manage_by_dte": 21,
+            "reached": "target",
+            "manage_by_due": false
+          },
+          "entry": 0.5,
+          "pnl": 50,
+          "fill": null,
+          "watched": 0,
+          "distance": 1,
+          "spx": null,
+          "spx_reason": "the Provider gives no option premium to derive it from",
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218P6350000",
+              "option_type": "PUT",
+              "strike": 6350,
+              "delta": -0.12,
+              "points": null,
+              "sigma": null,
+              "one_sigma": null
+            }
+          ]
+        }
+      ]
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}

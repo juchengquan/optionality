@@ -328,7 +328,7 @@ describe("legs added and removed (#334)", () => {
       expect(d.spreads[0]!.legs).toHaveLength(n);
     }
     expect(d.spreads[0]!.legs.slice(2).map(({ key: _, ...l }) => l))
-      .toEqual(Array(4).fill({ side: "long", option_type: "PUT", strike: "" }));
+      .toEqual(Array(4).fill({ side: "long", option_type: "PUT", strike: "", qty: "1" }));
     // each leg its own key, kept when legs around it come and go, so the form's focus follows it
     const keys = d.spreads[0]!.legs.map((l) => l.key);
     expect(new Set(keys).size).toBe(6);
@@ -355,7 +355,7 @@ describe("legs added and removed (#334)", () => {
       d = { ...d, spreads: [{ ...d.spreads[0]!, entry: "3" }] };
       const body = bodyOf(d);
       expect(SpreadsIn.safeParse(body).success).toBe(true);
-      expect(body.spreads[0]!.legs).toEqual(d.spreads[0]!.legs.map(({ key: _, ...l }) => ({ ...l, strike: Number(l.strike) })));
+      expect(body.spreads[0]!.legs).toEqual(d.spreads[0]!.legs.map(({ key: _, qty: __, ...l }) => ({ ...l, strike: Number(l.strike) })));
       // the value, and a delta Monitor on EACH short leg
       const shorts = d.spreads[0]!.legs.filter((l) => l.side === "short");
       expect(body.spreads[0]!.monitors).toEqual([
@@ -364,21 +364,18 @@ describe("legs added and removed (#334)", () => {
     });
   }
 
-  it("names two legs as before, and three to six compactly: each type's lowest and highest strike", () => {
+  it("names every leg, in strike order, each with its side and quantity (#351)", () => {
     const d = sixLegs();
     const legs = d.spreads[0]!.legs;
     const name = (n: number) => derivedName("2026-12-18", legs.slice(0, n));
+    // one contract, and a two-leg spread of one each, are named exactly as #293 named them: the
+    // watch rules saved under those names must still be replaced when the spread is held (#322)
     expect(derivedName("2026-12-18", [legs[0]!])).toBe("1218_P7150");
     expect(name(2)).toBe("1218_P7150_P7100");
-    expect(name(3)).toBe("1218_P7100-7150_C7700");
-    expect(name(4)).toBe("1218_P7100-7150_C7700-7750");
-    expect(name(5)).toBe("1218_P7050-7150_C7700-7750");
-    expect(name(6)).toBe("1218_P7050-7150_C7700-7800");
-    // short enough that a bot table widens by ten characters over a two-leg name, not twenty-four
-    for (let n = 3; n <= 6; n++) expect(name(n).length).toBeLessThanOrEqual(26);
-    // one type only, and a strike not yet typed
-    expect(derivedName("2026-12-18", legs.filter((l) => l.option_type === "PUT"))).toBe("1218_P7050-7150");
-    expect(derivedName("", [...legs.slice(0, 2), { ...legs[2]!, strike: "" }])).toBe("spread_P7100-7150_C");
+    expect(name(3)).toBe("1218_+P7100_-P7150_-C7700");
+    expect(name(6)).toBe("1218_+P7050_+P7100_-P7150_-C7700_+C7750_+C7800");
+    // a strike not yet typed comes last, as typed
+    expect(derivedName("", [...legs.slice(0, 2), { ...legs[2]!, strike: "" }])).toBe("spread_+P7100_-P7150_-C");
   });
 
   it("draws the preview of every leg, however many", () => {
@@ -459,3 +456,118 @@ describe("the watch rules a held spread will replace", () => {
   });
 });
 
+
+describe("a quantity per leg (#351)", () => {
+  /** a 1×2 put ratio held: the 7150 bought, the 7100 sold twice over, for a credit */
+  function ratio(held = true): AddDraft {
+    let d = { ...newDraft("2026-11-11"), held, expiry: "2026-12-18" };
+    const key = d.spreads[0]!.key;
+    d = setLeg(d, key, 0, { side: "long", strike: "7150" });
+    d = setLeg(d, key, 1, { side: "short", strike: "7100", qty: "2" });
+    return { ...d, spreads: [{ ...d.spreads[0]!, entry: "0.50" }] };
+  }
+
+  it("starts every leg at one, and posts no quantity for it", () => {
+    const d = condor();
+    expect(d.spreads.flatMap((s) => s.legs.map((l) => l.qty))).toEqual(["1", "1", "1", "1"]);
+    expect(bodyOf(d).spreads.flatMap((s) => s.legs).some((l) => "qty" in l)).toBe(false);
+    const more = addLeg(d, d.spreads[0]!.key);
+    expect(more.spreads[0]!.legs.at(-1)!.qty).toBe("1");
+  });
+
+  it("posts a quantity typed, which the route accepts", () => {
+    const body = bodyOf(ratio());
+    expect(SpreadsIn.safeParse(body).success).toBe(true);
+    expect(body.spreads[0]!.legs).toEqual([
+      { side: "long", option_type: "PUT", strike: 7150 }, { side: "short", option_type: "PUT", strike: 7100, qty: 2 },
+    ]);
+  });
+
+  it("gives the short leg ONE |Δ| Monitor whatever its quantity: a contract's delta is the contract's", () => {
+    expect(bodyOf(ratio()).spreads[0]!.monitors).toEqual([stop(1), { option_type: "PUT", strike: 7100, threshold: 0.3 }]);
+  });
+
+  it.each([["0"], ["11"], ["1.5"], [""], ["two"]])("refuses a quantity of %j before posting", (qty) => {
+    const d = ratio();
+    const bad = setLeg(d, d.spreads[0]!.key, 1, { qty });
+    expect(spreadsBody(bad)).toEqual({ error: "spread 1, leg 2: the quantity is a whole number from 1 to 10" });
+  });
+
+  it("signs a watched ratio's preview by the quantities: two sold against one bought can cost, so a credit", () => {
+    // long P7150 / short 2×P7100: as a 1×1 it could only pay, a debit; sold twice over it can cost
+    // without limit below 7050, and is taken as the credit it is entered for
+    const d = ratio(false);
+    expect(previewOf(d, { ...d.spreads[0]!, valueAt: "1.00" })!.entry).toBe(1);
+  });
+
+  it("draws the preview with the quantities", () => {
+    expect(previewOf(ratio(), ratio().spreads[0]!)!.legs).toEqual([
+      { side: "long", option_type: "PUT", strike: 7150 }, { side: "short", option_type: "PUT", strike: 7100, qty: 2 },
+    ]);
+  });
+
+  it("names a quantity in the spread's name, so a 1×2 and a 1×1 on the same strikes are two rules", () => {
+    const d = ratio();
+    expect(derivedName(d.expiry, d.spreads[0]!.legs)).toBe("1218_-2P7100_+P7150");
+    // the 1×1 on those strikes keeps #293's name, in the order typed
+    const one = d.spreads[0]!.legs.map((l) => ({ ...l, qty: "1" }));
+    expect(derivedName(d.expiry, one)).toBe("1218_P7150_P7100");
+    expect(derivedName("2026-12-18", fly(7350))).toBe("1218_+C7300_-2C7350_+C7400");
+    expect(derivedName("2026-12-18", fly(7350).map((l) => ({ ...l, qty: "1" })))).toBe("1218_+C7300_-C7350_+C7400");
+  });
+
+  /** a call butterfly on 7300 and 7400, its middle at `middle`, sold twice over */
+  const fly = (middle: number) => [
+    { side: "long" as const, option_type: "CALL" as const, strike: "7300", qty: "1" },
+    { side: "short" as const, option_type: "CALL" as const, strike: String(middle), qty: "2" },
+    { side: "long" as const, option_type: "CALL" as const, strike: "7400", qty: "1" },
+  ];
+
+  it("never names two structures alike: every strike, side, type and quantity is in the name", () => {
+    const structures = [
+      fly(7350), fly(7325),
+      fly(7350).map((l) => ({ ...l, qty: "1" })),
+      fly(7350).map((l) => ({ ...l, side: l.side === "long" ? "short" as const : "long" as const })),
+      fly(7350).map((l) => ({ ...l, option_type: "PUT" as const })),
+      fly(7350).map((l, i) => (i === 1 ? { ...l, qty: "3" } : l)),
+      fly(7350).slice(0, 2),
+      [{ ...fly(7350)[0]!, option_type: "PUT" as const }, ...fly(7350).slice(1)],
+    ];
+    const names = structures.map((legs) => derivedName("2026-12-18", legs));
+    expect(new Set(names).size).toBe(structures.length);
+  });
+
+  it("never derives a new-format name equal to an old-format one: the new always carries a sign", () => {
+    // every two-leg 1×1 over a spread of strikes, types and sides is old-format; every other
+    // structure — three legs, or a quantity — is new-format. An old name has no + or −; a new one
+    // has one per leg, so the two sets cannot meet
+    const strikes = ["7100", "7150", "7200"];
+    const legsOf = (qty: string) => strikes.flatMap((strike) => (["CALL", "PUT"] as const).flatMap((option_type) =>
+      (["short", "long"] as const).map((side) => ({ side, option_type, strike, qty }))));
+    const ones = legsOf("1");
+    const pairs = ones.flatMap((a) => ones.filter((b) => b !== a).map((b) => [a, b]));
+    const old = new Set(pairs.map((p) => derivedName("2026-12-18", p)));
+    const fresh = new Set([
+      ...pairs.map(([a, b]) => derivedName("2026-12-18", [a!, { ...b!, qty: "2" }])),
+      ...pairs.flatMap(([a, b]) => ones.filter((c) => c !== a && c !== b).map((c) => derivedName("2026-12-18", [a!, b!, c]))),
+    ]);
+    expect([...old].every((n) => !/[+-]/.test(n))).toBe(true);
+    expect([...fresh].every((n) => n.slice(5).split("_").every((w) => /^[+-]/.test(w)))).toBe(true);
+    expect([...old].filter((n) => fresh.has(n))).toEqual([]);
+  });
+
+  it("names a structure the same whatever order its legs were typed in", () => {
+    const legs = fly(7350);
+    const orders = [[0, 1, 2], [2, 1, 0], [1, 0, 2], [1, 2, 0]];
+    expect(new Set(orders.map((o) => derivedName("2026-12-18", o.map((i) => legs[i]!)))).size).toBe(1);
+    // a put and a call on one strike, either way round (a quantity, so the new format: a two-leg
+    // 1×1 keeps #293's name, in the order typed)
+    const both = [{ ...legs[0]!, option_type: "PUT" as const }, { ...legs[0]!, qty: "2" }];
+    expect(derivedName("2026-12-18", both)).toBe(derivedName("2026-12-18", [...both].reverse()));
+  });
+
+  it("names a strike and a quantity by the numbers they are, not as typed", () => {
+    const typed = [{ ...fly(7350)[0]!, strike: "07300" }, { ...fly(7350)[1]!, qty: "02" }, { ...fly(7350)[2]!, strike: "7400.0" }];
+    expect(derivedName("2026-12-18", typed)).toBe(derivedName("2026-12-18", fly(7350)));
+  });
+});

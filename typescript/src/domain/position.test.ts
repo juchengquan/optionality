@@ -609,3 +609,70 @@ describe("costing a named subset of what you hold", () => {
     expect(costToCloseOf([calls, puts], byCode, [PUT_A])).toBe(3);
   });
 });
+
+describe("a quantity per leg (#351)", () => {
+  // a put butterfly, 1×2×1: long the 7000, short two 7050s, long the 7100
+  const fly = (): Position => ({
+    name: "1016_FLY", strike_date: future(), contracts: 1, entry: -1.2,
+    legs: [
+      { side: "long", option_type: "PUT", strike: 7000 },
+      { side: "short", option_type: "PUT", strike: 7050, qty: 2 },
+      { side: "long", option_type: "PUT", strike: 7100 },
+    ],
+  });
+
+  it("multiplies each leg's signed mid by its quantity in the cost to close", () => {
+    const p = fly();
+    // buy back two 3.00s, sell the 1.00 and the 6.00: 6 - 1 - 6
+    expect(costToClose(p, quotes(p, [1.0, 3.0, 6.0]))).toBe(-1);
+  });
+
+  it("multiplies each leg's greek by its quantity in the exposure", () => {
+    const p = fly();
+    const byCode = quotes(p, [1, 3, 6]);
+    const [a, b, c] = positionLegCodes(p);
+    byCode[a!]!.option_delta = -0.1;
+    byCode[b!]!.option_delta = -0.3;
+    byCode[c!]!.option_delta = -0.6;
+    // long -0.1, short 2 × -0.3 counts +0.6, long -0.6
+    expect(positionGreek(p, byCode, "option_delta")).toBeCloseTo(-0.1, 12);
+  });
+
+  it("reads a leg with no quantity as one, so a holding recorded before it is unchanged", () => {
+    const p = condor();
+    const one = { ...p, legs: p.legs.map((l) => ({ ...l, qty: 1 })) };
+    const byCode = quotes(p, [5.0, 2.0, 3.0, 1.5]);
+    expect(costToClose(one, byCode)).toBe(costToClose(p, byCode));
+  });
+
+  it("still asks every leg: no partial sums under a quantity either", () => {
+    const p = fly();
+    const byCode = quotes(p, [1, 3, 6]);
+    delete byCode[positionLegCodes(p)[1]!];
+    expect(costToClose(p, byCode)).toBeNull();
+  });
+
+  it("buys back the quantity held when a rule names the contract", () => {
+    const p = fly();
+    const [, middle] = positionLegCodes(p);
+    expect(costToCloseOf([p], quotes(p, [1, 3, 6]), [middle!])).toBe(6);
+  });
+
+  it("links a rule as the whole of a ratio only where it names each contract as many times", () => {
+    const p = { ...fly(), id: "fly" };
+    const [low, middle, high] = positionLegCodes(p);
+    // the contracts a rule watches are a MULTISET: the middle named twice is the butterfly
+    expect(positionsHolding([p], [low!, middle!, middle!, high!])).toEqual({ found: new Set(["fly"]), scope: "all" });
+    // a 1×1×1 on the same strikes values another structure: linked, but as part of it
+    expect(positionsHolding([p], positionLegCodes(p))).toEqual({ found: new Set(["fly"]), scope: "leg" });
+    // and so does one naming the middle three times
+    expect(positionsHolding([p], [low!, middle!, middle!, middle!, high!]).scope).toBe("leg");
+  });
+
+  it("calls a 1×2 rule over a 1×1 holding part of it, not the whole", () => {
+    const one: Position & { id: string } = { ...fly(), id: "one", legs: fly().legs.map(({ qty: _, ...l }) => l) };
+    const [low, middle, high] = positionLegCodes(one);
+    expect(positionsHolding([one], [low!, middle!, middle!, high!]).scope).toBe("leg");
+    expect(positionsHolding([one], [low!, middle!, high!]).scope).toBe("all");
+  });
+});

@@ -83,7 +83,14 @@ from ....hydrate import to_monitor, to_position
 from ....monitors import adopt_orphan_monitors
 from ....ports import verify_contracts
 from ....schemas.monitor import DisabledReason
-from ....schemas.position import DEFAULT_CONTRACTS, ClosePositionIn, PayoffIn, PositionIn, PositionPatch
+from ....schemas.position import (
+    DEFAULT_CONTRACTS,
+    ClosePositionIn,
+    PayoffIn,
+    PositionIn,
+    PositionPatch,
+    stored_qty,
+)
 from ..deps import Deps
 from ..errors import http_error, not_found, provider_failed
 from ..validate import valid
@@ -102,6 +109,9 @@ class LegOut(BaseModel):
     side: Literal["short", "long"]
     option_type: str
     strike: float
+    #: how many of the Contract one of the holding holds; absent is 1 (#351), and absent is left out,
+    #: as zod leaves out an optional key that is not there
+    qty: float | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class PositionOut(BaseModel):
@@ -559,7 +569,7 @@ def position_routes(deps: Deps) -> APIRouter:
         """The payoff at expiry of legs nobody holds yet (#291): the add form's preview and a watched
         spread drawn at its current value. A POST only because legs do not fit a query string: it writes
         NOTHING and asks the Provider NOTHING."""
-        legs = [Leg(**leg.model_dump()) for leg in p.legs]
+        legs = [Leg(**leg.model_dump(exclude_none=True)) for leg in p.legs]
         contracts = p.contracts if p.contracts is not None else DEFAULT_CONTRACTS
         return payoff_at_expiry(legs, p.entry, contracts).model_dump()
 
@@ -574,7 +584,12 @@ def position_routes(deps: Deps) -> APIRouter:
             "strike_date": p.strike_date,
             "contracts": p.contracts if p.contracts is not None else DEFAULT_CONTRACTS,
             "entry": p.entry,
-            "legs": to_sqlite_json([leg.model_dump() for leg in p.legs]),
+            "legs": to_sqlite_json(
+                [
+                    {"side": leg.side, "option_type": leg.option_type, "strike": leg.strike, **stored_qty(leg.qty)}
+                    for leg in p.legs
+                ]
+            ),
             "created_at": to_sql_datetime(deps.now()),
             "opened_at": p.opened_at,
             "manage_notified_at": None,

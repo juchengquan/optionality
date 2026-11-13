@@ -50,7 +50,7 @@ def _pnl_at(legs: list[Leg], entry: float, contracts: int, spx: float) -> float:
     order, as the TypeScript's is."""
     settle = 0
     for leg in legs:
-        settle += (1 if leg.side == "short" else -1) * _intrinsic(leg, spx)
+        settle += (1 if leg.side == "short" else -1) * leg.qty * _intrinsic(leg, spx)
     return (entry - settle) * contracts
 
 
@@ -69,10 +69,11 @@ def payoff_at_expiry(legs: list[Leg], entry: float, contracts: int) -> Payoff:
     below = 0
     above = 0
     for leg in legs:
+        # a point per point per contract: a leg held twice over moves twice as fast (#351)
         if leg.option_type == "PUT":
-            below += 1 if leg.side == "short" else -1
+            below += (1 if leg.side == "short" else -1) * leg.qty
         else:
-            above += -1 if leg.side == "short" else 1
+            above += (-1 if leg.side == "short" else 1) * leg.qty
     slope_below = below * contracts
     slope_above = above * contracts
 

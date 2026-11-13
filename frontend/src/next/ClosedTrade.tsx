@@ -17,11 +17,12 @@ import { Correction } from "./ClosedResult";
 import { DeleteAsk } from "./HoldingActions";
 import { HoldingHistory } from "./History";
 import { madeWords, storedWords, type ClosedTrade } from "./journal";
+import { heldLegs } from "../shared/format";
 import { contractsWords } from "./phone/figures";
 
 /** `-P6000 +P5950`: the legs as the book writes a holding's, short as minus. */
 export function tradeLegs(trade: ClosedTrade): string {
-  return trade.legs.map((l) => `${l.side === "short" ? "-" : "+"}${l.option_type[0]}${l.strike}`).join(" ");
+  return heldLegs(trade.legs);
 }
 
 export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, heading = false }: {

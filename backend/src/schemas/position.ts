@@ -20,11 +20,24 @@ const StrikeDate = z.string().transform((value, ctx) => {
   }
 });
 
+/** The most of one Contract a leg may hold per unit of its structure (#351): a 1×2 ratio, a
+ *  butterfly's middle, a 1×3×2 broken wing all fit in single figures. The size of a trade is
+ *  `contracts`, so a larger figure here is a typo — a strike in the wrong box — far more often
+ *  than a structure. */
+export const MAX_LEG_QTY = 10;
+
 export const LegIn = z.object({
   side: z.enum(["short", "long"]),
   option_type: z.enum(["CALL", "PUT"]),
   strike: z.number(),
+  /** how many of this Contract one of the structure holds; 1 when not given (#351) */
+  qty: z.int().min(1).max(MAX_LEG_QTY).optional(),
 });
+
+/** A leg's quantity as a stored leg carries it: only where it is not 1, so a leg of one is stored
+ *  exactly as every leg was before quantities existed, and there is one spelling for it (#351). */
+export const storedQty = (qty: number | undefined): { qty?: number } =>
+  qty === undefined || qty === 1 ? {} : { qty };
 
 export const PositionIn = z.object({
   name: z.string(),

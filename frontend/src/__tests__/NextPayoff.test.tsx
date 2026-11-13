@@ -144,6 +144,17 @@ describe("a watched spread's payoff", () => {
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
 
+  it("is drawn with each leg's quantity, as the rule values it (#351)", async () => {
+    const ratio = QUOTES.map((q) => (q.id === "w-dec18"
+      ? { ...q, legs: q.legs!.map((l, i) => (i === 1 ? { ...l, qty: 2 } : l)) } : q) as Entry);
+    render(<DeskBook {...props({ quotes: ratio })} />);
+    fireEvent.click(within(deskRow("w-dec18")).getByRole("button", { name: "1218_P7150" }));
+    await waitFor(() => expect(asked).toHaveLength(1));
+    expect(asked[0]).toContain('{"side":"long","option_type":"PUT","strike":7100,"qty":2}');
+    // and the inspector writes it beside its side
+    expect(screen.getByRole("list", { name: "legs" }).textContent).toContain("long 2× PUT 7100");
+  });
+
   it("asks again when its value moves, since the curve is drawn at it", async () => {
     const view = render(<DeskBook {...props()} />);
     fireEvent.click(within(deskRow("w-dec18")).getByRole("button", { name: "1218_P7150" }));

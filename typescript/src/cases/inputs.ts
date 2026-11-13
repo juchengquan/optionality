@@ -86,6 +86,16 @@ const combo: Monitor = {
     { sign: -1, option_type: "CALL", strike: 7100 }, { sign: 1, option_type: "CALL", strike: 7150 },
   ],
 };
+/** a quantity per leg (#351): the condor with its short put held twice over — a 1×2 put ratio
+ *  beside a call spread — as a holding and as a rule, priced by the same quotes */
+const ratio: Position & { id: string } = {
+  ...condor, id: "p4", name: "1120_RATIO",
+  legs: condor.legs.map((l) => (l.side === "short" && l.option_type === "PUT" ? { ...l, qty: 2 } : l)),
+};
+const ratioCombo: Monitor = {
+  ...combo, code: "1120_RATIO",
+  legs: combo.legs!.map((l) => (l.sign < 0 && l.option_type === "PUT" ? { ...l, qty: 2 } : l)),
+};
 const single: Monitor = {
   code: SC, strike_date: EXP, option_type: "CALL", strike: 7100, field: "option_delta",
   threshold: 0.3, direction: "above", compare: "abs",
@@ -537,6 +547,16 @@ export const INPUTS: Record<string, CaseInput[]> = {
       fn: "costToCloseOf", name: "a named contract held twice",
       args: [[condor, putSpread], quotes, [SP]],
     },
+    { fn: "costToClose", name: "a quantity multiplies its leg (#351)", args: [ratio, quotes] },
+    { fn: "positionGreek", name: "a quantity multiplies its leg's greek (#351)", args: [ratio, quotes, "option_delta"] },
+    { fn: "costToCloseOf", name: "a contract held twice over, in one holding (#351)", args: [[ratio], quotes, [SP]] },
+    { fn: "positionsHolding", name: "a ratio named with its quantities is the whole of it (#351)",
+      args: [[ratio], [LP, SP, SP, SC, LC]] },
+    { fn: "positionsHolding", name: "a 1×1 over a held ratio is part of it (#351)",
+      args: [[ratio], [LP, SP, SC, LC]] },
+    { fn: "positionsHolding", name: "a ratio over a held 1×1 is part of it (#351)",
+      args: [[condor], [LP, SP, SP, SC, LC]] },
+    { fn: "positionPnl", name: "a ratio (#351)", args: [ratio, quotes] },
     { fn: "contractSize", name: "from the quotes", args: [quotes] },
     { fn: "contractSize", name: "no quotes", args: [{}] },
     { fn: "positionPnl", name: "a condor", args: [condor, quotes] },
@@ -891,6 +911,9 @@ export const INPUTS: Record<string, CaseInput[]> = {
   monitor: [
     { fn: "monitorLegCodes", name: "a combo", args: [combo] },
     { fn: "monitorLegCodes", name: "a single contract", args: [single] },
+    { fn: "monitorContracts", name: "a single contract", args: [single] },
+    { fn: "monitorContracts", name: "a combo", args: [combo] },
+    { fn: "monitorContracts", name: "a ratio, its quantity as repeats (#351)", args: [ratioCombo] },
     { fn: "comboFieldError", name: "IV is never summed", args: ["option_implied_volatility"] },
     { fn: "comboFieldError", name: "mid is", args: ["mid_price"] },
     { fn: "comboFieldSum", name: "a condor's mids", args: [combo, quotes, "mid_price"] },
@@ -903,6 +926,8 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "monitorValue", name: "a single contract", args: [single, quotes] },
     { fn: "monitorValue", name: "a combo", args: [combo, quotes] },
     { fn: "monitorValue", name: "unpriced", args: [single, {}] },
+    { fn: "comboFieldSum", name: "a quantity multiplies its leg (#351)", args: [ratioCombo, quotes, "option_delta"] },
+    { fn: "monitorValue", name: "a ratio (#351)", args: [ratioCombo, quotes] },
     { fn: "thresholdFill", name: "halfway above", args: [0.15, 0.3, "above", "abs"] },
     // a garbage quote field makes monitorValue NaN (js.number), and a NaN fill reached the bar's
     // width as "NaN%" here and a ValueError there. No figure is the answer both can give.
@@ -1003,6 +1028,12 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "payoffAtExpiry", name: "a ratio spread, its breakeven between two strikes",
       args: [[{ side: "short", option_type: "PUT", strike: 6500 }, { side: "short", option_type: "PUT", strike: 6500 },
               { side: "long", option_type: "PUT", strike: 6450 }], 1.37, 1] },
+    // the same ratio said as a quantity rather than a repeated leg (#351): the same curve
+    { fn: "payoffAtExpiry", name: "a ratio spread, its short leg's quantity 2",
+      args: [[{ side: "short", option_type: "PUT", strike: 6500, qty: 2 }, { side: "long", option_type: "PUT", strike: 6450 }], 1.37, 1] },
+    { fn: "payoffAtExpiry", name: "a call butterfly, 1×2×1",
+      args: [[{ side: "long", option_type: "CALL", strike: 7000 }, { side: "short", option_type: "CALL", strike: 7050, qty: 2 },
+              { side: "long", option_type: "CALL", strike: 7100 }], -1.25, 2] },
     // a breakeven exactly on a strike is found once, not twice
     { fn: "payoffAtExpiry", name: "a breakeven exactly on a strike",
       args: [[{ side: "short", option_type: "CALL", strike: 7100 }, { side: "long", option_type: "CALL", strike: 7101 }], 1, 1] },
@@ -1012,7 +1043,9 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "volAttribution", name: "no sample from the day it was opened", args: [chain.slice(1), condor] },
     { fn: "volAttribution", name: "a market day missing", args: [[chain[0], chain[2]], condor] },
     { fn: "volAttribution", name: "a day without vega", args: [[chain[0], { ...chain[1]!, legs_vega: null }], condor] },
+    { fn: "volAttribution", name: "a quantity weighs its leg's move (#351)", args: [chain, ratio] },
     { fn: "paceExplained", name: "the gap at the last close, split", args: [paced, condor, paceLater] },
+    { fn: "paceExplained", name: "a quantity weighs its leg's vega (#351)", args: [paced, ratio, paceLater] },
     { fn: "paceExplained", name: "the last row in hours while they run", args: [paced, condor, paceInHours] },
     { fn: "paceExplained", name: "the last row before the open",
       args: [[paced[0], paced[1], { ...paced[2]!, observed_at: "2026-10-08 04:05:00" }], condor, paceLater] },

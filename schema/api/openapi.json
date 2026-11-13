@@ -295,6 +295,9 @@
                             },
                             "strike": {
                               "type": "number"
+                            },
+                            "qty": {
+                              "type": "number"
                             }
                           },
                           "required": [
@@ -656,6 +659,9 @@
                                 },
                                 "strike": {
                                   "type": "number"
+                                },
+                                "qty": {
+                                  "type": "number"
                                 }
                               },
                               "required": [
@@ -807,6 +813,9 @@
                                 "type": "string"
                               },
                               "strike": {
+                                "type": "number"
+                              },
+                              "qty": {
                                 "type": "number"
                               }
                             },
@@ -977,6 +986,9 @@
                             },
                             "strike": {
                               "type": "number"
+                            },
+                            "qty": {
+                              "not": {}
                             }
                           },
                           "required": [
@@ -1127,6 +1139,9 @@
                                 "type": "string"
                               },
                               "strike": {
+                                "type": "number"
+                              },
+                              "qty": {
                                 "type": "number"
                               }
                             },
@@ -1522,6 +1537,9 @@
                             },
                             "strike": {
                               "type": "number"
+                            },
+                            "qty": {
+                              "type": "number"
                             }
                           },
                           "required": [
@@ -1637,6 +1655,9 @@
                             "type": "string"
                           },
                           "strike": {
+                            "type": "number"
+                          },
+                          "qty": {
                             "type": "number"
                           }
                         },
@@ -1770,6 +1791,11 @@
                         },
                         "strike": {
                           "type": "number"
+                        },
+                        "qty": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10
                         }
                       },
                       "required": [
@@ -1871,6 +1897,9 @@
                               "type": "string"
                             },
                             "strike": {
+                              "type": "number"
+                            },
+                            "qty": {
                               "type": "number"
                             }
                           },
@@ -2783,6 +2812,11 @@
                         "strike": {
                           "type": "number",
                           "exclusiveMinimum": 0
+                        },
+                        "qty": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10
                         }
                       },
                       "required": [
@@ -2866,6 +2900,9 @@
                             "type": "string"
                           },
                           "strike": {
+                            "type": "number"
+                          },
+                          "qty": {
                             "type": "number"
                           }
                         },
@@ -3106,6 +3143,9 @@
                             "type": "string"
                           },
                           "strike": {
+                            "type": "number"
+                          },
+                          "qty": {
                             "type": "number"
                           }
                         },
@@ -3705,6 +3745,11 @@
                               },
                               "strike": {
                                 "type": "number"
+                              },
+                              "qty": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10
                               }
                             },
                             "required": [

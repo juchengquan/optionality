@@ -160,6 +160,17 @@ describe("namesUnheldContract: the one predicate every surface asks (#346)", () 
     expect(namesUnheldContract(calls(7200, 7250, 7250), [h7200!, h7200!])).toBe(false);
   });
 
+  it("counts a leg's quantity as that many of its contract (#351)", () => {
+    const ratio = { strike_date: "2026-12-31", legs: [{ option_type: "CALL", strike: 7200 }, { option_type: "CALL", strike: 7250, qty: 2 }] };
+    // a 1×2 said with a quantity, over a 1×1: one contract more than is held
+    expect(namesUnheldContract(ratio, [h7200!])).toBe(true);
+    // over a 1×2 holding, every contract it names is held
+    const heldRatio = { ...h7200!, legs: h7200!.legs.map((l) => (l.strike === 7250 ? { ...l, qty: 2 } : l)) };
+    expect(namesUnheldContract(ratio, [heldRatio])).toBe(false);
+    // and a 1×1 over the 1×2 holding watches part of what is held, under it
+    expect(namesUnheldContract(calls(7200, 7250), [heldRatio])).toBe(false);
+  });
+
   it("is true for the same strikes on another expiry, or on the other side", () => {
     expect(namesUnheldContract({ ...calls(8050, 8100), strike_date: "2027-01-15" }, [h8050!])).toBe(true);
     const puts = { strike_date: "2026-12-31",

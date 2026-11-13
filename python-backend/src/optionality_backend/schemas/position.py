@@ -28,10 +28,24 @@ def _normalized(value: str) -> str:
 _StrikeDate = String(transform=_normalized)
 
 
+#: The most of one Contract a leg may hold per unit of its structure (#351): a 1×2 ratio, a butterfly's
+#: middle, a 1×3×2 broken wing all fit in single figures. The size of a trade is `contracts`, so a larger
+#: figure here is a typo — a strike in the wrong box — far more often than a structure.
+MAX_LEG_QTY = 10
+
+
 class LegIn(Shape):
     side: Annotated[Literal["short", "long"], Enum()]
     option_type: Annotated[Literal["CALL", "PUT"], Enum()]
     strike: Annotated[float, Number()]
+    #: how many of this Contract one of the structure holds; 1 when not given (#351)
+    qty: Annotated[int | None, Int(min=1, max=MAX_LEG_QTY)] = None
+
+
+def stored_qty(qty: int | None) -> dict[str, int]:
+    """A leg's quantity as a stored leg carries it: only where it is not 1, so a leg of one is stored
+    exactly as every leg was before quantities existed, and there is one spelling for it (#351)."""
+    return {} if qty is None or qty == 1 else {"qty": qty}
 
 
 class PositionIn(Shape):

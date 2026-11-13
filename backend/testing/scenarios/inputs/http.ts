@@ -133,6 +133,39 @@ const ONE_PUT = {
   monitors: [{ option_type: "PUT", strike: 6400, field: "option_delta", threshold: 0.3, direction: "above", compare: "abs" }],
 };
 
+/** A quantity per leg (#351). A 1×2 put ratio held: the 6400 bought, the 6350 sold twice over, for a
+ *  credit — its value rule the holding's signed stop, its delta rule on the short leg once, since
+ *  |Δ| is one contract's whatever the quantity. */
+const RATIO = {
+  name: "dec-ratio", held: true, entry: 0.5, opened_at: "2026-11-06",
+  legs: [
+    { side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6350, qty: 2 },
+  ],
+  monitors: [
+    { threshold: -1, direction: "below", compare: "signed" }, { option_type: "PUT", strike: 6350, threshold: 0.3 },
+  ],
+};
+/** A call butterfly, 1×2×1, watched: an entry signal on its value. */
+const C7400 = "US.SPXW261218C7400000";
+const FLY_BOOK = { ...BOOK, [C7400]: quote("SPXW 261218 7400C", 1, 0.1) };
+const FLY = {
+  name: "dec-fly", held: false,
+  legs: [
+    { side: "long", option_type: "CALL", strike: 7300 }, { side: "short", option_type: "CALL", strike: 7350, qty: 2 },
+    { side: "long", option_type: "CALL", strike: 7400 },
+  ],
+  monitors: [{ threshold: 0.5 }, { option_type: "CALL", strike: 7350, threshold: 0.3 }],
+};
+/** The ratio as `POST /spreads` leaves it: held, its value rule linked as the whole of it. */
+const ratioHeld = {
+  positions: [position({ id: "pos-ratio", name: "dec-ratio", entry: 0.5, legs: RATIO.legs })],
+  monitors: [combo({
+    id: "mon-ratio", code: "dec-ratio", scope: "all", threshold: -1, direction: "below", compare: "signed",
+    legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350, qty: 2 }],
+  })],
+  monitor_positions: [link("mon-ratio", "pos-ratio")],
+};
+
 /** The book with a far call priced too, which nothing holds and no combo names. */
 const WIDE = { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) };
 
@@ -193,6 +226,31 @@ export const HTTP: readonly HttpInput[] = [
   {
     name: "GET /quotes prices the whole watchlist in one call",
     world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // a quantity per leg (#351): the held ratio's value, greeks and cost to close each count its
+    // short leg twice, and its rule reads the holding's Entry as the whole of it
+    name: "GET /quotes values a held 1×2 ratio, its short leg counted twice",
+    world: world({ tables: ratioHeld, provider: { quotes: BOOK } }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // and a 1×1 watched on the same strikes beside it, as adoption links one (the POST /spreads
+    // scenarios below run it): part of the holding, "leg", so its row carries none of the 1×2's
+    // Entry, P&L, cost to close or schedule, and is valued as ITS legs say
+    name: "GET /quotes values a 1×1 watched beside a held 1×2 on the same strikes as its own legs",
+    world: world({
+      tables: {
+        ...ratioHeld,
+        monitors: [...ratioHeld.monitors, combo({
+          id: "mon-one", code: "dec-one", scope: "leg",
+          legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350 }],
+        })],
+        monitor_positions: [...ratioHeld.monitor_positions, link("mon-one", "pos-ratio")],
+      },
+      provider: { quotes: BOOK },
+    }),
     request: request("GET", "/quotes"),
   },
   {
@@ -373,6 +431,14 @@ export const HTTP: readonly HttpInput[] = [
     name: "POST /monitors creates a combo from its legs, probing both in one call",
     world: world({ provider: { quotes: BOOK } }),
     request: request("POST", "/monitors", comboBody),
+  },
+  {
+    // a quantity is POST /spreads' to take (#351): refused in words here, never dropped into a 1×1
+    name: "POST /monitors refuses a leg's quantity, asking the Provider nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", {
+      ...comboBody, legs: [comboBody.legs[0], { ...comboBody.legs[1], qty: 2 }],
+    }),
   },
   {
     // the database before the Provider: a duplicate costs no bounded call
@@ -637,6 +703,12 @@ export const HTTP: readonly HttpInput[] = [
       tables: held,
       provider: { quotes: { ...BOOK, [P6350]: { ...BOOK[P6350], option_delta: null } } },
     }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // a quantity per leg (#351): the 6350 bought back twice, 2 × 2.25 − 4.5 = 0, and its greeks twice
+    name: "GET /positions/values values a 1×2 ratio, its short leg counted twice",
+    world: world({ tables: ratioHeld, provider: { quotes: BOOK } }),
     request: request("GET", "/positions/values"),
   },
   {
@@ -917,6 +989,18 @@ export const HTTP: readonly HttpInput[] = [
         { side: "long", option_type: "PUT", strike: 6350 },
       ],
       entry: 1.85, contracts: 2,
+    }),
+  },
+  {
+    // the add form's preview of a butterfly (#351): a tent on the middle strike, sold twice over
+    name: "POST /positions/payoff draws a butterfly's middle leg twice",
+    world: world({ provider: { down: DOWN } }),
+    request: request("POST", "/positions/payoff", {
+      legs: [
+        { side: "long", option_type: "CALL", strike: 7300 }, { side: "short", option_type: "CALL", strike: 7350, qty: 2 },
+        { side: "long", option_type: "CALL", strike: 7400 },
+      ],
+      entry: -1.25,
     }),
   },
   {
@@ -1358,6 +1442,74 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/spreads", {
       strike_date: EXPIRY,
       spreads: Array.from({ length: 6 }, (_, i) => ({ ...PUT_SPREAD, name: `dec-six-${i % 5}`, legs: SIX_LEGS, monitors: [] })),
+    }),
+  },
+  // a quantity per leg (#351): one leg per contract, the quantity on the holding and on its rule
+  {
+    name: "POST /spreads records a 1×2 ratio held, its short leg's quantity on the holding and its rule",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [RATIO] }),
+  },
+  {
+    name: "POST /spreads watches a butterfly, asking for each contract once",
+    world: world({ provider: { quotes: FLY_BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [FLY] }),
+  },
+  {
+    // ADOPTION, run: a 1×1 watched on the ratio's strikes is linked to the new holding as part of it
+    // ("leg"), never as all of it — it values another structure (#351)
+    name: "POST /spreads adopts a 1×1 watched on a held 1×2's strikes as part of it",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-one", code: "dec-one",
+        legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [RATIO] }),
+  },
+  {
+    // and the other way round: a 1×2 watched, then the 1×1 put spread held on its strikes
+    name: "POST /spreads adopts a 1×2 watched on a held 1×1's strikes as part of it",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-ratio", code: "dec-ratio",
+        legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350, qty: 2 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{ ...PUT_SPREAD, monitors: [PUT_SPREAD.monitors[1]] }],
+    }),
+  },
+  {
+    // a two-leg 1×1 is still named as #293 named it (#351), so the watch rule saved under that name
+    // is the one the held spread replaces: the form posts this name, and the rule goes
+    name: "POST /spreads replaces a watch rule saved under the 1×1 spread's derived name",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-watch-value", code: "1218_P6400_P6350", threshold: 2.5,
+        legs: [{ sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...PUT_SPREAD, name: "1218_P6400_P6350" }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a quantity of none, asking the Provider nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...RATIO, legs: [RATIO.legs[0], { ...RATIO.legs[1], qty: 0 }] }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a quantity of more than ten, asking the Provider nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...RATIO, legs: [RATIO.legs[0], { ...RATIO.legs[1], qty: 11 }] }],
     }),
   },
   {

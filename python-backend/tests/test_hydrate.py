@@ -204,6 +204,21 @@ class TestAPosition:
         assert to_position(stored_position(legs=None)).legs == ()
         assert to_position(stored_position(legs="null")).legs == ()
 
+    def test_reads_a_legs_quantity_where_one_is_stored_and_none_where_none_is(self):
+        legs = '[{"side":"short","option_type":"CALL","strike":8100,"qty":2},{"side":"long","option_type":"CALL","strike":8150}]'
+        held = to_position(stored_position(legs=legs)).legs
+        assert [leg.qty for leg in held] == [2, 1]
+        assert [leg.model_dump() for leg in held] == [
+            {"side": "short", "option_type": "CALL", "strike": 8100, "qty": 2},
+            {"side": "long", "option_type": "CALL", "strike": 8150},
+        ]
+        signs = '[{"sign":1,"option_type":"CALL","strike":8100},{"sign":-1,"option_type":"CALL","strike":8150,"qty":2}]'
+        assert [leg.qty for leg in to_monitor(stored_monitor(legs=signs)).legs] == [1, 2]
+        refusal(
+            lambda: to_monitor(stored_monitor(legs='[{"sign":1,"option_type":"CALL","strike":8100,"qty":-1}]')),
+            "monitor dec-wing cannot be read: legs[0].qty must be a whole number, 1 or more",
+        )
+
     def test_whose_legs_are_not_json_cannot_be_read(self):
         refusal(
             lambda: to_position(stored_position(legs="{not json")),
@@ -232,6 +247,21 @@ class TestAPosition:
                 id="a leg with no type",
             ),
             pytest.param({"legs": '"short"'}, "legs must be a list", id="legs that are no list"),
+            pytest.param(
+                {"legs": '[{"side":"short","option_type":"CALL","strike":8100,"qty":0}]'},
+                "legs[0].qty must be a whole number, 1 or more",
+                id="a quantity of none",
+            ),
+            pytest.param(
+                {"legs": '[{"side":"short","option_type":"CALL","strike":8100,"qty":1.5}]'},
+                "legs[0].qty must be a whole number, 1 or more",
+                id="half a quantity",
+            ),
+            pytest.param(
+                {"legs": '[{"side":"short","option_type":"CALL","strike":8100,"qty":"2"}]'},
+                "legs[0].qty must be a whole number, 1 or more",
+                id="a quantity as text",
+            ),
             pytest.param({"contracts": 2.5}, "contracts must be a whole number", id="half a contract"),
             pytest.param({"contracts": "2"}, "contracts must be a whole number", id="contracts as text"),
             pytest.param({"entry": "6.4"}, "entry must be a number or null", id="an entry as text"),

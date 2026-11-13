@@ -42,7 +42,7 @@ import { adoptOrphanMonitors, editedMonitor, linkToPositions } from "./monitors.
 import {
   DEFAULT_COMBO_FIELD, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_SINGLE_FIELD, thresholdError,
 } from "./schemas/monitor.ts";
-import { DEFAULT_CONTRACTS } from "./schemas/position.ts";
+import { DEFAULT_CONTRACTS, storedQty } from "./schemas/position.ts";
 import { MAX_PROBE_LEGS } from "./schemas/spread.ts";
 
 export interface SpreadDeps {
@@ -57,6 +57,8 @@ export interface SpreadLeg {
   side: "short" | "long";
   option_type: "CALL" | "PUT";
   strike: number;
+  /** how many of the Contract one of the spread holds, 1 when not given (#351) */
+  qty?: number;
 }
 
 export interface SpreadMonitor {
@@ -104,7 +106,8 @@ export function isSpreadFault(result: Added | SpreadFault): result is SpreadFaul
 interface Planned {
   code: string;
   field: string;
-  /** the Contracts it watches: the legs for the value, the one contract for a leg */
+  /** the Contracts it watches: the legs for the value, each as many times as its quantity, and the
+   *  one contract for a leg */
   contracts: string[];
   columns: Partial<MonitorRow>;
 }
@@ -147,13 +150,17 @@ function plan(
   if (notAdditive) return refuse(notAdditive);
   if (thresholdFault(compare, m.threshold)) return refuse(thresholdError(compare, m.threshold)!);
   // minus is short (ADR 0013): a credit spread's value is the negative of its cost to close, which
-  // `compare: abs` is indifferent to
+  // `compare: abs` is indifferent to. A leg's quantity goes with it, so the rule values the
+  // structure the holding is (#351)
   const legs = spread.legs.map((l) => ({
-    sign: l.side === "short" ? -1 : 1, option_type: l.option_type, strike: l.strike,
+    sign: l.side === "short" ? -1 : 1, option_type: l.option_type, strike: l.strike, ...storedQty(l.qty),
   }));
   return {
     code: spread.name, field,
-    contracts: spread.legs.map((l) => buildSpxCode(strikeDate, l.option_type, l.strike)),
+    // a multiset, each leg as many times as its quantity (`monitorContracts`), so the rule is "all"
+    // of a holding only where it values the structure the holding is (#351)
+    contracts: spread.legs.flatMap((l) =>
+      Array<string>(l.qty ?? 1).fill(buildSpxCode(strikeDate, l.option_type, l.strike))),
     columns: {
       code: spread.name, strike_date: strikeDate, option_type: "CMB", strike: 0, field,
       legs: toSqliteJson(legs), ...common,
@@ -191,7 +198,8 @@ function inTheWay(
   return replaced;
 }
 
-/** Two legs on one contract: a typo, or a leg that cancels itself. */
+/** Two legs on one contract: a typo, or a leg that cancels itself. Held twice over is ONE leg with a
+ *  quantity (#351), so that "a Contract held twice" stays a fact about two holdings — a roll day. */
 function twiceOver(spread: Spread): SpreadFault | null {
   const seen = new Map<string, SpreadLeg>();
   for (const l of spread.legs) {
@@ -199,7 +207,7 @@ function twiceOver(spread: Spread): SpreadFault | null {
     const before = seen.get(key);
     if (before) {
       return refuse(before.side === l.side
-        ? `'${spread.name}' names ${key} twice`
+        ? `'${spread.name}' names ${key} twice: give the one leg a quantity`
         : `'${spread.name}' is both short and long ${key}`);
     }
     seen.set(key, l);
@@ -227,7 +235,9 @@ export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Prom
   const { db } = deps;
   const date = input.strike_date;
 
-  // 1. what the request says about itself, starting with its size: the one probe is bounded
+  // 1. what the request says about itself, starting with its size: the one probe is bounded. LEGS,
+  // not legs times quantity: a quantity asks the Provider for nothing more, and a spread names a
+  // Contract once (`twiceOver`), so legs are at least the codes the probe asks for (#351)
   const legCount = input.spreads.reduce((n, s) => n + s.legs.length, 0);
   if (legCount > MAX_PROBE_LEGS) {
     return refuse(`this request has ${legCount} legs: at most ${MAX_PROBE_LEGS} in one request`);
@@ -313,7 +323,7 @@ function write(
         contracts: spread.contracts ?? DEFAULT_CONTRACTS,
         entry: spread.entry ?? null,
         legs: toSqliteJson(spread.legs.map((l) => ({
-          side: l.side, option_type: l.option_type, strike: l.strike,
+          side: l.side, option_type: l.option_type, strike: l.strike, ...storedQty(l.qty),
         }))),
         created_at: createdAt,
         opened_at: spread.opened_at ?? null,

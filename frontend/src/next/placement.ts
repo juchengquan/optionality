@@ -95,7 +95,8 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
 /** What a rule's or a holding's contracts are, enough to compare them: an expiry and its legs. */
 interface Contracts {
   strike_date: string;
-  legs: readonly { option_type: string; strike: number }[];
+  /** `qty` is how many of the contract the leg holds, 1 when absent (#351) */
+  legs: readonly { option_type: string; strike: number; qty?: number }[];
 }
 
 /** A contract as a key and as the page writes it: `C8100`. */
@@ -104,7 +105,8 @@ const keyOf = (date: string, l: Leg) => `${date} ${l.option_type} ${l.strike}`;
 const label = (l: Leg) => `${l.option_type[0]}${l.strike}`;
 
 /** Whether a combo names a contract the holdings it is linked to do not hold, taken together —
- *  counted as MULTISETS, so a 1×2 ratio over a 1×1 holding names one contract more than is held.
+ *  counted as MULTISETS, so a 1×2 ratio over a 1×1 holding names one contract more than is held —
+ *  each leg as many times as its quantity (#351), whether it is said with one or by a repeated leg.
  *  Signs play no part (leg conventions differ, #97). The one predicate every surface asks about a
  *  linked combo (#346): false, every contract it names is held and it sits under its holding — the
  *  holding's own value rule, a wing of a held condor, a condor rule over a condor held as two
@@ -112,12 +114,12 @@ const label = (l: Leg) => `${l.option_type[0]}${l.strike}`;
 export function namesUnheldContract(rule: Contracts, holdings: readonly Contracts[]): boolean {
   const held = new Map<string, number>();
   for (const h of holdings) {
-    for (const l of h.legs) held.set(keyOf(h.strike_date, l), (held.get(keyOf(h.strike_date, l)) ?? 0) + 1);
+    for (const l of h.legs) held.set(keyOf(h.strike_date, l), (held.get(keyOf(h.strike_date, l)) ?? 0) + (l.qty ?? 1));
   }
   for (const l of rule.legs) {
-    const left = held.get(keyOf(rule.strike_date, l)) ?? 0;
-    if (left === 0) return true;
-    held.set(keyOf(rule.strike_date, l), left - 1);
+    const left = (held.get(keyOf(rule.strike_date, l)) ?? 0) - (l.qty ?? 1);
+    if (left < 0) return true;
+    held.set(keyOf(rule.strike_date, l), left);
   }
   return false;
 }

@@ -273,10 +273,11 @@ class Number(Check):
 
 @dataclass(frozen=True, kw_only=True)
 class Int(Check):
-    """`z.int()`, then `.min(n)`. A number first — so a string is "expected number" — then an integer,
-    which `2.0` is; then a SAFE one, which does not stop `.min(n)` from also being checked."""
+    """`z.int()`, then `.min(n)` and `.max(n)`. A number first — so a string is "expected number" — then
+    an integer, which `2.0` is; then a SAFE one, which does not stop `.min(n)` from also being checked."""
 
     min: int | None = None
+    max: int | None = None
 
     def check(self, value: Any) -> tuple[Any, list[str]]:
         if not (_is_number(value) and math.isfinite(_double(value))):
@@ -291,7 +292,20 @@ class Int(Check):
             found.append(f"Too small: expected int to be >={-MAX_SAFE_INTEGER}")
         if self.min is not None and x < self.min:
             found.append(f"Too small: expected number to be >={self.min}")
+        if self.max is not None and x > self.max:
+            found.append(f"Too big: expected number to be <={self.max}")
         return int(value), found
+
+
+@dataclass(frozen=True, kw_only=True)
+class Never(Check):
+    """`z.never({ error })`: any value at all is refused, with `error` — so `.optional()` lets the key be
+    absent and nothing else, null included."""
+
+    error: str
+
+    def check(self, value: Any) -> tuple[Any, list[str]]:
+        return value, [self.error]
 
 
 @dataclass(frozen=True, kw_only=True)

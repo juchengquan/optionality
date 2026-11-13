@@ -12,6 +12,10 @@ export interface MonitorLeg {
   sign: 1 | -1;
   option_type: "CALL" | "PUT";
   strike: number;
+  /** how many of this contract one of the combo holds — the 2 of a 1×2 ratio, the middle of a
+   *  butterfly (#351). A whole number, 1 or more; absent is 1, which is every row written before it.
+   *  It multiplies the leg's signed figure and nothing else: the sign still says which way. */
+  qty?: number;
 }
 
 export interface Monitor {
@@ -46,6 +50,16 @@ export function monitorLegCodes(monitor: Monitor): string[] {
   return monitor.legs.map((l) => buildSpxCode(monitor.strike_date, l.option_type, l.strike));
 }
 
+/** The Contracts a rule watches as a MULTISET: each leg's code as many times as its quantity, so a
+ *  1×2 names its second contract twice (#351). What `positionsHolding` is asked with, so a rule is
+ *  "all" of a holding only where it watches the structure the holding is. Its own code for a single
+ *  contract. */
+export function monitorContracts(monitor: Monitor): string[] {
+  if (!monitor.legs || monitor.legs.length === 0) return [monitor.code];
+  const codes = monitorLegCodes(monitor);
+  return monitor.legs.flatMap((l, i) => Array<string>(l.qty ?? 1).fill(codes[i]!));
+}
+
 /** Reason this field cannot be a combo's monitored field, or null if it can. */
 export function comboFieldError(field: string): string | null {
   if (NON_ADDITIVE_FIELDS.has(field)) {
@@ -64,7 +78,7 @@ export function comboFieldSum(monitor: Monitor, byCode: ByCode, field: string): 
   for (const [i, leg] of legs.entries()) {
     const value = byCode[codes[i]!]?.[field];
     if (value === null || value === undefined) return null;
-    total += leg.sign * Number(value);
+    total += leg.sign * (leg.qty ?? 1) * Number(value);
   }
   return total;
 }
