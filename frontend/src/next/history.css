@@ -48,8 +48,8 @@
 /* a closed holding's last day (#296): the samples end here, and the plan runs on to expiry */
 .nx-hist-close line { stroke: var(--foreground); stroke-width: 1; opacity: 0.6; }
 .nx-hist-close text { fill: var(--foreground); }
-/* a holding's history on demand in LIVE (#353): a disclosure, shut until asked for, its toggle a
-   phone-sized target in the sheet (44px, ADR 0023) */
+/* a holding's history on demand in LIVE (#353): a disclosure, shut until asked for. On the phone
+   its toggle is 44px as every control there is (next.css, the phone arrangement's rule) */
 .nx-hist-od { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
 .nx-hist-od-toggle {
   display: inline-flex; align-items: center; gap: 0.25rem; align-self: flex-start; min-height: 2rem;
@@ -62,6 +62,5 @@
 .nx-hist-od[data-open] .nx-hist-od-mark { transform: rotate(90deg); }
 .nx-hist-od-body { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
 .nx-hist-od-body[hidden] { display: none; }
-.nxp-sheet .nx-hist-od-toggle { min-height: 44px; min-width: 44px; }
 @media (prefers-reduced-motion: reduce) { .nx-hist-od-mark { transition: none; } }
 .nxp-sheet .nx-hist-od { margin-top: 0.75rem; }

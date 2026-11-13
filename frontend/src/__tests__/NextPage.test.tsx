@@ -102,7 +102,10 @@ function serve() {
           : path === "/references" ? [reference]
             : path === "/positions/values" ? [holding]
               // every holding on record, as stored: REVIEW's closed trades read it (#296)
-              : path === "/positions" ? [holding] : null;
+              : path === "/positions" ? [holding]
+                // its days, so the charts are drawn and stay drawn: an answer they cannot draw
+                // would take them down, and with them whatever might ask again (#353)
+                : path === "/positions/p1/samples" ? { levels: null, plan: [], samples: [] } : null;
     return answered(reply(true, body));
   }) as unknown as typeof fetch;
 }

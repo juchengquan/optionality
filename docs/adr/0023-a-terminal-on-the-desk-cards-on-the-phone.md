@@ -89,6 +89,8 @@ The research found three things nobody does, all of which this service can:
 - **LIVE** is the session: detect and act, on the live poll as today (ADR 0010).
 - **REVIEW** is after the close: understand. It reads the stored samples plus one asked-for batch
   when opened, and it does not poll.
+- **Amended 2026-11-13 (#353):** a holding's history is available in both modes, read once on
+  demand — open in REVIEW, a collapsed section in LIVE that reads the samples when opened; no poll reads them.
 - **The default** follows the clock in `DISPLAY_TZ`, with a visible switch and an override.
 - **Both modes** carry the "needs you" line and every fault. A review mode that hid a firing alarm
   would be a trap.

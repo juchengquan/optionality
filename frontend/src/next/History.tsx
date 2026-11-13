@@ -1,5 +1,6 @@
 /** A holding's recorded history, drawn (#295, ADR 0023): the burndown and the IV chart, in the desk's
- *  inspector in REVIEW and as the main chart of the phone's one-holding REVIEW page.
+ *  inspector in REVIEW and as the main chart of the phone's one-holding REVIEW page — and in LIVE,
+ *  on demand, behind `HistoryOnDemand` (#353).
  *
  *  Everything drawn is the service's (`/positions/{id}/samples`): each day's Cost to close, the
  *  planned decay at every DTE from the open (`onPace`, ADR 0011), the Target, the Stop and
@@ -7,9 +8,10 @@
  *  computes no curve: the plan is a polyline through the served DTEs, so the √ shape is the
  *  service's and not a guess redrawn here.
  *
- *  - **Read once, when opened.** The samples are asked for when a holding is shown in REVIEW, by
- *    its id, and never again while it stays shown: a row changes at most once a market day, and
- *    REVIEW does not poll (ADR 0023). A new valuation of the same holding asks nothing more.
+ *  - **Read once, when opened.** The samples are asked for when a holding is shown in REVIEW (or
+ *    its history opened in LIVE), by its id, and never again while it stays shown: a row changes
+ *    at most once a market day, and no poll reads it, in either mode (ADR 0023). A new valuation of
+ *    the same holding asks nothing more.
  *  - **A point that is not a close is drawn hollow**, and says why when pointed at — hovered on the
  *    desk, tapped on the phone, or focused — in the line beneath the chart, and in a native tooltip
  *    too. The whole chart is the target: a pointer anywhere on it picks the nearest day, because

@@ -7,9 +7,9 @@
  *  - **Read once per opening of the holding.** Opened, the charts stay mounted, hidden when it is
  *    shut, so shutting and opening it again asks nothing more; `useSamples` reads once per id, so
  *    a poll's new valuation of the same holding asks nothing either. Samples never join a poll.
- *  - **Another holding starts shut.** What was opened is held with the id it was opened for, so a
- *    holding selected next is not read until its own section is opened, and a late answer for the
- *    last one lands nowhere (`useSamples`' guard, and the charts unmounted with it).
+ *  - **Another holding starts shut.** The inspector and the sheet draw a holding's detail keyed by
+ *    its id, so this is drawn afresh, shut, for each; the charts of the one before go with it, and
+ *    an answer for it lands nowhere (`useSamples`' guard).
  *
  *  Privacy is `HoldingHistory`'s, as in REVIEW. The saved image does not carry it: the still draws
  *  neither mode's history. */
@@ -20,14 +20,13 @@ import { HoldingHistory, type Charted } from "./History";
 
 export function HistoryOnDemand({ holding, privacy }: { holding: Charted; privacy: boolean }) {
   const body = useId();
-  // the holding it was opened for, and whether it is open now
-  const [state, setState] = useState<{ id: string; open: boolean } | null>(null);
-  const opened = state?.id === holding.id;
-  const open = opened && state.open;
+  const [open, setOpen] = useState(false);
+  // once opened, the charts stay mounted, so shutting and opening again asks nothing more
+  const [opened, setOpened] = useState(false);
   return (
     <section className="nx-hist-od" data-open={open ? "" : undefined}>
       <button type="button" className="nx-hist-od-toggle" aria-expanded={open} aria-controls={body}
-              onClick={() => setState({ id: holding.id, open: !open })}>
+              onClick={() => { setOpen(!open); setOpened(true); }}>
         <ChevronRight aria-hidden="true" className="nx-hist-od-mark" />
         history
       </button>

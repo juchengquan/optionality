@@ -211,7 +211,7 @@ describe("the payoff at expiry fits in the inspector (#291)", () => {
   });
 });
 
-describe("the burndown and the IV chart fit in the inspector in REVIEW (#295)", () => {
+describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), and in LIVE opened (#353)", () => {
   /** Each chart drawn at the inspector's measured width: every piece inside the inspector's box,
    *  no label cut by its own SVG, nothing scrolling sideways — and the line under the burndown
    *  saying why a day is not the close when the pointer rests on it. */
@@ -247,11 +247,14 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295)", 
 
   // the call spread's week, with a day missing its IV; and the 4-leg condor's two days, whose
   // calls end half a point of IV apart, which put their names on top of each other
-  for (const width of [900, 1280, 2560]) for (const [id, days] of [["h-calls", 7], ["h-ic", 2]] as const) {
-    it(`${id}'s at ${width}px`, async () => {
-      await show("review", width);
+  // in LIVE with its history section opened (#353), as in REVIEW where it is open from the start
+  const cases = [["h-calls", 7], ["h-ic", 2]] as const;
+  for (const mode of ["review", "live"] as const) for (const width of [900, 1280, 2560]) for (const [id, days] of cases) {
+    it(`${id}'s at ${width}px in ${mode}`, async () => {
+      await show(mode, width);
       await inspect(id);
       const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
+      if (mode === "live") await userEvent.click(within(insp).getByRole("button", { name: "history" }));
       await settle();
       const charts = [...insp.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
       // worth nothing unless every chart is there to be measured, at a usable size: the burndown,
@@ -303,10 +306,21 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295)", 
     expect(document.querySelector(".nxd-inspector [data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-04");
   });
 
-  it("is not drawn in LIVE", async () => {
+  it("is drawn in LIVE when opened, and not before", async () => {
     await show("live", 1280);
     await inspect("h-calls");
-    expect(document.querySelector(".nxd-inspector .nx-hist")).toBeNull();
+    const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
+    expect(insp.querySelector(".nx-hist")).toBeNull();
+    const toggle = within(insp).getByRole("button", { name: "history" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await userEvent.click(toggle);
+    await settle();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(insp.querySelectorAll(".nx-hist svg")).toHaveLength(3);
+    // shut, it takes no room: nothing of it is drawn
+    await userEvent.click(toggle);
+    await settle();
+    expect([...insp.querySelectorAll(".nx-hist")].filter((el) => el.getClientRects().length > 0)).toEqual([]);
   });
 });
 
