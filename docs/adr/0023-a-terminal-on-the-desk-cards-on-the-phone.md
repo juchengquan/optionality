@@ -5,7 +5,13 @@ Date: 2026-11-10
 ## Status
 
 Built. `/opt` has served the new page since the swap (#301, 2026-11-13), which deleted the old one;
-what the swap dropped is recorded under "What the swap dropped" below. Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+what the swap dropped is recorded under "What the swap dropped" below. **Amended 2026-11-13: one
+page, by the session** (last section): Live and Review merge into one page with no switch, and
+what is fetched follows New York's session instead of a mode. That supersedes "Live and Review are
+modes", REVIEW's own columns, the phone's Live and Review tabs and its one-holding pager, and the
+clock's-mode consequence; it partly reverses #338's "closed holdings in REVIEW only" and re-keys
+#354's rule from the mode to the session. The superseded text is kept below and marked; the
+amendment, not yet built, is what binds. Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -67,7 +73,8 @@ The research found three things nobody does, all of which this service can:
     row is studied (the old sheet blurred the page);
   - a ⌘K command palette, with j/k to move;
   - REVIEW swaps the columns to P&L, captured, pace and days to manage-by, and puts the burndown and
-    the IV chart in the inspector;
+    the IV chart in the inspector; *(superseded 2026-11-13: one column set, and the charts sit in
+    the inspector's history section — see the amendment)*
   - the **price map** (prototype C) is a desk panel: every spread on one shared SPX axis, a lane per
     expiry, spot as a line through them all, and a ±1σ band per lane. REVIEW keeps C's "where SPX
     was against my strikes" chart for a holding.
@@ -75,8 +82,9 @@ The research found three things nobody does, all of which this service can:
   - "needs you" as banners at the top;
   - one card per held spread, with a strike strip and a large P&L;
   - watchlist cards with progress toward their entry thresholds;
-  - a bottom tab bar: Live, Review, Add, Settings;
-  - REVIEW is one holding per screen, with its burndown as the main chart;
+  - a bottom tab bar: Live, Review, Add, Settings; *(superseded 2026-11-13: Book, Add, Settings)*
+  - REVIEW is one holding per screen, with its burndown as the main chart; *(superseded
+    2026-11-13: the pager goes, and a holding's sheet carries its history)*
   - detail and add open as bottom sheets, closed by Back.
 - **Parity:** anything that can be done in one arrangement can be done in the other. ADR 0008's
   phone parity holds; its "one design" does not.
@@ -85,6 +93,10 @@ The research found three things nobody does, all of which this service can:
 - **Columns:** A's columns are still fitted by measurement, never by breakpoints (ADR 0008).
 
 ### Live and Review are modes
+
+*Superseded 2026-11-13 by "one page, by the session" (last section). Kept as the record of what
+was built at the swap and why; none of it binds the page any longer, except that the session's
+edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
 
 - **LIVE** is the session: detect and act, on the live poll as today (ADR 0010).
 - **REVIEW** is after the close: understand. It reads the stored samples plus one asked-for batch
@@ -104,7 +116,8 @@ The research found three things nobody does, all of which this service can:
   from the time the service stamped on it: "at stop · as valued at 21:04". The note saying when the
   holdings were valued reads the same stamp, so the page states one clock for it. The chip and the
   line then cannot read as a disagreement. LIVE is unchanged: both read the same poll there, and
-  the chip carries no time.
+  the chip carries no time. *(Re-keyed 2026-11-13: the same rule, with "outside the session"
+  where this says REVIEW and "in session" where it says LIVE.)*
 
 ### The spread is the unit, and the two lists stay apart
 
@@ -171,7 +184,9 @@ each was dropped rather than ported:
 - **Grouping by calls and puts, or not at all:** the page groups by expiry only (`ui_group` is no
   longer read).
 - **Closed holdings in LIVE:** LIVE shows only what is open. Correcting or deleting an older close
-  is done in REVIEW's journal.
+  is done in REVIEW's journal. *(Partly reversed 2026-11-13: with no REVIEW, the closed trades are
+  a folded section at the bottom of the one book, shut by default and read only when opened. What
+  stands is that the open book never mixes them in.)*
 - **A column picker on the phone:** cards on the phone, and the picker on the desk only. The desk's
   choice is still the `ui_cols_combo` cookie, so a choice made on the old page's combo table
   carried over.
@@ -217,6 +232,77 @@ From the backend map; each slice says which it needs.
   old page polled the valuation only while its Holdings panel was open. And a tab of the old page
   left open across the deploy keeps polling as before until it is reloaded.
 - **The owner has to accept or override the clock's mode.** A desk opened at 21:00 Singapore time
-  shows REVIEW until the session opens; the override exists for exactly that.
+  shows REVIEW until the session opens; the override exists for exactly that. *(Superseded
+  2026-11-13: there is no mode to override. Before the open the page shows everything, valued
+  once, and its refresh button re-values it.)*
 - **The prototype branch will rot,** and that is intended: it answers "what should this look like"
   as of 2026-11-10 and nothing after.
+
+## Amended 2026-11-13: one page, by the session
+
+Decided by the owner on 2026-11-13, in a grilling session after a day of using the swapped page.
+
+**Why.** Two modes were one concept too many, and the clock chose the wrong one at the times the
+page is most used:
+- the owner kept flipping between them: to LIVE in the evening for the value, Δ and SPX → short,
+  and to REVIEW after the close for the pace gap;
+- the clock opened the "wrong" mode, for instance REVIEW at 21:00 Singapore time, before the open,
+  when the owner is getting ready for the session.
+
+What differed between the modes that mattered was never what the page SHOWS but what it FETCHES,
+and that follows the session, not a choice. So the page is one page, and the session decides
+the fetching.
+
+**One desk column set.** LIVE's columns plus the pace gap. They survive narrowing in this order:
+value, P&L, Δ, pace gap, DTE, manage-by, SPX → short, captured, legs, rule — the rule's sentence
+still last, as the widest (ADR 0008). "On pace" leaves the table for the inspector's figures, and
+"DTE → manage-by" goes: DTE and manage-by are each a column already.
+
+**Closed trades.** A folded section at the bottom of the book, shut by default, and read only
+when it is opened — no poll reads it. This partly reverses #338's "closed holdings in REVIEW
+only" (see "What the swap dropped"): there is no REVIEW to hold them, and the open book still
+never mixes them in. Correcting or deleting a close is done from that section.
+
+**Fetching follows New York's session** (09:30–16:15 New York, both ends included, weekends out,
+holidays not detected: the same edges `inSession` and the daily sample use, ADR 0011):
+- **In session,** everything refreshes as LIVE does today: `/quotes`, `/positions/values` and
+  `/references` on every poll (ADR 0010).
+- **Outside it,** the holdings and SPX's price are valued ONCE, when the page opens, and the page
+  says so: "market closed — valued at HH:MM", with a refresh button
+  that values them once more. The refresh is what the mode override was for, e.g. a desk opened
+  just before the open.
+- **`/quotes` keeps polling in both,** so a rule's alarm and every fault always reach the page, as
+  they did in REVIEW (ADR 0012). The bounded-call invariant is unchanged: in session this is the
+  three calls per poll LIVE made; outside it, one per poll plus one asked-for valuation.
+- **The Reference strip stays on screen outside the session, read once with the rest and labelled
+  with its time** (the owner's choice of 2026-11-13), e.g. "SPX 7,592.40 · last at 16:15", from
+  the service's own stamp on each reading; the same refresh button reads it again. REVIEW hid it
+  because a figure frozen at entry would be read as current (ADR 0018). The time is what answers
+  that here: outside the session no reading is drawn without one. After the close, the last
+  close is the figure the owner wants, and hiding it would send them to another app for it.
+
+**The needs-you line** states holdings' Levels only in session. Outside it, a Level appears only
+on its chip, with "as valued at HH:MM": #354's rule (option (b) and its clarification), keyed by
+the session instead of the mode. In session the chip carries no time, as LIVE's did. A rule's own
+alarm and every fault show at every hour.
+
+**The phone** has three tabs: Book, Add, Settings. The Review pager (one holding per screen) goes.
+A holding's sheet opens its history section by default outside the session and shut in session.
+
+**The desk's inspector** has its history section shut in session and open outside it, and its
+charts are read once when the section opens, as #353 had them. "On pace" joins the inspector's
+figures.
+
+**No switch.** The Live/Review toggle, Settings' mode override and the palette's "switch mode"
+action all go. Outside the session the refresh button covers what the override did; in session
+there is nothing to switch to, because the page already shows everything.
+
+**What this supersedes** (marked where it stands above, not deleted): "Live and Review are modes"
+whole, with its #353 amendment folded into this one; REVIEW's column swap; the phone's Live and
+Review tabs and its one-holding REVIEW; and the consequence that the owner must accept or
+override the clock's mode. **What it re-keys:** #354's rule, from REVIEW to "outside the
+session". **What it partly reverses:** #338's placement of closed holdings. ADR 0005's "modes are
+state, not routes" survives with one fewer state.
+
+CLAUDE.md still describes the page as built ("LIVE" and "REVIEW" in the polling invariant): it
+says what exists, and the build issues update it as they land.
