@@ -31,11 +31,13 @@ export interface Findable {
 }
 
 /** A leg; `short` unset for the one contract a rule watches, which is not a position. */
-type Leg = { short?: boolean; type: string; strike: number };
+type Leg = { short?: boolean; type: string; strike: number; qty?: number };
 
-/** `-P7150 +P7100`: legs as the table writes them, short as minus; `P7150` for a rule's contract. */
+/** `-2P7150 +P7100`: legs as the table writes them, short as minus and a quantity where it is not 1
+ *  (#351); `P7150` for a rule's contract. */
 const legWords = (legs: Leg[]) =>
-  legs.map((l) => `${l.short === undefined ? "" : l.short ? "-" : "+"}${l.type[0]}${l.strike}`).join(" ");
+  legs.map((l) => `${l.short === undefined ? "" : l.short ? "-" : "+"}${(l.qty ?? 1) === 1 ? "" : l.qty}${l.type[0]}${l.strike}`)
+    .join(" ");
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
@@ -74,13 +76,13 @@ function findable(ref: string, kind: FindKind, name: string, date: string, legs:
 function ofRow(row: DeskRow): Findable {
   if (row.kind === "holding") {
     const h = row.holding;
-    const legs = h.legs.map((l) => ({ short: l.side === "short", type: l.option_type, strike: l.strike }));
+    const legs = h.legs.map((l) => ({ short: l.side === "short", type: l.option_type, strike: l.strike, qty: l.qty }));
     return findable(h.id, "holding", h.name, h.strike_date, legs, null);
   }
   if (row.kind === "rule") {
     const e = row.entry;
     const legs = e.legs
-      ? e.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike }))
+      ? e.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike, qty: l.qty }))
       : single(e.option_type, strikeOf(e.code));
     // a spread in the watchlist, the one that only partly overlaps a holding included (#346)
     const kind: FindKind = e.legs && (!e.held || Boolean(row.overlap)) ? "watched spread" : "Monitor";
@@ -91,7 +93,7 @@ function ofRow(row: DeskRow): Findable {
 
 function ofMonitor(m: Monitor, kind: FindKind): Findable {
   const legs = m.legs
-    ? m.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike }))
+    ? m.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike, qty: l.qty }))
     : single(m.option_type, strikeOf(m.code) ?? m.strike);
   return findable(m.id, kind, monitorName(m), m.strike_date, legs, fieldWords(m.field, Boolean(m.legs)));
 }

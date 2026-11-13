@@ -96,12 +96,12 @@ describe("the add form", () => {
   });
 
   it("says a refusal from the service IN the form, and keeps what was typed", async () => {
-    answer = { status: 409, body: { detail: "position '1218_P7150_P7100' already exists" } };
+    answer = { status: 409, body: { detail: "position '1218_+P7100_-P7150' already exists" } };
     const { form, onSaved } = open();
     enterCondor();
     fireEvent.click(screen.getByRole("button", { name: /^Record/ }));
     const alert = await within(form).findByRole("alert");
-    expect(alert.textContent).toBe("position '1218_P7150_P7100' already exists");
+    expect(alert.textContent).toBe("position '1218_+P7100_-P7150' already exists");
     expect(onSaved).not.toHaveBeenCalled();
     expect((screen.getByLabelText("spread 1, leg 1 strike") as HTMLInputElement).value).toBe("7150");
   });
@@ -127,7 +127,7 @@ describe("the add form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 Monitors" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: unknown[] }).spreads[0]).toEqual({
-      name: "1218_P7150_P7100", held: false,
+      name: "1218_+P7100_-P7150", held: false,
       legs: [
         { side: "short", option_type: "PUT", strike: 7150 },
         { side: "long", option_type: "PUT", strike: 7100 },
@@ -311,7 +311,7 @@ describe("a quantity per leg (#351)", () => {
       { side: "long", option_type: "PUT", strike: 7100 }, { side: "short", option_type: "PUT", strike: 7150, qty: 2 },
       { side: "long", option_type: "PUT", strike: 7200 },
     ]);
-    expect(body.spreads[0]!.name).toBe("1218_P7100-7200_1x2x1");
+    expect(body.spreads[0]!.name).toBe("1218_+P7100_-2P7150_+P7200");
     expect(body.spreads[0]!.monitors).toEqual([{ option_type: "PUT", strike: 7150, threshold: 0.3 }]);
   });
 

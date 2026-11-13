@@ -177,29 +177,38 @@ export function flipSide(d: AddDraft, key: string, index: number): AddDraft {
   return l ? setLeg(d, key, index, { side: l.side === "short" ? "long" : "short" }) : d;
 }
 
-/** `1218_P7150_P7100`: the expiry's month and day, then each leg's type and strike in order — for
- *  one leg or two. From three legs, each type once with its lowest and highest strike,
- *  `1218_P7050-7150_C7700-7800`: every leg spelled out made a six-leg name 40 characters, and the
- *  name is the bot's "contract" cell, which its ~40-column tables cannot carry (review of #343).
- *  26 characters at most for four-digit strikes, whatever the count; the legs themselves are on the
- *  holding and in the rule. */
+/** `1218_+P7100_-P7150`: the expiry's month and day, then EVERY leg in strike order — a put before
+ *  a call on one strike — each with its side as a sign and its quantity where it is not 1:
+ *  `1218_+C7300_-2C7350_+C7400` for a call butterfly. One contract is named as it always was,
+ *  `1218_P7150`, its side being the holding's.
+ *
+ *  UNIQUE per structure, whatever order its legs were typed in (#351). The name is the value rule's
+ *  CODE, and a held spread replaces a watch rule of its code (#322), carrying that rule's bell over
+ *  (#336): two structures sharing a name — the compact `1218_C7300-7400` this was, which dropped a
+ *  butterfly's middle strike and every side — let saving one take over the other's rule and its
+ *  alarm. Uniqueness beats shortness: six legs with quantities run to some 50 characters, and the
+ *  bot's tables shorten a name they cannot fit (`fitCell`) rather than this shortening it here.
+ *  Strikes and quantities are written as the numbers they parse to, so "07150" is 7150. */
 export function derivedName(
-  expiry: string, legs: (Pick<LegDraft, "option_type" | "strike"> & { qty?: string })[],
+  expiry: string,
+  legs: (Pick<LegDraft, "option_type" | "strike"> & { side?: Side; qty?: string })[],
 ): string {
   const day = expiry.length >= 10 ? `${expiry.slice(5, 7)}${expiry.slice(8, 10)}` : "spread";
-  // a quantity is in the name (#351): the name is the value rule's code, so a 1×2 and a 1×1 on the
-  // same strikes would otherwise be one rule, the second replacing or refused by the first
-  const qty = (l: { qty?: string }) => (l.qty ?? "1").trim() || "1";
-  if (legs.length <= 2) {
-    return [day, ...legs.map((l) => `${qty(l) === "1" ? "" : qty(l)}${l.option_type[0]}${l.strike.trim()}`)].join("_");
-  }
-  const types = [...new Set(legs.map((l) => l.option_type))];
-  const ratio = legs.some((l) => qty(l) !== "1") ? [legs.map(qty).join("x")] : [];
-  return [day, ...types.map((t) => {
-    const ks = [...new Set(legs.filter((l) => l.option_type === t).map((l) => l.strike.trim()).filter((k) => k !== ""))]
-      .sort((a, b) => Number(a) - Number(b));
-    return `${t[0]}${ks.length <= 1 ? (ks[0] ?? "") : `${ks[0]}-${ks.at(-1)}`}`;
-  }), ...ratio].join("_");
+  const number = (text: string) => {
+    const n = typed(text);
+    return n === null ? text.trim() : String(n);
+  };
+  const qty = (l: { qty?: string }) => {
+    const n = l.qty === undefined ? 1 : quantity(l.qty);
+    return n === 1 ? "" : String(n ?? l.qty!.trim());
+  };
+  const word = (l: (typeof legs)[number]) =>
+    `${legs.length === 1 || l.side === undefined ? "" : l.side === "short" ? "-" : "+"}${qty(l)}${l.option_type[0]}${number(l.strike)}`;
+  // typed strikes in order, a put before a call on one; a strike not yet typed after them, as typed
+  const at = (l: (typeof legs)[number]) => typed(l.strike) ?? Infinity;
+  const sorted = legs.map((l, i) => ({ l, i })).sort((a, b) =>
+    at(a.l) - at(b.l) || (a.l.option_type === b.l.option_type ? 0 : a.l.option_type === "PUT" ? -1 : 1) || a.i - b.i);
+  return [day, ...sorted.map(({ l }) => word(l))].join("_");
 }
 
 /** A number as typed, or null for blank or not a number. */
