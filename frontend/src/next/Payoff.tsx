@@ -15,8 +15,10 @@
  *  two shaded areas, a few rules and labels, and one linear scale per axis. visx would add 15–30 KB
  *  of scales and shapes to the bundle for arithmetic that is one line each here, and a dependency
  *  for both arrangements to agree on; the prototype's three charts were hand-written for the same
- *  reason. Its width is MEASURED rather than scaled from a viewBox, so text stays its own size in a
- *  272px inspector and on a 390px phone alike.
+ *  reason. (The burndown moved to visx in #360, for a crosshair this chart has no use for; the
+ *  scales are in the bundle since, but the arithmetic here is still one line each.) Its width is
+ *  MEASURED rather than scaled from a viewBox, so text stays its own size in a 272px inspector and
+ *  on a 390px phone alike.
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 

@@ -3,6 +3,7 @@
  *  with its tooltip inside the chart for every day; and touched with a real finger (Chrome's own
  *  touch events, through CDP), where a horizontal drag scrubs the days and a vertical swipe still
  *  scrolls the page. The desk's widths are `NextBurndown.test.tsx`'s. */
+/// <reference types="@vitest/browser/providers/playwright" />
 import { cdp, userEvent } from "@vitest/browser/context";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -40,7 +41,8 @@ async function review() {
   serveOwnerBook();
   render(<Next />);
   await settle();
-  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Review" }));
+  const views = screen.getByRole("navigation", { name: "views" });
+  await userEvent.click(within(views).getByRole("button", { name: "Review" }));
   await settle();
   const page1 = document.querySelector<HTMLElement>("[data-page][data-ref]")!;
   const chart = page1.querySelector<HTMLElement>(".nx-bd")!;
@@ -83,7 +85,8 @@ describe("the burndown on the phone's REVIEW page", () => {
         faults.push(`${day.dataset.sample}: outside the chart`);
       }
       const q = chart.querySelector(".nx-bd-cross-day")!.getBoundingClientRect();
-      if (t.left < q.right && q.left < t.right && t.top < q.bottom && q.top < t.bottom) faults.push(`${day.dataset.sample}: on its point`);
+      const covers = t.left < q.right && q.left < t.right && t.top < q.bottom && q.top < t.bottom;
+      if (covers) faults.push(`${day.dataset.sample}: on its point`);
     }
     expect(faults.join("; ")).toBe("");
     expect(overflowsSideways()).toBe(false);
@@ -92,7 +95,8 @@ describe("the burndown on the phone's REVIEW page", () => {
   it("scrubs the days under a finger dragged sideways, and keeps the last when it lifts", async () => {
     const { chart, page1 } = await review();
     const days = [...page1.querySelectorAll<SVGGElement>("[data-sample]")];
-    const [first, last] = [centreOf(days[0]!.querySelector("circle")!), centreOf(days.at(-1)!.querySelector("circle")!)];
+    const first = centreOf(days[0]!.querySelector("circle")!);
+    const last = centreOf(days.at(-1)!.querySelector("circle")!);
     const y = chart.getBoundingClientRect().top + 60;
     const before = window.scrollY;
     await drag([{ x: first.x, y }, { x: (first.x + last.x) / 2, y }, { x: last.x, y }]);

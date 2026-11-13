@@ -118,7 +118,8 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   const missed = missedDays(samples);
   const dayW = (W - L - R) / span;
   // the gap to the plan is shaded only where a day has its own On-pace
-  const paced = runsOf(samples.map((s) => (s.on_pace === null ? null : { dte: s.dte, cost: s.cost_to_close, pace: s.on_pace })));
+  const paced = runsOf(samples.map((s) =>
+    (s.on_pace === null ? null : { dte: s.dte, cost: s.cost_to_close, pace: s.on_pace })));
 
   const at = pointed === null ? null : samples[pointed] ?? null;
   /** The day nearest a pointer, from where it is across the drawing. */
@@ -137,7 +138,8 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   };
   const tip = at === null ? null : (() => {
     const tipW = Math.min(TIP_W, W);
-    return { tipW, lines: tipLines(at, unit), ...tipPlace({ x: x(at.dte), y: y(at.cost_to_close), W, H, tipW, tipH }) };
+    const place = tipPlace({ x: x(at.dte), y: y(at.cost_to_close), W, H, tipW, tipH });
+    return { tipW, lines: tipLines(at, unit), ...place };
   })();
   const offClose = samples.some((s) => s.timing !== "close");
 
@@ -146,33 +148,41 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
       {/* ONE stop for the keyboard: the days are reached with the arrows and said by the status
           line, since inside an image they would be presentational and each a tab stop besides */}
       <div className="nx-hist-chart nx-bd" ref={box} role="group" tabIndex={0} onKeyDown={onKey}
-           aria-label={`cost to close by day, ${samples.length} days, against the plan: arrow keys move from day to day`}>
+           aria-label={`cost to close by day, ${samples.length} days, against the plan: `
+             + "arrow keys move from day to day"}>
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true"
              onPointerMove={point} onPointerDown={point} onClick={point}
              onPointerLeave={(e) => { if (e.pointerType === "mouse") setPointed(null); }}>
           <defs>
-            <pattern id={`${id}-hatch`} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <pattern id={`${id}-hatch`} width="4" height="4" patternUnits="userSpaceOnUse"
+                     patternTransform="rotate(45)">
               <line className="nx-bd-hatch" x1="0" y1="0" x2="0" y2="4" />
             </pattern>
           </defs>
           <g data-grid="">
             {axis.ticks.map((v) => (
-              <line key={v} className={v === 0 ? "nx-hist-zero" : "nx-bd-grid"} x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
+              <line key={v} className={v === 0 ? "nx-hist-zero" : "nx-bd-grid"}
+                    x1={L} x2={W - R} y1={y(v)} y2={y(v)} />
             ))}
           </g>
           {axis.labels.length === 0 ? null : (
             <g data-axis="y">
-              {axis.ticks.map((v, i) => <text key={v} x={L - 6} y={y(v) + 4} textAnchor="end">{axis.labels[i]}</text>)}
+              {axis.ticks.map((v, i) => (
+                <text key={v} x={L - 6} y={y(v) + 4} textAnchor="end">{axis.labels[i]}</text>
+              ))}
             </g>
           )}
           {missed.map((d) => (
-            <rect key={d} data-missed={d} fill={`url(#${id}-hatch)`} x={x(d) - dayW / 2} y={T} width={dayW} height={H - T - B} />
+            <rect key={d} data-missed={d} fill={`url(#${id}-hatch)`}
+                  x={x(d) - dayW / 2} y={T} width={dayW} height={H - T - B} />
           ))}
           {paced.map((run, i) => (
             <Threshold key={run[0]!.dte} id={`${id}-pace${i}`} data={run} className="nx-bd-gap"
                        x={(d) => x(d.dte)} y0={(d) => y(d.cost)} y1={(d) => y(d.pace)}
                        clipAboveTo={T} clipBelowTo={H - B}
-                       belowAreaProps={{ className: "nx-bd-ahead" }} aboveAreaProps={{ className: "nx-bd-behind" }} />
+                       // below the plan costs less to close than planned: ahead
+                       belowAreaProps={{ className: "nx-bd-ahead" }}
+                       aboveAreaProps={{ className: "nx-bd-behind" }} />
           ))}
           {target === null ? null : (
             <g data-level="target" className="nx-hist-target">
@@ -186,11 +196,11 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
               <text x={W - R} y={y(stop.value) - 4} textAnchor="end">{level("stop", stop.value)}</text>
             </g>
           ) : (
-            // beyond the scale: marked at the edge it lies past, an arrow and its figure, in the
-            // margin outside the plot so it is on top of nothing drawn
+            // beyond the scale: marked at the edge it lies past, an arrow and its figure — above
+            // the top edge in the margin, or just inside the bottom one, clear of the DTE labels
             <g data-level="stop" data-off={stop.off} className="nx-hist-stop">
               <line x1={L} x2={W - R} y1={stop.off === "above" ? T : H - B} y2={stop.off === "above" ? T : H - B} />
-              <text x={W - R} y={stop.off === "above" ? T - 4 : H - B + 12} textAnchor="end">
+              <text x={W - R} y={stop.off === "above" ? T - 4 : H - B - 4} textAnchor="end">
                 {`${stop.off === "above" ? "▲" : "▼"} ${level("stop", stop.value)}`}
               </text>
             </g>
@@ -212,7 +222,8 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
             </g>
           )}
           {plan.length > 1 ? (
-            <LinePath data-plan="" className="nx-hist-plan" data={plan} x={(p) => x(p.dte)} y={(p) => y(p.on_pace)} />
+            <LinePath data-plan="" className="nx-hist-plan" data={plan}
+                      x={(p) => x(p.dte)} y={(p) => y(p.on_pace)} />
           ) : null}
           {runsOf(samples).map((run) => (
             <LinePath key={run[0]!.dte} data-costs="" className="nx-hist-costs" data={run}
@@ -237,8 +248,10 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
             <g data-crosshair={at.observed_on} className="nx-bd-cross" pointerEvents="none">
               <line x1={x(at.dte)} x2={x(at.dte)} y1={T} y2={H - B} />
               <line x1={L} x2={W - R} y1={y(at.cost_to_close)} y2={y(at.cost_to_close)} />
-              {at.on_pace === null ? null : <circle className="nx-bd-cross-plan" cx={x(at.dte)} cy={y(at.on_pace)} r={3} />}
-              <circle className="nx-bd-cross-day" data-mark={MARK[at.timing]} cx={x(at.dte)} cy={y(at.cost_to_close)} r={4.75} />
+              {at.on_pace === null ? null
+                : <circle className="nx-bd-cross-plan" cx={x(at.dte)} cy={y(at.on_pace)} r={3} />}
+              <circle className="nx-bd-cross-day" data-mark={MARK[at.timing]}
+                      cx={x(at.dte)} cy={y(at.cost_to_close)} r={4.75} />
             </g>
           )}
           <text x={L} y={H - 6} textAnchor="start">{startWords}</text>
@@ -256,7 +269,9 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
                 {tip.lines.gap === null ? null : (
                   <>
                     {" · "}
-                    <span className="nx-bd-tip-gap" data-outcome={tip.lines.gap.outcome ?? undefined}>{tip.lines.gap.words}</span>
+                    <span className="nx-bd-tip-gap" data-outcome={tip.lines.gap.outcome ?? undefined}>
+                      {tip.lines.gap.words}
+                    </span>
                   </>
                 )}
               </div>

@@ -31,15 +31,21 @@ const MISSED: Samples = {
 function serve(id: string, samples: Samples = SAMPLES[id]!) {
   window.fetch = ((url: string) => {
     const ok = String(url).endsWith(`/positions/${id}/samples`);
-    return Promise.resolve({ ok, status: ok ? 200 : 404, json: () => Promise.resolve(ok ? samples : { detail: "no" }) });
+    const body = ok ? samples : { detail: "no" };
+    return Promise.resolve({ ok, status: ok ? 200 : 404, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
 }
 
-async function draw(id: string, width: number, { samples, privacy = false }: { samples?: Samples; privacy?: boolean } = {}) {
+async function draw(id: string, width: number,
+  { samples, privacy = false }: { samples?: Samples; privacy?: boolean } = {}) {
   // room for the widest box, so the page's own width is never what pushes it sideways
   await page.viewport(Math.max(width, 400) + 40, 900);
   serve(id, samples);
-  render(<div className="nx" style={{ width, padding: 0 }}><HoldingHistory holding={holdingOf(id) as Holding} privacy={privacy} /></div>);
+  render(
+    <div className="nx" style={{ width, padding: 0 }}>
+      <HoldingHistory holding={holdingOf(id) as Holding} privacy={privacy} />
+    </div>,
+  );
   await settle();
   const chart = document.querySelector<HTMLElement>(".nx-bd")!;
   expect(chart, "the burndown is drawn").toBeTruthy();
@@ -58,7 +64,8 @@ function labelFaults(svg: SVGSVGElement): string[] {
     }
   }
   labels.forEach(([a, r], i) => labels.slice(i + 1).forEach(([b, q]) => {
-    if (r.left < q.right - 1 && q.left < r.right - 1 && r.top < q.bottom - 1 && q.top < r.bottom - 1) out.push(`${a} / ${b}`);
+    const over = r.left < q.right - 1 && q.left < r.right - 1 && r.top < q.bottom - 1 && q.top < r.bottom - 1;
+    if (over) out.push(`${a} / ${b}`);
   }));
   return out;
 }
@@ -78,11 +85,13 @@ async function tipFaults(chart: HTMLElement, svg: SVGSVGElement): Promise<string
     const tip = chart.querySelector<HTMLElement>("[data-tip]");
     const on = day.dataset.sample!;
     if (!tip) { out.push(`${on}: no tooltip`); continue; }
-    if (chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair") !== on) out.push(`${on}: crossed another day`);
+    const crossed = chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair");
+    if (crossed !== on) out.push(`${on}: crossed another day`);
     const t = tip.getBoundingClientRect();
     if (!inside(t, chart.getBoundingClientRect())) out.push(`${on}: tooltip outside the chart`);
     const p = chart.querySelector(".nx-bd-cross-day")!.getBoundingClientRect();
-    if (t.left < p.right && p.left < t.right && t.top < p.bottom && p.top < t.bottom) out.push(`${on}: tooltip on its point`);
+    const covers = t.left < p.right && p.left < t.right && t.top < p.bottom && p.top < t.bottom;
+    if (covers) out.push(`${on}: tooltip on its point`);
   }
   return out;
 }
@@ -94,7 +103,9 @@ describe("the burndown fits, and its tooltip stays inside it", () => {
     it(`at ${width}px: ${what}`, async () => {
       const { chart, svg } = await draw(id, width, { samples, privacy });
       expect(svg.getBoundingClientRect().width).toBe(width);
-      for (const s of document.querySelectorAll<SVGSVGElement>(".nx-hist svg")) expect(labelFaults(s).join("; ")).toBe("");
+      for (const s of document.querySelectorAll<SVGSVGElement>(".nx-hist svg")) {
+        expect(labelFaults(s).join("; ")).toBe("");
+      }
       expect((await tipFaults(chart, svg)).join("; ")).toBe("");
       expect(overflowsSideways()).toBe(false);
     });
@@ -171,6 +182,39 @@ describe("its colours are the tokens', light and dark", () => {
       expect(token(nx, "--loss")).not.toBe("");
     });
   }
+});
+
+describe("the gap to the plan", () => {
+  /** What is painted halfway between two days, halfway between the cost line and the plan. */
+  function between(svg: SVGSVGElement, a: string, b: string): string {
+    const at = (on: string) => {
+      const day = svg.querySelector(`[data-sample="${on}"] circle`)!;
+      const r = day.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const [p, q] = [at(a), at(b)];
+    const x = (p.x + q.x) / 2, cost = (p.y + q.y) / 2;
+    // the plan's y at that x: where a vertical probe meets the plan's path, read off its points
+    const plan = svg.querySelector<SVGPathElement>("[data-plan]")!;
+    const m = plan.getScreenCTM()!;
+    let best = { dx: Infinity, y: 0 };
+    for (let i = 0, n = plan.getTotalLength(); i <= n; i += 0.5) {
+      const pt = plan.getPointAtLength(i);
+      const sx = m.a * pt.x + m.e, sy = m.d * pt.y + m.f;
+      if (Math.abs(sx - x) < best.dx) best = { dx: Math.abs(sx - x), y: sy };
+    }
+    const hit = document.elementFromPoint(x, (cost + best.y) / 2);
+    return hit?.getAttribute("class") ?? hit?.tagName ?? "nothing";
+  }
+
+  it("is shaded behind where the cost is above the plan, and ahead where it is below", async () => {
+    // the call spread's week ran behind pace; the put spread's 5th to 6th ran ahead
+    const calls = await draw("h-calls", 400);
+    expect(between(calls.svg, "2026-11-07", "2026-11-08")).toMatch(/nx-bd-behind/);
+    cleanup();
+    const puts = await draw("h-puts", 400);
+    expect(between(puts.svg, "2026-11-05", "2026-11-06")).toMatch(/nx-bd-ahead/);
+  });
 });
 
 describe("a pointer", () => {

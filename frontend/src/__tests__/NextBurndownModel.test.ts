@@ -24,7 +24,8 @@ function served(costs: number[], stop: number | null = 4): Samples {
   return {
     levels: { dte_at_open: 45, target: 1, stop, target_dte: 11, manage_by_dte: 21 },
     plan: [{ dte: 45, on_pace: 2 }, { dte: 30, on_pace: 1.6 }, { dte: 0, on_pace: 0 }],
-    samples: costs.map((c, i) => day({ observed_on: `2026-11-${String(3 + i).padStart(2, "0")}`, dte: 45 - i, cost_to_close: c })),
+    samples: costs.map((c, i) =>
+      day({ observed_on: `2026-11-${String(3 + i).padStart(2, "0")}`, dte: 45 - i, cost_to_close: c })),
   } as Samples;
 }
 const held = { closed_on: null } as const;
@@ -187,6 +188,7 @@ describe("what a day says", () => {
 
   it("in the status line, everything the tooltip says and the whole reason", () => {
     expect(sampleWords(day(), money))
-      .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404 · behind by 0.28 — in hours (observed 16:00 New York)");
+      .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404 · behind by 0.28"
+        + " — in hours (observed 16:00 New York)");
   });
 });
