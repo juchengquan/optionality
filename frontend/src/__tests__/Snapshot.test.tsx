@@ -2,9 +2,9 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SnapshotView } from "../SnapshotView";
-import { AREA_LIMIT, SIDE_LIMIT, captureBox, deliver, snapshotName } from "../snapshot";
-import { COMBO_COLUMNS, SINGLE_COLUMNS } from "../columns";
-import type { Entry, Health, Holding } from "../api";
+import { AREA_LIMIT, SIDE_LIMIT, captureBox, deliver, snapshotName } from "../shared/snapshot";
+import { COMBO_COLUMNS, SINGLE_COLUMNS } from "../shared/columns";
+import type { Entry, Health, Holding } from "../shared/api";
 
 /** Saving the page as an image, to paste into a chat.
  *

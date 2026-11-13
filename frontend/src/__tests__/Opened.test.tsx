@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import { OpenedField } from "../OpenedField";
-import { marketDay } from "../format";
+import { marketDay } from "../shared/format";
 
 /** Opened is a TRADING day, and nothing on screen said so.
  *

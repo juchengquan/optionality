@@ -1,6 +1,6 @@
 import { BellRing, Clock, OctagonAlert, OctagonX, Sparkles, Target } from "lucide-react";
 
-import type { EntryStyle } from "../prefs";
+import type { EntryStyle } from "../shared/prefs";
 import type { Arrangement } from "./arrangement";
 import { toneOf, type Need, type NeedKind } from "./needs";
 

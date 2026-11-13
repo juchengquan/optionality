@@ -9,7 +9,7 @@ import {
   removeLeg, replaces, saveWords, setLeg, spreadsBody, stopWarning, valueDefault, valueEnabled, valueHint,
   type AddDraft, type SpreadDraft,
 } from "../next/add";
-import type { Monitor, Payoff } from "../api";
+import type { Monitor, Payoff } from "../shared/api";
 
 /** The condor the audit timed: two spreads on one expiry, each with its credit. */
 function condor(held = true): AddDraft {

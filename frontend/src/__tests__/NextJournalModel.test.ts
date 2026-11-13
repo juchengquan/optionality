@@ -3,7 +3,7 @@
  *  `NextJournal.test.tsx`; this is what it draws from. */
 import { describe, expect, it } from "vitest";
 
-import type { Recorded } from "../api";
+import type { Recorded } from "../shared/api";
 import { journalOf, madeWords, storedWords } from "../next/journal";
 
 const row = (id: string, over: Partial<Recorded>): Recorded => ({

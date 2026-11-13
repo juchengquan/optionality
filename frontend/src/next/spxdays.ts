@@ -6,7 +6,7 @@
  *  is null: that day is a GAP in the line, never a point at zero, and it is not part of the range
  *  either — a zero there would flatten every real day into one line at the top.
  */
-import type { Sample } from "../api";
+import type { Sample } from "../shared/api";
 
 export interface SpxDay {
   on: string;

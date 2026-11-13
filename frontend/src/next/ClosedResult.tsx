@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 
-import { correctClose } from "../api";
+import { correctClose } from "../shared/api";
 import { correctionBody, exitPrefill, type CloseDraft } from "./holding";
 import { madeWords } from "./journal";
 import { DayField, ExitField, type ClosedOutcome } from "./HoldingActions";

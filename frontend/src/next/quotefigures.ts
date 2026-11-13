@@ -15,8 +15,8 @@
  *  Nothing here is a $ amount, so privacy hides none of it (ADR 0023: privacy hides $ and keeps
  *  Δ) — a quote is per contract, in points, and says nothing about how many are held.
  */
-import type { Entry } from "../api";
-import { DASH, shortStamp } from "../format";
+import type { Entry } from "../shared/api";
+import { DASH, shortStamp } from "../shared/format";
 
 export interface RuleFigure {
   /** stable, for React and for a test that wants one figure */

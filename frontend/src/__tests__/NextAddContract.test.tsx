@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SpreadsIn } from "backend/schemas";
 import { AddSpread } from "../next/AddSpread";
-import type { Monitor } from "../api";
+import type { Monitor } from "../shared/api";
 
 /** Every request, as `METHOD path` with its parsed body. */
 let asked: { what: string; body: unknown }[] = [];

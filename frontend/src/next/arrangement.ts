@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ArrangementChoice } from "../prefs";
+import type { ArrangementChoice } from "../shared/prefs";
 
 /** Two arrangements over one capability (ADR 0023): the terminal on the desk, cards on the phone.
  *

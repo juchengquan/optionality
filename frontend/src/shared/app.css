@@ -1,12 +1,12 @@
-/* source(".") restricts automatic class detection to this directory — src — instead of the
-   whole project.
+/* source("..") restricts automatic class detection to src — the parent of src/shared/, where
+   this file moved in #337 — instead of the whole project.
    Tailwind skips .gitignore'd paths by default, but frontend/dist is deliberately NOT
    ignored (the bundle is committed), so it was scanning its own previous output and
    generating utilities for class strings found there. The CSS came out 3KB larger WITH a
    dist present than without, which made the build unreproducible from a clean checkout and
    was invisible to `make check-ui` — that always builds with a dist in place, so it was
    comparing a self-consistent result against itself. */
-@import "tailwindcss" source(".");
+@import "tailwindcss" source("..");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 

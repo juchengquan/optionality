@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Next } from "../next/Next";
 import { DeskBook } from "../next/desk/DeskBook";
 import { SpxPath, spxGutter } from "../next/SpxPath";
-import type { Entry } from "../api";
+import type { Entry } from "../shared/api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 

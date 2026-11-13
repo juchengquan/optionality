@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { Entry } from "./api";
+import type { Entry } from "./shared/api";
 import {
   columnsFor, COMBO_COLUMNS, offerable, SINGLE_COLUMNS, widthsFromContent,
-} from "./columns";
+} from "./shared/columns";
 
 /** Measures the room a table actually has, and how wide a character actually is.
  *

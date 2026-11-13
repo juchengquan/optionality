@@ -3,7 +3,7 @@
  *  writes (`holdingService.ts`). One trade has a week of samples, two days of them written after
  *  the day it is closed on, which the service hides as the route does (a backdated close, ADR 0022).
  */
-import type { Holding, Sample, Samples } from "../api";
+import type { Holding, Sample, Samples } from "../shared/api";
 import { holdingService, type HoldingService } from "./holdingService";
 import { HOLDINGS } from "./ownerBook";
 

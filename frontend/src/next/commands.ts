@@ -8,9 +8,9 @@
  *    amounts and the count of contracts; a finder that never carries either cannot leak them, and a
  *    threshold or a P&L is the table's to say, live, not a list's to freeze at the moment it opened.
  */
-import type { Monitor } from "../api";
-import { shortDate } from "../format";
-import type { ArrangementChoice } from "../prefs";
+import type { Monitor } from "../shared/api";
+import { shortDate } from "../shared/format";
+import type { ArrangementChoice } from "../shared/prefs";
 import { rowName, tableRows, type DeskRow } from "./desk/columns";
 import type { Mode } from "./mode";
 import { fieldWords, monitorName } from "./needs";

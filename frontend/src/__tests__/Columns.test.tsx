@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
-import { DEFAULT_BAND } from "../columns";
-import { shortContract } from "../format";
+import { DEFAULT_BAND } from "../shared/columns";
+import { shortContract } from "../shared/format";
 
 /** A MID-watched leg rule. It used to watch delta, but delta is pinned now (every
  *  single-leg rule in the real watchlist watches it) and a pinned column cannot be hidden

@@ -12,8 +12,8 @@
  *  and the scale's padding (`scaleOf`) keeps a label centred on the outermost mark inside the box —
  *  measured under the iPhone profile at a 24px text size.
  */
-import { DASH } from "../format";
-import type { Holding } from "../api";
+import { DASH } from "../shared/format";
+import type { Holding } from "../shared/api";
 import { deltaWords, distanceWords, scaleOf, strikeName, stripOfHolding, type Strip } from "./strip";
 import "./StrikeStrip.css";
 

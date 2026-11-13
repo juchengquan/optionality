@@ -7,8 +7,8 @@ import { NumberField } from "@/components/ui/number-field";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/native-select";
 
-import type { Entry, HoldingValues } from "./api";
-import { ConfirmDelete } from "./ConfirmDelete";
+import type { Entry, HoldingValues } from "./shared/api";
+import { ConfirmDelete } from "./shared/ConfirmDelete";
 import { OpenedField } from "./OpenedField";
 
 /** Whether there is an entry to type here at all: a rule covering WHOLE holdings, and at least one

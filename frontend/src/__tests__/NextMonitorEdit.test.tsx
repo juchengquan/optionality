@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { MonitorPatch } from "backend/schemas";
-import type { Entry, Monitor } from "../api";
+import type { Entry, Monitor } from "../shared/api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
 import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../next/MonitorEdit";

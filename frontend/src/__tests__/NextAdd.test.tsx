@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SpreadsIn } from "backend/schemas";
 import { AddSpread } from "../next/AddSpread";
 import { Next } from "../next/Next";
-import type { Monitor } from "../api";
+import type { Monitor } from "../shared/api";
 import { draftPayoff } from "../__browser__/nextBook";
 
 /** Every request, as `METHOD path` with its parsed body. */

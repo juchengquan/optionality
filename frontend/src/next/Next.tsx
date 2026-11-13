@@ -7,18 +7,18 @@ import {
   fetchReferences,
   patchMonitor, removeReference, setTotalEntry,
   type Added, type Entry, type Health, type Holding, type Monitor, type Reference,
-} from "../api";
+} from "../shared/api";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Toaster, toast } from "@/components/ui/toast";
-import { clockTime } from "../format";
-import { Freshness } from "../Freshness";
+import { clockTime } from "../shared/format";
+import { Freshness } from "../shared/Freshness";
 import {
   readArrangement, readEntryStyle, readPrivacy, readRefresh, readUp, writeArrangement,
   writeEntryStyle, writePrivacy, writeRefresh, writeUp, type ArrangementChoice, type EntryStyle, type UpColour,
-} from "../prefs";
-import { ReferenceStrip } from "../ReferenceStrip";
-import { useDismissOnBack } from "../useDismissOnBack";
+} from "../shared/prefs";
+import { ReferenceStrip } from "../shared/ReferenceStrip";
+import { useDismissOnBack } from "../shared/useDismissOnBack";
 import { AddSpread } from "./AddSpread";
 import { ClosedResult } from "./ClosedResult";
 import type { ClosedOutcome, HoldingWrites } from "./HoldingActions";

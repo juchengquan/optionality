@@ -1,7 +1,7 @@
 /** What the phone's cards say about a holding or a rule, in words and fixed places. Nothing here is
  *  computed: every figure is the service's (ADR 0005), and this only names and spells it. */
-import type { Entry, Holding, Monitor } from "../../api";
-import { DASH } from "../../format";
+import type { Entry, Holding, Monitor } from "../../shared/api";
+import { DASH } from "../../shared/format";
 import { servedDelta } from "../legs";
 
 /** "Fri 18 Dec 2026": an expiry as a date to read, not a key. Read as a calendar date in UTC, so

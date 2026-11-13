@@ -1,5 +1,5 @@
-import type { Entry, Health, Holding } from "./api";
-import { shortContract } from "./format";
+import type { Entry, Health, Holding } from "./shared/api";
+import { shortContract } from "./shared/format";
 
 /** The one line that says something needs you — and nothing at all when nothing does.
  *

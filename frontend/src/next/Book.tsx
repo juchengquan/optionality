@@ -1,8 +1,8 @@
 import { BellRing, OctagonAlert, Sparkles } from "lucide-react";
 
-import type { Entry, Holding, Monitor } from "../api";
-import type { EntryStyle } from "../prefs";
-import { DASH, legSummary } from "../format";
+import type { Entry, Holding, Monitor } from "../shared/api";
+import type { EntryStyle } from "../shared/prefs";
+import { DASH, legSummary } from "../shared/format";
 import type { HoldingWrites } from "./HoldingActions";
 import type { Mode } from "./mode";
 import { Glyph } from "./NeedsLine";

@@ -1,7 +1,7 @@
 /** A rule's every figure, drawn in whichever arrangement asks (#332): the desk's inspector passes
  *  its key-value grid's class, the phone's sheet its facts grid's, so each looks like the figures
  *  around it. What the list says is `rulefigures.ts`, one list for both. */
-import type { Entry } from "../api";
+import type { Entry } from "../shared/api";
 import { ruleFigures, wholeMissing } from "./quotefigures";
 import "./rulefigures.css";
 

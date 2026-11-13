@@ -5,7 +5,7 @@
  *  all — a draft that is not one has nothing to send — and the refusals the service words (a signed
  *  0, a combo on IV, a duplicate) are its own, filed beside the field they are about.
  */
-import type { Added, Entry, Holding, Monitor } from "../api";
+import type { Added, Entry, Holding, Monitor } from "../shared/api";
 import { contractCode, type OptionType, type Side, type SpreadsBody } from "./add";
 import { contractBody, contractName, type ContractSpot } from "./contract";
 import { entryName, fieldWords, monitorName, ruleWords } from "./needs";

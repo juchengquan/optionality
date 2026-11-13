@@ -6,7 +6,7 @@
  *  204, or a refusal in the service's words — never by a generic empty list or 404 that would hide a
  *  call gone wrong; a route not named here is a 404 that says which call it was.
  */
-import type { Entry, Monitor } from "../api";
+import type { Entry, Monitor } from "../shared/api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "./ownerBook";
 
 /** Five days kept, not the default seven, so a page that hard-coded the default would say the

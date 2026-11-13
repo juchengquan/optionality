@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_BAND, imminentReading, pressure } from "../columns";
+import { DEFAULT_BAND, imminentReading, pressure } from "../shared/columns";
 
 /** Which reading earns the second colour.
  *

@@ -1,4 +1,4 @@
-import type { Entry } from "../../api";
+import type { Entry } from "../../shared/api";
 import { isEntrySignal } from "../needs";
 
 /** The state a rule is in, as one of the attention family's chips — or none while it is calm.

@@ -4,7 +4,7 @@ import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "../App";
-import { marketDay } from "../format";
+import { marketDay } from "../shared/format";
 
 /** The trading-day offer, measured. It names a full ISO date — "trading day: 2026-10-19", 23
  *  characters — inside a field 44 units wide in the sheet, and it went into four forms at once.

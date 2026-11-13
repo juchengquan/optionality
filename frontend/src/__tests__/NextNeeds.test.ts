@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { Entry, Health, Holding, Monitor } from "../api";
+import type { Entry, Health, Holding, Monitor } from "../shared/api";
 import { isEntrySignal, needsYou, sentence, toneOf } from "../next/needs";
 
 const health = (over: Partial<{ ok: boolean; bad: boolean }> = {}) => ({

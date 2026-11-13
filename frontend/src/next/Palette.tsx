@@ -14,7 +14,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 
-import type { EntryStyle, UpColour } from "../prefs";
+import type { EntryStyle, UpColour } from "../shared/prefs";
 import { isPaletteChord, matching, onMac, tokens, type Findable, type PaletteAction } from "./commands";
 import "./palette.css";
 

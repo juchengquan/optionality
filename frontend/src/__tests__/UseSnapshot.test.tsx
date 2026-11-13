@@ -24,8 +24,8 @@ vi.mock("@/components/ui/toast", () => ({
 
 const delivered: { name: string }[] = [];
 let delivery: "shared" | "downloaded" | "cancelled" = "downloaded";
-vi.mock("../snapshot", async (orig) => ({
-  ...(await orig<typeof import("../snapshot")>()),
+vi.mock("../shared/snapshot", async (orig) => ({
+  ...(await orig<typeof import("../shared/snapshot")>()),
   deliver: (_blob: Blob, name: string) => {
     delivered.push({ name });
     return Promise.resolve(delivery);

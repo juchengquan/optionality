@@ -15,7 +15,7 @@
  */
 import { useLayoutEffect, useRef, useState } from "react";
 
-import type { Holding, Samples } from "../api";
+import type { Holding, Samples } from "../shared/api";
 import { spxRange, spxRuns, unrecorded } from "./spxdays";
 
 const H = 156, T = 10, B = 22;

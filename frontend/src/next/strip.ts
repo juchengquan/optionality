@@ -8,8 +8,8 @@
  *  why, and nothing here fills the gap — not the References strip's SPX, which nothing derives
  *  from (ADR 0018). The one piece of arithmetic is where a strike sits on the drawn scale.
  */
-import type { Entry, Holding } from "../api";
-import { DASH } from "../format";
+import type { Entry, Holding } from "../shared/api";
+import { DASH } from "../shared/format";
 
 export type ShortStrike = Holding["short_strikes"][number];
 

@@ -9,12 +9,12 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_BAND } from "../columns";
+import { DEFAULT_BAND } from "../shared/columns";
 import {
   readArrangement, readBand, readEntryStyle, readGrouping, readHidden, readPriceMap, readPrivacy, readRefresh,
   readSignal, readUp, writeArrangement, writeBand, writeEntryStyle, writeGrouping, writeHidden,
   writePriceMap, writePrivacy, writeRefresh, writeSignal, writeUp,
-} from "../prefs";
+} from "../shared/prefs";
 
 const NAMES = [
   "ui_cols_single", "ui_cols_combo", "ui_signal", "ui_band", "ui_group", "ui_refresh",

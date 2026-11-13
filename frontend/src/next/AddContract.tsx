@@ -10,7 +10,7 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 
-import { addSpreads, type Added, type Monitor } from "../api";
+import { addSpreads, type Added, type Monitor } from "../shared/api";
 import { Button } from "@/components/ui/button";
 import {
   CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces,

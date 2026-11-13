@@ -6,7 +6,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Entry, Holding, Monitor } from "../api";
+import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../next/Book";
 import { placeBook } from "../next/placement";
 import { PhoneBook } from "../next/phone/PhoneBook";

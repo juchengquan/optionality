@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
-import type { Entry, Holding, Monitor } from "../../api";
-import { ColumnPicker } from "../../ColumnPickers";
-import type { Column } from "../../columns";
-import { shortDate } from "../../format";
-import { GROUPS } from "../../MutedTables";
-import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../prefs";
+import type { Entry, Holding, Monitor } from "../../shared/api";
+import { ColumnPicker } from "../../shared/ColumnPickers";
+import type { Column } from "../../shared/columns";
+import { shortDate } from "../../shared/format";
+import { GROUPS } from "../../shared/groups";
+import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../shared/prefs";
 import { Chip, Money, type BookProps } from "../Book";
 import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";

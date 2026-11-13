@@ -7,13 +7,13 @@ import { useEffect, useState } from "react";
 
 import type { Source } from "backend/schemas";
 
-import { type Entry, type Health, type Holding, type Reference } from "./api";
-import { type Grouping, type Signal } from "./columns";
+import { type Entry, type Health, type Holding, type Reference } from "./shared/api";
+import { type Grouping, type Signal } from "./shared/columns";
 import { needs } from "./TopLine";
-import { References } from "./References";
+import { References } from "./shared/References";
 import { NativeSelect } from "@/components/ui/native-select";
 
-import { useDismissOnBack } from "./useDismissOnBack";
+import { useDismissOnBack } from "./shared/useDismissOnBack";
 
 /** unchanged when this moved out of App.tsx — the options are the owner's, not mine */
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];

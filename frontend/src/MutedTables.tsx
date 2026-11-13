@@ -1,26 +1,8 @@
-import type { Monitor } from "./api";
+import type { Monitor } from "./shared/api";
 import { Button } from "@/components/ui/button";
 
-import { ConfirmDelete } from "./ConfirmDelete";
-
-/** Most alarming first: the two Quarantines — the service's own doing, where a rule cannot be
- *  evaluated at all — then expiry, then the rules you muted yourself.
- *
- *  Exported for its test, which holds this list against the backend's `DISABLED_REASONS`. A reason
- *  with no group here renders in NO group, so the row would disappear from the page while sitting
- *  disabled in the database (#167).
- */
-export const GROUPS: [string | null, string][] = [
-  ["unknown-contract", "Unknown contract"],
-  ["no-figure", "Figure never arrived"],
-  ["unreadable", "Could not be read"],
-  ["expired", "Expired"],
-  // switched off by closing the holding they watched (ADR 0022): the owner's doing, so beside the
-  // rules muted by hand rather than among the faults
-  ["holding-closed", "Holding closed"],
-  ["manual", "Muted by you"],
-  [null, "Reason not recorded"],
-];
+import { ConfirmDelete } from "./shared/ConfirmDelete";
+import { GROUPS } from "./shared/groups";
 
 /** Days before the sweep deletes an expired monitor — the only auto-delete in the system,
  *  and one that otherwise gives no on-screen warning. */

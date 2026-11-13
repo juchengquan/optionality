@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { Entry, Health } from "../api";
+import type { Entry, Health } from "../shared/api";
 import { TopLine, needs } from "../TopLine";
 
 const health = (over: Record<string, unknown> = {}): Health => ({

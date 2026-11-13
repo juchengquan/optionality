@@ -3,11 +3,11 @@
  *  `useDismissOnBack` today's sheet at `/opt` uses. */
 import { useEffect, useRef } from "react";
 
-import type { Entry, Holding, Monitor } from "../../api";
+import type { Entry, Holding, Monitor } from "../../shared/api";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DASH, legSummary } from "../../format";
-import { readUp, type EntryStyle } from "../../prefs";
-import { useDismissOnBack } from "../../useDismissOnBack";
+import { DASH, legSummary } from "../../shared/format";
+import { readUp, type EntryStyle } from "../../shared/prefs";
+import { useDismissOnBack } from "../../shared/useDismissOnBack";
 import { Chip, Money } from "../Book";
 import { HoldingActions, type HoldingWrites } from "../HoldingActions";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";

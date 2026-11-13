@@ -10,27 +10,29 @@
  *  `backend` has `tools/check-boundaries.mjs` for the same question between packages; this is the
  *  same claim one level down, inside the frontend, and it is asserted rather than hoped for.
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, posix, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /** `npm test --workspace frontend` runs from `frontend/`; running the suite from the repo root
  *  runs from there. Both reach the same directory, and a wrong guess must FAIL rather than
  *  silently find nothing to complain about. */
 const SRC = ["src", "frontend/src"].map((d) => resolve(process.cwd(), d))
-  .find((d) => existsSync(`${d}/columns.ts`))!;
+  .find((d) => existsSync(`${d}/shared/columns.ts`))!;
 
-/** every `from "./x"` in a module, as the file name it names */
+/** every relative `from "..."` in a module (a path under `src/`), as the module it names, also
+ *  under `src/` — `./cells` in `shared/columns.ts` is `shared/cells`. Both pages' shared modules
+ *  live in `shared/` since #337, so a name is a path rather than a bare file name. */
 function imports(file: string): string[] {
   const text = readFileSync(`${SRC}/${file}`, "utf8");
-  return [...text.matchAll(/from\s+"\.\/([^"]+)"/g)].map((m) => m[1]!);
+  return [...text.matchAll(/from\s+"(\.{1,2}\/[^"]+)"/g)]
+    .map((m) => posix.join(dirname(file), m[1]!));
 }
 
-/** the module a specifier resolves to on disk — `./cells` is `cells.ts` */
+/** the module a path resolves to on disk — `shared/cells` is `shared/cells.ts` */
 function resolved(spec: string): string | null {
-  const names = readdirSync(SRC);
   for (const ext of ["", ".ts", ".tsx"]) {
-    if (names.includes(spec + ext)) return spec + ext;
+    if (existsSync(`${SRC}/${spec}${ext}`) && /\.\w+$/.test(spec + ext)) return spec + ext;
   }
   return null;
 }
@@ -43,8 +45,8 @@ function resolved(spec: string): string | null {
  *  silence — so it reaches the toast store, which lives in a component module. What it must not
  *  do is name the TREE it photographs, and that has a claim of its own below.
  */
-const PURE = ["columns.ts", "format.ts", "cells.ts", "snapshot.ts", "useTableFit.ts",
-  "useDismissOnBack.ts", "prefs.ts"];
+const PURE = ["shared/columns.ts", "shared/format.ts", "shared/cells.ts", "shared/snapshot.ts",
+  "useTableFit.ts", "shared/useDismissOnBack.ts", "shared/prefs.ts"];
 
 describe("the measuring and formatting path", () => {
   for (const file of PURE) {
@@ -62,6 +64,7 @@ describe("the measuring and formatting path", () => {
     const named = imports("useSnapshot.ts");
     expect(named).not.toContain("SnapshotView");
     expect(named).not.toContain("App");
+    expect(named).toContain("shared/snapshot"); // the reader still reads: a dead pattern passes the two above
   });
 
   it("reaches its row-to-text helpers by importing them, not by being handed them", () => {
@@ -72,7 +75,7 @@ describe("the measuring and formatting path", () => {
     // This read `not.toContain("cellText")`, which could not fail — the function had been called
     // `cellValue` for two releases, and the only occurrence of "cellText" in the repository was
     // this assertion, so reintroducing the dodge under the real name would have passed.
-    expect(imports("columns.ts")).toContain("cells");
+    expect(imports("shared/columns.ts")).toContain("shared/cells");
   });
 });
 
@@ -91,7 +94,7 @@ describe("the viewer's preferences", () => {
   // "live in a module of their own" was a `readdirSync(SRC)).toContain("prefs.ts")` and has gone,
   // as the same check for `cells.ts` did: every other claim below reads that file, so a module that
   // vanished would fail them — and fail collection in the PURE loop above — before this noticed.
-  for (const file of ["columns.ts", "App.tsx"]) {
+  for (const file of ["shared/columns.ts", "App.tsx"]) {
     it(`are no longer spelled out in ${file}`, () => {
       expect(readFileSync(`${SRC}/${file}`, "utf8")).not.toContain("document.cookie");
     });
@@ -99,7 +102,7 @@ describe("the viewer's preferences", () => {
 
   it("reach the cookie through one pair of functions", () => {
     // the plumbing itself: one reader, one writer, and every preference on top of them
-    const text = readFileSync(`${SRC}/prefs.ts`, "utf8");
+    const text = readFileSync(`${SRC}/shared/prefs.ts`, "utf8");
     expect(text.match(/document\.cookie/g)).toHaveLength(2);
   });
 });

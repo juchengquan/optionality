@@ -1,8 +1,8 @@
-import type { Entry, Health, Holding } from "./api";
+import type { Entry, Health, Holding } from "./shared/api";
 import {
   COMBO_COLUMNS, SINGLE_COLUMNS, shownColumns, type Grouping, type Signal,
-} from "./columns";
-import { Freshness } from "./Freshness";
+} from "./shared/columns";
+import { Freshness } from "./shared/Freshness";
 import { HoldingList, HoldingReadout } from "./Holdings";
 import { TopLine } from "./TopLine";
 import { WatchlistTable } from "./WatchlistTable";

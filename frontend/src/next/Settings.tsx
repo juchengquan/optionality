@@ -1,9 +1,9 @@
-import type { Health, Reference } from "../api";
+import type { Health, Reference } from "../shared/api";
 import type { Source } from "backend/schemas";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/native-select";
-import type { ArrangementChoice, EntryStyle, UpColour } from "../prefs";
-import { References } from "../References";
+import type { ArrangementChoice, EntryStyle, UpColour } from "../shared/prefs";
+import { References } from "../shared/References";
 import { Glyph } from "./NeedsLine";
 import type { Need } from "./needs";
 

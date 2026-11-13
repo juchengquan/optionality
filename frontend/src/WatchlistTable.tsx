@@ -1,11 +1,11 @@
 import { Fragment } from "react";
 
-import type { Entry, HoldingValues } from "./api";
+import type { Entry, HoldingValues } from "./shared/api";
 import {
   groupRows, identityBadges, imminentReading, signalColumns,
   type Column, type Grouping, type Signal,
-} from "./columns";
-import { shortContract } from "./format";
+} from "./shared/columns";
+import { shortContract } from "./shared/format";
 
 /** Somewhere the name may fold when the column is capped on a narrow screen.
  *

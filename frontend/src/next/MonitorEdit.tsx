@@ -24,7 +24,7 @@
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
-import type { Added, Entry, Holding, Monitor } from "../api";
+import type { Added, Entry, Holding, Monitor } from "../shared/api";
 import { Button } from "@/components/ui/button";
 import { DASH, marketDay } from "../format";
 import { ruleWords as replacedWords, type SpreadsBody } from "./add";

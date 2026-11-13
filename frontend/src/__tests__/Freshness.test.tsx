@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { Freshness } from "../Freshness";
-import { marketClock } from "../format";
+import { Freshness } from "../shared/Freshness";
+import { marketClock } from "../shared/format";
 
 /** The freshness line, in both zones.
  *

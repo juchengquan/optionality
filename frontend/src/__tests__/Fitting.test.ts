@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   ALWAYS, columnsFor, COMBO_COLUMNS, columnWidth, isPinned, offerable, PRIORITY,
   SCROLL_BUDGET, SINGLE_COLUMNS,
-} from "../columns";
-import { readHidden } from "../prefs";
+} from "../shared/columns";
+import { readHidden } from "../shared/prefs";
 
 /** The fitting rule, exhaustively, with no browser involved (ADR 0008).
  *
