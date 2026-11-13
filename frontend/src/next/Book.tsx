@@ -2,7 +2,7 @@ import { BellRing, OctagonAlert, Sparkles } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import type { EntryStyle } from "../shared/prefs";
-import { DASH, legSummary } from "../shared/format";
+import { DASH, heldLegs, legSummary } from "../shared/format";
 import type { HoldingWrites } from "./HoldingActions";
 import type { Mode } from "./mode";
 import { Glyph } from "./NeedsLine";
@@ -200,7 +200,5 @@ function HoldingItem({ holding, rules, mode, privacy }: {
 
 /** `-P7150 +P7100`: a holding's legs as the watchlist writes a combo's, short as minus. */
 function holdingLegs(holding: Holding): string {
-  return holding.legs
-    .map((l) => `${l.side === "short" ? "-" : "+"}${l.option_type[0]}${l.strike}`)
-    .join(" ");
+  return heldLegs(holding.legs);
 }

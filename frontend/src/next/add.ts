@@ -14,6 +14,10 @@
  *    short leg starts with no delta Monitor: there is no sold leg to watch (#334).
  *  - A spread has two legs to six, each its own side, type and strike (#334): the old dashboard's
  *    combo builder took six, and `POST /spreads` takes six.
+ *  - Each leg has a quantity, 1 to 10 (#351): a butterfly is three legs, its middle sold twice over,
+ *    and a 1×2 ratio two. One leg per contract, never the contract repeated — the route refuses that.
+ *    A short leg's |Δ| Monitor is still one, on the contract: a delta of 0.30 is the contract's
+ *    whatever the quantity, the figure the owner reads off a chain.
  *  - Opened starts as the New York trading day, never the local one: through the Singapore morning
  *    the two differ, and a holding whose Opened is not its first sample's day loses its vol figure
  *    without a word (ADR 0011).
@@ -32,6 +36,8 @@ export interface LegDraft {
   option_type: OptionType;
   /** as typed */
   strike: string;
+  /** how many of the contract one of the spread holds, as typed; "1" until changed (#351) */
+  qty: string;
 }
 
 export interface SpreadDraft {
@@ -62,10 +68,18 @@ export interface AddDraft {
   spreads: SpreadDraft[];
 }
 
+/** A leg as `POST /spreads` and the payoff take it: its quantity only where it is not 1 (#351). */
+export interface LegBody {
+  side: Side;
+  option_type: OptionType;
+  strike: number;
+  qty?: number;
+}
+
 /** One spread as `POST /spreads` takes it. */
 export interface SpreadBody {
   name: string;
-  legs: { side: Side; option_type: OptionType; strike: number }[];
+  legs: LegBody[];
   held: boolean;
   entry?: number | null;
   contracts?: number;
@@ -90,13 +104,16 @@ export type Preset = "put" | "call" | "condor";
 export const MIN_LEGS = 2;
 export const MAX_LEGS = 6;
 
+/** The most of one contract a leg may hold: `MAX_LEG_QTY`, the route's (#351). */
+export const MAX_QTY = 10;
+
 /** A held spread's short-leg delta Monitor, unless another is typed (ADR 0023). */
 export const HELD_DELTA = "0.30";
 
 let keys = 0;
 const nextKey = () => `s${++keys}`;
 
-const leg = (side: Side, option_type: OptionType): LegDraft => ({ key: `l${++keys}`, side, option_type, strike: "" });
+const leg = (side: Side, option_type: OptionType): LegDraft => ({ key: `l${++keys}`, side, option_type, strike: "", qty: "1" });
 
 const LEGS: Record<Preset, () => LegDraft[]> = {
   put: () => [leg("short", "PUT"), leg("long", "PUT")],
@@ -166,15 +183,23 @@ export function flipSide(d: AddDraft, key: string, index: number): AddDraft {
  *  name is the bot's "contract" cell, which its ~40-column tables cannot carry (review of #343).
  *  26 characters at most for four-digit strikes, whatever the count; the legs themselves are on the
  *  holding and in the rule. */
-export function derivedName(expiry: string, legs: Pick<LegDraft, "option_type" | "strike">[]): string {
+export function derivedName(
+  expiry: string, legs: (Pick<LegDraft, "option_type" | "strike"> & { qty?: string })[],
+): string {
   const day = expiry.length >= 10 ? `${expiry.slice(5, 7)}${expiry.slice(8, 10)}` : "spread";
-  if (legs.length <= 2) return [day, ...legs.map((l) => `${l.option_type[0]}${l.strike.trim()}`)].join("_");
+  // a quantity is in the name (#351): the name is the value rule's code, so a 1×2 and a 1×1 on the
+  // same strikes would otherwise be one rule, the second replacing or refused by the first
+  const qty = (l: { qty?: string }) => (l.qty ?? "1").trim() || "1";
+  if (legs.length <= 2) {
+    return [day, ...legs.map((l) => `${qty(l) === "1" ? "" : qty(l)}${l.option_type[0]}${l.strike.trim()}`)].join("_");
+  }
   const types = [...new Set(legs.map((l) => l.option_type))];
+  const ratio = legs.some((l) => qty(l) !== "1") ? [legs.map(qty).join("x")] : [];
   return [day, ...types.map((t) => {
     const ks = [...new Set(legs.filter((l) => l.option_type === t).map((l) => l.strike.trim()).filter((k) => k !== ""))]
       .sort((a, b) => Number(a) - Number(b));
     return `${t[0]}${ks.length <= 1 ? (ks[0] ?? "") : `${ks[0]}-${ks.at(-1)}`}`;
-  })].join("_");
+  }), ...ratio].join("_");
 }
 
 /** A number as typed, or null for blank or not a number. */
@@ -185,6 +210,19 @@ function typed(text: string): number | null {
 }
 
 const cents = (n: number) => Math.round(n * 100) / 100;
+
+/** A leg's quantity as typed, or null where it is not a whole number from 1 to `MAX_QTY`. */
+function quantity(text: string): number | null {
+  const n = typed(text);
+  return n !== null && Number.isInteger(n) && n >= 1 && n <= MAX_QTY ? n : null;
+}
+
+/** A leg as posted: its quantity only where it is not 1, as the service stores it (#351). An
+ *  unreadable quantity is posted as 1 here, for the preview's sake; `spreadsBody` refuses it. */
+function legBody(l: LegDraft, strike: number): LegBody {
+  const qty = quantity(l.qty) ?? 1;
+  return { side: l.side, option_type: l.option_type, strike, ...(qty === 1 ? {} : { qty }) };
+}
 
 /** A held spread whose Entry was a DEBIT: paid, typed negative as a Position's Entry is. */
 const isDebit = (held: boolean, s: SpreadDraft) => held && (typed(s.entry) ?? 0) < 0;
@@ -217,16 +255,16 @@ export function valueHint(held: boolean, s: SpreadDraft): string {
 /** What closing the legs would cost at expiry with SPX at `x`: the short legs' worth less the
  *  long ones', per contract. Used only to SIGN a watched spread's preview, which must be decided
  *  before the payoff can be asked for; the warning below reads the served payoff instead. */
-function costAt(legs: { side: Side; option_type: OptionType; strike: number }[], x: number): number {
+function costAt(legs: LegBody[], x: number): number {
   return legs.reduce((sum, l) => {
-    const worth = l.option_type === "CALL" ? Math.max(0, x - l.strike) : Math.max(0, l.strike - x);
+    const worth = (l.option_type === "CALL" ? Math.max(0, x - l.strike) : Math.max(0, l.strike - x)) * (l.qty ?? 1);
     return sum + (l.side === "short" ? worth : -worth);
   }, 0);
 }
 
 /** The most the legs can cost to close at expiry, and the least; null where it has no ceiling. The
  *  cost bends only at the strikes, so those, zero and one point past the top are all of it. */
-function costRange(legs: { side: Side; option_type: OptionType; strike: number }[]): { most: number | null; least: number } {
+function costRange(legs: LegBody[]): { most: number | null; least: number } {
   const ks = legs.map((l) => l.strike);
   const top = Math.max(...ks);
   const xs = [0, ...ks, top + 1];
@@ -238,7 +276,7 @@ function costRange(legs: { side: Side; option_type: OptionType; strike: number }
 const legsOf = (s: SpreadDraft) => {
   const ks = strikes(s);
   return ks.some((k) => k === null || k <= 0)
-    ? null : s.legs.map((l, j) => ({ side: l.side, option_type: l.option_type, strike: ks[j]! }));
+    ? null : s.legs.map((l, j) => legBody(l, ks[j]!));
 };
 
 /** A held credit spread's stop that can never fire: 2x a rich credit is past what the spread can
@@ -265,7 +303,7 @@ export function stopWarning(
 /** Whether a structure is put on for a credit, by its legs alone: one that can only cost to close
  *  was sold, one that can only pay was bought. A structure that can do either (a ratio) is taken
  *  as a credit, the book's usual case (review of #322). */
-function soldForCredit(legs: { side: Side; option_type: OptionType; strike: number }[]): boolean {
+function soldForCredit(legs: LegBody[]): boolean {
   const { most, least } = costRange(legs);
   return !(least < 0 && most !== null && most <= 0);
 }
@@ -294,7 +332,9 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
     const which = `spread ${i + 1}`;
     const ks = strikes(s);
     if (ks.some((k) => k === null || k <= 0)) return { error: `${which}: type every strike` };
-    const legs = s.legs.map((l, j) => ({ side: l.side, option_type: l.option_type, strike: ks[j]! }));
+    const unread = s.legs.findIndex((l) => quantity(l.qty) === null);
+    if (unread >= 0) return { error: `${which}, leg ${unread + 1}: the quantity is a whole number from 1 to ${MAX_QTY}` };
+    const legs = s.legs.map((l, j) => legBody(l, ks[j]!));
 
     const monitors: SpreadBody["monitors"] = [];
     if (valueEnabled(d.held, s)) {
@@ -345,7 +385,7 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
 export function previewOf(d: AddDraft, s: SpreadDraft): DraftPayoff | null {
   const ks = strikes(s);
   if (ks.some((k) => k === null || k <= 0)) return null;
-  const legs = s.legs.map((l, j) => ({ side: l.side, option_type: l.option_type, strike: ks[j]! }));
+  const legs = s.legs.map((l, j) => legBody(l, ks[j]!));
   // a held spread's Entry is typed signed; a watched one's threshold is a size (compared `abs`),
   // signed here by what the legs are: a debit spread is bought, at the value it watches for
   const typedAt = typed(d.held ? s.entry : valueShown(false, s)) ?? 0;

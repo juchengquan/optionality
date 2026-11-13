@@ -4,12 +4,21 @@ import type { Leg } from "./api";
 
 export const DASH = "—";
 
+/** `-2C8150`: one leg, short as minus, with its quantity where it is not 1 (#351). */
+const legWord = (short: boolean, qty: number | undefined, type: string, strike: number) =>
+  `${short ? "-" : "+"}${qty === undefined || qty === 1 ? "" : qty}${type[0]}${strike}`;
+
 /** +C8100 -C8150: the signs are what the signed-sum engine keys off, so a leg entered
- *  backwards is visible at a glance. */
+ *  backwards is visible at a glance. A quantity sits between the sign and the contract: `-2C8150`. */
 export function legSummary(legs: readonly Leg[]): string {
-  return legs
-    .map((l) => `${l.sign > 0 ? "+" : "-"}${l.option_type[0]}${l.strike}`)
-    .join(" ");
+  return legs.map((l) => legWord(l.sign < 0, l.qty, l.option_type, l.strike)).join(" ");
+}
+
+/** `-P7150 +P7100`: a holding's legs as the watchlist writes a combo's, short as minus, with each
+ *  leg's quantity where it is not 1 (`-2P7100`). Every place that writes a holding's or a closed
+ *  trade's legs writes them with this. */
+export function heldLegs(legs: readonly { side: string; option_type: string; strike: number; qty?: number }[]): string {
+  return legs.map((l) => legWord(l.side === "short", l.qty, l.option_type, l.strike)).join(" ");
 }
 
 /** "SPXW 261016 8050.00C" → "261016 8050C".

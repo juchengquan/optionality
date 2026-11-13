@@ -38,8 +38,9 @@
 .nx-add-fields { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
 
 .nx-add-legs { display: flex; flex-direction: column; gap: 0.375rem; }
-/* side, type, strike, and the leg's remove button once there are more than two (#334) */
-.nx-add-leg { display: grid; grid-template-columns: 4.5rem 4.5rem minmax(0, 8rem) auto; gap: 0.375rem; align-items: center; }
+/* side, quantity (#351), type, strike, and the leg's remove button once there are more than two (#334) */
+.nx-add-leg { display: grid; grid-template-columns: 4.5rem 3rem 4.5rem minmax(0, 8rem) auto; gap: 0.375rem; align-items: center; }
+.nx-add-qty { width: 100%; min-width: 0; text-align: center; }
 .nx-add-unleg { display: inline-flex; align-items: center; justify-content: center; padding: 0.25rem 0.5rem; }
 .nx-add-unleg svg { width: 0.875rem; height: 0.875rem; }
 /* a short leg and a long one look different at a glance, which is the mistake this form catches */
@@ -77,7 +78,7 @@
 
 /* on the phone every box is a 44pt target already (next.css); the legs' columns share the width
    rather than overflowing it, the strike taking what the toggles and the remove button leave */
-html[data-nx-arrangement="phone"] .nx-add-leg { grid-template-columns: 5rem 5rem minmax(0, 1fr) auto; }
+html[data-nx-arrangement="phone"] .nx-add-leg { grid-template-columns: 4.5rem 3rem 4.5rem minmax(0, 1fr) auto; }
 html[data-nx-arrangement="phone"] .nx-add-name input { width: 100%; }
 html[data-nx-arrangement="phone"] .nx-add-name { flex: 1 1 auto; }
 

@@ -290,6 +290,44 @@ describe("legs added and removed (#334)", () => {
   });
 });
 
+describe("a quantity per leg (#351)", () => {
+  it("saves a butterfly as three legs, its middle sold twice over, previewed with the quantity", async () => {
+    const { onSaved } = open();
+    type("expiry", "2026-12-18");
+    fireEvent.click(screen.getByRole("button", { name: "spread 1: add a leg" }));
+    ["7100", "7150", "7200"].forEach((k, i) => type(`spread 1, leg ${i + 1} strike`, k));
+    fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 1 side: short — flip" }));
+    fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 2 side: long — flip" }));
+    expect((screen.getByLabelText("spread 1, leg 2 quantity") as HTMLInputElement).value).toBe("1");
+    type("spread 1, leg 2 quantity", "2");
+    type("spread 1 entry", "-1.20");
+    await waitFor(() => expect(drafts().at(-1)?.legs[1]).toEqual({ side: "short", option_type: "PUT", strike: 7150, qty: 2 }));
+    // a debit: its stop is switched off, and the short leg's |Δ| is one Monitor
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 Monitor" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = posted()[0]!.body as { spreads: { name: string; legs: unknown[]; monitors: unknown[] }[] };
+    expect(SpreadsIn.safeParse(body).success).toBe(true);
+    expect(body.spreads[0]!.legs).toEqual([
+      { side: "long", option_type: "PUT", strike: 7100 }, { side: "short", option_type: "PUT", strike: 7150, qty: 2 },
+      { side: "long", option_type: "PUT", strike: 7200 },
+    ]);
+    expect(body.spreads[0]!.name).toBe("1218_P7100-7200_1x2x1");
+    expect(body.spreads[0]!.monitors).toEqual([{ option_type: "PUT", strike: 7150, threshold: 0.3 }]);
+  });
+
+  it("says a quantity it cannot read before asking the service anything", () => {
+    open();
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "1.50");
+    type("spread 1, leg 2 quantity", "11");
+    fireEvent.click(screen.getByRole("button", { name: /^Record holding/ }));
+    expect(screen.getByRole("alert").textContent).toContain("spread 1, leg 2: the quantity is a whole number from 1 to 10");
+    expect(posted()).toEqual([]);
+  });
+});
+
 describe("the preview", () => {
 
   it("asks for the payoff once the strikes are typed, per contract, and again when a side flips", async () => {

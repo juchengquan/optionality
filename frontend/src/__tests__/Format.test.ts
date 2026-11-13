@@ -8,7 +8,19 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { clockTime, marketDay, shortContract, shortStamp } from "../shared/format";
+import { clockTime, heldLegs, legSummary, marketDay, shortContract, shortStamp } from "../shared/format";
+
+describe("legs, short as minus (#351)", () => {
+  it("writes a quantity between the sign and the contract, and a quantity of one not at all", () => {
+    expect(legSummary([
+      { sign: 1, option_type: "CALL", strike: 7300 }, { sign: -1, option_type: "CALL", strike: 7350, qty: 2 },
+      { sign: 1, option_type: "CALL", strike: 7400, qty: 1 },
+    ])).toBe("+C7300 -2C7350 +C7400");
+    expect(heldLegs([
+      { side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6350, qty: 2 },
+    ])).toBe("+P6400 -2P6350");
+  });
+});
 
 describe("contract names", () => {
   it("drops the noise that every contract carries", () => {

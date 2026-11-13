@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type { Entry, Holding, Monitor } from "../../shared/api";
 import { ColumnPicker } from "../../shared/ColumnPickers";
 import { shortDate } from "../../shared/format";
+
 import { GROUPS } from "../../shared/groups";
 import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../shared/prefs";
 import { Chip, Money, type BookProps } from "../Book";
@@ -550,7 +551,7 @@ function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
           {`condor with ${partner.name} →`}
         </button>
       ) : null}
-      <Legs legs={h.legs.map((l) => `${l.side} ${l.option_type} ${l.strike}`)} />
+      <Legs legs={h.legs.map((l) => `${l.side}${qtyWords(l.qty)} ${l.option_type} ${l.strike}`)} />
       <InspectorStrip holding={h} partner={partner} />
       {/* the recorded days (ADR 0023, #295): open in REVIEW, on demand in LIVE (#353), read once */}
       {mode === "review" ? <HoldingHistory holding={h} privacy={privacy} /> : <HistoryOnDemand holding={h} privacy={privacy} />}
@@ -584,7 +585,7 @@ function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; o
           + (overlap ? "" : ` · ${entry.held ? "on something held" : "watch only"}`)}
       </p>
       {overlap ? <p className="nx-meta" data-overlap="">{overlap}</p> : null}
-      {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"} ${l.option_type} ${l.strike}`)} /> : null}
+      {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"}${qtyWords(l.qty)} ${l.option_type} ${l.strike}`)} /> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
       {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} /> : null}
       {/* every figure of its contract or combo, the reason beside each dash (#332) */}
@@ -610,6 +611,9 @@ function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined
     </>
   );
 }
+
+/** " 2×" after a leg's side where it holds more than one of its contract, nothing for one (#351). */
+const qtyWords = (qty: number | undefined) => (qty === undefined || qty === 1 ? "" : ` ${qty}×`);
 
 function Legs({ legs }: { legs: string[] }) {
   return (

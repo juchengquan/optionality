@@ -116,6 +116,8 @@ export function WatchedPayoff({ entry }: { entry: Entry }) {
   const draft: DraftPayoff | null = !priced || value === null || !entry.legs ? null : {
     legs: entry.legs.map((l) => ({
       side: l.sign < 0 ? "short" : "long", option_type: l.option_type as "CALL" | "PUT", strike: l.strike,
+      // a quantity is drawn as the rule values it (#351): a butterfly's middle twice over
+      ...(l.qty === undefined || l.qty === 1 ? {} : { qty: l.qty }),
     })),
     // to the cent, so a value that moved by float noise alone is not asked for again
     entry: Number((-value).toFixed(2)) || 0,

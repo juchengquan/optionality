@@ -13,7 +13,7 @@
  *  left before the Manage-by) and a share as a percentage.
  */
 import type { Entry, Holding, Monitor } from "../../shared/api";
-import { DASH, legSummary } from "../../shared/format";
+import { DASH, heldLegs, legSummary } from "../../shared/format";
 import type { Mode } from "../mode";
 import type { BookModel } from "../placement";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
@@ -59,9 +59,7 @@ export function moneyText(value: number | null, privacy: boolean): string {
 
 /** `-C7300 +C7350`: a holding's legs as the watchlist writes a combo's, short as minus. */
 export function holdingLegs(holding: Holding): string {
-  return holding.legs
-    .map((l) => `${l.side === "short" ? "-" : "+"}${l.option_type[0]}${l.strike}`)
-    .join(" ");
+  return heldLegs(holding.legs);
 }
 
 /** moomoo's `US.SPXW261218P7150000` as the type and strike it names, or null for anything else. */
