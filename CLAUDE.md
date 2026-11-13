@@ -53,13 +53,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   here. Running a subset is how a commit passes while something it touched is broken: `make test`
   alone is only the Python (every golden case, reproduced exactly, then `python-backend/`'s suite).
   `make lint` is ruff over both Python packages (`check`, and `format --check`: `make format` is
-  what fixes it) plus six scripts — `check-boundaries`,
-  `check-test-support`, `check-seams` (four seams: the backend's `vendors/` and the library's,
+  what fixes it) plus the scripts its rule names — `check-boundaries`, `check-test-support`,
+  `check-seams` (the seams in its `SEAMS` table: the backend's `vendors/` and the library's,
   `engine/`, `entrypoints/`), `check-module-map`, `check-make-targets`, `check-served-root` — and
   `check-py-backend`, the Python backend's three lines (ADR 0021): it imports only the library's
   public modules, it names no order call or class outside a `trading/` that does not exist
   (the library holds itself to the second with no door at all, in its own suite), and it keeps
-  `check-seams`' four seams, which reads no Python: `vendors/` and the library's clients behind it,
+  `check-seams`' seams, which reads no Python: `vendors/` and the library's clients behind it,
   `engine/`, `entrypoints/`.
   `check-module-map` holds the same backend module for module: every TypeScript backend module has
   its Python port or a reason in the tool's table, landed in the same change (lockstep, ADR 0021);
@@ -118,9 +118,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   reads the answer, rather than beside the message that carries it: nothing else could hold it. The
   fake gateway answers `reqMarketDataType` with nothing, as the real one does, so no replay can see
   which grade was asked, and changing the Python port's copy of that number left all 688 of its
-  tests passing. Recorded here, `test_ibkr.py` compares it like any other shared number, in both
-  directions — a constant the corpus states and the port lacks fails too. Deliberately NOT
-  part of the `GOLDEN_CASES` fingerprint: that answers "does this port reproduce the DOMAIN", and
+  tests passing (#317, 2026-11-11). Recorded here, `test_ibkr.py` compares it like any other shared
+  number, in both directions — a constant the corpus states and the port lacks fails too.
+  Deliberately NOT part of the `GOLDEN_CASES` fingerprint: that answers "does this port reproduce the DOMAIN", and
   the Python package has no vendor ports yet — folding these in would make `py-2026.11.9`, tagged
   and answering "agrees" today, report disagreement over code it does not contain. Every
   exported domain function must have a case (ADR 0014), decisions included (ADR 0017) — `cases.test.ts`
@@ -368,10 +368,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   reaching into another package's source. Beside them, `api/`: the HTTP door's description of
   itself, which the TypeScript generates and the Python serves (see **Door scenarios**).
 - `tools/guards.test.mjs` — every tree-walking guard skips the same directories. `SKIP_DIRS` is
-  copied in FIVE files, each with its own `walk`, which is why `.claude` was missing from all five
-  at once: `.claude/worktrees/<agent>` is a checkout of this repository on another branch, live and
-  registered with git, so walking into one lints that branch against this one's rules and `make
-  check` goes red on a clean main. The real fix is one shared walk; until then this holds each list
+  copied in every guard its `GUARDS` names, each with its own `walk`, which is why `.claude` was
+  missing from all five at once on 2026-11-10: `.claude/worktrees/<agent>` is a checkout of this
+  repository on another branch, live and registered with git, so walking into one lints that
+  branch against this one's rules and `make check` goes red on a clean main. The real fix is one shared walk; until then this holds each list
   to a floor.
 - `testdata/golden/` — the golden cases; `testdata/vendors/` — the vendor field corpus (both
   generated test data, both written by `make cases`), and inside it `ibkr-gateway/`, recorded IB
@@ -430,22 +430,21 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   and `api.py` are cased by nothing: they mirror no domain module and no vendor one. `yahoo.py` IS
   cased — against `testdata/vendors/`, not `testdata/golden/`, so it is outside the `GOLDEN_CASES`
   fingerprint on purpose (`cases/vendors.ts` says why). Everything else is, decisions included.
-  Counted on 2026-11-11 and moved by #297's two (`quote.sigma_distance`, `quote.strike_distances`)
-  and #295's one (`expiry.sample_timing`), #298's one (`quote.one_sigma`) and #333's one
-  (`vol.pace_explained`), and #351's one (`monitor.monitor_contracts`)
-  — every public function a public module of the package defines, against every `fn` in
-  `testdata/golden/` — that is 68 of the package's 95, which is exactly the 68 of the TypeScript
-  domain's 72 exported ones that have cases: the four `*Policy` readers take the
-  service's Settings, so the package takes their knobs directly instead. The other 27, none of them
-  in `testdata/golden/`:
-  - seven held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
-    five, `quotes.verify_contracts`, and `opend.quotes`, the one-shot for a script;
-  - six held to `testdata/vendors/` instead: `yahoo.to_record` and `yahoo.quotes`, and `ibkr`'s four
-    field readers (`grade`, `greek_fields`, `with_mid`, `has_figures`) against `ibkr-fields.json`;
-  - two held by the recorded IB Gateway conversations and their own tests: `ibkr.contract_for` and
+  The cased functions are exactly the TypeScript domain's exported ones that have cases, which is
+  all of them but the `*Policy` readers in `cases.test.ts`'s `NOT_PORTED`: they take the service's
+  Settings, so the package takes their knobs directly instead. Every other public function a public
+  module of the package defines is named in `tests/test_cases.py`'s `UNCASED`, with what holds it,
+  and that test fails on one in neither — so the list is the table, not a count here (this
+  paragraph's counts were moved by hand in five PRs running and checked by nothing, #366). They
+  fall into these kinds:
+  - held by their own tests and no corpus, because they mirror no domain function: `api.py`'s
+    readers, `quotes.verify_contracts`, and `opend.quotes`, the one-shot for a script;
+  - held to `testdata/vendors/` instead: the Yahoo port, and `ibkr`'s field readers against
+    `ibkr-fields.json`;
+  - held by the recorded IB Gateway conversations and their own tests: `ibkr.contract_for` and
     `ibkr.quotes`;
-  - `no_trading`'s eight, a lint held by fixture sources;
-  - `research/`'s three, cased by nothing by design (ADR 0020);
+  - `no_trading`'s, a lint held by fixture sources;
+  - `research/`'s, cased by nothing by design (ADR 0020);
   - and `js.js_string`, which mirrors no TypeScript function — the TypeScript interpolates a number
     where the Python must spell the conversion out.
   **`src/optionality/research/`** is the package's other half, and the only subdirectory: chains,
@@ -463,9 +462,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   maths and drives the ports, which is what it is for.
   `tests/test_cases.py` runs every golden case, and `tests/test_standalone.py` holds the promise
   three documents make and nothing checked: the maths imports and computes with NO `opend` extra
-  and NO service. Two checks, because they fail differently — a static pass over the sixteen pure
-  modules (it reads the AST, so a lazy import inside a function is seen too) and a subprocess that
-  imports them all with `moomoo` and `ib_async` unimportable and `OPTIONALITY_API` unset. The second is the only
+  and NO service. Two checks, because they fail differently — a static pass over every pure
+  module, derived there as every module not `IMPURE` (it reads the AST, so a lazy import inside a
+  function is seen too), and a subprocess that imports them all with `moomoo` and `ib_async` unimportable and `OPTIONALITY_API` unset. The second is the only
   one that can catch an import-time dependency no pattern lists, like zone data. Worth having
   because `moomoo` IS installed in the venv the suite runs in, so a violation was invisible here.
   Writing it also corrected a belief: `optionality.opend` imports perfectly well without the SDK —
@@ -521,8 +520,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   shrinking list: a listed scenario that passes FAILS ("take it off the backlog"), one not listed
   must pass, a listed one that no longer exists fails, and the list is written out — a test reads
   its syntax — so a new scenario joins it only in a diff. `test_scenario_runner.py` holds all of
-  that against small worlds and a fake backend, because 120 skips cannot show a runner compares
-  anything.
+  that against small worlds and a fake backend, because a suite of skips — all 120 scenarios were,
+  when it was written on 2026-11-09 — cannot show a runner compares anything.
   **How it starts**: `python -m optionality_backend --env-file=.env`, which is `__main__.py`, the
   port of `main.ts`, in the order `listen.py`'s docstring gives the lock (.env, port, settings,
   database, vendors, sweep, app, bot, startup line). `entrypoints/http/listen.py` takes the port
@@ -694,7 +693,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   its scenarios came with it `/docs` and `/openapi.json` were nobody's door.
   Every road to a Python plist goes through it — `make use`, `make launchd-api-install
   BACKEND=python` and `make deploy`'s restart — and there is no override. Since 2026-11-10 it
-  refuses nothing — every scenario passes (143 of 143) and every module is ported — and it stays,
+  refuses nothing — every scenario passes (`make test`'s last line, "door scenarios: N of M
+  ported", counts them) and every module is ported — and it stays,
   because a TypeScript change that lands without its Python is a tree it must refuse.
   **A drill** — the
   Python live for a while, by hand, then back — is run when the owner asks and never on a
