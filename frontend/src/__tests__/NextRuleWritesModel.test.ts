@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { MonitorPatch, SpreadsIn, TotalEntryIn } from "backend/schemas";
-import type { Entry, Holding, Monitor } from "../api";
+import type { Entry, Holding, Monitor } from "../shared/api";
 import { contractCode, ruleWords } from "../next/add";
 import {
   contractOfCode, draftOf, holdBody, holdDraft, holdLinks, holdOffered, holdToast, patchOf,

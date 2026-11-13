@@ -5,7 +5,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import type { Added, Entry } from "../api";
+import type { Added, Entry } from "../shared/api";
 import type { SpreadsBody } from "../next/add";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";

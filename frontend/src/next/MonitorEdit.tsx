@@ -26,7 +26,7 @@ import { flushSync } from "react-dom";
 
 import type { Added, Entry, Holding, Monitor } from "../shared/api";
 import { Button } from "@/components/ui/button";
-import { DASH, marketDay } from "../format";
+import { DASH, marketDay } from "../shared/format";
 import { ruleWords as replacedWords, type SpreadsBody } from "./add";
 import { refusalSpot, type ContractSpot } from "./contract";
 import {

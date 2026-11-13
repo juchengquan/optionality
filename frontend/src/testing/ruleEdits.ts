@@ -11,7 +11,7 @@
  *  Every route the page calls is answered on purpose, and a route not named is a 404 that says
  *  which call it was. Each write changes what the next read says, as the real routes do.
  */
-import type { Entry, Holding, Monitor } from "../api";
+import type { Entry, Holding, Monitor } from "../shared/api";
 import { EDIT_HEALTH } from "./editBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "./ownerBook";
 
