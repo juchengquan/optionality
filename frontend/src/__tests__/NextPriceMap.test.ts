@@ -89,6 +89,9 @@ describe("SPX's price", () => {
     expect(spxWords(line, true)).toBe("SPX 6911.25 · from the holdings' batch, 23:14:35");
     expect(spxWords({ ...line, source: "watchlist" }, true)).toBe("SPX 6911.25 · from the watchlist's batch, 23:14:35");
     expect(spxWords(line, false)).toBe("SPX 6911.25 · as last valued, 23:14:35");
+    // outside the session the watchlist's batch is still POLLED (#371's review): it is not "as last
+    // valued", and saying so of the newest figure on the page would be the wrong way round
+    expect(spxWords({ ...line, source: "watchlist" }, false)).toBe("SPX 6911.25 · from the watchlist's batch, 23:14:35");
     expect(spxWords({ ...line, at: null }, true)).toBe("SPX 6911.25 · from the holdings' batch");
     expect(spxWords({ spx: null, reason: REASON, source: null, at: null }, true)).toBe(`SPX — ${REASON}`);
   });

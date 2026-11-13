@@ -99,12 +99,15 @@ export function spxOfBook(quotes: Entry[], holdings: Holding[] | null): SpxLine 
 /** "23:14:35": the clock time of a served instant, as the service wrote it in DISPLAY_TZ. */
 const clockOf = (at: string | null) => /\d{2}:\d{2}:\d{2}/.exec(at ?? "")?.[0] ?? null;
 
-/** What the map says above its line: SPX's price, and which batch and when — outside the session,
- *  where the holdings are not polled, "as last valued" (#371) — or, with no price, why. */
+/** What the map says above its line: SPX's price, and which batch and when — or, with no price, why.
+ *  Worded by the batch it came FROM (#371's review): the watchlist's is `/quotes`, polled at every
+ *  hour, so it is "from the watchlist's batch" in or out of the session; the holdings' is polled
+ *  only in session, and outside it is "as last valued". Keyed by the session alone, the map called
+ *  the newest figure on the page "as last valued". */
 export function spxWords(line: SpxLine, session: boolean): string {
   if (line.spx === null) return `SPX — ${line.reason ?? "no price"}`;
   const time = clockOf(line.at);
-  const whose = !session ? "as last valued"
+  const whose = line.source === "holdings" && !session ? "as last valued"
     : `from the ${line.source === "holdings" ? "holdings'" : "watchlist's"} batch`;
   return `SPX ${line.spx.toFixed(2)} · ${whose}${time ? `, ${time}` : ""}`;
 }
