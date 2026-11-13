@@ -77,9 +77,18 @@ export function correctedLegs(name: string, stored: readonly Leg[], given: reado
   return { legs, changed: legs.some((l, i) => (l.qty ?? 1) !== (stored[i]!.qty ?? 1)) };
 }
 
+/** What a correction did to the rules: those whose legs took the new quantities (each a new rule,
+ *  unrung), and those whose scope moved, with the scope each now has. The route answers with both,
+ *  so the page says what happened rather than what usually would. */
+export interface Followed {
+  followed: { id: string; code: string }[];
+  rescoped: { id: string; code: string; scope: "all" | "leg" | null }[];
+}
+
 /** Write a correction and what follows it (see the module's comment). The caller holds the
  *  transaction, and has already checked the holding is open and the legs are a correction. */
-export function correctQuantities(db: DatabaseSync, row: PositionRow, legs: Leg[], at: Date): void {
+export function correctQuantities(db: DatabaseSync, row: PositionRow, legs: Leg[], at: Date): Followed {
+  const done: Followed = { followed: [], rescoped: [] };
   const before = toPosition(row);
   updatePositionFields(db, row.id, {
     legs: toSqliteJson(legs.map((l) => ({
@@ -119,13 +128,18 @@ export function correctQuantities(db: DatabaseSync, row: PositionRow, legs: Leg[
           // what it watches changed, so it is a new rule: unrung (#292)
           Object.assign(changes, { legs: text, triggered: 0, last_alarm_at: null });
           watching = toMonitor({ ...watcher, legs: text });
+          done.followed.push({ id: watcher.id, code: watcher.code });
         }
       }
     }
     const scope = positionsHolding(linked, monitorContracts(watching)).scope;
-    if (scope !== watcher.scope) changes.scope = scope;
+    if (scope !== watcher.scope) {
+      changes.scope = scope;
+      done.rescoped.push({ id: watcher.id, code: watcher.code, scope });
+    }
     if (Object.keys(changes).length > 0) updateMonitorFields(db, watcher.id, changes);
   }
+  return done;
 }
 
 /** Whether a sample was summed under quantities since corrected: observed before the correction,

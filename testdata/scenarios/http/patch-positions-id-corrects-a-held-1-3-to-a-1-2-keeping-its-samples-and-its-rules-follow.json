@@ -179,7 +179,14 @@
         "opened_at": "2026-10-12",
         "closed_on": null,
         "exit": null,
-        "realized_points": null
+        "realized_points": null,
+        "followed_monitors": [
+          {
+            "id": "mon-ratio",
+            "code": "dec-ratio"
+          }
+        ],
+        "rescoped_monitors": []
       }
     },
     "rows": {

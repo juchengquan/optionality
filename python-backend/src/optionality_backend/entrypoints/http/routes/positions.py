@@ -152,6 +152,30 @@ class ClosedOut(PositionOut):
     disabled_monitors: list[DisabledMonitor]
 
 
+class FollowedMonitor(BaseModel):
+    model_config = _AS_ZOD
+
+    id: str
+    code: str
+
+
+class RescopedMonitor(BaseModel):
+    model_config = _AS_ZOD
+
+    id: str
+    code: str
+    scope: Literal["all", "leg"] | None
+
+
+class UpdatedOut(PositionOut):
+    """An edit, answered: the holding as it now stands, and what a corrected quantity did to the rules
+    watching it (#359) — the rules whose legs took the new quantities, each a new rule unrung, and the rules
+    whose scope moved. Both empty when no quantity changed."""
+
+    followed_monitors: list[FollowedMonitor]
+    rescoped_monitors: list[RescopedMonitor]
+
+
 class ScheduleOut(BaseModel):
     """The exit schedule, or None for a Position whose Opened nobody has declared — which is the opt-in,
     because nothing is inferred from created_at (ADR 0011)."""
@@ -244,9 +268,11 @@ class SampleOut(BaseModel):
     legs_delta: dict[str, float] | None
     #: SPX's price as the writing sweep's batch implied it (ADR 0024), or None
     spx: float | None
-    #: summed under quantities since corrected (#359): its Cost to close is the old structure's, kept as it
-    #: was because nothing stored can re-sum it. Its IV, vega and delta are one contract's readings and stay
-    #: true.
+    #: observed before the LATEST correction of a leg's quantity (#359), so its Cost to close may be another
+    #: structure's — kept as it was, because nothing stored can re-sum it. Its IV, vega and delta are one
+    #: contract's readings and stay true. One stamp per holding, so a correction undone (3→2→3) leaves the
+    #: days summed under the 3 marked too: it may mark a day that agrees, never leave one unmarked that does
+    #: not. Exact would need each sample's own legs stored.
     before_correction: bool
 
 
@@ -634,7 +660,7 @@ def position_routes(deps: Deps) -> APIRouter:
 
         return out(await atomic(db, save))
 
-    @router.patch("/{id}", summary="Update a position", response_model=PositionOut)
+    @router.patch("/{id}", summary="Update a position", response_model=UpdatedOut)
     async def update(
         id_: Annotated[str, Path(alias="id")],
         given: Annotated[PositionPatch, Depends(valid("json", PositionPatch))],
@@ -684,13 +710,20 @@ def position_routes(deps: Deps) -> APIRouter:
             changes["closed_on"] = given.closed_on
         at = deps.now()
 
-        def save() -> PositionRow:
+        def save() -> dict[str, Any]:
             # one transaction: the legs, the rules that follow them, and the rest of the patch
-            if correction is not None and correction.changed:
+            done = (
                 correct_quantities(db, row, correction.legs, at)
-            return update_position_fields(db, id_, changes)
+                if correction is not None and correction.changed
+                else None
+            )
+            return {
+                **out(update_position_fields(db, id_, changes)),
+                "followed_monitors": done.followed if done else [],
+                "rescoped_monitors": done.rescoped if done else [],
+            }
 
-        return out(await atomic(db, save))
+        return await atomic(db, save)
 
     @router.post("/{id}/close", summary="Close a position, keeping it and its history", response_model=ClosedOut)
     async def close(

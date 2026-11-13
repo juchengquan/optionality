@@ -113,9 +113,20 @@ def _stored_legs(legs: list[Leg]) -> str:
     )
 
 
-def correct_quantities(db: sqlite3.Connection, row: PositionRow, legs: list[Leg], at: datetime) -> None:
+@dataclass
+class Followed:
+    """What a correction did to the rules: those whose legs took the new quantities (each a new rule,
+    unrung), and those whose scope moved, with the scope each now has. The route answers with both, so the
+    page says what happened rather than what usually would."""
+
+    followed: list[dict[str, str]]
+    rescoped: list[dict[str, str | None]]
+
+
+def correct_quantities(db: sqlite3.Connection, row: PositionRow, legs: list[Leg], at: datetime) -> Followed:
     """Write a correction and what follows it (see the module's docstring). The caller holds the
     transaction, and has already checked the holding is open and the legs are a correction."""
+    done = Followed(followed=[], rescoped=[])
     before = to_position(row)
     update_position_fields(db, row["id"], {"legs": _stored_legs(legs), "qty_corrected_at": to_sql_datetime(at)})
     written = find_position(db, row["id"])
@@ -154,11 +165,14 @@ def correct_quantities(db: sqlite3.Connection, row: PositionRow, legs: list[Leg]
                     # what it watches changed, so it is a new rule: unrung (#292)
                     changes.update({"legs": text, "triggered": 0, "last_alarm_at": None})
                     watching = to_monitor({**watcher, "legs": text})
+                    done.followed.append({"id": watcher["id"], "code": watcher["code"]})
         scope = positions_holding(linked, monitor_contracts(watching)).scope
         if scope != watcher["scope"]:
             changes["scope"] = scope
+            done.rescoped.append({"id": watcher["id"], "code": watcher["code"], "scope": scope})
         if changes:
             update_monitor_fields(db, watcher["id"], changes)
+    return done
 
 
 def before_correction(observed_at: str | None, corrected_at: str | None) -> bool:

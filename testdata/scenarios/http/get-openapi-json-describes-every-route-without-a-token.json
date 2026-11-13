@@ -2992,6 +2992,57 @@
                               "number",
                               "null"
                             ]
+                          },
+                          "followed_monitors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code"
+                              ]
+                            }
+                          },
+                          "rescoped_monitors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "scope": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "all",
+                                        "leg"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code",
+                                "scope"
+                              ]
+                            }
                           }
                         },
                         "required": [
@@ -3006,7 +3057,9 @@
                           "opened_at",
                           "closed_on",
                           "exit",
-                          "realized_points"
+                          "realized_points",
+                          "followed_monitors",
+                          "rescoped_monitors"
                         ]
                       }
                     }

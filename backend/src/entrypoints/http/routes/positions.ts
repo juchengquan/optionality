@@ -79,6 +79,16 @@ const ClosedOut = PositionOut.extend({
   disabled_monitors: z.array(z.object({ id: z.string(), code: z.string() })),
 });
 
+/** An edit, answered: the holding as it now stands, and what a corrected quantity did to the rules
+ *  watching it (#359) — the rules whose legs took the new quantities, each a new rule unrung, and
+ *  the rules whose scope moved. Both empty when no quantity changed. */
+const UpdatedOut = PositionOut.extend({
+  followed_monitors: z.array(z.object({ id: z.string(), code: z.string() })),
+  rescoped_monitors: z.array(z.object({
+    id: z.string(), code: z.string(), scope: z.enum(["all", "leg"]).nullable(),
+  })),
+});
+
 /** The exit schedule, or null for a Position whose Opened nobody has declared — which is the
  *  opt-in, because nothing is inferred from created_at (ADR 0011). */
 const ScheduleOut = z.object({
@@ -191,9 +201,11 @@ const SampleOut = z.object({
   legs_delta: LegMap,
   /** SPX's price as the writing sweep's batch implied it (ADR 0024), or null */
   spx: z.number().nullable(),
-  /** summed under quantities since corrected (#359): its Cost to close is the old structure's, kept
-   *  as it was because nothing stored can re-sum it. Its IV, vega and delta are one contract's
-   *  readings and stay true. */
+  /** observed before the LATEST correction of a leg's quantity (#359), so its Cost to close may be
+   *  another structure's — kept as it was, because nothing stored can re-sum it. Its IV, vega and
+   *  delta are one contract's readings and stay true. One stamp per holding, so a correction undone
+   *  (3→2→3) leaves the days summed under the 3 marked too: it may mark a day that agrees, never
+   *  leave one unmarked that does not. Exact would need each sample's own legs stored. */
   before_correction: z.boolean(),
 });
 
@@ -225,7 +237,7 @@ const samples = documented("A holding's daily samples, with its on-pace and its 
 const payoff = documented("A holding's payoff at expiry", { 200: PayoffOut }, [404, 422]);
 const draft = documented("The payoff at expiry of draft legs, saving nothing and asking no Provider", { 200: PayoffOut });
 const create = documented("Create a position", { 201: PositionOut }, [409]);
-const update = documented("Update a position", { 200: PositionOut }, [404]);
+const update = documented("Update a position", { 200: UpdatedOut }, [404]);
 const close = documented("Close a position, keeping it and its history", { 200: ClosedOut }, [404, 409]);
 const remove = documented("Delete a position", { 204: null }, [404]);
 
@@ -547,11 +559,13 @@ export function positionRoutes(deps: Deps) {
       if (given.closed_on !== undefined) changes.closed_on = given.closed_on;
       const at = deps.now();
       // one transaction: the legs, the rules that follow them, and the rest of the patch
-      const saved = await atomic(db, () => {
-        if (correction?.changed) correctQuantities(db, row, correction.legs, at);
-        return updatePositionFields(db, id, changes);
+      const { saved, done } = await atomic(db, () => {
+        const done = correction?.changed ? correctQuantities(db, row, correction.legs, at) : null;
+        return { saved: updatePositionFields(db, id, changes), done };
       });
-      return update.reply(c, 200, out(saved));
+      return update.reply(c, 200, {
+        ...out(saved), followed_monitors: done?.followed ?? [], rescoped_monitors: done?.rescoped ?? [],
+      });
     })
 
     /** Close a holding: it is no longer held, and it is KEPT (ADR 0022).

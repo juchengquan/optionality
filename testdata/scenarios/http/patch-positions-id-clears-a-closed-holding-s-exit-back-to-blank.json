@@ -111,7 +111,9 @@
         "opened_at": "2026-10-12",
         "closed_on": "2026-11-06",
         "exit": null,
-        "realized_points": null
+        "realized_points": null,
+        "followed_monitors": [],
+        "rescoped_monitors": []
       }
     },
     "rows": {

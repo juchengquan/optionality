@@ -173,7 +173,9 @@
         "opened_at": "2026-10-13",
         "closed_on": null,
         "exit": null,
-        "realized_points": null
+        "realized_points": null,
+        "followed_monitors": [],
+        "rescoped_monitors": []
       }
     },
     "rows": {

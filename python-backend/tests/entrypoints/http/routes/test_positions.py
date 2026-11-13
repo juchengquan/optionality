@@ -1901,8 +1901,13 @@ class TestCorrectingAHeldLegsQuantity:
         id_ = await self.held(h)
         self.ringing(h, "ratio")
         self.ringing(h, SHORT)
-        assert (await patch(h, id_, {"legs": MEANT})).status_code == 200
+        answer = (await patch(h, id_, {"legs": MEANT})).json()
         value = self.rule(h, "ratio")
+        # what happened, said by the service: the page words its account from this (#359's review)
+        assert (answer["followed_monitors"], answer["rescoped_monitors"]) == (
+            [{"id": value["id"], "code": "ratio"}],
+            [],
+        )
         assert json.loads(value["legs"]) == [
             {"sign": 1, "option_type": "PUT", "strike": 7100},
             {"sign": -1, "option_type": "PUT", "strike": 7075, "qty": 2},
@@ -1936,7 +1941,9 @@ class TestCorrectingAHeldLegsQuantity:
         )
         assert links(h, watch) == ([id_], "leg")
         self.ringing(h, "w11")
-        assert (await patch(h, id_, {"legs": [TYPED[0], {**TYPED[1], "qty": 1}]})).status_code == 200
+        answer = (await patch(h, id_, {"legs": [TYPED[0], {**TYPED[1], "qty": 1}]})).json()
+        assert answer["rescoped_monitors"] == [{"id": watch, "code": "w11", "scope": "all"}]
+        assert [m["code"] for m in answer["followed_monitors"]] == ["ratio"]
         assert links(h, watch) == ([id_], "all")
         assert json.loads(self.rule(h, "w11")["legs"]) == [
             {"sign": 1, "option_type": "PUT", "strike": 7100},
@@ -1986,7 +1993,11 @@ class TestCorrectingAHeldLegsQuantity:
             (EXPIRY, json.dumps(legs)),
         )
         h.db.execute("insert into monitor_positions (monitor_id, position_id) values ('old', ?)", (id_,))
-        assert (await patch(h, id_, {"legs": MEANT})).status_code == 200
+        answer = (await patch(h, id_, {"legs": MEANT})).json()
+        assert ([m["code"] for m in answer["followed_monitors"]], answer["rescoped_monitors"]) == (
+            ["ratio"],
+            [{"id": "old", "code": "old13", "scope": "leg"}],
+        )
         assert json.loads(self.rule(h, "old13")["legs"]) == legs
         assert (self.rule(h, "old13")["scope"], self.rule(h, "old13")["triggered"]) == ("leg", 1)
 
@@ -2000,7 +2011,8 @@ class TestCorrectingAHeldLegsQuantity:
         h = start_with(start)
         id_ = await self.held(h)
         self.ringing(h, "ratio")
-        assert (await patch(h, id_, {"legs": TYPED})).status_code == 200
+        answer = (await patch(h, id_, {"legs": TYPED})).json()
+        assert (answer["followed_monitors"], answer["rescoped_monitors"]) == ([], [])
         assert self.stored(h, id_)["qty_corrected_at"] is None
         assert self.rule(h, "ratio")["triggered"] == 1
 

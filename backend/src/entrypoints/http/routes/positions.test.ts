@@ -1650,8 +1650,10 @@ describe("correcting a held leg's quantity (#359)", () => {
     const id = await held();
     ringing("ratio");
     ringing(SHORT);
-    expect((await patch(id, { legs: MEANT })).status).toBe(200);
+    const answer = await body(await patch(id, { legs: MEANT }));
     const value = rule("ratio");
+    // what happened, said by the service: the page words its account from this (#359's review)
+    expect([answer.followed_monitors, answer.rescoped_monitors]).toEqual([[{ id: value.id, code: "ratio" }], []]);
     expect(JSON.parse(value.legs!)).toEqual([
       { sign: 1, option_type: "PUT", strike: 7100 }, { sign: -1, option_type: "PUT", strike: 7075, qty: 2 },
     ]);
@@ -1674,7 +1676,9 @@ describe("correcting a held leg's quantity (#359)", () => {
     });
     expect(links(watch)).toEqual([[id], "leg"]);
     ringing("w11");
-    expect((await patch(id, { legs: [TYPED[0], { ...TYPED[1], qty: 1 }] })).status).toBe(200);
+    const answer = await body(await patch(id, { legs: [TYPED[0], { ...TYPED[1], qty: 1 }] }));
+    expect(answer.rescoped_monitors).toEqual([{ id: watch, code: "w11", scope: "all" }]);
+    expect(answer.followed_monitors.map((m: { code: string }) => m.code)).toEqual(["ratio"]);
     expect(links(watch)).toEqual([[id], "all"]);
     expect(JSON.parse(rule("w11").legs!)).toEqual([
       { sign: 1, option_type: "PUT", strike: 7100 }, { sign: -1, option_type: "PUT", strike: 7075 },
@@ -1710,7 +1714,9 @@ describe("correcting a held leg's quantity (#359)", () => {
        values ('old', 'old13', ?, 'CMB', 0, 'mid_price', 9, 'above', 'abs', ?, 'all', 1, 1, '2026-10-01 00:00:00.000000')`,
     ).run(EXPIRY, JSON.stringify(legs));
     h.db.prepare("insert into monitor_positions (monitor_id, position_id) values ('old', ?)").run(id);
-    expect((await patch(id, { legs: MEANT })).status).toBe(200);
+    const answer = await body(await patch(id, { legs: MEANT }));
+    expect([answer.followed_monitors.map((m: { code: string }) => m.code), answer.rescoped_monitors])
+      .toEqual([["ratio"], [{ id: "old", code: "old13", scope: "leg" }]]);
     expect(JSON.parse(rule("old13").legs!)).toEqual(legs);
     expect([rule("old13").scope, rule("old13").triggered]).toEqual(["leg", 1]);
   });
@@ -1726,7 +1732,8 @@ describe("correcting a held leg's quantity (#359)", () => {
     start();
     const id = await held();
     ringing("ratio");
-    expect((await patch(id, { legs: TYPED })).status).toBe(200);
+    const answer = await body(await patch(id, { legs: TYPED }));
+    expect([answer.followed_monitors, answer.rescoped_monitors]).toEqual([[], []]);
     expect(stored(id).qty_corrected_at).toBeNull();
     expect(rule("ratio").triggered).toBe(1);
   });
