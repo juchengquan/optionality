@@ -66,7 +66,7 @@ from .schemas.monitor import (
     DEFAULT_SINGLE_FIELD,
     threshold_error,
 )
-from .schemas.position import DEFAULT_CONTRACTS, LegIn
+from .schemas.position import DEFAULT_CONTRACTS, LegIn, stored_qty
 from .schemas.spread import MAX_PROBE_LEGS, SpreadIn, SpreadMonitorIn, SpreadsIn
 
 
@@ -159,9 +159,15 @@ def _plan(strike_date: str, spread: SpreadIn, m: SpreadMonitorIn, index: int) ->
     if threshold_fault(compare, m.threshold):
         return _refuse(cast(str, threshold_error(compare, m.threshold)))
     # minus is short (ADR 0013): a credit spread's value is the negative of its cost to close, which
-    # `compare: abs` is indifferent to
+    # `compare: abs` is indifferent to. A leg's quantity goes with it, so the rule values the structure
+    # the holding is (#351)
     legs = [
-        {"sign": -1 if leg.side == "short" else 1, "option_type": leg.option_type, "strike": leg.strike}
+        {
+            "sign": -1 if leg.side == "short" else 1,
+            "option_type": leg.option_type,
+            "strike": leg.strike,
+            **stored_qty(leg.qty),
+        }
         for leg in spread.legs
     ]
     return _Planned(
@@ -207,14 +213,15 @@ def _in_the_way(
 
 
 def _twice_over(spread: SpreadIn) -> SpreadFault | None:
-    """Two legs on one contract: a typo, or a leg that cancels itself."""
+    """Two legs on one contract: a typo, or a leg that cancels itself. Held twice over is ONE leg with a
+    quantity (#351), so that "a Contract held twice" stays a fact about two holdings — a roll day."""
     seen: dict[str, LegIn] = {}
     for leg in spread.legs:
         key = f"{leg.option_type} {js_string(leg.strike)}"
         before = seen.get(key)
         if before is not None:
             return _refuse(
-                f"'{spread.name}' names {key} twice"
+                f"'{spread.name}' names {key} twice: give the one leg a quantity"
                 if before.side == leg.side
                 else f"'{spread.name}' is both short and long {key}"
             )
@@ -230,7 +237,9 @@ async def create_spreads(deps: SpreadDeps, given: SpreadsIn) -> Added | SpreadFa
     db = deps.db
     date = given.strike_date
 
-    # 1. what the request says about itself, starting with its size: the one probe is bounded
+    # 1. what the request says about itself, starting with its size: the one probe is bounded. LEGS, not
+    # legs times quantity: a quantity asks the Provider for nothing more, and a spread names a Contract
+    # once (`_twice_over`), so legs are at least the codes the probe asks for (#351)
     leg_count = sum(len(spread.legs) for spread in given.spreads)
     if leg_count > MAX_PROBE_LEGS:
         return _refuse(f"this request has {leg_count} legs: at most {MAX_PROBE_LEGS} in one request")
@@ -340,7 +349,10 @@ def _write(
                 "contracts": DEFAULT_CONTRACTS if spread.contracts is None else spread.contracts,
                 "entry": spread.entry,
                 "legs": to_sqlite_json(
-                    [{"side": leg.side, "option_type": leg.option_type, "strike": leg.strike} for leg in spread.legs]
+                    [
+                        {"side": leg.side, "option_type": leg.option_type, "strike": leg.strike, **stored_qty(leg.qty)}
+                        for leg in spread.legs
+                    ]
                 ),
                 "created_at": created_at,
                 "opened_at": spread.opened_at,

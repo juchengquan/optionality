@@ -51,6 +51,10 @@ WHOLE: Rule = (lambda v: _is_number(v) and (isinstance(v, int) or v.is_integer()
 SIGN: Rule = (lambda v: _is_number(v) and v in (1, -1), "1 or -1")
 OPTION_TYPE: Rule = (lambda v: isinstance(v, str) and v in ("CALL", "PUT"), '"CALL" or "PUT"')
 SIDE: Rule = (lambda v: isinstance(v, str) and v in ("short", "long"), '"short" or "long"')
+QTY: Rule = (
+    lambda v: _is_number(v) and (isinstance(v, int) or v.is_integer()) and v >= 1,
+    "a whole number, 1 or more",
+)
 
 
 class _Reader:
@@ -107,6 +111,8 @@ def _monitor_leg(read: _Reader, i: int, value: Any) -> dict[str, Any]:
         "sign": read.take(f"legs[{i}].sign", leg.get("sign"), SIGN),
         "option_type": read.take(f"legs[{i}].option_type", leg.get("option_type"), OPTION_TYPE),
         "strike": read.take(f"legs[{i}].strike", leg.get("strike"), NUMBER),
+        # absent is 1, every leg written before #351; present, it multiplies the maths and must be one
+        **({} if "qty" not in leg else {"qty": read.take(f"legs[{i}].qty", leg["qty"], QTY)}),
     }
 
 
@@ -132,4 +138,5 @@ def _leg(read: _Reader, i: int, value: Any) -> dict[str, Any]:
         "side": read.take(f"legs[{i}].side", leg.get("side"), SIDE),
         "option_type": read.take(f"legs[{i}].option_type", leg.get("option_type"), OPTION_TYPE),
         "strike": read.take(f"legs[{i}].strike", leg.get("strike"), NUMBER),
+        **({} if "qty" not in leg else {"qty": read.take(f"legs[{i}].qty", leg["qty"], QTY)}),
     }

@@ -36,6 +36,7 @@ const WHOLE: Rule = [(v) => Number.isInteger(v), "a whole number"];
 const SIGN: Rule = [(v) => v === 1 || v === -1, "1 or -1"];
 const OPTION_TYPE: Rule = [(v) => v === "CALL" || v === "PUT", '"CALL" or "PUT"'];
 const SIDE: Rule = [(v) => v === "short" || v === "long", '"short" or "long"'];
+const QTY: Rule = [(v) => Number.isInteger(v) && (v as number) >= 1, "a whole number, 1 or more"];
 
 /** Reads one row's values, refusing the first that is not what its rule says. */
 function reader(kind: string, name: unknown) {
@@ -87,6 +88,8 @@ export function toMonitor(row: MonitorRow): Monitor & { id: string } {
       sign: take<1 | -1>(`legs[${i}].sign`, leg.sign, SIGN),
       option_type: take<"CALL" | "PUT">(`legs[${i}].option_type`, leg.option_type, OPTION_TYPE),
       strike: take<number>(`legs[${i}].strike`, leg.strike, NUMBER),
+      // absent is 1, every leg written before #351; present, it multiplies the maths and must be one
+      ...(leg.qty === undefined ? {} : { qty: take<number>(`legs[${i}].qty`, leg.qty, QTY) }),
     };
   });
   return { ...monitor, legs };
@@ -109,6 +112,7 @@ export function toPosition(row: PositionRow): Position & { id: string } {
       side: take<Side>(`legs[${i}].side`, leg.side, SIDE),
       option_type: take<"CALL" | "PUT">(`legs[${i}].option_type`, leg.option_type, OPTION_TYPE),
       strike: take<number>(`legs[${i}].strike`, leg.strike, NUMBER),
+      ...(leg.qty === undefined ? {} : { qty: take<number>(`legs[${i}].qty`, leg.qty, QTY) }),
     };
   });
   return { ...position, legs };

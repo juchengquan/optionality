@@ -11,7 +11,7 @@ door scenario "post-positions-refuses-a-holding-with-no-legs".
 
 import pytest
 
-from optionality_backend.schemas.position import DEFAULT_CONTRACTS, PositionIn, PositionPatch
+from optionality_backend.schemas.position import DEFAULT_CONTRACTS, MAX_LEG_QTY, PositionIn, PositionPatch
 from optionality_backend.schemas.zod import ZodError, parse, prettify_error
 
 LEG = {"side": "short", "option_type": "CALL", "strike": 8050}
@@ -86,3 +86,25 @@ class TestPatching:
             detail(PositionPatch, {"strategy": None})
             == "✖ Invalid input: expected string, received null\n  → at strategy"
         )
+
+
+class TestAQuantityPerLeg:
+    """#351: `qty`, a whole number from 1 to MAX_LEG_QTY, absent when not given."""
+
+    def test_takes_a_quantity_and_leaves_one_absent(self):
+        given = parse(PositionIn, condor(legs=[{**LEG, "qty": 2}, {**LEG, "strike": 8075}]))
+        assert [leg.qty for leg in given.legs] == [2, None]
+        assert MAX_LEG_QTY == 10
+
+    @pytest.mark.parametrize(
+        ("qty", "why"),
+        [
+            (0, "Too small: expected number to be >=1"),
+            (11, "Too big: expected number to be <=10"),
+            (1.5, "Invalid input: expected int, received number"),
+            ("2", "Invalid input: expected number, received string"),
+            (None, "Invalid input: expected number, received null"),
+        ],
+    )
+    def test_refuses_a_quantity_of_none_of_more_than_ten_or_of_a_part(self, qty, why):
+        assert detail(PositionIn, condor(legs=[{**LEG, "qty": qty}])) == f"✖ {why}\n  → at legs[0].qty"

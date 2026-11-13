@@ -158,6 +158,18 @@ export const BOT: readonly BotInput[] = [
     update: message("/combo dec-calls"),
   },
   {
+    // a quantity per leg (#351): the 7350 sold twice over, said beside its sign and counted twice
+    name: "/combo counts a leg's quantity in the total",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-ratio", code: "dec-ratio",
+        legs: [{ sign: 1, option_type: "CALL", strike: 7300 }, { sign: -1, option_type: "CALL", strike: 7350, qty: 2 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    update: message("/combo dec-ratio"),
+  },
+  {
     name: "/combo names nothing it cannot find",
     world: world({ tables: held }),
     update: message("/combo dec-puts"),

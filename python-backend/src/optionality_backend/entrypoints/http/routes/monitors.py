@@ -31,7 +31,7 @@ from typing import Annotated, Any, Literal, cast
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.exit import ExitPolicy
 from optionality.monitor import combo_field_error
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from ....create_monitor import (
     ComboInput,
@@ -84,6 +84,9 @@ class LegOut(BaseModel):
     sign: float
     option_type: str
     strike: float
+    #: how many of the Contract one of the combo holds; absent is 1 (#351), and absent is left out, as
+    #: zod leaves out an optional key that is not there
+    qty: float | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class PositionRefOut(BaseModel):

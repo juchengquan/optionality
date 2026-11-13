@@ -149,12 +149,13 @@ async def combo(ctx: BotContext, args: list[str]) -> str:
         code = codes[index]
         record = by_code.get(code)
         value = None if record is None else record.get(monitor.field)
-        sign = "+" if leg.sign > 0 else "-"
+        # a quantity beside its sign, `-2`, as the dashboard writes one (#351); one says nothing more
+        sign = ("+" if leg.sign > 0 else "-") + ("" if leg.qty == 1 else str(leg.qty))
         if value is None:
             rows.append([sign, short_spx_code(code), "—"])
             complete = False
         else:
-            total += leg.sign * number(value)
+            total += leg.sign * leg.qty * number(value)
             rows.append([sign, short_spx_code(code), fmt_value(monitor.field, number(value))])
     # 4dp on the total, as the old Python rounded it: a signed sum of three-decimal mids otherwise shows
     # float noise in a figure read as a price

@@ -1,0 +1,90 @@
+{
+  "name": "POST /positions/payoff draws a butterfly's middle leg twice",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/positions/payoff",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "legs": [
+        {
+          "side": "long",
+          "option_type": "CALL",
+          "strike": 7300
+        },
+        {
+          "side": "short",
+          "option_type": "CALL",
+          "strike": 7350,
+          "qty": 2
+        },
+        {
+          "side": "long",
+          "option_type": "CALL",
+          "strike": 7400
+        }
+      ],
+      "entry": -1.25
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "at_strikes": [
+          {
+            "spx": 7300,
+            "pnl": -1.25
+          },
+          {
+            "spx": 7350,
+            "pnl": 48.75
+          },
+          {
+            "spx": 7400,
+            "pnl": -1.25
+          }
+        ],
+        "slope_below": 0,
+        "slope_above": 0,
+        "breakevens": [
+          7301.25,
+          7398.75
+        ],
+        "max_profit": 48.75,
+        "max_loss": -1.25
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

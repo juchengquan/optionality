@@ -1756,3 +1756,33 @@ class TestWhatOnlyThePythonCanGetWrong:
         for method, path in (("GET", "/positions/x"), ("POST", "/positions/values"), ("PUT", "/positions/x")):
             resp = await h.call(path, method=method)
             assert (resp.status_code, resp.text) == (404, "404 Not Found"), (method, path)
+
+
+#: a 1×2 put ratio: one leg per contract, the short one held twice over (#351)
+RATIO = [
+    {"side": "long", "option_type": "PUT", "strike": 7100},
+    {"side": "short", "option_type": "PUT", "strike": 7075, "qty": 2},
+]
+
+
+class TestAQuantityPerLeg:
+    """#351: one leg per contract, with a quantity, recorded as given and drawn with it."""
+
+    async def test_records_a_legs_quantity_and_a_quantity_of_one_as_none(self, start):
+        h = start_with(start)
+        created201(await post(h, condor(name="ratio", legs=RATIO)))
+        created201(await post(h, condor(name="ones", legs=[{**leg, "qty": 1} for leg in RATIO])))
+
+        def stored(name):
+            return json.loads(h.db.execute("select legs from positions where name = ?", (name,)).fetchone()[0])
+
+        assert stored("ratio") == RATIO
+        assert stored("ones") == [{k: v for k, v in leg.items() if k != "qty"} for leg in RATIO]
+
+    async def test_draws_a_holdings_payoff_with_its_quantities(self, start):
+        h = start_with(start)
+        id_ = created201(await post(h, condor(name="ratio", legs=RATIO, entry=0.5, contracts=1)))
+        payoff = (await h.call(f"/positions/{id_}/payoff")).json()
+        # below the short strike two puts are owed against one held
+        assert payoff["slope_below"] == 1
+        assert payoff["at_strikes"] == [{"spx": 7075, "pnl": 25.5}, {"spx": 7100, "pnl": 0.5}]

@@ -105,12 +105,14 @@ export const combo: Command = async (ctx, args) => {
   for (const [index, leg] of (monitor.legs ?? []).entries()) {
     const code = codes[index]!;
     const value = byCode[code]?.[monitor.field];
-    const sign = leg.sign > 0 ? "+" : "-";
+    // a quantity beside its sign, `-2`, as the dashboard writes one (#351); one says nothing more
+    const qty = leg.qty ?? 1;
+    const sign = `${leg.sign > 0 ? "+" : "-"}${qty === 1 ? "" : qty}`;
     if (value === undefined || value === null) {
       rows.push([sign, shortSpxCode(code), "—"]);
       complete = false;
     } else {
-      total += leg.sign * Number(value);
+      total += leg.sign * qty * Number(value);
       rows.push([sign, shortSpxCode(code), fmtValue(monitor.field, Number(value))]);
     }
   }

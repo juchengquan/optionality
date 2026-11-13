@@ -42,6 +42,8 @@ const MonitorOut = z.object({
   compare: z.string(),
   legs: z.array(z.object({
     sign: z.number(), option_type: z.string(), strike: z.number(),
+    /** how many of the Contract one of the combo holds; absent is 1 (#351) */
+    qty: z.number().optional(),
   })).nullable(),
   enabled: z.boolean(),
   scope: z.string().nullable(),
@@ -294,6 +296,8 @@ const EntryOut = z.object({
   quote: QuoteOut.nullable(),
   legs: z.array(z.object({
     sign: z.number(), option_type: z.string(), strike: z.number(),
+    /** how many of the Contract one of the combo holds; absent is 1 (#351) */
+    qty: z.number().optional(),
   })).optional(),
   combo_value: z.number().nullable().optional(),
   combo_greeks: z.record(z.string(), z.number().nullable()).optional(),

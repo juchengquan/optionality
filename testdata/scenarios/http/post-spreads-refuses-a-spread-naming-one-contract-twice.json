@@ -72,7 +72,7 @@
     "response": {
       "status": 422,
       "body": {
-        "detail": "'dec-puts' names PUT 6400 twice"
+        "detail": "'dec-puts' names PUT 6400 twice: give the one leg a quantity"
       }
     },
     "rows": {},

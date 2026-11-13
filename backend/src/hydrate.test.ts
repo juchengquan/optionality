@@ -152,6 +152,16 @@ describe("a position", () => {
     expect(toPosition(storedPosition({ legs: "null" })).legs).toEqual([]);
   });
 
+  it("reads a leg's quantity where one is stored, and none where none is (#351)", () => {
+    const legs = [{ ...HELD_LEGS[0], qty: 2 }, HELD_LEGS[1]];
+    expect(toPosition(storedPosition({ legs: JSON.stringify(legs) })).legs).toEqual(legs);
+    const signs = [COMBO_LEGS[0], { ...COMBO_LEGS[1], qty: 2 }];
+    expect(toMonitor(storedMonitor({ legs: JSON.stringify(signs) })).legs).toEqual(signs);
+    expect(() => toMonitor(storedMonitor({ legs: JSON.stringify([{ ...COMBO_LEGS[0], qty: -1 }]) }))).toThrow(
+      new Error("monitor dec-wing cannot be read: legs[0].qty must be a whole number, 1 or more"),
+    );
+  });
+
   it("whose legs are not JSON cannot be read", () => {
     expect(() => toPosition(storedPosition({ legs: "{not json" }))).toThrow(
       new Error("position dec-condor cannot be read: legs must be JSON"),
@@ -166,6 +176,12 @@ describe("a position", () => {
     ["a leg with no type", { legs: '[{"side":"long","strike":8100}]' },
       'legs[0].option_type must be "CALL" or "PUT"'],
     ["legs that are no list", { legs: '"short"' }, "legs must be a list"],
+    ["a quantity of none", { legs: '[{"side":"short","option_type":"CALL","strike":8100,"qty":0}]' },
+      "legs[0].qty must be a whole number, 1 or more"],
+    ["half a quantity", { legs: '[{"side":"short","option_type":"CALL","strike":8100,"qty":1.5}]' },
+      "legs[0].qty must be a whole number, 1 or more"],
+    ["a quantity as text", { legs: '[{"side":"short","option_type":"CALL","strike":8100,"qty":"2"}]' },
+      "legs[0].qty must be a whole number, 1 or more"],
     ["half a contract", { contracts: 2.5 }, "contracts must be a whole number"],
     ["contracts as text", { contracts: "2" }, "contracts must be a whole number"],
     ["an entry as text", { entry: "6.4" }, "entry must be a number or null"],

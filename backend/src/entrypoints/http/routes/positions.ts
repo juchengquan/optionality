@@ -35,7 +35,7 @@ import { adoptOrphanMonitors } from "../../../monitors.ts";
 import { verifyContracts } from "optionality/quotes";
 import type { DisabledReason } from "../../../schemas/monitor.ts";
 import {
-  ClosePositionIn, DEFAULT_CONTRACTS, PayoffIn, PositionIn, PositionPatch,
+  ClosePositionIn, DEFAULT_CONTRACTS, PayoffIn, PositionIn, PositionPatch, storedQty,
 } from "../../../schemas/position.ts";
 import { displayStored } from "../../../db/time.ts";
 import { displayTime } from "optionality/domain/timefmt";
@@ -47,6 +47,8 @@ import { StrikeDistanceOut } from "./monitors.ts";
  *  served as though nothing were wrong, and the dashboard would read it as long (ADR 0013). */
 const LegOut = z.object({
   side: z.enum(["short", "long"]), option_type: z.string(), strike: z.number(),
+  /** how many of the Contract one of the holding holds; absent is 1 (#351) */
+  qty: z.number().optional(),
 });
 
 const PositionOut = z.object({
@@ -461,7 +463,9 @@ export function positionRoutes(deps: Deps) {
         strike_date: p.strike_date,
         contracts: p.contracts ?? DEFAULT_CONTRACTS,
         entry: p.entry ?? null,
-        legs: toSqliteJson(p.legs),
+        legs: toSqliteJson(p.legs.map((l) => ({
+          side: l.side, option_type: l.option_type, strike: l.strike, ...storedQty(l.qty),
+        }))),
         created_at: toSqlDatetime(deps.now()),
         opened_at: p.opened_at ?? null,
         manage_notified_at: null,

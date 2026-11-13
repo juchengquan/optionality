@@ -361,7 +361,8 @@ describe("what a spread may not say", () => {
 
   it("one contract twice, on one side or on both", async () => {
     start();
-    expect(await refused(one({ legs: [PUTS[0], PUTS[0]] }))).toBe("'w' names PUT 7150 twice");
+    expect(await refused(one({ legs: [PUTS[0], PUTS[0]] })))
+      .toBe("'w' names PUT 7150 twice: give the one leg a quantity");
     expect(await refused(one({ legs: [PUTS[0], { ...PUTS[0], side: "long" }] }))).toBe("'w' is both short and long PUT 7150");
     nothingWritten();
   });
@@ -390,6 +391,89 @@ describe("what a spread may not say", () => {
     // 32 exactly is within it
     const legs32 = [...six.slice(0, 5), { ...six[5]!, legs: SIX.slice(0, 2) }];
     expect((await post({ strike_date: EXPIRY, spreads: legs32 })).status).toBe(201);
+  });
+});
+
+describe("a quantity per leg (#351)", () => {
+  /** a put butterfly, 1×2×1, the middle sold twice over */
+  const FLY = [
+    { side: "long", option_type: "PUT", strike: 7100 },
+    { side: "short", option_type: "PUT", strike: 7150, qty: 2 },
+    { side: "long", option_type: "PUT", strike: 7200 },
+  ];
+  const fly = (over: object = {}) => ({ strike_date: EXPIRY, spreads: [{
+    name: "fly", legs: FLY, held: true, entry: -1.2, opened_at: "2026-10-01",
+    monitors: [{ threshold: 2.4 }, { option_type: "PUT", strike: 7150, threshold: 0.3 }], ...over,
+  }] });
+  const refused = async (payload: unknown) => {
+    const resp = await post(payload);
+    expect(resp.status).toBe(422);
+    return (await body(resp)).detail as string;
+  };
+
+  it("records a butterfly as ONE leg per contract, the middle's quantity on the holding and its rule", async () => {
+    const { asked, fetch } = counting();
+    start(fetch);
+    const resp = await post(fly());
+    expect(resp.status, JSON.stringify(await body(resp))).toBe(201);
+    // three contracts asked, once each: a quantity adds nothing to the probe
+    expect(asked).toEqual([FLY.map((l) => buildSpxCode(EXPIRY, l.option_type as "PUT", l.strike)).sort()]);
+    const held = h.db.prepare("select legs from positions").get() as { legs: string };
+    expect(JSON.parse(held.legs)).toEqual([
+      { side: "long", option_type: "PUT", strike: 7100 },
+      { side: "short", option_type: "PUT", strike: 7150, qty: 2 },
+      { side: "long", option_type: "PUT", strike: 7200 },
+    ]);
+    const value = h.db.prepare("select legs, scope from monitors where code = 'fly'").get() as { legs: string; scope: string };
+    expect(JSON.parse(value.legs)).toEqual([
+      { sign: 1, option_type: "PUT", strike: 7100 },
+      { sign: -1, option_type: "PUT", strike: 7150, qty: 2 },
+      { sign: 1, option_type: "PUT", strike: 7200 },
+    ]);
+    expect(value.scope).toBe("all");
+    // the short leg's |Δ| is one contract's, so one rule on it whatever its quantity
+    expect(count("monitors")).toBe(2);
+  });
+
+  it("stores a quantity of one as no quantity, as every leg before it was stored", async () => {
+    start();
+    const ones = FLY.map((l) => ({ ...l, qty: 1 }));
+    expect((await post(fly({ legs: ones }))).status).toBe(201);
+    const held = h.db.prepare("select legs from positions").get() as { legs: string };
+    expect(JSON.parse(held.legs).some((l: object) => "qty" in l)).toBe(false);
+    const value = h.db.prepare("select legs from monitors where code = 'fly'").get() as { legs: string };
+    expect(JSON.parse(value.legs).some((l: object) => "qty" in l)).toBe(false);
+  });
+
+  it("serves the quantity back on the holding and on the rule", async () => {
+    start();
+    expect((await post(fly())).status).toBe(201);
+    const [position] = await body(await h.call("/positions"));
+    expect(position.legs[1]).toEqual({ side: "short", option_type: "PUT", strike: 7150, qty: 2 });
+    expect(position.legs[0]).not.toHaveProperty("qty");
+    const monitors = await body(await h.call("/monitors"));
+    const value = monitors.find((m: { code: string }) => m.code === "fly");
+    expect(value.legs[1]).toEqual({ sign: -1, option_type: "PUT", strike: 7150, qty: 2 });
+    expect(value.legs[0]).not.toHaveProperty("qty");
+  });
+
+  it("refuses a quantity of none, of more than ten, or of a part, before the Provider is asked", async () => {
+    const { asked, fetch } = counting();
+    start(fetch);
+    const at = (qty: unknown) => fly({ legs: [FLY[0], { ...FLY[1], qty }, FLY[2]] });
+    expect(await refused(at(0))).toBe("✖ Too small: expected number to be >=1\n  → at spreads[0].legs[1].qty");
+    expect(await refused(at(11))).toBe("✖ Too big: expected number to be <=10\n  → at spreads[0].legs[1].qty");
+    expect(await refused(at(1.5))).toBe("✖ Invalid input: expected int, received number\n  → at spreads[0].legs[1].qty");
+    expect(asked).toEqual([]);
+    nothingWritten();
+  });
+
+  it("counts legs, not contracts times quantity, against the probe's bound", async () => {
+    start();
+    const tens = SIX.map((l) => ({ ...l, qty: 10 }));
+    const many = Array.from({ length: 5 }, (_, i) => ({ name: `w${i}`, legs: tens, held: false, monitors: [{ threshold: 2 }] }));
+    // 30 legs, 300 contracts: 30 codes at most are asked
+    expect((await post({ strike_date: EXPIRY, spreads: many })).status).toBe(201);
   });
 });
 
