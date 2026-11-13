@@ -122,3 +122,29 @@ it("rounds to four places, as every points figure is", () => {
   const p = payoffAtExpiry([short("PUT", 6400), long("PUT", 6350)], 0.1 + 0.2, 3);
   expect(p.at_strikes[1]!.pnl).toBe(0.9);
 });
+
+describe("a quantity per leg (#351)", () => {
+  it("settles a 1×2 put ratio's short leg twice over", () => {
+    // long the 7100, short two 7050s, for a credit of 1
+    const p = payoffAtExpiry([long("PUT", 7100), { ...short("PUT", 7050), qty: 2 }], 1, 1);
+    expect(p.at_strikes).toEqual([{ spx: 7050, pnl: 51 }, { spx: 7100, pnl: 1 }]);
+    // below the short strike two puts are owed against one held: a point lost per point it falls
+    expect(p.slope_below).toBe(1);
+    expect(p.breakevens).toEqual([6999]);
+    expect(p.max_profit).toBe(51);
+    // bounded only because SPX stops at zero: 7100 - 2 × 7050 + 1
+    expect(p.max_loss).toBe(-6999);
+  });
+
+  it("draws a butterfly as a tent on its middle strike", () => {
+    const p = payoffAtExpiry([long("CALL", 7000), { ...short("CALL", 7050), qty: 2 }, long("CALL", 7100)], -1, 1);
+    expect(p.at_strikes).toEqual([{ spx: 7000, pnl: -1 }, { spx: 7050, pnl: 49 }, { spx: 7100, pnl: -1 }]);
+    expect(p.slope_above).toBe(0);
+    expect(p.breakevens).toEqual([7001, 7099]);
+  });
+
+  it("reads a leg with no quantity as one", () => {
+    const legs = [short("PUT", 6400), long("PUT", 6350)];
+    expect(payoffAtExpiry(legs.map((l) => ({ ...l, qty: 1 })), 1.5, 1)).toEqual(payoffAtExpiry(legs, 1.5, 1));
+  });
+});

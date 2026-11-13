@@ -12,6 +12,10 @@ export interface MonitorLeg {
   sign: 1 | -1;
   option_type: "CALL" | "PUT";
   strike: number;
+  /** how many of this contract one of the combo holds — the 2 of a 1×2 ratio, the middle of a
+   *  butterfly (#351). A whole number, 1 or more; absent is 1, which is every row written before it.
+   *  It multiplies the leg's signed figure and nothing else: the sign still says which way. */
+  qty?: number;
 }
 
 export interface Monitor {
@@ -64,7 +68,7 @@ export function comboFieldSum(monitor: Monitor, byCode: ByCode, field: string): 
   for (const [i, leg] of legs.entries()) {
     const value = byCode[codes[i]!]?.[field];
     if (value === null || value === undefined) return null;
-    total += leg.sign * Number(value);
+    total += leg.sign * (leg.qty ?? 1) * Number(value);
   }
   return total;
 }

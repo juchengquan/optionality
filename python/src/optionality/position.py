@@ -13,7 +13,7 @@ import math
 from collections.abc import Iterable
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SerializerFunctionWrapHandler, model_serializer
 
 from optionality.contract import OptionType, build_spx_code
 from optionality.js import number, truthy
@@ -31,6 +31,19 @@ class Leg(BaseModel):
     side: Side
     option_type: OptionType
     strike: float
+    #: how many of this Contract one of the Position holds: the 2 of a 1×2 ratio, the middle of a
+    #: butterfly (#351). Absent is 1, which is every Position recorded before it. One leg per
+    #: Contract, so "a Contract held twice" stays a fact about two holdings.
+    qty: int = 1
+
+    @model_serializer(mode="wrap")
+    def _as_given(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """`qty` dumped only where it was given, as the TypeScript's optional key is: a leg recorded
+        before #351 has none, and one that says 1 says so."""
+        data = handler(self)
+        if "qty" not in self.model_fields_set:
+            data.pop("qty", None)
+        return data
 
 
 class Position(BaseModel):
@@ -95,7 +108,7 @@ def _signed_sum(position: Position, by_code: ByCode, field: str, short_sign: int
         value = _value(by_code, code, field)
         if value is None:
             return None
-        total += (short_sign if leg.side == "short" else -short_sign) * number(value)
+        total += (short_sign if leg.side == "short" else -short_sign) * leg.qty * number(value)
     return total
 
 
@@ -129,7 +142,7 @@ def cost_to_close_of(positions: list[Position], by_code: ByCode, codes: Iterable
             mid = _value(by_code, code, "mid_price")
             if mid is None:
                 return None
-            total += (1 if leg.side == "short" else -1) * number(mid)
+            total += (1 if leg.side == "short" else -1) * leg.qty * number(mid)
             found.add(code)
     return total if len(found) == len(named) else None
 

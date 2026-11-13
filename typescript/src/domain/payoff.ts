@@ -10,7 +10,8 @@
  *  The curve is piecewise linear with its corners at the strikes, so the P&L at each strike and
  *  the slope beyond the outer two describe all of it; a drawing joins the dots. Signed as
  *  everywhere else (ADR 0013): Entry is a credit RECEIVED, so a debit is negative, and a short leg
- *  costs its intrinsic value to settle while a long one pays it.
+ *  costs its intrinsic value to settle while a long one pays it, each as many times as its quantity
+ *  (#351).
  *
  *  In POINTS, across the contracts held, as `realizedPoints` is: money needs a contract size that
  *  only a Quote carries, and this reads none.
@@ -52,7 +53,7 @@ function intrinsic(leg: Leg, spx: number): number {
  *  A plain left-to-right sum in the legs' order, which is what the Python port does too. */
 function pnlAt(legs: Leg[], entry: number, contracts: number, spx: number): number {
   let settle = 0;
-  for (const leg of legs) settle += (leg.side === "short" ? 1 : -1) * intrinsic(leg, spx);
+  for (const leg of legs) settle += (leg.side === "short" ? 1 : -1) * (leg.qty ?? 1) * intrinsic(leg, spx);
   return (entry - settle) * contracts;
 }
 
@@ -70,9 +71,11 @@ export function payoffAtExpiry(legs: Leg[], entry: number, contracts: number): P
   // below every strike only puts pay, each a point per point SPX falls; above, only calls
   let below = 0;
   let above = 0;
+  // a point per point per contract: a leg held twice over moves twice as fast (#351)
   for (const leg of legs) {
-    if (leg.option_type === "PUT") below += leg.side === "short" ? 1 : -1;
-    else above += leg.side === "short" ? -1 : 1;
+    const qty = leg.qty ?? 1;
+    if (leg.option_type === "PUT") below += (leg.side === "short" ? 1 : -1) * qty;
+    else above += (leg.side === "short" ? -1 : 1) * qty;
   }
   const slopeBelow = below * contracts;
   const slopeAbove = above * contracts;

@@ -75,8 +75,9 @@ function measure(samples: readonly VolSample[], position: Position): VolAttribut
   }
 
   const codes = positionLegCodes(position);
-  // short +1, long -1: the signing costToClose uses, so the result is already in the gap's units
-  const signs = position.legs.map((l) => (l.side === "short" ? 1 : -1));
+  // short +1, long -1: the signing costToClose uses, so the result is already in the gap's units —
+  // times the leg's quantity, as costToClose multiplies it (#351); the readings stay per contract
+  const signs = position.legs.map((l) => (l.side === "short" ? 1 : -1) * (l.qty ?? 1));
 
   for (const s of samples) {
     const whole = s.legs_iv !== null && s.legs_vega !== null
@@ -225,7 +226,8 @@ export function paceExplained(
     if (codes.every((c) => reading(last.legs_vega![c]))) {
       vega = 0;
       for (const [i, c] of codes.entries()) {
-        vega += (position.legs[i]!.side === "short" ? -1 : 1) * last.legs_vega[c]!;
+        const leg = position.legs[i]!;
+        vega += (leg.side === "short" ? -1 : 1) * (leg.qty ?? 1) * last.legs_vega[c]!;
       }
       if (Math.abs(vega) < VEGA_FLOOR) vega = 0;
     }

@@ -63,6 +63,21 @@ describe("combos", () => {
     expect(comboFieldSum(combo(), priced(0.4, 0.25), "option_delta")).toBeCloseTo(0.15, 12);
   });
 
+  it("multiplies a leg's signed figure by its quantity: a 1×2 sells the second leg twice (#351)", () => {
+    const ratio = combo({ legs: [
+      { sign: 1, option_type: "CALL", strike: 8050 },
+      { sign: -1, option_type: "CALL", strike: 8075, qty: 2 },
+    ] });
+    expect(comboFieldSum(ratio, priced(0.4, 0.25), "option_delta")).toBeCloseTo(-0.1, 12);
+    expect(monitorValue({ ...ratio, field: "option_delta" }, priced(0.4, 0.25))).toBeCloseTo(-0.1, 12);
+  });
+
+  it("reads a leg with no quantity as one", () => {
+    const ones = combo({ legs: combo().legs!.map((l) => ({ ...l, qty: 1 })) });
+    expect(comboFieldSum(ones, priced(0.4, 0.25), "option_delta"))
+      .toBe(comboFieldSum(combo(), priced(0.4, 0.25), "option_delta"));
+  });
+
   it("reports nothing rather than a part sum when a leg is missing", () => {
     // any missing leg skips the combo (CLAUDE.md) — a partial exposure reads as a real one
     expect(comboFieldSum(combo(), { [code("CALL", 8050)]: { option_delta: 0.4 } }, "option_delta"))

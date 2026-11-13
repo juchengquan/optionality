@@ -20,6 +20,13 @@ export interface Leg {
   side: Side;
   option_type: OptionType;
   strike: number;
+  /** how many of this Contract one of the Position holds: the 2 of a 1×2 ratio, the middle of a
+   *  butterfly (#351). A whole number, 1 or more; absent is 1, which is every Position recorded
+   *  before it. ONE leg per Contract, with a quantity, rather than the Contract repeated: every
+   *  "a Contract held twice is ambiguous" rule below — a roll day — stays a rule about two
+   *  HOLDINGS. It multiplies the leg's signed figure; per-leg readings (IV, vega, delta) stay per
+   *  contract, because they are intensive. */
+  qty?: number;
 }
 
 export interface Position {
@@ -79,7 +86,7 @@ function signedSum(
   for (const [i, leg] of legs.entries()) {
     const value = byCode[codes[i]!]?.[field];
     if (value === null || value === undefined) return null;
-    total += (leg.side === "short" ? shortSign : -shortSign) * Number(value);
+    total += (leg.side === "short" ? shortSign : -shortSign) * (leg.qty ?? 1) * Number(value);
   }
   return total;
 }
@@ -137,7 +144,8 @@ export function positionGreek(
   return signedSum(p, byCode, field, -1, scope);
 }
 
-/** What it would cost to buy back just these Contracts, out of what you hold.
+/** What it would cost to buy back just these Contracts, out of what you hold — each in the
+ *  quantity its leg holds (#351).
  *
  *  By SIDE, never from a combo's signs. A sign is a multiplier the trader picked, and both
  *  conventions for it exist in this repo's own history — "+ on sold legs" was documented in the
@@ -172,7 +180,7 @@ export function costToCloseOf(
       if (mid === null || mid === undefined) return null;
       // buying back a short leg COSTS; selling a long one returns. The inverse of the
       // exposure signing above, which is why both live in this file.
-      total += (leg.side === "short" ? 1 : -1) * Number(mid);
+      total += (leg.side === "short" ? 1 : -1) * (leg.qty ?? 1) * Number(mid);
       found.add(code);
     }
   }
