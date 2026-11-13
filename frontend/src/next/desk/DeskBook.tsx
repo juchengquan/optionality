@@ -442,14 +442,29 @@ export function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColum
   if (column.key === "pnl" && row.kind === "holding") {
     return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Money value={row.holding.pnl} privacy={privacy} /></span></>;
   }
-  // positive is BEHIND the plan: costing more to close than it should by now
-  const outcome = column.key === "pace_gap" && row.kind === "holding" ? paceOutcome(row.holding.schedule?.pace_gap) : undefined;
+  const outcome = outcomeOf(row, column);
+  // a compact cell (the pace gap's sign, #379) is read out as its words, and shows them to a pointer
+  const words = column.words?.(row, privacy);
+  if (words !== undefined && words !== text) {
+    return (
+      <>
+        <span className="sr-only">{`${label} ${words}`}</span>
+        <span className="nxd-v" data-outcome={outcome} title={words} aria-hidden="true">{text}</span>
+      </>
+    );
+  }
   return (
     <>
       <span className="sr-only">{`${label} `}</span>
       <span className="nxd-v" data-outcome={outcome}>{text}</span>
     </>
   );
+}
+
+/** A cell's outcome colour: the pace gap's, where positive is BEHIND the plan — costing more to
+ *  close than it should by now — and the table and the inspector draw it alike. */
+function outcomeOf(row: DeskRow, column: DeskColumn): "loss" | "gain" | undefined {
+  return column.key === "pace_gap" && row.kind === "holding" ? paceOutcome(row.holding.schedule?.pace_gap) : undefined;
 }
 
 /** How far the watched figure has come toward its threshold, as the service measured it. */
@@ -508,12 +523,15 @@ function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean;
   for (const c of FIGURES) {
     // the strip is drawn whole beneath, with its words
     if (c.key === "name" || c.key === "alarm" || c.key === "legs" || c.key === "strip") continue;
-    const text = c.text(row, privacy);
+    // the words where the table writes a compact form of them (the pace gap, #379)
+    const text = c.words?.(row, privacy) ?? c.text(row, privacy);
     if (text === "") continue;
+    const outcome = outcomeOf(row, c);
     const label = c.key === "value" && row.kind === "holding" ? "cost to close"
       : c.key === "delta" && row.kind === "holding" ? "short leg Δ" : c.label;
     items.push([label, c.key === "pnl" && row.kind === "holding"
-      ? <Money value={row.holding.pnl} privacy={privacy} /> : text]);
+      ? <Money value={row.holding.pnl} privacy={privacy} />
+      : outcome ? <span data-outcome={outcome}>{text}</span> : text]);
   }
   items.push(...extra);
   return (

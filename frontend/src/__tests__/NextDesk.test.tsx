@@ -410,11 +410,44 @@ describe("one column set, in either mode (#372)", () => {
   it("says only what the service served: the schedule's own pace gap, or a dash", () => {
     const mixed = scheduled.map((h) => h.id === "h-ic" ? { ...h, schedule: null } : h);
     render(<DeskBook {...props({ holdings: mixed })} />);
-    expect(cellText("h-calls", "pace_gap")).toBe("behind by 0.47");
+    expect(cellText("h-calls", "pace_gap")).toBe("+0.47");
     expect(cellText("h-calls", "captured")).toBe("50%");
     expect(cellText("h-calls", "value")).toBe("4.40");
     // no Opened, no schedule: nothing is drawn in its place
     expect(cellText("h-ic", "pace_gap")).toBe("—");
+  });
+
+  /** What a screen reader hears from a cell: its text, less anything hidden from it. */
+  const heard = (el: Element): string => [...el.childNodes].map((n) => n.nodeType === Node.TEXT_NODE ? n.textContent
+    : (n as Element).getAttribute("aria-hidden") === "true" ? "" : heard(n as Element)).join("");
+
+  it("writes the pace gap compactly, signed as the service serves it, and says it in words (owner, #379)", () => {
+    // the gap is cost to close less on pace: positive is BEHIND the plan, the bad way
+    const mixed = scheduled.map((h) => h.id === "h-puts"
+      ? { ...h, schedule: { ...h.schedule!, pace_gap: -0.5 } } : h.id === "h-ic" ? { ...h, schedule: null } : h);
+    render(<DeskBook {...props({ holdings: mixed })} />);
+    const behind = cell("h-calls", "pace_gap")!.querySelector<HTMLElement>(".nxd-v")!;
+    expect(behind.textContent).toBe("+0.47");
+    expect(behind.dataset.outcome).toBe("loss");
+    expect(behind.title).toBe("behind by 0.47");
+    // the true minus sign, not a hyphen
+    const ahead = cell("h-puts", "pace_gap")!.querySelector<HTMLElement>(".nxd-v")!;
+    expect(ahead.textContent).toBe("\u22120.50");
+    expect(ahead.dataset.outcome).toBe("gain");
+    expect(ahead.title).toBe("ahead by 0.50");
+    // a screen reader hears the words, never "plus" or "minus"
+    expect(heard(cell("h-calls", "pace_gap")!)).toBe("pace gap behind by 0.47");
+    expect(heard(cell("h-puts", "pace_gap")!)).toBe("pace gap ahead by 0.50");
+    expect(heard(cell("h-ic", "pace_gap")!)).toBe("pace gap —");
+  });
+
+  it("says the pace gap in words in the inspector, in the table cell's colour", () => {
+    render(<DeskBook {...props({ holdings: scheduled })} />);
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    const insp = screen.getByRole("complementary", { name: /inspector/ });
+    const dd = within(insp).getByText("pace gap").nextElementSibling!;
+    expect(dd.textContent).toBe("behind by 0.47");
+    expect(dd.querySelector("[data-outcome]")?.getAttribute("data-outcome")).toBe("loss");
   });
 
   for (const session of [true, false]) {

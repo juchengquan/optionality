@@ -8,8 +8,8 @@
  *  for is blank, not a dash, because a dash reads as "the figure has not arrived".
  *
  *  Every figure is one the service served. Nothing here models a price: a pace is the schedule's
- *  `on_pace` and `pace_gap`, the gap in words, never a curve drawn on screen (ADR 0023: "never draw what the system
- *  does not know"). The two pieces of arithmetic are a subtraction of two served day counts (days
+ *  `on_pace` and `pace_gap` — the gap signed in the table and in words everywhere else (#379) —
+ *  never a curve drawn on screen (ADR 0023: "never draw what the system does not know"). The two pieces of arithmetic are a subtraction of two served day counts (days
  *  left before the Manage-by) and a share as a percentage.
  */
 import type { Entry, Holding, Monitor } from "../../shared/api";
@@ -17,7 +17,7 @@ import { DASH, heldLegs, legSummary } from "../../shared/format";
 import type { BookModel } from "../placement";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
 import { servedDelta } from "../legs";
-import { paceWords } from "../pace";
+import { paceSigned, paceWords } from "../pace";
 import { LEVEL_WORDS, levelWords } from "../levels";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
@@ -38,6 +38,9 @@ export interface DeskColumn {
   /** what the cell says, for the drawing, the inspector and the measuring alike; empty where the
    *  row has nothing to say in this column */
   text: (row: DeskRow, privacy: boolean) => string;
+  /** what the cell MEANS, where `text` is a compact form of it: said to a reader and a pointer
+   *  beside the drawn text, and in the inspector instead of it */
+  words?: (row: DeskRow, privacy: boolean) => string;
 }
 
 // ---- figures, with fixed decimals per field (ADR 0023)
@@ -254,10 +257,13 @@ const ON_PACE: DeskColumn = {
 };
 
 const PACE_GAP: DeskColumn = {
-  // Cost to close less on-pace, said in words (CONTEXT.md: Pace gap): BEHIND is costing more than
-  // the plan, and a bare sign beside a P&L invites reading it the wrong way round (ADR 0011)
+  // Cost to close less on-pace (CONTEXT.md: Pace gap): BEHIND is costing more than the plan. The
+  // table writes it signed, + behind, to leave room for the market's columns (the owner, #379);
+  // the sign is never alone — the outcome colour, and the words to a pointer and a reader, go
+  // with it, because a bare sign beside a P&L invites reading it the wrong way round (ADR 0011)
   key: "pace_gap", label: "pace gap",
-  text: holdingOnly((h) => h.schedule ? paceWords(h.schedule.pace_gap) : DASH),
+  text: holdingOnly((h) => h.schedule ? paceSigned(h.schedule.pace_gap) : DASH),
+  words: holdingOnly((h) => h.schedule ? paceWords(h.schedule.pace_gap) : DASH),
 };
 
 const ALARM: DeskColumn = {

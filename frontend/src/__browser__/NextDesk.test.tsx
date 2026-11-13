@@ -451,13 +451,15 @@ describe("columns are dropped as measured (ADR 0008)", () => {
   // what each width draws, measured in this engine with the owner's book; the same in either mode,
   // because there is one set (#372) — both modes are on screen until #375 takes the switch away
   const DRAWN: Record<number, { shut: string[]; open: string[] }> = {
+    // the pace gap written signed (#379) is 75px where its words took 122: room for SPX → short at
+    // 900 shut and at 1280 open, which the words had pushed off
     900: {
-      shut: ["name", "value", "pnl", "pace_gap", "delta", "dte", "manage"],
+      shut: ["name", "value", "pnl", "pace_gap", "delta", "strip", "dte", "manage"],
       open: ["name", "value", "pnl", "pace_gap", "delta", "dte"],
     },
     1280: {
       shut: ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage"],
-      open: ["name", "value", "pnl", "pace_gap", "delta", "dte", "manage"],
+      open: ["name", "value", "pnl", "pace_gap", "delta", "strip", "dte", "manage"],
     },
     2560: { shut: ONE_SET, open: ONE_SET },
   };
@@ -474,6 +476,11 @@ describe("columns are dropped as measured (ADR 0008)", () => {
           expect(drawn, `${state}: ${widths()}`).toEqual(DRAWN[width]![state]);
           expect(misfits(), `${state}: ${widths()}`).toEqual([]);
           expect(overflowsSideways()).toBe(false);
+          // the gap signed, its words to a pointer and, in place of the sign, to a reader
+          const gap = rowOf("h-calls").querySelector<HTMLElement>('[data-col="pace_gap"]')!;
+          expect(gap.querySelector<HTMLElement>(".nxd-v")!.textContent).toBe("+0.47");
+          expect(gap.querySelector<HTMLElement>(".nxd-v")!.title).toBe("behind by 0.47");
+          expect(gap.querySelector(".sr-only")!.textContent).toBe("pace gap behind by 0.47");
           expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
         }
       });
