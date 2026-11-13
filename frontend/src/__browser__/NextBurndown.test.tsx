@@ -112,6 +112,33 @@ describe("the burndown fits, and its tooltip stays inside it", () => {
   }
 });
 
+describe("the tooltip's measured height", () => {
+  /** Twenty days whose costs sweep the plot from top to bottom and back, every other one recorded
+   *  that evening — so at 272px every other tooltip carries a reason wrapped over two lines, and
+   *  some day sits wherever a guessed height would put it on top of its own point. */
+  const SWEEP: Samples = {
+    ...SAMPLES["h-calls"]!,
+    samples: Array.from({ length: 20 }, (_, i) => {
+      const on = new Date(Date.UTC(2026, 10, 3 + i)).toISOString().slice(0, 10);
+      return {
+        ...SAMPLES["h-calls"]!.samples[1]!, observed_on: on, dte: 45 - i,
+        cost_to_close: 2 + 1.9 * Math.sin(i * 0.7), timing: i % 2 ? "close" : "after-close",
+        observed_at: `${on} ${i % 2 ? "21:00:00" : "23:30:00"}+00:00`,
+      };
+    }),
+  };
+
+  it("keeps a two-line tooltip inside the 272px chart and off its point, wherever the day is", async () => {
+    const { chart, svg } = await draw("h-calls", 272, { samples: SWEEP });
+    // the reason does wrap there: taller than one line of 11px text
+    const evening = svg.querySelector("[data-sample][data-timing='after-close'] circle")!.getBoundingClientRect();
+    const box = svg.getBoundingClientRect();
+    await userEvent.hover(svg, { position: { x: evening.left + evening.width / 2 - box.left, y: 10 } });
+    expect(chart.querySelector(".nx-bd-tip-why")!.getBoundingClientRect().height).toBeGreaterThan(24);
+    expect((await tipFaults(chart, svg)).join("; ")).toBe("");
+  });
+});
+
 describe("the three charts put a day at one x (#327)", () => {
   for (const width of [272, 400, 900]) for (const privacy of [false, true]) {
     it(`at ${width}px${privacy ? ", privacy on" : ""}`, async () => {

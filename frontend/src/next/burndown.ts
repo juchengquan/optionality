@@ -104,6 +104,19 @@ export function tipLines(s: Sample, unit: Unit) {
 
 /** One day, said in full, by the status line: everything the tooltip says — which no screen reader
  *  hears — and the whole reason for whether it was the close. */
+/** What the tooltip says of today's valuation: a stop of the crosshair's of its own, after the last
+ *  day, since it is drawn apart from the closes and has no plan or reason of its own. */
+export function nowLines(now: { dte: number; cost: number }, unit: Unit) {
+  const scope = scopeWords(unit);
+  return { day: `valued now · ${now.dte} DTE`, cost: `to close${scope === null ? "" : `, ${scope}`}: ${say(now.cost, unit)}` };
+}
+
+/** Today's valuation said in full, by the status line. */
+export function nowWords(now: { dte: number; cost: number }, unit: Unit): string {
+  const t = nowLines(now, unit);
+  return `valued now, ${now.dte} DTE: ${t.cost}`;
+}
+
 export function sampleWords(s: Sample, unit: Unit): string {
   const t = tipLines(s, unit);
   const gap = t.gap === null ? "" : ` · ${t.gap.words}`;
@@ -120,7 +133,9 @@ export function nearestDay(xs: number[], at: number): number | null {
 }
 
 /** The day a key moves the crosshair to: the arrows a day at a time from either end, Home and End
- *  to the ends, Escape lets go ("clear"); undefined for any other key, or with no days. */
+ *  to the ends, Escape lets go ("clear") of a day pointed at; undefined for any other key, with no
+ *  days, or for Escape with none pointed at — which is then the page's: the desk's inspector closes
+ *  on an Escape nobody took, and a chart that swallowed every one could never be closed from. */
 export function stepDay(key: string, at: number | null, count: number): number | "clear" | undefined {
   const last = count - 1;
   if (last < 0) return undefined;
@@ -129,7 +144,7 @@ export function stepDay(key: string, at: number | null, count: number): number |
     case "ArrowLeft": return at === null ? last : Math.max(0, at - 1);
     case "Home": return 0;
     case "End": return last;
-    case "Escape": return "clear";
+    case "Escape": return at === null ? undefined : "clear";
     default: return undefined;
   }
 }
@@ -153,7 +168,7 @@ export function nowOf(holding: Valued) {
 
 /** The burndown's value axis: fitted to the days, the plan, the Target and today — 0 always in it —
  *  at nice ticks. NOT to the Stop: at twice the Entry it set the top and squeezed every line into
- *  the bottom third (#360). A Stop beyond the scale is marked at the edge it lies past (`off`)
+ *  the bottom third (#360). A Stop above the scale is marked at its top edge (`off`)
  *  rather than drawn, and one inside it is drawn where it is. `L` is the left margin the labels
  *  need; under privacy there are none, and no gutter as wide as they would be, which would say how
  *  many digits they hid. */
@@ -165,6 +180,8 @@ export function valueAxis(served: Samples, holding: Valued, unit: Unit) {
     ...(levels?.target == null ? [] : [levels.target]), ...(now ? [now.cost] : []),
   ];
   let hi = Math.max(...values), lo = Math.min(...values);
+  // every figure at zero: a scale of one value has no height to draw in
+  if (hi === lo) hi = lo + 1;
   // room for a point at either end, so none sits on the plot's edge
   const pad = (hi - lo || 1) * 0.04;
   if (hi > 0) hi += pad;
@@ -173,7 +190,8 @@ export function valueAxis(served: Samples, holding: Valued, unit: Unit) {
   const ticks = scale.ticks(4);
   const [bottom, top] = scale.domain() as [number, number];
   const stop = levels?.stop == null ? null
-    : { value: levels.stop, off: levels.stop > top ? "above" as const : levels.stop < bottom ? "below" as const : null };
+    // never below: a Stop is a credit's, above its Entry, and the scale always holds 0
+    : { value: levels.stop, off: levels.stop > top ? "above" as const : null };
   const labels = unit.hidden ? [] : ticks.map((v) => tickWords(v, unit));
   const L = unit.hidden ? 8 : Math.ceil(Math.max(...labels.map(textWidth), 16)) + 10;
   return { lo: bottom, hi: top, ticks, labels, stop, now, L };

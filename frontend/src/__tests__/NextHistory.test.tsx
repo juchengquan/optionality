@@ -240,9 +240,12 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     fireEvent.keyDown(days, { key: "ArrowLeft" });
     expect(said()).toMatch(/^3 Nov/);
     fireEvent.keyDown(days, { key: "End" });
-    expect(said()).toMatch(/^9 Nov · 39 DTE/);
+    // the last stop is today's valuation (#360), and the day before it the last sample
+    expect(said()).toMatch(/^valued now, 38 DTE/);
     fireEvent.keyDown(days, { key: "ArrowRight" });
-    expect(said()).toMatch(/^9 Nov/);
+    expect(said()).toMatch(/^valued now/);
+    fireEvent.keyDown(days, { key: "ArrowLeft" });
+    expect(said()).toMatch(/^9 Nov · 39 DTE/);
     fireEvent.keyDown(days, { key: "Home" });
     expect(said()).toMatch(/^3 Nov/);
   });
@@ -354,11 +357,58 @@ describe("the crosshair (#360)", () => {
     expect(crossed(chart)).toBeUndefined();
     expect(tipOf(chart)).toBeNull();
     expect(said(chart)).toMatch(/point at a day/);
-    // a finger dragged across: each move scrubs to the day under it, and lifting keeps the last
-    pointAt(chart, dayOf(chart, "[data-sample='2026-11-04']"), { type: "touch" });
-    pointAt(chart, dayOf(chart, "[data-sample='2026-11-06']"), { type: "touch" });
+    // a finger dragged across: once it has gone sideways each move scrubs to the day under it,
+    // and lifting keeps the last
+    const xOf = (on: string) => Number(dayOf(chart, `[data-sample='${on}']`).querySelector("circle")!.getAttribute("cx"));
+    fireEvent.pointerDown(svg, { clientX: xOf("2026-11-03"), clientY: 50, pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    fireEvent.pointerMove(svg, { clientX: xOf("2026-11-04"), clientY: 50, pointerType: "touch" });
+    fireEvent.pointerMove(svg, { clientX: xOf("2026-11-06"), clientY: 50, pointerType: "touch" });
+    expect(crossed(chart)).toBe("2026-11-06");
+    fireEvent.pointerUp(svg, { pointerType: "touch" });
     fireEvent.pointerLeave(svg, { pointerType: "touch" });
     expect(crossed(chart)).toBe("2026-11-06");
+  });
+
+  it("chooses no day for a finger that touches down and scrolls the page", async () => {
+    const chart = await chartOf();
+    const svg = chart.querySelector(".nx-bd svg")!;
+    fireEvent.pointerDown(svg, { clientX: 100, clientY: 100, pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    // up the page, a little sideways as a thumb goes: the page's, not a scrub
+    fireEvent.pointerMove(svg, { clientX: 112, clientY: 70, pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    fireEvent.pointerCancel(svg, { pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    expect(tipOf(chart)).toBeNull();
+    // and a day chosen before is let go of when a scroll starts on the chart: it was not chosen
+    // for the page to carry its tooltip away up the screen
+    fireEvent.pointerDown(svg, { clientX: 100, clientY: 50, pointerType: "touch" });
+    fireEvent.click(svg, { clientX: 100, clientY: 50 });
+    expect(crossed(chart)).toBeDefined();
+    fireEvent.pointerDown(svg, { clientX: 100, clientY: 100, pointerType: "touch" });
+    fireEvent.pointerCancel(svg, { pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+  });
+
+  it("chooses a day on a tap, lets go of it on a second tap or a tap outside the chart", async () => {
+    const chart = await chartOf();
+    const svg = chart.querySelector(".nx-bd svg")!;
+    const x = Number(dayOf(chart, "[data-sample='2026-11-05']").querySelector("circle")!.getAttribute("cx"));
+    const tap = (at: number) => {
+      fireEvent.pointerDown(svg, { clientX: at, clientY: 50, pointerType: "touch" });
+      fireEvent.pointerUp(svg, { clientX: at, clientY: 50, pointerType: "touch" });
+      fireEvent.click(svg, { clientX: at, clientY: 50 });
+    };
+    tap(x + 1);
+    expect(crossed(chart)).toBe("2026-11-05");
+    tap(x);
+    expect(crossed(chart)).toBeUndefined();
+    tap(x);
+    expect(crossed(chart)).toBe("2026-11-05");
+    fireEvent.pointerDown(document.body, { pointerType: "touch" });
+    expect(crossed(chart)).toBeUndefined();
+    expect(tipOf(chart)).toBeNull();
   });
 
   it("is driven by the keys too, and Escape lets go", async () => {
@@ -368,10 +418,75 @@ describe("the crosshair (#360)", () => {
     expect(crossed(chart)).toBe("2026-11-03");
     expect(tipOf(chart)?.textContent).toMatch(/^3 Nov/);
     fireEvent.keyDown(days, { key: "End" });
-    expect(crossed(chart)).toBe("2026-11-09");
+    expect(crossed(chart)).toBe("now");
     fireEvent.keyDown(days, { key: "Escape" });
     expect(crossed(chart)).toBeUndefined();
     expect(tipOf(chart)).toBeNull();
+  });
+});
+
+describe("the crosshair and the inspector's Escape (#360)", () => {
+  const inspector = () => screen.queryByRole("complementary", { name: /inspector/ });
+
+  it("lets Escape through to close the inspector when no day is pointed at", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    days.focus();
+    fireEvent.keyDown(days, { key: "Escape" });
+    expect(inspector()).toBeNull();
+  });
+
+  it("takes the first Escape to let go of a day, and lets the second close the inspector", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    days.focus();
+    fireEvent.keyDown(days, { key: "ArrowRight" });
+    fireEvent.keyDown(days, { key: "Escape" });
+    expect(chart.querySelector("[data-crosshair]")).toBeNull();
+    expect(inspector()).toBeTruthy();
+    fireEvent.keyDown(days, { key: "Escape" });
+    expect(inspector()).toBeNull();
+  });
+});
+
+describe("today's valuation on the crosshair (#360)", () => {
+  async function chartOf(over: Partial<BookProps> = {}) {
+    const { insp } = await inspect("h-calls", "1218_C7300", over);
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    return chart;
+  }
+
+  it("is the last stop for the keys, and says it is the valuation now", async () => {
+    const chart = await chartOf();
+    const days = within(chart).getByRole("group", { name: /cost to close by day/ });
+    fireEvent.keyDown(days, { key: "End" });
+    expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("now");
+    expect(chart.querySelector("[data-now]")?.hasAttribute("data-pointed")).toBe(true);
+    // h-calls is valued at 4.40 with 38 days to go, one contract at a size of 100
+    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close, 1 contract: $440");
+    expect(tipOf(chart)?.textContent).toBe("valued now · 38 DTEto close, 1 contract: $440");
+    fireEvent.keyDown(days, { key: "ArrowLeft" });
+    expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("2026-11-09");
+  });
+
+  it("is reached by a pointer at its x", async () => {
+    const chart = await chartOf();
+    const at = chart.querySelector("[data-now] rect:not(.nx-bd-halo)")!;
+    const x = Number(at.getAttribute("x")) + 4.5;
+    fireEvent.pointerMove(chart.querySelector(".nx-bd svg")!, { clientX: x, pointerType: "mouse" });
+    expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("now");
+  });
+
+  it("is masked under privacy", async () => {
+    const chart = await chartOf({ privacy: true });
+    fireEvent.keyDown(within(chart).getByRole("group", { name: /cost to close by day/ }), { key: "End" });
+    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close: $•••");
+    expect(tipOf(chart)?.textContent).not.toMatch(/\$\d|contract/);
   });
 });
 
@@ -509,7 +624,10 @@ describe("on the phone's one-holding REVIEW page", () => {
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
     const svg = chart.querySelector(".nx-bd svg")!;
     const x = Number(dayOf(chart, "[data-timing='before-open']").querySelector("circle")!.getAttribute("cx"));
+    // a tap: down, up and the click it makes
     fireEvent.pointerDown(svg, { clientX: x + 2, pointerType: "touch" });
+    fireEvent.pointerUp(svg, { clientX: x + 2, pointerType: "touch" });
+    fireEvent.click(svg, { clientX: x + 2 });
     expect(within(chart).getByRole("status").textContent)
       .toMatch(/not the close: observed 00:05 New York, before the 09:30 open/);
     // lifting the finger off leaves it said, where a mouse leaving lets it go

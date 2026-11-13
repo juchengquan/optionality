@@ -56,16 +56,34 @@ const centreOf = (el: Element) => {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 };
 
-/** A finger: down at the first point, through the rest, and up. */
-async function drag(points: { x: number; y: number }[]) {
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** A finger: down at `from`, moved to `to` in `steps` even steps a frame apart — as a hand moves,
+ *  not all at once, which Chrome read as an erratic fling — and up. */
+async function drag(from: { x: number; y: number }, to: { x: number; y: number }, steps = 12) {
   const send = (type: string, at?: { x: number; y: number }) => cdp().send("Input.dispatchTouchEvent", {
     type, touchPoints: at ? [{ x: Math.round(at.x), y: Math.round(at.y) }] : [],
   });
-  await send("touchStart", points[0]);
-  for (const p of points.slice(1)) await send("touchMove", p);
+  await send("touchStart", from);
+  for (let i = 1; i <= steps; i++) {
+    await pause(16);
+    await send("touchMove", { x: from.x + ((to.x - from.x) * i) / steps, y: from.y + ((to.y - from.y) * i) / steps });
+  }
+  await pause(16);
   await send("touchEnd");
   await settle();
 }
+
+/** A finger tapped at a point: down and up, without moving. */
+async function tap(at: { x: number; y: number }) {
+  const point = [{ x: Math.round(at.x), y: Math.round(at.y) }];
+  await cdp().send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: point });
+  await pause(50);
+  await cdp().send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await settle();
+}
+
+const crossed = (chart: HTMLElement) => chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair");
 
 describe("the burndown on the phone's REVIEW page", () => {
   it("is inside the screen, and its tooltip inside the chart and off its point, for every day", async () => {
@@ -99,21 +117,42 @@ describe("the burndown on the phone's REVIEW page", () => {
     const last = centreOf(days.at(-1)!.querySelector("circle")!);
     const y = chart.getBoundingClientRect().top + 60;
     const before = window.scrollY;
-    await drag([{ x: first.x, y }, { x: (first.x + last.x) / 2, y }, { x: last.x, y }]);
-    expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe(days.at(-1)!.dataset.sample);
+    const track = document.querySelector<HTMLElement>(".nxp-track")!;
+    const across = track.scrollLeft;
+    await drag({ x: first.x, y }, { x: last.x, y });
+    expect(crossed(chart)).toBe(days.at(-1)!.dataset.sample);
     expect(page1.querySelector(".nx-hist-said")!.textContent).toMatch(/^9 Nov · 39 DTE/);
-    // a sideways drag is the chart's: the page did not move under it
+    // a sideways drag is the chart's: neither the page nor the pager of holdings moved under it
     expect(window.scrollY).toBe(before);
+    expect(track.scrollLeft).toBe(across);
     expect(overflowsSideways()).toBe(false);
   });
 
+  it("chooses a day on a tap, and lets go of it on a tap outside the chart", async () => {
+    const { chart, page1 } = await review();
+    const day = page1.querySelector<SVGGElement>("[data-sample='2026-11-05']")!;
+    await tap({ x: centreOf(day.querySelector("circle")!).x, y: chart.getBoundingClientRect().top + 40 });
+    expect(crossed(chart)).toBe("2026-11-05");
+    expect(chart.querySelector("[data-tip]")).toBeTruthy();
+    await tap(centreOf(page1.querySelector(".nx-hist-h")!));
+    expect(crossed(chart)).toBeUndefined();
+    expect(chart.querySelector("[data-tip]")).toBeNull();
+  });
+
   it("lets a finger swiped up the chart scroll the page", async () => {
-    const { chart } = await review();
+    const { chart, page1 } = await review();
+    // a day chosen first, by a tap, is let go of by the scroll rather than carried up the screen
+    const day = page1.querySelector<SVGGElement>("[data-sample='2026-11-05']")!;
+    await tap({ x: centreOf(day.querySelector("circle")!).x, y: chart.getBoundingClientRect().top + 40 });
+    expect(crossed(chart)).toBe("2026-11-05");
     const r = chart.getBoundingClientRect();
     const x = r.left + r.width / 2;
     const before = window.scrollY;
-    await drag([{ x, y: r.bottom - 10 }, { x, y: r.bottom - 60 }, { x, y: r.bottom - 110 }, { x, y: r.bottom - 160 }]);
+    await drag({ x, y: r.bottom - 10 }, { x, y: r.bottom - 160 });
     await settle();
-    expect(window.scrollY).toBeGreaterThan(before);
+    expect(window.scrollY).not.toBe(before);
+    // and a scroll is never a choice of day: nothing is crossed, and no tooltip is left behind
+    expect(crossed(chart)).toBeUndefined();
+    expect(chart.querySelector("[data-tip]")).toBeNull();
   });
 });

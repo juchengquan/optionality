@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Sample, Samples } from "../shared/api";
 import {
-  nearestDay, sampleWords, stepDay, tipLines, tipPlace, valueAxis, type Unit,
+  nearestDay, nowLines, sampleWords, stepDay, tipLines, tipPlace, valueAxis, type Unit,
 } from "../next/burndown";
 
 const money: Unit = { size: 100, contracts: 2, money: true, hidden: false };
@@ -57,6 +57,10 @@ describe("which day a key moves to", () => {
     expect(stepDay("Escape", 2, 5)).toBe("clear");
   });
 
+  it("leaves Escape to the page when no day is pointed at, so it can close what holds the chart", () => {
+    expect(stepDay("Escape", null, 5)).toBeUndefined();
+  });
+
   it("leaves every other key alone, and every key with no days", () => {
     expect(stepDay("Tab", 1, 5)).toBeUndefined();
     expect(stepDay("ArrowRight", null, 0)).toBeUndefined();
@@ -79,14 +83,13 @@ describe("the value axis", () => {
     expect(axis.stop).toEqual({ value: 4, off: null });
   });
 
-  it("marks a Stop below a debit's scale at the bottom", () => {
-    const debit = served([-2.1, -1.9]);
-    debit.levels = { ...debit.levels!, target: -3, stop: -0.5 };
-    debit.plan = debit.plan.map((p) => ({ ...p, on_pace: -p.on_pace }));
-    // a debit's Stop is a smaller value: here it is inside, at -0.5 between -2.1 and 0
-    expect(valueAxis(debit, held, money).stop?.off).toBeNull();
-    debit.levels.stop = -9;
-    expect(valueAxis(debit, held, money).stop).toEqual({ value: -9, off: "below" });
+  it("is never a single value: with every figure at zero it still has a height to draw in", () => {
+    const flat = served([0, 0], null);
+    flat.levels = { ...flat.levels!, target: null };
+    flat.plan = flat.plan.map((p) => ({ ...p, on_pace: 0 }));
+    const axis = valueAxis(flat, held, money);
+    expect(axis.hi).toBeGreaterThan(axis.lo);
+    expect(axis.ticks.length).toBeGreaterThan(1);
   });
 
   it("has no Stop to mark when there is none", () => {
@@ -190,5 +193,14 @@ describe("what a day says", () => {
     expect(sampleWords(day(), money))
       .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404 · behind by 0.28"
         + " — in hours (observed 16:00 New York)");
+  });
+});
+
+describe("what today's valuation says", () => {
+  it("its DTE and its cost to close, in the chart's money, or masked under privacy", () => {
+    const now = { dte: 38, cost: 4.4 };
+    expect(nowLines(now, money)).toEqual({ day: "valued now · 38 DTE", cost: "to close, 2 contracts: $880" });
+    expect(nowLines(now, points).cost).toBe("to close, per contract: 4.40 pts");
+    expect(nowLines(now, hidden)).toEqual({ day: "valued now · 38 DTE", cost: "to close: $•••" });
   });
 });

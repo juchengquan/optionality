@@ -6,13 +6,16 @@
  *    (visx's `Threshold`); the Target and the Stop labelled in their attention colours, Manage-by
  *    too; today's valuation emphasised; a day that is not the close hollow; a missed day a break in
  *    the line over a hatched column.
- *  - **The value axis is the days', not the Stop's** (`valueAxis`): a Stop beyond it is marked at
- *    the edge, with an arrow and its figure, rather than stretching the scale.
- *  - **The crosshair** follows a mouse, and a finger: a horizontal drag scrubs while a vertical one
- *    still scrolls the page (`touch-action: pan-y`). The arrow keys move it a day at a time, Home
- *    and End to the ends, Escape lets go — ONE tab stop, as the days inside an image would each be
- *    one otherwise. The tooltip is for the eye and is hidden from a screen reader; the status line
- *    beneath says the same day in full, and is what is announced.
+ *  - **The value axis is the days', not the Stop's** (`valueAxis`): a Stop above it is marked at
+ *    the top edge, with an arrow and its figure, rather than stretching the scale.
+ *  - **The crosshair** stops at every day and at today's valuation after them. It follows a mouse.
+ *    A finger chooses by a tap — a second tap, a tap outside the chart or a scroll lets go — or by
+ *    a drag that has gone sideways, which scrubs, while a vertical one still scrolls the page
+ *    (`touch-action: pan-y`) and chooses nothing. The arrow keys move it a stop at a time, Home
+ *    and End to the ends; Escape lets go of a day, and with none chosen is left to the page, whose
+ *    inspector it closes. ONE tab stop, as the days inside an image would each be one otherwise.
+ *    The tooltip is for the eye and is hidden from a screen reader; the status line beneath says
+ *    the same stop in full, and is what is announced.
  *  - **Privacy** keeps the shape and drops every $ figure: no value axis and no gutter for one, the
  *    Levels named without their figures, the tooltip's money masked. The Pace gap is in points,
  *    which privacy keeps.
@@ -22,19 +25,23 @@
  *  1.x, unmaintained since 2016, for labels this chart places by hand anyway; and the prototype's
  *  `TooltipWithBounds` ran off the 272px inspector (`tipPlace`).
  */
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";
 import { Threshold } from "@visx/threshold";
 
 import type { Sample, Samples } from "../shared/api";
 import {
-  nearestDay, sampleWords, say, stepDay, textWidth, tipLines, tipPlace, valueAxis, type Unit,
+  nearestDay, nowLines, nowWords, sampleWords, say, stepDay, textWidth, tipLines, tipPlace, valueAxis,
+  type Unit,
 } from "./burndown";
 
 export const H = 196, T = 16, B = 22;
 /** The tooltip's width, or the chart's where that is narrower. */
 const TIP_W = 192;
+/** How far a finger must move sideways, and more sideways than up or down, before it scrubs: until
+ *  then the page may yet take it as a scroll, and a scroll is never a choice of day. */
+const SCRUB = 10;
 
 const MARK: Record<Sample["timing"], "close" | "off-close" | "unrecorded"> = {
   close: "close", "after-close": "off-close", "before-open": "off-close", unrecorded: "unrecorded",
@@ -91,9 +98,11 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   const [box, W] = useWidth();
   const id = useId().replace(/:/g, "");
   const [pointed, setPointed] = useState<number | null>(null);
-  // the tooltip's height, measured once drawn: how much room it needs above or below its day
+  // the tooltip's height, measured once drawn: how much room it needs above or below its day. No
+  // guess to start from — a layout effect measures it before it is ever painted, and a guess would
+  // only hide a measurement that stopped happening (#360's review)
   const tipBox = useRef<HTMLDivElement>(null);
-  const [tipH, setTipH] = useState(96);
+  const [tipH, setTipH] = useState(0);
   useLayoutEffect(() => {
     const h = tipBox.current?.offsetHeight;
     if (h && h !== tipH) setTipH(h);
@@ -102,7 +111,8 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   const { now } = axis;
   const x = scaleLinear<number>({ domain: [span, 0], range: [L, W - R] });
   const y = scaleLinear<number>({ domain: [axis.lo, axis.hi], range: [H - B, T] });
-  const xs = samples.map((s) => x(s.dte));
+  // the crosshair's stops: every day, then today's valuation, which is drawn apart from them
+  const xs = [...samples.map((s) => x(s.dte)), ...(now ? [x(now.dte)] : [])];
 
   const level = (kind: "target" | "stop", v: number) => (unit.hidden ? kind : `${kind} ${say(v, unit)}`);
   const stop = axis.stop;
@@ -122,24 +132,67 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
     (s.on_pace === null ? null : { dte: s.dte, cost: s.cost_to_close, pace: s.on_pace })));
 
   const at = pointed === null ? null : samples[pointed] ?? null;
-  /** The day nearest a pointer, from where it is across the drawing. */
-  const point = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => {
+  const atNow = pointed !== null && pointed === samples.length && now !== null ? now : null;
+  /** The stop nearest a pointer, from where it is across the drawing. */
+  const nearest = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
     // the drawing is its measured width, but should the box ever be scaled the pointer is not
-    const along = (e.clientX - box.left) * (box.width > 0 ? W / box.width : 1);
-    const day = nearestDay(xs, along);
-    if (day !== null) setPointed(day);
+    return nearestDay(xs, (e.clientX - box.left) * (box.width > 0 ? W / box.width : 1));
   };
+  const pick = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => {
+    const stop = nearest(e);
+    if (stop !== null) setPointed(stop);
+  };
+  // A mouse points by moving. A finger chooses a day only by a TAP, or by a drag that has gone
+  // sideways (`SCRUB`): never on touching down, because a vertical scroll that starts on the chart
+  // touches down too, and then left a day chosen for the life of the page (#360's review)
+  const kind = useRef("mouse");
+  const touch = useRef<{ x0: number; y0: number; scrubbing: boolean } | null>(null);
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    kind.current = e.pointerType;
+    if (e.pointerType === "mouse") pick(e);
+    else touch.current = { x0: e.clientX, y0: e.clientY, scrubbing: false };
+  };
+  const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === "mouse") { pick(e); return; }
+    const t = touch.current;
+    if (!t) return;
+    const [dx, dy] = [Math.abs(e.clientX - t.x0), Math.abs(e.clientY - t.y0)];
+    if (!t.scrubbing && (dx < SCRUB || dx <= dy)) return;
+    t.scrubbing = true;
+    pick(e);
+  };
+  const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const t = touch.current;
+    touch.current = null;
+    if (kind.current === "mouse") { pick(e); return; }
+    // a scrub ends on the day it reached; a tap chooses a day, or lets go of the one chosen
+    if (t?.scrubbing) return;
+    const stop = nearest(e);
+    setPointed(stop === pointed ? null : stop);
+  };
+  // the page took the touch — a scroll — so nothing the finger did chooses a day
+  const onPointerCancel = () => { touch.current = null; setPointed(null); };
+  // a tap or a click anywhere outside the chart lets go of the day it was showing
+  useEffect(() => {
+    if (pointed === null) return;
+    const away = (e: PointerEvent) => {
+      if (e.target instanceof Node && !box.current?.contains(e.target)) setPointed(null);
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [pointed, box]);
   const onKey = (e: React.KeyboardEvent) => {
-    const next = stepDay(e.key, pointed, samples.length);
+    const next = stepDay(e.key, pointed, xs.length);
     if (next === undefined) return;
     e.preventDefault();
     setPointed(next === "clear" ? null : next);
   };
-  const tip = at === null ? null : (() => {
+  const tip = at === null && atNow === null ? null : (() => {
     const tipW = Math.min(TIP_W, W);
-    const place = tipPlace({ x: x(at.dte), y: y(at.cost_to_close), W, H, tipW, tipH });
-    return { tipW, lines: tipLines(at, unit), ...place };
+    const [px, py] = at ? [x(at.dte), y(at.cost_to_close)] : [x(atNow!.dte), y(atNow!.cost)];
+    const lines = at ? tipLines(at, unit) : { ...nowLines(atNow!, unit), pace: null, gap: null, why: null };
+    return { tipW, lines, ...tipPlace({ x: px, y: py, W, H, tipW, tipH }) };
   })();
   const offClose = samples.some((s) => s.timing !== "close");
 
@@ -151,7 +204,8 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
            aria-label={`cost to close by day, ${samples.length} days, against the plan: `
              + "arrow keys move from day to day"}>
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true"
-             onPointerMove={point} onPointerDown={point} onClick={point}
+             onPointerMove={onPointerMove} onPointerDown={onPointerDown} onClick={onClick}
+             onPointerCancel={onPointerCancel}
              onPointerLeave={(e) => { if (e.pointerType === "mouse") setPointed(null); }}>
           <defs>
             <pattern id={`${id}-hatch`} width="4" height="4" patternUnits="userSpaceOnUse"
@@ -196,13 +250,11 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
               <text x={W - R} y={y(stop.value) - 4} textAnchor="end">{level("stop", stop.value)}</text>
             </g>
           ) : (
-            // beyond the scale: marked at the edge it lies past, an arrow and its figure — above
-            // the top edge in the margin, or just inside the bottom one, clear of the DTE labels
+            // above the scale: marked at its top edge, an arrow and its figure, in the margin
+            // over the plot, so it is on top of nothing drawn
             <g data-level="stop" data-off={stop.off} className="nx-hist-stop">
-              <line x1={L} x2={W - R} y1={stop.off === "above" ? T : H - B} y2={stop.off === "above" ? T : H - B} />
-              <text x={W - R} y={stop.off === "above" ? T - 4 : H - B - 4} textAnchor="end">
-                {`${stop.off === "above" ? "▲" : "▼"} ${level("stop", stop.value)}`}
-              </text>
+              <line x1={L} x2={W - R} y1={T} y2={T} />
+              <text x={W - R} y={T - 4} textAnchor="end">{`▲ ${level("stop", stop.value)}`}</text>
             </g>
           )}
           {manage === null ? null : (
@@ -236,13 +288,19 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
             </g>
           ))}
           {now ? (
-            <g data-now="" className="nx-hist-now">
+            <g data-now="" className="nx-hist-now" data-pointed={atNow ? "" : undefined}>
               <rect className="nx-bd-halo" x={x(now.dte) - 7} y={y(now.cost) - 7} width={14} height={14}
                     transform={`rotate(45 ${x(now.dte)} ${y(now.cost)})`} />
               <rect x={x(now.dte) - 4.5} y={y(now.cost) - 4.5} width={9} height={9}
                     transform={`rotate(45 ${x(now.dte)} ${y(now.cost)})`} />
             </g>
           ) : null}
+          {atNow === null ? null : (
+            <g data-crosshair="now" className="nx-bd-cross" pointerEvents="none">
+              <line x1={x(atNow.dte)} x2={x(atNow.dte)} y1={T} y2={H - B} />
+              <line x1={L} x2={W - R} y1={y(atNow.cost)} y2={y(atNow.cost)} />
+            </g>
+          )}
           {/* the crosshair: a rule down the day, a rule across at its cost, the plan's mark on it */}
           {at === null ? null : (
             <g data-crosshair={at.observed_on} className="nx-bd-cross" pointerEvents="none">
@@ -281,7 +339,7 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
         )}
       </div>
       <p className="nx-hist-said" role="status">
-        {at ? sampleWords(at, unit)
+        {at ? sampleWords(at, unit) : atNow ? nowWords(atNow, unit)
           : offClose ? "● in hours · ○ not the close · point at a day to see why"
             : "● each day in hours · point at a day for its figures"}
       </p>
