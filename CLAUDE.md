@@ -533,7 +533,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 
 - Every call for **market data** is a single bounded one: the sweep, `/quotes`, `/references`,
   `/positions/values` and the creation probes (`POST /monitors`, `/positions`, `/references` and
-  `/spreads`, which probes every leg of every spread in ONE call). Widened from "every call to the Provider" by ADR
+  `/spreads`, which probes every leg of every spread in ONE call — at most 32 legs in all, six
+  to a spread, #334). Widened from "every call to the Provider" by ADR
   0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
   service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
   call to one — a loophole that change itself created. The payoff at expiry (`GET /positions/{id}/payoff`,

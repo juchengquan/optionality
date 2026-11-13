@@ -25,6 +25,12 @@ const CALLS = [
   { side: "long", option_type: "CALL", strike: 7750 },
 ];
 
+/** Six legs on one expiry: the most one spread may have (#334). */
+const SIX = [
+  ...PUTS, ...CALLS,
+  { side: "long", option_type: "PUT", strike: 7050 }, { side: "long", option_type: "CALL", strike: 7800 },
+];
+
 const heldSpread = (name: string, legs: unknown[], entry: number, short: { option_type: string; strike: number }) => ({
   name, legs, held: true, entry, opened_at: "2026-10-01",
   monitors: [
@@ -319,6 +325,27 @@ describe("all of it or none of it, when the write itself fails", () => {
   });
 });
 
+describe("a spread of six legs (#334)", () => {
+  it("is recorded with its value and every short leg's delta, probing all six in ONE call", async () => {
+    const { asked, fetch } = counting();
+    start(fetch);
+    const spread = {
+      name: "six", legs: SIX, held: true, entry: 3, opened_at: "2026-10-01",
+      monitors: [
+        { threshold: 6 },
+        { option_type: "PUT", strike: 7150, threshold: 0.3 }, { option_type: "CALL", strike: 7700, threshold: 0.3 },
+      ],
+    };
+    const resp = await post({ strike_date: EXPIRY, spreads: [spread] });
+    expect(resp.status, JSON.stringify(await body(resp))).toBe(201);
+    expect(asked).toEqual([SIX.map((l) => buildSpxCode(EXPIRY, l.option_type as "CALL" | "PUT", l.strike)).sort()]);
+    const stored = h.db.prepare("select legs from positions").get() as { legs: string };
+    expect(JSON.parse(stored.legs)).toHaveLength(6);
+    const value = h.db.prepare("select legs from monitors where field = 'mid_price'").get() as { legs: string };
+    expect(JSON.parse(value.legs).map((l: { sign: number }) => l.sign)).toEqual([-1, 1, -1, 1, 1, 1]);
+  });
+});
+
 describe("what a spread may not say", () => {
   const refused = async (payload: unknown) => {
     const resp = await post(payload);
@@ -339,12 +366,30 @@ describe("what a spread may not say", () => {
     nothingWritten();
   });
 
-  it("more than eight spreads, or more than four legs to one, so the one probe stays small", async () => {
+  it("more than eight spreads, or more than six legs to one, so the one probe stays small", async () => {
     start();
     const nine = Array.from({ length: 9 }, (_, i) => ({ name: `w${i}`, legs: PUTS, held: false, monitors: [{ threshold: 2 }] }));
     expect(await refused({ strike_date: EXPIRY, spreads: nine })).toBe("✖ Too big: expected array to have <=8 items\n  → at spreads");
-    const five = [...PUTS, ...CALLS, { side: "long", option_type: "CALL", strike: 7800 }];
-    expect(await refused(one({ legs: five }))).toBe("✖ Too big: expected array to have <=4 items\n  → at spreads[0].legs");
+    const seven = [...SIX, { side: "long", option_type: "CALL", strike: 7850 }];
+    expect(await refused(one({ legs: seven }))).toBe("✖ Too big: expected array to have <=6 items\n  → at spreads[0].legs");
+  });
+
+  it("more than 32 legs in all, before the Provider is asked: the probe's bound #322 set", async () => {
+    const { asked, fetch } = counting();
+    start(fetch);
+    const six = Array.from({ length: 6 }, (_, i) => ({ name: `w${i}`, legs: SIX, held: false, monitors: [{ threshold: 2 }] }));
+    expect(await refused({ strike_date: EXPIRY, spreads: six }))
+      .toBe("this request has 36 legs: at most 32 in one request");
+    expect(asked).toEqual([]);
+    nothingWritten();
+    // decided FIRST in the request's own checks: a name given twice, which is refused in step 1
+    // too, is not what a request this size is told
+    const twice = six.map((sp, i) => ({ ...sp, name: `w${i % 2}` }));
+    expect(await refused({ strike_date: EXPIRY, spreads: twice }))
+      .toBe("this request has 36 legs: at most 32 in one request");
+    // 32 exactly is within it
+    const legs32 = [...six.slice(0, 5), { ...six[5]!, legs: SIX.slice(0, 2) }];
+    expect((await post({ strike_date: EXPIRY, spreads: legs32 })).status).toBe(201);
   });
 });
 

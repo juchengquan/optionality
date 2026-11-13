@@ -136,6 +136,15 @@ const ONE_PUT = {
 /** The book with a far call priced too, which nothing holds and no combo names. */
 const WIDE = { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) };
 
+/** A far put, priced: the sixth leg of the six-leg spread (#334). */
+const P6300 = "US.SPXW261218P6300000";
+const SIX_BOOK = { ...WIDE, [P6300]: quote("SPXW 261218 6300P", 1.25, -0.08) };
+/** The condor with a further wing bought on each side: six legs, the most one spread may have. */
+const SIX_LEGS = [
+  ...PUT_SPREAD.legs, ...CALL_SPREAD.legs,
+  { side: "long", option_type: "PUT", strike: 6300 }, { side: "long", option_type: "CALL", strike: 7500 },
+];
+
 const CONDOR_SIGNS = [
   { sign: -1, option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7350 },
   { sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 },
@@ -1243,7 +1252,7 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
-    // at most eight spreads of at most four legs: the one probe asks for 32 codes at most
+    // at most eight spreads of at most six legs, and 32 legs in all: the one probe stays small
     name: "POST /spreads refuses more than eight spreads",
     world: world(),
     request: request("POST", "/spreads", {
@@ -1252,11 +1261,37 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
-    name: "POST /spreads refuses a spread of more than four legs",
+    // six legs is the most a spread may have, as the old dashboard's combo builder took (#334)
+    name: "POST /spreads records a six-leg spread with its value and both short legs' delta Monitors",
+    world: world({ provider: { quotes: SIX_BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{
+        name: "dec-six", held: true, entry: 3.5, opened_at: "2026-11-06", legs: SIX_LEGS,
+        monitors: [
+          { threshold: 7 },
+          { option_type: "PUT", strike: 6400, threshold: 0.3 }, { option_type: "CALL", strike: 7300, threshold: 0.3 },
+        ],
+      }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a spread of more than six legs",
     world: world(),
     request: request("POST", "/spreads", {
       strike_date: EXPIRY,
-      spreads: [{ ...PUT_SPREAD, legs: [...PUT_SPREAD.legs, ...CALL_SPREAD.legs, { side: "long", option_type: "CALL", strike: 7500 }] }],
+      spreads: [{ ...PUT_SPREAD, legs: [...SIX_LEGS, { side: "long", option_type: "CALL", strike: 7600 }] }],
+    }),
+  },
+  {
+    // six-leg spreads, each within the schema, but 36 legs in all: refused before the one probe,
+    // and before anything else the request says about itself — two of them share a name, which
+    // is refused too, but not first
+    name: "POST /spreads refuses more than 32 legs in all, first and asking the Provider nothing",
+    world: world({ provider: { quotes: SIX_BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: Array.from({ length: 6 }, (_, i) => ({ ...PUT_SPREAD, name: `dec-six-${i % 5}`, legs: SIX_LEGS, monitors: [] })),
     }),
   },
   {

@@ -6,9 +6,10 @@ way left half a condor behind. Here one request carries the lot, and nothing is 
 everything has passed. The order is `create_monitor.py`'s, for its reason — everything free comes
 before the one step that leaves the machine:
 
-1. what the request says about itself: a spread that would record nothing, a watched spread carrying a
-   holding's figures, a rule on a leg the spread does not have, a threshold the rule refuses, a combo
-   field that does not add up, a name or a rule given twice;
+1. what the request says about itself: more legs in all than one probe may ask for (`MAX_PROBE_LEGS`), a
+   spread that would record nothing, a watched spread carrying a holding's figures, a rule on a leg the
+   spread does not have, a threshold the rule refuses, a combo field that does not add up, a name or a
+   rule given twice;
 2. the database: a holding of that name, a Monitor on that (code, field) already there;
 3. ONE probe of every leg of every spread, deduplicated — strict as POST /positions and POST /monitors
    are, so one Contract the Provider refuses refuses the whole request;
@@ -66,7 +67,7 @@ from .schemas.monitor import (
     threshold_error,
 )
 from .schemas.position import DEFAULT_CONTRACTS, LegIn
-from .schemas.spread import SpreadIn, SpreadMonitorIn, SpreadsIn
+from .schemas.spread import MAX_PROBE_LEGS, SpreadIn, SpreadMonitorIn, SpreadsIn
 
 
 @dataclass(frozen=True)
@@ -229,7 +230,10 @@ async def create_spreads(deps: SpreadDeps, given: SpreadsIn) -> Added | SpreadFa
     db = deps.db
     date = given.strike_date
 
-    # 1. what the request says about itself
+    # 1. what the request says about itself, starting with its size: the one probe is bounded
+    leg_count = sum(len(spread.legs) for spread in given.spreads)
+    if leg_count > MAX_PROBE_LEGS:
+        return _refuse(f"this request has {leg_count} legs: at most {MAX_PROBE_LEGS} in one request")
     names: set[str] = set()
     planned: list[list[_Planned]] = []
     watched: set[tuple[str, str]] = set()

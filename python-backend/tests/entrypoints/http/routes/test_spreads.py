@@ -22,6 +22,14 @@ CALLS = [
     {"side": "long", "option_type": "CALL", "strike": 7750},
 ]
 
+#: six legs on one expiry: the most one spread may have (#334)
+SIX = [
+    *PUTS,
+    *CALLS,
+    {"side": "long", "option_type": "PUT", "strike": 7050},
+    {"side": "long", "option_type": "CALL", "strike": 7800},
+]
+
 
 def held_spread(name, legs, entry, short):
     return {
@@ -433,6 +441,30 @@ class TestAllOfItOrNoneOfItWhenTheWriteItselfFails:
         assert [count(h, "positions"), count(h, "monitors"), count(h, "monitor_positions")] == [1, 0, 0]
 
 
+class TestASpreadOfSixLegs:
+    async def test_is_recorded_with_its_value_and_every_short_legs_delta_probing_all_six_in_one_call(self, start):
+        asked, fetch = counting()
+        h = start(fetch_quotes=fetch)
+        spread = {
+            "name": "six",
+            "legs": SIX,
+            "held": True,
+            "entry": 3,
+            "opened_at": "2026-10-01",
+            "monitors": [
+                {"threshold": 6},
+                {"option_type": "PUT", "strike": 7150, "threshold": 0.3},
+                {"option_type": "CALL", "strike": 7700, "threshold": 0.3},
+            ],
+        }
+        resp = await post(h, {"strike_date": EXPIRY, "spreads": [spread]})
+        assert resp.status_code == 201, json.dumps(resp.json())
+        assert asked == [sorted(code(leg["option_type"], leg["strike"]) for leg in SIX)]
+        assert len(json.loads(h.db.execute("select legs from positions").fetchone()[0])) == 6
+        value = h.db.execute("select legs from monitors where field = 'mid_price'").fetchone()[0]
+        assert [leg["sign"] for leg in json.loads(value)] == [-1, 1, -1, 1, 1, 1]
+
+
 class TestWhatASpreadMayNotSay:
     @staticmethod
     async def refused(h, payload):
@@ -459,16 +491,35 @@ class TestWhatASpreadMayNotSay:
         )
         nothing_written(h)
 
-    async def test_more_than_eight_spreads_or_more_than_four_legs_to_one(self, start):
+    async def test_more_than_eight_spreads_or_more_than_six_legs_to_one(self, start):
         h = start()
         nine = [{"name": f"w{i}", "legs": PUTS, "held": False, "monitors": [{"threshold": 2}]} for i in range(9)]
         assert await self.refused(h, {"strike_date": EXPIRY, "spreads": nine}) == (
             "✖ Too big: expected array to have <=8 items\n  → at spreads"
         )
-        five = [*PUTS, *CALLS, {"side": "long", "option_type": "CALL", "strike": 7800}]
-        assert await self.refused(h, self.one(legs=five)) == (
-            "✖ Too big: expected array to have <=4 items\n  → at spreads[0].legs"
+        seven = [*SIX, {"side": "long", "option_type": "CALL", "strike": 7850}]
+        assert await self.refused(h, self.one(legs=seven)) == (
+            "✖ Too big: expected array to have <=6 items\n  → at spreads[0].legs"
         )
+
+    async def test_more_than_32_legs_in_all_before_the_provider_is_asked(self, start):
+        asked, fetch = counting()
+        h = start(fetch_quotes=fetch)
+        six = [{"name": f"w{i}", "legs": SIX, "held": False, "monitors": [{"threshold": 2}]} for i in range(6)]
+        assert await self.refused(h, {"strike_date": EXPIRY, "spreads": six}) == (
+            "this request has 36 legs: at most 32 in one request"
+        )
+        assert asked == []
+        nothing_written(h)
+        # decided FIRST in the request's own checks: a name given twice, which is refused in step 1
+        # too, is not what a request this size is told
+        twice = [{**sp, "name": f"w{i % 2}"} for i, sp in enumerate(six)]
+        assert await self.refused(h, {"strike_date": EXPIRY, "spreads": twice}) == (
+            "this request has 36 legs: at most 32 in one request"
+        )
+        # 32 exactly is within it
+        legs32 = [*six[:5], {**six[5], "legs": SIX[:2]}]
+        assert (await post(h, {"strike_date": EXPIRY, "spreads": legs32})).status_code == 201
 
 
 class TestAHeldSpreadReplacingTheWatchRulesItClashesWith:

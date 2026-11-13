@@ -148,3 +148,48 @@ describe("the Add sheet", () => {
     expect(document.querySelector(".nx")).toBeTruthy();
   });
 });
+
+/** A combo of `n` legs, entered in the sheet as the owner would: legs added to two, each strike
+ *  typed, the last leg made a short call — its own side and type — and the Entry. */
+async function enterCombo(sheet: HTMLElement, n: number): Promise<void> {
+  await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
+  for (let i = 2; i < n; i++) await userEvent.click(within(sheet).getByRole("button", { name: "spread 1: add a leg" }));
+  const strikes = ["7150", "7100", "7050", "7000", "6950"].slice(0, n - 1).concat("7700");
+  for (const [i, k] of strikes.entries()) await userEvent.fill(screen.getByLabelText(`spread 1, leg ${i + 1} strike`), k);
+  await userEvent.click(within(sheet).getByRole("button", { name: `spread 1, leg ${n} side: long — flip` }));
+  await userEvent.click(within(sheet).getByRole("button", { name: `spread 1, leg ${n} type: PUT — change` }));
+  await userEvent.fill(screen.getByLabelText("spread 1 entry"), "3");
+}
+
+describe("combos of 3 to 6 legs on the phone (#334)", () => {
+  for (const n of [3, 5, 6]) {
+    it(`adds a ${n}-leg combo from the sheet, its preview drawn over every leg`, async () => {
+      const sent = await openPhone();
+      const sheet = await openSheet();
+      await enterCombo(sheet, n);
+      await waitFor(() => expect(sheet.querySelector('[data-spread="1"] [data-curve]')).not.toBeNull());
+      await userEvent.click(within(sheet).getByRole("button", { name: "Record holding + 3 Monitors" }));
+      await waitFor(() => expect(sent).toHaveLength(1));
+      const legs = (sent[0] as { spreads: { legs: { side: string; option_type: string; strike: number }[] }[] }).spreads[0]!.legs;
+      expect(legs.map((l) => `${l.side[0]}${l.option_type[0]}${l.strike}`)).toEqual([
+        "sP7150", "lP7100", ...["7050", "7000", "6950"].slice(0, n - 3).map((k) => `lP${k}`), "sC7700",
+      ]);
+    });
+  }
+
+  it("pushes nothing sideways at 390px with six legs, every target 44pt and every box 16px", async () => {
+    await openPhone();
+    const sheet = await openSheet();
+    expect(document.documentElement.clientWidth).toBe(390);
+    await enterCombo(sheet, 6);
+    await waitFor(() => expect(sheet.querySelector('[data-spread="1"] [data-curve]')).not.toBeNull());
+    await settle();
+    expect(within(sheet).getAllByRole("button", { name: /^remove spread 1, leg \d$/ })).toHaveLength(6);
+    expect(overflowsSideways()).toBe(false);
+    expect(pastTheEdge(sheet)).toEqual([]);
+    expect(tooSmall(sheet)).toEqual([]);
+    const small = [...sheet.querySelectorAll("input")]
+      .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16).map((el) => el.getAttribute("aria-label"));
+    expect(small).toEqual([]);
+  });
+});

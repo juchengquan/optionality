@@ -1,5 +1,5 @@
 {
-  "name": "POST /spreads refuses a spread of more than four legs",
+  "name": "POST /spreads refuses a spread of more than six legs",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -65,8 +65,18 @@
             },
             {
               "side": "long",
+              "option_type": "PUT",
+              "strike": 6300
+            },
+            {
+              "side": "long",
               "option_type": "CALL",
               "strike": 7500
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7600
             }
           ],
           "monitors": [
@@ -87,7 +97,7 @@
     "response": {
       "status": 422,
       "body": {
-        "detail": "✖ Too big: expected array to have <=4 items\n  → at spreads[0].legs"
+        "detail": "✖ Too big: expected array to have <=6 items\n  → at spreads[0].legs"
       }
     },
     "rows": {},

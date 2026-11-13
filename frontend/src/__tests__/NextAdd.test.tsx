@@ -8,27 +8,28 @@ import { SpreadsIn } from "backend/schemas";
 import { AddSpread } from "../next/AddSpread";
 import { Next } from "../next/Next";
 import type { Monitor } from "../api";
+import { draftPayoff } from "../__browser__/nextBook";
 
 /** Every request, as `METHOD path` with its parsed body. */
 let asked: { what: string; body: unknown }[] = [];
 let answer: { status: number; body: unknown } = { status: 201, body: { positions: [], monitors: [] } };
-const PAYOFF = {
-  at_strikes: [{ spx: 7100, pnl: -48.5 }, { spx: 7150, pnl: 1.5 }],
-  slope_below: 0, slope_above: 0, breakevens: [7148.5], max_profit: 1.5, max_loss: -48.5,
-};
 
+/** The form's two routes, each answered on purpose: the draft's payoff worked out from what was
+ *  sent, as the service would, and `POST /spreads` as `answer` says. Anything else is a 404 that
+ *  names the call, never an answer a wrong call could pass on. */
 beforeEach(() => {
   asked = [];
   answer = { status: 201, body: { positions: [{ id: "p1", name: "x" }], monitors: [] } };
   vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
-    asked.push({ what: `${init?.method ?? "GET"} ${path}`, body: init?.body ? JSON.parse(String(init.body)) : null });
-    if (path === "/positions/payoff") {
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(PAYOFF) });
-    }
-    return Promise.resolve({
-      ok: answer.status < 400, status: answer.status, json: () => Promise.resolve(answer.body),
-    });
+    const what = `${init?.method ?? "GET"} ${path}`;
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    asked.push({ what, body });
+    const reply = (status: number, json: unknown) =>
+      Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(json) });
+    if (what === "POST /positions/payoff") return reply(200, draftPayoff(body));
+    if (what === "POST /spreads") return reply(answer.status, answer.body);
+    return reply(404, { detail: `${what} is not served here` });
   }));
 });
 
@@ -91,7 +92,7 @@ describe("the add form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record 2 holdings + 3 Monitors" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     const body = posted()[0]!.body as { spreads: { monitors: unknown[] }[] };
-    expect(body.spreads[1]!.monitors).toEqual([{ threshold: 2.5 }]);
+    expect(body.spreads[1]!.monitors).toEqual([{ threshold: -2.5, direction: "below", compare: "signed" }]);
   });
 
   it("says a refusal from the service IN the form, and keeps what was typed", async () => {
@@ -144,6 +145,14 @@ describe("the add form", () => {
     expect(screen.getByLabelText("spread 1 contracts").classList.contains("nx-private")).toBe(false);
   });
 
+  it("words a held credit's stop as its cost to close, and a watched spread's as its value", () => {
+    open();
+    const line = () => screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!.textContent;
+    expect(line()).toMatch(/^on\s*cost to close ≥/);
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    expect(line()).toMatch(/^on\s*spread value ≥/);
+  });
+
   it("starts a debit spread's stop switched off, and says why", () => {
     open();
     type("spread 1, leg 1 strike", "7150");
@@ -153,14 +162,21 @@ describe("the add form", () => {
     expect(screen.getByText("a debit spread's stop is a fall in its value: set one by hand")).toBeTruthy();
   });
 
-  it("warns, and keeps it on, when a credit's stop can never fire", () => {
+  it("warns, and keeps it on, when a credit's stop can never fire — from the payoff served", async () => {
     open();
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "30");
     expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByRole("status", { name: "spread 1's stop" }).textContent)
+    expect((await screen.findByRole("status", { name: "spread 1's stop" })).textContent)
       .toBe("the stop at 60.00 can never fire: this spread costs at most 50.00 to close");
+    // a leg changed: the curve on screen is no longer this draft's, so neither is its warning
+    type("spread 1, leg 2 strike", "7000");
+    expect(screen.queryByRole("status", { name: "spread 1's stop" })).toBeNull();
+    // and the new legs' payoff, once served, says the stop can fire after all
+    await waitFor(() => expect(drafts().at(-1)?.legs[1]?.strike).toBe(7000));
+    await screen.findByRole("img", { name: /payoff at expiry/ });
+    expect(screen.queryByRole("status", { name: "spread 1's stop" })).toBeNull();
   });
 
   it("names the watch rules a held spread will replace, before saving and after", async () => {
@@ -183,9 +199,98 @@ describe("the add form", () => {
   });
 });
 
+const drafts = () => asked.filter((a) => a.what === "POST /positions/payoff")
+  .map((a) => a.body as { legs: { side: string; option_type: string; strike: number }[]; entry: number; contracts: number });
+
+describe("legs added and removed (#334)", () => {
+  const legs = () => screen.getAllByLabelText(/^spread 1, leg \d strike$/);
+  const addLeg = () => fireEvent.click(screen.getByRole("button", { name: "spread 1: add a leg" }));
+
+  for (const n of [3, 5, 6]) {
+    it(`saves a ${n}-leg combo, each leg its own side, type and strike, previewed whole`, async () => {
+      const { onSaved } = open();
+      type("expiry", "2026-12-18");
+      const strikes = ["7150", "7100", "7050", "7000", "6950", "6900"];
+      for (let i = 2; i < n; i++) addLeg();
+      expect(legs()).toHaveLength(n);
+      strikes.slice(0, n).forEach((k, i) => type(`spread 1, leg ${i + 1} strike`, k));
+      // the last leg made a short call: its own side and type, not its neighbours'
+      fireEvent.click(screen.getByRole("button", { name: `spread 1, leg ${n} side: long — flip` }));
+      fireEvent.click(screen.getByRole("button", { name: `spread 1, leg ${n} type: PUT — change` }));
+      type("spread 1 entry", "3");
+      await waitFor(() => expect(drafts().at(-1)?.legs).toHaveLength(n));
+      fireEvent.click(screen.getByRole("button", { name: "Record holding + 3 Monitors" }));
+      await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+      const body = posted()[0]!.body as { spreads: { legs: { side: string; option_type: string; strike: number }[]; monitors: unknown[] }[] };
+      expect(SpreadsIn.safeParse(body).success).toBe(true);
+      const sent = body.spreads[0]!;
+      expect(sent.legs.map((l) => `${l.side[0]}${l.option_type[0]}${l.strike}`)).toEqual([
+        "sP7150", "lP7100", ...strikes.slice(2, n - 1).map((k) => `lP${k}`), `sC${strikes[n - 1]}`,
+      ]);
+      expect(sent.monitors).toEqual([
+        { threshold: -6, direction: "below", compare: "signed" },
+        { option_type: "PUT", strike: 7150, threshold: 0.3 },
+        { option_type: "CALL", strike: Number(strikes[n - 1]), threshold: 0.3 },
+      ]);
+    });
+  }
+
+  it("offers no seventh leg, and takes none away below two", () => {
+    open();
+    expect(screen.queryByRole("button", { name: /^remove spread 1, leg/ })).toBeNull();
+    for (let i = 0; i < 4; i++) addLeg();
+    expect(legs()).toHaveLength(6);
+    expect(screen.queryByRole("button", { name: "spread 1: add a leg" })).toBeNull();
+    type("spread 1, leg 3 strike", "7050");
+    fireEvent.click(screen.getByRole("button", { name: "remove spread 1, leg 2" }));
+    expect(legs()).toHaveLength(5);
+    expect((legs()[1] as HTMLInputElement).value).toBe("7050");
+    expect(screen.getByRole("button", { name: "spread 1: add a leg" })).toBeTruthy();
+  });
+
+  it("keeps the focus with its leg when a leg above it is removed", () => {
+    open();
+    addLeg(); addLeg();
+    ["7150", "7100", "7050", "7000"].forEach((k, i) => type(`spread 1, leg ${i + 1} strike`, k));
+    const third = screen.getByLabelText("spread 1, leg 3 strike") as HTMLInputElement;
+    third.focus();
+    fireEvent.click(screen.getByRole("button", { name: "remove spread 1, leg 2" }));
+    // the box the owner was in is still the 7050 leg's, now the second, and still focused
+    expect(document.activeElement).toBe(third);
+    expect(third.value).toBe("7050");
+    expect(third.getAttribute("aria-label")).toBe("spread 1, leg 2 strike");
+  });
+
+  it("gives the focus to + leg when the remove button that had it goes with its leg", () => {
+    open();
+    addLeg(); addLeg();
+    const remove = screen.getByRole("button", { name: "remove spread 1, leg 4" });
+    remove.focus();
+    fireEvent.click(remove);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "spread 1: add a leg" }));
+    // down to two, every remove button gone: the focus is not left on nothing
+    const last = screen.getByRole("button", { name: "remove spread 1, leg 3" });
+    last.focus();
+    fireEvent.click(last);
+    expect(screen.queryByRole("button", { name: /^remove spread 1, leg/ })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "spread 1: add a leg" }));
+  });
+
+  it("gives a structure with no short leg no |Δ| Monitor, and saves it without one", async () => {
+    const { onSaved } = open();
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 1 side: short — flip" }));
+    expect(screen.getByRole("switch", { name: "spread 1 delta Monitor" }).getAttribute("aria-checked")).toBe("false");
+    type("spread 1 entry", "-4");
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 0 Monitors" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([]);
+  });
+});
+
 describe("the preview", () => {
-  const drafts = () => asked.filter((a) => a.what === "POST /positions/payoff")
-    .map((a) => a.body as { legs: { side: string }[]; entry: number; contracts: number });
 
   it("asks for the payoff once the strikes are typed, per contract, and again when a side flips", async () => {
     open();
