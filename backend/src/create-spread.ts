@@ -38,7 +38,7 @@ import type { MonitorRow, PositionRow } from "./db/rows.ts";
 import { toSqlDatetime } from "./db/time.ts";
 import { newId, toSqliteJson } from "./db/values.ts";
 import { toPosition } from "./hydrate.ts";
-import { adoptOrphanMonitors, linkToPositions } from "./monitors.ts";
+import { adoptOrphanMonitors, editedMonitor, linkToPositions } from "./monitors.ts";
 import {
   DEFAULT_COMBO_FIELD, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_SINGLE_FIELD, thresholdError,
 } from "./schemas/monitor.ts";
@@ -207,6 +207,20 @@ function twiceOver(spread: Spread): SpreadFault | null {
   return null;
 }
 
+/** What a watch rule's alarm leaves the holding's rule that replaces it (#336): its state — the bell,
+ *  when it last sent, the figure it last read — where the new rule watches the same figure the same
+ *  way, as a PATCH moving the threshold alone keeps it (#292); nothing where it watches another way
+ *  or the watch rule was off, as such a PATCH would forget it. One rule, `editedMonitor`'s, so the
+ *  two doors cannot disagree. Remade fresh, a ringing rule would send "crossed" again next sweep. */
+function carriedAlarm(was: MonitorRow | undefined, now: MonitorRow): Partial<MonitorRow> {
+  if (!was) return {};
+  const edited = editedMonitor(was, {
+    field: now.field, direction: now.direction, compare: now.compare, threshold: now.threshold, enabled: now.enabled,
+  });
+  if (edited.triggered !== undefined) return {};
+  return { triggered: was.triggered, last_alarm_at: was.last_alarm_at, last_value: was.last_value };
+}
+
 const isUniqueClash = (err: unknown) => err instanceof Error && /UNIQUE constraint failed/.test(err.message);
 
 export async function createSpreads(deps: SpreadDeps, input: SpreadsInput): Promise<Added | SpreadFault> {
@@ -317,6 +331,7 @@ function write(
         enabled: 1, disabled_reason: null, triggered: 0, last_value: null, last_checked_at: null,
         last_alarm_at: null, created_at: createdAt, ...p.columns,
       } as MonitorRow;
+      Object.assign(row, carriedAlarm(replacing.find((m) => m.code === p.code && m.field === p.field), row));
       insertMonitor(db, row);
       added.monitors.push({ id: row.id, code: p.code, field: p.field });
       links.push({ monitorId: row.id, contracts: p.contracts, holding });

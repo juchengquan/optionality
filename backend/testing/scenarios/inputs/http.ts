@@ -1227,6 +1227,29 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [ONE_PUT] }),
   },
   {
+    // the watch rule was RINGING, its alarm sent: the holding's rule watches the same figure the same
+    // way at another threshold, so it keeps the bell, as a PATCH moving the threshold alone keeps it
+    // (#292) — remade fresh, the next sweep would say "crossed" a second time (#336)
+    name: "POST /spreads carries a ringing watch rule's alarm over to the holding's rule watching it the same way",
+    world: world({
+      tables: { monitors: [{ ...WATCHING_PUTS[1]!, triggered: 1, last_alarm_at: "2026-11-09 14:45:00.000000", last_value: -0.21 }] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [ONE_PUT] }),
+  },
+  {
+    // the same, but the holding's rule watches its size from BELOW: another rule, which a PATCH
+    // changing the direction would also make unrung (#292)
+    name: "POST /spreads starts the alarm afresh where the holding's rule watches another way",
+    world: world({
+      tables: { monitors: [{ ...WATCHING_PUTS[1]!, triggered: 1, last_alarm_at: "2026-11-09 14:45:00.000000", last_value: -0.21 }] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...ONE_PUT, monitors: [{ ...ONE_PUT.monitors[0]!, direction: "below" }] }],
+    }),
+  },
+  {
     // the condor already holds the 6400 put: the lone holding's rule is linked to IT, never to the
     // condor, and the condor gains no rule nobody asked for
     name: "POST /spreads links one contract's rule to its own holding when another holding holds that strike",

@@ -57,7 +57,7 @@ from .db.rows import MonitorRow, PositionRow
 from .db.time import to_sql_datetime
 from .db.values import new_id, to_sqlite_json
 from .hydrate import to_position
-from .monitors import adopt_orphan_monitors, link_to_positions
+from .monitors import adopt_orphan_monitors, edited_monitor, link_to_positions
 from .ports import QuoteFetcher, verify_contracts
 from .schemas.monitor import (
     DEFAULT_COMBO_FIELD,
@@ -290,6 +290,29 @@ async def create_spreads(deps: SpreadDeps, given: SpreadsIn) -> Added | SpreadFa
         raise
 
 
+def _carried_alarm(was: MonitorRow | None, now: MonitorRow) -> dict[str, Any]:
+    """What a watch rule's alarm leaves the holding's rule that replaces it (#336): its state — the bell,
+    when it last sent, the figure it last read — where the new rule watches the same figure the same way,
+    as a PATCH moving the threshold alone keeps it (#292); nothing where it watches another way or the
+    watch rule was off, as such a PATCH would forget it. One rule, `edited_monitor`'s, so the two doors
+    cannot disagree. Remade fresh, a ringing rule would send "crossed" again next sweep."""
+    if was is None:
+        return {}
+    edited = edited_monitor(
+        was,
+        {
+            "field": now["field"],
+            "direction": now["direction"],
+            "compare": now["compare"],
+            "threshold": now["threshold"],
+            "enabled": now["enabled"],
+        },
+    )
+    if "triggered" in edited:
+        return {}
+    return {"triggered": was["triggered"], "last_alarm_at": was["last_alarm_at"], "last_value": was["last_value"]}
+
+
 def _write(
     db: sqlite3.Connection,
     given: SpreadsIn,
@@ -352,6 +375,8 @@ def _write(
                     **p.columns,
                 },
             )
+            was = next((m for m in replacing if m["code"] == p.code and m["field"] == p.field), None)
+            monitor.update(cast(Any, _carried_alarm(was, monitor)))
             insert_monitor(db, monitor)
             added.monitors.append({"id": monitor["id"], "code": p.code, "field": p.field})
             links.append((monitor["id"], p.contracts, holding))
