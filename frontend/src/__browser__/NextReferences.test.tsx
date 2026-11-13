@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { settle } from "./nextBook";
-import { serveReferences, stripLines } from "./nextReferences";
+import { serveReferences, stripLines } from "./nextCarried";
 
 async function show() {
   serveReferences();
