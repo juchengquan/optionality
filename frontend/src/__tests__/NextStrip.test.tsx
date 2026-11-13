@@ -141,7 +141,7 @@ const deskRow = (id: string) =>
   [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
 
 describe("on the desk (arrangement A)", () => {
-  const strip = COLUMNS.live.find((c) => c.key === "strip")!;
+  const strip = COLUMNS.find((c) => c.key === "strip")!;
 
   it("gives every held spread and every watched spread a strip in its row, in Live", () => {
     render(<DeskBook {...deskProps()} />);
@@ -172,10 +172,6 @@ describe("on the desk (arrangement A)", () => {
     expect(cell.querySelector(".nxs")).toBeTruthy();
     expect(cell.querySelector("[title]")!.getAttribute("title")).toBe(REASON);
     expect(cell.textContent).toContain(REASON);
-  });
-
-  it("leaves REVIEW's columns alone: after the close is for the plan, not the market", () => {
-    expect(COLUMNS.review.some((c) => c.key === "strip")).toBe(false);
   });
 
   it("draws the whole strip in the inspector, a bracketed condor's two spreads on one", () => {

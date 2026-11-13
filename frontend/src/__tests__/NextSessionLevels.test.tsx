@@ -154,11 +154,9 @@ describe("the words", () => {
 
   it("is what the desk's fitting counts, so the longer chip is measured", () => {
     const rows: DeskRow[] = [{ kind: "holding", holding: holding as unknown as Holding, rules: [] }];
-    for (const mode of ["live", "review"] as const) {
-      const name = COLUMNS[mode].find((c) => c.key === "name")!;
-      expect(charsOf(name, rows, false, false) - charsOf(name, rows, false, true))
-        .toBe(" · as valued at 23:04".length);
-    }
+    const name = COLUMNS.find((c) => c.key === "name")!;
+    expect(charsOf(name, rows, false, false) - charsOf(name, rows, false, true))
+      .toBe(" · as valued at 23:04".length);
   });
 });
 

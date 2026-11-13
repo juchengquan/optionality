@@ -9,10 +9,8 @@ import { GROUPS } from "../../shared/groups";
 import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../../shared/prefs";
 import { Chip, Money, type BookProps } from "../Book";
 import { ClosedLine } from "../ClosedLine";
-import type { Mode } from "../mode";
 import { Glyph } from "../NeedsLine";
 import { monitorName, fieldWords } from "../needs";
-import { HoldingHistory } from "../History";
 import { HistoryOnDemand } from "../HistoryOnDemand";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome } from "../pace";
@@ -23,7 +21,7 @@ import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, rowId, rowName, rowStrip, tableRows,
+  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, FIGURES, RETIRED_KEYS, rowId, rowName, rowStrip, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
@@ -50,7 +48,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
   /** the selection, when the page owns it (#299): the palette reads it and lands on a row */
   selection?: [DeskSelection, (s: DeskSelection) => void];
 }) {
-  const { quotes, monitors, holdings, mode, session, privacy } = props;
+  const { quotes, monitors, holdings, session, privacy } = props;
   const placed = useMemo(() => placeBook(quotes, holdings, monitors), [quotes, holdings, monitors]);
   const rows = useMemo(() => tableRows(placed), [placed]);
   const partners = useMemo(() => new Map(placed.holdings.flatMap((g) => g.rows)
@@ -62,7 +60,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
   // (gamma, expiry…). So every change is made to the cookie as it stands NOW — another tab may have
   // written it since this one read it — and touches only the desk's own keys.
   const [hidden, setHidden] = useState(() => readHidden());
-  const fit = useDeskFit(mode, rows, hidden, privacy, session);
+  const fit = useDeskFit(rows, hidden, privacy, session);
   const onToggle = useCallback((key: string, shown: boolean) => {
     const next = readHidden();
     if (shown) next.delete(key); else next.add(key);
@@ -170,7 +168,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
     columns: fit.columns, privacy, selected: current ? rowId(current) : null, cursor: sel.id, select: setSelected,
     inspectorId, session,
   };
-  const pickable = COLUMNS[mode].filter((c) => c.key !== "name" && (fit.offered.has(c.key) || hidden.has(c.key)));
+  const pickable = COLUMNS.filter((c) => c.key !== "name" && (fit.offered.has(c.key) || hidden.has(c.key)));
 
   return (
     <div className="nx-book nxd" ref={root} data-inspecting={current ? "" : undefined}>
@@ -198,7 +196,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
         <Muted monitors={placed.muted} />
       </div>
 
-      {current ? <Inspector id={inspectorId} row={current} mode={mode} session={session} privacy={privacy} rows={rows} partners={partners}
+      {current ? <Inspector id={inspectorId} row={current} session={session} privacy={privacy} rows={rows} partners={partners}
                             onSelect={setSelected} onClose={close} monitors={monitors} writes={props.writes} /> : null}
       {/* the closed trades' fold (#373): the last thing in the book, across the whole width */}
       {props.journal}
@@ -224,8 +222,12 @@ interface Ctx {
   session: boolean;
 }
 
-/** Every key the desk draws: all it may change in the column cookie (`readHidden`). */
-const DESK_KEYS = new Set([...COLUMNS.live, ...COLUMNS.review].map((c) => c.key));
+/** Every key the desk draws, and the ones it drew before #372: all it may change in the column
+ *  cookie (`readHidden`). A retired key hides nothing, since no column has it, and reset clears it. */
+const DESK_KEYS = new Set([...COLUMNS.map((c) => c.key), ...RETIRED_KEYS]);
+
+/** The rule's sentence, as its column says it. */
+const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
 
 /** `tableRows` lives with the columns (`columns.ts`); the still (#300) reads it from here. */
 export { tableRows } from "./columns";
@@ -464,8 +466,8 @@ export function Fill({ entry }: { entry: Entry }) {
 
 // ---- the inspector
 
-function Inspector({ id, row, mode, session, privacy, rows, partners, onSelect, onClose, monitors, writes }: {
-  id: string; row: DeskRow; mode: Mode; session: boolean; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
+function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClose, monitors, writes }: {
+  id: string; row: DeskRow; session: boolean; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
   onSelect: (id: string) => void; onClose: () => void; monitors: Monitor[]; writes?: HoldingWrites;
 }) {
   const name = rowName(row);
@@ -483,7 +485,7 @@ function Inspector({ id, row, mode, session, privacy, rows, partners, onSelect, 
       </div>
       {/* the heading and its close stay outside: a detail that cannot be drawn can still be shut */}
       <DetailBoundary key={subject} what={row.kind === "holding" ? "holding" : "rule"}>
-        {row.kind === "holding" ? <HoldingDetail row={row} mode={mode} session={session} privacy={privacy} partners={partners} onSelect={onSelect} />
+        {row.kind === "holding" ? <HoldingDetail row={row} session={session} privacy={privacy} partners={partners} onSelect={onSelect} />
           : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null} />
             : <QuarantinedDetail row={row} />}
         {/* by the session, not the mode (#371): what is polled is what updates */}
@@ -499,14 +501,13 @@ function Inspector({ id, row, mode, session, privacy, rows, partners, onSelect, 
   );
 }
 
-/** Every column's figure for this row, in both modes, whether the table drew it or not. */
+/** Every column's figure for this row, whether the table drew it or not, and "on pace", which has
+ *  no column (#372). */
 function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean; extra?: [string, React.ReactNode][] }) {
-  const seen = new Set<string>();
   const items: [string, React.ReactNode][] = [];
-  for (const c of [...COLUMNS.live, ...COLUMNS.review]) {
+  for (const c of FIGURES) {
     // the strip is drawn whole beneath, with its words
-    if (c.key === "name" || c.key === "alarm" || c.key === "legs" || c.key === "strip" || seen.has(c.key)) continue;
-    seen.add(c.key);
+    if (c.key === "name" || c.key === "alarm" || c.key === "legs" || c.key === "strip") continue;
     const text = c.text(row, privacy);
     if (text === "") continue;
     const label = c.key === "value" && row.kind === "holding" ? "cost to close"
@@ -522,8 +523,8 @@ function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean;
   );
 }
 
-function HoldingDetail({ row, mode, session, privacy, partners, onSelect }: {
-  row: Extract<DeskRow, { kind: "holding" }>; mode: Mode; session: boolean; privacy: boolean; partners: Map<string, Holding>;
+function HoldingDetail({ row, session, privacy, partners, onSelect }: {
+  row: Extract<DeskRow, { kind: "holding" }>; session: boolean; privacy: boolean; partners: Map<string, Holding>;
   onSelect: (id: string) => void;
 }) {
   const h: Holding = row.holding;
@@ -561,8 +562,10 @@ function HoldingDetail({ row, mode, session, privacy, partners, onSelect }: {
       ) : null}
       <Legs legs={h.legs.map((l) => `${l.side}${qtyWords(l.qty)} ${l.option_type} ${l.strike}`)} />
       <InspectorStrip holding={h} partner={partner} />
-      {/* the recorded days (ADR 0023, #295): open in REVIEW, on demand in LIVE (#353), read once */}
-      {mode === "review" ? <HoldingHistory holding={h} privacy={privacy} /> : <HistoryOnDemand holding={h} privacy={privacy} />}
+      {/* the recorded days (ADR 0023, #295), read once when the section opens (#353): shut in
+          session and open outside it (#372). The detail is keyed by the holding, so the session
+          decides how the NEXT holding opens, and never folds or unfolds this one under the reader */}
+      <HistoryOnDemand holding={h} privacy={privacy} defaultOpen={!session} />
       <HoldingPayoff holding={h} privacy={privacy} />
       <Figures row={row} privacy={privacy} extra={extra} />
       <PaceExplained holding={h} />
@@ -606,7 +609,7 @@ function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; o
 
 function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined" }> }) {
   const m = row.monitor;
-  const text = COLUMNS.live.find((c) => c.key === "alarm")!.text(row, false);
+  const text = ALARM_COLUMN.text(row, false);
   return (
     <>
       <p className="nx-meta">{`${m.strike_date} · ${m.code}`}</p>
@@ -643,7 +646,7 @@ function Monitors({ entries }: { entries: Entry[] }) {
           return (
             <li key={e.id} className="nxd-monitor" data-state={a ?? "calm"}>
               {a ? <AttentionChip kind={a} /> : null}
-              <span>{COLUMNS.live.find((c) => c.key === "alarm")!.text(row, false)}</span>
+              <span>{ALARM_COLUMN.text(row, false)}</span>
               <Fill entry={e} />
               <MonitorControls rule={ruleOfEntry(e)} served={e} />
             </li>

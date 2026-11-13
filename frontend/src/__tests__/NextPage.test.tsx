@@ -468,6 +468,85 @@ describe("a holding's history in LIVE (#353)", () => {
   }
 });
 
+describe("the desk inspector's history, by the session (#372)", () => {
+  const samplesAsked = () => calls.filter((c) => c === "/positions/p1/samples").length;
+  const history = () => screen.getByRole("button", { name: "history" });
+  const inspect = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: "1231_7000P" }));
+    await quiet();
+  };
+  const shut = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "close the inspector" }));
+    await quiet();
+  };
+
+  it("starts shut in session, and asks for nothing until it is opened", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    await quiet();
+    await inspect();
+    expect(history().getAttribute("aria-expanded")).toBe("false");
+    await polls(2);
+    expect(samplesAsked(), `shut, nothing\n${said()}`).toBe(0);
+  });
+
+  for (const [when, now] of [["an evening", EVENING], ["a Sunday", SUNDAY]] as const) {
+    it(`starts open outside the session, on ${when}, and reads the samples once`, async () => {
+      document.cookie = "ui_arrangement=desk;path=/";
+      at(now);
+      await open();
+      await quiet();
+      await inspect();
+      expect(history().getAttribute("aria-expanded")).toBe("true");
+      expect(samplesAsked(), `open, once\n${said()}`).toBe(1);
+      // the charts load once: polls, and shutting and opening the section, ask nothing more
+      await polls(3);
+      fireEvent.click(history());
+      fireEvent.click(history());
+      await quiet();
+      expect(samplesAsked(), `still once\n${said()}`).toBe(1);
+    });
+  }
+
+  it("crossing 16:15 with the inspector open does not unfold its shut section", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T21:14:00Z"); // Monday 16:14 New York
+    await open();
+    await quiet();
+    await inspect();
+    expect(history().getAttribute("aria-expanded")).toBe("false");
+    await readClock("2026-11-09T21:16:00Z"); // 16:16: the session is over
+    await quiet();
+    expect(closedLine(), "the page has not seen the close").toBeTruthy();
+    expect(history().getAttribute("aria-expanded"), "the close unfolded it under the reader").toBe("false");
+    expect(samplesAsked()).toBe(0);
+    // the next holding opened takes the new default: here the same one, opened afresh
+    await shut();
+    await inspect();
+    expect(history().getAttribute("aria-expanded")).toBe("true");
+    expect(samplesAsked()).toBe(1);
+  });
+
+  it("crossing 09:30 with the history open outside the session does not fold it", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-09T14:29:00Z"); // Monday 09:29 New York
+    await open();
+    await quiet();
+    await inspect();
+    expect(history().getAttribute("aria-expanded")).toBe("true");
+    await readClock("2026-11-09T14:31:00Z"); // 09:31: the session is open
+    await quiet();
+    expect(closedLine(), "the page has not seen the open").toBeNull();
+    expect(history().getAttribute("aria-expanded"), "the open folded it under the reader").toBe("true");
+    await shut();
+    await inspect();
+    expect(history().getAttribute("aria-expanded")).toBe("false");
+    // read once, for the opening outside the session, and not again
+    expect(samplesAsked(), said()).toBe(1);
+  });
+});
+
 describe("asking again", () => {
   it("asks for nothing more on switching mode: the mode decides no fetching", async () => {
     document.cookie = "ui_arrangement=desk;path=/";

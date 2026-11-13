@@ -1,5 +1,5 @@
-/** The desk's book, arrangement A (ADR 0023, #289): the terminal table, its inspector and REVIEW's
- *  columns, on the owner-shaped book both arrangements are held to (`testing/ownerBook.ts`).
+/** The desk's book, arrangement A (ADR 0023, #289): the terminal table, its inspector and its one
+ *  column set (#372), on the owner-shaped book both arrangements are held to (`testing/ownerBook.ts`).
  *  Behaviour only — what sits where, what each row says, what stays live. Layout (no sideways
  *  scroll, columns dropping as measured, the colours) is the browser suite's: `NextDesk.test.tsx`
  *  under `__browser__/`.
@@ -8,10 +8,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Entry, Holding, Monitor } from "../shared/api";
+import type { Entry, Holding } from "../shared/api";
 import type { BookProps } from "../next/Book";
 import { DeskBook } from "../next/desk/DeskBook";
-import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, type DeskRow } from "../next/desk/columns";
+import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, tableRows, type DeskRow } from "../next/desk/columns";
 import { Next } from "../next/Next";
 import { placeBook } from "../next/placement";
 import { readHidden } from "../shared/prefs";
@@ -381,30 +381,62 @@ describe("with the inspector open, the table stays live", () => {
   });
 });
 
-describe("REVIEW", () => {
+describe("one column set, in either mode (#372)", () => {
   const scheduled: Holding[] = HOLDINGS.map((h) => ({
     ...h, schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4,
       target_dte: 11, manage_by_dte: 21, reached: null, manage_by_due: false },
   }));
+  const ONE_SET = ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage", "alarm"];
 
-  it("swaps the columns to P&L, captured, pace and DTE to Manage-by", () => {
-    render(<DeskBook {...props({ mode: "review", holdings: scheduled })} />);
-    expect(headers()).toEqual(["name", "legs", "pnl", "captured", "on_pace", "pace_gap", "to_manage", "alarm"]);
+  // both modes are still on screen until #375 takes the switch away; each draws the one set
+  for (const mode of ["live", "review"] as const) {
+    for (const session of [true, false]) {
+      it(`draws Live's columns and the pace gap in ${mode}, ${session ? "in" : "outside"} the session`, () => {
+        render(<DeskBook {...props({ mode, session, holdings: scheduled })} />);
+        expect(headers()).toEqual(ONE_SET);
+      });
+    }
+  }
+
+  it("draws no on-pace column and no DTE → manage-by", () => {
+    render(<DeskBook {...props({ holdings: scheduled })} />);
+    expect(COLUMNS.map((c) => c.key)).toEqual(ONE_SET);
+    expect(cell("h-calls", "on_pace")).toBeNull();
+    expect(cell("h-calls", "to_manage")).toBeNull();
+    expect(document.querySelector(".nxd-head")!.textContent).not.toContain("DTE → manage-by");
+    expect(document.querySelector(".nxd-head")!.textContent).not.toContain("on pace");
   });
 
-  it("says only what the service served: the schedule's own on-pace and pace gap, or a dash", () => {
+  it("says only what the service served: the schedule's own pace gap, or a dash", () => {
     const mixed = scheduled.map((h) => h.id === "h-ic" ? { ...h, schedule: null } : h);
-    render(<DeskBook {...props({ mode: "review", holdings: mixed })} />);
-    expect(cellText("h-calls", "on_pace")).toBe("1.23");
+    render(<DeskBook {...props({ holdings: mixed })} />);
     expect(cellText("h-calls", "pace_gap")).toBe("behind by 0.47");
     expect(cellText("h-calls", "captured")).toBe("50%");
-    expect(cellText("h-calls", "to_manage")).toBe("38 → 21");
+    expect(cellText("h-calls", "value")).toBe("4.40");
     // no Opened, no schedule: nothing is drawn in its place
-    expect(cellText("h-ic", "on_pace")).toBe("—");
     expect(cellText("h-ic", "pace_gap")).toBe("—");
-    expect(cellText("h-ic", "to_manage")).toBe("—");
-    expect(cell("h-calls", "value")).toBeNull();
   });
+
+  for (const session of [true, false]) {
+    it(`says on pace in the inspector ${session ? "in" : "outside"} the session, and no DTE → manage-by`, () => {
+      const mixed = scheduled.map((h) => h.id === "h-ic" ? { ...h, schedule: null } : h);
+      render(<DeskBook {...props({ session, holdings: mixed })} />);
+      fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+      let insp = screen.getByRole("complementary", { name: /inspector/ });
+      const terms = () => [...insp.querySelectorAll(".nxd-kv dt")].map((d) => d.textContent);
+      expect(within(insp).getByText("on pace").nextElementSibling!.textContent).toBe("1.23");
+      expect(within(insp).getByText("pace gap").nextElementSibling!.textContent).toBe("behind by 0.47");
+      // beside the pace gap it is the plan of, and its two parts each said once
+      expect(terms().indexOf("pace gap") - terms().indexOf("on pace")).toBe(1);
+      expect(terms()).not.toContain("DTE → manage-by");
+      expect(terms().filter((t) => t === "DTE")).toHaveLength(1);
+      expect(within(insp).getByText("manage-by").nextElementSibling!.textContent).toBe("in 17d");
+      // a holding with no schedule says so with a dash, as the table did
+      fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+      insp = screen.getByRole("complementary", { name: /inspector/ });
+      expect(within(insp).getByText("on pace").nextElementSibling!.textContent).toBe("—");
+    });
+  }
 
   it("says when the holdings were valued, outside the session, where nothing re-values them", () => {
     render(<DeskBook {...props({ mode: "review", holdingsAt: "23:14:05" })} />);
@@ -424,42 +456,50 @@ describe("the columns", () => {
   it("carry over today's column choice", () => {
     document.cookie = "ui_cols_combo=pnl.legs.delta;path=/";
     render(<DeskBook {...props()} />);
-    expect(headers()).toEqual(["name", "value", "captured", "strip", "dte", "manage", "alarm"]);
+    expect(headers()).toEqual(["name", "value", "captured", "pace_gap", "strip", "dte", "manage", "alarm"]);
   });
 
   it("stop at the first that does not fit, rather than skipping to a narrower one (ADR 0008)", () => {
     // P&L is too wide for what is left; delta, after it, would fit on its own
-    const widths: Record<string, number> = { name: 100, value: 50, pnl: 400, delta: 40, dte: 30 };
+    const widths: Record<string, number> = { name: 100, value: 50, pnl: 400, delta: 40, pace_gap: 50, dte: 30 };
     const widthOf = (k: string) => widths[k] ?? 60;
-    expect(fitColumns("live", 300, new Set(), widthOf).map((c) => c.key)).toEqual(["name", "value"]);
+    expect(fitColumns(300, new Set(), widthOf).map((c) => c.key)).toEqual(["name", "value"]);
     // hiding P&L is how room is made for what follows it, and the picker offers exactly that
-    expect(fitColumns("live", 300, new Set(["pnl"]), widthOf).map((c) => c.key))
-      .toEqual(["name", "value", "delta", "dte", "manage"]);
+    expect(fitColumns(300, new Set(["pnl"]), widthOf).map((c) => c.key))
+      .toEqual(["name", "value", "pace_gap", "delta", "dte"]);
     // the picker offers what ticking would draw: nothing behind P&L until P&L is hidden
-    expect(offerable("live", 300, new Set(), widthOf).has("delta")).toBe(false);
-    expect(offerable("live", 300, new Set(["pnl"]), widthOf).has("delta")).toBe(true);
+    expect(offerable(300, new Set(), widthOf).has("delta")).toBe(false);
+    expect(offerable(300, new Set(["pnl"]), widthOf).has("delta")).toBe(true);
+  });
+
+  /** Every row the owner's book draws, as the table does. */
+  const ownerRows = (): DeskRow[] => tableRows(placeBook(QUOTES, HOLDINGS, MONITORS));
+
+  it("drop in exactly the survival order as the room shrinks: the rule first, pace gap after DTE", () => {
+    const rows = ownerRows();
+    const widthOf = (key: string) => Math.ceil(charsOf(COLUMNS.find((c) => c.key === key)!, rows, false, true) * 8);
+    const all = COLUMNS.reduce((n, c) => n + widthOf(c.key), 0);
+    const dropped: string[] = [];
+    let before = COLUMNS.map((c) => c.key);
+    for (let room = all; room >= widthOf("name"); room -= 1) {
+      const now = fitColumns(room, new Set(), widthOf).map((c) => c.key);
+      dropped.push(...before.filter((k) => !now.includes(k)));
+      before = now;
+    }
+    // the reverse of value, P&L, Δ, pace gap, DTE, manage-by, SPX → short, captured, legs, rule
+    expect(dropped).toEqual(["alarm", "legs", "captured", "strip", "manage", "dte", "pace_gap", "delta", "pnl", "value"]);
+    expect(before).toEqual(["name"]);
+    expect(PRIORITY).toEqual(["value", "pnl", "delta", "pace_gap", "dte", "manage", "strip", "captured", "legs", "alarm"]);
   });
 
   it("are dropped widest last (ADR 0008)", () => {
-    const placed = placeBook(QUOTES, HOLDINGS, MONITORS);
-    const rows: DeskRow[] = [
-      ...placed.holdings.flatMap((g) => g.rows.flat().flatMap((p) => [
-        { kind: "holding" as const, holding: p.holding, rules: p.rules },
-        ...p.rules.map((entry) => ({ kind: "rule" as const, entry, nested: true })),
-      ])),
-      ...placed.watchlist.flatMap((g) => g.items.flatMap((i) => [
-        { kind: "rule" as const, entry: i.entry, nested: false },
-        ...i.under.map((entry) => ({ kind: "rule" as const, entry, nested: true })),
-      ])),
-      ...placed.quarantined.map((monitor: Monitor) => ({ kind: "quarantined" as const, monitor })),
-    ];
-    for (const mode of ["live", "review"] as const) {
-      const width = (key: string) => charsOf(COLUMNS[mode].find((c) => c.key === key)!, rows, false, mode === "live");
-      const order = PRIORITY[mode];
-      expect(Math.max(...order.map(width))).toBe(width(order[order.length - 1]!));
-      // and every column but the pinned name is in the order exactly once
-      expect([...order].sort()).toEqual(COLUMNS[mode].map((c) => c.key).filter((k) => k !== "name").sort());
+    const rows = ownerRows();
+    for (const session of [true, false]) {
+      const width = (key: string) => charsOf(COLUMNS.find((c) => c.key === key)!, rows, false, session);
+      expect(Math.max(...PRIORITY.map(width))).toBe(width(PRIORITY[PRIORITY.length - 1]!));
     }
+    // and every column but the pinned name is in the order exactly once
+    expect([...PRIORITY].sort()).toEqual(COLUMNS.map((c) => c.key).filter((k) => k !== "name").sort());
   });
 });
 
@@ -472,6 +512,20 @@ describe("the column choice is shared with /opt, and only the desk's part of it 
     await userEvent.click(within(picker).getByText("show all"));
     expect([...readHidden()].sort()).toEqual(["expiry", "gamma", "theta", "vega"]);
     expect(headers()).toContain("pnl");
+  });
+
+  it("loads a cookie that hid REVIEW's retired columns, hides nothing for them, and resets them (#372)", async () => {
+    document.cookie = "ui_cols_combo=gamma.on_pace.to_manage;path=/";
+    render(<DeskBook {...props()} />);
+    expect(headers()).toEqual(COLUMNS.map((c) => c.key));
+    await userEvent.click(screen.getByRole("button", { name: "book columns" }));
+    const picker = await screen.findByRole("group", { name: "book columns" });
+    // the picker offers no column that is not drawn
+    expect(within(picker).queryByText("on pace")).toBeNull();
+    expect(within(picker).queryByText("DTE → manage-by")).toBeNull();
+    await userEvent.click(within(picker).getByText("show all"));
+    // the old page's keys stay; the desk's, retired ones included, are cleared
+    expect([...readHidden()]).toEqual(["gamma"]);
   });
 
   it("keeps a choice another tab made since this one read the cookie", async () => {

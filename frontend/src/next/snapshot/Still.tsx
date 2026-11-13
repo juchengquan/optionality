@@ -84,12 +84,12 @@ export function Still(props: StillProps) {
  *  widened to read what an ellipsis took, so it errs wide. */
 const SLACK_CH = 1;
 
-function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, privacy }: BookProps) {
+function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, privacy }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const rows = tableRows(placed);
   // the viewer's column choice, as the table on screen reads it; the room on screen, not at all
   const hidden = readHidden();
-  const columns = COLUMNS[mode].filter((c) => c.key === PINNED || !hidden.has(c.key));
+  const columns = COLUMNS.filter((c) => c.key === PINNED || !hidden.has(c.key));
   const flexible = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
   // in `ch` of the table's own monospace, which is what the screen's fitting measures in pixels
   const template = columns.map((c) => {
