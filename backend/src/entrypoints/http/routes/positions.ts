@@ -472,6 +472,7 @@ export function positionRoutes(deps: Deps) {
         // recorded as held; closing it later is a state of this row, not its removal (ADR 0022)
         closed_on: null,
         exit: null,
+        qty_corrected_at: null,
       };
       // strict gate, as for monitors: nothing enters the table unverified
       const codes = [...new Set(positionLegCodes(toPosition(row)))].sort();

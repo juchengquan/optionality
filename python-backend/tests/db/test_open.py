@@ -77,9 +77,11 @@ class TestTheSchema:
             "schema_migrations",
         ]
         positions = [r[0] for r in db.execute("select name from pragma_table_info('positions')")]
-        assert positions[-4:-2] == ["opened_at", "manage_notified_at"]
+        assert positions[-5:-3] == ["opened_at", "manage_notified_at"]
         # ...and after them, the two that let a holding be CLOSED rather than deleted (ADR 0022)
-        assert positions[-2:] == ["closed_on", "exit"]
+        assert positions[-3:-1] == ["closed_on", "exit"]
+        # ...and the stamp of a corrected quantity, which the samples are read against (#359)
+        assert positions[-1:] == ["qty_corrected_at"]
 
     def test_creates_every_index_under_the_name_sqlalchemy_gave_it(self, db):
         # kept from the old Python's models so that a live file and a fresh one agree name for name

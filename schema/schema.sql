@@ -46,6 +46,7 @@ CREATE TABLE positions (
 	manage_notified_at DATETIME,
 	closed_on VARCHAR(10),
 	exit FLOAT,
+	qty_corrected_at DATETIME,
 	PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX ix_positions_name ON positions (name);

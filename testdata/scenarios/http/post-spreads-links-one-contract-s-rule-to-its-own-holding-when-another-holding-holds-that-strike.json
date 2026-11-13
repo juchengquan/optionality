@@ -108,7 +108,8 @@
           "opened_at": "2026-10-12",
           "manage_notified_at": null,
           "closed_on": null,
-          "exit": null
+          "exit": null,
+          "qty_corrected_at": null
         }
       ],
       "monitors": [],
@@ -194,7 +195,8 @@
             "opened_at": "2026-11-06",
             "manage_notified_at": null,
             "closed_on": null,
-            "exit": null
+            "exit": null,
+            "qty_corrected_at": null
           }
         ]
       },

@@ -330,6 +330,7 @@ function write(
         manage_notified_at: null,
         closed_on: null,
         exit: null,
+        qty_corrected_at: null,
       };
       insertPosition(db, holding);
       added.positions.push({ id: holding.id, name: holding.name });

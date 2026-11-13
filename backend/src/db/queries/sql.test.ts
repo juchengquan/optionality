@@ -44,6 +44,7 @@ function holding(over: Partial<PositionRow> = {}): PositionRow {
     manage_notified_at: null,
     closed_on: null,
     exit: null,
+    qty_corrected_at: null,
     ...over,
   };
 }

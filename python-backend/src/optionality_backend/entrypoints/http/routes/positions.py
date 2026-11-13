@@ -596,6 +596,7 @@ def position_routes(deps: Deps) -> APIRouter:
             # recorded as held; closing it later is a state of this row, not its removal (ADR 0022)
             "closed_on": None,
             "exit": None,
+            "qty_corrected_at": None,
         }
         # strict gate, as for monitors: nothing enters the table unverified
         codes = _js_sorted(set(position_leg_codes(to_position(row))))

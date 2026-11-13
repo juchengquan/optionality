@@ -365,6 +365,7 @@ def _write(
                 "manage_notified_at": None,
                 "closed_on": None,
                 "exit": None,
+                "qty_corrected_at": None,
             }
             insert_position(db, holding)
             added.positions.append({"id": holding["id"], "name": holding["name"]})

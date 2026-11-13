@@ -1621,6 +1621,7 @@ def insert_holding(h, name, strike_date, legs, **over):
         "manage_notified_at": None,
         "closed_on": None,
         "exit": None,
+        "qty_corrected_at": None,
         **over,
     }
     insert_position(h.db, row)

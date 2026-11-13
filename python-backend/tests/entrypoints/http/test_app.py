@@ -81,6 +81,7 @@ def holding(id_, name, strike_date="2026-12-18"):
         "manage_notified_at": None,
         "closed_on": None,
         "exit": None,
+        "qty_corrected_at": None,
     }
 
 

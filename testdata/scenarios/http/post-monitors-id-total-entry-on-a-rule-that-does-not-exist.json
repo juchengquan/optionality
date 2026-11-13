@@ -45,7 +45,8 @@
           "opened_at": "2026-10-12",
           "manage_notified_at": null,
           "closed_on": null,
-          "exit": null
+          "exit": null,
+          "qty_corrected_at": null
         },
         {
           "id": "pos-puts",
@@ -70,7 +71,8 @@
           "opened_at": "2026-10-12",
           "manage_notified_at": null,
           "closed_on": null,
-          "exit": null
+          "exit": null,
+          "qty_corrected_at": null
         }
       ],
       "monitors": [
