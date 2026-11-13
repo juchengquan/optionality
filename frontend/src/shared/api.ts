@@ -71,7 +71,14 @@ async function read<T>(
   return body as T;
 }
 
-export const fetchQuotes = () => read<Entry[]>(client.quotes.$get(), "/quotes");
+/** SPX's derived price on a row, as the page reads it: null where the row says nothing at all.
+ *  The service always sends the field (ADR 0024), but a row without it — an older service, a test
+ *  service — reached the payoff chart as `undefined`, which drew it with NaN and threw (#337). */
+function withSpx<T extends { spx?: number | null; spx_reason?: string | null }>(rows: T[]): T[] {
+  return rows.map((r) => ({ ...r, spx: r.spx ?? null, spx_reason: r.spx_reason ?? null }));
+}
+
+export const fetchQuotes = () => read<Entry[]>(client.quotes.$get(), "/quotes").then(withSpx);
 
 /** What of a holding's pace gap vol accounts for, over its own stored samples (ADR 0011), and
  *  since #333 the whole split: why not where it cannot say, and the gap, the rest and what would
@@ -167,7 +174,7 @@ export type Holding = Awaited<ReturnType<typeof fetchHoldings>>[number];
 export const fetchHoldings = () =>
   read<Exclude<Infer<typeof client.positions.values.$get>, { detail: string }>>(
     client.positions.values.$get(), "/positions/values",
-  );
+  ).then(withSpx);
 export const fetchHealth = () => read<Health>(client.health.$get(), "/health");
 
 /** A write, whose only interesting answer is whether it was refused. */
