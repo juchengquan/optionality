@@ -10,12 +10,16 @@
 .nx-hist-chart svg { display: block; max-width: 100%; height: auto; overflow: visible; }
 .nx-hist-chart text { fill: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
 .nx-hist-zero { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.4; }
-.nx-hist-plan { fill: none; stroke: var(--muted-foreground); stroke-width: 1.5; stroke-dasharray: 1.5 3; }
-.nx-hist-costs { fill: none; stroke: var(--foreground); stroke-width: 1.25; opacity: 0.45; }
+.nx-hist-plan { fill: none; stroke: var(--muted-foreground); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.nx-hist-costs {
+  fill: none; stroke: var(--foreground); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
+}
 .nx-hist-stop line { stroke: var(--alarm); stroke-width: 1; }
-.nx-hist-stop text { fill: var(--alarm); }
+.nx-hist-stop text { fill: var(--alarm); font-weight: 600; }
+/* a Stop beyond the scale (#360): the edge it lies past, drawn as a dashed rule under its arrow */
+.nx-hist-stop[data-off] line { stroke-dasharray: 2 2; }
 .nx-hist-target line { stroke: var(--entry); stroke-width: 1; stroke-dasharray: 5 3; }
-.nx-hist-target text { fill: var(--entry); }
+.nx-hist-target text { fill: var(--entry); font-weight: 600; }
 .nx-hist-manage line { stroke: var(--warn); stroke-dasharray: 2 2; }
 .nx-hist-manage text { fill: var(--warn); }
 /* a day: the close filled, a point that is not one hollow, a row nobody timed faint */
@@ -28,8 +32,10 @@
   fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; stroke-dasharray: 2 1.5;
 }
 .nx-hist-point [data-mark="unrecorded"] { fill: var(--foreground); opacity: 0.4; }
-.nx-hist-point[data-pointed] [data-mark], .nx-hist-point:hover [data-mark] { stroke: var(--ring); stroke-width: 2.5; }
-.nx-hist-now rect { fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; }
+.nx-hist-point[data-pointed] [data-mark] { stroke: var(--ring); stroke-width: 2.5; }
+/* today's valuation, emphasised: a filled diamond on a halo of the page's background */
+.nx-hist-now rect { fill: var(--foreground); }
+.nx-hist-now .nx-bd-halo { fill: var(--background); stroke: var(--foreground); stroke-width: 1; }
 .nx-hist-said { font-size: 0.75rem; color: var(--muted-foreground); min-height: 2.5em; overflow-wrap: anywhere; }
 .nx-hist-leg polyline { fill: none; stroke: var(--foreground); stroke-width: 1.5; }
 .nx-hist-leg circle { fill: var(--foreground); }
@@ -64,3 +70,30 @@
 .nx-hist-od-body[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .nx-hist-od-mark { transition: none; } }
 .nxp-sheet .nx-hist-od { margin-top: 0.75rem; }
+/* the burndown on visx, with its crosshair (#360, BurndownChart.tsx). Every colour a token, so dark
+   mode is app.css's and next.css's: the gap to the plan in the OUTCOME colours, which follow the
+   viewer's direction setting, and the Levels in the ATTENTION ones, which never flip (ADR 0023) */
+.nx-bd { position: relative; }
+/* a horizontal drag scrubs the days; a vertical one is the page's, and still scrolls it */
+.nx-bd svg { touch-action: pan-y; }
+.nx-bd-grid { stroke: var(--border); stroke-width: 1; }
+.nx-bd-ahead { fill: var(--gain); opacity: 0.22; }
+.nx-bd-behind { fill: var(--loss); opacity: 0.22; }
+.nx-bd-hatch { stroke: var(--muted-foreground); stroke-width: 1; opacity: 0.45; }
+.nx-bd-cross line { stroke: var(--foreground); stroke-width: 1; opacity: 0.4; stroke-dasharray: 3 2; }
+.nx-bd-cross-plan { fill: var(--background); stroke: var(--muted-foreground); stroke-width: 1.5; }
+.nx-bd-cross-day { fill: var(--foreground); stroke: var(--background); stroke-width: 2; }
+.nx-bd-cross-day[data-mark="off-close"] { fill: var(--background); stroke: var(--foreground); }
+.nx-bd-cross-day[data-mark="unrecorded"] { opacity: 0.6; }
+/* the tooltip: for the eye only (the status line is what is announced), and never in the way of
+   the pointer it follows. `data-below` hangs it above the plot's bottom edge */
+.nx-bd-tip {
+  position: absolute; pointer-events: none; box-sizing: border-box; padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border); border-radius: 0.375rem; background: var(--popover);
+  color: var(--popover-foreground); box-shadow: 0 2px 8px color-mix(in oklch, var(--foreground) 15%, transparent);
+  font-size: 11px; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.nx-bd-tip[data-below] { transform: translateY(-100%); }
+.nx-bd-tip-h { font-weight: 600; }
+.nx-bd-tip-gap { font-weight: 600; }
+.nx-bd-tip-why { margin-top: 0.125rem; padding-top: 0.125rem; border-top: 1px solid var(--border); color: var(--muted-foreground); }
