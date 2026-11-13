@@ -672,7 +672,7 @@ wheels = [
 
 [[package]]
 name = "optionality"
-version = "2026.11.11"
+version = "2026.11.13"
 source = { editable = "python" }
 dependencies = [
     { name = "pydantic" },
