@@ -28,7 +28,9 @@ export interface BookProps {
   /** the same stamp whole, with its date (`valuedStamp`): the market-closed line dates a valuation
    *  from another day by it (#371's review). Absent, the line says `holdingsAt`'s time alone. */
   holdingsServed?: string | null;
-  /** the on-screen mode, which since #371 decides only which columns and views are drawn */
+  /** the on-screen mode, which since #371 decides only which views are drawn (the phone's pages,
+   *  REVIEW's closed trades): the desk's columns are one set at every hour (#372), and #375
+   *  removes the switch */
   mode: Mode;
   /** whether New York's session is open (`session.ts`): what is fetched, what the needs-you line
    *  says and whether a figure carries its time all follow this, never the mode (#371) */

@@ -4,7 +4,8 @@ import { inSession } from "./session";
  *
  *  Since #371 they decide neither what the page fetches nor what the needs-you line says: both
  *  follow New York's session (`session.ts`). What is left here is the switch's default — the
- *  clock's mode — and the type the two column sets are keyed by.
+ *  clock's mode — and which views are drawn (the phone's pages, REVIEW's closed trades). Since
+ *  #372 the desk's columns are one set at every hour, keyed by nothing.
  */
 export type Mode = "live" | "review";
 
