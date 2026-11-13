@@ -27,7 +27,7 @@ export function served(date: string, type: "CALL" | "PUT", strike: number, delta
   return { code, option_type: type, strike, delta, points, sigma, one_sigma };
 }
 
-function entry(id: string, over: Partial<Entry> & { strike_date: string }): Entry {
+export function entry(id: string, over: Partial<Entry> & { strike_date: string }): Entry {
   return {
     id, code: id, option_type: "CMB", field: "mid_price", threshold: 6, direction: "above",
     compare: "abs", triggered: false, quote: null, dte: 38, scope: null, positions: [],
@@ -40,7 +40,7 @@ function entry(id: string, over: Partial<Entry> & { strike_date: string }): Entr
 const put = (short: number, long: number) => [
   { sign: -1, option_type: "PUT", strike: short }, { sign: 1, option_type: "PUT", strike: long },
 ];
-const call = (short: number, long: number) => [
+export const call = (short: number, long: number) => [
   { sign: -1, option_type: "CALL", strike: short }, { sign: 1, option_type: "CALL", strike: long },
 ];
 
@@ -78,7 +78,7 @@ export const QUOTES: Entry[] = [
     positions: [{ id: "h-ic", name: "1231_IC" }] }),
 ];
 
-function holding(id: string, over: Partial<Holding> & { strike_date: string; legs: Holding["legs"] }): Holding {
+export function holding(id: string, over: Partial<Holding> & { strike_date: string; legs: Holding["legs"] }): Holding {
   return {
     id, name: id, strategy: null, contracts: 1, entry: 2, created_at: null, opened_at: "2026-11-03",
     closed_on: null, exit: null, realized_points: null, cost_to_close: 1, pnl: 100, captured: 0.5,
@@ -87,7 +87,7 @@ function holding(id: string, over: Partial<Holding> & { strike_date: string; leg
   } as Holding;
 }
 
-const side = (s: "short" | "long", option_type: "CALL" | "PUT", strike: number) =>
+export const side = (s: "short" | "long", option_type: "CALL" | "PUT", strike: number) =>
   ({ side: s, option_type, strike });
 
 export const HOLDINGS: Holding[] = [
@@ -111,7 +111,7 @@ export const HOLDINGS: Holding[] = [
     short_strikes: [served("2026-12-31", "CALL", 7400, 0.12, 38), served("2026-12-31", "PUT", 6300, -0.25, 38)] }),
 ];
 
-function monitor(id: string, over: Partial<Monitor>): Monitor {
+export function monitor(id: string, over: Partial<Monitor>): Monitor {
   return {
     id, code: id, strike_date: "2026-12-18", option_type: "CALL", strike: 8000, field: "option_delta",
     threshold: 0.1, direction: "above", compare: "abs", legs: null, enabled: true, scope: null,

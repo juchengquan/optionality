@@ -9,7 +9,13 @@
  *  - a rule on something held whose holding is not drawn — the valuation failed or has not arrived,
  *    or two holdings share its contract, as on a roll day — is still shown, unplaced;
  *  - a condor held as two spreads on one expiry is BRACKETED: one call vertical and one put
- *    vertical, the calls first. A 4-leg holding is already one row and is never split.
+ *    vertical, the calls first. A 4-leg holding is already one row and is never split;
+ *  - a COMBO linked to a holding whose contracts are not exactly that holding's (`coversExactly`)
+ *    only partly overlaps it — the holding holds part of it (scope `leg`), or it holds the whole
+ *    holding and more (scope `all`) — and is drawn in the watchlist with a note naming the
+ *    contracts it shares and with whom (#346, the owner's decision in #338). The service's link is
+ *    untouched: only where the rule is DRAWN changes. A single-contract rule and a combo on exactly
+ *    the holding's contracts stay under it.
  */
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { isEntrySignal, QUARANTINED } from "./needs";
@@ -30,6 +36,9 @@ export interface HoldingGroup {
 export interface PlacedRule {
   entry: Entry;
   under: Entry[];
+  /** for a combo that only partly overlaps a holding, what it shares and with whom
+   *  (`overlapOf`): "shares C8100 with 1231_8050"; null for everything else */
+  overlap: string | null;
 }
 
 export interface WatchGroup {
@@ -49,7 +58,9 @@ export interface BookModel {
 }
 
 export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors: Monitor[]): BookModel {
-  const watched = quotes.filter(isEntrySignal);
+  const overlaps = new Map(quotes.map((e) => [e.id, overlapOf(e, holdings ?? [])]));
+  const overlap = (e: Entry) => overlaps.get(e.id) ?? null;
+  const watched = quotes.filter((e) => isEntrySignal(e) || overlap(e) !== null);
   const drawn = new Set((holdings ?? []).map((h) => h.id));
   const unplaced = quotes.filter((e) => !isEntrySignal(e) && !e.positions.some((p) => drawn.has(p.id)));
 
@@ -67,16 +78,71 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
     holdings: byExpiry(holdings ?? []).map(([expiry, group]) => ({
       expiry,
       rows: brackets(group).map((row) => row.map((holding) => ({
-        holding, rules: quotes.filter((e) => e.positions.some((p) => p.id === holding.id)),
+        holding, rules: quotes.filter((e) => overlap(e) === null && e.positions.some((p) => p.id === holding.id)),
       }))),
     })),
     unplaced,
     watchlist: byExpiry(watched.filter((e) => !nested(e))).map(([expiry, group]) => ({
-      expiry, items: group.map((entry) => ({ entry, under: under(entry) })),
+      expiry, items: group.map((entry) => ({ entry, under: under(entry), overlap: overlap(entry) })),
     })),
     quarantined: byExpiry(off.filter(quarantine)).flatMap(([, g]) => g),
     muted: byExpiry(off.filter((m) => !quarantine(m))).flatMap(([, g]) => g),
   };
+}
+
+/** What a rule's or a holding's contracts are, enough to compare them: an expiry and its legs. */
+interface Contracts {
+  strike_date: string;
+  legs: readonly { option_type: string; strike: number }[];
+}
+
+/** A contract as a key and as the page writes it: `C8100`. */
+const keyOf = (date: string, l: { option_type: string; strike: number }) => `${date} ${l.option_type} ${l.strike}`;
+const label = (l: { option_type: string; strike: number }) => `${l.option_type[0]}${l.strike}`;
+
+/** Whether a combo's contracts are EXACTLY the contracts of the holdings it is linked to, taken
+ *  together: the same set, whatever the signs either is written with (leg conventions differ,
+ *  #97). The one predicate every surface asks about a linked combo (#346): true, it is the holding's
+ *  own rule and sits under it; false, it only partly overlaps and is drawn in the watchlist. A
+ *  condor rule over a condor held as two spreads covers both whole, and stays. */
+export function coversExactly(rule: Contracts, holdings: readonly Contracts[]): boolean {
+  const own = new Set(rule.legs.map((l) => keyOf(rule.strike_date, l)));
+  const held = new Set(holdings.flatMap((h) => h.legs.map((l) => keyOf(h.strike_date, l))));
+  return own.size === held.size && [...own].every((k) => held.has(k));
+}
+
+/** A rule as `/quotes` or `/monitors` serves it: its legs where it is a combo, and its links. */
+interface Linked {
+  strike_date: string;
+  legs?: readonly { option_type: string; strike: number }[] | null;
+  positions: readonly { id: string; name: string }[];
+}
+
+/** For a COMBO linked to holdings whose contracts it does not cover exactly, the note it is drawn
+ *  with in the watchlist — which contracts it shares, and with which holding, never a figure, so
+ *  privacy has nothing to hide in it: "shares C8100 with 1231_8050" where the holding holds part of
+ *  it, "contains 1231_7700's C7700" where it holds the whole holding and more. Null for a single
+ *  contract, a rule linked to nothing, a combo covering exactly its holdings, and one linked to a
+ *  holding the page has not valued, which cannot be compared and is drawn as before. */
+export function overlapOf(rule: Linked, holdings: readonly (Contracts & { id: string; name: string })[]): string | null {
+  if (!rule.legs || rule.legs.length === 0 || rule.positions.length === 0) return null;
+  const linked = rule.positions.map((p) => holdings.find((h) => h.id === p.id));
+  if (linked.some((h) => h === undefined)) return null;
+  const mine = { strike_date: rule.strike_date, legs: rule.legs };
+  const ofHoldings = linked as (Contracts & { name: string })[];
+  if (coversExactly(mine, ofHoldings)) return null;
+  const own = new Set(rule.legs.map((l) => keyOf(rule.strike_date, l)));
+  return ofHoldings.map((h) => {
+    const shared = h.legs.filter((l) => own.has(keyOf(h.strike_date, l))).map(label);
+    if (shared.length === 0) return `linked to ${h.name}`;
+    const whole = shared.length === h.legs.length;
+    return whole ? `contains ${h.name}'s ${words(shared)}` : `shares ${words(shared)} with ${h.name}`;
+  }).join("; ");
+}
+
+/** "C8050", "C8050 and C8100", "C7400, C7450 and P6300". */
+function words(items: string[]): string {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 /** Rows grouped by expiry, the earliest first; each group keeps the order its rows arrived in. */
