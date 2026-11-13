@@ -483,6 +483,22 @@ export const HTTP: readonly HttpInput[] = [
     request: request("PATCH", "/monitors/mon-2", { name: "dec-call-spread" }),
   },
   {
+    // the dashboard says so where the name is typed (#336): a holding recorded under the same name,
+    // as POST /spreads records a held spread's, keeps it — PATCH /positions takes no name at all
+    name: "PATCH /monitors/{id} renames a held spread's rule and leaves its holding's name",
+    world: world({
+      tables: {
+        positions: [position({
+          id: "pos-calls", name: "dec-calls",
+          legs: [{ side: "short", option_type: "CALL", strike: 7300 }, { side: "long", option_type: "CALL", strike: 7350 }],
+        })],
+        monitors: [combo({ id: "mon-2", code: "dec-calls", scope: "all" })],
+        monitor_positions: [link("mon-2", "pos-calls")],
+      },
+    }),
+    request: request("PATCH", "/monitors/mon-2", { name: "dec-call-spread" }),
+  },
+  {
     name: "PATCH /monitors/{id} refuses a rename onto a name already taken",
     world: world({
       tables: { ...held, monitors: [...held.monitors, combo({ id: "mon-3", code: "dec-wing" })] },
