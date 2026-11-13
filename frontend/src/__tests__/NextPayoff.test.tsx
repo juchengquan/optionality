@@ -12,6 +12,7 @@ import { DeskBook } from "../next/desk/DeskBook";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
+import { until } from "../testing/until";
 
 /** Every request the page made, as `METHOD path body`. */
 let asked: string[] = [];
@@ -50,7 +51,15 @@ async function inspect(id: string, name: string, over: Partial<BookProps> = {}) 
   return screen.getByRole("complementary", { name: `inspector: ${name}` });
 }
 
-const payoffOf = (root: HTMLElement) => within(root).findByRole("group", { name: "payoff at expiry" });
+/** A payoff once its answer is DRAWN. The group is drawn at once, saying "drawing…" until the
+ *  service answers, so finding the group alone found that: what was asserted next held only while
+ *  the answer happened to be drawn inside the one turn `findByRole` lets pass. Answered a turn later
+ *  (a 20 ms timer in the fake), nine of these tests failed on figures not yet drawn (#350). */
+async function payoffOf(root: HTMLElement): Promise<HTMLElement> {
+  const payoff = await within(root).findByRole("group", { name: "payoff at expiry" });
+  await until(() => expect(within(payoff).queryByText("drawing…")).toBeNull());
+  return payoff;
+}
 
 describe("a holding's payoff, in the desk's inspector", () => {
   it("asks for it by the holding's id, and draws the curve, the breakevens and the maximums", async () => {

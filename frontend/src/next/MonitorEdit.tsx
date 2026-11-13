@@ -107,8 +107,15 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     const home = refocus ? homeOf(root.current) : null;
     try {
       await write();
-      after();
-      if (refocus) setTimeout(() => settleFocus(root.current, editButton.current, home), 0);
+      if (refocus) {
+        // committed NOW, as `holdIt` does: the focus below goes to the edit button, which is
+        // disabled until `busy` is drawn false. Left to a batch, the timer could run first (#350,
+        // captured under load): the focus went nowhere and the render then took the rule.
+        flushSync(() => { setBusy(false); after(); });
+        setTimeout(() => settleFocus(root.current, editButton.current, home), 0);
+      } else {
+        after();
+      }
     } catch (e: unknown) {
       const text = e instanceof Error ? e.message : String(e);
       setError({ text, at: spot(text) });
@@ -245,10 +252,19 @@ function homeOf(el: HTMLElement | null): HTMLElement | null {
 }
 
 /** Where the focus goes after a write that may have moved the rule: its own edit button while it is
- *  still drawn here; else the heading of the surface it was in (or a folded list's summary); else
- *  the page's first heading. Never left on the body, where the next Tab starts from the top. */
-function settleFocus(root: HTMLElement | null, edit: HTMLElement | null, home: HTMLElement | null) {
-  if (root?.isConnected && edit) { edit.focus(); return; }
+ *  still drawn here, and enabled — a disabled one takes no focus, and the focus would stay on a dead
+ *  button; else the heading of the surface it was in (or a folded list's summary); else the page's
+ *  first heading. Never left on the body, where the next Tab starts from the top.
+ *
+ *  And never taken back: the surface itself gone while the focus is somewhere live means the owner
+ *  closed it during the write and went on, and where they went is theirs. (A sheet that is still
+ *  open may have moved the focus itself when the rule's button left, so only a CLOSED surface
+ *  says the focus is the owner's.) */
+function settleFocus(root: HTMLElement | null, edit: HTMLButtonElement | null, home: HTMLElement | null) {
+  if (root?.isConnected && edit && !edit.disabled) { edit.focus(); return; }
+  const active = document.activeElement;
+  const closed = home !== null && !home.isConnected;
+  if (closed && active instanceof HTMLElement && active !== document.body && active.isConnected) return;
   const place = home?.isConnected ? home : document.querySelector<HTMLElement>(".nx-main");
   const target = place instanceof HTMLDetailsElement ? place.querySelector<HTMLElement>("summary")
     : place?.querySelector<HTMLElement>("h2, h3, h4") ?? null;
