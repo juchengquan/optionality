@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { ClosePositionIn, PositionPatch } from "backend/schemas";
 import type { Holding, Monitor } from "../shared/api";
 import {
-  closeBody, closeDay, correctedLegs, correctionBody, editBody, editDraft, exitPrefill, fates, type Watching,
+  aboutQuantities, closeBody, closeDay, correctedLegs, correctionBody, correctionWords, followersOf, editBody, editDraft, exitPrefill, fates, type Watching,
 } from "../next/holding";
 
 const held = {
@@ -155,6 +155,47 @@ describe("correcting a leg's quantity (#359)", () => {
     ]);
     expect(correctedLegs(ratio, draft(["1", "3"]))).toBeNull();
     expect(correctedLegs(ratio, draft(["1", "11"]))).toBeNull();
+  });
+});
+
+describe("what a quantity's correction does to the rules (#359's review)", () => {
+  const legs = (qty: number) => [
+    { sign: 1, option_type: "PUT", strike: 7150 }, { sign: -1, option_type: "PUT", strike: 7100, qty },
+  ];
+  const linked = [{ id: "h2", name: "1218_ratio" }];
+
+  it("says, before the save, which rules value the whole structure and so will follow it", () => {
+    const value = monitor("v", { code: "1218_ratio", legs: legs(3), scope: "all", positions: linked });
+    const part = monitor("p", { code: "w11", legs: legs(1), scope: "leg", positions: linked });
+    const elsewhere = monitor("e", { code: "other", legs: legs(3), scope: "all", positions: [] });
+    // written before #351: the 7100 named on two legs, no one of which can carry the quantity
+    const repeated = monitor("r", { code: "old", scope: "all", positions: linked,
+      legs: [...legs(1), { sign: -1, option_type: "PUT", strike: 7100 }] });
+    expect(followersOf(ratio, [value, part, elsewhere, repeated]).map((m) => m.id)).toEqual(["v"]);
+  });
+
+  it("places a refusal beside the quantities only when it is about them", () => {
+    expect(aboutQuantities("'r' has no PUT 7050 leg: only a leg's quantity can be corrected — a different structure is a different holding")).toBe(true);
+    expect(aboutQuantities("position 'r' is closed: a leg's quantity is corrected only while it is held")).toBe(true);
+    expect(aboutQuantities("✖ Too big: expected number to be <=10\n  → at legs[1].qty")).toBe(true);
+    expect(aboutQuantities("position not found")).toBe(false);
+    expect(aboutQuantities("Failed to fetch")).toBe(false);
+    expect(aboutQuantities("✖ Invalid input\n  → at opened_at")).toBe(false);
+  });
+
+  it("says after the save what the service did, rule by rule", () => {
+    expect(correctionWords({
+      followed_monitors: [{ id: "v", code: "1218_ratio" }],
+      rescoped_monitors: [
+        { id: "p", code: "w11", scope: "all" }, { id: "r", code: "old", scope: "leg" }, { id: "x", code: "x", scope: null },
+      ],
+    })).toEqual([
+      "1218_ratio took the new quantities and starts unrung",
+      "w11 now values the whole holding",
+      "old now watches part of it",
+      "x no longer covers it",
+    ]);
+    expect(correctionWords({ followed_monitors: [], rescoped_monitors: [] })).toEqual([]);
   });
 });
 

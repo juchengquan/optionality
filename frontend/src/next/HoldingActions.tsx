@@ -13,14 +13,16 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import {
-  closePosition, deletePosition, fetchDraftPayoff, fetchMonitors, patchPosition, type Closed, type Entry,
-  type DraftPayoff, type Holding, type Monitor, type Payoff,
+  closePosition, deletePosition, editPosition, fetchDraftPayoff, fetchMonitors, type Closed, type Corrected,
+  type DraftPayoff, type Entry, type Holding, type Monitor, type Payoff,
 } from "../shared/api";
 import { marketDay } from "../shared/format";
 import {
-  closeBody, closeDay, correctedLegs, editBody, editDraft, exitPrefill, fates, legWords, type CloseDraft,
-  type EditDraft, type Fate, type Watching,
+  aboutQuantities, closeBody, closeDay, correctedLegs, correctionWords, editBody, editDraft, exitPrefill,
+  fates, followersOf, legWords, type CloseDraft, type EditDraft, type Fate, type Watching,
 } from "./holding";
+import { MonitorControls } from "./MonitorEdit";
+import { ruleOfMonitor } from "./edit";
 import { fieldWords, monitorName } from "./needs";
 import "./holding.css";
 
@@ -70,11 +72,15 @@ export function HoldingActions({ holding, monitors, rules, privacy, writes, now 
   // said HERE, by the buttons, not in a toast: on the desk a toast lands over the inspector's own
   // buttons, and the next one pressed was under it
   const [saved, setSaved] = useState(false);
+  // what the last save's correction did to the rules, as the service answered it (#359)
+  const [account, setAccount] = useState<Corrected | null>(null);
   const buttons = useRef<Record<Exclude<Open, null>, HTMLButtonElement | null>>({ edit: null, close: null, delete: null });
   const id = useId();
   const watching = watchingOf(holding, monitors, rules);
 
-  const toggle = (which: Exclude<Open, null>) => { setSaved(false); setOpen((o) => (o === which ? null : which)); };
+  const toggle = (which: Exclude<Open, null>) => {
+    setSaved(false); setAccount(null); setOpen((o) => (o === which ? null : which));
+  };
   /** back to the button that opened it */
   const cancel = () => {
     const was = open;
@@ -103,11 +109,16 @@ export function HoldingActions({ holding, monitors, rules, privacy, writes, now 
                 onClick={() => toggle("delete")}>Delete…</button>
       </div>
       {/* mounted empty and filled, so a screen reader announces it */}
-      <p className="nx-meta nx-hold-status" role="status">{saved ? `saved ${holding.name}` : ""}</p>
+      <p className="nx-meta nx-hold-status" role="status">
+        {saved ? [`saved ${holding.name}`, ...(account ? correctionWords(account) : [])].join(" · ") : ""}
+      </p>
+      {saved && account ? <Renames account={account} monitors={monitors} /> : null}
       {open === "edit" ? (
         <EditForm id={`${id}-form`} holding={holding} watching={watching.length} privacy={privacy} now={now}
-                  onCancel={cancel} onSaved={() => {
-                    setOpen(null); setSaved(true); buttons.current.edit?.focus(); writes.edited(holding);
+                  monitors={monitors}
+                  onCancel={cancel} onSaved={(answer) => {
+                    setOpen(null); setSaved(true); setAccount(answer); buttons.current.edit?.focus();
+                    writes.edited(holding);
                   }} />
       ) : open === "close" ? (
         <CloseForm id={`${id}-form`} holding={holding} now={now} onCancel={cancel}
@@ -130,9 +141,29 @@ export function HoldingActions({ holding, monitors, rules, privacy, writes, now 
   );
 }
 
-function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
-  id: string; holding: Holding; watching: number; privacy: boolean; now?: Date;
-  onCancel: () => void; onSaved: () => void;
+/** After a correction, each rule whose legs took the new quantities, with its editor: its name was
+ *  KEPT, and a derived one still spells the old quantities in every Telegram alarm (#359's review),
+ *  so renaming it is offered here, where the owner is looking, rather than left to be noticed. */
+function Renames({ account, monitors }: { account: Corrected; monitors: Monitor[] }) {
+  const rules = account.followed_monitors.flatMap((f) => monitors.filter((m) => m.id === f.id));
+  if (rules.length === 0) return null;
+  return (
+    <div className="nx-hold-renames" role="group" aria-label="rename the rules that followed">
+      {rules.map((m) => (
+        <div key={m.id}>
+          <p className="nx-meta">
+            {`Its alarms still call it ${m.code}. If that name spells the old quantities, rename it:`}
+          </p>
+          <MonitorControls rule={ruleOfMonitor(m)} served={null} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EditForm({ id, holding, watching, privacy, now, monitors, onCancel, onSaved }: {
+  id: string; holding: Holding; watching: number; privacy: boolean; now?: Date; monitors: Monitor[];
+  onCancel: () => void; onSaved: (answer: Corrected) => void;
 }) {
   const [draft, setDraft] = useState<EditDraft>(() => editDraft(holding));
   // said where it belongs: a quantity's refusal beside the quantities, everything else by the buttons
@@ -149,11 +180,12 @@ function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
     if ("error" in out) { setError({ text: out.error, at: "at" in out ? out.at : null }); return; }
     setSaving(true);
     try {
-      await patchPosition(holding.id, out.body);
-      onSaved();
+      onSaved(await editPosition(holding.id, out.body));
     } catch (err) {
-      // a refusal of a request that corrected a quantity is about the legs (#359)
-      setError({ text: message(err), at: out.body.legs ? "qty" : null });
+      // beside the quantities only when it is about them (#359): the holding gone, the network
+      // down or Opened refused are said where every other refusal is
+      const text = message(err);
+      setError({ text, at: out.body.legs && aboutQuantities(text) ? "qty" : null });
     } finally {
       setSaving(false);
     }
@@ -187,6 +219,7 @@ function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
         </label>
       </div>
       <QuantityFields holding={holding} draft={draft} error={error?.at === "qty" ? error.text : null}
+                      followers={followersOf(holding, monitors)}
                       onChange={(qty) => change({ qty })} />
       <p className="nx-meta">
         {"The name, the contracts and their sides stay as recorded — the service does not edit them. "}
@@ -211,9 +244,13 @@ function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
  *  holding, and the only other remedy, a delete, takes the daily samples. What the correction
  *  changes is previewed from the service's own payoff, and what it does to the samples and the
  *  rules is said before it is saved. */
-function QuantityFields({ holding, draft, error, onChange }: {
-  holding: Holding; draft: EditDraft; error: string | null; onChange: (qty: string[]) => void;
+function QuantityFields({ holding, draft, error, followers, onChange }: {
+  holding: Holding; draft: EditDraft; error: string | null;
+  /** the rules the page expects to follow (`followersOf`); the service's answer says what did */
+  followers: Monitor[];
+  onChange: (qty: string[]) => void;
 }) {
+  const names = followers.map((m) => m.code).join(", ");
   const legs = correctedLegs(holding, draft);
   return (
     <fieldset className="nx-hold-qty" aria-label="quantity of each leg">
@@ -235,9 +272,12 @@ function QuantityFields({ holding, draft, error, onChange }: {
           <p className="nx-meta">
             {"Its daily samples are kept as they are: each day's Cost to close was summed with the quantities "}
             {"it had then, and its history marks the days before the correction; their IV, vega and delta are "}
-            {"one contract's and stay true. Its value rule takes the new quantities and starts unrung; the name "}
-            {"stays as recorded. The Cost to close, P&L and greeks are valued with the new quantities from the "}
-            {"next read."}
+            {"one contract's and stay true. "}
+            {followers.length > 0
+              ? `${names} ${followers.length === 1 ? "values" : "value"} the whole structure, so ${followers.length === 1 ? "it takes" : "they take"} the new quantities and ${followers.length === 1 ? "starts" : "start"} unrung; ${followers.length === 1 ? "its name stays" : "their names stay"} as recorded. `
+              : "No rule values this structure as a whole, so no rule's legs change. "}
+            {"Any rule on it is given the scope it then has. The Cost to close, P&L and greeks are valued with "}
+            {"the new quantities from the next read."}
           </p>
         </>
       ) : null}
@@ -255,20 +295,23 @@ function QuantityChange({ holding, corrected }: { holding: Holding; corrected: H
   const key = JSON.stringify(corrected);
   const [shown, setShown] = useState<{ key: string; before: Payoff; after: Payoff } | { key: string; error: string } | null>(null);
   const { legs, entry } = holding;
+  // by VALUE: a poll serves the holding anew, with legs equal to the last ones but not the same
+  // array, and asking the payoff route again on every poll is a POST per poll for nothing
+  const recorded = JSON.stringify(legs);
   useEffect(() => {
     if (entry === null) return;
     let live = true;
     const ask = setTimeout(() => {
       // the service's own legs, whose option_type it serves as text: CALL or PUT, as it stored them
-      const draft = (l: Holding["legs"]) =>
-        fetchDraftPayoff({ legs: l as DraftPayoff["legs"], entry, contracts: 1 });
-      Promise.all([draft(legs), draft(JSON.parse(key) as Holding["legs"])]).then(
+      const draft = (l: string) =>
+        fetchDraftPayoff({ legs: JSON.parse(l) as DraftPayoff["legs"], entry, contracts: 1 });
+      Promise.all([draft(recorded), draft(key)]).then(
         ([before, after]) => { if (live) setShown({ key, before, after }); },
         (err: unknown) => { if (live) setShown({ key, error: message(err) }); },
       );
     }, 200);
     return () => { live = false; clearTimeout(ask); };
-  }, [key, legs, entry]);
+  }, [key, recorded, entry]);
 
   const strikes = legs.map((l) => l.strike);
   const [lo, hi] = [Math.min(...strikes), Math.max(...strikes)];

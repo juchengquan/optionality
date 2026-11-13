@@ -88,6 +88,8 @@ export interface EditDraft {
 
 type Edited = Pick<Holding, "entry" | "contracts" | "opened_at" | "legs">;
 type HeldLeg = Holding["legs"][number];
+/** a leg as PATCH takes it: the service serves `option_type` as text, and takes CALL or PUT */
+type SentLeg = Omit<HeldLeg, "option_type"> & { option_type: "CALL" | "PUT" };
 
 export function editDraft(h: Edited): EditDraft {
   return {
@@ -120,11 +122,12 @@ function quantities(h: Edited, d: EditDraft): number[] | { error: string; at: "q
 /** The holding's legs with the quantities typed, in the shape PATCH takes them — each quantity only
  *  where it is not 1, as the service stores it — or null where none changed or one cannot be read.
  *  What the correction's preview is drawn from. */
-export function correctedLegs(h: Edited, d: EditDraft): HeldLeg[] | null {
+export function correctedLegs(h: Edited, d: EditDraft): SentLeg[] | null {
   const qty = quantities(h, d);
   if (!Array.isArray(qty) || qty.every((q, i) => q === (h.legs[i]!.qty ?? 1))) return null;
   return h.legs.map((l, i) => ({
-    side: l.side, option_type: l.option_type, strike: l.strike, ...(qty[i] === 1 ? {} : { qty: qty[i] }),
+    side: l.side, option_type: l.option_type as SentLeg["option_type"], strike: l.strike,
+    ...(qty[i] === 1 ? {} : { qty: qty[i] }),
   }));
 }
 
@@ -132,8 +135,8 @@ export function correctedLegs(h: Edited, d: EditDraft): HeldLeg[] | null {
  *  these, so a field cleared is refused here, in words, rather than sent and refused there. */
 export function editBody(
   h: Edited, d: EditDraft,
-): Out<{ entry?: number; contracts?: number; opened_at?: string; legs?: HeldLeg[] }> | { error: string; at: "qty" } {
-  const body: { entry?: number; contracts?: number; opened_at?: string; legs?: HeldLeg[] } = {};
+): Out<{ entry?: number; contracts?: number; opened_at?: string; legs?: SentLeg[] }> | { error: string; at: "qty" } {
+  const body: { entry?: number; contracts?: number; opened_at?: string; legs?: SentLeg[] } = {};
   const entry = typed(d.entry);
   if (Number.isNaN(entry)) return { error: `the entry is not a number: ${d.entry.trim()}` };
   if (entry === null && h.entry !== null) return { error: "the entry cannot be cleared here — type what was taken in" };
@@ -198,4 +201,35 @@ export function fates(
     if (!m.enabled) return { id, name, fate: `linked to nothing; it was already off (${reasonWords(m.disabled_reason)})` };
     return { id, name, fate: "kept on, linked to no holding" };
   });
+}
+
+/** The rules a quantity's correction will rewrite, as far as the page can tell before the save
+ *  (#359): each one linked to this holding as the whole of what it values, naming each of its
+ *  contracts on exactly one leg. The service decides — it recomputes the scope under the old
+ *  quantities — and its answer says what it did (`correctionWords`); this only words the promise. */
+export function followersOf(h: Pick<Holding, "id" | "legs">, monitors: Monitor[]): Monitor[] {
+  return monitors.filter((m) => m.legs && m.scope === "all" && m.positions.some((p) => p.id === h.id)
+    && h.legs.every((l) =>
+      m.legs!.filter((ml) => ml.option_type === l.option_type && ml.strike === l.strike).length === 1));
+}
+
+/** Whether a refusal of a save is about the quantities, and so said beside them: the service's own
+ *  words for a correction it refuses, or a schema refusal at a leg. Anything else — the holding gone,
+ *  the network down, Opened refused — is said where every other refusal is. */
+export function aboutQuantities(text: string): boolean {
+  return /only a leg's quantity can be corrected|a leg's quantity is corrected only while it is held|legs\[\d+\]/
+    .test(text);
+}
+
+/** What a correction did, as the service answered it: each rule whose legs took the new
+ *  quantities, and each whose scope moved. Empty when it touched no rule. */
+export function correctionWords(answer: {
+  followed_monitors: { id: string; code: string }[];
+  rescoped_monitors: { id: string; code: string; scope: "all" | "leg" | null }[];
+}): string[] {
+  const scopeWords = { all: "now values the whole holding", leg: "now watches part of it" } as const;
+  return [
+    ...answer.followed_monitors.map((m) => `${m.code} took the new quantities and starts unrung`),
+    ...answer.rescoped_monitors.map((m) => `${m.code} ${m.scope === null ? "no longer covers it" : scopeWords[m.scope]}`),
+  ];
 }
