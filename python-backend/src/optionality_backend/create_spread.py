@@ -173,7 +173,13 @@ def _plan(strike_date: str, spread: SpreadIn, m: SpreadMonitorIn, index: int) ->
     return _Planned(
         code=spread.name,
         field=field_,
-        contracts=[build_spx_code(strike_date, leg.option_type, leg.strike) for leg in spread.legs],
+        # a multiset, each leg as many times as its quantity (`monitor_contracts`), so the rule is "all" of a
+        # holding only where it values the structure the holding is (#351)
+        contracts=[
+            build_spx_code(strike_date, leg.option_type, leg.strike)
+            for leg in spread.legs
+            for _ in range(1 if leg.qty is None else leg.qty)
+        ],
         columns={
             "code": spread.name,
             "strike_date": strike_date,

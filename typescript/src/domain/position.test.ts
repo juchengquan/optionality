@@ -658,8 +658,21 @@ describe("a quantity per leg (#351)", () => {
     expect(costToCloseOf([p], quotes(p, [1, 3, 6]), [middle!])).toBe(6);
   });
 
-  it("links a rule on every contract of a ratio as the whole of it, whatever the quantities", () => {
+  it("links a rule as the whole of a ratio only where it names each contract as many times", () => {
     const p = { ...fly(), id: "fly" };
-    expect(positionsHolding([p], positionLegCodes(p))).toEqual({ found: new Set(["fly"]), scope: "all" });
+    const [low, middle, high] = positionLegCodes(p);
+    // the contracts a rule watches are a MULTISET: the middle named twice is the butterfly
+    expect(positionsHolding([p], [low!, middle!, middle!, high!])).toEqual({ found: new Set(["fly"]), scope: "all" });
+    // a 1×1×1 on the same strikes values another structure: linked, but as part of it
+    expect(positionsHolding([p], positionLegCodes(p))).toEqual({ found: new Set(["fly"]), scope: "leg" });
+    // and so does one naming the middle three times
+    expect(positionsHolding([p], [low!, middle!, middle!, middle!, high!]).scope).toBe("leg");
+  });
+
+  it("calls a 1×2 rule over a 1×1 holding part of it, not the whole", () => {
+    const one: Position & { id: string } = { ...fly(), id: "one", legs: fly().legs.map(({ qty: _, ...l }) => l) };
+    const [low, middle, high] = positionLegCodes(one);
+    expect(positionsHolding([one], [low!, middle!, middle!, high!]).scope).toBe("leg");
+    expect(positionsHolding([one], [low!, middle!, high!]).scope).toBe("all");
   });
 });

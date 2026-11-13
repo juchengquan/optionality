@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from optionality.exit import ExitPolicy
-from optionality.monitor import monitor_leg_codes
+from optionality.monitor import monitor_contracts
 from optionality.position import Position, positions_holding
 from optionality.quote import display_records, round4
 
@@ -190,7 +190,7 @@ def adopt_orphan_monitors(db: sqlite3.Connection) -> None:
     positions = [to_position(r) for r in open_positions(db)]
     for row in orphans:
         monitor = to_monitor(row)
-        holding = positions_holding(positions, monitor_leg_codes(monitor))
+        holding = positions_holding(positions, monitor_contracts(monitor))
         if not holding.found:
             continue
         set_monitor_scope(db, row["id"], holding.scope)

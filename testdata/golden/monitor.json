@@ -78,6 +78,115 @@
       ]
     },
     {
+      "fn": "monitorContracts",
+      "name": "a single contract",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        }
+      ],
+      "expect": [
+        "US.SPXW261120C7100000"
+      ]
+    },
+    {
+      "fn": "monitorContracts",
+      "name": "a combo",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": [
+        "US.SPXW261120P6450000",
+        "US.SPXW261120P6500000",
+        "US.SPXW261120C7100000",
+        "US.SPXW261120C7150000"
+      ]
+    },
+    {
+      "fn": "monitorContracts",
+      "name": "a ratio, its quantity as repeats (#351)",
+      "args": [
+        {
+          "code": "1120_RATIO",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500,
+              "qty": 2
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": [
+        "US.SPXW261120P6450000",
+        "US.SPXW261120P6500000",
+        "US.SPXW261120P6500000",
+        "US.SPXW261120C7100000",
+        "US.SPXW261120C7150000"
+      ]
+    },
+    {
       "fn": "comboFieldError",
       "name": "IV is never summed",
       "args": [

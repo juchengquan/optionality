@@ -5,7 +5,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { positionsHolding } from "optionality/domain/position";
-import { monitorLegCodes } from "optionality/domain/monitor";
+import { monitorContracts } from "optionality/domain/monitor";
 import { round4 } from "optionality/domain/quote";
 import { atomic } from "./db/open.ts";
 import {
@@ -162,7 +162,7 @@ export function adoptOrphanMonitors(db: DatabaseSync): void {
   const positions = openPositions(db).map(toPosition);
   for (const row of orphans) {
     const monitor = toMonitor(row);
-    const { found, scope } = positionsHolding(positions, monitorLegCodes(monitor));
+    const { found, scope } = positionsHolding(positions, monitorContracts(monitor));
     if (found.size === 0) continue;
     setMonitorScope(db, monitor.id, scope);
     linkMonitorToPositions(db, monitor.id, [...found]);

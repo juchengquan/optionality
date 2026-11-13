@@ -50,6 +50,16 @@ export function monitorLegCodes(monitor: Monitor): string[] {
   return monitor.legs.map((l) => buildSpxCode(monitor.strike_date, l.option_type, l.strike));
 }
 
+/** The Contracts a rule watches as a MULTISET: each leg's code as many times as its quantity, so a
+ *  1×2 names its second contract twice (#351). What `positionsHolding` is asked with, so a rule is
+ *  "all" of a holding only where it watches the structure the holding is. Its own code for a single
+ *  contract. */
+export function monitorContracts(monitor: Monitor): string[] {
+  if (!monitor.legs || monitor.legs.length === 0) return [monitor.code];
+  const codes = monitorLegCodes(monitor);
+  return monitor.legs.flatMap((l, i) => Array<string>(l.qty ?? 1).fill(codes[i]!));
+}
+
 /** Reason this field cannot be a combo's monitored field, or null if it can. */
 export function comboFieldError(field: string): string | null {
   if (NON_ADDITIVE_FIELDS.has(field)) {

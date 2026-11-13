@@ -606,6 +606,32 @@ class TestAQuantityPerLeg:
         assert asked == []
         nothing_written(h)
 
+    @staticmethod
+    def scope_of(h, code):
+        return h.db.execute(
+            "select m.scope, group_concat(p.name) from monitors m left join monitor_positions mp on mp.monitor_id = m.id "
+            "left join positions p on p.id = mp.position_id where m.code = ? group by m.id",
+            (code,),
+        ).fetchone()
+
+    async def test_adopts_a_watched_1x1x1_into_a_held_butterfly_as_a_leg_rule(self, start):
+        h = start()
+        one = [{k: v for k, v in leg.items() if k != "qty"} for leg in FLY]
+        watched = {"name": "w", "legs": one, "held": False, "monitors": [{"threshold": 2}]}
+        assert (await post(h, {"strike_date": EXPIRY, "spreads": [watched]})).status_code == 201
+        assert (await post(h, self.fly())).status_code == 201
+        assert self.scope_of(h, "w") == ("leg", "fly")
+        assert self.scope_of(h, "fly") == ("all", "fly")
+
+    async def test_adopts_a_watched_butterfly_into_a_held_1x1x1_as_a_leg_rule(self, start):
+        h = start()
+        one = [{k: v for k, v in leg.items() if k != "qty"} for leg in FLY]
+        watched = {"name": "w", "legs": FLY, "held": False, "monitors": [{"threshold": 2}]}
+        assert (await post(h, {"strike_date": EXPIRY, "spreads": [watched]})).status_code == 201
+        assert (await post(h, self.fly(name="one", legs=one, entry=0.5))).status_code == 201
+        assert self.scope_of(h, "w") == ("leg", "one")
+        assert self.scope_of(h, "one") == ("all", "one")
+
     async def test_counts_legs_not_contracts_times_quantity_against_the_probes_bound(self, start):
         h = start()
         tens = [{**leg, "qty": 10} for leg in SIX]

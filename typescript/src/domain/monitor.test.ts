@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildSpxCode } from "./contract.ts";
 import {
-  comboFieldError, comboFieldSum, isBreached, monitorLegCodes, monitorValue, thresholdDistance,
+  comboFieldError, comboFieldSum, isBreached, monitorContracts, monitorLegCodes, monitorValue, thresholdDistance,
   thresholdFault, thresholdFill, type ByCode, type Monitor,
 } from "./monitor.ts";
 
@@ -39,6 +39,13 @@ describe("what a monitor watches", () => {
 
   it("builds a code per leg for a combo", () => {
     expect(monitorLegCodes(combo())).toEqual([code("CALL", 8050), code("CALL", 8075)]);
+  });
+
+  it("names the contracts it watches as a multiset, each leg as many times as its quantity (#351)", () => {
+    expect(monitorContracts(single())).toEqual([code("CALL", 8050)]);
+    expect(monitorContracts(combo())).toEqual([code("CALL", 8050), code("CALL", 8075)]);
+    const ratio = combo({ legs: [combo().legs![0]!, { ...combo().legs![1]!, qty: 3 }] });
+    expect(monitorContracts(ratio)).toEqual([code("CALL", 8050), code("CALL", 8075), code("CALL", 8075), code("CALL", 8075)]);
   });
 
   it("reads the field straight off the quote for a single leg", () => {

@@ -468,6 +468,30 @@ describe("a quantity per leg (#351)", () => {
     nothingWritten();
   });
 
+  describe("a rule on the same strikes in another quantity is part of the holding, never all of it", () => {
+    const ONE = FLY.map(({ qty: _, ...l }) => l);
+    const scopeOf = (code: string) => (h.db.prepare(
+      "select m.scope, group_concat(p.name) as held from monitors m left join monitor_positions mp on mp.monitor_id = m.id "
+        + "left join positions p on p.id = mp.position_id where m.code = ? group by m.id",
+    ).get(code) as { scope: string | null; held: string | null });
+
+    it("adopts a watched 1×1×1 into a held butterfly as a leg rule", async () => {
+      start();
+      expect((await post({ strike_date: EXPIRY, spreads: [{ name: "w", legs: ONE, held: false, monitors: [{ threshold: 2 }] }] })).status).toBe(201);
+      expect((await post(fly())).status).toBe(201);
+      expect(scopeOf("w")).toEqual({ scope: "leg", held: "fly" });
+      expect(scopeOf("fly")).toEqual({ scope: "all", held: "fly" });
+    });
+
+    it("adopts a watched butterfly into a held 1×1×1 as a leg rule", async () => {
+      start();
+      expect((await post({ strike_date: EXPIRY, spreads: [{ name: "w", legs: FLY, held: false, monitors: [{ threshold: 2 }] }] })).status).toBe(201);
+      expect((await post(fly({ name: "one", legs: ONE, entry: 0.5 }))).status).toBe(201);
+      expect(scopeOf("w")).toEqual({ scope: "leg", held: "one" });
+      expect(scopeOf("one")).toEqual({ scope: "all", held: "one" });
+    });
+  });
+
   it("counts legs, not contracts times quantity, against the probe's bound", async () => {
     start();
     const tens = SIX.map((l) => ({ ...l, qty: 10 }));

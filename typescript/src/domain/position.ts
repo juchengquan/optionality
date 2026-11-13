@@ -297,6 +297,12 @@ export function combinedGreek(
  *  strikes nobody holds — and that alone does not stop it covering what IS held; what stops it is
  *  a held leg the Monitor does not watch. Several Positions at once is normal and not
  *  ambiguity: a condor's stop spans both its spreads (ADR 0004).
+ *
+ *  `contracts` is a MULTISET (#351): a contract named twice is two of it, as `monitorContracts`
+ *  spells a rule's quantities. "all" also needs each held contract named exactly as many times as
+ *  the Positions found hold it — a 1×1 rule over a held 1×2 values another structure, and given
+ *  "all" its row carried the 1×2's Entry, P&L, cost to close and schedule beside a bell reading the
+ *  1×1. It is then "leg", linked to what it watches part of, as any partial overlap is.
  */
 export function positionsHolding(
   positions: (Position & { id: string })[], contracts: string[],
@@ -322,10 +328,16 @@ export function positionsHolding(
   // that does not: on 2026-10-20 a rule on the 8150/8200 call spread shared one leg with a held
   // 8100/8150 spread and named an 8200 nobody held — two against two, so it was called "all" and
   // the holding's entry, P&L, cost to close and exit schedule all appeared on its row.
-  const watched = new Set(contracts);
-  const covered = positions
-    .filter((p) => found.has(p.id))
-    .every((p) => positionLegCodes(p).every((code) => watched.has(code)));
+  const watched = new Map<string, number>();
+  for (const code of contracts) watched.set(code, (watched.get(code) ?? 0) + 1);
+  // what the Positions found hold, each leg as many times as its quantity
+  const held = new Map<string, number>();
+  for (const p of positions.filter((x) => found.has(x.id))) {
+    for (const [i, code] of positionLegCodes(p).entries()) {
+      held.set(code, (held.get(code) ?? 0) + (p.legs[i]!.qty ?? 1));
+    }
+  }
+  const covered = [...held].every(([code, n]) => watched.get(code) === n);
   return { found, scope: covered ? "all" : "leg" };
 }
 

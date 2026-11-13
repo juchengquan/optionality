@@ -236,14 +236,16 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/quotes"),
   },
   {
-    // and a 1×1 watched on the same strikes beside it: linked to the holding, as every rule on its
-    // contracts is, and valued as ITS legs say — the holding's quantities are the holding's
+    // and a 1×1 watched on the same strikes beside it, as adoption links one (the POST /spreads
+    // scenarios below run it): part of the holding, "leg", so its row carries none of the 1×2's
+    // Entry, P&L, cost to close or schedule, and is valued as ITS legs say
     name: "GET /quotes values a 1×1 watched beside a held 1×2 on the same strikes as its own legs",
     world: world({
       tables: {
         ...ratioHeld,
         monitors: [...ratioHeld.monitors, combo({
-          id: "mon-one", code: "dec-one", legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350 }],
+          id: "mon-one", code: "dec-one", scope: "leg",
+          legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350 }],
         })],
         monitor_positions: [...ratioHeld.monitor_positions, link("mon-one", "pos-ratio")],
       },
@@ -1444,6 +1446,34 @@ export const HTTP: readonly HttpInput[] = [
     name: "POST /spreads watches a butterfly, asking for each contract once",
     world: world({ provider: { quotes: FLY_BOOK } }),
     request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [FLY] }),
+  },
+  {
+    // ADOPTION, run: a 1×1 watched on the ratio's strikes is linked to the new holding as part of it
+    // ("leg"), never as all of it — it values another structure (#351)
+    name: "POST /spreads adopts a 1×1 watched on a held 1×2's strikes as part of it",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-one", code: "dec-one",
+        legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [RATIO] }),
+  },
+  {
+    // and the other way round: a 1×2 watched, then the 1×1 put spread held on its strikes
+    name: "POST /spreads adopts a 1×2 watched on a held 1×1's strikes as part of it",
+    world: world({
+      tables: { monitors: [combo({
+        id: "mon-ratio", code: "dec-ratio",
+        legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350, qty: 2 }],
+      })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{ ...PUT_SPREAD, monitors: [PUT_SPREAD.monitors[1]] }],
+    }),
   },
   {
     name: "POST /spreads refuses a quantity of none, asking the Provider nothing",

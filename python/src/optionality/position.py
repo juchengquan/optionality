@@ -205,8 +205,8 @@ def combined_greek(positions: list[Position], by_code: ByCode, field: str, scope
 
 def positions_holding(positions: list[Position], contracts: list[str]) -> Holding:
     """The Positions that hold these contracts. Nothing if a contract is held twice (ambiguous) or not
-    at all. "all" when every leg of every Position found is among these contracts, "leg" when this
-    watches part of one. Naming contracts beyond them does not stop it covering what IS held; a held
+    at all. "all" when every leg of every Position found is among these contracts, as many times as it
+    is held (a multiset, #351), "leg" when this watches part of one. Naming contracts beyond them does not stop it covering what IS held; a held
     leg it does not name does."""
     owners: dict[str, list[str]] = {}
     for position in positions:
@@ -218,11 +218,18 @@ def positions_holding(positions: list[Position], contracts: list[str]) -> Holdin
     if not found:
         return Holding(found=frozenset(), scope=None)
     # membership, not cardinality: counting legs against contracts made an adjacent spread sharing
-    # one leg come out equal to covering the holding whole (2026-10-20)
-    watched = set(contracts)
-    covered = all(
-        all(code in watched for code in position_leg_codes(position)) for position in positions if position.id in found
-    )
+    # one leg come out equal to covering the holding whole (2026-10-20). And `contracts` is a MULTISET
+    # (#351): "all" needs each held contract named exactly as many times as the Positions found hold it
+    watched: dict[str, int] = {}
+    for code in contracts:
+        watched[code] = watched.get(code, 0) + 1
+    held: dict[str, int] = {}
+    for position in positions:
+        if position.id not in found:
+            continue
+        for leg, code in zip(position.legs, position_leg_codes(position), strict=True):
+            held[code] = held.get(code, 0) + leg.qty
+    covered = all(watched.get(code) == n for code, n in held.items())
     return Holding(found=found, scope="all" if covered else "leg")
 
 

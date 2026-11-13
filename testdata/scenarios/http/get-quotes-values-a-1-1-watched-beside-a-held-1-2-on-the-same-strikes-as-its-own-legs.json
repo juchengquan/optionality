@@ -125,7 +125,7 @@
               "strike": 6350
             }
           ],
-          "scope": null,
+          "scope": "leg",
           "enabled": 1,
           "disabled_reason": null,
           "triggered": 0,
@@ -224,7 +224,7 @@
             "option_vega": 0
           },
           "dte": 39,
-          "scope": null,
+          "scope": "leg",
           "positions": [
             {
               "id": "pos-ratio",

@@ -60,6 +60,14 @@ def monitor_leg_codes(monitor: Monitor) -> list[str]:
     return [build_spx_code(monitor.strike_date, leg.option_type, leg.strike) for leg in monitor.legs]
 
 
+def monitor_contracts(monitor: Monitor) -> list[str]:
+    """The Contracts a rule watches as a MULTISET: each leg's code as many times as its quantity (#351).
+    What `positions_holding` is asked with. Its own code for a single contract."""
+    if not monitor.legs:
+        return [monitor.code]
+    return [code for leg, code in zip(monitor.legs, monitor_leg_codes(monitor), strict=True) for _ in range(leg.qty)]
+
+
 def combo_field_error(field: str) -> str | None:
     if field in NON_ADDITIVE_FIELDS:
         return f"combos cannot watch {field}: it is not additive across legs"

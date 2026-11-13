@@ -106,7 +106,8 @@ export function isSpreadFault(result: Added | SpreadFault): result is SpreadFaul
 interface Planned {
   code: string;
   field: string;
-  /** the Contracts it watches: the legs for the value, the one contract for a leg */
+  /** the Contracts it watches: the legs for the value, each as many times as its quantity, and the
+   *  one contract for a leg */
   contracts: string[];
   columns: Partial<MonitorRow>;
 }
@@ -156,7 +157,10 @@ function plan(
   }));
   return {
     code: spread.name, field,
-    contracts: spread.legs.map((l) => buildSpxCode(strikeDate, l.option_type, l.strike)),
+    // a multiset, each leg as many times as its quantity (`monitorContracts`), so the rule is "all"
+    // of a holding only where it values the structure the holding is (#351)
+    contracts: spread.legs.flatMap((l) =>
+      Array<string>(l.qty ?? 1).fill(buildSpxCode(strikeDate, l.option_type, l.strike))),
     columns: {
       code: spread.name, strike_date: strikeDate, option_type: "CMB", strike: 0, field,
       legs: toSqliteJson(legs), ...common,
