@@ -19,6 +19,7 @@ import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { stripOfEntry } from "../strip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry } from "../edit";
+import { RuleFigures } from "../RuleFigures";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
@@ -146,9 +147,10 @@ function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
         <dl className="nxp-facts">
           <div><dt>watches</dt><dd>{fieldWords(entry.field, Boolean(entry.legs))}</dd></div>
           <div><dt>compare</dt><dd>{entry.compare === "abs" ? "its size" : "signed"}</dd></div>
-          {entry.legs ? <div><dt>spread value</dt><dd>{points(entry.combo_value)}</dd></div> : null}
           <div><dt>expiry</dt><dd>{entry.strike_date}</dd></div>
         </dl>
+        {/* every figure of its contract or combo, the reason beside each dash (#332) */}
+        <RuleFigures entry={entry} className="nxp-facts" />
         {under.length > 0 ? (
           <>
             <h3 className="nxp-h">Monitors on its legs</h3>

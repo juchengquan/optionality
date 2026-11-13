@@ -1,0 +1,12 @@
+/* why a figure is a dash (#332): under it, small and quiet, and free to wrap — the desk's figures
+   do not wrap (.nxd-kv dd), and a reason held to one line would push the inspector sideways */
+.nx-figures .nx-figure-why {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; font-size: 0.6875rem; font-weight: 400;
+  line-height: 1.25; color: var(--muted-foreground);
+  white-space: normal; overflow-wrap: anywhere;
+}
+
+/* the last trade's date and time may take two lines: on one, it is wider than a narrow inspector's
+   cell (measured: 172px of text in a 154px cell at 1280px), and the desk's figures do not wrap */
+.nx-figures [data-figure="update_time"] dd { white-space: normal; }
