@@ -51,7 +51,7 @@ function serve(): string[] {
     asked.push(`${method} ${path}`);
     const routes: Record<string, unknown> = {
       "/quotes": QUOTES, "/monitors": MONITORS, "/health": health, "/positions/values": HOLDINGS,
-      // REVIEW's closed trades (#296), which the picture leaves out: a journal is not the book
+      // the closed trades (#296, #373), which the picture leaves out: a journal is not the book
       "/positions": [CLOSED],
       "/references": [],
     };
@@ -159,8 +159,9 @@ describe("saving the phone's cards as an image", () => {
     });
   }
 
-  it("leaves REVIEW's closed trades out of the picture: a journal is not the book", async () => {
+  it("leaves the closed trades out of the picture, their fold open: a journal is not the book", async () => {
     await show("Review");
+    await userEvent.click(screen.getByRole("button", { name: "Closed trades" }));
     await expect.poll(() => document.querySelector(".nx-main")!.textContent, { timeout: 4000 })
       .toContain("1120_P6000");
     const shared = catchShare();

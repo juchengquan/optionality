@@ -262,7 +262,7 @@ export function serveContract(spreads?: { status: number; body: object }): { wha
     if (method === "GET") {
       if (path === "/health") return reply(200, health);
       if (path === "/positions/values") return reply(200, held);
-      // `/positions` is REVIEW's closed trades (#296), which the page reads when the clock says REVIEW
+      // `/positions` is the closed trades (#296), which the page reads when their fold is opened (#373)
       if (["/quotes", "/monitors", "/references", "/positions"].includes(path)) return reply(200, []);
     }
     return reply(404, { detail: `${method} ${path} is not served here` });

@@ -1,4 +1,4 @@
-/** The closed trades' journal in REVIEW (#296), as a model: which rows of `GET /positions` are in
+/** The closed trades' journal (#296, #373), as a model: which rows of `GET /positions` are in
  *  it, in what order, and how a figure nobody recorded is said. The page is
  *  `NextJournal.test.tsx`; this is what it draws from. */
 import { describe, expect, it } from "vitest";

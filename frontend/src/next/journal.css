@@ -1,7 +1,24 @@
-/* REVIEW's closed trades (#296): the desk's section under the book, the phone's cards, and one trade
-   opened — under the desk's table, or in the phone's sheet. */
+/* The closed trades (#296): folded at the bottom of the book (#373) — the desk's rows, the phone's
+   cards — and one trade opened, under the desk's table or in the phone's sheet. */
 .nx-journal { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; margin-top: 1.5rem; }
 .nx-journal h2 { font-size: 1rem; font-weight: 650; }
+/* the desk's book is a grid with the inspector beside the table: the fold takes the whole width,
+   under both; the phone's book spaces its sections with a gap already */
+.nxd > .nxj-fold { grid-column: 1 / -1; }
+.nxp-book > .nxj-fold { margin-top: 0; }
+.nxj-fold { scroll-margin-top: 4rem; }
+.nxj-fold h2 { margin: 0; }
+.nxj-fold-toggle {
+  display: inline-flex; align-items: center; gap: 0.25rem; min-height: 2rem; padding: 0 0.5rem 0 0.25rem;
+  border-radius: 0.375rem; font: inherit;
+}
+.nxj-fold-toggle:hover { background: color-mix(in oklch, var(--foreground) 5%, transparent); }
+.nxj-fold-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.nxj-fold-mark { width: 1rem; height: 1rem; color: var(--muted-foreground); transition: transform 0.15s; }
+.nxj-fold[data-open] .nxj-fold-mark { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .nxj-fold-mark { transition: none; } }
+.nxj-fold-body { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.nxj-fold-body[hidden] { display: none; }
 
 /* ---- the desk: a plain table, its figures right-aligned in tabular numbers ---- */
 .nxj-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }

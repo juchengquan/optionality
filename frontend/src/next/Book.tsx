@@ -42,8 +42,8 @@ export interface BookProps {
   entryStyle: EntryStyle;
   /** editing, closing and deleting a holding (#294); absent, its detail offers none of them */
   writes?: HoldingWrites;
-  /** REVIEW's closed trades (#296), drawn by the phone's book under its holdings; the desk's is
-   *  the page's own section under the table */
+  /** the closed trades' fold (#296, #373), drawn by either arrangement as the LAST thing in its
+   *  book, after the watchlist; absent from the saved picture, which is not a journal */
   journal?: React.ReactNode;
 }
 

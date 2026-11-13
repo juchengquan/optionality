@@ -7,10 +7,12 @@
  *    method is composing a word, or when something earlier already handled the key;
  *  - while the focus is where a key is TYPED: an input, a textarea, a select, an editable region;
  *  - while a dialog is open — the palette, Settings, a column picker — which owns the keyboard;
+ *  - while the focus is in the closed trades' fold (#373), whose rows are not the table's;
  *  - while a form is open in the desk (the inspector's editors, a delete asked about) or the add
  *    panel is: j would move the inspector out from under a draft, and with it the draft. The
  *    palette keeps the same rule (`holdOnDesk`): while a form holds, it lands on nothing and opens
- *    no other form, and says so.
+ *    no other form, and says so. The fold's own forms are not the desk's here: a correction
+ *    left open in it holds no row of the table.
  *  Enter is also left to any control that has the focus, which answers it itself.
  *
  *  Only the desk mounts this, so the phone registers nothing (ADR 0023: parity is by touch there).
@@ -40,15 +42,30 @@ export function typingInto(target: EventTarget | null): boolean {
     || target.closest('[contenteditable]:not([contenteditable="false"])') !== null;
 }
 
+/** The closed trades' fold (#373), the last thing in the desk's book: it is not the table, and a
+ *  correction drawn in it holds nothing of the table's — a jump moves no draft of the fold's, which
+ *  stays mounted. Its own keys are its own: a key pressed inside it is never the table's. */
+const FOLD = ".nxj-fold";
+
+/** The forms, and whatever else holds, in the TABLE and its inspector: never the fold's. */
+function holding(desk: Element | null, selector: string): Element[] {
+  return [...(desk?.querySelectorAll(selector) ?? [])].filter((el) => el.closest(FOLD) === null);
+}
+
 /** Whether something else owns the keyboard now: a dialog, or a form open on the desk. */
 export function keysAreElsewhere(desk: Element | null): boolean {
   if (document.querySelector('[role="dialog"], [role="alertdialog"], .nx-add-panel')) return true;
-  return Boolean(desk?.querySelector('form, [data-poll="hold"]'));
+  return holding(desk, 'form, [data-poll="hold"]').length > 0;
+}
+
+/** Whether a key pressed at `target` was pressed inside the closed trades' fold. */
+export function inFold(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(FOLD) !== null;
 }
 
 /** What holds the desk, for the palette (`Hold` in commands.ts): read from the page as it stands. */
 export function holdOnDesk(desk: Element | null): Hold {
-  const held = [...(desk?.querySelectorAll('[data-poll="hold"]') ?? [])];
+  const held = holding(desk, '[data-poll="hold"]');
   if (held.length === 0) return null;
   const inspector = desk!.querySelector(".nxd-inspector");
   const form = held[0]!;
@@ -81,7 +98,7 @@ export function useDeskKeys({ ids, selection, setSelection, desk }: {
       if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.isComposing || e.keyCode === 229) return;
       if (e.key !== "j" && e.key !== "k" && e.key !== "Enter") return;
-      if (typingInto(e.target) || keysAreElsewhere(desk.current)) return;
+      if (typingInto(e.target) || inFold(e.target) || keysAreElsewhere(desk.current)) return;
       const { ids, selection: s, setSelection: set } = now.current;
       if (e.key === "Enter") {
         if (s.id === null || s.open) return;

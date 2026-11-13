@@ -116,7 +116,7 @@ function serve() {
         : path === "/health" ? health
           : path === "/references" ? references.map((r) => ({ fetched_at: referenceStamp, ...r }))
             : path === "/positions/values" ? [{ ...holding, fetched_at: holdingStamp }]
-              // every holding on record, as stored: REVIEW's closed trades read it (#296)
+              // every holding on record, as stored: the closed trades' fold reads it (#296, #373)
               : path === "/positions" ? [holding]
                 // its days, an empty week: the shape the service answers, so the history drawn
                 // in LIVE (#353) is drawn from samples rather than said to be unreadable

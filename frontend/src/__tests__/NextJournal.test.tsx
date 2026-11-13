@@ -1,4 +1,5 @@
-/** The closed trades in REVIEW (#296, ADR 0022): a section on the desk, a list on the phone that opens
+/** The closed trades (#296, ADR 0022), folded at the bottom of the book since #373 — shut on every
+ *  load, read only once opened, never polled: a section on the desk, a list on the phone that opens
  *  one trade per screen, each with its burndown and IV through `/positions/{id}/samples`, ending at
  *  its close, and the correction a mistyped close takes. Against a service that remembers what it
  *  was sent (`testing/holdingService.ts`), which serves a closed holding's samples only to the day
@@ -6,6 +7,7 @@
  *  `__browser__/NextJournal.iphone.test.tsx`.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
@@ -38,7 +40,16 @@ async function open(
   await waitFor(() => expect(s.sent.some((x) => x.path === "/positions/values")).toBe(true));
 }
 
-const journal = () => screen.findByRole("region", { name: "closed trades" });
+/** The fold's own button, "Closed trades", at the bottom of the book (#373). */
+const fold = () => screen.getByRole("button", { name: "Closed trades" });
+const isOpen = () => fold().getAttribute("aria-expanded") === "true";
+
+/** The closed trades, the fold opened first if it is shut: it is shut on every load (#373). */
+async function journal(): Promise<HTMLElement> {
+  const region = await screen.findByRole("region", { name: "closed trades" });
+  if (!isOpen()) fireEvent.click(fold());
+  return region;
+}
 
 /** Each entry of the journal, in the order drawn. */
 async function entries(): Promise<HTMLElement[]> {
@@ -64,6 +75,8 @@ const rowOf = (id: string) => document.querySelector<HTMLElement>(`[aria-label="
 
 /** 1231_IC closed from its live detail in REVIEW, at `exit`: the close's account, once it is drawn. */
 async function closeHeld(arrangement: "desk" | "phone", exit?: string): Promise<HTMLElement> {
+  // drawn, not only asked for: a loaded runner answers the valuation after `open` returns
+  await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
   if (arrangement === "desk") {
     const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="h-ic"]')!;
     fireEvent.click(row.querySelector(".nxd-name")!);
@@ -79,7 +92,8 @@ async function closeHeld(arrangement: "desk" | "phone", exit?: string): Promise<
   fireEvent.click(within(form).getByRole("button", { name: "Close holding" }));
   const account = await screen.findByRole("region", { name: "closed 1231_IC" });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  await waitFor(() => expect(rowOf("h-ic")).not.toBeNull());
+  // listed at once where the fold is open; shut, it lists nothing and reads nothing (#373)
+  if (isOpen()) await waitFor(() => expect(rowOf("h-ic")).not.toBeNull());
   return account;
 }
 
@@ -340,6 +354,8 @@ for (const arrangement of ["desk", "phone"] as const) {
         .getByRole("button", { name: "Delete for good" }));
       await waitFor(() => expect(s.writes().map((w) => `${w.method} ${w.path}`)).toEqual(["DELETE /positions/c-old"]));
       await waitFor(() => expect(rowOf("c-old")).toBeNull());
+      // and the section read again, once
+      await waitFor(() => expect(asked(s, "/positions")).toBe(2));
       await waitFor(() => expect(screen.queryByRole("region", { name: "closed trade 1120_P6000", hidden: true })).toBeNull());
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(rowOf("c-tie")).not.toBeNull();
@@ -401,35 +417,221 @@ describe("the desk's journal", () => {
   });
 });
 
-describe("in LIVE", () => {
+/** The page's poll, `n` times: the line is asked at each, so the clock did run. */
+async function polls(n: number) {
+  for (let i = 0; i < n; i++) await act(async () => { vi.advanceTimersByTime(15_000); });
+}
+
+/** The book as drawn: the desk's table or the phone's cards. */
+const book = () => document.querySelector<HTMLElement>(".nx-book")!;
+
+describe("folded at the bottom of the book (#373)", () => {
   for (const arrangement of ["desk", "phone"] as const) {
-    it(`draws no closed holding and asks for none, on the ${arrangement}`, async () => {
+    for (const [when, at] of [["in session", IN_SESSION], ["outside it", AFTER_CLOSE]] as const) {
+      it(`is shut on loading, ${when} on the ${arrangement}, and asks for nothing across polls`, async () => {
+        const s = service();
+        document.cookie = "ui_refresh=5;path=/";
+        await open(arrangement, s, { at });
+        await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
+        const region = screen.getByRole("region", { name: "closed trades" });
+        expect(fold().getAttribute("aria-expanded")).toBe("false");
+        // shut, it mounts no row and names no closed trade
+        expect(region.querySelector("[data-closed]")).toBeNull();
+        expect(document.body.textContent).not.toMatch(/1120_P6000|1204_P6500|1204_C7500/);
+        const line = asked(s, "/health");
+        await polls(4);
+        expect(asked(s, "/health")).toBeGreaterThan(line);
+        expect(asked(s, "/positions")).toBe(0);
+      });
+
+      it(`is the last thing in the book, ${when} on the ${arrangement}: after the watchlist`, async () => {
+        const s = service();
+        await open(arrangement, s, { at });
+        const region = await screen.findByRole("region", { name: "closed trades" });
+        expect(book().lastElementChild).toBe(region);
+        const watchlist = book().querySelector(`[aria-labelledby="${arrangement === "desk" ? "nxd" : "nxp"}-watchlist"]`)!;
+        expect(watchlist.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      });
+    }
+
+    it(`reads the closed trades once on opening, on the ${arrangement}, and never again by polling or reopening`, async () => {
+      const s = service();
+      document.cookie = "ui_refresh=5;path=/";
+      await open(arrangement, s);
+      fireEvent.click(fold());
+      expect(fold().getAttribute("aria-expanded")).toBe("true");
+      const region = screen.getByRole("region", { name: "closed trades" });
+      expect(fold().getAttribute("aria-controls")).toBeTruthy();
+      expect(document.getElementById(fold().getAttribute("aria-controls")!)).not.toBeNull();
+      await waitFor(() => expect(region.querySelectorAll("[data-closed]")).toHaveLength(3));
+      expect(asked(s, "/positions")).toBe(1);
+      await polls(4);
+      expect(asked(s, "/positions")).toBe(1);
+      // shut: the rows are hidden — kept, with whatever is open in them — and nothing is asked
+      fireEvent.click(fold());
+      expect(fold().getAttribute("aria-expanded")).toBe("false");
+      expect(document.getElementById(fold().getAttribute("aria-controls")!)!.hidden).toBe(true);
+      expect(within(region).queryAllByRole("button", { name: /1120_P6000/ })).toEqual([]);
+      await polls(2);
+      // opened again: the rows it read, and still nothing asked
+      fireEvent.click(fold());
+      expect(region.querySelectorAll("[data-closed]")).toHaveLength(3);
+      await polls(2);
+      expect(asked(s, "/positions")).toBe(1);
+    });
+
+    it(`reads nothing for a close made before the fold was ever opened, on the ${arrangement}, and the close's own answer is its account`, async () => {
+      const s = service();
+      await open(arrangement, s);
+      const account = await closeHeld(arrangement, "1");
+      // drawn from the close's answer: the journal was never read
+      expect(account.textContent).toMatch(/closed on 2026-11-12/);
+      const fix = within(account).getByRole("form", { name: "correct the close of 1231_IC" });
+      typeIn(within(fix).getByLabelText("exit, per contract"), "1.3");
+      fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
+      await waitFor(() => expect(within(fix).getByRole("status").textContent).toBe("corrected"));
+      // and the account says the correction from its own answer, the journal still unread
+      await waitFor(() => expect(account.textContent).toMatch(/exit 1\.3 ·/));
+      await polls(2);
+      expect(asked(s, "/positions")).toBe(0);
+      // opened after both: ONE read, saying the close as the service now has it
+      fireEvent.click(fold());
+      await waitFor(() => expect(fig(rowOf("h-ic")!, "exit")).toBe("1.3"));
+      expect(asked(s, "/positions")).toBe(1);
+    });
+
+    it(`reads again once for a close made after the fold was opened, shut since, on the ${arrangement}`, async () => {
+      const s = service();
+      await open(arrangement, s);
+      await entries();
+      fireEvent.click(fold());
+      expect(asked(s, "/positions")).toBe(1);
+      await closeHeld(arrangement, "1");
+      await waitFor(() => expect(asked(s, "/positions")).toBe(2));
+      await polls(2);
+      expect(asked(s, "/positions")).toBe(2);
+    });
+
+    it(`corrects a close from the section in session too, on the ${arrangement}`, async () => {
       const s = service();
       await open(arrangement, s, { at: IN_SESSION });
-      await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
-      expect(screen.queryByRole("region", { name: "closed trades" })).toBeNull();
-      expect(document.body.textContent).not.toMatch(/1120_P6000|1204_P6500|1204_C7500/);
-      expect(asked(s, "/positions")).toBe(0);
+      const trade = await openTrade("1120_P6000");
+      const fix = within(trade).getByRole("form", { name: "correct the close of 1120_P6000" });
+      typeIn(within(fix).getByLabelText("exit, per contract"), "0.7");
+      fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
+      await waitFor(() => expect(fig(rowOf("c-old")!, "made")).toBe("3.9 pts"));
+      expect(asked(s, "/positions")).toBe(2);
     });
   }
 
-  it("asks for the journal on switching into REVIEW, and drops it on switching back", async () => {
+  it("keeps the fold as it was across a switch of mode, and asks nothing for it", async () => {
     const s = service();
     await open("desk", s, { at: IN_SESSION });
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect((await entries()).map((r) => r.dataset.closed)).toEqual(["c-blank", "c-tie", "c-old"]);
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(fold().getAttribute("aria-expanded")).toBe("true");
+    expect(rowOf("c-old")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Live" }));
-    await waitFor(() => expect(screen.queryByRole("region", { name: "closed trades" })).toBeNull());
-    expect(document.body.textContent).not.toMatch(/1120_P6000/);
+    expect(rowOf("c-old")).not.toBeNull();
+    expect(asked(s, "/positions")).toBe(1);
   });
 
-  it("on the phone, shows the journal under the Review tab and not under Live", async () => {
+  it("on the phone, is drawn under the Live tab and the Review tab alike", async () => {
     const s = service();
     await open("phone", s, { at: IN_SESSION });
-    expect(screen.queryByRole("region", { name: "closed trades" })).toBeNull();
+    expect(await entries()).toHaveLength(3);
     fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Review" }));
-    expect((await entries()).map((r) => r.dataset.closed)).toEqual(["c-blank", "c-tie", "c-old"]);
-    fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Live" }));
-    await waitFor(() => expect(screen.queryByRole("region", { name: "closed trades" })).toBeNull());
+    expect(rowOf("c-old")).not.toBeNull();
+    expect(book().lastElementChild).toBe(screen.getByRole("region", { name: "closed trades" }));
+    expect(asked(s, "/positions")).toBe(1);
   });
 });
+
+/** The desk's cursor: the row j and k are on. */
+const cursor = () => document.querySelector<HTMLElement>(".nxd-row[data-cursor]")?.dataset.ref ?? null;
+const inspector = () => screen.queryByRole("complementary", { name: /^inspector:/ });
+
+describe("the fold beside the desk's own keys", () => {
+  it("leaves j to the table while a trade is open in the fold and the focus is outside it", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    await openTrade("1120_P6000");
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(cursor()).toBeNull();
+    fireEvent.keyDown(document.body, { key: "j" });
+    await waitFor(() => expect(cursor()).not.toBeNull());
+  });
+
+  it("leaves j alone while the focus is inside the fold's correction", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    const trade = await openTrade("1120_P6000");
+    const save = within(trade).getByRole("button", { name: "Save correction" });
+    save.focus();
+    fireEvent.keyDown(save, { key: "j" });
+    expect(cursor()).toBeNull();
+  });
+
+  it("lets the palette land on a row while a trade is open in the fold", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    await openTrade("1120_P6000");
+    const user = userEvent.setup();
+    (document.activeElement as HTMLElement | null)?.blur();
+    await user.keyboard("{Control>}k{/Control}");
+    const palette = screen.getByRole("dialog", { name: "commands" });
+    await user.type(within(palette).getByRole("combobox"), "1231_IC holding");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
+    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1231_IC"));
+  });
+
+  it("keeps the inspector open on an Escape inside the fold, and the correction's Escape puts its figures back", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    fireEvent.click(document.querySelector<HTMLElement>('.nxd-row[data-ref="h-ic"] .nxd-name')!);
+    await waitFor(() => expect(inspector()).not.toBeNull());
+    const trade = await openTrade("1120_P6000");
+    const fix = within(trade).getByRole("form", { name: "correct the close of 1120_P6000" });
+    const exit = within(fix).getByLabelText("exit, per contract") as HTMLInputElement;
+    typeIn(exit, "0.9");
+    exit.focus();
+    fireEvent.keyDown(exit, { key: "Escape" });
+    // the edit cancelled, to the close as the service has it, and the inspector left open
+    expect(exit.value).toBe("0.5");
+    expect(inspector()).not.toBeNull();
+    // and an Escape with nothing to cancel is still not the inspector's
+    fireEvent.keyDown(exit, { key: "Escape" });
+    expect(inspector()).not.toBeNull();
+    expect(s.writes()).toEqual([]);
+  });
+
+  it("keeps a correction's draft and the open trade across a shut, and reads nothing for it", async () => {
+    const s = service();
+    await open("desk", s, { at: IN_SESSION });
+    const trade = await openTrade("1120_P6000");
+    typeIn(within(trade).getByLabelText("exit, per contract"), "0.9");
+    fireEvent.click(fold());
+    expect(fold().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(fold());
+    const again = screen.getByRole("region", { name: "closed trade 1120_P6000" });
+    expect((within(again).getByLabelText("exit, per contract") as HTMLInputElement).value).toBe("0.9");
+    expect(asked(s, "/positions")).toBe(1);
+  });
+});
+
+for (const arrangement of ["desk", "phone"] as const) {
+  it(`reads again on reopening, on the ${arrangement}, when the first read failed and nothing was drawn`, async () => {
+    const s = service();
+    s.refuse.set("GET /positions", { status: 503, detail: "busy" });
+    await open(arrangement, s);
+    const j = await journal();
+    await waitFor(() => expect(j.textContent).toMatch(/could not be read/));
+    s.refuse.delete("GET /positions");
+    fireEvent.click(fold());
+    fireEvent.click(fold());
+    await waitFor(() => expect(j.querySelectorAll("[data-closed]")).toHaveLength(3));
+    expect(asked(s, "/positions")).toBe(2);
+    expect(j.textContent).not.toMatch(/could not be read/);
+  });
+}

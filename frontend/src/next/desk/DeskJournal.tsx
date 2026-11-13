@@ -1,7 +1,8 @@
-/** REVIEW's closed trades on the desk (#296, ADR 0023's arrangement A): a section under the book, one
- *  row per trade, newest first, and the trade a row opens drawn beneath it — its figures, its
- *  charts to the close, and the correction. A section of its own rather than rows of the book's
- *  table: the table is what is held and watched, and a closed trade is neither (ADR 0022).
+/** The closed trades on the desk (#296, ADR 0023's arrangement A): the body of the fold at the
+ *  bottom of the book (`JournalFold`, #373), one row per trade, newest first, and the trade a row
+ *  opens drawn beneath it — its figures, its charts to the close, the correction and the delete.
+ *  Rows of their own rather than rows of the book's table: the table is what is held and watched,
+ *  and a closed trade is neither (ADR 0022).
  *
  *  Only what is selected is kept, as an id, and looked up in each render's journal, so a
  *  correction's re-read is what the open trade shows.
@@ -23,8 +24,7 @@ export function DeskJournal({ journal, privacy, onCorrected, onDeleted }: {
   const detailId = useId();
 
   return (
-    <section className="nx-journal nxj-desk" aria-label="closed trades">
-      <h2>Closed trades</h2>
+    <div className="nxj-desk">
       {/* said BESIDE the rows a re-read failed to replace, which stay: they are the last the
           service said, and the trade open on them stays open */}
       {error !== null ? <p className="nx-hold-error" role="alert">{`the closed trades could not be read — ${error}`}</p> : null}
@@ -66,6 +66,6 @@ export function DeskJournal({ journal, privacy, onCorrected, onDeleted }: {
             )}
       {current ? <ClosedTradeDetail id={detailId} trade={current} privacy={privacy} onCorrected={onCorrected}
                                     onDeleted={onDeleted} heading /> : null}
-    </section>
+    </div>
   );
 }

@@ -1,7 +1,8 @@
-/** Closed holdings for the suites of REVIEW's journal (#296): the owner's book (`ownerBook.ts`) with
- *  three trades it has closed — two on one day, one with no Exit — behind a service that remembers
- *  writes (`holdingService.ts`). One trade has a week of samples, two days of them written after
- *  the day it is closed on, which the service hides as the route does (a backdated close, ADR 0022).
+/** Closed holdings for the suites of the closed trades (#296, #373): the owner's book
+ *  (`ownerBook.ts`) with three trades it has closed — two on one day, one with no Exit — behind a
+ *  service that remembers writes (`holdingService.ts`). One trade has a week of samples, two days
+ *  of them written after the day it is closed on, which the service hides as the route does (a
+ *  backdated close, ADR 0022).
  */
 import type { Holding, Sample, Samples } from "../shared/api";
 import { holdingService, type HoldingService } from "./holdingService";

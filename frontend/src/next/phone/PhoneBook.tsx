@@ -100,10 +100,6 @@ export function PhoneBook({
           {unplaced}
         </section>
       )}
-      {/* the closed trades (#296), between REVIEW's holdings and the watchlist: the page hands
-          them over in REVIEW only */}
-      {journal}
-
       <section aria-labelledby="nxp-watchlist">
         <h2 id="nxp-watchlist">Watchlist</h2>
         {placed.watchlist.length === 0 ? <p className="nxp-meta">nothing watched</p> : null}
@@ -127,6 +123,9 @@ export function PhoneBook({
           <OffList quarantined={placed.quarantined} muted={placed.muted} />
         </section>
       ) : null}
+
+      {/* the closed trades' fold (#373): the last thing in the book, in either tab */}
+      {journal}
 
       <DetailSheet subject={subject} onClose={close} quotes={quotes} monitors={monitors}
                    privacy={privacy} entryStyle={entryStyle} writes={writes} mode={mode} session={session} />
