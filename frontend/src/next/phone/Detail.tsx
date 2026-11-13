@@ -25,7 +25,6 @@ import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry } from "../edit";
 import { RuleFigures } from "../RuleFigures";
 import { HistoryOnDemand } from "../HistoryOnDemand";
-import type { Mode } from "../mode";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
