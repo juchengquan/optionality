@@ -95,12 +95,16 @@ The research found three things nobody does, all of which this service can:
 - **Both modes** carry the "needs you" line and every fault. A review mode that hid a firing alarm
   would be a trap.
 - **A holding's Levels in REVIEW** (decided by the owner on 2026-11-13, #354, option (b)): the needs
-  line keeps leaving them out, because REVIEW values the holdings once on entering it rather than
-  polling them (ADR 0012). Every Level chip of a holding (Target, Stop, Manage-by: on its row, in
-  the desk's inspector, on the phone's page and sheet, and in the saved picture) says instead when
-  that valuation was made, from the time the service stamped on it: "at stop · as valued at 21:04".
-  The chip and the line then cannot read as a disagreement. LIVE is unchanged: there both read the
-  same poll.
+  line says no holding's Levels in REVIEW, because REVIEW values the holdings once on entering it
+  rather than polling them (ADR 0012). That holds for the holdings and equally for a rule linked to
+  one, whose `schedule` is the holding's and arrives on the `/quotes` REVIEW still polls: the line
+  states none of them, and still says each rule's own alarm and every fault. Every Level chip of a
+  holding, where one is drawn (Target, Stop, Manage-by: on its row, in the desk's inspector, on the
+  phone's page and sheet, and in the saved picture), says instead when that valuation was made,
+  from the time the service stamped on it: "at stop · as valued at 21:04". The note saying when the
+  holdings were valued reads the same stamp, so the page states one clock for it. The chip and the
+  line then cannot read as a disagreement. LIVE is unchanged: both read the same poll there, and
+  the chip carries no time.
 
 ### The spread is the unit, and the two lists stay apart
 

@@ -54,9 +54,25 @@ const due = {
 };
 
 let holdings: object[] = [holding, due];
+let quotes: object[] = [spread];
+/** the time the fake service stamps on each valuation it serves, in DISPLAY_TZ (+08:00) — never
+ *  the zone this suite runs in (TZ=UTC), so a note drawn from the device's clock would differ */
+let stamp = "2026-11-08 23:04:11+08:00";
+const valued = () => holdings.map((h) => ({ ...h, fetched_at: stamp }));
+
+/** A rule on the whole of p1, linked to it: `/quotes` serves it the holding's schedule
+ *  (`schedule.position_id`), and REVIEW still polls `/quotes`. */
+const linked = (over: object = {}) => ({
+  ...spread, id: "r1", code: "1231_7000P", strike_date: "2026-12-31", field: "mid_price", threshold: 6,
+  legs: [{ sign: -1, option_type: "PUT", strike: 7000 }, { sign: 1, option_type: "PUT", strike: 6950 }],
+  positions: [{ id: "p1", name: "1231_7000P" }], scope: "all", held: true, watched: 6.2, distance: -0.2,
+  schedule: { ...schedule, reached: "stop", position_id: "p1" }, ...over,
+});
 
 function serve() {
   holdings = [holding, due];
+  quotes = [spread];
+  stamp = "2026-11-08 23:04:11+08:00";
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     // what a holding's detail reads once it is opened — its payoff, samples and pace split — as
@@ -64,11 +80,11 @@ function serve() {
     const own = path.replace(/^\/positions\/p[12]\//, "/positions/h-puts/");
     const read = payoffAnswer(own) ?? samplesAnswer(own) ?? volAnswer(own);
     const body = read ? read : init?.method && init.method !== "GET" ? {}
-      : path === "/quotes" ? [spread]
+      : path === "/quotes" ? quotes
         : path === "/monitors" ? []
           : path === "/health" ? health
             : path === "/references" ? []
-              : path === "/positions/values" ? holdings
+              : path === "/positions/values" ? valued()
                 : path === "/positions" ? holdings : null;
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
@@ -81,11 +97,11 @@ function at(iso: string) {
 const SESSION = "2026-11-09T15:00:00Z";
 const SUNDAY = "2026-11-08T15:00:00Z";
 
-async function open(arrangement: Arrangement, now: string) {
+async function open(arrangement: Arrangement, now: string, chip = true) {
   document.cookie = `ui_arrangement=${arrangement};path=/`;
   at(now);
   render(<Next />);
-  await until(() => expect(document.querySelector('[data-ref="p1"] .nx-chip')).toBeTruthy());
+  await until(() => expect(document.querySelector(chip ? '[data-ref="p1"] .nx-chip' : '[data-ref="p1"]')).toBeTruthy());
 }
 
 /** what the line says, or "" where nothing needs you and it is not drawn */
@@ -161,6 +177,21 @@ describe("in REVIEW, a holding's chip and the needs-you line never contradict ea
     expect(chipIn(document, "p1")).toBe("at stop");
     expect(line()).toContain("1204_6900P at its manage-by");
     expect(chipIn(document, "p2")).toBe("manage-by");
+
+    // the inspector draws the row's chip, bare as the row's is
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!)
+      .getByRole("button", { name: "1231_7000P" }));
+    const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
+    expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop");
+  });
+
+  it("in LIVE the phone's card and its sheet carry no time either", async () => {
+    await open("phone", SESSION);
+    const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
+    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop");
+    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
+    const sheet = await screen.findByRole("dialog");
+    await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop"));
   });
 
   it("still holds after switching from LIVE into REVIEW", async () => {
@@ -168,6 +199,52 @@ describe("in REVIEW, a holding's chip and the needs-you line never contradict ea
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Review" })); });
     await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04"));
     expect(line()).not.toContain("1231_7000P");
+  });
+});
+
+describe("in REVIEW a rule linked to a holding does not say the holding's Levels either (#354)", () => {
+  it("names no Level the holding's chip already says, and keeps the rule's own alarm", async () => {
+    quotes = [spread, linked({ triggered: true })];
+    await open("desk", SUNDAY);
+    expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
+    // the rule rings: that is the rule's, from the poll, and it is said
+    await until(() => expect(line()).toContain("1231_7000P ringing"));
+    expect(line()).not.toContain("at stop");
+  });
+
+  it("names no Level the holding's valuation did not show, so the line never states one the row lacks", async () => {
+    // the stop reached since REVIEW valued the holding: the poll's schedule says it, the row cannot
+    holdings = [{ ...holding, schedule }, due];
+    quotes = [spread, linked()];
+    await open("desk", SUNDAY, false);
+    expect(chipIn(document, "p1")).toBeNull();
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(line()).not.toContain("at stop");
+    expect(line()).not.toContain("1231_7000P");
+  });
+
+  it("while LIVE still says it, from the poll", async () => {
+    quotes = [spread, linked()];
+    await open("desk", SESSION);
+    await until(() => expect(line()).toContain("1231_7000P at stop"));
+  });
+});
+
+describe("one clock for a valuation", () => {
+  it("says when the holdings were valued in the service's zone, as the chip does, whatever the device's", async () => {
+    // this suite runs at TZ=UTC: 15:00 here is 23:00 in the service's +08:00
+    await open("desk", SUNDAY);
+    expect(document.querySelector(".nx-book")!.textContent).toContain("valued at 23:04:11");
+    expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
+  });
+
+  it("moves the chip's time on when REVIEW values the holdings again", async () => {
+    await open("desk", SUNDAY);
+    stamp = "2026-11-08 23:09:30+08:00";
+    // Settings, opened in REVIEW, values the holdings afresh
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:09"));
+    expect(screen.getByText("holdings valued at 23:09:30")).toBeTruthy();
   });
 });
 

@@ -163,7 +163,8 @@ describe("a Level's chip in REVIEW, with its valuation's time, fits", () => {
 
         await inspect("h-ic");
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
-        if (mode === "review") expect(insp.querySelector(".nx-chip")!.textContent).toBe("manage-by · as valued at 23:14");
+        expect(insp.querySelector(".nx-chip")!.textContent)
+          .toBe(mode === "review" ? "manage-by · as valued at 23:14" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(misfits()).toEqual([]);
         expect(cutChips(table())).toEqual([]);

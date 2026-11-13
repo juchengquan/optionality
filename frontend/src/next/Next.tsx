@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Toaster, toast } from "@/components/ui/toast";
 import { clockTime } from "../shared/format";
+import { valuedAt } from "./levels";
 import { Freshness } from "../shared/Freshness";
 import {
   readArrangement, readEntryStyle, readPrivacy, readRefresh, readUp, writeArrangement,
@@ -216,11 +217,14 @@ export function Next() {
   const shortcut = paletteShortcut();
 
   // the line uses only what is polled (ADR 0012): holdings are polled in LIVE and asked for once
-  // in REVIEW, so in REVIEW their Levels are left to Settings, which asks again and says when. The
-  // book is still DRAWN with them in REVIEW, so they still say which combos are drawn apart (#346)
+  // in REVIEW, so in REVIEW it says no holding's Levels — not even through a rule linked to one,
+  // whose schedule `/quotes` serves (#354): each holding's chip says them, as valued, and Settings
+  // asks again and says when. The book is still DRAWN with them in REVIEW, so they still say which
+  // combos are drawn apart (#346)
+  const live = mode === "live";
   const items = useMemo(
-    () => needsYou(book.quotes, book.monitors, book.health, mode === "live" ? holdings : null, holdings),
-    [book.quotes, book.monitors, book.health, holdings, mode],
+    () => needsYou(book.quotes, book.monitors, book.health, live ? holdings : null, holdings, live),
+    [book.quotes, book.monitors, book.health, holdings, live],
   );
   const everything = useMemo(
     () => needsYou(book.quotes, book.monitors, book.health, holdings),
@@ -548,7 +552,8 @@ function useBook(mode: Mode) {
       if (mine < landed.current) return;
       landed.current = mine;
       setHoldings(valued);
-      setHoldingsAt(clockTime(new Date()));
+      // the service's own stamp, as each chip reads it (#354): one clock, whatever the device's zone
+      setHoldingsAt(valuedAt(valued) ?? clockTime(new Date()));
       setHoldingsError(null);
     } catch (e: unknown) {
       if (mine < landed.current) return;

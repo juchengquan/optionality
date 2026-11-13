@@ -31,7 +31,9 @@ export function LevelChip({ holding, mode }: { holding: Holding; mode: Mode }) {
   const level = holding.schedule?.reached ?? null;
   if (!level) return null;
   const kind = level === "stop" ? "stop" : "target";
-  return <span className="nx-chip" data-kind={kind}><Glyph kind={kind} />{levelWords(kind, holding, mode)}</span>;
+  return (
+    <span className="nx-chip" data-kind={kind}><Glyph kind={kind} />{levelWords(kind, holding, mode)}</span>
+  );
 }
 
 /** One rule as a line: what it watches in its own sentence, and its state's chip when it has one. */

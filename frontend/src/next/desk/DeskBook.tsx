@@ -536,8 +536,9 @@ function HoldingDetail({ row, mode, privacy, partners, onSelect }: {
   }
   // the condor's other spread, when placement bracketed the two
   const partner = partners.get(h.id) ?? null;
-  // its Level, in REVIEW only, where the row's chip says which valuation it is from (#354)
-  const a = mode === "review" ? attentionOf(row) : null;
+  // its Level, as the row's chip says it: bare in LIVE, and in REVIEW with the valuation it is
+  // from (#354)
+  const a = attentionOf(row);
   return (
     <>
       {a ? <p><AttentionChip kind={a} words={chipWords(row, mode)} /></p> : null}
