@@ -2,15 +2,15 @@
  *  (#337), which measures it on today's `App` and goes with it in #301. The phone's widths are
  *  `NextReferences.iphone.test.tsx`'s.
  *
- *  The strip is drawn in LIVE only, so the page is put there by the mode switch: the browser's clock
- *  is the real one, and outside the session it says REVIEW.
+ *  Measured in session (the suite's pinned clock) and outside it, where every reading also carries
+ *  the time it was read (#371). The Live switch is still pressed, as before.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
-import { settle } from "./nextBook";
+import { overflowsSideways, settle } from "./nextBook";
 import { serveReferences, stripLines } from "./nextCarried";
 
 async function show() {
@@ -31,6 +31,22 @@ describe("the strip at a desk", () => {
     expect(items).toHaveLength(3);
     expect(lines).toBe(1);
   });
+
+  for (const width of [900, 1280, 2560]) {
+    it(`outside the session, says every reading's time and keeps each whole at ${width}px (#371)`, async () => {
+      vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday
+      await page.viewport(width, 900);
+      await show();
+      const { items } = stripLines();
+      expect(items).toHaveLength(3);
+      for (const item of items) {
+        expect(item.textContent).toMatch(/read at 01:00$/);
+        expect(item.getBoundingClientRect().right, `${item.textContent} past the edge`).toBeLessThanOrEqual(width + 1);
+        expect(item.scrollWidth, `${item.textContent} is clipped`).toBeLessThanOrEqual(item.clientWidth + 1);
+      }
+      expect(overflowsSideways()).toBe(false);
+    });
+  }
 
   it("sits below the freshness line and above the book", async () => {
     await page.viewport(1280, 900);

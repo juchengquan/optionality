@@ -554,13 +554,15 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   call to one — a loophole that change itself created. The payoff at expiry (`GET /positions/{id}/payoff`,
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
   an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
-  samples (`GET /positions/{id}/samples`, #295): stored history, read once when REVIEW opens a
-  holding and never polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
+  samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history
+  is drawn — REVIEW's inspector and pages, or its history section opened by hand (#353) — and never
+  polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
-  nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` in both modes,
-  and in LIVE `/positions/values` and `/references` with it — three calls per LIVE poll per open
-  tab, where the old page made two; REVIEW asks for `/positions/values` once, on entering it, and
-  never for `/references`.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
+  nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
+  By New York's session (09:30–16:15, weekdays; `frontend/src/next/session.ts`), never by the mode
+  on screen (#371): in session it polls `/positions/values` and `/references` with it — three calls
+  per poll per open tab, where the old page made two; outside the session it reads those two once —
+  on opening, at each change of session, and on the refresh button — and polls neither.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
   moomoo rejects a whole batch for one bad code and the containment loop drops only a code it
   NAMES, so a class refusal (`US..SPX`, which is the first thing a reasonable person types) would
   blank every row the owner acts on. It is also the one route that cannot fail: a Provider that is

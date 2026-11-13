@@ -34,10 +34,10 @@ vi.mock("html-to-image", async (orig) => {
   };
 });
 
-/** One Reference, so LIVE's strip has something to say. */
+/** One Reference, so the strip has something to say, with the service's stamp on its read (#371). */
 const references = [
   { id: "ref1", code: "US..SPX", label: "S&P 500", source: "moomoo", figure: 7612.25, change: 0.0042,
-    field: "mid_price", name: "S&P 500", error: null, last_known: false },
+    field: "mid_price", name: "S&P 500", error: null, last_known: false, fetched_at: "2026-11-10 23:14:05+08:00" },
 ];
 
 /** A holding closed on 6 Nov, as `/positions` keeps it (ADR 0022). */
@@ -238,14 +238,15 @@ describe("saving the desk as an image", () => {
     shared.release();
   });
 
-  it("carries LIVE's References, and not REVIEW's, which shows none", async () => {
-    // the one place a LIVE picture states SPX's level, from a figure the page already polls
+  it("carries the References in session, with no time, whichever mode", async () => {
+    // the one place a picture states SPX's level, from a figure the page already polls
     await show("live");
     let shared = catchShare();
     press();
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
     expect(captured[0]!.text).toContain("S&P 500");
     expect(captured[0]!.text).toContain("7,612.25");
+    expect(captured[0]!.text).not.toContain("read at");
     shared.release();
     await expect.poll(() => document.querySelector(".nx-still-stage"), { timeout: 4000 }).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
@@ -253,9 +254,26 @@ describe("saving the desk as an image", () => {
     shared = catchShare();
     press();
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    expect(captured[1]!.text).not.toContain("S&P 500");
+    expect(captured[1]!.text).toContain("7,612.25");
     shared.release();
   });
+
+  for (const mode of ["live", "review"] as const) {
+    it(`carries the References outside the session in ${mode} with the time each was read (#371)`, async () => {
+      vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday
+      await show(mode);
+      const shared = catchShare();
+      press();
+      await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+      const strip = captured[0]!.node.querySelector(".references")!;
+      expect(strip.textContent).toBe("S&P 500 (moomoo) 7,612.25+0.42%read at 23:14");
+      // and the market-closed line, with no button: nothing in a picture can be pressed (the owner's
+      // book here carries no stamp, so the line says no time rather than the device's)
+      expect(captured[0]!.node.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed");
+      expect(captured[0]!.node.querySelector(".nx-mkt-closed button")).toBeNull();
+      shared.release();
+    });
+  }
 
   it("is one moment: a poll that lands mid-capture changes the page, not the picture", async () => {
     let watched = 2.4;

@@ -21,10 +21,10 @@ export function ClosedLine({ at, onRefresh, refreshing = false, className }: {
   className: string;
 }) {
   return (
-    <p className={`nx-closed ${className}`}>
+    <p className={`nx-mkt-closed ${className}`}>
       <span>{at ? `market closed — valued at ${at.slice(0, 5)}` : "market closed"}</span>
       {onRefresh ? (
-        <button type="button" className="nx-closed-refresh" aria-label="refresh the valuation" disabled={refreshing}
+        <button type="button" className="nx-mkt-closed-refresh" aria-label="refresh the valuation" disabled={refreshing}
                 onClick={onRefresh}>
           <RefreshCw aria-hidden="true" className={refreshing ? "animate-spin" : undefined} />
           refresh

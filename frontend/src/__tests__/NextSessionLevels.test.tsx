@@ -272,7 +272,7 @@ describe("one clock for a valuation", () => {
   it("says when the holdings were valued in the service's zone, as the chip does, whatever the device's", async () => {
     // this suite runs at TZ=UTC: 15:00 here is 23:00 in the service's +08:00
     await open("desk", SUNDAY);
-    expect(document.querySelector(".nx-closed")!.textContent).toContain("market closed — valued at 23:04");
+    expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at 23:04");
     expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
   });
 
@@ -283,16 +283,16 @@ describe("one clock for a valuation", () => {
     fireEvent.click(screen.getByRole("button", { name: "settings" }));
     await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:09"));
     expect(screen.getByText("holdings valued at 23:09:30")).toBeTruthy();
-    expect(document.querySelector(".nx-closed")!.textContent).toContain("valued at 23:09");
+    expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("valued at 23:09");
   });
 
   it("moves the line and the chip on together by the line's own refresh", async () => {
     await open("desk", EVENING, true, "Live");
     stamp = "2026-11-08 23:11:02+08:00";
-    fireEvent.click(within(document.querySelector<HTMLElement>(".nx-closed")!)
+    fireEvent.click(within(document.querySelector<HTMLElement>(".nx-mkt-closed")!)
       .getByRole("button", { name: "refresh the valuation" }));
     await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:11"));
-    expect(document.querySelector(".nx-closed")!.textContent).toContain("market closed — valued at 23:11");
+    expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at 23:11");
   });
 });
 
@@ -309,13 +309,13 @@ describe("the saved picture says which valuation, outside the session only", () 
       it(`from the ${arrangement} in ${mode}`, () => {
         picture(arrangement, mode, false);
         expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
-        expect(document.querySelector(".nx-closed")!.textContent).toBe("market closed — valued at 23:04");
+        expect(document.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed — valued at 23:04");
         // nothing in a picture can be pressed
-        expect(document.querySelector(".nx-closed button")).toBeNull();
+        expect(document.querySelector(".nx-mkt-closed button")).toBeNull();
         cleanup();
         picture(arrangement, mode, true);
         expect(chipIn(document, "p1")).toBe("at stop");
-        expect(document.querySelector(".nx-closed")).toBeNull();
+        expect(document.querySelector(".nx-mkt-closed")).toBeNull();
       });
     }
   }

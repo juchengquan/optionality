@@ -43,6 +43,9 @@ export default defineConfig({
     // a second time under the iPhone profile, and with nothing here vitest's own default pattern
     // was merged in and both instances ran the jsdom suite as well (measured, 2026-11-10).
     include: [],
+    // the session pinned for every test, so a page that follows New York's clock measures the same
+    // whenever the suite runs (#371); a test outside the session pins its own
+    setupFiles: ["src/__browser__/session.setup.ts"],
     browser: {
       enabled: true,
       provider: "playwright",

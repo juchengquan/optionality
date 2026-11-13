@@ -416,7 +416,7 @@ describe("REVIEW", () => {
     expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
     cleanup();
     render(<DeskBook {...props({ mode: "review", session: true, holdingsAt: "23:14:05" })} />);
-    expect(document.querySelector(".nx-closed")).toBeNull();
+    expect(document.querySelector(".nx-mkt-closed")).toBeNull();
   });
 });
 

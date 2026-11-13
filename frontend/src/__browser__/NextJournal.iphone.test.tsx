@@ -20,7 +20,7 @@ async function review(): Promise<{ s: HoldingService; journal: HTMLElement }> {
   window.fetch = s.fetch;
   render(<Next />);
   await settle();
-  // the mode follows the real clock here; the tab makes it this test's
+  // the clock is pinned in session (session.setup.ts); the tab picks this test's mode
   await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Review" }));
   const journal = await screen.findByRole("region", { name: "closed trades" });
   await waitFor(() => expect(journal.querySelectorAll("[data-closed]")).toHaveLength(3));

@@ -30,7 +30,7 @@ const withValueRule = () => MONITORS.map((m) => {
 }) as Monitor[];
 
 async function openPhone(monitors?: Monitor[]): Promise<HoldingService> {
-  vi.useFakeTimers({ toFake: ["Date"], now: IN_SESSION });
+  vi.setSystemTime(IN_SESSION);
   const s = holdingService({
     holdings: HOLDINGS.map((h) => h.id === "h-ic" ? { ...h, cost_to_close: 1.225 } : h), monitors,
   });

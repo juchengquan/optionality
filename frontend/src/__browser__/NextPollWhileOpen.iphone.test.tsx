@@ -23,7 +23,7 @@ async function show() {
   serveBook();
   render(<Next />);
   await settle();
-  // the cards are LIVE's: the browser's clock is the real one, and outside the session it says REVIEW
+  // the cards are LIVE's: the tab picks it, whatever the pinned clock (session.setup.ts) defaults to
   await userEvent.click(tab("Live"));
   await settle();
 }

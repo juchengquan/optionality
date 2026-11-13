@@ -62,7 +62,7 @@ let references: object[] = [];
 let referenceStamp = "";
 let holdingStamp = "";
 /** the market-closed line, wherever the arrangement draws it */
-const closedLine = () => document.querySelector<HTMLElement>(".nx-closed");
+const closedLine = () => document.querySelector<HTMLElement>(".nx-mkt-closed");
 
 /** the GETs the page made, by path; writes are kept apart in `writes` */
 let calls: string[] = [];
@@ -93,7 +93,7 @@ function serve() {
   held = null;
   references = [reference, unread];
   referenceStamp = "2026-11-09 21:04:11+08:00";
-  holdingStamp = "x";
+  holdingStamp = "2026-11-10 07:00:12+08:00";
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
     if (init?.method && init.method !== "GET") {
@@ -305,6 +305,17 @@ describe("the market-closed line and its refresh (#371)", () => {
     await until(() => expect(screen.getByText(/could not be valued/)).toBeTruthy());
     expect(closedLine()?.textContent).toMatch(/^market closed/);
     expect(closedLine()?.textContent).not.toMatch(/valued at/);
+  });
+
+  it("says no time when nothing is held, rather than the device's clock in the service's place", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(EVENING);
+    held = [];
+    await open();
+    await until(() => expect(held!.length).toBe(1));
+    await act(async () => { held![0]!.settle(true, []); });
+    await until(() => expect(screen.getByText("nothing held")).toBeTruthy());
+    expect(closedLine()?.firstElementChild?.textContent).toBe("market closed");
   });
 
   for (const where of ["desk", "phone"] as const) {

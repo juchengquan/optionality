@@ -15,7 +15,7 @@ import { overflowsSideways, settle } from "./nextBook";
 /* The page's clock, on a day before every expiry in the owner's book but the expired rule's: a rule
    past its expiry offers no unmute (#292), so a suite on the real clock would change its answers
    when December came. Only Date is faked; the page's timers run. */
-beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") }); });
+beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const SPREAD = "1218_P7150 spread value";

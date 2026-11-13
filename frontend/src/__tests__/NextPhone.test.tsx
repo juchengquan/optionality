@@ -293,7 +293,7 @@ describe("REVIEW", () => {
     expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
     cleanup();
     draw({ mode: "review", session: true });
-    expect(document.querySelector(".nx-closed")).toBeNull();
+    expect(document.querySelector(".nx-mkt-closed")).toBeNull();
   });
 
   it("hides the contract count on its pages under privacy, and shows it otherwise", () => {

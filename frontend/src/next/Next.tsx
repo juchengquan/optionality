@@ -566,8 +566,10 @@ function useBook(session: boolean) {
       if (mine < landed.current) return;
       landed.current = mine;
       setHoldings(valued);
-      // the service's own stamp, as each chip reads it (#354): one clock, whatever the device's zone
-      setHoldingsAt(valuedAt(valued) ?? clockTime(new Date()));
+      // the service's own stamp, as each chip reads it (#354): one clock, whatever the device's zone.
+      // None where the answer carries none — nothing held — rather than the device's clock in its
+      // place: the market-closed line then says no time (#371)
+      setHoldingsAt(valuedAt(valued));
       setHoldingsError(null);
     } catch (e: unknown) {
       if (mine < landed.current) return;

@@ -14,7 +14,7 @@ import { serveRuleEdits, type Refusals } from "../testing/ruleEdits";
 import { settle } from "./nextBook";
 
 /* a day before every expiry in the book; only Date is faked, the page's timers run */
-beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") }); });
+beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 async function openDesk(refuse?: Refusals) {
