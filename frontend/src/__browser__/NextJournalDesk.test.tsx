@@ -1,6 +1,7 @@
-/** REVIEW's closed trades on the desk (#296), measured in a real layout engine: the journal's table
- *  and an opened trade, its charts and its correction, push nothing sideways from a 900px desk to a
- *  wide one, and no chart label lands on another. The behaviour is `__tests__/NextJournal.test.tsx`.
+/** The closed trades on the desk (#296), folded at the bottom of the book since #373, measured in a
+ *  real layout engine: the fold shut and opened, and an opened trade, its charts and its correction,
+ *  push nothing sideways from a 900px desk to a 2560px one, the trade is brought into view, and no
+ *  chart label lands on another. The behaviour is `__tests__/NextJournal.test.tsx`.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
@@ -12,29 +13,74 @@ import { overflowsSideways, settle } from "./nextBook";
 
 afterEach(cleanup);
 
-async function review(width: number): Promise<HTMLElement> {
+const WIDTHS = [900, 1280, 2560];
+
+/** The desk at `width`, in session (session.setup.ts), its fold as loaded: shut. */
+async function desk(width: number): Promise<HTMLElement> {
   await page.viewport(width, 900);
   window.fetch = closedBookService().fetch;
   document.cookie = "ui_arrangement=desk;path=/";
   render(<Next />);
   await settle();
-  // the clock is pinned in session (session.setup.ts); the switch picks this test's mode
-  fireEvent.click(screen.getByRole("button", { name: "Review" }));
-  const journal = await screen.findByRole("region", { name: "closed trades" });
+  return screen.getByRole("region", { name: "closed trades" });
+}
+
+/** The fold opened by its button, and its three trades drawn. */
+async function opened(width: number): Promise<HTMLElement> {
+  const journal = await desk(width);
+  fireEvent.click(within(journal).getByRole("button", { name: "Closed trades" }));
   await waitFor(() => expect(journal.querySelectorAll("[data-closed]")).toHaveLength(3));
+  await settle();
   return journal;
+}
+
+/** Wholly inside the window: left, right, top and bottom. */
+function onScreen(el: Element): boolean {
+  const r = el.getBoundingClientRect();
+  return r.left >= -0.5 && r.right <= document.documentElement.clientWidth + 0.5
+    && r.top >= -0.5 && r.bottom <= window.innerHeight + 0.5;
 }
 
 afterEach(() => { document.cookie = "ui_arrangement=;path=/;max-age=0"; });
 
-describe("the closed trades on the desk", () => {
-  for (const width of [900, 1440]) {
-    it(`fit a ${width}px desk with a trade open, no chart label over another`, async () => {
-      const journal = await review(width);
+describe("the closed trades' fold on the desk", () => {
+  for (const width of WIDTHS) {
+    it(`is shut at ${width}px, the last thing in the book and across its width, pushing nothing sideways`, async () => {
+      const journal = await desk(width);
+      const book = document.querySelector<HTMLElement>(".nx-book")!;
+      expect(book.lastElementChild).toBe(journal);
+      expect(journal.querySelector("[data-closed]")).toBeNull();
+      // across the whole book, under the table, whatever the inspector does beside it
+      expect(Math.abs(journal.getBoundingClientRect().width - book.getBoundingClientRect().width)).toBeLessThan(1);
+      const table = book.querySelector(".nxd-table")!.getBoundingClientRect();
+      expect(journal.getBoundingClientRect().top).toBeGreaterThanOrEqual(table.bottom - 0.5);
+      const button = within(journal).getByRole("button", { name: "Closed trades" }).getBoundingClientRect();
+      expect(button.right).toBeLessThanOrEqual(document.documentElement.clientWidth);
+      expect(button.height).toBeGreaterThanOrEqual(24);
+      expect(overflowsSideways()).toBe(false);
+    });
+
+    it(`opens at ${width}px into view, its table inside the window`, async () => {
+      const journal = await opened(width);
+      // brought into view by the press: the first trade's row is on the screen
+      expect(onScreen(journal.querySelector("[data-closed]")!)).toBe(true);
+      expect(journal.querySelector("table")!.getBoundingClientRect().right)
+        .toBeLessThanOrEqual(document.documentElement.clientWidth);
+      expect(overflowsSideways()).toBe(false);
+    });
+  }
+
+  for (const width of WIDTHS) {
+    it(`fits a ${width}px desk with a trade open, brought into view, no chart label over another`, async () => {
+      const journal = await opened(width);
       fireEvent.click(within(journal).getByRole("button", { name: "1120_P6000" }));
       const trade = await screen.findByRole("region", { name: "closed trade 1120_P6000" });
       await waitFor(() => expect(trade.querySelectorAll("[data-sample]").length).toBeGreaterThan(0));
       await settle();
+      // the opened trade's heading is on the screen, the focus on it
+      const heading = within(trade).getByRole("heading", { name: "1120_P6000" });
+      expect(onScreen(heading)).toBe(true);
+      expect(document.activeElement).toBe(heading);
       const edge = document.documentElement.clientWidth;
       expect(journal.querySelector("table")!.getBoundingClientRect().right).toBeLessThanOrEqual(edge);
       // the burndown, the IV and where SPX was (#298): a closed trade reads the same samples

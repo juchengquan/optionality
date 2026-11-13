@@ -66,7 +66,7 @@ function serve(quotes: () => unknown = () => QUOTES): string[] {
     asked.push(`${method} ${path}`);
     const routes: Record<string, unknown> = {
       "/quotes": quotes(), "/monitors": MONITORS, "/health": health, "/positions/values": HOLDINGS,
-      // REVIEW's closed trades (#296), which the picture leaves out: a journal is not the book
+      // the closed trades (#296, #373), which the picture leaves out: a journal is not the book
       "/positions": [CLOSED],
       "/references": references,
     };

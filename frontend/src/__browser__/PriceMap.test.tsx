@@ -51,7 +51,7 @@ function serve(): void {
       if (path === "/monitors") return ok(MONITORS);
       if (path === "/health") return ok(health);
       if (path === "/positions/values") return ok(HOLDINGS);
-      // every holding on record, which REVIEW's closed trades read (#296): none of these is closed
+      // every holding on record, which the closed trades' fold reads (#296, #373): none is closed
       if (path === "/positions") return ok(HOLDINGS);
       if (path === "/references") return ok([]);
     }

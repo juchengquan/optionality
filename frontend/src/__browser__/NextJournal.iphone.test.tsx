@@ -1,5 +1,6 @@
-/** REVIEW's closed trades on the phone (#296), MEASURED under Playwright's iPhone profile: the list's
- *  cards each one 44pt target, a trade opened on a screen of its own with its charts inside the
+/** The closed trades on the phone (#296), folded at the bottom of the book since #373, MEASURED
+ *  under Playwright's iPhone profile: the fold's button a 44pt target, shut and open, the list's
+ *  cards each one 44pt target and brought into view on opening, a trade opened on a screen of its own with its charts inside the
  *  screen and no label over another, the correction's boxes 16px so iOS does not zoom and its
  *  targets 44pt, nothing past the screen's edge, and Back closing the trade. Runs in the suite's
  *  `iphone` instance only; the behaviour is `__tests__/NextJournal.test.tsx`.
@@ -15,16 +16,29 @@ import { overflowsSideways, settle } from "./nextBook";
 
 afterEach(cleanup);
 
-async function review(): Promise<{ s: HoldingService; journal: HTMLElement }> {
+/** The page in session (session.setup.ts), its fold as loaded: shut. */
+async function load(): Promise<{ s: HoldingService; journal: HTMLElement }> {
   const s = closedBookService();
   window.fetch = s.fetch;
   render(<Next />);
   await settle();
-  // the clock is pinned in session (session.setup.ts); the tab picks this test's mode
-  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Review" }));
-  const journal = await screen.findByRole("region", { name: "closed trades" });
+  return { s, journal: screen.getByRole("region", { name: "closed trades" }) };
+}
+
+/** The fold opened by a tap, and its three trades drawn. */
+async function review(): Promise<{ s: HoldingService; journal: HTMLElement }> {
+  const { s, journal } = await load();
+  await userEvent.click(within(journal).getByRole("button", { name: "Closed trades" }));
   await waitFor(() => expect(journal.querySelectorAll("[data-closed]")).toHaveLength(3));
+  await settle();
   return { s, journal };
+}
+
+/** The part of `el` the screen shows, above the tab bar: some of it, at least. */
+function inView(el: Element): boolean {
+  const r = el.getBoundingClientRect();
+  const bar = document.querySelector('nav[aria-label="views"]')?.getBoundingClientRect().top ?? window.innerHeight;
+  return r.bottom > 0 && r.top < bar;
 }
 
 /** A sheet slides in, and a box measured mid-animation is not where it will be. */
@@ -65,6 +79,24 @@ async function openTrade(journal: HTMLElement, name: string): Promise<HTMLElemen
 }
 
 describe("the closed trades on the phone", () => {
+  it("is shut on loading, the last thing in the book, its button one 44pt target inside the screen", async () => {
+    const { journal } = await load();
+    expect(document.querySelector(".nx-book")!.lastElementChild).toBe(journal);
+    expect(journal.querySelector("[data-closed]")).toBeNull();
+    const button = within(journal).getByRole("button", { name: "Closed trades" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(tooSmall(journal)).toEqual([]);
+    expect(pastTheEdge(journal)).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+  });
+
+  it("opens on a tap into view: its first trade on the screen, above the tab bar", async () => {
+    const { journal } = await review();
+    expect(inView(journal.querySelector("[data-closed]")!)).toBe(true);
+    expect(within(journal).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded")).toBe("true");
+    expect(overflowsSideways()).toBe(false);
+  });
+
   it("lists each trade as one 44pt card, inside the screen", async () => {
     const { journal } = await review();
     expect(tooSmall(journal)).toEqual([]);
@@ -147,11 +179,11 @@ describe("the closed trades on the phone", () => {
     expect(document.activeElement?.closest('[data-poll="hold"]')).toBeNull();
   });
 
-  it("closes the trade with Back, and leaves the page on REVIEW", async () => {
+  it("closes the trade with Back, and leaves the fold open on its trades", async () => {
     const { journal } = await review();
     await openTrade(journal, "1120_P6000");
     history.back();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(screen.getByRole("region", { name: "closed trades" })).toBeTruthy();
+    expect(journal.querySelectorAll("[data-closed]")).toHaveLength(3);
   });
 });

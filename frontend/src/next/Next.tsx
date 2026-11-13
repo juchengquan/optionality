@@ -256,7 +256,8 @@ export function Next() {
     holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, mode, session, privacy, entryStyle, writes,
     onRevalue: () => void book.refreshNow(), revaluing: book.refreshing,
     journal: (
-      <JournalFold open={journalOpen} onToggle={toggleJournal}>
+      <JournalFold open={journalOpen} onToggle={toggleJournal}
+                   ready={journal.trades !== null || journal.error !== null}>
         {phone
           ? <PhoneJournal journal={journal} privacy={privacy} entryStyle={entryStyle} onCorrected={rereadJournal}
                           onDeleted={tradeDeleted} />

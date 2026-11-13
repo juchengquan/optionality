@@ -179,7 +179,7 @@ export function serveRuleEdits(refuse: Refusals = {}, extra: Entry[] = []): Writ
       if (path === "/health") return reply(200, EDIT_HEALTH);
       if (path === "/positions/values") return reply(200, holdings);
       if (path === "/references") return reply(200, []);
-      // REVIEW's closed trades (#296): none here
+      // the closed trades' fold (#296, #373): none here
       if (path === "/positions") return reply(200, []);
     }
     return reply(404, { detail: `${method} ${path} is not served here` });
