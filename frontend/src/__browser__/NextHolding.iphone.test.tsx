@@ -84,6 +84,25 @@ describe("changing a holding from the phone's sheet", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
+  it("corrects a leg's quantity with 44pt boxes, its preview inside the screen (#359)", async () => {
+    const s = await openPhone();
+    const sheet = await sheetOf("h-ic");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Edit" }));
+    const qty = within(sheet).getByRole("group", { name: "quantity of each leg" });
+    await userEvent.fill(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
+    const change = await within(qty).findByRole("group", { name: "what the correction changes" });
+    await waitFor(() => expect(change.textContent).toMatch(/max loss/));
+    await settle();
+    const form = sheet.querySelector(".nx-hold")!;
+    expect(tooSmall(form)).toEqual([]);
+    expect(smallText(form)).toEqual([]);
+    expect(pastTheEdge(sheet)).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+    await userEvent.click(within(sheet).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(writes(s)).toHaveLength(1));
+    expect((writes(s)[0]![1] as { legs: { qty?: number }[] }).legs.map((l) => l.qty ?? 1)).toEqual([1, 1, 2, 1]);
+  });
+
   it("cancels the close form with Escape and keeps the sheet open, the focus back on Close…", async () => {
     const s = await openPhone();
     const sheet = await sheetOf("h-ic");

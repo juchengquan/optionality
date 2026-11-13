@@ -50,3 +50,10 @@
 html[data-nx-arrangement="phone"] .nx-hold-field { flex: 1 1 9rem; }
 html[data-nx-arrangement="phone"] .nx-hold-field input { width: 100%; }
 html[data-nx-arrangement="phone"] .nx-hold-link { min-height: 44px; }
+
+/* each leg's quantity, correctable in place (#359): a group of small boxes, wrapping as the
+   other rows do */
+.nx-hold-qty { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; border: 0; padding: 0; margin: 0; }
+.nx-hold-qty > legend { padding: 0; margin-bottom: 0.25rem; }
+.nx-hold-change { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.nx-hold-change [data-updating] { opacity: 0.6; }

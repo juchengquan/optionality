@@ -256,6 +256,7 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
       levels: { dte_at_open: 45, target: null, stop: null, target_dte: null, manage_by_dte: 21 },
       plan: [{ dte: 45, on_pace: -2 }, { dte: 0, on_pace: 0 }],
       samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: -s.cost_to_close, on_pace: null })),
+      qty_corrected_at: null,
     });
     const { insp } = await inspect("h-calls", "1218_C7300", { holdings: debit });
     const chart = await burndownOf(insp);

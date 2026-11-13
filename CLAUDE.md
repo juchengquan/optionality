@@ -615,7 +615,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   to give a contract size; its Exit is signed like Cost to close (a long's sale is NEGATIVE). A
   backdated close hides later samples from every reader and deletes none. A mistyped close is
   corrected by PATCH (`exit`, `closed_on`); DELETE is for a holding recorded by mistake, and still
-  takes the samples.
+  takes the samples. A held leg's QUANTITY typed wrong is corrected by the same PATCH (`legs`, the
+  same contracts and sides, only `qty` differing; refused on a closed holding, #359): the samples are
+  kept AS THEY ARE — no sample stores a leg's price, so none is re-summed — and `qty_corrected_at`
+  marks those summed before it (`/samples`' `before_correction`; `/vol` withholds a gap read off
+  one). Every rule that valued exactly the structure takes the new quantities, unrung, its name
+  kept; every rule linked to the holding gets the scope it now has (`correct-legs.ts`).
 - Daily samples are the day's CLOSE: written freely only from 09:30 to 16:15 New York, the options'
   close (`inSampleHours`), so the last sweep by then stays and no overnight mark replaces it — on EVERY
   calendar day, weekends included, because the vol chain steps exactly one day (ADR 0011, amended

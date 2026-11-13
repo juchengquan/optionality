@@ -13,13 +13,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import {
-  closePosition, deletePosition, fetchMonitors, patchPosition, type Closed, type Entry, type Holding,
-  type Monitor,
+  closePosition, deletePosition, fetchDraftPayoff, fetchMonitors, patchPosition, type Closed, type Entry,
+  type DraftPayoff, type Holding, type Monitor, type Payoff,
 } from "../shared/api";
 import { marketDay } from "../shared/format";
 import {
-  closeBody, closeDay, editBody, editDraft, exitPrefill, fates, type CloseDraft, type EditDraft,
-  type Fate, type Watching,
+  closeBody, closeDay, correctedLegs, editBody, editDraft, exitPrefill, fates, legWords, type CloseDraft,
+  type EditDraft, type Fate, type Watching,
 } from "./holding";
 import { fieldWords, monitorName } from "./needs";
 import "./holding.css";
@@ -135,7 +135,8 @@ function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
   onCancel: () => void; onSaved: () => void;
 }) {
   const [draft, setDraft] = useState<EditDraft>(() => editDraft(holding));
-  const [error, setError] = useState<string | null>(null);
+  // said where it belongs: a quantity's refusal beside the quantities, everything else by the buttons
+  const [error, setError] = useState<{ text: string; at: "qty" | null } | null>(null);
   const [saving, setSaving] = useState(false);
   const first = useRef<HTMLInputElement>(null);
   useEffect(() => { first.current?.focus(); }, []);
@@ -145,13 +146,14 @@ function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     const out = editBody(holding, draft);
-    if ("error" in out) { setError(out.error); return; }
+    if ("error" in out) { setError({ text: out.error, at: "at" in out ? out.at : null }); return; }
     setSaving(true);
     try {
       await patchPosition(holding.id, out.body);
       onSaved();
     } catch (err) {
-      setError(message(err));
+      // a refusal of a request that corrected a quantity is about the legs (#359)
+      setError({ text: message(err), at: out.body.legs ? "qty" : null });
     } finally {
       setSaving(false);
     }
@@ -184,21 +186,112 @@ function EditForm({ id, holding, watching, privacy, now, onCancel, onSaved }: {
           </small>
         </label>
       </div>
+      <QuantityFields holding={holding} draft={draft} error={error?.at === "qty" ? error.text : null}
+                      onChange={(qty) => change({ qty })} />
       <p className="nx-meta">
-        {"The name and the legs stay as recorded — the service does not edit them. "}
+        {"The name, the contracts and their sides stay as recorded — the service does not edit them. "}
         {"A wrong name cannot be changed, and the daily samples are worth more than the name: keep it. "}
-        {"Wrong legs are a different holding: delete it and add it again — which deletes its daily samples "}
+        {"A quantity typed wrong is corrected above. "}
+        {"A wrong strike or side is a different holding: delete it and add it again — which deletes its daily samples "}
         {"for good"}
         {watching > 0
           ? `; its ${watching} Monitor${watching === 1 ? " is" : "s are"} kept, and a holding added with the same contracts takes ${watching === 1 ? "it" : "them"} back.`
           : "."}
       </p>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error && error.at === null ? <p className="nx-hold-error" role="alert">{error.text}</p> : null}
       <div className="nx-hold-row">
         <button type="submit" className="nx-hold-primary" disabled={saving}>{saving ? "saving…" : "Save"}</button>
         <button type="button" onClick={onCancel}>Cancel</button>
       </div>
     </form>
+  );
+}
+
+/** Each leg's quantity, correctable in place (#359): a 1×3 typed where a 1×2 was meant is the same
+ *  holding, and the only other remedy, a delete, takes the daily samples. What the correction
+ *  changes is previewed from the service's own payoff, and what it does to the samples and the
+ *  rules is said before it is saved. */
+function QuantityFields({ holding, draft, error, onChange }: {
+  holding: Holding; draft: EditDraft; error: string | null; onChange: (qty: string[]) => void;
+}) {
+  const legs = correctedLegs(holding, draft);
+  return (
+    <fieldset className="nx-hold-qty" aria-label="quantity of each leg">
+      <legend className="nx-meta">quantity of each leg</legend>
+      <div className="nx-hold-row">
+        {holding.legs.map((l, i) => (
+          <label key={`${l.option_type}${l.strike}`} className="nx-hold-field nx-hold-count">
+            <span>{legWords(l)}</span>
+            <input aria-label={`quantity, ${legWords(l)}`} inputMode="numeric" autoComplete="off"
+                   value={draft.qty[i] ?? ""}
+                   onChange={(e) => onChange(draft.qty.map((q, j) => (j === i ? e.target.value : q)))} />
+          </label>
+        ))}
+      </div>
+      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {legs ? (
+        <>
+          <QuantityChange holding={holding} corrected={legs} />
+          <p className="nx-meta">
+            {"Its daily samples are kept as they are: each day's Cost to close was summed with the quantities "}
+            {"it had then, and its history marks the days before the correction; their IV, vega and delta are "}
+            {"one contract's and stay true. Its value rule takes the new quantities and starts unrung; the name "}
+            {"stays as recorded. The Cost to close, P&L and greeks are valued with the new quantities from the "}
+            {"next read."}
+          </p>
+        </>
+      ) : null}
+    </fieldset>
+  );
+}
+
+const points = (p: number | null, none: string) =>
+  p === null ? none : `${p > 0 ? "+" : ""}${p.toFixed(2)} pts`;
+
+/** The payoff at expiry per contract, as recorded and as corrected, both the service's (`POST
+ *  /positions/payoff`: no Provider, nothing written): what a quantity changes is its maximums and
+ *  what each point of SPX beyond the strikes is worth. Asked for a moment after the typing stops. */
+function QuantityChange({ holding, corrected }: { holding: Holding; corrected: Holding["legs"] }) {
+  const key = JSON.stringify(corrected);
+  const [shown, setShown] = useState<{ key: string; before: Payoff; after: Payoff } | { key: string; error: string } | null>(null);
+  const { legs, entry } = holding;
+  useEffect(() => {
+    if (entry === null) return;
+    let live = true;
+    const ask = setTimeout(() => {
+      // the service's own legs, whose option_type it serves as text: CALL or PUT, as it stored them
+      const draft = (l: Holding["legs"]) =>
+        fetchDraftPayoff({ legs: l as DraftPayoff["legs"], entry, contracts: 1 });
+      Promise.all([draft(legs), draft(JSON.parse(key) as Holding["legs"])]).then(
+        ([before, after]) => { if (live) setShown({ key, before, after }); },
+        (err: unknown) => { if (live) setShown({ key, error: message(err) }); },
+      );
+    }, 200);
+    return () => { live = false; clearTimeout(ask); };
+  }, [key, legs, entry]);
+
+  const strikes = legs.map((l) => l.strike);
+  const [lo, hi] = [Math.min(...strikes), Math.max(...strikes)];
+  const body = entry === null ? <p className="nx-meta">no Entry recorded, so there is no payoff to compare</p>
+    : shown === null ? <p className="nx-meta">comparing…</p>
+      : "error" in shown ? <p className="nx-meta">{`the payoff could not be compared — ${shown.error}`}</p>
+        : (
+          <dl className="nx-payoff-kv" data-updating={shown.key !== key ? "" : undefined}>
+            {([
+              ["max profit", (p: Payoff) => points(p.max_profit, "no ceiling")],
+              ["max loss", (p: Payoff) => points(p.max_loss, "no floor")],
+              [`per point below ${lo}`, (p: Payoff) => points(p.slope_below, "")],
+              [`per point above ${hi}`, (p: Payoff) => points(p.slope_above, "")],
+            ] as const).map(([label, say]) => (
+              <div key={label}><dt>{label}</dt><dd>{`${say(shown.before)} → ${say(shown.after)}`}</dd></div>
+            ))}
+          </dl>
+        );
+  return (
+    <section role="group" aria-label="what the correction changes" className="nx-hold-change">
+      <p className="nx-meta">at expiry, per contract, as recorded → as corrected</p>
+      {body}
+    </section>
   );
 }
 

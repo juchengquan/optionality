@@ -7,12 +7,18 @@ import { describe, expect, it } from "vitest";
 import { ClosePositionIn, PositionPatch } from "backend/schemas";
 import type { Holding, Monitor } from "../shared/api";
 import {
-  closeBody, closeDay, correctionBody, editBody, editDraft, exitPrefill, fates, type Watching,
+  closeBody, closeDay, correctedLegs, correctionBody, editBody, editDraft, exitPrefill, fates, type Watching,
 } from "../next/holding";
 
 const held = {
   id: "h1", name: "1218_P7150", strike_date: "2026-12-18", contracts: 2, entry: 1.5,
   opened_at: "2026-11-03", cost_to_close: 0.85,
+  legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
+} as Holding;
+/** a 1×3 typed where a 1×2 was meant (#359) */
+const ratio = {
+  ...held, id: "h2", name: "1218_ratio",
+  legs: [{ side: "long", option_type: "PUT", strike: 7150 }, { side: "short", option_type: "PUT", strike: 7100, qty: 3 }],
 } as Holding;
 
 describe("the exit a close starts with", () => {
@@ -87,16 +93,17 @@ describe("correcting a close", () => {
 
 describe("the edit", () => {
   it("starts from the holding as recorded", () => {
-    expect(editDraft(held)).toEqual({ entry: "1.5", contracts: "2", opened: "2026-11-03" });
+    expect(editDraft(held)).toEqual({ entry: "1.5", contracts: "2", opened: "2026-11-03", qty: ["1"] });
     expect(editDraft({ ...held, entry: null, opened_at: null } as Holding))
-      .toEqual({ entry: "", contracts: "2", opened: "" });
+      .toEqual({ entry: "", contracts: "2", opened: "", qty: ["1"] });
+    expect(editDraft(ratio).qty).toEqual(["1", "3"]);
   });
 
   it("sends only what changed, in the shape PATCH takes", () => {
-    const out = editBody(held, { entry: "1.65", contracts: "2", opened: "2026-11-04" });
+    const out = editBody(held, { entry: "1.65", contracts: "2", opened: "2026-11-04", qty: ["1"] });
     expect(out).toEqual({ body: { entry: 1.65, opened_at: "2026-11-04" } });
     expect(PositionPatch.safeParse((out as { body: unknown }).body).success).toBe(true);
-    expect(editBody(held, { entry: "1.5", contracts: "3", opened: "2026-11-03" }))
+    expect(editBody(held, { entry: "1.5", contracts: "3", opened: "2026-11-03", qty: ["1"] }))
       .toEqual({ body: { contracts: 3 } });
   });
 
@@ -105,14 +112,49 @@ describe("the edit", () => {
   });
 
   it("refuses what PATCH cannot take: a cleared entry or day, a count that is not whole", () => {
-    expect(editBody(held, { entry: "", contracts: "2", opened: "2026-11-03" }))
+    expect(editBody(held, { entry: "", contracts: "2", opened: "2026-11-03", qty: ["1"] }))
       .toEqual({ error: "the entry cannot be cleared here — type what was taken in" });
-    expect(editBody(held, { entry: "1.5", contracts: "2", opened: "" }))
+    expect(editBody(held, { entry: "1.5", contracts: "2", opened: "", qty: ["1"] }))
       .toEqual({ error: "Opened cannot be cleared here — type the New York trading day it was put on" });
-    expect(editBody(held, { entry: "1.5", contracts: "1.5", opened: "2026-11-03" }))
+    expect(editBody(held, { entry: "1.5", contracts: "1.5", opened: "2026-11-03", qty: ["1"] }))
       .toEqual({ error: "contracts must be a whole number, 1 or more" });
-    expect(editBody(held, { entry: "x", contracts: "2", opened: "2026-11-03" }))
+    expect(editBody(held, { entry: "x", contracts: "2", opened: "2026-11-03", qty: ["1"] }))
       .toEqual({ error: "the entry is not a number: x" });
+  });
+});
+
+describe("correcting a leg's quantity (#359)", () => {
+  const draft = (qty: string[]) => ({ ...editDraft(ratio), qty });
+
+  it("sends every leg, each quantity where it is not 1, when one changed", () => {
+    const out = editBody(ratio, draft(["1", "2"]));
+    expect(out).toEqual({ body: { legs: [
+      { side: "long", option_type: "PUT", strike: 7150 }, { side: "short", option_type: "PUT", strike: 7100, qty: 2 },
+    ] } });
+    expect(PositionPatch.safeParse((out as { body: unknown }).body).success).toBe(true);
+    expect(editBody(ratio, draft(["1", "1"]))).toEqual({ body: { legs: [
+      { side: "long", option_type: "PUT", strike: 7150 }, { side: "short", option_type: "PUT", strike: 7100 },
+    ] } });
+  });
+
+  it("sends no legs when no quantity changed", () => {
+    expect(editBody(ratio, { ...draft(["1", "3"]), entry: "1.6" })).toEqual({ body: { entry: 1.6 } });
+  });
+
+  it("refuses a quantity the service refuses, naming the leg, beside the quantities", () => {
+    for (const q of ["0", "11", "1.5", "", "x"]) {
+      expect(editBody(ratio, draft(["1", q]))).toEqual({
+        error: "short PUT 7100: a quantity is a whole number from 1 to 10", at: "qty",
+      });
+    }
+  });
+
+  it("is the corrected legs, or null where nothing changed or a quantity cannot be read", () => {
+    expect(correctedLegs(ratio, draft(["1", "2"]))).toEqual([
+      { side: "long", option_type: "PUT", strike: 7150 }, { side: "short", option_type: "PUT", strike: 7100, qty: 2 },
+    ]);
+    expect(correctedLegs(ratio, draft(["1", "3"]))).toBeNull();
+    expect(correctedLegs(ratio, draft(["1", "11"]))).toBeNull();
   });
 });
 

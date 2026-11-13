@@ -96,6 +96,28 @@ describe("changing a holding from the inspector", () => {
     });
   }
 
+  for (const width of [900, 1440]) {
+    it(`fits a quantity's correction and its preview in the inspector at ${width}px (#359)`, async () => {
+      const s = await openDesk(width);
+      const insp = await inspect("h-ic");
+      await userEvent.click(within(insp).getByRole("button", { name: "Edit" }));
+      const qty = within(insp).getByRole("group", { name: "quantity of each leg" });
+      const boxes = within(qty).getAllByLabelText(/^quantity, /);
+      expect(boxes).toHaveLength(4);
+      // a box a digit can be read in, and a label beside it that says which leg
+      for (const box of boxes) expect(box.getBoundingClientRect().width).toBeGreaterThanOrEqual(40);
+      await userEvent.fill(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
+      const change = await within(qty).findByRole("group", { name: "what the correction changes" });
+      await waitFor(() => expect(change.textContent).toMatch(/max loss/));
+      await settle();
+      expect(overflowsSideways()).toBe(false);
+      expect(pastTheEdge(insp)).toEqual([]);
+      await userEvent.click(within(insp).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(writes(s)).toHaveLength(1));
+      expect((writes(s)[0]![1] as { legs: { qty?: number }[] }).legs.map((l) => l.qty ?? 1)).toEqual([1, 1, 2, 1]);
+    });
+  }
+
   it("draws the close's account above the table, in view and with the focus on it", async () => {
     await openDesk();
     const insp = await inspect("h-ic");

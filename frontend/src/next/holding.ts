@@ -3,8 +3,9 @@
  *  tested here; `HoldingActions.tsx` and `ClosedResult.tsx` only draw it.
  *
  *  Three routes, all of them the service's (ADR 0022), none new:
- *  - `PATCH /positions/{id}` takes Entry, contracts and Opened on a held holding — never its name or
- *    its legs ("a different structure is a different holding"), and never a null for any of them.
+ *  - `PATCH /positions/{id}` takes Entry, contracts and Opened on a held holding, and a leg's
+ *    QUANTITY (#359) — never its name or any other part of its legs ("a different structure is a
+ *    different holding"), and never a null for any of them.
  *  - `POST /positions/{id}/close` takes the Exit and the day. The Exit is SIGNED LIKE COST TO CLOSE,
  *    which is how `/positions/values` serves `cost_to_close`, so the prefill is that figure as it
  *    stands: a long's sale is negative there and stays negative here.
@@ -81,22 +82,58 @@ export interface EditDraft {
   contracts: string;
   /** Opened, a New York market day */
   opened: string;
+  /** each leg's quantity as typed, in the order the holding records its legs (#359) */
+  qty: string[];
 }
 
-export function editDraft(h: Pick<Holding, "entry" | "contracts" | "opened_at">): EditDraft {
+type Edited = Pick<Holding, "entry" | "contracts" | "opened_at" | "legs">;
+type HeldLeg = Holding["legs"][number];
+
+export function editDraft(h: Edited): EditDraft {
   return {
     entry: h.entry === null ? "" : String(h.entry),
     contracts: String(h.contracts),
     opened: h.opened_at ?? "",
+    qty: h.legs.map((l) => String(l.qty ?? 1)),
   };
+}
+
+/** The most of one Contract a leg may hold, as the service refuses (#351's `MAX_LEG_QTY`). */
+const MAX_QTY = 10;
+
+/** A leg as the inspector writes it: `short PUT 7100`. */
+export const legWords = (l: HeldLeg) => `${l.side} ${l.option_type} ${l.strike}`;
+
+/** Each leg's quantity as typed, or the first leg whose quantity cannot be one. */
+function quantities(h: Edited, d: EditDraft): number[] | { error: string; at: "qty" } {
+  const out: number[] = [];
+  for (const [i, leg] of h.legs.entries()) {
+    const q = typed(d.qty[i] ?? "");
+    if (q === null || !Number.isInteger(q) || q < 1 || q > MAX_QTY) {
+      return { error: `${legWords(leg)}: a quantity is a whole number from 1 to ${MAX_QTY}`, at: "qty" };
+    }
+    out.push(q);
+  }
+  return out;
+}
+
+/** The holding's legs with the quantities typed, in the shape PATCH takes them — each quantity only
+ *  where it is not 1, as the service stores it — or null where none changed or one cannot be read.
+ *  What the correction's preview is drawn from. */
+export function correctedLegs(h: Edited, d: EditDraft): HeldLeg[] | null {
+  const qty = quantities(h, d);
+  if (!Array.isArray(qty) || qty.every((q, i) => q === (h.legs[i]!.qty ?? 1))) return null;
+  return h.legs.map((l, i) => ({
+    side: l.side, option_type: l.option_type, strike: l.strike, ...(qty[i] === 1 ? {} : { qty: qty[i] }),
+  }));
 }
 
 /** What `PATCH /positions/{id}` is sent: only what changed. The route takes no null for any of
  *  these, so a field cleared is refused here, in words, rather than sent and refused there. */
 export function editBody(
-  h: Pick<Holding, "entry" | "contracts" | "opened_at">, d: EditDraft,
-): Out<{ entry?: number; contracts?: number; opened_at?: string }> {
-  const body: { entry?: number; contracts?: number; opened_at?: string } = {};
+  h: Edited, d: EditDraft,
+): Out<{ entry?: number; contracts?: number; opened_at?: string; legs?: HeldLeg[] }> | { error: string; at: "qty" } {
+  const body: { entry?: number; contracts?: number; opened_at?: string; legs?: HeldLeg[] } = {};
   const entry = typed(d.entry);
   if (Number.isNaN(entry)) return { error: `the entry is not a number: ${d.entry.trim()}` };
   if (entry === null && h.entry !== null) return { error: "the entry cannot be cleared here — type what was taken in" };
@@ -110,6 +147,12 @@ export function editBody(
     return { error: "Opened cannot be cleared here — type the New York trading day it was put on" };
   }
   if (d.opened !== "" && d.opened !== h.opened_at) body.opened_at = d.opened;
+  // a leg's quantity, corrected (#359): every leg is sent, so the service can see it is the same
+  // structure, and only when one differs
+  const qty = quantities(h, d);
+  if (!Array.isArray(qty)) return qty;
+  const legs = correctedLegs(h, d);
+  if (legs !== null) body.legs = legs;
   return Object.keys(body).length === 0 ? { error: "nothing changed" } : { body };
 }
 
