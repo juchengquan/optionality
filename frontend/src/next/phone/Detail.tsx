@@ -154,7 +154,8 @@ function RuleDetail({ entry, under, overlap = null }: {
         {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
         <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
         {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-        {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
+        {/* a combo drawn in the watchlist apart from its holding is a watched spread here too (#346) */}
+        {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} /> : null}
         <dl className="nxp-facts">
           <div><dt>watches</dt><dd>{fieldWords(entry.field, Boolean(entry.legs))}</dd></div>
           <div><dt>compare</dt><dd>{entry.compare === "abs" ? "its size" : "signed"}</dd></div>

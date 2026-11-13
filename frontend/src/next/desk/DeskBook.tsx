@@ -569,13 +569,17 @@ function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; o
     r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
   return (
     <>
+      {/* a combo drawn in the watchlist because it names a contract its holding does not hold is a
+          watched spread here too (#346): its note says what it shares, in place of "on something
+          held", and its payoff is drawn at its current value */}
       <p className="nx-meta">
-        {`${entry.strike_date} · ${entry.dte} DTE · ${entry.held ? "on something held" : "watch only"}`}
+        {`${entry.strike_date} · ${entry.dte} DTE`
+          + (overlap ? "" : ` · ${entry.held ? "on something held" : "watch only"}`)}
       </p>
       {overlap ? <p className="nx-meta" data-overlap="">{overlap}</p> : null}
       {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"} ${l.option_type} ${l.strike}`)} /> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-      {entry.legs && !entry.held ? <WatchedPayoff entry={entry} /> : null}
+      {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} /> : null}
       {/* every figure of its contract or combo, the reason beside each dash (#332) */}
       <RuleFigures entry={entry} className="nxd-kv" />
       {entry.error ? <p className="nxd-why">{entry.error}</p> : null}

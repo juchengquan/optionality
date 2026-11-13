@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../next/Next";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
+import { payoffAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 const SAMPLES = {
@@ -34,7 +35,9 @@ function serveOverlap(quotes: object[] = OVERLAP_QUOTES, holdings: object[] = OV
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(SAMPLES) });
     }
     const body = path === "/quotes" ? quotes : path === "/monitors" ? OVERLAP_MONITORS
-      : path === "/health" ? health : path === "/positions/values" ? holdings : [];
+      : path === "/health" ? health : path === "/positions/values" ? holdings
+        // a moved combo's inspector draws its payoff as a watched spread's (#346)
+        : payoffAnswer(path) ?? [];
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   }) as unknown as typeof fetch;
 }
