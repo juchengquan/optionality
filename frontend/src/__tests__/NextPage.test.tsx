@@ -411,6 +411,32 @@ describe("the needs-you line", () => {
   });
 });
 
+describe("a combo drawn in the Watchlist because it names a contract its holding does not hold (#346)", () => {
+  /** −P7000 +P6950 −P6900: the whole of the holding `1231_7000P` and an unheld P6900, so the
+   *  service links it with scope `all` and serves it the holding's Levels */
+  const moved = {
+    ...holdingRule, id: "r2", code: "1231_7000W", field: "mid_price",
+    legs: [{ sign: -1, option_type: "PUT", strike: 7000 }, { sign: 1, option_type: "PUT", strike: 6950 },
+           { sign: -1, option_type: "PUT", strike: 6900 }],
+    schedule: { reached: null, manage_by_due: true, position_id: "p1" },
+  };
+
+  for (const [mode, now] of [["LIVE", SESSION], ["REVIEW", SUNDAY]] as const) {
+    it(`does not say its holding's manage-by under its own name in ${mode}`, async () => {
+      document.cookie = "ui_arrangement=desk;path=/";
+      at(now);
+      serve();
+      quotes = [spread, shortLeg, moved];
+      await open();
+      // the holdings have arrived, and the combo is drawn apart from its holding
+      await screen.findByText("contains 1231_7000P's P7000 and P6950", undefined, { timeout: SLOW });
+      const line = screen.getByRole("status", { name: "needs you" });
+      expect(line.textContent).toContain("quarantined");
+      expect(line.textContent).not.toContain("1231_7000W at its manage-by");
+    });
+  }
+});
+
 describe("the book", () => {
   it("sits a short leg's delta rule under the spread that holds its contract", async () => {
     at(SESSION);

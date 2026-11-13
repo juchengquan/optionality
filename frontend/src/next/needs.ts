@@ -58,10 +58,14 @@ export function monitorName(monitor: Monitor): string {
   return `${shortDate(monitor.strike_date)} ${monitor.strike}${monitor.option_type[0]}`;
 }
 
-/** @param holdings what the page has valued, or null where it has not asked: in LIVE they are
- *  polled with the watchlist, so their Levels are already paid for; in REVIEW nothing is. */
+/** @param holdings the holdings whose Levels the line says, or null where it says none: in LIVE
+ *  they are polled with the watchlist, so their Levels are already paid for; in REVIEW nothing is.
+ *  @param placedBy the holdings the book is DRAWN with, which decide which combos are drawn apart
+ *  from their holding (#346) — in REVIEW, the ones valued once on entering it, whose Levels the
+ *  line still does not say. The same as `holdings` unless given. */
 export function needsYou(
   quotes: Entry[], monitors: Monitor[], health: Health | null, holdings: Holding[] | null,
+  placedBy: Holding[] | null = holdings,
 ): Need[] {
   const out: Need[] = [];
   if (health && !health.provider.ok) {
@@ -73,8 +77,8 @@ export function needsYou(
   // A combo the book draws in the watchlist because it only partly overlaps a holding (#346) does
   // not speak for that holding's Levels: the holding is drawn on its own, and says them itself.
   // Without the holdings nothing is compared, and the rule speaks as before.
-  const apart = new Set(holdings === null ? []
-    : quotes.filter((e) => overlapOf(e, holdings) !== null).map((e) => e.id));
+  const apart = new Set(placedBy === null ? []
+    : quotes.filter((e) => overlapOf(e, placedBy) !== null).map((e) => e.id));
   for (const e of quotes) {
     const name = entryName(e);
     if (e.error) out.push({ kind: "fault", text: `${name} — ${e.error}`, ref: e.id });
