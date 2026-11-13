@@ -3,8 +3,8 @@ import { ImageDown, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
 
 import "./next.css";
 import {
-  addReference, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes, fetchReferences,
-  patchMonitor, removeReference,
+  addReference, addSpreads, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchQuotes, fetchReferences,
+  patchMonitor, removeReference, setTotalEntry,
   type Added, type Entry, type Health, type Holding, type Monitor, type Reference,
 } from "../api";
 import { Button } from "@/components/ui/button";
@@ -115,11 +115,26 @@ export function Next() {
   // editing a Monitor in place (#292): each write then the page as the service now tells it, its
   // refusal thrown back to the form that sent it rather than toasted underneath it
   const retentionDays = book.health?.settings.expired_retention_days ?? null;
+  // and the two writes that start from a rule (#336): a total entry split across its holdings, by
+  // the route today's page uses, and a watched contract recorded as held, by `POST /spreads`
+  const ruleMonitors = book.monitors;
   const monitorActions = useMemo<MonitorActions>(() => ({
     patch: async (id, body) => { await patchMonitor(id, body as Record<string, unknown>); await reload(); },
     remove: async (id) => { await deleteMonitor(id); await reload(); },
+    totalEntry: async (id, entry) => { await setTotalEntry(id, entry); await reload(); },
+    hold: async (body) => {
+      const added = await addSpreads(body);
+      const r = added.replaced.length;
+      toast.add({
+        title: `recorded ${added.positions.map((p) => p.name).join(", ")}${r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : ""}`,
+        type: "success",
+      });
+      await reload();
+      return added;
+    },
+    book: { monitors: ruleMonitors, holdings, privacy },
     retentionDays,
-  }), [reload, retentionDays]);
+  }), [reload, retentionDays, ruleMonitors, holdings, privacy]);
   // the preview's SPX marker: the book's last batch's derived price, never a Reference's (ADR 0024)
   const priced = book.quotes.find((q) => q.spx !== null) ?? book.holdings?.find((h) => h.spx !== null);
   const spx = priced?.spx ?? null;
