@@ -166,6 +166,28 @@ const ratioHeld = {
   monitor_positions: [link("mon-ratio", "pos-ratio")],
 };
 
+/** The ratio typed as a 1×3 (#359), held, with its value rule ringing, its short leg's Δ rule and a
+ *  day's sample: what a quantity correction starts from. */
+const TYPED13 = [
+  { side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6350, qty: 3 },
+];
+const typed13 = {
+  positions: [position({ id: "pos-ratio", name: "dec-ratio", entry: 0.5, legs: TYPED13 })],
+  monitors: [
+    combo({
+      id: "mon-ratio", code: "dec-ratio", scope: "all", threshold: -1, direction: "below", compare: "signed",
+      triggered: 1, last_alarm_at: "2026-11-09 14:00:00.000000",
+      legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350, qty: 3 }],
+    }),
+    monitor({
+      id: "mon-ratio-d", option_type: "PUT", strike: 6350, scope: "leg", triggered: 1,
+      last_alarm_at: "2026-11-09 14:00:00.000000",
+    }),
+  ],
+  monitor_positions: [link("mon-ratio", "pos-ratio"), link("mon-ratio-d", "pos-ratio")],
+  position_samples: [sample({ position_id: "pos-ratio", observed_on: "2026-11-06", cost_to_close: 2.25 })],
+};
+
 /** The book with a far call priced too, which nothing holds and no combo names. */
 const WIDE = { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) };
 
@@ -1149,6 +1171,96 @@ export const HTTP: readonly HttpInput[] = [
       tables: { positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 1.25 })] },
     }),
     request: request("PATCH", "/positions/pos-1", { exit: null }),
+  },
+  {
+    // #359: a 1×3 typed where a 1×2 was meant is corrected in place, so its samples survive it. Its
+    // value rule takes the new quantity and is a new rule, unrung; the short leg's Δ rule is one
+    // contract's whatever the quantity, and keeps everything
+    name: "PATCH /positions/{id} corrects a held 1×3 to a 1×2, keeping its samples, and its rules follow",
+    world: world({ tables: typed13 }),
+    request: request("PATCH", "/positions/pos-ratio", {
+      legs: [
+        { side: "short", option_type: "PUT", strike: 6350, qty: 2 }, { side: "long", option_type: "PUT", strike: 6400 },
+      ],
+    }),
+  },
+  {
+    // a rule that valued other quantities is not re-quantified; it is given the scope it now has
+    name: "PATCH /positions/{id} corrects a held 1×2 to a 1×1, and a 1×1 rule on it becomes all of it",
+    world: world({
+      tables: {
+        ...ratioHeld,
+        monitors: [...ratioHeld.monitors, combo({
+          id: "mon-w11", code: "w11", scope: "leg", triggered: 1,
+          legs: [{ sign: 1, option_type: "PUT", strike: 6400 }, { sign: -1, option_type: "PUT", strike: 6350 }],
+        })],
+        monitor_positions: [...ratioHeld.monitor_positions, link("mon-w11", "pos-ratio")],
+      },
+    }),
+    request: request("PATCH", "/positions/pos-ratio", {
+      legs: [{ side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6350 }],
+    }),
+  },
+  {
+    name: "PATCH /positions/{id} refuses legs of another structure",
+    world: world({ tables: typed13 }),
+    request: request("PATCH", "/positions/pos-ratio", {
+      legs: [
+        { side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6300, qty: 2 },
+      ],
+    }),
+  },
+  {
+    name: "PATCH /positions/{id} refuses a leg's quantity above ten",
+    world: world({ tables: typed13 }),
+    request: request("PATCH", "/positions/pos-ratio", {
+      legs: [
+        { side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6350, qty: 11 },
+      ],
+    }),
+  },
+  {
+    // a closed holding's legs are the record it closed with, and no rule is linked to follow them
+    name: "PATCH /positions/{id} refuses to correct a closed holding's quantity",
+    world: world({
+      tables: { positions: [position({ id: "pos-ratio", name: "dec-ratio", legs: TYPED13, closed_on: "2026-11-06", exit: 0.25 })] },
+    }),
+    request: request("PATCH", "/positions/pos-ratio", {
+      legs: [
+        { side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6350, qty: 2 },
+      ],
+    }),
+  },
+  {
+    // the rows observed before the correction were summed under the 1×3, and are kept as they were
+    name: "GET /positions/{id}/samples marks the days summed before a leg's quantity was corrected",
+    world: world({
+      tables: {
+        positions: [{ ...opened, qty_corrected_at: "2026-11-08 15:00:00.000000" }],
+        position_samples: [
+          day("2026-11-06", 42, [14.5, 14, 19.25, 20]),
+          dayAt("2026-11-07", 41, 6.1, [14.75, 14, 19.5, 20.25], VEGAS, "2026-11-07 21:05:00.000000"),
+          dayAt("2026-11-08", 40, 6.25, [15, 14.25, 19, 20], VEGAS, "2026-11-08 21:05:00.000000"),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    // the vol part is re-measured under the corrected quantities from per-contract readings; the
+    // gap is read off a Cost to close summed before the correction, and is withheld
+    name: "GET /positions/{id}/vol withholds a gap read off a day summed before a correction",
+    world: world({
+      tables: {
+        positions: [{ ...opened, qty_corrected_at: "2026-11-09 14:00:00.000000" }],
+        position_samples: [
+          dayAt("2026-11-06", 42, 6.4, [14.5, 14, 19.25, 20], VEGAS, "2026-11-06 21:05:00.000000"),
+          dayAt("2026-11-07", 41, 6.1, [14.75, 14, 19.5, 20.25], VEGAS, "2026-11-07 21:05:00.000000"),
+          dayAt("2026-11-08", 40, 6.25, [15, 14.25, 19, 20], VEGAS, "2026-11-08 21:05:00.000000"),
+        ],
+      },
+    }),
+    request: request("GET", "/positions/pos-1/vol"),
   },
   {
     name: "PATCH /positions/{id} refuses an exit on a holding still held",

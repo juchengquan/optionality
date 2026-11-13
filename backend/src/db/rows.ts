@@ -23,7 +23,7 @@ export const COLUMNS = {
   positions: [
     "id", "name", "strategy", "strike_date", "contracts", "entry", "legs", "created_at",
     // appended, because ALTER TABLE adds at the end and a migrated database lists them here
-    "opened_at", "manage_notified_at", "closed_on", "exit",
+    "opened_at", "manage_notified_at", "closed_on", "exit", "qty_corrected_at",
   ],
   position_samples: [
     "position_id", "observed_on", "dte", "cost_to_close",
@@ -50,7 +50,9 @@ export const NULLABLE = {
   monitors: [
     "legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at",
   ],
-  positions: ["strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit"],
+  positions: [
+    "strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit", "qty_corrected_at",
+  ],
   position_samples: ["legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"],
   monitor_positions: [],
   reference_securities: ["label"],
@@ -106,6 +108,9 @@ export interface PositionRow {
   /** what was paid to close it, per contract, in points — Entry's counterpart. Null where the
    *  owner left it blank when closing; the holding is closed either way (ADR 0022) */
   exit: number | null;
+  /** when a held leg's quantity was last corrected, UTC, or null if never (#359): a sample observed
+   *  before it was summed under earlier quantities, and is kept as it was */
+  qty_corrected_at: string | null;
 }
 
 /** A Reference: a Security kept on the page to read the market by (ADR 0018).

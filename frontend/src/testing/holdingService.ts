@@ -108,8 +108,15 @@ export function holdingService(over: {
       if (h.closed_on === null && ("exit" in given || "closed_on" in given)) {
         return reply(422, { detail: `position '${h.name}' is not closed: close it first` });
       }
+      // a corrected quantity (#359): the service's account of the rules, as it gives it — every
+      // rule linked to the holding as the whole of a structure follows; none changes scope here
+      const corrected = "legs" in given && JSON.stringify(given.legs) !== JSON.stringify(h.legs);
       Object.assign(h, given);
-      return reply(200, out(h));
+      const followed = corrected
+        ? [...monitors.values()].filter((m) => m.legs && m.scope === "all" && m.positions.some((p) => p.id === h.id))
+          .map((m) => ({ id: m.id, code: m.code }))
+        : [];
+      return reply(200, { ...out(h), followed_monitors: followed, rescoped_monitors: [] });
     }
     if (h && method === "POST" && one![2]) {
       if (h.closed_on !== null) return reply(409, { detail: `position '${h.name}' is already closed` });

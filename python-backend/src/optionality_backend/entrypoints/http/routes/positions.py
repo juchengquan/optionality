@@ -59,6 +59,7 @@ from optionality.timefmt import display_time
 from optionality.vol import PacedSample, pace_explained
 from pydantic import BaseModel, ConfigDict, Field
 
+from ....correct_legs import Fault, before_correction, correct_quantities, corrected_legs
 from ....db.open import atomic
 from ....db.queries import (
     clear_position_links,
@@ -149,6 +150,30 @@ class ClosedOut(PositionOut):
     can say which without a second request."""
 
     disabled_monitors: list[DisabledMonitor]
+
+
+class FollowedMonitor(BaseModel):
+    model_config = _AS_ZOD
+
+    id: str
+    code: str
+
+
+class RescopedMonitor(BaseModel):
+    model_config = _AS_ZOD
+
+    id: str
+    code: str
+    scope: Literal["all", "leg"] | None
+
+
+class UpdatedOut(PositionOut):
+    """An edit, answered: the holding as it now stands, and what a corrected quantity did to the rules
+    watching it (#359) — the rules whose legs took the new quantities, each a new rule unrung, and the rules
+    whose scope moved. Both empty when no quantity changed."""
+
+    followed_monitors: list[FollowedMonitor]
+    rescoped_monitors: list[RescopedMonitor]
 
 
 class ScheduleOut(BaseModel):
@@ -243,6 +268,12 @@ class SampleOut(BaseModel):
     legs_delta: dict[str, float] | None
     #: SPX's price as the writing sweep's batch implied it (ADR 0024), or None
     spx: float | None
+    #: observed before the LATEST correction of a leg's quantity (#359), so its Cost to close may be another
+    #: structure's — kept as it was, because nothing stored can re-sum it. Its IV, vega and delta are one
+    #: contract's readings and stay true. One stamp per holding, so a correction undone (3→2→3) leaves the
+    #: days summed under the 3 marked too: it may mark a day that agrees, never leave one unmarked that does
+    #: not. Exact would need each sample's own legs stored.
+    before_correction: bool
 
 
 class SampleLevelsOut(BaseModel):
@@ -276,6 +307,8 @@ class SamplesOut(BaseModel):
     plan: list[PlanPointOut]
     #: oldest first, none after the day it closed (ADR 0022)
     samples: list[SampleOut]
+    #: when a held leg's quantity was last corrected, in DISPLAY_TZ, or None if never (#359)
+    qty_corrected_at: str | None
 
 
 class PayoffAtOut(BaseModel):
@@ -478,6 +511,7 @@ def position_routes(deps: Deps) -> APIRouter:
         row = find_position(db, id_)
         if row is None:
             raise not_found("position")
+        stored = list_position_samples(db, id_)
         samples = [
             PacedSample(
                 observed_on=s["observed_on"],
@@ -488,9 +522,21 @@ def position_routes(deps: Deps) -> APIRouter:
                 legs_iv=_parse_map(s["legs_iv"]),
                 legs_vega=_parse_map(s["legs_vega"]),
             )
-            for s in list_position_samples(db, id_)
+            for s in stored
         ]
-        return pace_explained(samples, to_position(row), deps.now()).model_dump(by_alias=True)
+        explained = pace_explained(samples, to_position(row), deps.now()).model_dump(by_alias=True)
+        # The vol part is re-measured under the legs as they now are, from per-contract readings, so a
+        # correction leaves it true (#359). The gap is not: it is read off the last sample's stored Cost to
+        # close, which a sample from before the correction summed under the old quantities.
+        last = stored[-1] if stored else None
+        if (
+            explained["gap"] is None
+            or last is None
+            or not before_correction(last["observed_at"], row["qty_corrected_at"])
+        ):
+            return explained
+        why = f"the Cost to close of {last['observed_on']} was summed before a leg's quantity was corrected"
+        return {**explained, "gap": None, "gap_reason": why, "rest": None, "cover": None, "cover_reason": why}
 
     @router.get(
         "/{id}/samples",
@@ -541,10 +587,12 @@ def position_routes(deps: Deps) -> APIRouter:
                     "legs_vega": _leg_map(s["legs_vega"]),
                     "legs_delta": _leg_map(s["legs_delta"]),
                     "spx": s["spx"],
+                    "before_correction": before_correction(s["observed_at"], row["qty_corrected_at"]),
                 }
                 for s in list_position_samples(db, id_)
                 for timing in [sample_timing(s["observed_at"])]
             ],
+            "qty_corrected_at": display_stored(row["qty_corrected_at"], tz),
         }
 
     @router.get("/{id}/payoff", summary="A holding's payoff at expiry", response_model=PayoffOut)
@@ -596,6 +644,7 @@ def position_routes(deps: Deps) -> APIRouter:
             # recorded as held; closing it later is a state of this row, not its removal (ADR 0022)
             "closed_on": None,
             "exit": None,
+            "qty_corrected_at": None,
         }
         # strict gate, as for monitors: nothing enters the table unverified
         codes = _js_sorted(set(position_leg_codes(to_position(row))))
@@ -611,7 +660,7 @@ def position_routes(deps: Deps) -> APIRouter:
 
         return out(await atomic(db, save))
 
-    @router.patch("/{id}", summary="Update a position", response_model=PositionOut)
+    @router.patch("/{id}", summary="Update a position", response_model=UpdatedOut)
     async def update(
         id_: Annotated[str, Path(alias="id")],
         given: Annotated[PositionPatch, Depends(valid("json", PositionPatch))],
@@ -627,6 +676,15 @@ def position_routes(deps: Deps) -> APIRouter:
         # they would half-close it, so they are refused.
         if row["closed_on"] is None and ("exit" in given.model_fields_set or given.closed_on is not None):
             raise http_error(422, f"position '{row['name']}' is not closed: close it first")
+        # A quantity typed wrong is corrected on a holding still HELD; a closed one's legs are the record it
+        # closed with, and its rules are no longer linked to follow it (#359)
+        if row["closed_on"] is not None and given.legs is not None:
+            raise http_error(
+                422, f"position '{row['name']}' is closed: a leg's quantity is corrected only while it is held"
+            )
+        correction = None if given.legs is None else corrected_legs(row["name"], to_position(row).legs, given.legs)
+        if isinstance(correction, Fault):
+            raise http_error(422, correction.fault)
         if row["closed_on"] is not None:
             # the close's own bounds, against whatever this request leaves Opened at
             fault = _closed_on_fault(
@@ -650,7 +708,22 @@ def position_routes(deps: Deps) -> APIRouter:
             changes["exit"] = given.exit
         if given.closed_on is not None:
             changes["closed_on"] = given.closed_on
-        return out(update_position_fields(db, id_, changes))
+        at = deps.now()
+
+        def save() -> dict[str, Any]:
+            # one transaction: the legs, the rules that follow them, and the rest of the patch
+            done = (
+                correct_quantities(db, row, correction.legs, at)
+                if correction is not None and correction.changed
+                else None
+            )
+            return {
+                **out(update_position_fields(db, id_, changes)),
+                "followed_monitors": done.followed if done else [],
+                "rescoped_monitors": done.rescoped if done else [],
+            }
+
+        return await atomic(db, save)
 
     @router.post("/{id}/close", summary="Close a position, keeping it and its history", response_model=ClosedOut)
     async def close(

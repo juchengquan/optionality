@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import type { Sample, Samples } from "../shared/api";
 import {
-  nearestDay, nowLines, sampleWords, stepDay, tipLines, tipPlace, valueAxis, type Unit,
+  correctionDte, costRuns, nearestDay, nowLines, sampleWords, stepDay, tipLines, tipPlace, valueAxis,
+  type Unit,
 } from "../next/burndown";
 
 const money: Unit = { size: 100, contracts: 2, money: true, hidden: false };
@@ -16,6 +17,7 @@ const hidden: Unit = { ...money, hidden: true };
 const day = (over: Partial<Sample> = {}): Sample => ({
   observed_on: "2026-11-03", dte: 45, cost_to_close: 2.3, on_pace: 2.02, timing: "close",
   observed_at: "2026-11-04 05:00:00+08:00", legs_iv: null, legs_vega: null, legs_delta: null, spx: null,
+  before_correction: false,
   ...over,
 } as Sample);
 
@@ -202,5 +204,46 @@ describe("what today's valuation says", () => {
     expect(nowLines(now, money)).toEqual({ day: "valued now · 38 DTE", cost: "to close, 2 contracts: $880" });
     expect(nowLines(now, points).cost).toBe("to close, per contract: 4.40 pts");
     expect(nowLines(now, hidden)).toEqual({ day: "valued now · 38 DTE", cost: "to close: $•••" });
+  });
+});
+
+describe("a day summed before a leg's quantity was corrected (#359)", () => {
+  const before = day({ before_correction: true });
+
+  it("says so in the tooltip, and measures no gap from it: its Cost to close is another structure's", () => {
+    const lines = tipLines(before, money);
+    expect(lines.corrected).toBe("summed before a leg's quantity was corrected");
+    expect(lines.gap).toBeNull();
+    expect(tipLines(day(), money).corrected).toBeNull();
+  });
+
+  it("says so in the status line", () => {
+    expect(sampleWords(before, money))
+      .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404"
+        + " — in hours (observed 16:00 New York) — summed before a leg's quantity was corrected");
+  });
+
+  it("is the New York market day of the correction, as a DTE on the days' own reckoning", () => {
+    const days = [day({ observed_on: "2026-11-03", dte: 45 }), day({ observed_on: "2026-11-04", dte: 44 })];
+    // 13:26 in Singapore on the 5th is 00:26 on the 5th in New York
+    expect(correctionDte({ samples: days, qty_corrected_at: "2026-11-05 13:26:06+08:00" })).toBe(43);
+    // 09:00 in Singapore on the 5th is still the 4th in New York
+    expect(correctionDte({ samples: days, qty_corrected_at: "2026-11-05 09:00:00+08:00" })).toBe(44);
+    expect(correctionDte({ samples: days, qty_corrected_at: null })).toBeNull();
+    expect(correctionDte({ samples: [], qty_corrected_at: "2026-11-05 13:26:06+08:00" })).toBeNull();
+  });
+
+  it("splits the line where the structure changed: the days before, joined to the first after, apart", () => {
+    const days = [44, 43, 42, 41].map((dte, i) => ({ dte, before_correction: i < 2 }));
+    expect(costRuns(days)).toEqual([
+      { before: true, run: [days[0], days[1], days[2]] },
+      { before: false, run: [days[2], days[3]] },
+    ]);
+    // a missed day still breaks it
+    const gap = [{ dte: 44, before_correction: true }, { dte: 41, before_correction: false }];
+    expect(costRuns(gap)).toEqual([
+      { before: true, run: [gap[0]] }, { before: false, run: [gap[1]] },
+    ]);
+    expect(costRuns([{ dte: 2, before_correction: false }])).toEqual([{ before: false, run: [{ dte: 2, before_correction: false }] }]);
   });
 });

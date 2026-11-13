@@ -99,6 +99,25 @@ class SweeperDeps:
     now: Callable[[], datetime] | None = None
 
 
+#: What makes a rule the rule it is: the contract or legs it values, the figure, and the line.
+_DEFINITION = (
+    "code",
+    "strike_date",
+    "option_type",
+    "strike",
+    "legs",
+    "field",
+    "threshold",
+    "direction",
+    "compare",
+)
+
+
+def _redefined(before: MonitorRow, now: MonitorRow) -> bool:
+    """Whether a rule changed what it watches between the read a batch was valued for and now."""
+    return any(before[k] != now[k] for k in _DEFINITION)  # type: ignore[literal-required]
+
+
 def _utc_date(when: datetime) -> str:
     """The date a sweep reckons expiry against: the UTC day, as the Python's `utcnow().date()` gave.
 
@@ -447,6 +466,12 @@ class MonitorSweeper:
                     # and muted are the same answer here: this reading is about a rule that is no longer
                     # being watched.
                     if not current["enabled"]:
+                        continue
+                    # ...and whether it is still the rule this batch was valued for. A held leg's quantity
+                    # corrected (#359) rewrites its value rule's legs, and a PATCH may change its field or
+                    # threshold (#292); the figure above answers the OLD definition, and writing or alarming
+                    # it onto the new one says a 1×2 crossed on a 1×3's value. The next sweep reads it anew.
+                    if _redefined(row, current):
                         continue
 
                     changes: dict[str, object] = {"last_value": value, "last_checked_at": stamp}

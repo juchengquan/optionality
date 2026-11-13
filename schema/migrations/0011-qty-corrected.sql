@@ -1,0 +1,13 @@
+-- When a held leg's quantity was last CORRECTED (#359), as a UTC instant like `created_at`.
+--
+-- A holding's legs are never edited — a different structure is a different holding — with one
+-- exception: a quantity typed wrong (a 1×3 meant as a 1×2) is corrected in place, because the
+-- alternative, DELETE, takes the daily samples with it and they cannot be re-entered. The samples
+-- are KEPT, and each one's per-contract readings (IV, vega, delta) stay true, but its Cost to close
+-- was summed under the quantities as they then stood. Nothing a sample stores can re-sum it — there
+-- is no per-leg price — so the samples are left as they were and this says from when they agree
+-- with the legs: a sample observed before this instant was summed under earlier quantities.
+--
+-- Nullable with no default, so ADD COLUMN suffices and every holding already in the table reads as
+-- never corrected, which is the truth.
+ALTER TABLE positions ADD COLUMN qty_corrected_at DATETIME;

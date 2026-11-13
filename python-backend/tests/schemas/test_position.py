@@ -77,9 +77,14 @@ class TestPatching:
         given = parse(PositionPatch, {"entry": 3.0, "opened_at": "20261012"})
         assert given.model_dump(exclude_unset=True) == {"entry": 3.0, "opened_at": "2026-10-12"}
 
-    def test_never_carries_legs(self):
-        # a different structure is a different holding: the key is dropped
-        assert parse(PositionPatch, {"legs": [LEG]}).model_fields_set == set()
+    def test_carries_legs_whose_quantities_the_route_corrects(self):
+        # #359: a held leg's quantity is corrected in place; whether they are a correction is the route's
+        assert parse(PositionPatch, {"legs": [LEG]}).model_fields_set == {"legs"}
+
+    def test_refuses_a_leg_quantity_above_ten(self):
+        assert detail(PositionPatch, {"legs": [{**LEG, "qty": 11}]}) == (
+            "✖ Too big: expected number to be <=10\n  → at legs[0].qty"
+        )
 
     def test_refuses_a_null_where_the_typescript_only_lets_a_key_be_absent(self):
         assert (

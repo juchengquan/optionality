@@ -7,9 +7,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Holding, Monitor } from "../shared/api";
+import { HoldingActions } from "../next/HoldingActions";
 import { Next } from "../next/Next";
 import { holdingService, type HoldingService } from "../testing/holdingService";
-import { HOLDINGS, MONITORS } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 const COOKIES = ["ui_arrangement", "ui_privacy", "ui_cols_combo"];
 afterEach(() => {
@@ -53,6 +54,14 @@ const LONG_PUT = {
   ...HOLDINGS[0]!, id: "h-long", name: "1218_LP6800", entry: -5, cost_to_close: -7.25,
   legs: [{ side: "long", option_type: "PUT", strike: 6800 }],
 } as Holding;
+/** The rules as `/monitors` serves them, the condor's own value rule carrying its legs and its scope:
+ *  the whole of the holding it values. */
+const withValueRule = () => MONITORS.map((m) => {
+  const q = QUOTES.find((e) => e.id === m.id);
+  const linked = q && q.positions.length > 0 ? { ...m, positions: q.positions } : m;
+  return m.id === "r-ic" ? { ...linked, legs: q!.legs, scope: "all" } : linked;
+}) as Monitor[];
+
 const book = () => [
   ...HOLDINGS.map((h) => h.id === "h-ic" ? { ...h, cost_to_close: 1.225, fetched_at: "2026-11-12 23:14:05+08:00" } : h),
   LONG_PUT,
@@ -89,9 +98,90 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(form.textContent).toMatch(/the service does not edit them/);
       // a wrong name is not worth the samples; delete-and-add-again is for wrong LEGS, and says the cost
       expect(form.textContent).toMatch(/A wrong name cannot be changed, and the daily samples are worth more than the name/);
-      expect(form.textContent).toMatch(/Wrong legs are a different holding: delete it and add it again — which deletes its daily samples for good/);
+      expect(form.textContent).toMatch(/A wrong strike or side is a different holding: delete it and add it again — which deletes its daily samples for good/);
       expect(form.textContent).toMatch(/its 1 Monitor is kept/);
       expect(form.textContent).not.toMatch(/Recorded wrongly\? Delete it/);
+    });
+
+    it("corrects a leg's quantity, previewing what changes and saying what becomes of the samples (#359)", async () => {
+      const s = holdingService({ holdings: book(), monitors: withValueRule() });
+      await open(arrangement, s);
+      const d = await detail(arrangement, "h-ic");
+      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      const form = within(d).getByRole("form", { name: "edit 1231_IC" });
+      const qty = within(form).getByRole("group", { name: "quantity of each leg" });
+      const putQty = within(qty).getByLabelText("quantity, short PUT 6300") as HTMLInputElement;
+      expect(putQty.value).toBe("1");
+      // nothing to preview until a quantity differs
+      expect(within(qty).queryByRole("group", { name: "what the correction changes" })).toBeNull();
+      typeIn(putQty, "2");
+      const change = await within(qty).findByRole("group", { name: "what the correction changes" });
+      // the service's payoff, per contract, before and after: nothing is worked out here
+      await waitFor(() => expect(s.sent.filter((w) => w.path === "/positions/payoff")).toHaveLength(2));
+      const asked = s.sent.filter((w) => w.path === "/positions/payoff").map((w) => w.body as { legs: { qty?: number }[] });
+      expect(asked.map((b) => b.legs.map((l) => l.qty ?? 1))).toEqual([[1, 1, 1, 1], [1, 1, 2, 1]]);
+      await waitFor(() => expect(change.textContent).toMatch(/max loss/));
+      expect(qty.textContent).toMatch(/daily samples are kept as they are/);
+      // worded from the rules the page has: 1231_IC values the whole condor, so it follows
+      expect(qty.textContent).toMatch(/1231_IC values the whole structure, so it takes the new quantities and starts unrung/);
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(writes(s)).toEqual(["PATCH /positions/h-ic"]));
+      // ...and said after it from what the service answered, with the rule's editor to rename it
+      await waitFor(() => expect(within(d).getByRole("status").textContent)
+        .toBe("saved 1231_IC · 1231_IC took the new quantities and starts unrung"));
+      const renames = within(d).getByRole("group", { name: "rename the rules that followed" });
+      expect(renames.textContent).toMatch(/Its alarms still call it 1231_IC/);
+      expect(within(renames).getByRole("button", { name: /^edit / })).toBeTruthy();
+      expect(s.writes()[0]!.body).toEqual({ legs: [
+        { side: "short", option_type: "CALL", strike: 7400 }, { side: "long", option_type: "CALL", strike: 7450 },
+        { side: "short", option_type: "PUT", strike: 6300, qty: 2 }, { side: "long", option_type: "PUT", strike: 6250 },
+      ] });
+    });
+
+    it("says no rule's legs change where no rule values the structure whole", async () => {
+      const s = holdingService({ holdings: book() });
+      await open(arrangement, s);
+      const d = await detail(arrangement, "h-ic");
+      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      const qty = within(d).getByRole("group", { name: "quantity of each leg" });
+      typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
+      expect(qty.textContent).toMatch(/No rule values this structure as a whole, so no rule's legs change/);
+      expect(qty.textContent).not.toMatch(/takes the new quantities/);
+      fireEvent.click(within(d).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(within(d).getByRole("status").textContent).toBe("saved 1231_IC"));
+      expect(within(d).queryByRole("group", { name: "rename the rules that followed" })).toBeNull();
+    });
+
+    it("says a refusal that is not about the quantities where other refusals go", async () => {
+      const s = holdingService({ holdings: book() });
+      await open(arrangement, s);
+      const d = await detail(arrangement, "h-ic");
+      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      const form = within(d).getByRole("form", { name: "edit 1231_IC" });
+      const qty = within(form).getByRole("group", { name: "quantity of each leg" });
+      s.refuse.set("PATCH /positions/h-ic", { status: 404, detail: "position not found" });
+      typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(within(form).getByRole("alert").textContent).toBe("position not found"));
+      expect(within(qty).queryByRole("alert")).toBeNull();
+    });
+
+    it("refuses a quantity beside the quantities, and shows the service's refusal there too", async () => {
+      const s = holdingService({ holdings: book() });
+      await open(arrangement, s);
+      const d = await detail(arrangement, "h-ic");
+      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      const form = within(d).getByRole("form", { name: "edit 1231_IC" });
+      const qty = within(form).getByRole("group", { name: "quantity of each leg" });
+      typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "11");
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      expect(within(qty).getByRole("alert").textContent).toBe("short PUT 6300: a quantity is a whole number from 1 to 10");
+      expect(writes(s)).toEqual([]);
+
+      s.refuse.set("PATCH /positions/h-ic", { status: 422, detail: "position '1231_IC' is closed: a leg's quantity is corrected only while it is held" });
+      typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
+      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(within(qty).getByRole("alert").textContent).toMatch(/is closed/));
     });
 
     it("prefills the Exit with the served Cost to close and the day with New York's, and posts it", async () => {
@@ -371,5 +461,28 @@ describe("on the desk's inspector", () => {
     await waitFor(() => expect(document.activeElement).toBe(within(result).getByRole("heading", { name: "Closed 1231_IC" })));
     fireEvent.click(within(result).getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("region", { name: "closed 1231_IC" })).toBeNull();
+  });
+});
+
+describe("the quantity's preview, under a poll (#359's review)", () => {
+  it("asks the payoff route once for a correction, not again each time a poll serves the holding anew", async () => {
+    const s = holdingService({ holdings: book() });
+    vi.stubGlobal("fetch", s.fetch);
+    const h = book().find((x) => x.id === "h-ic")!;
+    const writes = { edited: () => {}, closed: () => {}, deleted: () => {} };
+    const draw = (holding: Holding) =>
+      <HoldingActions holding={holding} monitors={[]} rules={[]} privacy={false} writes={writes} />;
+    const { rerender } = render(draw(h));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    typeIn(screen.getByLabelText("quantity, short PUT 6300"), "2");
+    await waitFor(() => expect(screen.getByRole("group", { name: "what the correction changes" }).textContent).toMatch(/max loss/));
+    const asked = () => s.sent.filter((w) => w.path === "/positions/payoff").length;
+    expect(asked()).toBe(2);
+    // a poll: the same holding, every leg equal, none of them the same object
+    for (let i = 0; i < 3; i++) {
+      rerender(draw({ ...h, legs: h.legs.map((l) => ({ ...l })) }));
+      await act(() => new Promise((r) => setTimeout(r, 250)));
+    }
+    expect(asked(), "a POST per poll for nothing").toBe(2);
   });
 });

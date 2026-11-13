@@ -55,7 +55,8 @@
           "opened_at": "2026-11-06",
           "manage_notified_at": null,
           "closed_on": "2026-11-07",
-          "exit": 6
+          "exit": 6,
+          "qty_corrected_at": null
         }
       ],
       "monitors": [],
@@ -291,7 +292,8 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null
+            "spx": null,
+            "before_correction": false
           },
           {
             "observed_on": "2026-11-07",
@@ -303,9 +305,11 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null
+            "spx": null,
+            "before_correction": false
           }
-        ]
+        ],
+        "qty_corrected_at": null
       }
     },
     "rows": {},

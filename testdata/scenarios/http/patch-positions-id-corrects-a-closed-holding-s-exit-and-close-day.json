@@ -55,7 +55,8 @@
           "opened_at": "2026-10-12",
           "manage_notified_at": null,
           "closed_on": "2026-11-06",
-          "exit": 1.25
+          "exit": 1.25,
+          "qty_corrected_at": null
         }
       ],
       "monitors": [],
@@ -123,7 +124,9 @@
         "opened_at": "2026-10-12",
         "closed_on": "2026-11-05",
         "exit": 1.5,
-        "realized_points": 4.9
+        "realized_points": 4.9,
+        "followed_monitors": [],
+        "rescoped_monitors": []
       }
     },
     "rows": {

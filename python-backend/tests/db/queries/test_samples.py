@@ -38,6 +38,7 @@ def db(tmp_path):
                 "manage_notified_at": None,
                 "closed_on": None,
                 "exit": None,
+                "qty_corrected_at": None,
             },
         )
     yield d

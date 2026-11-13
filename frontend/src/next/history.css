@@ -96,3 +96,9 @@
 .nx-bd-tip-h { font-weight: 600; }
 .nx-bd-tip-gap { font-weight: 600; }
 .nx-bd-tip-why { margin-top: 0.125rem; padding-top: 0.125rem; border-top: 1px solid var(--border); color: var(--muted-foreground); }
+/* a leg's quantity corrected (#359): the days summed before it, another structure's Cost to close,
+   faint and dashed; and the New York day it was corrected, a rule of its own */
+.nx-hist-costs[data-costs="before-correction"] { opacity: 0.45; stroke-dasharray: 3 3; }
+.nx-hist-point[data-before-correction] [data-mark] { opacity: 0.45; }
+.nx-hist-corrected line { stroke: var(--foreground); stroke-width: 1; stroke-dasharray: 1 3; opacity: 0.7; }
+.nx-hist-corrected text { fill: var(--foreground); }

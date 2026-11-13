@@ -237,8 +237,14 @@ export async function closePosition(
  *  (ADR 0022), answered with the holding as it now stands, so the page can say what it now made
  *  in the service's own `realized_points` rather than working it out. */
 export type Corrected = Exclude<Infer<typeof client.positions[":id"]["$patch"]>, { detail: string }>;
-export async function correctClose(
-  id: string, given: { exit?: number | null; closed_on?: string },
+export const correctClose = (id: string, given: { exit?: number | null; closed_on?: string }) =>
+  editPosition(id, given);
+
+/** Edit a held holding — Entry, contracts, Opened, and a leg's quantity (#359) — answered with the
+ *  holding as it now stands and what a corrected quantity did to its rules, which the page says
+ *  rather than guessing. */
+export async function editPosition(
+  id: string, given: InferRequestType<typeof client.positions[":id"]["$patch"]>["json"],
 ): Promise<Corrected> {
   const response = await client.positions[":id"].$patch({ param: { id }, json: given });
   const body: unknown = await response.json().catch(() => null);

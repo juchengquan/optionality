@@ -111,7 +111,8 @@
           "opened_at": "2026-10-12",
           "manage_notified_at": null,
           "closed_on": "2026-11-06",
-          "exit": 1.25
+          "exit": 1.25,
+          "qty_corrected_at": null
         }
       ],
       "monitors": [],

@@ -1133,6 +1133,45 @@ describe("a rule muted while the sweep is out", () => {
   });
 });
 
+/** A rule REDEFINED while the sweep is out (#359's review): a held 1×3 corrected to a 1×2 takes its
+ *  value rule with it, and a PATCH to /monitors may change a rule's field (#292). The batch was
+ *  valued against the row read BEFORE the fetch, so an answer to the old definition must not be
+ *  written onto, or alarmed for, the new one: the next sweep reads the rule as it now is. */
+describe("a rule redefined while the sweep is out", () => {
+  const ratio = (qty: number) => [
+    { sign: 1, option_type: "CALL", strike: 8100 }, { sign: -1, option_type: "CALL", strike: 8150, qty },
+  ];
+  /** the 8100 at 2.00 and the 8150 at 1.00: the 1×3 is worth −1, the 1×2 nothing */
+  const mids = (codes: string[]) => codes.map((c) => ({ code: c, name: c, mid_price: c.endsWith("C8100000") ? 2 : 1 }));
+
+  it("is not alarmed on the old definition's figure when its legs change", async () => {
+    const id = combo({ code: "ratio", threshold: 0.8, direction: "above", compare: "abs", legs: ratio(3) });
+    const racing: FakeProvider = (codes) => {
+      db.prepare("update monitors set legs = ? where id = ?").run(JSON.stringify(ratio(2)), id);
+      return Promise.resolve(mids(codes));
+    };
+    await sweeper(racing).sweep();
+    expect(sent, "it alarmed a 1×2 on the 1×3's value").toEqual([]);
+    expect([row(id)!.triggered, row(id)!.last_value]).toEqual([0, null]);
+
+    // the next sweep values the rule as it now is: 0, inside 0.8
+    await sweeper((codes) => Promise.resolve(mids(codes))).sweep();
+    expect(sent).toEqual([]);
+    expect(row(id)!.last_value).toBe(0);
+  });
+
+  it("is not alarmed on the old field's figure when its field changes", async () => {
+    const id = monitor({ threshold: 0.6 });
+    const racing: FakeProvider = (codes) => {
+      db.prepare("update monitors set field = 'mid_price' where id = ?").run(id);
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.9, mid_price: 0.1 })));
+    };
+    await sweeper(racing).sweep();
+    expect(sent.filter((t) => t.includes("crossed"))).toHaveLength(0);
+    expect([row(id)!.triggered, row(id)!.last_value]).toEqual([0, null]);
+  });
+});
+
 /** The knobs' range checks were asserted here too, against `settingsFor` — the HARNESS's settings
  *  rather than the service's. `env.test.ts`'s "the knobs a service must not start on" covers the
  *  same three refusals and the same zeros-that-mean-off through `settingsFromEnv`, the real door,

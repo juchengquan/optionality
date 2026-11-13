@@ -58,6 +58,7 @@ def stored_position(**over):
         "manage_notified_at": None,
         "closed_on": None,
         "exit": None,
+        "qty_corrected_at": None,
         **over,
     }
 

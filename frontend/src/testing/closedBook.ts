@@ -45,10 +45,11 @@ const OLD_SAMPLES: Samples = {
     cost_to_close: 2 - i * 0.2, on_pace: null,
     legs_iv: { "US.SPXW261120P6000000": 20 - i, "US.SPXW261120P5950000": 22 - i },
     // SPX as each day's batch implied it (ADR 0024), walking up towards the short put's 6000
-    legs_vega: null, legs_delta: null, spx: 6120 - i * 12,
+    legs_vega: null, legs_delta: null, spx: 6120 - i * 12, before_correction: false,
   })),
+  qty_corrected_at: null,
 };
-const EMPTY: Samples = { levels: null, plan: [], samples: [] };
+const EMPTY: Samples = { levels: null, plan: [], samples: [], qty_corrected_at: null };
 
 /** The book behind a service; `over` changes a closed trade as stored, by its id. */
 export function closedBookService(over: Record<string, Partial<Holding>> = {}): HoldingService {

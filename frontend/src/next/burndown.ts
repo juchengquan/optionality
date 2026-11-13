@@ -82,10 +82,15 @@ function whyShort(s: Sample): string | null {
   return null;
 }
 
+/** What a day summed before a leg's quantity was corrected is said to be (#359): its Cost to close
+ *  is the structure as it was then recorded, kept as it was because nothing stored can re-sum it. */
+export const CORRECTED_WORDS = "summed before a leg's quantity was corrected";
+
 /** A day's Pace gap, in points per contract as every Pace gap on the page is said (`pace.ts`) —
- *  which is no money, so privacy keeps it. */
+ *  which is no money, so privacy keeps it. None for a day summed before a correction: its Cost to
+ *  close is another structure's, and the service measures no gap from one either (`/vol`). */
 function gapOf(s: Sample) {
-  if (s.on_pace === null) return null;
+  if (s.on_pace === null || s.before_correction) return null;
   const gap = s.cost_to_close - s.on_pace;
   return { words: paceWords(gap), outcome: paceOutcome(gap) ?? null };
 }
@@ -99,6 +104,7 @@ export function tipLines(s: Sample, unit: Unit) {
     pace: s.on_pace === null ? null : `on pace ${say(s.on_pace, unit)}`,
     gap: gapOf(s),
     why: whyShort(s),
+    corrected: s.before_correction ? CORRECTED_WORDS : null,
   };
 }
 
@@ -120,7 +126,41 @@ export function nowWords(now: { dte: number; cost: number }, unit: Unit): string
 export function sampleWords(s: Sample, unit: Unit): string {
   const t = tipLines(s, unit);
   const gap = t.gap === null ? "" : ` · ${t.gap.words}`;
-  return `${t.day} · ${t.cost}${t.pace === null ? "" : ` · ${t.pace}`}${gap} — ${whyWords(s)}`;
+  const corrected = t.corrected === null ? "" : ` — ${t.corrected}`;
+  return `${t.day} · ${t.cost}${t.pace === null ? "" : ` · ${t.pace}`}${gap} — ${whyWords(s)}${corrected}`;
+}
+
+const NEW_YORK_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" });
+const dayNumber = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+
+/** The DTE of the New York market day a leg's quantity was corrected on (#359), on the days' own
+ *  reckoning — a day's DTE less the calendar days from it — so the marker sits where that day's
+ *  row would. Null where it never was, or with no day to reckon from. */
+export function correctionDte(served: Pick<Samples, "samples" | "qty_corrected_at">): number | null {
+  const first = served.samples[0];
+  if (served.qty_corrected_at === null || first === undefined) return null;
+  const when = new Date(served.qty_corrected_at.replace(" ", "T"));
+  if (Number.isNaN(when.getTime())) return null;
+  return first.dte - (dayNumber(NEW_YORK_DAY.format(when)) - dayNumber(first.observed_on));
+}
+
+/** The Cost-to-close line in runs: broken by a missed day, as `runsOf` breaks it, and split where
+ *  the days summed before a correction give way to the days after (#359). The step between the two
+ *  joins different structures, so it belongs to the run before, drawn as that run is. */
+export function costRuns<T extends { dte: number; before_correction: boolean }>(days: T[]) {
+  const runs: { before: boolean; run: T[] }[] = [];
+  let prev: T | undefined;
+  for (const d of days) {
+    const last = runs.at(-1);
+    const joined = prev !== undefined && prev.dte - d.dte === 1;
+    if (last && joined && last.before === d.before_correction) last.run.push(d);
+    else {
+      if (last && joined && last.before) last.run.push(d);
+      runs.push({ before: d.before_correction, run: [d] });
+    }
+    prev = d;
+  }
+  return runs;
 }
 
 /** The day whose x is nearest the pointer's: what a pointer anywhere on the chart means, since days

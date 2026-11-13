@@ -256,6 +256,7 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
       levels: { dte_at_open: 45, target: null, stop: null, target_dte: null, manage_by_dte: 21 },
       plan: [{ dte: 45, on_pace: -2 }, { dte: 0, on_pace: 0 }],
       samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: -s.cost_to_close, on_pace: null })),
+      qty_corrected_at: null,
     });
     const { insp } = await inspect("h-calls", "1218_C7300", { holdings: debit });
     const chart = await burndownOf(insp);
@@ -280,6 +281,45 @@ describe("the burndown, in the desk's inspector in REVIEW", () => {
     const iv = await ivOf(insp);
     const runs = [...iv.querySelectorAll("[data-leg]")][0]!.querySelectorAll("polyline");
     expect([...runs].map((r) => corners(r).length)).toEqual([2, 3]);
+  });
+
+  it("draws the days summed before a leg's quantity was corrected apart, and says so (#359)", async () => {
+    // corrected at 13:00 in Singapore on 6 Nov, which is midnight on the 6th in New York: the 3rd,
+    // 4th and 5th were summed under the quantities as first recorded
+    const days = SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, before_correction: s.observed_on < "2026-11-06" }));
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days, qty_corrected_at: "2026-11-06 13:00:00+08:00" });
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    expect([...chart.querySelectorAll("[data-before-correction]")].map((g) => g.getAttribute("data-sample")))
+      .toEqual(["2026-11-03", "2026-11-04", "2026-11-05"]);
+    // the line in two: the three days before, and the step to the 6th, faint; the rest as ever
+    expect([...chart.querySelectorAll("[data-costs]")].map((r) => [r.getAttribute("data-costs"), corners(r).length]))
+      .toEqual([["before-correction", 4], ["", 4]]);
+    // a rule on the day it was corrected, at the 6th's x
+    const marker = chart.querySelector("[data-corrected-on]")!;
+    expect(marker.textContent).toBe("qty corrected");
+    expect(marker.querySelector("line")!.getAttribute("x1"))
+      .toBe(dayOf(chart, "[data-sample='2026-11-06']").querySelector("circle")!.getAttribute("cx"));
+    expect(within(chart).getByRole("status").textContent).toMatch(/faint: summed before a leg's quantity was corrected$/);
+
+    pointAt(chart, dayOf(chart, "[data-sample='2026-11-04']"));
+    expect(within(chart).getByRole("status").textContent).toMatch(/— summed before a leg's quantity was corrected$/);
+    // no gap is said against the plan for another structure's Cost to close
+    expect(within(chart).getByRole("status").textContent).not.toMatch(/ahead by|behind by/);
+    expect(tipOf(chart)?.querySelector("[data-corrected]")?.textContent).toBe("summed before a leg's quantity was corrected");
+    pointAt(chart, dayOf(chart, "[data-sample='2026-11-07']"));
+    expect(within(chart).getByRole("status").textContent).not.toMatch(/quantity was corrected/);
+    expect(tipOf(chart)?.querySelector("[data-corrected]")).toBeNull();
+  });
+
+  it("marks nothing for a holding never corrected", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    expect(chart.querySelector("[data-corrected-on]")).toBeNull();
+    expect(chart.querySelector("[data-before-correction]")).toBeNull();
+    expect(within(chart).getByRole("status").textContent).not.toMatch(/corrected/);
   });
 
   it("draws the costs with no plan, and says why, for a holding with no Opened", async () => {

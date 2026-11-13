@@ -1,0 +1,165 @@
+{
+  "name": "PATCH /positions/{id} refuses a leg's quantity above ten",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-ratio",
+          "name": "dec-ratio",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 0.5,
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 3
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-ratio",
+          "code": "dec-ratio",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": -1,
+          "direction": "below",
+          "compare": "signed",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 3
+            }
+          ],
+          "scope": "all",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 1,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": "2026-11-09 14:00:00.000000",
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-ratio-d",
+          "code": "US.SPXW261218P6350000",
+          "strike_date": "2026-12-18",
+          "option_type": "PUT",
+          "strike": 6350,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": "leg",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 1,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": "2026-11-09 14:00:00.000000",
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-ratio",
+          "position_id": "pos-ratio"
+        },
+        {
+          "monitor_id": "mon-ratio-d",
+          "position_id": "pos-ratio"
+        }
+      ],
+      "position_samples": [
+        {
+          "position_id": "pos-ratio",
+          "observed_on": "2026-11-06",
+          "dte": 39,
+          "cost_to_close": 2.25,
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": null,
+          "spx": null
+        }
+      ],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "PATCH",
+    "path": "/positions/pos-ratio",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "legs": [
+        {
+          "side": "long",
+          "option_type": "PUT",
+          "strike": 6400
+        },
+        {
+          "side": "short",
+          "option_type": "PUT",
+          "strike": 6350,
+          "qty": 11
+        }
+      ]
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "✖ Too big: expected number to be <=10\n  → at legs[1].qty"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

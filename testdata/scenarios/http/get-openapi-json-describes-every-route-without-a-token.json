@@ -2554,6 +2554,9 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "before_correction": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -2566,15 +2569,23 @@
                                 "legs_iv",
                                 "legs_vega",
                                 "legs_delta",
-                                "spx"
+                                "spx",
+                                "before_correction"
                               ]
                             }
+                          },
+                          "qty_corrected_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
                           "levels",
                           "plan",
-                          "samples"
+                          "samples",
+                          "qty_corrected_at"
                         ]
                       }
                     }
@@ -2981,6 +2992,57 @@
                               "number",
                               "null"
                             ]
+                          },
+                          "followed_monitors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code"
+                              ]
+                            }
+                          },
+                          "rescoped_monitors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "scope": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "all",
+                                        "leg"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "code",
+                                "scope"
+                              ]
+                            }
                           }
                         },
                         "required": [
@@ -2995,7 +3057,9 @@
                           "opened_at",
                           "closed_on",
                           "exit",
-                          "realized_points"
+                          "realized_points",
+                          "followed_monitors",
+                          "rescoped_monitors"
                         ]
                       }
                     }
@@ -3047,6 +3111,42 @@
                     "schema": {
                       "type": "object",
                       "properties": {
+                        "legs": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "short",
+                                  "long"
+                                ]
+                              },
+                              "option_type": {
+                                "type": "string",
+                                "enum": [
+                                  "CALL",
+                                  "PUT"
+                                ]
+                              },
+                              "strike": {
+                                "type": "number"
+                              },
+                              "qty": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10
+                              }
+                            },
+                            "required": [
+                              "side",
+                              "option_type",
+                              "strike"
+                            ]
+                          }
+                        },
                         "entry": {
                           "type": "number"
                         },

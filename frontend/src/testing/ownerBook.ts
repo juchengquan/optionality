@@ -193,9 +193,10 @@ function history(h: Holding, days: Day[]): Samples {
       return {
         observed_on: on, observed_at, timing, dte, cost_to_close: cost, on_pace: pace(dte),
         legs_iv: ivs === null ? null : Object.fromEntries(codes.map((c, i) => [c, ivs[i]!])),
-        legs_vega: null, legs_delta: null, spx,
+        legs_vega: null, legs_delta: null, spx, before_correction: false,
       };
     }),
+    qty_corrected_at: null,
   };
 }
 

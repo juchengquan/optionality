@@ -67,8 +67,13 @@ export const PayoffIn = z.object({
   contracts: z.int().min(1).optional(),
 });
 
-/** Legs are never edited here — a different structure is a different holding. */
+/** Legs are never edited here — a different structure is a different holding — with one
+ *  exception: a held leg's QUANTITY, corrected in place, because the other remedy is DELETE and it
+ *  takes the samples (#359, `correct-legs.ts`). */
 export const PositionPatch = z.object({
+  /** the holding's legs as they should have been recorded: the same contracts on the same sides,
+   *  in any order, differing only in `qty`. Refused on a closed holding. */
+  legs: z.array(LegIn).min(1).optional(),
   entry: z.number().optional(),
   contracts: z.int().min(1).optional(),
   strategy: z.string().optional(),

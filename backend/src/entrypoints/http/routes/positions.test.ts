@@ -213,17 +213,17 @@ describe("a holding's daily samples, served for the burndown and the IV chart (#
     expect(data.samples).toEqual([
       {
         observed_on: "2026-10-06", observed_at: "2026-10-07 04:00:00+08:00", timing: "close", dte: 73,
-        cost_to_close: 2.9, on_pace: 3, spx: 6612.5,
+        cost_to_close: 2.9, on_pace: 3, spx: 6612.5, before_correction: false,
         legs_iv: JSON.parse(flat(14.5)), legs_vega: JSON.parse(flat(4.25)), legs_delta: JSON.parse(flat(0.2)),
       },
       {
         observed_on: "2026-10-07", observed_at: "2026-10-08 08:30:00+08:00", timing: "after-close", dte: 72,
-        cost_to_close: 2.75, on_pace: 3 * Math.sqrt(72 / 73), spx: null,
+        cost_to_close: 2.75, on_pace: 3 * Math.sqrt(72 / 73), spx: null, before_correction: false,
         legs_iv: null, legs_vega: null, legs_delta: null,
       },
       {
         observed_on: "2026-10-08", observed_at: null, timing: "unrecorded", dte: 71,
-        cost_to_close: 2.5, on_pace: 3 * Math.sqrt(71 / 73), spx: null,
+        cost_to_close: 2.5, on_pace: 3 * Math.sqrt(71 / 73), spx: null, before_correction: false,
         legs_iv: null, legs_vega: null, legs_delta: null,
       },
     ]);
@@ -846,14 +846,14 @@ describe("recording a credit after the fact", () => {
     expect((await body(resp)).detail).toBe("nothing to update");
   });
 
-  it("never edits the legs — a different structure is a different holding", async () => {
+  it("never edits the legs into another structure — a different structure is a different holding", async () => {
     start();
     const id = (await body(await post(condor()))).id;
-    const patched = await patch(id, { legs: [CONDOR_LEGS[0]], contracts: 3 });
-    expect(patched.status).toBe(200);
-    const data = await body(patched);
-    expect(data.legs).toHaveLength(4);
-    expect(data.contracts).toBe(3);
+    const refused = await patch(id, { legs: [CONDOR_LEGS[0]], contracts: 3 });
+    expect(refused.status).toBe(422);
+    expect((await body(refused)).detail).toMatch(/a different structure is a different holding$/);
+    const [listed] = await body(await h.call("/positions"));
+    expect([listed.legs.length, listed.contracts], "and nothing was written").toEqual([4, 1]);
   });
 });
 
@@ -1573,5 +1573,237 @@ describe("a quantity per leg (#351)", () => {
     // below the short strike two puts are owed against one held
     expect(payoff.slope_below).toBe(1);
     expect(payoff.at_strikes).toEqual([{ spx: 7075, pnl: 25.5 }, { spx: 7100, pnl: 0.5 }]);
+  });
+});
+
+describe("correcting a held leg's quantity (#359)", () => {
+  /** a 1×3 typed where a 1×2 was meant: one P7100 bought, the P7075 sold three times over */
+  const TYPED = [
+    { side: "long", option_type: "PUT", strike: 7100 }, { side: "short", option_type: "PUT", strike: 7075, qty: 3 },
+  ];
+  const MEANT = [
+    { side: "long", option_type: "PUT", strike: 7100 }, { side: "short", option_type: "PUT", strike: 7075, qty: 2 },
+  ];
+  const SHORT = buildSpxCode(EXPIRY, "PUT", 7075);
+
+  /** the holding recorded through the add form's route, with its value rule and its short leg's Δ */
+  const held = async (legs: unknown[] = TYPED) => {
+    const resp = await h.call("/spreads", json({ strike_date: EXPIRY, spreads: [{
+      name: "ratio", legs, held: true, entry: 0.5, opened_at: "2026-10-01",
+      monitors: [{ threshold: 1.0 }, { option_type: "PUT", strike: 7075, threshold: 0.3 }],
+    }] }));
+    expect(resp.status, JSON.stringify(await body(resp.clone()))).toBe(201);
+    return (h.db.prepare("select id from positions where name = 'ratio'").get() as { id: string }).id;
+  };
+  const rule = (code: string) => h.db.prepare(
+    "select id, legs, scope, triggered, last_alarm_at from monitors where code = ?",
+  ).get(code) as { id: string; legs: string | null; scope: string | null; triggered: number; last_alarm_at: string | null };
+  const stored = (id: string) => h.db.prepare("select legs, qty_corrected_at, entry from positions where id = ?")
+    .get(id) as { legs: string; qty_corrected_at: string | null; entry: number };
+  const ringing = (code: string) => h.db.prepare(
+    "update monitors set triggered = 1, last_alarm_at = '2026-10-01 15:00:00.000000' where code = ?",
+  ).run(code);
+  const sampleOn = (id: string, on: string, dte: number, at: string | null, cost = 1.5) => h.db.prepare(
+    `insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at)
+     values (?, ?, ?, ?, ?)`,
+  ).run(id, on, dte, cost, at);
+  const refused = async (id: string, payload: unknown) => {
+    const resp = await patch(id, payload);
+    const data = await body(resp);
+    expect(resp.status, JSON.stringify(data)).toBe(422);
+    return data.detail as string;
+  };
+
+  it("corrects a 1×3 to a 1×2, keeping every sample and stamping when", async () => {
+    start();
+    const id = await held();
+    sampleOn(id, "2026-10-01", 78, "2026-10-01 19:59:00.000000", 1.4);
+    const resp = await patch(id, { legs: MEANT });
+    const data = await body(resp);
+    expect(resp.status, JSON.stringify(data)).toBe(200);
+    expect(data.legs).toEqual(MEANT);
+    expect(JSON.parse(stored(id).legs)).toEqual(MEANT);
+    expect(stored(id).qty_corrected_at).toBe("2026-10-02 05:26:06.299000");
+    // kept as it was: summed under the 1×3, and nothing stored can re-sum it
+    expect(h.db.prepare("select observed_on, cost_to_close from position_samples where position_id = ?").all(id))
+      .toEqual([{ observed_on: "2026-10-01", cost_to_close: 1.4 }]);
+  });
+
+  it("takes the legs in any order, and keeps them in the order they were recorded", async () => {
+    start();
+    const id = await held();
+    expect((await patch(id, { legs: [...MEANT].reverse() })).status).toBe(200);
+    expect(JSON.parse(stored(id).legs)).toEqual(MEANT);
+  });
+
+  it("stores a corrected quantity of one as none", async () => {
+    start();
+    const id = await held();
+    expect((await patch(id, { legs: [TYPED[0], { ...TYPED[1], qty: 1 }] })).status).toBe(200);
+    expect(JSON.parse(stored(id).legs)).toEqual([
+      { side: "long", option_type: "PUT", strike: 7100 }, { side: "short", option_type: "PUT", strike: 7075 },
+    ]);
+  });
+
+  it("takes its value rule with it, as a new rule: same name, the new quantities, unrung", async () => {
+    start();
+    const id = await held();
+    ringing("ratio");
+    ringing(SHORT);
+    const answer = await body(await patch(id, { legs: MEANT }));
+    const value = rule("ratio");
+    // what happened, said by the service: the page words its account from this (#359's review)
+    expect([answer.followed_monitors, answer.rescoped_monitors]).toEqual([[{ id: value.id, code: "ratio" }], []]);
+    expect(JSON.parse(value.legs!)).toEqual([
+      { sign: 1, option_type: "PUT", strike: 7100 }, { sign: -1, option_type: "PUT", strike: 7075, qty: 2 },
+    ]);
+    expect([value.scope, value.triggered, value.last_alarm_at]).toEqual(["all", 0, null]);
+    // the short leg's Δ is one contract's whatever the quantity: nothing about it changed
+    const delta = rule(SHORT);
+    expect([delta.legs, delta.scope, delta.triggered, delta.last_alarm_at])
+      .toEqual([null, "leg", 1, "2026-10-01 15:00:00.000000"]);
+    expect(links(value.id)).toEqual([[id], "all"]);
+  });
+
+  it("gives a rule that watched other quantities the scope it now has", async () => {
+    // a 1×1 watch rule on the same two contracts was `leg` of the 1×3; corrected to a 1×1, the
+    // holding IS what it values. It is not re-quantified: it never valued the holding's structure
+    start();
+    const id = await held();
+    const watch = await makeMonitor({
+      name: "w11", strike_date: EXPIRY, field: "mid_price", threshold: 9,
+      legs: [{ sign: 1, option_type: "PUT", strike: 7100 }, { sign: -1, option_type: "PUT", strike: 7075 }],
+    });
+    expect(links(watch)).toEqual([[id], "leg"]);
+    ringing("w11");
+    const answer = await body(await patch(id, { legs: [TYPED[0], { ...TYPED[1], qty: 1 }] }));
+    expect(answer.rescoped_monitors).toEqual([{ id: watch, code: "w11", scope: "all" }]);
+    expect(answer.followed_monitors.map((m: { code: string }) => m.code)).toEqual(["ratio"]);
+    expect(links(watch)).toEqual([[id], "all"]);
+    expect(JSON.parse(rule("w11").legs!)).toEqual([
+      { sign: 1, option_type: "PUT", strike: 7100 }, { sign: -1, option_type: "PUT", strike: 7075 },
+    ]);
+    expect(rule("w11").triggered, "its figure means what it meant").toBe(1);
+    // and the holding's own rule, which followed, is still all of it
+    expect(links(rule("ratio").id)).toEqual([[id], "all"]);
+  });
+
+  it("takes a rule spanning two holdings with it, in the wing that was corrected", async () => {
+    start();
+    const calls = await makePosition("calls", EXPIRY, CONDOR_LEGS.slice(0, 2));
+    const puts = await makePosition("puts", EXPIRY, CONDOR_LEGS.slice(2));
+    const condorRule = await makeMonitor({
+      name: "ic", strike_date: EXPIRY, field: "mid_price", threshold: 9,
+      legs: CONDOR_LEGS.map((l) => ({ sign: l.side === "short" ? -1 : 1, option_type: l.option_type, strike: l.strike })),
+    });
+    expect(links(condorRule)).toEqual([[calls, puts].sort(), "all"]);
+    const resp = await patch(puts, { legs: [{ ...CONDOR_LEGS[2], qty: 2 }, CONDOR_LEGS[3]] });
+    expect(resp.status, JSON.stringify(await body(resp.clone()))).toBe(200);
+    expect(JSON.parse(rule("ic").legs!).map((l: { qty?: number }) => l.qty ?? 1)).toEqual([1, 1, 2, 1]);
+    expect(links(condorRule)).toEqual([[calls, puts].sort(), "all"]);
+  });
+
+  it("leaves the legs of a rule that names a contract twice, and gives it the scope it now has", async () => {
+    // a 1×3 written before #351 as three legs on one contract: no one leg can carry the quantity
+    start();
+    const id = await held();
+    const legs = [{ sign: 1, option_type: "PUT", strike: 7100 }, ...Array(3).fill({ sign: -1, option_type: "PUT", strike: 7075 })];
+    h.db.prepare(
+      `insert into monitors (id, code, strike_date, option_type, strike, field, threshold, direction,
+         compare, legs, scope, enabled, triggered, created_at)
+       values ('old', 'old13', ?, 'CMB', 0, 'mid_price', 9, 'above', 'abs', ?, 'all', 1, 1, '2026-10-01 00:00:00.000000')`,
+    ).run(EXPIRY, JSON.stringify(legs));
+    h.db.prepare("insert into monitor_positions (monitor_id, position_id) values ('old', ?)").run(id);
+    const answer = await body(await patch(id, { legs: MEANT }));
+    expect([answer.followed_monitors.map((m: { code: string }) => m.code), answer.rescoped_monitors])
+      .toEqual([["ratio"], [{ id: "old", code: "old13", scope: "leg" }]]);
+    expect(JSON.parse(rule("old13").legs!)).toEqual(legs);
+    expect([rule("old13").scope, rule("old13").triggered]).toEqual(["leg", 1]);
+  });
+
+  it("writes the legs and the rest of the patch together", async () => {
+    start();
+    const id = await held();
+    expect((await patch(id, { legs: MEANT, entry: 0.75 })).status).toBe(200);
+    expect([JSON.parse(stored(id).legs), stored(id).entry]).toEqual([MEANT, 0.75]);
+  });
+
+  it("stamps nothing and resets nothing when no quantity changed", async () => {
+    start();
+    const id = await held();
+    ringing("ratio");
+    const answer = await body(await patch(id, { legs: TYPED }));
+    expect([answer.followed_monitors, answer.rescoped_monitors]).toEqual([[], []]);
+    expect(stored(id).qty_corrected_at).toBeNull();
+    expect(rule("ratio").triggered).toBe(1);
+  });
+
+  it("refuses anything but a quantity: a different structure is a different holding", async () => {
+    start();
+    const id = await held();
+    const [long, short] = TYPED as unknown as [Record<string, unknown>, Record<string, unknown>];
+    const tail = ": only a leg's quantity can be corrected — a different structure is a different holding";
+    expect(await refused(id, { legs: [long] })).toBe(`'ratio' has 2 legs, not 1${tail}`);
+    expect(await refused(id, { legs: [long, { ...short, strike: 7050 }] })).toBe(`'ratio' has no PUT 7050 leg${tail}`);
+    expect(await refused(id, { legs: [long, { ...short, option_type: "CALL" }] })).toBe(`'ratio' has no CALL 7075 leg${tail}`);
+    expect(await refused(id, { legs: [long, { ...short, side: "long" }] })).toBe(`'ratio' is short PUT 7075, not long${tail}`);
+    expect(await refused(id, { legs: [long, long] })).toBe(`'ratio' is given PUT 7100 twice${tail}`);
+    expect(JSON.parse(stored(id).legs), "and nothing was written").toEqual(TYPED);
+    expect(stored(id).qty_corrected_at).toBeNull();
+  });
+
+  it("refuses a quantity of none, of more than ten, or of a part", async () => {
+    start();
+    const id = await held();
+    for (const qty of [0, 11, 1.5]) {
+      expect(await refused(id, { legs: [TYPED[0], { ...TYPED[1], qty }] })).toMatch(/legs\[1\]\.qty/);
+    }
+    expect(JSON.parse(stored(id).legs)).toEqual(TYPED);
+  });
+
+  it("refuses a closed holding: its quantities are part of the record it closed with", async () => {
+    start();
+    const id = await held();
+    expect((await h.call(`/positions/${id}/close`, json({ exit: 0.2 }))).status).toBe(200);
+    expect(await refused(id, { legs: MEANT }))
+      .toBe("position 'ratio' is closed: a leg's quantity is corrected only while it is held");
+    expect(JSON.parse(stored(id).legs)).toEqual(TYPED);
+  });
+
+  it("marks the samples observed before the correction, and says when it was", async () => {
+    start();
+    const id = await held();
+    sampleOn(id, "2026-09-30", 79, null);
+    sampleOn(id, "2026-10-01", 78, "2026-10-01 19:59:00.000000");
+    expect((await patch(id, { legs: MEANT })).status).toBe(200);
+    // the day's row, written by a sweep after the correction, is summed under the 1×2
+    sampleOn(id, "2026-10-02", 77, "2026-10-02 05:30:00.000000");
+    const data = await body(await h.call(`/positions/${id}/samples`));
+    expect(data.qty_corrected_at).toBe("2026-10-02 13:26:06+08:00");
+    expect(data.samples.map((s: { observed_on: string; before_correction: boolean }) =>
+      [s.observed_on, s.before_correction])).toEqual([
+      ["2026-09-30", true], ["2026-10-01", true], ["2026-10-02", false],
+    ]);
+  });
+
+  it("marks no sample of a holding never corrected", async () => {
+    start();
+    const id = await held();
+    sampleOn(id, "2026-10-01", 78, null);
+    const data = await body(await h.call(`/positions/${id}/samples`));
+    expect(data.qty_corrected_at).toBeNull();
+    expect(data.samples[0].before_correction).toBe(false);
+  });
+
+  it("measures no gap from a Cost to close summed before the correction", async () => {
+    start();
+    const id = await held();
+    sampleOn(id, "2026-10-01", 78, "2026-10-01 19:59:00.000000");
+    const before = await body(await h.call(`/positions/${id}/vol`));
+    expect(before.gap).not.toBeNull();
+    expect((await patch(id, { legs: MEANT })).status).toBe(200);
+    const after = await body(await h.call(`/positions/${id}/vol`));
+    const why = "the Cost to close of 2026-10-01 was summed before a leg's quantity was corrected";
+    expect([after.gap, after.gap_reason, after.rest, after.cover, after.cover_reason]).toEqual([null, why, null, null, why]);
   });
 });
