@@ -32,6 +32,7 @@ import { httpError, notFound, providerFailed } from "../errors.ts";
 import { paceExplained, type PacedSample } from "optionality/domain/vol";
 import { toMonitor, toPosition } from "../../../hydrate.ts";
 import { adoptOrphanMonitors } from "../../../monitors.ts";
+import { beforeCorrection, correctQuantities, correctedLegs } from "../../../correct-legs.ts";
 import { verifyContracts } from "optionality/quotes";
 import type { DisabledReason } from "../../../schemas/monitor.ts";
 import {
@@ -190,6 +191,10 @@ const SampleOut = z.object({
   legs_delta: LegMap,
   /** SPX's price as the writing sweep's batch implied it (ADR 0024), or null */
   spx: z.number().nullable(),
+  /** summed under quantities since corrected (#359): its Cost to close is the old structure's, kept
+   *  as it was because nothing stored can re-sum it. Its IV, vega and delta are one contract's
+   *  readings and stay true. */
+  before_correction: z.boolean(),
 });
 
 /** A holding's recorded history, for the burndown and the IV chart (#295): every Daily sample to
@@ -209,6 +214,8 @@ const SamplesOut = z.object({
   plan: z.array(z.object({ dte: z.number(), on_pace: z.number() })),
   /** oldest first, none after the day it closed (ADR 0022) */
   samples: z.array(SampleOut),
+  /** when a held leg's quantity was last corrected, in DISPLAY_TZ, or null if never (#359) */
+  qty_corrected_at: z.string().nullable(),
 });
 
 const list = documented("List positions", { 200: z.array(PositionOut) });
@@ -367,7 +374,8 @@ export function positionRoutes(deps: Deps) {
       const id = c.req.param("id");
       const row = findPosition(db, id);
       if (!row) throw notFound("position");
-      const samples: PacedSample[] = listPositionSamples(db, id).map((s) => ({
+      const stored = listPositionSamples(db, id);
+      const samples: PacedSample[] = stored.map((s) => ({
         observed_on: s.observed_on,
         dte: s.dte,
         cost_to_close: s.cost_to_close,
@@ -376,7 +384,18 @@ export function positionRoutes(deps: Deps) {
         legs_iv: parseMap(s.legs_iv),
         legs_vega: parseMap(s.legs_vega),
       }));
-      return vol.reply(c, 200, paceExplained(samples, toPosition(row), deps.now()));
+      const explained = paceExplained(samples, toPosition(row), deps.now());
+      // The vol part is re-measured under the legs as they now are, from per-contract readings, so
+      // a correction leaves it true (#359). The gap is not: it is read off the last sample's stored
+      // Cost to close, which a sample from before the correction summed under the old quantities.
+      const last = stored.at(-1);
+      if (explained.gap === null || !last || !beforeCorrection(last.observed_at, row.qty_corrected_at)) {
+        return vol.reply(c, 200, explained);
+      }
+      const why = `the Cost to close of ${last.observed_on} was summed before a leg's quantity was corrected`;
+      return vol.reply(c, 200, {
+        ...explained, gap: null, gap_reason: why, rest: null, cover: null, cover_reason: why,
+      });
     })
 
     /** A holding's daily samples, open or closed (#295): what REVIEW's burndown and IV chart draw.
@@ -421,8 +440,10 @@ export function positionRoutes(deps: Deps) {
             legs_vega: legMap(s.legs_vega),
             legs_delta: legMap(s.legs_delta),
             spx: s.spx,
+            before_correction: beforeCorrection(s.observed_at, row.qty_corrected_at),
           };
         }),
+        qty_corrected_at: displayStored(row.qty_corrected_at, tz),
       });
     })
 
@@ -489,7 +510,7 @@ export function positionRoutes(deps: Deps) {
     })
 
     /** Record what was taken in, after the fact. */
-    .patch("/:id", update, valid("json", PositionPatch), (c) => {
+    .patch("/:id", update, valid("json", PositionPatch), async (c) => {
       const given = c.req.valid("json");
       if (Object.keys(given).length === 0) throw httpError(422, "nothing to update");
       const id = c.req.param("id");
@@ -501,6 +522,14 @@ export function positionRoutes(deps: Deps) {
       if (row.closed_on === null && (given.exit !== undefined || given.closed_on !== undefined)) {
         throw httpError(422, `position '${row.name}' is not closed: close it first`);
       }
+      // A quantity typed wrong is corrected on a holding still HELD; a closed one's legs are the
+      // record it closed with, and its rules are no longer linked to follow it (#359)
+      if (row.closed_on !== null && given.legs !== undefined) {
+        throw httpError(422, `position '${row.name}' is closed: a leg's quantity is corrected only while it is held`);
+      }
+      const correction = given.legs === undefined ? null
+        : correctedLegs(row.name, toPosition(row).legs, given.legs);
+      if (correction !== null && "fault" in correction) throw httpError(422, correction.fault);
       if (row.closed_on !== null) {
         // the close's own bounds, against whatever this request leaves Opened at
         const fault = closedOnFault(
@@ -516,7 +545,13 @@ export function positionRoutes(deps: Deps) {
       if (given.opened_at !== undefined) changes.opened_at = given.opened_at;
       if (given.exit !== undefined) changes.exit = given.exit;
       if (given.closed_on !== undefined) changes.closed_on = given.closed_on;
-      return update.reply(c, 200, out(updatePositionFields(db, id, changes)));
+      const at = deps.now();
+      // one transaction: the legs, the rules that follow them, and the rest of the patch
+      const saved = await atomic(db, () => {
+        if (correction?.changed) correctQuantities(db, row, correction.legs, at);
+        return updatePositionFields(db, id, changes);
+      });
+      return update.reply(c, 200, out(saved));
     })
 
     /** Close a holding: it is no longer held, and it is KEPT (ADR 0022).
