@@ -628,7 +628,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
   it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
-  combo); greeks are signed sums of the value; IV is never summed.
+  combo); greeks are signed sums of the value; IV is never summed. A leg may carry a QUANTITY (`qty`, a whole
+  number 1–10, absent is 1, stored only where it is not 1; #351): it multiplies that leg's signed figure in
+  every sum — a combo's value and greeks, Cost to close, `costToCloseOf`, the payoff, the vol split — and a
+  Contract is one leg with a quantity, never repeated, so "held twice" stays a fact about two holdings.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command
   (`/quotes`, `/greeks`, `/vol`), never a fifth column. `<pre>` + `parse_mode: HTML` only for table replies.
 - Timestamps: storage is UTC; display converts via `DISPLAY_TZ`. moomoo `update_time` arrives naive US-Eastern

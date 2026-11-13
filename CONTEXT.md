@@ -32,6 +32,16 @@ Position, never to a Monitor — the same Contract can be a Leg of yours and the
 else's Monitor, and those are different facts about it.
 _Avoid_: option, contract (when the thing you mean is held rather than merely tradeable)
 
+**Quantity**:
+How many of a Leg's Contract one unit of the Position holds: the 2 of a 1×2 ratio, the middle of a
+butterfly. A whole number from 1 to 10, and 1 unless said — every Leg recorded before it existed is
+one. A Contract is ONE Leg with a Quantity, never the same Contract twice, so "a Contract held twice"
+still means two Positions, as on a roll day. It multiplies the Leg's signed figures — Cost to close,
+the greeks, the payoff — and nothing per contract: a Leg's IV, vega and delta are the Contract's.
+Not the count of the Position, which is how many of the whole structure you hold.
+_Avoid_: ratio (the structure's shape, not one Leg's figure), size, contracts (that is the Position's
+count)
+
 **Side**:
 Whether you are long or short a Leg: long if you bought it, short if you sold it. A fact about
 the Position, not a choice about how to add its legs up. It is never SHOWN as a +/- sign: where a
