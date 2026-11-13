@@ -561,8 +561,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
   By New York's session (09:30–16:15, weekdays; `frontend/src/next/session.ts`), never by the mode
   on screen (#371): in session it polls `/positions/values` and `/references` with it — three calls
-  per poll per open tab, where the old page made two; outside the session it reads those two once —
-  on opening, at each change of session, and on the refresh button — and polls neither.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
+  per poll per open tab, where the old page made two; outside the session it reads those two once
+  each time it is asked — on opening, at each edge of the session (one slept through included), on
+  the refresh button, on opening Settings, and after every write the page makes — and polls neither.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
   moomoo rejects a whole batch for one bad code and the containment loop drops only a code it
   NAMES, so a class refusal (`US..SPX`, which is the first thing a reasonable person types) would
   blank every row the owner acts on. It is also the one route that cannot fail: a Provider that is
