@@ -1,12 +1,12 @@
 /** Saving the page as an image, for pasting into a chat.
  *
  *  The rasterizing itself is html-to-image's `toPng`, which wraps the node in an SVG
- *  foreignObject so the REAL engine paints it. That choice is not a preference: every colour in
- *  app.css is `oklch`, the top line uses `color-mix(in oklch, ...)` and every highlighted cell is
- *  a `linear-gradient` stopped at the row's fill. html2canvas re-implements CSS painting and can
- *  paint none of it — the cells where the urgency lives would come back blank, in an image
- *  already sent to someone. `__browser__/Rasterize.test.tsx` holds the proof, and fails against a
- *  blank image of exactly the right size.
+ *  foreignObject so the REAL engine paints it. That choice is not a preference: every colour is
+ *  `oklch`, the page mixes them with `color-mix(in oklch, ...)` and a fill bar is a gradient.
+ *  html2canvas re-implements CSS painting and can paint none of it — the cells where the urgency
+ *  lives would come back blank, in an image already sent to someone. The proof is
+ *  `__browser__/NextSnapshot.test.tsx`'s "paints the fills and the attention chips, in their own
+ *  colours", in both schemes.
  */
 
 /** `optionality-20261021-1330.png` — dated, and sortable in a folder of them.
@@ -38,8 +38,9 @@ export const SIDE_LIMIT = 8_192;
  *  The size is the stage's SCROLL size, not its offset size. `offsetWidth` is the box, and anything
  *  overflowing it is simply absent from the image: measured in a real browser with the stage one
  *  pixel narrower than its widest table, 161px of a 13-column combo table fell outside the picture
- *  in Chromium and 204px in WebKit. `.snapshot .table-scroll` no longer clips (app.css), so the
- *  scroll size is now the true extent of the figures rather than the extent of the window onto them.
+ *  in Chromium and 204px in WebKit (the old page's tables, #301). Nothing in the picture's tree
+ *  clips (`next/snapshot/still.css`), so the scroll size is the true extent of the figures rather
+ *  than the extent of a window onto them.
  *
  *  The resolution is a CEILING of 2 that comes down as far as the limits demand. A flat 2 is what
  *  took the bottom off: squeezed columns wrap, a wrapped page gets tall — 1535px to 4224px in the

@@ -25,6 +25,7 @@
 	# sends a bookmark on to `/opt/` from inside the page, which can name the prefix where Caddy
 	# cannot. It is tried as a FILE, so `/next` is served without the trailing-slash redirect
 	# file_server would otherwise issue — the redirect the paragraph above says cannot work.
+	# Remove that entry and this comment after 2026-12-31, with next/index.html (it says what else).
 	try_files {path} {path}/index.html /index.html
 	file_server
 

@@ -198,7 +198,11 @@ From the backend map; each slice says which it needs.
 - **Two arrangements to build and test.** The browser suite measures both, at an iPhone profile and
   at desk width, as ADR 0008 required for one.
 - **Double polling during the rollout.** While both pages existed, the old and the new dashboards
-  each polled when open; two open tabs were two batches per poll (ADR 0010). The swap ended it.
+  each polled when open; two open tabs were two batches per poll (ADR 0010). The swap ended the
+  two-page double polling, with two qualifications. Each LIVE tab now costs one market-data call
+  more per poll than the old page did: `/quotes`, `/references` and `/positions/values`, where the
+  old page polled the valuation only while its Holdings panel was open. And a tab of the old page
+  left open across the deploy keeps polling as before until it is reloaded.
 - **The owner has to accept or override the clock's mode.** A desk opened at 21:00 Singapore time
   shows REVIEW until the session opens; the override exists for exactly that.
 - **The prototype branch will rot,** and that is intended: it answers "what should this look like"

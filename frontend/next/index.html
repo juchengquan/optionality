@@ -2,7 +2,10 @@
 <!-- The redesign was served here, at /opt/next, until it replaced the page at /opt (#301, ADR 0023).
      This sends a bookmark there. In the page and not in deploy/Caddyfile: tailscale serve strips the
      prefix and does not rewrite a Location header, so Caddy cannot name /opt without writing the
-     prefix down a second time; Vite writes the build's own UI_BASE into this file instead. -->
+     prefix down a second time; Vite writes the build's own UI_BASE into this file instead.
+     REMOVE AFTER 2026-12-31: this file, its `next` input in vite.config.ts, its case in
+     src/__tests__/Entries.test.ts, and the `{path}/index.html` entry in deploy/Caddyfile's
+     try_files with the comment above it. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />

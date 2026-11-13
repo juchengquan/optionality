@@ -341,7 +341,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   which Vite fills with `UI_BASE`. A page and not a Caddy redirect because tailscale strips the
   prefix and rewrites no `Location` (deploy/Caddyfile), and Caddy still serves `/next` as a
   directory (`try_files {path}/index.html`) so it needs no trailing-slash redirect either;
-  `src/__tests__/Entries.test.ts` holds both entries. The page's source is still `src/next/`, a
+  `src/__tests__/Entries.test.ts` holds both entries. **The redirect is temporary: remove it
+  after 2026-12-31** — the file, its `next` build input, its case in `Entries.test.ts`, and the
+  `{path}/index.html` entry in the Caddyfile's `try_files` with its comment. The page's source is still `src/next/`, a
   name left from the rollout — moving it up into `src/` is a rename of its own, not yet done.
   Beside it, `src/shared/` (`api.ts`, `format.ts`, `prefs.ts`, the References panel and strip,
   `Freshness`, the column picker, `groups.ts`, `app.css`), `src/components/` (shadcn's),
@@ -554,9 +556,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when REVIEW opens a
   holding and never polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
-  nothing called it, and the bot's `/snapshot` answers the same question in-process.) (`/positions/values` is polled by the dashboard's Holdings
-  panel while it is open.) `/references` is polled WITH `/quotes` — two calls per poll per open
-  tab — and is a call of its own rather than part of that batch for containment, not for cost:
+  nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` in both modes,
+  and in LIVE `/positions/values` and `/references` with it — three calls per LIVE poll per open
+  tab, where the old page made two; REVIEW asks for `/positions/values` once, on entering it, and
+  never for `/references`.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
   moomoo rejects a whole batch for one bad code and the containment loop drops only a code it
   NAMES, so a class refusal (`US..SPX`, which is the first thing a reasonable person types) would
   blank every row the owner acts on. It is also the one route that cannot fail: a Provider that is

@@ -24,7 +24,8 @@ export default defineConfig({
   // `/opt/next` — where the redesign was built beside the old page until it replaced it (ADR 0023,
   // #301) — on to `/opt/`. It is a page and not a redirect because deploy/Caddyfile says why a
   // redirect cannot work here, and `next/index.html` rather than `next.html` so Caddy serves it at
-  // `/next` as a directory, again without a redirect.
+  // `/next` as a directory, again without a redirect. Until 2026-12-31: `next/index.html` says
+  // what goes with it then.
   build: {
     outDir: "dist", emptyOutDir: true,
     rollupOptions: {
