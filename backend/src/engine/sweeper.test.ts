@@ -17,6 +17,7 @@ import {
 import { MonitorSweeper } from "./sweeper.ts";
 import { findMonitor, updateMonitorFields } from "../db/queries/index.ts";
 import { editedMonitor } from "../monitors.ts";
+import { createSpreads, isSpreadFault } from "../create-spread.ts";
 
 /** A contract the Provider cannot price. How it SAYS so is its own business and is tested in
  *  `opend/client.test.ts`; what reaches the sweep is the code, named in the batch (#168).
@@ -197,6 +198,43 @@ describe("an edited rule (#292)", () => {
     await tick(sweeper(quoting("mid_price", { [CODE]: 5 })));
     // not "back below 30" about a rule that was never above it
     expect(sent).toHaveLength(1);
+  });
+});
+
+describe("a ringing watch rule recorded as held (#336)", () => {
+  /** The watched call sold: `POST /spreads`, one leg held, carrying the rule — at `rule`'s threshold
+   *  and direction — which replaces the watch rule with the holding's own. */
+  async function hold(code: string, rule: { threshold: number; direction?: string }) {
+    const added = await createSpreads({ db, fetchQuotes: fakeFetcher(quoting("option_delta", { [code]: 0.7 })), now: () => now }, {
+      strike_date: future(),
+      spreads: [{
+        name: "c6500", held: true, legs: [{ side: "short", option_type: "CALL", strike: 6500 }],
+        monitors: [{ option_type: "CALL", strike: 6500, field: "option_delta", compare: "abs", direction: "above", ...rule }],
+      }],
+    });
+    expect(isSpreadFault(added)).toBe(false);
+  }
+
+  it("does not say it crossed a second time when the holding's rule watches it the same way", async () => {
+    const code = buildSpxCode(future(), "CALL", 6500);
+    monitor({ code });
+    await sweeper(quoting("option_delta", { [code]: 0.7 })).sweep();
+    expect(sent.filter((t) => t.includes("crossed"))).toHaveLength(1);
+    // the threshold moved with it, still breached: the bell is the same bell
+    await hold(code, { threshold: 0.65 });
+    await tick(sweeper(quoting("option_delta", { [code]: 0.7 })));
+    expect(sent.filter((t) => t.includes("crossed"))).toHaveLength(1);
+  });
+
+  it("tells the owner afresh where the holding's rule watches another way and is breached", async () => {
+    const code = buildSpxCode(future(), "CALL", 6500);
+    monitor({ code });
+    await sweeper(quoting("option_delta", { [code]: 0.7 })).sweep();
+    await hold(code, { threshold: 0.8, direction: "below" });
+    await tick(sweeper(quoting("option_delta", { [code]: 0.7 })));
+    // a new rule, breached from its first sweep: said, as an edit to another direction says it (#292)
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain("fell ≤ 0.8");
   });
 });
 

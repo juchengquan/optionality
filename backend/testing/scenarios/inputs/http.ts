@@ -483,6 +483,24 @@ export const HTTP: readonly HttpInput[] = [
     request: request("PATCH", "/monitors/mon-2", { name: "dec-call-spread" }),
   },
   {
+    // the dashboard says so where the name is typed (#336): a holding recorded under the same name,
+    // as POST /spreads records a held spread's, keeps it — PATCH /positions takes no name at all
+    name: "PATCH /monitors/{id} renames a held spread's rule and leaves its holding's name",
+    world: world({
+      tables: {
+        positions: [position({
+          id: "pos-calls", name: "dec-calls",
+          legs: [
+            { side: "short", option_type: "CALL", strike: 7300 }, { side: "long", option_type: "CALL", strike: 7350 },
+          ],
+        })],
+        monitors: [combo({ id: "mon-2", code: "dec-calls", scope: "all" })],
+        monitor_positions: [link("mon-2", "pos-calls")],
+      },
+    }),
+    request: request("PATCH", "/monitors/mon-2", { name: "dec-call-spread" }),
+  },
+  {
     name: "PATCH /monitors/{id} refuses a rename onto a name already taken",
     world: world({
       tables: { ...held, monitors: [...held.monitors, combo({ id: "mon-3", code: "dec-wing" })] },
@@ -1207,6 +1225,54 @@ export const HTTP: readonly HttpInput[] = [
     name: "POST /spreads records one contract held, replacing the watch rule on it",
     world: world({ tables: { monitors: [WATCHING_PUTS[1]!] }, provider: { quotes: BOOK } }),
     request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [ONE_PUT] }),
+  },
+  {
+    // the watch rule was RINGING, its alarm sent: the holding's rule watches the same figure the same
+    // way at another threshold, so it keeps the bell, as a PATCH moving the threshold alone keeps it
+    // (#292) — remade fresh, the next sweep would say "crossed" a second time (#336)
+    name: "POST /spreads carries a ringing watch rule's alarm over to the holding's rule watching it the same way",
+    world: world({
+      tables: { monitors: [{ ...WATCHING_PUTS[1]!, triggered: 1, last_alarm_at: "2026-11-09 14:45:00.000000", last_value: -0.21 }] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [ONE_PUT] }),
+  },
+  {
+    // the same, but the holding's rule watches its size from BELOW: another rule, which a PATCH
+    // changing the direction would also make unrung (#292)
+    name: "POST /spreads starts the alarm afresh where the holding's rule watches another way",
+    world: world({
+      tables: { monitors: [{ ...WATCHING_PUTS[1]!, triggered: 1, last_alarm_at: "2026-11-09 14:45:00.000000", last_value: -0.21 }] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...ONE_PUT, monitors: [{ ...ONE_PUT.monitors[0]!, direction: "below" }] }],
+    }),
+  },
+  {
+    // the 7300 call sold from a watchlist that also watches the 7300/7350 call spread `cs` and the
+    // 6400 put: the call's watch rule is replaced, and the ADOPTION that follows every POST /spreads
+    // links `cs` to the new holding as covering all of it — the spread's row then reads the one
+    // call's Entry. The dashboard names both before the save (#336); this is what it is held to.
+    name: "POST /spreads records one contract held, and a watched spread holding it is linked to it",
+    world: world({
+      tables: {
+        monitors: [
+          combo({ id: "mon-cs", code: "cs" }),
+          monitor({ id: "mon-c7300" }),
+          monitor({ id: "mon-p6400", option_type: "PUT", strike: 6400, threshold: 0.15 }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{
+        name: "1218_C7300", held: true, entry: 2.75, contracts: 1, opened_at: "2026-11-06",
+        legs: [{ side: "short", option_type: "CALL", strike: 7300 }],
+        monitors: [{ option_type: "CALL", strike: 7300, field: "option_delta", threshold: 0.3, direction: "above", compare: "abs" }],
+      }],
+    }),
   },
   {
     // the condor already holds the 6400 put: the lone holding's rule is linked to IT, never to the

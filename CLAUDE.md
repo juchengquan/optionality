@@ -589,7 +589,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   Nothing else is ever auto-deleted. One deletion is the OWNER's, triggered by saving: `POST /spreads`
   recording a spread as HELD replaces a WATCH rule (linked to no holding) on a (code, field) it makes —
   deleted and remade as the holding's in one transaction, named by the form before the save and in
-  its answer after (#293). A watched spread, a switched-off default or another holding's rule never
+  its answer after (#293). Remade, it keeps the watch rule's alarm state (bell, last alarm, last
+  figure) where it watches the same field, direction and compare and the watch rule was on — the
+  rule a PATCH follows (`editedMonitor`, #292) — and starts afresh otherwise, so a ringing rule
+  recorded as held does not say "crossed" twice (#336). A watched spread, a switched-off default or another holding's rule never
   replaces anything. A holding that ends is CLOSED, not deleted (ADR 0022): kept with
   its samples, out of everything live (`openPositions` — the sweep, `/positions/values`, linking), its
   rules unlinked — handed first to any open holding still holding their contracts (a roll), and

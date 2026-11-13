@@ -431,6 +431,45 @@ describe("a held spread replacing the watch rules it clashes with", () => {
     expect([count("positions"), count("monitors")]).toEqual([1, 1]);
   });
 
+  /** A watch rule on the 7150 put's delta, ringing since an alarm was sent, as the sweep left it. */
+  async function ringing(over: { direction?: string; compare?: string; enabled?: boolean } = {}) {
+    const watched = await watch([{ option_type: "PUT", strike: 7150, threshold: 0.15, ...over }]);
+    const id = watched.monitors[0].id as string;
+    h.db.prepare("update monitors set triggered = 1, last_alarm_at = '2026-11-09 15:00:00.000000', last_value = -0.21, "
+      + "enabled = ? where id = ?").run(over.enabled === false ? 0 : 1, id);
+    return id;
+  }
+  const state = (code: string) => h.db.prepare(
+    "select triggered, last_alarm_at, last_value from monitors where code = ? and field = 'option_delta'",
+  ).get(code);
+  const holdPut = (rule: object) => post({ strike_date: EXPIRY, spreads: [{
+    name: "p7150", legs: [PUTS[0]], held: true, entry: 2, monitors: [{ option_type: "PUT", strike: 7150, ...rule }],
+  }] }).then(created);
+  const P7150 = buildSpxCode(EXPIRY, "PUT", 7150);
+
+  it("carries a ringing rule's alarm over to the holding's rule that watches it the same way (#336)", async () => {
+    // the threshold may move, as a PATCH moving it alone keeps the state (#292): no second "crossed"
+    start();
+    await ringing();
+    const added = await holdPut({ field: "option_delta", threshold: 0.25 });
+    expect(added.replaced).toHaveLength(1);
+    expect(state(P7150)).toEqual({ triggered: 1, last_alarm_at: "2026-11-09 15:00:00.000000", last_value: -0.21 });
+  });
+
+  it("starts the alarm afresh where the holding's rule watches another way", async () => {
+    start();
+    await ringing();
+    await holdPut({ field: "option_delta", threshold: 0.25, direction: "below" });
+    expect(state(P7150)).toEqual({ triggered: 0, last_alarm_at: null, last_value: null });
+  });
+
+  it("starts the alarm afresh where the watch rule was switched off, as switching it back on would", async () => {
+    start();
+    await ringing({ enabled: false });
+    await holdPut({ field: "option_delta", threshold: 0.15 });
+    expect(state(P7150)).toEqual({ triggered: 0, last_alarm_at: null, last_value: null });
+  });
+
   it("never deletes for a spread that is only watched", async () => {
     start();
     await watch([{ threshold: 1.8 }]);

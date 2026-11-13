@@ -590,6 +590,53 @@ class TestAHeldSpreadReplacingTheWatchRulesItClashesWith:
         assert resp.status_code == 409
         assert [count(h, "positions"), count(h, "monitors")] == [1, 1]
 
+    async def ringing(self, h, enabled=True, **over):
+        """A watch rule on the 7150 put's delta, ringing since an alarm was sent, as the sweep left it."""
+        watched = await self.watch(h, [{"option_type": "PUT", "strike": 7150, "threshold": 0.15, **over}])
+        id_ = watched["monitors"][0]["id"]
+        h.db.execute(
+            "update monitors set triggered = 1, last_alarm_at = '2026-11-09 15:00:00.000000', last_value = -0.21, "
+            "enabled = ? where id = ?",
+            (1 if enabled else 0, id_),
+        )
+        h.db.commit()
+        return id_
+
+    @staticmethod
+    def state(h):
+        return h.db.execute(
+            "select triggered, last_alarm_at, last_value from monitors where code = ? and field = 'option_delta'",
+            (code("PUT", 7150),),
+        ).fetchone()
+
+    @staticmethod
+    async def hold_put(h, **rule):
+        spread = {
+            "name": "p7150", "legs": [PUTS[0]], "held": True, "entry": 2,
+            "monitors": [{"option_type": "PUT", "strike": 7150, **rule}],
+        }  # fmt: skip
+        return created(await post(h, {"strike_date": EXPIRY, "spreads": [spread]}))
+
+    async def test_carries_a_ringing_rules_alarm_over_to_the_holdings_rule_watching_it_the_same_way(self, start):
+        # the threshold may move, as a PATCH moving it alone keeps the state (#292): no second "crossed" (#336)
+        h = start()
+        await self.ringing(h)
+        added = await self.hold_put(h, field="option_delta", threshold=0.25)
+        assert len(added["replaced"]) == 1
+        assert tuple(self.state(h)) == (1, "2026-11-09 15:00:00.000000", -0.21)
+
+    async def test_starts_the_alarm_afresh_where_the_holdings_rule_watches_another_way(self, start):
+        h = start()
+        await self.ringing(h)
+        await self.hold_put(h, field="option_delta", threshold=0.25, direction="below")
+        assert tuple(self.state(h)) == (0, None, None)
+
+    async def test_starts_the_alarm_afresh_where_the_watch_rule_was_switched_off(self, start):
+        h = start()
+        await self.ringing(h, enabled=False)
+        await self.hold_put(h, field="option_delta", threshold=0.15)
+        assert tuple(self.state(h)) == (0, None, None)
+
     async def test_never_deletes_for_a_spread_that_is_only_watched(self, start):
         h = start()
         await self.watch(h, [{"threshold": 1.8}])
