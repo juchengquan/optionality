@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Toaster, toast } from "@/components/ui/toast";
 import { clockTime } from "../shared/format";
-import { valuedAt } from "./levels";
+import { valuedAt, valuedStamp } from "./levels";
 import { Freshness } from "../shared/Freshness";
 import {
   readArrangement, readEntryStyle, readPrivacy, readRefresh, readUp, writeArrangement,
@@ -35,7 +35,7 @@ import { holdToast } from "./edit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
 import { clockMode, type Mode } from "./mode";
-import { inSession, sessionEdge, useSessionClock } from "./session";
+import { inSession, servedWhen, sessionEdge, useSessionClock } from "./session";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
@@ -247,7 +247,7 @@ export function Next() {
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
     quotes: book.quotes, monitors: book.monitors, holdings,
-    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, mode, session, privacy, entryStyle, writes,
+    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, mode, session, privacy, entryStyle, writes,
     onRevalue: () => void book.refreshNow(), revaluing: book.refreshing,
     journal: mode === "review" && phone
       ? <PhoneJournal journal={journal} privacy={privacy} entryStyle={entryStyle} onCorrected={rereadJournal}
@@ -323,7 +323,7 @@ export function Next() {
         {/* the market, in either mode (#371): polled in session; outside it read once with the
             holdings, and every reading says when — a figure frozen at a read would otherwise be
             taken for current (ADR 0018) */}
-        <ReferenceStrip references={book.references} stamped={!session} />
+        <ReferenceStrip references={book.references} timeOf={session ? undefined : servedWhen} />
         {/* a close's account (#294): the holding has left the book, and its detail with it */}
         {/* one per close, newest first, each until its own Done: a second close never discards the
             first's account, nor a correction half typed into it */}
@@ -526,6 +526,7 @@ function useBook(session: boolean, edge: number) {
   const [holdings, setHoldings] = useState<Holding[] | null>(null);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
   const [holdingsAt, setHoldingsAt] = useState<string | null>(null);
+  const [holdingsServed, setHoldingsServed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [polledAt, setPolledAt] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
@@ -577,6 +578,7 @@ function useBook(session: boolean, edge: number) {
       // None where the answer carries none — nothing held — rather than the device's clock in its
       // place: the market-closed line then says no time (#371)
       setHoldingsAt(valuedAt(valued));
+      setHoldingsServed(valuedStamp(valued));
       setHoldingsError(null);
     } catch (e: unknown) {
       if (mine < landed.current) return;
@@ -586,6 +588,7 @@ function useBook(session: boolean, edge: number) {
       // that has since failed — nor a time it was valued at
       setHoldings(null);
       setHoldingsAt(null);
+      setHoldingsServed(null);
       setHoldingsError(e instanceof Error ? e.message : String(e));
     }
   }, []);
@@ -670,7 +673,7 @@ function useBook(session: boolean, edge: number) {
   const reload = useCallback(() => load(true, true), [load]);
 
   return {
-    quotes, monitors, health, references, holdings, holdingsError, holdingsAt, error, polledAt,
+    quotes, monitors, health, references, holdings, holdingsError, holdingsAt, holdingsServed, error, polledAt,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
     referencesPending: referencesPending > 0, reload,
   };

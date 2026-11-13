@@ -228,7 +228,7 @@ export { tableRows } from "./columns";
 
 // ---- the sections
 
-function Holdings({ placed, holdings, holdingsError, holdingsAt, session, onRevalue, revaluing, ctx, picker }: BookProps & {
+function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed, session, onRevalue, revaluing, ctx, picker }: BookProps & {
   placed: BookModel; ctx: Ctx; picker: React.ReactNode;
 }) {
   return (
@@ -243,7 +243,7 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, session, onReva
       {holdings !== null && holdings.length === 0 ? <p className="nx-meta nxd-note">nothing held</p> : null}
       {/* outside the session, whichever mode (#371): when the service valued what is drawn, and the
           refresh that values it again */}
-      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} onRefresh={onRevalue}
+      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} onRefresh={onRevalue}
                               refreshing={revaluing} className="nx-meta nxd-note" /> : null}
       {placed.holdings.map(({ expiry, rows }) => (
         <div key={expiry} className="nxd-expiry">

@@ -25,6 +25,9 @@ export interface BookProps {
   /** when the service last valued them, from its own stamp: said outside the session, where they
    *  are not polled ("market closed — valued at 21:04", #371) */
   holdingsAt: string | null;
+  /** the same stamp whole, with its date (`valuedStamp`): the market-closed line dates a valuation
+   *  from another day by it (#371's review). Absent, the line says `holdingsAt`'s time alone. */
+  holdingsServed?: string | null;
   /** the on-screen mode, which since #371 decides only which columns and views are drawn */
   mode: Mode;
   /** whether New York's session is open (`session.ts`): what is fetched, what the needs-you line
@@ -48,7 +51,7 @@ export interface BookProps {
  *  both by expiry (ADR 0023: the spread is the unit, grouped by expiry). Which rule sits where is
  *  `placeBook`'s; this only draws it, plainly, until the desk table (#289) and the phone cards
  *  (#290) replace it. */
-export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, session, privacy }: BookProps) {
+export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, privacy }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const unplaced = placed.unplaced;
 
@@ -61,7 +64,7 @@ export function Book({ quotes, monitors, holdings, holdingsError, holdingsAt, mo
           : null}
         {holdings === null && holdingsError === null ? <p className="nx-meta">valuing…</p> : null}
         {holdings !== null && holdings.length === 0 ? <p className="nx-meta">nothing held</p> : null}
-        {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} className="nx-meta" /> : null}
+        {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} className="nx-meta" /> : null}
         {placed.holdings.map(({ expiry, rows }) => (
           <div key={expiry} className="nx-expiry">
             <h3>{expiry}</h3>

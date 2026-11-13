@@ -421,7 +421,7 @@ describe("the market-closed line on the phone", () => {
  *  iPhone's 390px. */
 describe("a Level's chip outside the session, with its valuation's time", () => {
   const levelled = HOLDINGS.map((h) => ({
-    ...h, fetched_at: "2026-11-10 23:14:05+08:00",
+    ...h, fetched_at: "2026-11-16 00:59:05+08:00",
     schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4, target_dte: 11,
       manage_by_dte: 21, reached: h.id === "h-ic" ? "target" : "stop", manage_by_due: false },
   }));
@@ -432,7 +432,7 @@ describe("a Level's chip outside the session, with its valuation's time", () => 
     await show("Review", QUOTES, levelled);
     for (const ref of ["h-calls", "h-puts", "h-ic"]) {
       const chip = pageOf(ref).querySelector<HTMLElement>(".nx-chip")!;
-      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 23:14$/);
+      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 00:59$/);
       const card = pageOf(ref).querySelector(".nxp-card")!.getBoundingClientRect();
       const r = chip.getBoundingClientRect();
       expect(r.left >= card.left && r.right <= card.right, `${ref}'s chip inside its card`).toBe(true);
@@ -442,7 +442,7 @@ describe("a Level's chip outside the session, with its valuation's time", () => 
     await userEvent.click(within(pageOf("h-calls")).getByRole("button", { name: "detail and Monitors" }));
     const sheet = await screen.findByRole("dialog");
     await animationsDone();
-    expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 23:14");
+    expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 00:59");
     expect(pastTheEdge(sheet)).toEqual([]);
     expect(overflowsSideways()).toBe(false);
   });

@@ -37,7 +37,7 @@ vi.mock("html-to-image", async (orig) => {
 /** One Reference, so the strip has something to say, with the service's stamp on its read (#371). */
 const references = [
   { id: "ref1", code: "US..SPX", label: "S&P 500", source: "moomoo", figure: 7612.25, change: 0.0042,
-    field: "mid_price", name: "S&P 500", error: null, last_known: false, fetched_at: "2026-11-10 23:14:05+08:00" },
+    field: "mid_price", name: "S&P 500", error: null, last_known: false, fetched_at: "2026-11-16 00:59:05+08:00" },
 ];
 
 /** A holding closed on 6 Nov, as `/positions` keeps it (ADR 0022). */
@@ -266,7 +266,7 @@ describe("saving the desk as an image", () => {
       press();
       await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
       const strip = captured[0]!.node.querySelector(".references")!;
-      expect(strip.textContent).toBe("S&P 500 (moomoo) 7,612.25+0.42%read at 23:14");
+      expect(strip.textContent).toBe("S&P 500 (moomoo) 7,612.25+0.42%read at 00:59");
       // and the market-closed line, with no button: nothing in a picture can be pressed (the owner's
       // book here carries no stamp, so the line says no time rather than the device's)
       expect(captured[0]!.node.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed");

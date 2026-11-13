@@ -29,6 +29,7 @@ import {
   attentionOf, charsOf, chipWords, COLUMNS, PINNED, rowId, rowName, type DeskColumn, type DeskRow,
 } from "../desk/columns";
 import { ClosedLine } from "../ClosedLine";
+import { servedWhen } from "../session";
 import { NeedsLine } from "../NeedsLine";
 import { paceOutcome, paceWords } from "../pace";
 import { fieldWords, monitorName, QUARANTINED, type Need } from "../needs";
@@ -71,7 +72,7 @@ export function Still(props: StillProps) {
           Outside the session each reading carries the time it was read, as on screen (#371): a
           picture is looked at long after, and a figure with no time would be taken for current.
           the old page's picture had none. */}
-      <ReferenceStrip references={references} stamped={!session} />
+      <ReferenceStrip references={references} timeOf={session ? undefined : servedWhen} />
       {arrangement === "desk" ? <StillDesk {...props} /> : <StillCards {...props} />}
     </div>
   );
@@ -83,7 +84,7 @@ export function Still(props: StillProps) {
  *  widened to read what an ellipsis took, so it errs wide. */
 const SLACK_CH = 1;
 
-function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, session, privacy }: BookProps) {
+function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, privacy }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const rows = tableRows(placed);
   // the viewer's column choice, as the table on screen reads it; the room on screen, not at all
@@ -104,8 +105,8 @@ function StillDesk({ quotes, monitors, holdings, holdingsError, holdingsAt, mode
         </div>
         <section>
           <div className="nxd-section"><h2>Holdings</h2></div>
-          <HoldingsStatus holdings={holdings} error={holdingsError} at={holdingsAt} session={session}
-                          className="nx-meta nxd-note" />
+          <HoldingsStatus holdings={holdings} error={holdingsError} at={holdingsAt} served={holdingsServed}
+                          session={session} className="nx-meta nxd-note" />
           {placed.holdings.map(({ expiry, rows: brackets }) => (
             <div key={expiry} className="nxd-expiry">
               <h3 className="nxd-group">{`${shortDate(expiry)} · ${brackets[0]![0]!.holding.dte} DTE`}</h3>
@@ -199,14 +200,14 @@ function StillRow({ row, columns, privacy, bracket, session }: {
 
 // ---- B: the cards
 
-function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, mode, session, privacy }: BookProps) {
+function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, privacy }: BookProps) {
   const placed: BookModel = placeBook(quotes, holdings, monitors);
   return (
     <div className="nx-book nxp-book">
       <section>
         <h2>{mode === "live" ? "Holdings" : "Review"}</h2>
-        <HoldingsStatus holdings={holdings} error={holdingsError} at={holdingsAt} session={session}
-                        className="nxp-meta" />
+        <HoldingsStatus holdings={holdings} error={holdingsError} at={holdingsAt} served={holdingsServed}
+                        session={session} className="nxp-meta" />
         {placed.holdings.map(({ expiry, rows }) => (
           <section key={expiry} className="nxp-expiry">
             <ExpiryHead expiry={expiry} dte={rows[0]![0]!.holding.dte} />
@@ -323,12 +324,13 @@ function Quarantined({ monitors }: { monitors: Monitor[] }) {
 /** Where the holdings stand, said as the page says it: outside the session the market-closed line
  *  with the service's time (#371), and no button, since nothing in a picture can be pressed; then
  *  why there are no figures, when there are none. */
-function HoldingsStatus({ holdings, error, at, session, className }: {
-  holdings: Holding[] | null; error: string | null; at: string | null; session: boolean; className: string;
+function HoldingsStatus({ holdings, error, at, served, session, className }: {
+  holdings: Holding[] | null; error: string | null; at: string | null; served?: string | null; session: boolean;
+  className: string;
 }) {
   return (
     <>
-      {!session ? <ClosedLine at={holdings !== null ? at : null} className={className} /> : null}
+      {!session ? <ClosedLine at={holdings !== null ? at : null} served={served} className={className} /> : null}
       {error !== null ? <p className={className}>{`the holdings could not be valued — ${error}`}</p>
         : holdings === null ? <p className={className}>valuing…</p>
           : holdings.length === 0 ? <p className={className}>nothing held</p> : null}

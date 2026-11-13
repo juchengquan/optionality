@@ -1,5 +1,6 @@
 import type { Holding } from "../shared/api";
 import { servedClock } from "../shared/format";
+import { servedWhen } from "./session";
 
 /** A holding's Levels as its chip says them, on every surface that draws one (#354, re-keyed to
  *  the session by #371).
@@ -30,19 +31,22 @@ export function valuedClock(served: string | null | undefined): string | null {
  *  Settings — from the same stamp the chips read, so the page states ONE clock for it (#354). All
  *  of one answer's holdings carry the same stamp; null where none has one, or there are none. */
 export function valuedAt(holdings: readonly Holding[]): string | null {
-  for (const h of holdings) {
-    const at = servedClock(h.fetched_at);
-    if (at !== null) return at;
-  }
-  return null;
+  return servedClock(valuedStamp(holdings));
+}
+
+/** The service's stamp on a valuation, whole (`2026-11-12 21:04:37+08:00`), for words that say its
+ *  DATE when it is not today's (`servedWhen`); null where none has a time, or there are none. */
+export function valuedStamp(holdings: readonly Holding[]): string | null {
+  return holdings.find((h) => servedClock(h.fetched_at) !== null)?.fetched_at ?? null;
 }
 
 /** @param session whether New York's session is open: bare then, with its valuation's time
- *  outside it */
-export function levelWords(level: Level, holding: Holding, session: boolean): string {
+ *  outside it — and its date too where the time alone would mislead (`servedWhen`, #371's review)
+ *  @param now the clock that decides that, the page's own */
+export function levelWords(level: Level, holding: Holding, session: boolean, now: Date = new Date()): string {
   const words = LEVEL_WORDS[level];
   if (session) return words;
-  const at = valuedClock(holding.fetched_at);
+  const at = servedWhen(holding.fetched_at, now);
   // a valuation with no time on it is still not live, and is said to be as last valued
   return `${words} · ${at ? `as valued at ${at}` : "as last valued"}`;
 }

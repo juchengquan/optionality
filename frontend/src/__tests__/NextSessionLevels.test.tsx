@@ -98,9 +98,15 @@ function at(iso: string) {
 const SESSION = "2026-11-09T15:00:00Z";
 const SUNDAY = "2026-11-08T15:00:00Z";
 const EVENING = "2026-11-09T23:00:00Z";
+/** the valuation's stamp on that evening: Tuesday 06:23 in the service's +08:00, after Monday's
+ *  close, so its time alone is right (an older one is dated: `servedWhen`) */
+const EVENING_STAMP = "2026-11-10 06:23:11+08:00";
+/** the clock a chip states for the default stamp at `now` */
+const valuedTime = (now: string) => (now === EVENING ? "06:23" : "23:04");
 
 async function open(arrangement: Arrangement, now: string, chip = true, mode?: "Live" | "Review") {
   document.cookie = `ui_arrangement=${arrangement};path=/`;
+  if (now === EVENING && stamp === "2026-11-08 23:04:11+08:00") stamp = EVENING_STAMP;
   at(now);
   render(<Next />);
   if (mode) {
@@ -125,6 +131,9 @@ afterEach(() => {
 });
 
 describe("the words", () => {
+  // Sunday 23:00 in the service's +08:00: the stamp is today's, so its time alone is right
+  beforeEach(() => at(SUNDAY));
+
   it("reads the clock the service wrote on the valuation, to the minute", () => {
     expect(valuedClock("2026-11-12 21:04:37+08:00")).toBe("21:04");
     expect(valuedClock("2026-11-12T09:30:00-05:00")).toBe("09:30");
@@ -159,8 +168,9 @@ describe("outside the session, a holding's chip and the needs-you line never con
   ] as const) {
     it(`on the desk ${when}: the row and the inspector say which valuation, and the line says nothing of it`, async () => {
       await open("desk", now, true, mode);
-      expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
-      expect(chipIn(document, "p2")).toBe("manage-by · as valued at 23:04");
+      const t = valuedTime(now);
+      expect(chipIn(document, "p1")).toBe(`at stop · as valued at ${t}`);
+      expect(chipIn(document, "p2")).toBe(`manage-by · as valued at ${t}`);
       // the line names neither holding: it leaves their Levels out outside the session
       expect(line()).not.toContain("1231_7000P");
       expect(line()).not.toContain("1204_6900P");
@@ -168,7 +178,7 @@ describe("outside the session, a holding's chip and the needs-you line never con
       const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!;
       fireEvent.click(within(row).getByRole("button", { name: "1231_7000P" }));
       const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
-      expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 23:04");
+      expect(inspector.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t}`);
       expect(inspector.textContent).toContain("as last valued");
     });
   }
@@ -187,11 +197,11 @@ describe("outside the session, a holding's chip and the needs-you line never con
   it("on the phone's Live card and its sheet, with Live picked", async () => {
     await open("phone", EVENING, true, "Live");
     const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
-    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 23:04");
+    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 06:23");
     expect(line()).not.toContain("1231_7000P");
     fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
     const sheet = await screen.findByRole("dialog");
-    await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 23:04"));
+    await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 06:23"));
   });
 });
 
@@ -230,12 +240,13 @@ describe("in session they read the same poll and agree, so the chip carries no t
   });
 
   it("still holds across the close: the chip takes its time as the line lets the Level go", async () => {
+    stamp = "2026-11-10 05:15:30+08:00"; // Monday 16:15:30 New York, valued just after the close
     await open("desk", "2026-11-09T21:14:00Z"); // Monday 16:14 New York
     await until(() => expect(line()).toContain("1231_7000P at stop"));
     expect(chipIn(document, "p1")).toBe("at stop");
     vi.setSystemTime(new Date("2026-11-09T21:16:00Z")); // 16:16, the window focused
     await act(async () => { window.dispatchEvent(new Event("focus")); });
-    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04"));
+    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 05:15"));
     expect(line()).not.toContain("1231_7000P");
   });
 });
@@ -287,7 +298,7 @@ describe("one clock for a valuation", () => {
   });
 
   it("moves the line and the chip on together by the line's own refresh", async () => {
-    await open("desk", EVENING, true, "Live");
+    await open("desk", SUNDAY, true, "Live");
     stamp = "2026-11-08 23:11:02+08:00";
     fireEvent.click(within(document.querySelector<HTMLElement>(".nx-mkt-closed")!)
       .getByRole("button", { name: "refresh the valuation" }));
@@ -296,8 +307,30 @@ describe("one clock for a valuation", () => {
   });
 });
 
+describe("a valuation from another day says its date (#371's review)", () => {
+  it("on the chip, the inspector and the market-closed line alike", async () => {
+    // Sunday 23:00 in +08; valued on Friday's +08 evening, before the session's last edge
+    stamp = "2026-11-06 23:04:11+08:00";
+    await open("desk", SUNDAY);
+    expect(chipIn(document, "p1")).toBe("at stop · as valued at Fri 23:04");
+    expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at Fri 23:04");
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!)
+      .getByRole("button", { name: "1231_7000P" }));
+    const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
+    expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at Fri 23:04");
+  });
+
+  it("on the phone's card", async () => {
+    stamp = "2026-10-30 23:04:11+08:00";
+    await open("phone", SUNDAY, true, "Live");
+    const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
+    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 30 Oct 23:04");
+  });
+});
+
 describe("the saved picture says which valuation, outside the session only", () => {
   function picture(arrangement: Arrangement, mode: "live" | "review", session: boolean) {
+    at(SUNDAY); // the stamp is today's, so its time alone
     render(<Still arrangement={arrangement} quotes={[spread] as never} monitors={[]}
                   holdings={[holding, due] as unknown as Holding[]} holdingsError={null} holdingsAt="23:04:15"
                   mode={mode} session={session} privacy={false} entryStyle="opportunity" needs={[]} health={null}

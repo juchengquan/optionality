@@ -19,7 +19,7 @@ import { ReviewPager } from "./Review";
  *  was opened, and closes itself if what it shows is gone.
  */
 export function PhoneBook({
-  quotes, monitors, holdings, holdingsError, holdingsAt, mode, session, onRevalue, revaluing, privacy, entryStyle, writes,
+  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, onRevalue, revaluing, privacy, entryStyle, writes,
   journal,
 }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
@@ -37,7 +37,7 @@ export function PhoneBook({
     <>
       {/* outside the session, whichever tab (#371): when the service valued what is drawn, and the
           refresh that values it again */}
-      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} onRefresh={onRevalue}
+      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} onRefresh={onRevalue}
                               refreshing={revaluing} className="nxp-meta" /> : null}
       {holdingsError !== null ? <p className="nxp-meta">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}

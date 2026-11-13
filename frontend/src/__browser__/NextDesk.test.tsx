@@ -127,14 +127,14 @@ describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => 
 });
 
 /** A holding's Level chip says, in REVIEW, when the holding was valued (#354), so it is longer
- *  there: every holding at a Level — the longest, "manage-by · as valued at 23:14", among them —
+ *  there: every holding at a Level — the longest, "manage-by · as valued at 00:59", among them —
  *  and the table still fits, the chip drawn whole inside its cell, and in the inspector too. */
 /** A Sunday, 12:00 New York: outside the session, at an hour that would be in it on a weekday. */
 const SUNDAY = new Date("2026-11-15T17:00:00Z");
 
 describe("a Level's chip outside the session, with its valuation's time, fits", () => {
   const levelled = scheduled.map((h) => ({
-    ...h, fetched_at: "2026-11-10 23:14:05+08:00",
+    ...h, fetched_at: "2026-11-16 00:59:05+08:00",
     schedule: { ...h.schedule, reached: h.id === "h-calls" ? "stop" : h.id === "h-puts" ? "target" : null,
       manage_by_due: h.id === "h-ic" },
   }));
@@ -159,8 +159,8 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
         if (mode === "review") vi.setSystemTime(SUNDAY);
         await show(mode, width);
         const chip = (id: string) => rowOf(id).querySelector(".nx-chip")!.textContent;
-        expect(chip("h-calls")).toBe(mode === "review" ? "at stop · as valued at 23:14" : "at stop");
-        expect(chip("h-ic")).toBe(mode === "review" ? "manage-by · as valued at 23:14" : "manage-by");
+        expect(chip("h-calls")).toBe(mode === "review" ? "at stop · as valued at 00:59" : "at stop");
+        expect(chip("h-ic")).toBe(mode === "review" ? "manage-by · as valued at 00:59" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
         expect(misfits()).toEqual([]);
@@ -169,7 +169,7 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
         await inspect("h-ic");
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
         expect(insp.querySelector(".nx-chip")!.textContent)
-          .toBe(mode === "review" ? "manage-by · as valued at 23:14" : "manage-by");
+          .toBe(mode === "review" ? "manage-by · as valued at 00:59" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(misfits()).toEqual([]);
         expect(cutChips(table())).toEqual([]);

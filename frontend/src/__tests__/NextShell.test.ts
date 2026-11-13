@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { arrangementFor, DESK_FROM } from "../next/arrangement";
 import { clockMode } from "../next/mode";
-import { inSession, sessionEdge } from "../next/session";
+import { inSession, servedWhen, sessionEdge } from "../next/session";
 
 describe("the measured width chooses the arrangement", () => {
   it("puts the cards on anything narrower than the desk and the terminal on the rest", () => {
@@ -110,5 +110,42 @@ describe("the last edge of the session", () => {
     // and March's: Friday 2027-03-12 is EST, Monday 2027-03-15 EDT
     expect(edge("2027-03-14T12:00:00Z")).toBe("2027-03-12T21:15:01.000Z");
     expect(edge("2027-03-15T13:30:00Z")).toBe("2027-03-15T13:30:00.000Z");
+  });
+});
+
+/** A served time, with its date when it is not from today in the zone it was written in, or when
+ *  it predates the session's last edge (#371's review): "valued at 07:00" on a page woken a day
+ *  later read as this morning's. */
+describe("a served time, dated when it is not this session's", () => {
+  // Tuesday 2026-11-10 07:00 in the service's +08:00, Monday 18:00 in New York, after the close
+  const now = new Date("2026-11-09T23:00:00Z");
+
+  it("is the time alone when it is today's and after the last edge", () => {
+    expect(servedWhen("2026-11-10 06:59:11+08:00", now)).toBe("06:59");
+    // Monday 16:20 New York, after the close at 16:15:01, written in +08 on Tuesday
+    expect(servedWhen("2026-11-10 05:20:00+08:00", now)).toBe("05:20");
+  });
+
+  it("carries its weekday from earlier in the week, and its date from before that", () => {
+    expect(servedWhen("2026-11-09 21:04:11+08:00", now)).toBe("Mon 21:04");
+    expect(servedWhen("2026-11-07 05:15:00+08:00", now)).toBe("Sat 05:15");
+    expect(servedWhen("2026-11-03 21:04:00+08:00", now)).toBe("3 Nov 21:04");
+  });
+
+  it("carries its weekday when it is today's but from before the last edge", () => {
+    // Tuesday 04:00 in +08 is Monday 15:00 in New York: inside the session that has since closed
+    expect(servedWhen("2026-11-10 04:00:00+08:00", now)).toBe("Tue 04:00");
+  });
+
+  it("reads the day in the stamp's own zone, never the device's", () => {
+    // the same instant written in New York's zone: Monday's evening there, and today there
+    expect(servedWhen("2026-11-09 17:59:00-05:00", now)).toBe("17:59");
+  });
+
+  it("is the time alone where the stamp gives no zone to judge it by, and nothing without a time", () => {
+    expect(servedWhen("2026-11-03 21:04:00", now)).toBe("21:04");
+    expect(servedWhen("x", now)).toBeNull();
+    expect(servedWhen(null, now)).toBeNull();
+    expect(servedWhen(undefined, now)).toBeNull();
   });
 });

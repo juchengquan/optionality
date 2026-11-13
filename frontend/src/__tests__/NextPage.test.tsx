@@ -92,7 +92,7 @@ function serve() {
   quotes = [spread, shortLeg];
   held = null;
   references = [reference, unread];
-  referenceStamp = "2026-11-09 21:04:11+08:00";
+  referenceStamp = "2026-11-10 06:58:11+08:00";
   holdingStamp = "2026-11-10 07:00:12+08:00";
   window.fetch = ((url: string, init?: RequestInit) => {
     const path = String(url).replace(/^.*\/api/, "");
@@ -326,6 +326,16 @@ describe("the market-closed line and its refresh (#371)", () => {
     });
   }
 
+  it("dates a valuation from before the session's last edge (#371's review)", async () => {
+    // Monday 18:00 New York, Tuesday 07:00 in the service's +08:00; valued on Saturday's +08 morning,
+    // which is Friday's close in New York: "valued at 05:15" alone would read as this morning's
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(EVENING);
+    holdingStamp = "2026-11-07 05:15:00+08:00";
+    await open();
+    await until(() => expect(closedLine()?.textContent).toContain("market closed — valued at Sat 05:15"));
+  });
+
   it("says no time when the valuation failed", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(EVENING);
@@ -386,10 +396,19 @@ describe("the References strip outside the session (#371)", () => {
       await open();
       await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(2));
       for (const r of document.querySelectorAll(".references .reference")) {
-        expect(r.textContent, "every reading says when").toContain("read at 21:04");
+        expect(r.textContent, "every reading says when").toMatch(/(read|tried) at 06:58$/);
       }
     });
   }
+
+  it("dates a reading from another day (#371's review)", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(EVENING);
+    referenceStamp = "2026-11-03 21:04:11+08:00";
+    await open();
+    await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(2));
+    expect(document.querySelector(".references")!.textContent).toContain("read at 3 Nov 21:04");
+  });
 
   it("never draws a reading without its time", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
@@ -397,7 +416,7 @@ describe("the References strip outside the session (#371)", () => {
     references = [reference, { ...unread, fetched_at: undefined }];
     await open();
     await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(1));
-    expect(document.querySelector(".references")!.textContent).toContain("read at 21:04");
+    expect(document.querySelector(".references")!.textContent).toContain("read at 06:58");
     expect(document.querySelector(".references")!.textContent).not.toContain("VIX");
   });
 
@@ -416,7 +435,7 @@ describe("the References strip outside the session (#371)", () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(EVENING);
     await open();
-    await until(() => expect(document.querySelector(".references")!.textContent).toContain("read at 21:04"));
+    await until(() => expect(document.querySelector(".references")!.textContent).toContain("read at 06:58"));
     referenceStamp = "2026-11-10 07:09:30+08:00";
     fireEvent.click(within(closedLine()!).getByRole("button", { name: "refresh the valuation" }));
     await until(() => expect(document.querySelector(".references")!.textContent).toContain("read at 07:09"));

@@ -99,3 +99,34 @@ export function useSessionClock(): Date {
   }, []);
   return now;
 }
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAY_MS = 86_400_000;
+
+/** "21:04", or "Fri 21:04", or "13 Nov 21:04": the time the service wrote on something it served
+ *  (a valuation's or a Reference reading's `fetched_at`, `2026-11-13 21:04:37+08:00`, in
+ *  DISPLAY_TZ), to the minute — with its DATE wherever the time alone would mislead (#371's
+ *  review). That is when it is not from today in the zone it was written in, or when it predates
+ *  the session's last edge (`sessionEdge`): "valued at 07:00" on a page woken a day later read as
+ *  this morning's. A weekday within the last six days, a date before that. Read as written, never
+ *  in the device's zone. A stamp with no offset cannot be judged and says its time alone; one with
+ *  no time is null. */
+export function servedWhen(served: string | null | undefined, now: Date = new Date()): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(served ?? "");
+  if (!m) return null;
+  const clock = `${m[4]}:${m[5]}`;
+  const zone = m[7];
+  if (zone === undefined) return clock;
+  const offset = zone === "Z" ? 0
+    : (zone[0] === "-" ? -1 : 1) * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(-2))) * 60_000;
+  const day = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const instant = day + ((Number(m[4]) * 60 + Number(m[5])) * 60 + Number(m[6])) * 1000 - offset;
+  const today = Math.floor((now.getTime() + offset) / DAY_MS) * DAY_MS;
+  if (day === today && instant >= sessionEdge(now).getTime()) return clock;
+  const ago = Math.round((today - day) / DAY_MS);
+  const date = new Date(day);
+  return ago >= 0 && ago <= 6
+    ? `${WEEKDAYS[date.getUTCDay()]} ${clock}`
+    : `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${clock}`;
+}
