@@ -322,3 +322,18 @@ def test_a_reference_is_frozen_like_the_rest_of_the_package(service):
     (row, _) = api.references(service.url)
     with pytest.raises(ValidationError):
         row.figure = 1.0
+
+
+def test_a_reference_carries_when_the_service_read_it_371(service):
+    """Since #371 `/references` stamps each reading with when its source answered, in DISPLAY_TZ: a
+    notebook reading the strip after the close needs that time as much as the page does."""
+    service.routes["/references"] = (200, [{**GSPC, "fetched_at": "2026-11-13 21:04:19+08:00"}])
+    (row,) = api.references(service.url)
+    assert row.fetched_at == "2026-11-13 21:04:19+08:00"
+
+
+def test_a_reference_from_a_service_older_than_the_stamp_reads_none(service):
+    """Optional rather than required, unlike the twelve: a service from before #371 sends none, and a
+    notebook pinned to this release must still read it."""
+    (row, _) = api.references(service.url)
+    assert row.fetched_at is None
