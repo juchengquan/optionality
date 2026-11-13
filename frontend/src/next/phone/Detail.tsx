@@ -15,7 +15,6 @@ import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome, paceWords } from "../pace";
 import { entryName, fieldWords, sentence } from "../needs";
-import type { Mode } from "../mode";
 import { LevelChip, Progress, RuleLine } from "./Cards";
 import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
@@ -30,7 +29,7 @@ export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
   | { kind: "rule"; entry: Entry; under: Entry[]; overlap?: string | null };
 
-export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes, mode, session }: {
+export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes, session }: {
   /** what is open, from the figures as they are NOW, or null for nothing */
   subject: Subject | null;
   onClose: () => void;
@@ -40,9 +39,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   entryStyle: EntryStyle;
   /** editing, closing and deleting a holding (#294) */
   writes?: HoldingWrites;
-  /** REVIEW's pages draw a holding's history already, so LIVE's sheet offers it on demand (#353) */
-  mode: Mode;
-  /** outside the session a holding's Level says which valuation it is from (#354, #371) */
+  /** outside the session a holding's Level says which valuation it is from (#354, #371), and its
+   *  history opens with the sheet (#374) */
   session: boolean;
 }) {
   const open = subject !== null;
@@ -71,7 +69,7 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
           <DetailBoundary key={shown.kind === "holding" ? shown.holding.id : shown.entry.id} what={shown.kind}>
             {shown.kind === "holding" ? (
               <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
-                             privacy={privacy} mode={mode} session={session} />
+                             privacy={privacy} session={session} />
             ) : <RuleDetail entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null} />}
             {shown.kind === "holding" && writes ? (
               <div className="nxp-sheet-body">
@@ -89,9 +87,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
 const greek = (n: number | null | undefined, places: number) =>
   n === null || n === undefined ? DASH : n.toFixed(places);
 
-function HoldingDetail({ holding, rules, quotes, monitors, privacy, mode, session }: {
-  holding: Holding; rules: Entry[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; mode: Mode;
-  session: boolean;
+function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
+  holding: Holding; rules: Entry[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
 }) {
   const s = holding.schedule;
   const g = holding.greeks;
@@ -111,7 +108,11 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, mode, sessio
         </div>
         <HoldingStrip holding={holding} />
         <HoldingPayoff holding={holding} privacy={privacy} />
-        {mode === "live" ? <HistoryOnDemand holding={holding} privacy={privacy} /> : null}
+        {/* open from the start outside the session, as the pager's pages were, and shut in it
+            (#374): the burndown is what an evening's look is for, and a poll's figures are what a
+            session's is for. Read when the sheet opens, so a change of session with it open
+            neither folds nor unfolds it; the next sheet opened takes the new default */}
+        <HistoryOnDemand holding={holding} privacy={privacy} defaultOpen={!session} />
         <dl className="nxp-facts">
           <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
           <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>

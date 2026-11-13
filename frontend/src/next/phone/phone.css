@@ -111,27 +111,6 @@
 .nxp-off { display: flex; flex-direction: column; gap: 0.5rem; }
 .nxp-off .nxp-card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
 
-/* ---- REVIEW: one holding per screen ---- */
-/* the track runs to the screen's edges, out through the page's gutter, and pages snap to it */
-.nxp-pager { margin: 0 calc(-1 * var(--nx-gutter)); }
-.nxp-track {
-  display: flex; overflow-x: auto; overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory; scrollbar-width: none;
-}
-.nxp-track::-webkit-scrollbar { display: none; }
-.nxp-page { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; padding: 0 var(--nx-gutter); }
-.nxp-page .nxp-card > * { pointer-events: auto; }
-.nxp-pager-nav { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 0.5rem; }
-.nxp-pager-nav button {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; border-radius: 999px; background: var(--muted);
-}
-.nxp-pager-nav button:disabled { opacity: 0.35; }
-.nxp-more {
-  width: 100%; margin-top: 0.75rem; min-height: 44px; border-radius: 0.75rem;
-  border: 1px solid var(--border); font-size: 0.9375rem; font-weight: 600;
-}
-
 /* ---- the detail sheet: from the bottom, never taller than the screen, scrolling inside ---- */
 .nxp-sheet {
   max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain;

@@ -325,13 +325,13 @@ describe("the pace explained, in the phone's holding detail", () => {
 
   it("reads it once per holding opened, and never under the next one", async () => {
     holdBack = /\/vol$/;
-    drawPhone({ mode: "review" });
-    const page = (id: string) => document.querySelector<HTMLElement>(`[data-page][data-ref="${id}"]`)!;
-    fireEvent.click(within(page("h-calls")).getByRole("button", { name: "detail and Monitors" }));
+    // outside the session, the sheet's history open from the start (#374) beside it
+    drawPhone({ mode: "review", session: false });
+    fireEvent.click(within(card("h-calls")).getByRole("button", { name: /details of 1218_C7300/ }));
     await screen.findByRole("dialog");
     act(() => { window.history.back(); });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    fireEvent.click(within(page("h-puts")).getByRole("button", { name: "detail and Monitors" }));
+    fireEvent.click(within(card("h-puts")).getByRole("button", { name: /details of 1218_P6400/ }));
     const sheet = await screen.findByRole("dialog");
     await waitFor(() => expect(within(sheet).getByRole("heading", { name: "1218_P6400" })).toBeTruthy());
     await act(async () => { held.get("/positions/h-calls/vol")?.(VOLS["h-calls"]!); });
@@ -341,11 +341,14 @@ describe("the pace explained, in the phone's holding detail", () => {
     expect(volAsked().filter((a) => a.includes("h-puts"))).toEqual(["GET /positions/h-puts/vol"]);
   });
 
-  it("says the gap in words on each REVIEW page", () => {
-    drawPhone({ mode: "review" });
-    const page = document.querySelector<HTMLElement>('[data-page][data-ref="h-puts"]')!;
-    const gap = within(page).getByText("pace gap").nextElementSibling as HTMLElement;
-    expect(gap.textContent).toBe("ahead by 0.50");
-    expect(gap.dataset.outcome).toBe("gain");
-  });
+  for (const session of [true, false]) {
+    it(`says the gap in words on each holding's card, ${session ? "in" : "out of"} session (#374)`, () => {
+      drawPhone({ mode: session ? "live" : "review", session });
+      for (const [id, words, outcome] of [["h-puts", "ahead by 0.50", "gain"], ["h-calls", "behind by 0.47", "loss"]]) {
+        const gap = within(card(id!)).getByText("pace gap").nextElementSibling as HTMLElement;
+        expect(gap.textContent).toBe(words);
+        expect(gap.dataset.outcome).toBe(outcome);
+      }
+    });
+  }
 });

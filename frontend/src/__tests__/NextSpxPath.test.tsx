@@ -153,9 +153,10 @@ describe("a holding with two legs on one strike", () => {
   });
 });
 
-describe("on the phone, in REVIEW", () => {
-  it("draws it on the holding's page", async () => {
+describe("on the phone, outside the session", () => {
+  it("draws it in the holding's sheet, whose history opens with it (#374)", async () => {
     render(<PhoneBook {...props()} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /^details of / })[0]!);
     const charts = await screen.findAllByRole("group", { name: "SPX against the strikes" });
     expect(charts.length).toBeGreaterThan(0);
     expect(charts[0]!.querySelectorAll("[data-spx-day]").length).toBeGreaterThan(0);

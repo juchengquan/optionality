@@ -81,8 +81,8 @@ async function closeHeld(arrangement: "desk" | "phone", exit?: string): Promise<
     const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="h-ic"]')!;
     fireEvent.click(row.querySelector(".nxd-name")!);
   } else {
-    const page = document.querySelector<HTMLElement>('article[data-ref="h-ic"]')!;
-    fireEvent.click(within(page).getByRole("button", { name: "detail and Monitors" }));
+    const card = document.querySelector<HTMLElement>('article[data-ref="h-ic"]')!;
+    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_IC" }));
   }
   const d = arrangement === "desk"
     ? screen.getByRole("complementary", { name: /^inspector:/ }) : await screen.findByRole("dialog");
@@ -228,8 +228,8 @@ for (const arrangement of ["desk", "phone"] as const) {
         const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="h-ic"]')!;
         fireEvent.click(row.querySelector(".nxd-name")!);
       } else {
-        const page = document.querySelector<HTMLElement>('article[data-ref="h-ic"]')!;
-        fireEvent.click(within(page).getByRole("button", { name: "detail and Monitors" }));
+        const card = document.querySelector<HTMLElement>('article[data-ref="h-ic"]')!;
+        fireEvent.click(within(card).getByRole("button", { name: "details of 1231_IC" }));
       }
       const d = arrangement === "desk"
         ? screen.getByRole("complementary", { name: /^inspector:/ }) : await screen.findByRole("dialog");
@@ -536,12 +536,11 @@ describe("folded at the bottom of the book (#373)", () => {
     expect(asked(s, "/positions")).toBe(1);
   });
 
-  it("on the phone, is drawn under the Live tab and the Review tab alike", async () => {
+  it("on the phone, is the last thing in the book, at every hour, picked by no tab (#374)", async () => {
     const s = service();
     await open("phone", s, { at: IN_SESSION });
+    expect(within(screen.getByRole("navigation", { name: "views" })).queryByRole("button", { name: "Review" })).toBeNull();
     expect(await entries()).toHaveLength(3);
-    fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Review" }));
-    expect(rowOf("c-old")).not.toBeNull();
     expect(book().lastElementChild).toBe(screen.getByRole("region", { name: "closed trades" }));
     expect(asked(s, "/positions")).toBe(1);
   });

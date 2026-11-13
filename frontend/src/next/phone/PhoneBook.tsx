@@ -8,10 +8,11 @@ import { placeBook, type BookModel, type PlacedHolding } from "../placement";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
 import { expiryWords } from "./figures";
-import { ReviewPager } from "./Review";
 
-/** The phone's book, arrangement B (ADR 0023, #290): cards, the detail sheet, and REVIEW's one
- *  holding per screen.
+/** The phone's book, arrangement B (ADR 0023, #290): cards and the detail sheet — ONE book, the
+ *  same cards in session and out of it, whichever mode the page holds (#374; ADR 0023 amended
+ *  2026-11-13). REVIEW's one holding per screen went with that amendment: a holding's history is
+ *  in its sheet, open from the start outside the session.
  *
  *  It DRAWS `placeBook` and decides nothing about where a rule sits, so the phone cannot group the
  *  owner's book differently from the desk. What is open in the sheet is held as an id and looked
@@ -19,7 +20,8 @@ import { ReviewPager } from "./Review";
  *  was opened, and closes itself if what it shows is gone.
  */
 export function PhoneBook({
-  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, onRevalue, revaluing, privacy, entryStyle, writes,
+  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, onRevalue, revaluing, privacy,
+  entryStyle, writes,
   journal,
 }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
@@ -31,11 +33,10 @@ export function PhoneBook({
   // nobody asked for, pushing a second entry as it does.
   const gone = openId !== null && subject === null;
   useEffect(() => { if (gone) setOpenId(null); }, [gone]);
-  const flat = placed.holdings.flatMap((g) => g.rows.flat());
 
   const status = (
     <>
-      {/* outside the session, whichever tab (#371): when the service valued what is drawn, and the
+      {/* outside the session (#371): when the service valued what is drawn, and the
           refresh that values it again */}
       {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} onRefresh={onRevalue}
                               refreshing={revaluing} className="nxp-meta" /> : null}
@@ -63,43 +64,33 @@ export function PhoneBook({
 
   return (
     <div className="nx-book nxp-book">
-      {mode === "live" ? (
-        <section aria-labelledby="nxp-holdings">
-          <h2 id="nxp-holdings">Holdings</h2>
-          {status}
-          {placed.holdings.map(({ expiry, rows }) => (
-            <section key={expiry} className="nxp-expiry" data-expiry={expiry}>
-              <ExpiryHead expiry={expiry} dte={rows[0]![0]!.holding.dte} />
-              <ul className="nxp-cards">
-                {rows.map((row) => (
-                  <li key={row.map((p) => p.holding.id).join("+")}>
-                    {row.length === 2 ? (
-                      <Condor row={row} privacy={privacy}>
-                        {row.map((p) => (
-                          <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                       privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
-                        ))}
-                      </Condor>
-                    ) : row.map((p) => (
-                      <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                   privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
-                    ))}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-          {unplaced}
-        </section>
-      ) : (
-        <section aria-labelledby="nxp-review">
-          <h2 id="nxp-review">Review</h2>
-          {status}
-          <ReviewPager placed={flat} quotes={quotes} monitors={monitors} privacy={privacy} session={session}
-                       onOpen={setOpenId} />
-          {unplaced}
-        </section>
-      )}
+      <section aria-labelledby="nxp-holdings">
+        <h2 id="nxp-holdings">Holdings</h2>
+        {status}
+        {placed.holdings.map(({ expiry, rows }) => (
+          <section key={expiry} className="nxp-expiry" data-expiry={expiry}>
+            <ExpiryHead expiry={expiry} dte={rows[0]![0]!.holding.dte} />
+            <ul className="nxp-cards">
+              {rows.map((row) => (
+                <li key={row.map((p) => p.holding.id).join("+")}>
+                  {row.length === 2 ? (
+                    <Condor row={row} privacy={privacy}>
+                      {row.map((p) => (
+                        <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
+                                     privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
+                      ))}
+                    </Condor>
+                  ) : row.map((p) => (
+                    <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
+                                 privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        {unplaced}
+      </section>
       <section aria-labelledby="nxp-watchlist">
         <h2 id="nxp-watchlist">Watchlist</h2>
         {placed.watchlist.length === 0 ? <p className="nxp-meta">nothing watched</p> : null}
@@ -124,11 +115,11 @@ export function PhoneBook({
         </section>
       ) : null}
 
-      {/* the closed trades' fold (#373): the last thing in the book, in either tab */}
+      {/* the closed trades' fold (#373): the last thing in the book, at every hour */}
       {journal}
 
       <DetailSheet subject={subject} onClose={close} quotes={quotes} monitors={monitors}
-                   privacy={privacy} entryStyle={entryStyle} writes={writes} mode={mode} session={session} />
+                   privacy={privacy} entryStyle={entryStyle} writes={writes} session={session} />
     </div>
   );
 }

@@ -110,10 +110,8 @@ async function open(arrangement: Arrangement, now: string, chip = true, mode?: "
   at(now);
   render(<Next />);
   if (mode) {
-    // the owner's choice, by hand: the desk's switch or the phone's tab
-    const tabs = screen.queryByRole("navigation", { name: "views" });
-    fireEvent.click(tabs ? within(tabs).getByRole("button", { name: mode })
-      : within(screen.getByRole("group", { name: "mode" })).getByRole("button", { name: mode }));
+    // the owner's choice, by hand: the desk's switch, the only one since #374
+    fireEvent.click(within(screen.getByRole("group", { name: "mode" })).getByRole("button", { name: mode }));
   }
   await until(() => expect(document.querySelector(chip ? '[data-ref="p1"] .nx-chip' : '[data-ref="p1"]')).toBeTruthy());
 }
@@ -181,26 +179,18 @@ describe("outside the session, a holding's chip and the needs-you line never con
     });
   }
 
-  it("on the phone's Review page and sheet, and the line says nothing of it", async () => {
-    await open("phone", SUNDAY);
-    const page = document.querySelector<HTMLElement>('[data-page][data-ref="p1"]')!;
-    expect(page.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 23:04");
-    expect(line()).not.toContain("1231_7000P");
-
-    fireEvent.click(within(page).getByRole("button", { name: "detail and Monitors" }));
-    const sheet = await screen.findByRole("dialog");
-    await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 23:04"));
-  });
-
-  it("on the phone's Live card and its sheet, with Live picked", async () => {
-    await open("phone", EVENING, true, "Live");
-    const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
-    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 06:23");
-    expect(line()).not.toContain("1231_7000P");
-    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
-    const sheet = await screen.findByRole("dialog");
-    await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 06:23"));
-  });
+  for (const [when, now] of [["on a Sunday", SUNDAY], ["on an evening", EVENING]] as const) {
+    it(`on the phone's card and its sheet ${when}, and the line says nothing of it`, async () => {
+      await open("phone", now);
+      const t = valuedTime(now);
+      const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
+      expect(card.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t}`);
+      expect(line()).not.toContain("1231_7000P");
+      fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
+      const sheet = await screen.findByRole("dialog");
+      await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t}`));
+    });
+  }
 });
 
 describe("in session they read the same poll and agree, so the chip carries no time", () => {
@@ -228,13 +218,6 @@ describe("in session they read the same poll and agree, so the chip carries no t
     fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
     const sheet = await screen.findByRole("dialog");
     await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop"));
-  });
-
-  it("on the phone's Review page, with Review picked", async () => {
-    await open("phone", SESSION, true, "Review");
-    const page = document.querySelector<HTMLElement>('[data-page][data-ref="p1"]')!;
-    expect(page.querySelector(".nx-chip")?.textContent).toBe("at stop");
-    await until(() => expect(line()).toContain("1231_7000P at stop"));
   });
 
   it("still holds across the close: the chip takes its time as the line lets the Level go", async () => {

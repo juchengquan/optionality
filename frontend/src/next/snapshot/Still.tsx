@@ -17,13 +17,13 @@
 import { OctagonAlert } from "lucide-react";
 
 import "./still.css";
-import type { Entry, Health, Holding, Monitor, Reference } from "../../shared/api";
-import { DASH, shortDate } from "../../shared/format";
+import type { Health, Holding, Monitor, Reference } from "../../shared/api";
+import { shortDate } from "../../shared/format";
 import { Freshness } from "../../shared/Freshness";
 import { readHidden } from "../../shared/prefs";
 import { ReferenceStrip } from "../../shared/ReferenceStrip";
 import type { Arrangement } from "../arrangement";
-import { Money, type BookProps } from "../Book";
+import type { BookProps } from "../Book";
 import { AttentionChip, Cell, Fill, OverlapNote, tableRows } from "../desk/DeskBook";
 import {
   attentionOf, charsOf, chipWords, COLUMNS, PINNED, rowId, rowName, type DeskColumn, type DeskRow,
@@ -31,14 +31,10 @@ import {
 import { ClosedLine } from "../ClosedLine";
 import { servedWhen } from "../session";
 import { NeedsLine } from "../NeedsLine";
-import { paceOutcome, paceWords } from "../pace";
 import { fieldWords, monitorName, QUARANTINED, type Need } from "../needs";
-import { HoldingCard, LevelChip, RuleCard, RuleLine } from "../phone/Cards";
-import {
-  contractsWords, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords,
-} from "../phone/figures";
+import { HoldingCard, RuleCard } from "../phone/Cards";
 import { Condor, ExpiryHead } from "../phone/PhoneBook";
-import { placeBook, type BookModel, type PlacedHolding } from "../placement";
+import { placeBook, type BookModel } from "../placement";
 import { STILL } from "./useSaveImage";
 
 export interface StillProps extends BookProps {
@@ -200,23 +196,20 @@ function StillRow({ row, columns, privacy, bracket, session }: {
 
 // ---- B: the cards
 
-function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, mode, session, privacy }: BookProps) {
+/** The phone's book as the phone draws it: the same cards in session and out of it (#374). */
+function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, privacy }: BookProps) {
   const placed: BookModel = placeBook(quotes, holdings, monitors);
   return (
     <div className="nx-book nxp-book">
       <section>
-        <h2>{mode === "live" ? "Holdings" : "Review"}</h2>
+        <h2>Holdings</h2>
         <HoldingsStatus holdings={holdings} error={holdingsError} at={holdingsAt} served={holdingsServed}
                         session={session} className="nxp-meta" />
         {placed.holdings.map(({ expiry, rows }) => (
           <section key={expiry} className="nxp-expiry">
             <ExpiryHead expiry={expiry} dte={rows[0]![0]!.holding.dte} />
             <ul className="nxp-cards">
-              {mode === "review" ? rows.flat().map((p) => (
-                <li key={p.holding.id}>
-                  <ReviewCard placed={p} quotes={quotes} monitors={monitors} privacy={privacy} session={session} />
-                </li>
-              )) : rows.map((row) => (
+              {rows.map((row) => (
                 <li key={row.map((p) => p.holding.id).join("+")}>
                   {row.length === 2 ? (
                     <Condor row={row} privacy={privacy}>
@@ -266,41 +259,6 @@ function StillCards({ quotes, monitors, holdings, holdingsError, holdingsAt, hol
         </section>
       ) : null}
     </div>
-  );
-}
-
-/** REVIEW's page for one holding (phone/Review.tsx) with what a picture cannot carry left out: the
- *  charts, which read the samples, and the button to the detail. */
-function ReviewCard({ placed: { holding, rules }, quotes, monitors, privacy, session }: {
-  placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
-}) {
-  const s = holding.schedule;
-  return (
-    <article className="nxp-card" data-ref={holding.id}>
-      <header className="nxp-head">
-        <span className="nxp-name">{holding.name}</span>
-        <span className="nxp-legs">{holdingLegs(holding)}</span>
-        <span className="nxp-pill">{`${holding.dte} DTE`}</span>
-      </header>
-      <p className="nxp-meta">
-        {`${contractsWords(holding.contracts, privacy)} · ${expiryWords(holding.strike_date)} · opened ${holding.opened_at ?? DASH}`}
-      </p>
-      <div className="nxp-hero">
-        <Money value={holding.pnl} privacy={privacy} />
-        <span className="nxp-hero-sub">unrealised</span>
-        <LevelChip holding={holding} session={session} />
-      </div>
-      <dl className="nxp-facts">
-        <div><dt>captured</dt><dd>{percent(holding.captured)}</dd></div>
-        <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
-        <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
-        <div><dt>pace gap</dt><dd data-outcome={paceOutcome(s?.pace_gap)}>{paceWords(s?.pace_gap)}</dd></div>
-        <div><dt>manage-by</dt><dd>{s ? `at ${s.manage_by_dte} DTE` : DASH}</dd></div>
-        <div><dt>short Δ</dt><dd>{shortDeltaWords(shortDeltas(holding, quotes, monitors))}</dd></div>
-      </dl>
-      {s ? null : <p className="nxp-meta">no schedule — Opened not recorded</p>}
-      {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}
-    </article>
   );
 }
 
