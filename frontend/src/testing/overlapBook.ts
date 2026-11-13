@@ -31,7 +31,8 @@ const to7700 = [{ id: "h-7700", name: "1231_7700" }];
 export const OVERLAP_QUOTES: Entry[] = [
   // the holding's own value rule: exactly its two contracts
   entry("r-8050", { code: "1231_8050", strike_date: DATE, legs: call(8050, 8100), held: true,
-    scope: "all", positions: to8050, short_strikes: [served(DATE, "CALL", 8050, 0.04, 38)] }),
+    scope: "all", positions: to8050, cost_to_close: 1.2, combo_value: -1.2, watched: -1.2,
+    short_strikes: [served(DATE, "CALL", 8050, 0.04, 38)] }),
   // a single contract on its short leg: stays under it, as every single-contract rule does
   entry("r-8050-delta", { code: code(8050), strike_date: DATE, option_type: "CALL",
     field: "option_delta", threshold: 0.2, watched: 0.04, distance: 0.16, held: true, scope: "leg",

@@ -16,6 +16,7 @@ import { Next } from "../next/Next";
 import { placeBook } from "../next/placement";
 import { readHidden } from "../shared/prefs";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
+import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
@@ -491,5 +492,56 @@ describe("what the holdings section says when there are no figures", () => {
     cleanup();
     render(<DeskBook {...props({ holdings: [] })} />);
     expect(screen.getByText("nothing held")).toBeTruthy();
+  });
+});
+
+describe("a combo that only partly overlaps a holding (#346)", () => {
+  const overlap = (over: Partial<BookProps> = {}) =>
+    props({ quotes: OVERLAP_QUOTES, holdings: OVERLAP_HOLDINGS, monitors: OVERLAP_MONITORS, ...over });
+  const note = (id: string) =>
+    row(id).closest("li")!.querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
+
+  it("is drawn in the watchlist with its note, and the holding keeps its own rules", () => {
+    render(<DeskBook {...overlap()} />);
+    expect(order()).toEqual([
+      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700",
+      "r-8100", "w-8150-delta", "w-7700",
+    ]);
+    const watchlist = screen.getByRole("region", { name: "Watchlist" });
+    const holdings = screen.getByRole("region", { name: "Holdings" });
+    expect(watchlist.contains(row("r-8100"))).toBe(true);
+    expect(watchlist.contains(row("w-7700"))).toBe(true);
+    expect(holdings.contains(row("r-8050"))).toBe(true);
+    expect(holdings.contains(row("r-8050-delta"))).toBe(true);
+    expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
+    expect(note("w-7700")).toBe("contains 1231_7700's C7700");
+    // and no note on a rule that is drawn where it always was
+    expect(note("r-8050")).toBeNull();
+    expect(row("r-8100").dataset.nested).toBeUndefined();
+  });
+
+  it("gives its own value, as every watched spread's, not the cost to close of the shared leg", () => {
+    render(<DeskBook {...overlap()} />);
+    expect(cellText("r-8100", "value")).toBe("-0.60");
+    expect(cellText("w-7700", "value")).toBe("-1.50");
+    // the holding's own value rule still reads its holding's cost to close
+    expect(cellText("r-8050", "value")).toBe("1.20");
+  });
+
+  it("says it in the inspector too, and the note survives privacy, having no $ and no count in it", () => {
+    render(<DeskBook {...overlap({ privacy: true })} />);
+    expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
+    fireEvent.click(within(row("r-8100")).getByRole("button", { name: "1231_8100" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1231_8100" });
+    expect(insp.querySelector("[data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");
+  });
+
+  it("is no longer among the holding's Monitors in its inspector", () => {
+    render(<DeskBook {...overlap()} />);
+    fireEvent.click(within(row("h-8050")).getByRole("button", { name: "1231_8050" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1231_8050" });
+    const monitors = within(insp).getByRole("heading", { name: "Monitors" }).parentElement!;
+    expect(monitors.querySelectorAll(".nxd-monitor")).toHaveLength(2);
+    expect(monitors.textContent).not.toContain("now -0.60");
   });
 });

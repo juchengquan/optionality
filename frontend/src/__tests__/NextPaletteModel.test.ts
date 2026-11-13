@@ -7,6 +7,7 @@ import { tableRows, type DeskRow } from "../next/desk/columns";
 import { findables, isPaletteChord, matching, paletteActions, type Findable } from "../next/commands";
 import { placeBook } from "../next/placement";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const book = findables(placeBook(QUOTES, HOLDINGS, MONITORS));
 const refs = (fs: Findable[]) => fs.map((f) => f.ref);
@@ -197,5 +198,24 @@ describe("the chord that opens it", () => {
     expect(isPaletteChord(key({ metaKey: true, ctrlKey: true }), true)).toBe(false);
     expect(isPaletteChord(key({ key: "j", metaKey: true }), true)).toBe(false);
     expect(isPaletteChord(key({}), true)).toBe(false);
+  });
+});
+
+describe("a combo that only partly overlaps a holding (#346)", () => {
+  const found = findables(placeBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS, OVERLAP_MONITORS));
+
+  it("is found where the table draws it, in the watchlist after the holdings, and jumps there", () => {
+    expect(refs(found)).toEqual([
+      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700",
+      "r-8100", "w-8150-delta", "w-7700",
+    ]);
+  });
+
+  it("is called a watched spread, as every spread in the watchlist is", () => {
+    const kind = (ref: string) => found.find((f) => f.ref === ref)!.kind;
+    expect(kind("r-8100")).toBe("watched spread");
+    expect(kind("w-7700")).toBe("watched spread");
+    // the holding's own value rule is still one of its Monitors
+    expect(kind("r-8050")).toBe("Monitor");
   });
 });

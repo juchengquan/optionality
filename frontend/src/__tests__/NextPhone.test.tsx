@@ -11,6 +11,7 @@ import type { BookProps } from "../next/Book";
 import { placeBook } from "../next/placement";
 import { PhoneBook } from "../next/phone/PhoneBook";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 afterEach(cleanup);
 
@@ -322,3 +323,32 @@ const SHORT_LEG_RULE = {
   ...MONITORS[0]!, id: "r-calls-short", code: "US.SPXW261218C7300000", strike_date: "2026-12-18",
   option_type: "CALL", strike: 7300, legs: null, enabled: true,
 } as Monitor;
+
+describe("a combo that only partly overlaps a holding (#346)", () => {
+  const overlap = (over: Partial<BookProps> = {}) =>
+    draw({ quotes: OVERLAP_QUOTES, holdings: OVERLAP_HOLDINGS, monitors: OVERLAP_MONITORS, ...over });
+  const note = (ref: string) => card(ref).querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
+
+  it("is a card in the watchlist with its note, and the holding's card keeps its own rules", () => {
+    overlap();
+    expect(refs(region("Holdings"))).toEqual(["h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700"]);
+    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700"]);
+    expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
+    expect(note("w-7700")).toBe("contains 1231_7700's C7700");
+    expect(card("h-8050").querySelector("[data-overlap]")).toBeNull();
+  });
+
+  it("says it in the detail sheet too, and under privacy", async () => {
+    overlap({ privacy: true });
+    expect(note("w-7700")).toBe("contains 1231_7700's C7700");
+    fireEvent.click(within(card("w-7700")).getByRole("button", { name: /details of 1231_C7700/ }));
+    const sheet = await screen.findByRole("dialog");
+    expect(sheet.querySelector("[data-overlap]")!.textContent).toBe("contains 1231_7700's C7700");
+  });
+
+  it("is on its holding's REVIEW page no more, and still in the watchlist there", () => {
+    overlap({ mode: "review" });
+    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700"]);
+    expect(refs(region("Review"))).not.toContain("r-8100");
+  });
+});

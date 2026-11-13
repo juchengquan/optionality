@@ -1,5 +1,6 @@
 import type { Entry, Health, Holding, Monitor } from "../shared/api";
 import { shortContract, shortDate } from "../shared/format";
+import { overlapOf } from "./placement";
 
 /** What needs you, for the redesigned page (ADR 0012, amended by ADR 0023).
  *
@@ -69,17 +70,24 @@ export function needsYou(
   if (health?.monitor.alarms.bad) {
     out.push({ kind: "fault", text: `alarms ${health.monitor.alarms.label}` });
   }
+  // A combo the book draws in the watchlist because it only partly overlaps a holding (#346) does
+  // not speak for that holding's Levels: the holding is drawn on its own, and says them itself.
+  // Without the holdings nothing is compared, and the rule speaks as before.
+  const apart = new Set(holdings === null ? []
+    : quotes.filter((e) => overlapOf(e, holdings) !== null).map((e) => e.id));
   for (const e of quotes) {
     const name = entryName(e);
     if (e.error) out.push({ kind: "fault", text: `${name} — ${e.error}`, ref: e.id });
-    if (e.schedule?.reached === "stop") out.push({ kind: "stop", text: `${name} at stop`, ref: e.id });
+    // the Levels are the holding's to say when this rule is drawn apart from it
+    const schedule = apart.has(e.id) ? null : e.schedule;
+    if (schedule?.reached === "stop") out.push({ kind: "stop", text: `${name} at stop`, ref: e.id });
     if (e.triggered) {
       out.push(isEntrySignal(e)
         ? { kind: "entry", text: `${name} entry signal`, ref: e.id }
         : { kind: "alarm", text: `${name} ringing`, ref: e.id });
     }
-    if (e.schedule?.reached === "target") out.push({ kind: "target", text: `${name} at target`, ref: e.id });
-    if (e.schedule?.manage_by_due) {
+    if (schedule?.reached === "target") out.push({ kind: "target", text: `${name} at target`, ref: e.id });
+    if (schedule?.manage_by_due) {
       out.push({ kind: "manage", text: `${name} at its manage-by`, ref: e.id });
     }
   }
@@ -91,7 +99,8 @@ export function needsYou(
     if (why) out.push({ kind: "fault", text: `${monitorName(m)} ${what} quarantined — ${why}` });
   }
   const spokenFor = new Set(
-    quotes.map((e) => e.schedule?.position_id).filter((id): id is string => Boolean(id)),
+    quotes.filter((e) => !apart.has(e.id)).map((e) => e.schedule?.position_id)
+      .filter((id): id is string => Boolean(id)),
   );
   for (const h of holdings ?? []) {
     if (spokenFor.has(h.id)) continue;

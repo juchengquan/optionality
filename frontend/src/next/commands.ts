@@ -82,7 +82,8 @@ function ofRow(row: DeskRow): Findable {
     const legs = e.legs
       ? e.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike }))
       : single(e.option_type, strikeOf(e.code));
-    const kind: FindKind = e.legs && !e.held ? "watched spread" : "Monitor";
+    // a spread in the watchlist, the one that only partly overlaps a holding included (#346)
+    const kind: FindKind = e.legs && (!e.held || Boolean(row.overlap)) ? "watched spread" : "Monitor";
     return findable(e.id, kind, rowName(row), e.strike_date, legs, fieldWords(e.field, Boolean(e.legs)));
   }
   return ofMonitor(row.monitor, "quarantined Monitor");

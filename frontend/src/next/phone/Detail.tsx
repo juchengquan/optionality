@@ -26,7 +26,7 @@ import { RuleFigures } from "../RuleFigures";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
-  | { kind: "rule"; entry: Entry; under: Entry[] };
+  | { kind: "rule"; entry: Entry; under: Entry[]; overlap?: string | null };
 
 export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes }: {
   /** what is open, from the figures as they are NOW, or null for nothing */
@@ -66,7 +66,7 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
             {shown.kind === "holding" ? (
               <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
                              privacy={privacy} />
-            ) : <RuleDetail entry={shown.entry} under={shown.under} />}
+            ) : <RuleDetail entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null} />}
             {shown.kind === "holding" && writes ? (
               <div className="nxp-sheet-body">
                 <HoldingActions key={shown.holding.id} holding={shown.holding} monitors={monitors} rules={shown.rules}
@@ -134,7 +134,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy }: {
   );
 }
 
-function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
+function RuleDetail({ entry, under, overlap = null }: { entry: Entry; under: Entry[]; overlap?: string | null }) {
   const state = ruleState(entry);
   return (
     <>
@@ -146,6 +146,7 @@ function RuleDetail({ entry, under }: { entry: Entry; under: Entry[] }) {
       </SheetHeader>
       <div className="nxp-sheet-body">
         {state ? <p><Chip state={state} /></p> : null}
+        {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
         <Progress entry={entry} />
         <p className="nxp-sentence">{sentence(entry)}</p>
         {entry.error ? <p className="nxp-error">{entry.error}</p> : null}

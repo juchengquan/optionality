@@ -300,7 +300,9 @@ describe("what recording a holding does to the rest of the book (#336)", () => {
     const form = screen.getByRole("form", { name: `record a holding of ${LABEL}` });
     expect(within(form).getByTestId("hold-links").textContent).toBe(
       "Also linked to it, by the service, as it links every rule no holding owns: "
-      + "cs spread value — as covering the whole of it, so that row reads this holding's Entry and P&L.");
+      + "cs spread value — as covering the whole of it, so that row reads this holding's Entry and P&L; "
+      // a combo on more than the holding's one contract is drawn in the Watchlist (#346)
+      + "it is drawn in the Watchlist, with a note of the contracts it shares.");
   });
 
   it("says it cannot tell which rules it takes while the holdings are not read", () => {
