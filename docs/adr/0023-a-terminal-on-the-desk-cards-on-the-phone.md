@@ -179,10 +179,11 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
 - **Slice by slice.** It was built in slices (#287 to #346) while the old dashboard kept working.
 - **The swap.** When it covered everything the old one did, `/opt` swapped over and the old
   dashboard and its tests were deleted (#301, 2026-11-13): what went was listed beforehand in a
-  test held to the import graph (#337), so the deletion was mechanical. `/opt/next` is kept as a
-  page that sends a bookmark on to `/opt/`; it is a page and not a Caddy redirect because tailscale
+  test held to the import graph (#337), so the deletion was mechanical. `/opt/next` was kept as a
+  page that sent a bookmark on to `/opt/` (a page and not a Caddy redirect, because tailscale
   strips the prefix and rewrites no `Location`, so only the build, which knows `UI_BASE`, can name
-  `/opt/`. The source stayed in `frontend/src/next/` until #363 moved it up into `src/`, a rename
+  `/opt/`), until the owner had it removed on 2026-11-14 (#364); `/opt/next` now falls through to
+  the dashboard like any unknown path. The source stayed in `frontend/src/next/` until #363 moved it up into `src/`, a rename
   of its own. ADR 0005's "no client-side router" holds: modes and arrangements are state, not
   routes. *(Since 2026-11-13 there are no modes: arrangements are the only such state.)*
 - **The prototype is rewritten, not promoted.** It was written without tests and against a static

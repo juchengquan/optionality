@@ -344,14 +344,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   needs-you line states (holdings' Levels only in session); whether a holding's history starts
   open (outside the session) in the desk's inspector and the phone's sheet; and the saved
   picture's header ("in session", or nothing beside its market-closed line). It was built at `/opt/next` beside the old page, slice
-  by slice (#287 onward), and `next/index.html` is kept as a second build entry that only sends a
-  bookmark of `/opt/next` on to `/opt/` — a meta refresh and a `location.replace` to `%BASE_URL%`,
-  which Vite fills with `UI_BASE`. A page and not a Caddy redirect because tailscale strips the
-  prefix and rewrites no `Location` (deploy/Caddyfile), and Caddy still serves `/next` as a
-  directory (`try_files {path}/index.html`) so it needs no trailing-slash redirect either;
-  `src/__tests__/Entries.test.ts` holds both entries. **The redirect is temporary: remove it
-  after 2026-12-31** — the file, its `next` build input, its case in `Entries.test.ts`, and the
-  `{path}/index.html` entry in the Caddyfile's `try_files` with its comment. The page's source is
+  by slice (#287 onward); the page that sent bookmarks of `/opt/next` on to `/opt/` after the swap
+  was removed by #364, so `/opt/next` now falls through to the dashboard like any unknown path.
+  `index.html` is the build's one entry, and `src/__tests__/Entries.test.ts` holds that. The page's source is
   `src/` itself (moved up from `src/next/`, the rollout's name, in #363): its modules at the top,
   with `desk/`, `phone/` and `snapshot/` for what only one arrangement or the saved picture draws.
   Beside them, `src/shared/` (`api.ts`, `format.ts`, `prefs.ts`, the References panel and strip,
