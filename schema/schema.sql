@@ -63,11 +63,14 @@ CREATE TABLE monitor_positions (
 	FOREIGN KEY(position_id) REFERENCES positions (id)
 );
 
+-- One Position's day, one row per market day (ADR 0011). `cost_to_close` may be empty: a sweep
+-- with no two-sided quote for a leg (moomoo's 0/0 out of hours) still records the day's vol
+-- readings, which the chain needs, and has no cost to give (#380, migration 0012).
 CREATE TABLE position_samples (
 	position_id VARCHAR(32) NOT NULL,
 	observed_on VARCHAR(10) NOT NULL,
 	dte INTEGER NOT NULL,
-	cost_to_close FLOAT NOT NULL,
+	cost_to_close FLOAT,
 	legs_iv TEXT,
 	legs_vega TEXT,
 	legs_delta TEXT,

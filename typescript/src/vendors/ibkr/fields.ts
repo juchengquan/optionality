@@ -10,11 +10,11 @@
  *  one set at 0.14 would fire constantly on moomoo — a silent 100× error in the one figure a
  *  volatility rule reads.
  *
- *  **The mid is DERIVED**, not sent, and only when both sides are numbers — the same rule
- *  `opend/snapshot.ts` applies, because `domain/reference.ts` prefers the mid and a mid derived
- *  from one side would be a number with no meaning.
+ *  **The mid is DERIVED**, not sent, and only where there is a two-sided quote with an offer above
+ *  zero — the same rule `opend/snapshot.ts` applies, because it is the domain's (`midPrice`, #380):
+ *  a mid from one side, or the 0 of an empty book, would be a number with no meaning.
  */
-import type { Quote } from "../../domain/quote.ts";
+import { midPrice, type Quote } from "../../domain/quote.ts";
 
 /** Price ticks, live and delayed, to the service's field names.
  *
@@ -120,18 +120,17 @@ export function greekFields(figures: Greeks): Quote {
   return out;
 }
 
-/** The mid, where both sides arrived.
+/** The mid, where there is a two-sided quote.
  *
- *  Mutates the record it is given, as `opend/snapshot.ts` does, and only when both sides are
- *  numbers: a mid from one side is a number with no meaning, and `domain/reference.ts` prefers
- *  the mid over the last trade.
+ *  Mutates the record it is given, as `opend/snapshot.ts` does, by the one rule every vendor
+ *  shares (`domain/quote.ts` `midPrice`): both sides, and an ask above zero. A mid from one side
+ *  is a number with no meaning, and so is the 0 of an empty book (#380) — `domain/reference.ts`
+ *  prefers the mid over the last trade, and the sweep and the holdings read it as a price. The
+ *  sides are kept as they came.
  */
 export function withMid(record: Quote): Quote {
-  const bid = record.bid_price;
-  const ask = record.ask_price;
-  if (typeof bid === "number" && typeof ask === "number") {
-    record.mid_price = (bid + ask) / 2;
-  }
+  const mid = midPrice(record.bid_price, record.ask_price);
+  if (mid !== null) record.mid_price = mid;
   return record;
 }
 

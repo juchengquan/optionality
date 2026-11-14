@@ -412,10 +412,9 @@ describe("recording what a Position was worth", () => {
     // one unpriced leg and the Cost to close is unknown, not zero — the same all-or-nothing rule
     // the dashboard holds to. A half-priced observation would quietly bend the curve.
     //
-    // The silence is the half worth asserting. The column is NOT NULL and the write is wrapped in
-    // a catch, so dropping the guard still records nothing — it just logs a failure for every
-    // unpriced Position on every sweep, once a minute, for ever. A mutation sweep found that this
-    // test could not tell those apart.
+    // With nothing else read either there is no row to write: #380 writes one with an EMPTY cost
+    // only to keep a vol reading. The silence is the half worth asserting — a mutation sweep once
+    // found this test could not tell "skipped" from "failed and logged" on every sweep.
     const errors: unknown[][] = [];
     const realError = console.error;
     console.error = (...args: unknown[]) => { errors.push(args); };
@@ -431,6 +430,62 @@ describe("recording what a Position was worth", () => {
     expect(samples()).toEqual([]);
     expect(errors, `an unpriced Position should be silent, not logged: ${JSON.stringify(errors)}`)
       .toEqual([]);
+  });
+
+  /** both legs as moomoo answers them out of hours (#380): bid 0 / ask 0 and so no mid, the vol
+   *  still served */
+  const noBook: FakeProvider = (codes) => Promise.resolve(codes.map((c) => ({
+    code: c, name: c, bid_price: 0, ask_price: 0,
+    option_implied_volatility: c === buildSpxCode(future(), "CALL", 8050) ? 10.5 : 22.1,
+    option_vega: 2.5, option_delta: 0.1,
+  })));
+  const row = (id: string) => db.prepare(
+    "select cost_to_close, legs_iv, legs_vega, legs_delta, observed_at from position_samples where position_id = ?",
+  ).get(id) as { cost_to_close: number | null; legs_iv: string | null; legs_vega: string | null;
+    legs_delta: string | null; observed_at: string } | undefined;
+
+  it("fills a day with an empty cost and its vol when no leg has a book (#380)", async () => {
+    // out of hours moomoo quotes 0/0, and this row was a Cost to close of 0.00 — a weekend's, or
+    // the Opened day of a trade recorded in the evening. The vol chain needs the day; the price was
+    // not there to read, so it is left empty rather than invented.
+    const id = held("held");
+    const legs = { [buildSpxCode(future(), "CALL", 8050)]: 10.5, [buildSpxCode(future(), "CALL", 8075)]: 22.1 };
+    const quotes: FakeProvider = (codes) => Promise.resolve(codes.map((c) => ({
+      code: c, name: c, bid_price: 0, ask_price: 0,
+      option_implied_volatility: legs[c], option_vega: 2.5, option_delta: 0.1,
+    })));
+    now = new Date("2026-10-17T14:00:00Z"); // a Saturday, mid-morning in New York
+    await sweeper(quotes).sweep();
+    const r = row(id);
+    expect(r?.cost_to_close).toBeNull();
+    expect(JSON.parse(r!.legs_iv!)).toEqual(legs);
+    expect(r?.legs_vega).not.toBeNull();
+    expect(r?.legs_delta).not.toBeNull();
+  });
+
+  it("never replaces a stored cost with an empty one (#380)", async () => {
+    // in the hours a row is rewritten whenever its figures move, and the open quotes one leg before
+    // another: a costless reading must not blank the day's price
+    const id = held("held");
+    await sweeper(spread(5.0, 1.0)).sweep();
+    const before = row(id);
+    now = new Date(now.getTime() + 60_000);
+    await sweeper(noBook).sweep();
+    expect(row(id)).toEqual(before);
+    expect(before?.cost_to_close).toBe(4);
+    // and after the close, where an incomplete row would otherwise be "completed"
+    now = new Date("2026-10-02T01:30:00Z"); // 21:30 the same New York day
+    await sweeper(noBook).sweep();
+    expect(row(id)).toEqual(before);
+  });
+
+  it("gives a costless row its cost when a sweep prices it (#380)", async () => {
+    const id = held("held");
+    await sweeper(noBook).sweep();
+    expect(row(id)?.cost_to_close).toBeNull();
+    now = new Date(now.getTime() + 60_000);
+    await sweeper(spread(5.0, 1.0)).sweep();
+    expect(row(id)?.cost_to_close).toBe(4);
   });
 
   it("stops recording once a Position has expired", async () => {

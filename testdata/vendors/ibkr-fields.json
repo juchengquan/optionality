@@ -171,18 +171,46 @@
     },
     {
       "fn": "withMid",
-      "name": "zero for an empty book, left for the domain to judge",
+      "name": "absent for an empty book, whose sides are kept",
       "args": [
         {
           "bid_price": 0,
-          "ask_price": 0,
-          "mid_price": 0
+          "ask_price": 0
         }
       ],
       "expect": {
         "bid_price": 0,
-        "ask_price": 0,
-        "mid_price": 0
+        "ask_price": 0
+      }
+    },
+    {
+      "fn": "withMid",
+      "name": "absent where the ask is zero, whatever the bid",
+      "args": [
+        {
+          "bid_price": 4.4,
+          "ask_price": 0
+        }
+      ],
+      "expect": {
+        "bid_price": 4.4,
+        "ask_price": 0
+      }
+    },
+    {
+      "fn": "withMid",
+      "name": "a bid of zero against a real offer",
+      "args": [
+        {
+          "bid_price": 0,
+          "ask_price": 0.05,
+          "mid_price": 0.025
+        }
+      ],
+      "expect": {
+        "bid_price": 0,
+        "ask_price": 0.05,
+        "mid_price": 0.025
       }
     },
     {

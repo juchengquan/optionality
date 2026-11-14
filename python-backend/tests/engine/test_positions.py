@@ -421,9 +421,8 @@ class TestRecordingWhatAPositionWasWorth:
 
     async def test_skips_a_position_it_could_not_price_quietly(self, b: Book, caplog: pytest.LogCaptureFixture) -> None:
         # one unpriced leg and the Cost to close is unknown, not zero — the same all-or-nothing rule
-        # the dashboard holds to. The silence is the half worth asserting: the column is NOT NULL and
-        # the write is guarded, so dropping the guard still records nothing — it just logs a failure
-        # for every unpriced Position on every sweep, for ever.
+        # the dashboard holds to. With nothing else read either there is no row to write (#380 writes
+        # one with an empty cost only to keep a reading), and the silence is the half worth asserting.
         b.held("held")
 
         def fetch(codes: list[str]) -> list[dict[str, Any]]:
@@ -434,6 +433,76 @@ class TestRecordingWhatAPositionWasWorth:
         assert b.samples() == []
         errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
         assert errors == [], f"an unpriced Position should be silent, not logged: {errors}"
+
+    def no_book(self, b: Book, ivs: dict[str, float]) -> FakeProvider:
+        """Both legs as moomoo answers them out of hours (#380): bid 0 / ask 0 and so no mid, the vol
+        still served."""
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "code": c,
+                    "name": c,
+                    "bid_price": 0,
+                    "ask_price": 0,
+                    "option_implied_volatility": ivs.get(c, 15.0),
+                    "option_vega": 2.5,
+                    "option_delta": 0.1,
+                }
+                for c in codes
+            ]
+
+        return fetch
+
+    def row(self, b: Book, id_: str) -> dict[str, Any] | None:
+        cursor = b.db.execute(
+            "select cost_to_close, legs_iv, legs_vega, legs_delta, observed_at from position_samples"
+            " where position_id = ?",
+            (id_,),
+        )
+        found = cursor.fetchone()
+        return None if found is None else dict(zip([d[0] for d in cursor.description], found, strict=True))
+
+    async def test_fills_a_day_with_an_empty_cost_and_its_vol_when_no_leg_has_a_book(self, b: Book) -> None:
+        # out of hours moomoo quotes 0/0, and this row was a Cost to close of 0.00 — a weekend's, or the
+        # Opened day of a trade recorded in the evening (#380). The vol chain needs the day; the price was
+        # not there to read, so it is left empty rather than invented.
+        id_ = b.held("held")
+        legs = {b.sold(): 10.5, b.bought(): 22.1}
+        quotes = self.no_book(b, legs)
+        b.now = datetime(2026, 10, 17, 14, 0, tzinfo=UTC)  # a Saturday, mid-morning in New York
+        await b.sweeper(quotes).sweep()
+        r = self.row(b, id_)
+        assert r is not None
+        assert r["cost_to_close"] is None
+        assert json.loads(r["legs_iv"]) == legs
+        assert r["legs_vega"] is not None
+        assert r["legs_delta"] is not None
+
+    async def test_never_replaces_a_stored_cost_with_an_empty_one(self, b: Book) -> None:
+        # in the hours a row is rewritten whenever its figures move, and the open quotes one leg before
+        # another: a costless reading must not blank the day's price (#380)
+        id_ = b.held("held")
+        await b.sweeper(b.spread(5.0, 1.0)).sweep()
+        before = self.row(b, id_)
+        no_book = self.no_book(b, {})
+        b.now += timedelta(minutes=1)
+        await b.sweeper(no_book).sweep()
+        assert self.row(b, id_) == before
+        assert before is not None
+        assert before["cost_to_close"] == 4
+        # and after the close, where an incomplete row would otherwise be "completed"
+        b.now = datetime(2026, 10, 2, 1, 30, tzinfo=UTC)  # 21:30 the same New York day
+        await b.sweeper(no_book).sweep()
+        assert self.row(b, id_) == before
+
+    async def test_gives_a_costless_row_its_cost_when_a_sweep_prices_it(self, b: Book) -> None:
+        id_ = b.held("held")
+        await b.sweeper(self.no_book(b, {})).sweep()
+        assert self.row(b, id_)["cost_to_close"] is None  # type: ignore[index]
+        b.now += timedelta(minutes=1)
+        await b.sweeper(b.spread(5.0, 1.0)).sweep()
+        assert self.row(b, id_)["cost_to_close"] == 4  # type: ignore[index]
 
     async def test_stops_recording_once_a_position_has_expired(self, b: Book) -> None:
         b.held("gone", strike_date=b.past())

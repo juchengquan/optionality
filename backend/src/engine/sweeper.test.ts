@@ -389,6 +389,103 @@ describe("a value it cannot read", () => {
   });
 });
 
+describe("a price with no book (#380)", () => {
+  /** what moomoo answers for every option out of hours: bid 0 / ask 0, so the mapping derives no
+   *  mid (`midPrice`), and the greeks regardless */
+  const noBook: FakeProvider = (codes) =>
+    Promise.resolve(codes.map((c) => ({ code: c, name: c, bid_price: 0, ask_price: 0, option_delta: 0.1 })));
+  const ringing = (id: string, value: number) => updateMonitorFields(db, id, {
+    triggered: 1, last_value: value, last_checked_at: "2026-09-30 20:14:59.000000",
+    last_alarm_at: "2026-09-30 19:00:00.000000",
+  });
+
+  it("neither clears a ringing ABOVE rule nor says anything, and keeps its figure", async () => {
+    // a 0 is never above anything: read as a price, every evening said "back below" and the
+    // bell went off until the open
+    const id = combo({ direction: "above", threshold: 5 });
+    ringing(id, 6.2);
+    const before = row(id);
+    await sweeper(noBook, { alarmRepeatSeconds: 60 }).sweep();
+    expect(sent).toEqual([]);
+    expect(row(id)).toEqual(before);
+  });
+
+  it("neither rings a BELOW rule nor reminds one already ringing", async () => {
+    // a 0 is below everything: read as a price, a profit target rang every evening and reminded
+    // all night
+    const quiet = combo({ code: "quiet", direction: "below", threshold: 3 });
+    const loud = combo({ code: "loud", direction: "below", threshold: 3, legs: [
+      { sign: 1, option_type: "CALL", strike: 8200 }, { sign: -1, option_type: "CALL", strike: 8250 },
+    ] });
+    ringing(loud, 2.5);
+    const [q, l] = [row(quiet), row(loud)];
+    await sweeper(noBook, { alarmRepeatSeconds: 1 }).sweep();
+    expect(sent).toEqual([]);
+    expect(row(quiet)).toEqual(q);
+    expect(row(loud)).toEqual(l);
+  });
+
+  it("is not evaluated with one leg quoted and the other not, as at the open", async () => {
+    // the open quotes one leg before the other: the sum of a real mid and a 0 read as one leg's
+    // whole price, and rang an above rule — which is what 13 Nov's 09:25 and 09:30 alarms were
+    const id = combo({ direction: "above", threshold: 5 });
+    const a = buildSpxCode(future(), "CALL", 8100);
+    await sweeper((codes) => Promise.resolve(codes.map((c) => (c === a
+      ? { code: c, bid_price: 26.2, ask_price: 26.6, mid_price: 26.4 }
+      : { code: c, bid_price: 0, ask_price: 0 })))).sweep();
+    expect(sent).toEqual([]);
+    expect(row(id)!.triggered).toBe(0);
+    expect(row(id)!.last_value).toBeNull();
+  });
+
+  it("is held, not counted toward quarantine, however long the book stays empty", async () => {
+    const id = combo();
+    const s = sweeper(noBook, { quarantineAfterSilentSweeps: 1 });
+    await s.sweep();
+    await tick(s);
+    expect(row(id)!.enabled).toBe(1);
+    expect(sent).toEqual([]);
+    expect(s.silentSweeps.has(id), "a held rule has no run of silence").toBe(false);
+  });
+
+  it("ends a run of silence: a held sweep between two silent ones starts the count again", async () => {
+    // the run counts CONSECUTIVE sweeps with no figure, and a held sweep is an answer — so a leg that
+    // goes missing again afterwards starts from one. Kept from before the hold, the count would reach
+    // the limit here and quarantine a rule whose legs the Provider has been returning all along.
+    const id = combo();
+    const a = buildSpxCode(future(), "CALL", 8100);
+    let held = false;
+    const s = sweeper((codes) => Promise.resolve(codes
+      .filter((c) => held || c === a)
+      .map((c) => ({ code: c, name: c, bid_price: 0, ask_price: 0 }))), { quarantineAfterSilentSweeps: 3 });
+    await s.sweep();
+    await tick(s); // two silent sweeps: one short of the limit
+    expect(s.silentSweeps.get(id)).toBe(2);
+    held = true;
+    await tick(s); // every leg back, one with no book: held
+    held = false;
+    await tick(s); // the leg missing again: the first of a new run
+    expect(row(id)!.enabled).toBe(1);
+    expect(s.silentSweeps.get(id)).toBe(1);
+    expect(sent).toEqual([]);
+  });
+
+  it("still counts a leg the Provider did not return at all: that is silence", async () => {
+    const id = combo();
+    const a = buildSpxCode(future(), "CALL", 8100);
+    await sweeper((codes) => Promise.resolve(codes.filter((c) => c === a)
+      .map((c) => ({ code: c, bid_price: 0, ask_price: 0 }))), { quarantineAfterSilentSweeps: 1 }).sweep();
+    expect(row(id)!.enabled).toBe(0);
+    expect(row(id)!.disabled_reason).toBe("no-figure");
+  });
+
+  it("still counts a missing figure on any other field", async () => {
+    const id = monitor({ field: "option_vega" });
+    await sweeper(noBook, { quarantineAfterSilentSweeps: 1 }).sweep();
+    expect(row(id)!.enabled).toBe(0);
+  });
+});
+
 describe("the expiry lifecycle", () => {
   it("mutes an expired monitor with a notice, and stops fetching it", async () => {
     const id = monitor({ strike_date: past() });

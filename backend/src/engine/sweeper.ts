@@ -29,6 +29,11 @@
  *  The first two are symmetrical in their answer and differ only in how long it takes to be sure.
  *  The second used to be a log line and a `continue`, which is the quietest failure this service
  *  had: an alarm that cannot fire reads exactly like one that is not breached (#167).
+ *
+ *  One absence is NOT a fault: a price rule whose legs all came back but not all with a two-sided
+ *  quote is HELD (`holdsWithoutQuote`, #380) — not evaluated, not counted, nothing said. That is the
+ *  market shut or not yet quoting, every evening and every open, and counting it would quarantine
+ *  every price rule each night.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -37,7 +42,7 @@ import { type NotifySender, type Notifier, notifier } from "../notify.ts";
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { alarmPolicy, alarmTransition } from "optionality/domain/alarm";
 import {
-  expiryVerdict, silenceVerdict, unknownContractVerdict, unreadableNotice,
+  expiryVerdict, holdsWithoutQuote, silenceVerdict, unknownContractVerdict, unreadableNotice,
 } from "optionality/domain/lifecycle";
 import { monitorLegCodes, monitorValue } from "optionality/domain/monitor";
 import { positionLegCodes } from "optionality/domain/position";
@@ -389,6 +394,15 @@ export class MonitorSweeper {
         try {
           const monitor = toMonitor(row);
           const value = monitorValue(monitor, byCode);
+          if (value === null && holdsWithoutQuote(monitor, byCode)) {
+            // HELD (#380): every leg came back, and one without a two-sided quote — moomoo's 0/0
+            // out of hours, IB Gateway's empty sides, the open quoting one leg first. The market's
+            // answer rather than a figure that failed to arrive, so the rule is neither evaluated
+            // nor counted: its bell, its figure and its last check stay as the last quoted sweep
+            // left them, nothing is said, and no run of silence is kept for it.
+            this.silentSweeps.delete(row.id);
+            continue;
+          }
           if (value === null) {
             // the decision is `domain/lifecycle.silenceVerdict` (ADR 0017); this applies it
             const verdict = silenceVerdict(

@@ -7,7 +7,8 @@ Date: 2026-10-12
 Accepted. Decided with the owner on 2026-10-12. Amended 2026-11-10: the daily sample is the day's
 close (or marked as not one), and records each leg's delta (last section). Amended 2026-11-11 by
 ADR 0024: the sample also records SPX's price, derived from the sweep's batch. Amended 2026-11-12:
-the vol split is of the gap at the last sample, served whole by the route (last section).
+the vol split is of the gap at the last sample, served whole by the route. Amended 2026-11-14
+(#380): a day's row may have an empty Cost to close, and keeps its vol readings (last section).
 
 ## Context
 
@@ -243,3 +244,53 @@ would otherwise claim a cover of 1e17 vol points.
 The dashboard shows that split dated, beside the live gap, and does not reconcile the two: they are
 different instants and say so. `/opt`'s row sheet still subtracts from its live gap until #301
 deletes it.
+
+## Amended 2026-11-14: an out-of-hours row may have no Cost to close (#380)
+
+Out of hours moomoo quotes every option bid 0 / ask 0, and the mapping read that as a mid of 0. So
+the book was valued at 0.00 every evening, and any row this file's rules let the sweep write out of
+hours stored a Cost to close of 0. That covered three kinds of row: a weekend's, a holiday's, and
+the Opened day of a trade recorded in New York's evening, which is the owner's habit. "Weekend rows
+carry the last close forward", as the 2026-11-10 amendment put it, assumed a quote that was not
+there. The owner decided three things on 2026-11-14:
+
+- **A quote with no ask above zero is no price** (`midPrice` in `domain/quote.ts`, shared by every
+  vendor's mapping in both languages; the sides themselves are kept). A worthless wing is bid 0 /
+  ask 0.05 and keeps its mid.
+- **The sweep holds a price rule** whose legs came back without a two-sided quote. This is
+  CLAUDE.md's Retention invariant, and it does not concern the samples.
+- **A day's row may have an EMPTY Cost to close** (migration 0012).
+
+On the third:
+
+- **Skipping the row instead would break the chain.** With no price, the old rule wrote nothing.
+  The chain above needs a row for every calendar day from Opened, so the Vol part would have gone
+  null across every weekend and for every trade recorded in the evening.
+- **The vol readings are what the chain needs, and they are still served out of hours.** So the
+  row is written with each leg's IV, vega and delta, its SPX where the batch gives one, and the cost
+  left empty. Nothing that nobody observed is stored.
+- **A sweep that read nothing at all writes no row, as before.** That is a leg the Provider did not
+  return, with no price and no reading.
+
+`takesSample` takes the cost as one of a reading's figures:
+
+- **An empty cost never replaces a stored one, at any hour.** In the hours a row is rewritten
+  whenever its figures move, and the open quotes one leg before another, so this is what stops a
+  costless reading from blanking a day's price, or a fill a session priced.
+- **A row without a cost is INCOMPLETE**, as one without its IV or vega is. In the hours it is
+  given a cost by any sweep that has one, as a moved figure always rewrote it. After the close it is
+  completed only by a reading with all three: a costless reading is never complete, so it cannot
+  rewrite a costless row on every sweep until midnight.
+
+What reads a costless row:
+
+- **The burndown** draws no point for it. The row is there, so it is not hatched as a missed day,
+  and the line breaks across it as it does across a gap.
+- **The pace SKIPS it.** `/vol`'s split (`paceExplained`) is taken at the last day WITH a Cost to
+  close, and the vol part runs to that same day, so vol + rest = gap stays one instant. Taken at a
+  costless last row, every weekend and every weekday's small hours would have read "has no Cost to
+  close". Only where no day has a cost does the last day say so.
+- **The vol chain itself** never read the cost, so a costless day still links the days either side.
+
+Valuing a holding from its latest close outside the session is the second half of #380, and is not
+decided here.

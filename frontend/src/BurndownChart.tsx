@@ -36,7 +36,7 @@ import { Threshold } from "@visx/threshold";
 
 import type { Sample, Samples } from "./shared/api";
 import {
-  CORRECTED_WORDS, correctionDte, costRuns, nearestDay, nowLines, nowWords, sampleWords, say, stepDay,
+  CORRECTED_WORDS, correctionDte, costRuns, hasCost, nearestDay, nowLines, nowWords, sampleWords, say, stepDay,
   textWidth, tipLines, tipPlace, valueAxis, type Unit,
 } from "./burndown";
 
@@ -111,7 +111,10 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
     const h = tipBox.current?.offsetHeight;
     if (h && h !== tipH) setTipH(h);
   });
-  const { levels, plan, samples } = served;
+  // the days that have a Cost to close are the points; a day kept only for its vol readings
+  // (#380: no two-sided quote, out of hours) is a row, so it is not a missed day, but no point
+  const { levels, plan, samples: rows } = served;
+  const samples = rows.filter(hasCost);
   const { now } = axis;
   const x = scaleLinear<number>({ domain: [span, 0], range: [L, W - R] });
   const y = scaleLinear<number>({ domain: [axis.lo, axis.hi], range: [H - B, T] });
@@ -129,7 +132,7 @@ export function Burndown({ served, unit, axis, span, gutters: { L, R }, closeDte
   const half = textWidth(manageWords) / 2;
   const manageLabelX = manage === null ? null : Math.min(
     Math.max(x(manage), L + textWidth(startWords) + 6 + half), W - 4 - textWidth(endWords) - 6 - half);
-  const missed = missedDays(samples);
+  const missed = missedDays(rows);
   const dayW = (W - L - R) / span;
   // the gap to the plan is shaded only where a day has its own On-pace, and a Cost to close summed
   // under the quantities as they now are (#359)

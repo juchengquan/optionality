@@ -256,7 +256,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     serveSamples({
       levels: { dte_at_open: 45, target: null, stop: null, target_dte: null, manage_by_dte: 21 },
       plan: [{ dte: 45, on_pace: -2 }, { dte: 0, on_pace: 0 }],
-      samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: -s.cost_to_close, on_pace: null })),
+      samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: -s.cost_to_close!, on_pace: null })),
       qty_corrected_at: null,
     });
     const { insp } = await inspect("h-calls", "1218_C7300", { holdings: debit });
@@ -282,6 +282,28 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     const iv = await ivOf(insp);
     const runs = [...iv.querySelectorAll("[data-leg]")][0]!.querySelectorAll("polyline");
     expect([...runs].map((r) => corners(r).length)).toEqual([2, 3]);
+  });
+
+  it("draws no point for a day kept with no Cost to close, and does not call it missed (#380)", async () => {
+    // 5 Nov's row is there for its vol readings, with no price: a leg had no two-sided quote
+    const days = SAMPLES["h-calls"]!.samples.map((s) => (s.observed_on === "2026-11-05" ? { ...s, cost_to_close: null } : s));
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(6));
+    expect(chart.querySelector("[data-sample='2026-11-05']")).toBeNull();
+    // the line breaks there, as it does across a missed day, but the day is not hatched as missed
+    expect([...chart.querySelectorAll("[data-costs]")].map((r) => corners(r).length)).toEqual([2, 4]);
+    expect(chart.querySelectorAll("[data-missed]")).toHaveLength(0);
+  });
+
+  it("says why the burndown is empty when no day has a Cost to close yet (#380)", async () => {
+    const days = SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: null }));
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(within(chart).getByText(/no day with a Cost to close yet/)).toBeTruthy());
+    expect(chart.querySelectorAll("[data-sample]")).toHaveLength(0);
   });
 
   it("draws the days summed before a leg's quantity was corrected apart, and says so (#359)", async () => {

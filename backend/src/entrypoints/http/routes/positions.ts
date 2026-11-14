@@ -192,7 +192,9 @@ const SampleOut = z.object({
   /** whether it is the day's close, and if not why (`sampleTiming`): what the chart marks */
   timing: z.enum(["close", "before-open", "after-close", "unrecorded"]),
   dte: z.number(),
-  cost_to_close: z.number(),
+  /** null on a day kept for its vol readings with no price to give: a leg without a two-sided
+   *  quote, moomoo's 0/0 out of hours (#380). The burndown draws no point for it. */
+  cost_to_close: z.number().nullable(),
   /** what Cost to close would be at this DTE if only time had passed (`onPace`); null without a
    *  schedule */
   on_pace: z.number().nullable(),

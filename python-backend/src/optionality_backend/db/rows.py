@@ -57,7 +57,7 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
 NULLABLE: dict[TableName, tuple[str, ...]] = {
     "monitors": ("legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at"),
     "positions": ("strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit", "qty_corrected_at"),
-    "position_samples": ("legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"),
+    "position_samples": ("cost_to_close", "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"),
     "monitor_positions": (),
     "reference_securities": ("label",),
     "schema_migrations": (),
@@ -151,7 +151,10 @@ class PositionSampleRow(TypedDict):
     position_id: str
     observed_on: str
     dte: int
-    cost_to_close: float
+    #: None where a leg had no two-sided quote to price it — moomoo's 0/0 out of hours — on a row
+    #: written for its vol readings, which the chain needs for every day (#380, migration 0012). An
+    #: empty cost never replaces a stored one (`takes_sample`).
+    cost_to_close: float | None
     #: JSON text: contract code -> implied volatility. None where not every leg was priced — a partial
     #: map would invite a vol figure computed from half a structure (ADR 0011).
     legs_iv: str | None

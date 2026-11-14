@@ -244,7 +244,7 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["timing"],
     "close" | "before-open" | "after-close" | "unrecorded">>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["observed_at"], string | null>>,
-  Checked<Exactly<Ok<E["samples"]>["samples"][number]["cost_to_close"], number>>,
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["cost_to_close"], number | null>>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["on_pace"], number | null>>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["legs_iv"], Record<string, number> | null>>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["spx"], number | null>>,

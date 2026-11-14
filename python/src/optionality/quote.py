@@ -97,6 +97,22 @@ class DerivedSpx(BaseModel):
     reason: str | None
 
 
+def mid_price(bid: object, ask: object) -> float | None:
+    """The mid of a quote, or None where there is no two-sided quote to take one from (#380).
+
+    Every vendor's mapping derives `mid_price` through this one rule, in both languages. Both sides
+    must be finite numbers (a bool is not one, as `typeof` says in the TypeScript), the ask above
+    zero and the bid zero or more. Out of hours moomoo quotes every option bid 0 / ask 0, and a mid
+    of 0 valued the book at 0.00 every evening: nobody offers an option for nothing, so an ask of
+    zero is no offer at all. A worthless wing is bid 0 / ask 0.05 and keeps its mid. Mirrors
+    `quote.ts`' `midPrice`.
+    """
+    b, a = _finite(bid), _finite(ask)
+    if b is None or a is None or not a > 0 or b < 0:
+        return None
+    return (b + a) / 2
+
+
 def _finite(value: object) -> float | None:
     """A figure from the wire, or None for anything that is not a finite number.
 

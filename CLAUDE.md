@@ -614,7 +614,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   A rule the engine cannot evaluate → quarantine (disable + Telegram notice, NEVER delete), for either
   fault: an unknown contract, or a watched figure that has not arrived for `QUARANTINE_AFTER_SILENT_SWEEPS`
   consecutive sweeps (observed, never declared — what a provider serves depends on the account, not on its
-  code; 0 only logs). Expired monitors: mute with notice, auto-delete after `EXPIRED_RETENTION_DAYS`.
+  code; 0 only logs). An UNQUOTED book is HELD, not counted (#380): a price rule (`mid_price`) whose legs
+  all came back but not all with a two-sided quote — moomoo's 0/0 out of hours, IB Gateway's empty sides,
+  the open quoting one leg first — is neither evaluated nor counted toward quarantine, at any hour, by
+  the batch and never the clock (`holdsWithoutQuote`): its bell, figure and last check stay as the last
+  quoted sweep left them and nothing is said. A mid is a price only with an ask above zero, by ONE rule
+  every vendor's mapping shares in both languages (`midPrice`, `domain/quote.ts`); the raw sides are kept.
+  Expired monitors: mute with notice, auto-delete after `EXPIRED_RETENTION_DAYS`.
   Nothing else is ever auto-deleted. One deletion is the OWNER's, triggered by saving: `POST /spreads`
   recording a spread as HELD replaces a WATCH rule (linked to no holding) on a (code, field) it makes —
   deleted and remade as the holding's in one transaction, named by the form before the save and in
@@ -645,6 +651,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   (missing IV or vega, from a sweep with both), never changed (`takesSample`). Every write stamps
   `observed_at`, so an off-close point is marked.
   Each carries per-leg IV, vega and delta, all-or-nothing per map, each gated on its own.
+  Its Cost to close may be EMPTY (#380, migration 0012): a sweep with no two-sided quote for a leg (out
+  of hours) still keeps the day for its vol readings, which the chain needs, and an empty cost NEVER
+  replaces a stored one, at any hour; a costless row is incomplete, completed only by a reading with
+  cost, IV and vega (ADR 0011, amended 2026-11-14). The burndown draws no point for it and does not
+  call it missed, and `/vol`'s split skips it: taken at the last day with a cost, vol part included. A sweep that read nothing at all (a leg not returned) writes no row.
   And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
   it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the

@@ -115,9 +115,10 @@ export function recordSamples(
       const dte = daysToExpiry(row.strike_date, at);
       if (dte < 0) continue;
       const position = toPosition(row);
-      // unknown, not zero: one unpriced leg and there is no observation to make
+      // unknown, not zero: one leg without a mid and there is no cost to record. The vol may still
+      // be there to read — moomoo quotes every option 0/0 out of hours and serves the greeks — and
+      // the chain needs the day, so the row is written with the cost left empty (#380, below).
       const cost = costToClose(position, byCode);
-      if (cost === null) continue;
 
       // Per LEG, because a structure has no IV — "IV is never summed" (CLAUDE.md), and these
       // legs run 10.5% to 22.1%, so one number for them would be a fiction. The vegas go with
@@ -137,12 +138,18 @@ export function recordSamples(
       // never costs the IV or the vega reading beside it.
       const deltas = legReadings(position, byCode, "option_delta");
       const legsDelta = deltas === null ? null : toSqliteJson(deltas);
+      // nothing observed at all — a leg the Provider did not return — is no row: there is neither a
+      // price nor a reading to keep, and skipping it is quiet, as it always was
+      if (cost === null && ivs === null && vegas === null && deltas === null) continue;
 
       // The day's row as it stands decides what this sweep may do with it: fill it, write it if
       // its figures moved, restamp or replace a provisional one, complete one without its vol
       // readings — or nothing, which is how a settled close stays the close (takesSample).
       const stored = findPositionSample(db, row.id, observedOn);
-      const write = takesSample(at, stored ?? null, { legs_iv: legsIv, legs_vega: legsVega });
+      // ...and an EMPTY cost never replaces a stored one, whatever the hour (#380)
+      const write = takesSample(
+        at, stored ?? null, { legs_iv: legsIv, legs_vega: legsVega, cost_to_close: cost },
+      );
       if (write === "no") continue;
 
       // Only when something actually differs. The sweep runs every 15 seconds and the day's row

@@ -113,6 +113,18 @@ def test_derives_a_mid_only_from_both_sides():
     assert "mid_price" not in records[1]  # a mid from one side looks like a price and is not one
 
 
+def test_an_empty_book_is_no_mid_and_keeps_its_sides():
+    # moomoo quotes every option bid 0 / ask 0 out of hours, and a mid of 0 valued the book at 0.00
+    # every evening (#380): no ask above zero is no price, by `quote.mid_price`
+    rows = [{"code": A, "bid_price": 0.0, "ask_price": 0.0}, {"code": C, "bid_price": 0.0, "ask_price": 0.05}]
+    ctx = FakeContext(rows=rows)
+    with opend.OpenD(connect=connect(ctx)) as od:
+        records = od.fetch([A, C])
+    assert "mid_price" not in records[0]
+    assert (records[0]["bid_price"], records[0]["ask_price"]) == (0.0, 0.0)
+    assert records[1]["mid_price"] == 0.025  # a worthless wing offered at 0.05 is a quote
+
+
 def test_closes_the_connection_even_when_the_call_fails():
     # the TypeScript's #128: every OpenD failure leaked a websocket that reconnected for ever
     ctx = FakeContext(error=RuntimeError("timeout"))

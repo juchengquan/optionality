@@ -379,6 +379,122 @@ class TestAValueItCannotRead:
         assert m["last_value"] == pytest.approx(7.15, abs=0.5e-10)
 
 
+def no_book(codes: list[str]) -> list[dict[str, Any]]:
+    """What moomoo answers for every option out of hours (#380): bid 0 / ask 0, so the mapping derives
+    no mid (`quote.mid_price`), and the greeks regardless."""
+    return [{"code": c, "name": c, "bid_price": 0, "ask_price": 0, "option_delta": 0.1} for c in codes]
+
+
+class TestAPriceWithNoBook:
+    @staticmethod
+    def ringing(t: Sweeps, id_: str, value: float) -> None:
+        update_monitor_fields(
+            t.db,
+            id_,
+            {
+                "triggered": 1,
+                "last_value": value,
+                "last_checked_at": "2026-09-30 20:14:59.000000",
+                "last_alarm_at": "2026-09-30 19:00:00.000000",
+            },
+        )
+
+    async def test_neither_clears_a_ringing_above_rule_nor_says_anything_and_keeps_its_figure(self, t: Sweeps) -> None:
+        # a 0 is never above anything: read as a price, every evening said "back below"
+        id_ = t.combo(direction="above", threshold=5)
+        self.ringing(t, id_, 6.2)
+        before = t.row(id_)
+        await t.sweeper(no_book, alarm_repeat_seconds=60).sweep()
+        assert t.sent == []
+        assert t.row(id_) == before
+
+    async def test_neither_rings_a_below_rule_nor_reminds_one_already_ringing(self, t: Sweeps) -> None:
+        # a 0 is below everything: read as a price, a profit target rang every evening
+        quiet = t.combo(code="quiet", direction="below", threshold=3)
+        loud = t.combo(
+            code="loud",
+            direction="below",
+            threshold=3,
+            legs=[
+                {"sign": 1, "option_type": "CALL", "strike": 8200},
+                {"sign": -1, "option_type": "CALL", "strike": 8250},
+            ],
+        )
+        self.ringing(t, loud, 2.5)
+        q, l_ = t.row(quiet), t.row(loud)
+        await t.sweeper(no_book, alarm_repeat_seconds=1).sweep()
+        assert t.sent == []
+        assert t.row(quiet) == q
+        assert t.row(loud) == l_
+
+    async def test_is_not_evaluated_with_one_leg_quoted_and_the_other_not_as_at_the_open(self, t: Sweeps) -> None:
+        # the sum of a real mid and a 0 read as one leg's whole price, and rang an above rule
+        id_ = t.combo(direction="above", threshold=5)
+        a = build_spx_code(t.future(), "CALL", 8100)
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [
+                {"code": c, "bid_price": 26.2, "ask_price": 26.6, "mid_price": 26.4}
+                if c == a
+                else {"code": c, "bid_price": 0, "ask_price": 0}
+                for c in codes
+            ]
+
+        await t.sweeper(fetch).sweep()
+        assert t.sent == []
+        assert t.row(id_)["triggered"] == 0
+        assert t.row(id_)["last_value"] is None
+
+    async def test_is_held_not_counted_toward_quarantine_however_long_the_book_stays_empty(self, t: Sweeps) -> None:
+        id_ = t.combo()
+        s = t.sweeper(no_book, quarantine_after_silent_sweeps=1)
+        await s.sweep()
+        await t.tick(s)
+        assert t.row(id_)["enabled"] == 1
+        assert t.sent == []
+        assert id_ not in s.silent_sweeps, "a held rule has no run of silence"
+
+    async def test_ends_a_run_of_silence_a_held_sweep_between_two_silent_ones_starts_the_count_again(
+        self, t: Sweeps
+    ) -> None:
+        # the run counts CONSECUTIVE sweeps with no figure, and a held sweep is an answer: kept from
+        # before the hold, the count would reach the limit here and quarantine the rule
+        id_ = t.combo()
+        a = build_spx_code(t.future(), "CALL", 8100)
+        state = {"held": False}
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [{"code": c, "name": c, "bid_price": 0, "ask_price": 0} for c in codes if state["held"] or c == a]
+
+        s = t.sweeper(fetch, quarantine_after_silent_sweeps=3)
+        await s.sweep()
+        await t.tick(s)  # two silent sweeps: one short of the limit
+        assert s.silent_sweeps.get(id_) == 2
+        state["held"] = True
+        await t.tick(s)  # every leg back, one with no book: held
+        state["held"] = False
+        await t.tick(s)  # the leg missing again: the first of a new run
+        assert t.row(id_)["enabled"] == 1
+        assert s.silent_sweeps.get(id_) == 1
+        assert t.sent == []
+
+    async def test_still_counts_a_leg_the_provider_did_not_return_at_all(self, t: Sweeps) -> None:
+        id_ = t.combo()
+        a = build_spx_code(t.future(), "CALL", 8100)
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [{"code": c, "bid_price": 0, "ask_price": 0} for c in codes if c == a]
+
+        await t.sweeper(fetch, quarantine_after_silent_sweeps=1).sweep()
+        assert t.row(id_)["enabled"] == 0
+        assert t.row(id_)["disabled_reason"] == "no-figure"
+
+    async def test_still_counts_a_missing_figure_on_any_other_field(self, t: Sweeps) -> None:
+        id_ = t.monitor(field="option_vega")
+        await t.sweeper(no_book, quarantine_after_silent_sweeps=1).sweep()
+        assert t.row(id_)["enabled"] == 0
+
+
 class TestTheExpiryLifecycle:
     async def test_mutes_an_expired_monitor_with_a_notice_and_stops_fetching_it(self, t: Sweeps) -> None:
         id_ = t.monitor(strike_date=t.past())

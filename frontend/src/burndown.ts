@@ -19,6 +19,12 @@ export interface Unit {
 
 const MONEY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
+/** A day with a Cost to close. A day may have none (#380): out of hours a leg has no two-sided
+ *  quote — moomoo quotes 0/0 — and the sweep keeps the day for its vol readings with the cost left
+ *  empty. Such a day is a row (it is not a missed day), and is not a point on the burndown. */
+export type PricedSample = Sample & { cost_to_close: number };
+export const hasCost = (s: Sample): s is PricedSample => s.cost_to_close !== null;
+
 export function say(points: number, unit: Unit): string {
   if (unit.hidden) return "$•••";
   if (unit.money) return MONEY.format(points * unit.contracts * unit.size);
@@ -89,14 +95,14 @@ export const CORRECTED_WORDS = "summed before a leg's quantity was corrected";
 /** A day's Pace gap, in points per contract as every Pace gap on the page is said (`pace.ts`) —
  *  which is no money, so privacy keeps it. None for a day summed before a correction: its Cost to
  *  close is another structure's, and the service measures no gap from one either (`/vol`). */
-function gapOf(s: Sample) {
+function gapOf(s: PricedSample) {
   if (s.on_pace === null || s.before_correction) return null;
   const gap = s.cost_to_close - s.on_pace;
   return { words: paceWords(gap), outcome: paceOutcome(gap) ?? null };
 }
 
 /** What the crosshair's tooltip says of a day, line by line. */
-export function tipLines(s: Sample, unit: Unit) {
+export function tipLines(s: PricedSample, unit: Unit) {
   const scope = scopeWords(unit);
   return {
     day: `${dayWords(s.observed_on)} · ${s.dte} DTE`,
@@ -123,7 +129,7 @@ export function nowWords(now: { dte: number; cost: number }, unit: Unit): string
   return `valued now, ${now.dte} DTE: ${t.cost}`;
 }
 
-export function sampleWords(s: Sample, unit: Unit): string {
+export function sampleWords(s: PricedSample, unit: Unit): string {
   const t = tipLines(s, unit);
   const gap = t.gap === null ? "" : ` · ${t.gap.words}`;
   const corrected = t.corrected === null ? "" : ` — ${t.corrected}`;
@@ -217,7 +223,7 @@ export function valueAxis(served: Samples, holding: Valued, unit: Unit) {
   const { levels, plan, samples } = served;
   const now = nowOf(holding);
   const values = [
-    0, ...samples.map((s) => s.cost_to_close), ...plan.map((p) => p.on_pace),
+    0, ...samples.filter(hasCost).map((s) => s.cost_to_close), ...plan.map((p) => p.on_pace),
     ...(levels?.target == null ? [] : [levels.target]), ...(now ? [now.cost] : []),
   ];
   let hi = Math.max(...values), lo = Math.min(...values);
