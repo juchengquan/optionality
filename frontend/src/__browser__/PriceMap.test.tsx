@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Next } from "../Next";
 import { DeskBook } from "../desk/DeskBook";
 import { SpxPath, spxGutter } from "../SpxPath";
+import { stillCross } from "../testing/cross";
 import type { Entry } from "../shared/api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
@@ -289,7 +290,7 @@ describe("where SPX was, for an iron fly", () => {
       { side: "long", option_type: "PUT", strike: 6950 }, { side: "long", option_type: "CALL", strike: 7050 },
     ] } as typeof HOLDINGS[number];
     render(<div style={{ width: 360 }}>
-      <SpxPath served={SAMPLES["h-puts"]!} holding={fly} span={45} gutters={{ L: spxGutter(fly), R: 10 }} />
+      <SpxPath served={SAMPLES["h-puts"]!} holding={fly} span={45} gutters={{ L: spxGutter(fly), R: 10 }} cross={stillCross()} />
     </div>);
     await settle();
     const svg = screen.getByRole("group", { name: "SPX against the strikes" }).querySelector("svg")!;

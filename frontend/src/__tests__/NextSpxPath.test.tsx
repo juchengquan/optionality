@@ -12,6 +12,7 @@ import { DeskBook } from "../desk/DeskBook";
 import { PhoneBook } from "../phone/PhoneBook";
 import { spxRange, spxRuns } from "../spxdays";
 import { SpxPath, spxGutter } from "../SpxPath";
+import { stillCross } from "../testing/cross";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { legMarks } from "../testing/legs";
 
@@ -90,7 +91,7 @@ describe("in the desk's inspector, outside the session", () => {
     const chart = await chartOf(insp);
     const days = [...chart.querySelectorAll<SVGElement>("[data-spx-day]")].map((d) => d.dataset.spxDay);
     expect(days).toEqual(["2026-11-03", "2026-11-04", "2026-11-06", "2026-11-07", "2026-11-08", "2026-11-09"]);
-    expect(chart.querySelectorAll("polyline[data-spx-run]")).toHaveLength(2);
+    expect(chart.querySelectorAll("[data-spx-run]")).toHaveLength(2);
     expect(chart.querySelector('[data-strike="6400"]')!.getAttribute("data-side")).toBe("short");
     expect(chart.querySelector('[data-strike="6350"]')!.getAttribute("data-side")).toBe("long");
     // every point drawn sits inside the plot: a missing day mapped to zero would fall far below it
@@ -104,16 +105,20 @@ describe("in the desk's inspector, outside the session", () => {
     expect(within(chart).getByText(/1 day stored without SPX's price: a gap, never zero/)).toBeTruthy();
   });
 
-  it("marks SPX now, from the valuation's own batch, on today's DTE", async () => {
+  it("marks SPX now, from the valuation's own batch, on today's DTE, and says it at the last stop", async () => {
     const chart = await chartOf(inspect("h-puts", "1218_P6400"));
-    expect(chart.querySelector("[data-spx-now]")!.textContent).toContain("6900.50");
+    expect(chart.querySelector("[data-spx-now]")).toBeTruthy();
+    fireEvent.keyDown(within(chart).getByRole("group", { name: /SPX's price by day/ }), { key: "End" });
+    // the valuation's own SPX and its short strike's distance, as /positions/values served them
+    expect(within(chart).getByRole("status").textContent)
+      .toBe("valued now · 38 DTE: SPX now 6900.50 · P6400 500.50 pts · 1.25σ away");
   });
 
   it("says why there is no line when no day carries SPX's price, and draws no point", async () => {
     samples = (path) => (path.includes("h-ic") ? withSpx("h-ic", [null, null]) : samplesAnswer(path));
     const chart = await chartOf(inspect("h-ic", "1231_IC"));
     expect(chart.querySelectorAll("[data-spx-day]")).toHaveLength(0);
-    expect(chart.querySelectorAll("polyline")).toHaveLength(0);
+    expect(chart.querySelectorAll("[data-spx-run]")).toHaveLength(0);
     expect(within(chart).getByText(/no day carries SPX's price/)).toBeTruthy();
   });
 
@@ -145,7 +150,7 @@ describe("a holding with two legs on one strike", () => {
       { side: "long", option_type: "PUT", strike: 6950 }, { side: "long", option_type: "CALL", strike: 7050 },
     ] } as typeof HOLDINGS[number];
     const { container } = render(
-      <SpxPath served={SAMPLES["h-puts"]!} holding={fly} span={45} gutters={{ L: spxGutter(fly), R: 10 }} />);
+      <SpxPath served={SAMPLES["h-puts"]!} holding={fly} span={45} gutters={{ L: spxGutter(fly), R: 10 }} cross={stillCross()} />);
     const ys = [...container.querySelectorAll<SVGTextElement>("[data-strike] text")]
       .map((t) => [t.textContent, Number(t.getAttribute("y"))] as const);
     expect(ys.map(([name]) => name).sort()).toEqual(["C7000", "C7050", "P6950", "P7000"]);

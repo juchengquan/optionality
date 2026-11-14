@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildSpxCode, parseSpxCode } from "optionality/domain/contract";
+import { oneSigma, sigmaDistance } from "optionality/domain/quote";
 import {
   type FakeProvider, type Harness, body, harness, json, pricedFetcher,
 } from "../../../../testing/harness.ts";
@@ -215,17 +216,50 @@ describe("a holding's daily samples, served for the burndown and the IV chart (#
         observed_on: "2026-10-06", observed_at: "2026-10-07 04:00:00+08:00", timing: "close", dte: 73,
         cost_to_close: 2.9, on_pace: 3, spx: 6612.5, before_correction: false,
         legs_iv: JSON.parse(flat(14.5)), legs_vega: JSON.parse(flat(4.25)), legs_delta: JSON.parse(flat(0.2)),
+        short_strikes: expect.any(Array),
       },
       {
         observed_on: "2026-10-07", observed_at: "2026-10-08 08:30:00+08:00", timing: "after-close", dte: 72,
         cost_to_close: 2.75, on_pace: 3 * Math.sqrt(72 / 73), spx: null, before_correction: false,
         legs_iv: null, legs_vega: null, legs_delta: null,
+        short_strikes: expect.any(Array),
       },
       {
         observed_on: "2026-10-08", observed_at: null, timing: "unrecorded", dte: 71,
         cost_to_close: 2.5, on_pace: 3 * Math.sqrt(71 / 73), spx: null, before_correction: false,
         legs_iv: null, legs_vega: null, legs_delta: null,
+        short_strikes: expect.any(Array),
       },
+    ]);
+  });
+
+  it("places each day's short strikes against that day's SPX, in points and σ, as the domain does (#395)", async () => {
+    // the chart's SPX readout shows these and works out none of them (ADR 0005)
+    const id = await made({ opened_at: "2026-10-06", entry: 3 });
+    const [c8050, , p7100] = legCodes();
+    // SPX and every IV: points and σ
+    sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000",
+      { iv: flat(14.5), delta: flat(0.2), spx: 6612.5 });
+    // SPX, no IV: points, and no σ to measure them in
+    sample(id, "2026-10-07", 72, 2.75, "2026-10-07 20:00:00.000000", { spx: 6650 });
+    // IV and no SPX: each strike placed, no distance at all
+    sample(id, "2026-10-08", 71, 2.5, "2026-10-08 20:00:00.000000", { iv: flat(15) });
+    const { samples } = await body(await h.call(`/positions/${id}/samples`));
+    const at = (spx: number, iv: number, dte: number, points: number) => ({
+      points, sigma: sigmaDistance(points, spx, iv, dte), one_sigma: oneSigma(spx, iv, dte),
+    });
+    expect(samples[0].short_strikes).toEqual([
+      { code: c8050, option_type: "CALL", strike: 8050, delta: 0.2, ...at(6612.5, 14.5, 73, 1437.5) },
+      { code: p7100, option_type: "PUT", strike: 7100, delta: 0.2, ...at(6612.5, 14.5, 73, -487.5) },
+    ]);
+    expect(samples[0].short_strikes[0].sigma).toBeCloseTo(3.35, 2);
+    expect(samples[1].short_strikes).toEqual([
+      { code: c8050, option_type: "CALL", strike: 8050, delta: null, points: 1400, sigma: null, one_sigma: null },
+      { code: p7100, option_type: "PUT", strike: 7100, delta: null, points: -450, sigma: null, one_sigma: null },
+    ]);
+    expect(samples[2].short_strikes).toEqual([
+      { code: c8050, option_type: "CALL", strike: 8050, delta: null, points: null, sigma: null, one_sigma: null },
+      { code: p7100, option_type: "PUT", strike: 7100, delta: null, points: null, sigma: null, one_sigma: null },
     ]);
   });
 

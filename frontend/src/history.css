@@ -37,18 +37,22 @@
 .nx-hist-now rect { fill: var(--foreground); }
 .nx-hist-now .nx-bd-halo { fill: var(--background); stroke: var(--foreground); stroke-width: 1; }
 .nx-hist-said { font-size: 0.75rem; color: var(--muted-foreground); min-height: 2.5em; overflow-wrap: anywhere; }
-.nx-hist-leg polyline { fill: none; stroke: var(--foreground); stroke-width: 1.5; }
+.nx-hist-leg path { fill: none; stroke: var(--foreground); stroke-width: 1.5; stroke-linejoin: round; }
 .nx-hist-leg circle { fill: var(--foreground); }
-.nx-hist-leg[data-side="long"] polyline { stroke: var(--muted-foreground); stroke-dasharray: 4 2; }
+.nx-hist-leg[data-side="long"] path { stroke: var(--muted-foreground); stroke-dasharray: 4 2; }
 .nx-hist-leg[data-side="long"] circle { fill: var(--muted-foreground); }
+/* a day that is not the close hollow and a row nobody timed faint, in every panel as in the burndown */
+.nx-hist-leg circle[data-mark="off-close"], .nx-spxp-day[data-mark="off-close"] {
+  fill: var(--background); stroke: var(--foreground); stroke-width: 1.25;
+}
+.nx-hist-leg circle[data-mark="unrecorded"], .nx-spxp-day[data-mark="unrecorded"] { opacity: 0.4; }
 /* where SPX was against the strikes (#298): each strike a rule across the plot, the short ones in
    the foreground and the side each loses on faintly shaded; SPX's days a line in the foreground */
-.nx-spxp svg { cursor: default; }
 .nx-spxp-loss { fill: var(--muted-foreground); opacity: 0.08; }
 .nx-spxp-k line { stroke: var(--foreground); stroke-width: 1; opacity: 0.7; }
 .nx-spxp-k[data-side="long"] line { stroke: var(--muted-foreground); stroke-dasharray: 4 2; opacity: 1; }
 .nx-spxp-k[data-side="short"] text { fill: var(--foreground); font-weight: 600; }
-.nx-spxp-line { fill: none; stroke: var(--foreground); stroke-width: 1.75; }
+.nx-spxp-line { fill: none; stroke: var(--foreground); stroke-width: 1.75; stroke-linejoin: round; }
 .nx-spxp-day { fill: var(--foreground); }
 .nx-spxp-now rect { fill: var(--background); stroke: var(--foreground); stroke-width: 1.5; }
 /* a closed holding's last day (#296): the samples end here, and the plan runs on to expiry */
@@ -73,9 +77,10 @@
 /* the burndown on visx, with its crosshair (#360, BurndownChart.tsx). Every colour a token, so dark
    mode is app.css's and next.css's: the gap to the plan in the OUTCOME colours, which follow the
    viewer's direction setting, and the Levels in the ATTENTION ones, which never flip (ADR 0023) */
-.nx-bd { position: relative; }
+/* the IV chart and SPX's path carry the same crosshair (#395, Crosshair.tsx) */
+.nx-bd, .nx-cross { position: relative; }
 /* a horizontal drag scrubs the days; a vertical one is the page's, and still scrolls it */
-.nx-bd svg { touch-action: pan-y; }
+.nx-bd svg, .nx-cross svg { touch-action: pan-y; }
 .nx-bd-grid { stroke: var(--border); stroke-width: 1; }
 .nx-bd-ahead { fill: var(--gain); opacity: 0.22; }
 .nx-bd-behind { fill: var(--loss); opacity: 0.22; }

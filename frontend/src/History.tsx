@@ -19,22 +19,28 @@
  *    tooltip and in the status line beneath the chart (`BurndownChart.tsx`, #360). A row written before
  *    observation times were kept is drawn faint: nothing says whether it was the close, so it is
  *    claimed neither way.
- *  - **Privacy** keeps the shape and drops every $ figure: the value axis and the Levels' figures
- *    go, the lines stay. The IV chart is in %, which privacy keeps.
+ *  - **Privacy** keeps the shape and drops every $ figure and everything across the contracts held:
+ *    the burndown says points per contract instead (#395). The IV chart is in % and SPX's path in
+ *    index points, which privacy keeps.
  *
- *  The burndown is drawn on visx (`BurndownChart.tsx`, #360). The IV chart here and SPX's path
- *  (`SpxPath.tsx`) stay hand-written SVG at their measured width, as `Payoff.tsx` is: they have no
- *  crosshair to want visx for, and what keeps a day at one x down all three is not the library but
- *  the margins they share (`Gutters`) and the one mapping they all use, DTE from `span` at the left
- *  margin to 0 at the right.
+ *  All three are drawn on visx at their measured width — the burndown (`BurndownChart.tsx`, #360),
+ *  the IV chart here and SPX's path (`SpxPath.tsx`, #395) — and share ONE crosshair
+ *  (`Crosshair.tsx`): hovering, tapping or stepping a day in any of them puts it on that day in all
+ *  three, each saying the day in its own readout. What keeps a day at one x down all three is the
+ *  margins they share (`Gutters`) and the one mapping they all use (`dayScale`), DTE from `span` at
+ *  the left margin to 0 at the right.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { scaleLinear } from "@visx/scale";
+import { LinePath } from "@visx/shape";
 
 import { fetchSamples, type Holding, type Samples } from "./shared/api";
 import { heldLeg, legText } from "./shared/format";
-import { SvgLeg } from "./shared/Legs";
+import { Leg, SvgLeg } from "./shared/Legs";
 import { hasCost, scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
 import { Burndown, runsOf, useWidth } from "./BurndownChart";
+import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross, type Gutters, type Panel } from "./Crosshair";
+import { ivLines, ivWords, MARK, nowDte, stopsOf, type IvLeg } from "./historyDays";
 import { legCode } from "./legs";
 import { SpxPath, spxGutter } from "./SpxPath";
 import "./history.css";
@@ -77,7 +83,31 @@ function isSamples(body: unknown): body is Samples {
  *  valued — today's figures. A closed holding (#296) is drawn from `GET /positions`, which carries
  *  none of them: no contract size, so its money is points per contract, and no "now". */
 export type Charted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">
-  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "spx">>;
+  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "spx" | "short_strikes" | "valued_from">>;
+
+/** The crosshair the three panels share (#395): the stop pointed at, kept under the holding it was
+ *  pointed at in, so another holding drawn in the same place starts with none; and a tap outside
+ *  every panel lets go of it. */
+function useCross(id: string, served: Samples | undefined, holding: Charted): Cross {
+  const [at, setAt] = useState<{ id: string; i: number } | null>(null);
+  const [driver, drive] = useState<Panel>("burndown");
+  const plots = useRef(new Set<HTMLElement>());
+  const stops = stopsOf(served?.samples ?? [], nowDte(holding));
+  const pointed = at !== null && at.id === id && at.i < stops.length ? at.i : null;
+  useEffect(() => {
+    if (pointed === null) return;
+    const away = (e: PointerEvent) => {
+      const inside = e.target instanceof Node && [...plots.current].some((p) => p.contains(e.target as Node));
+      if (!inside) setAt(null);
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [pointed]);
+  return {
+    stops, pointed, plots, driver, drive,
+    point: (i, by) => { drive(by); setAt(i === null ? null : { id, i }); },
+  };
+}
 
 export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy: boolean }) {
   const state = useSamples(holding.id);
@@ -86,6 +116,7 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
     size: size ?? 1, contracts: holding.contracts, money: size !== null, hidden: privacy,
   };
   const served = state?.samples;
+  const cross = useCross(holding.id, served, holding);
   const blank = state?.error !== undefined ? `the samples could not be read — ${state.error}`
     : !served ? "reading the samples…"
       : served.samples.length === 0 ? (holding.closed_on === null
@@ -110,14 +141,13 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
       <section className="nx-hist" role="group" aria-label="burndown">
         <h4 className="nx-hist-h">
           Burndown
-          {scopeWords(unit) === null ? null
-            : <span className="nx-hist-unit">{`${unit.money ? "$" : "points"} to close, ${scopeWords(unit)}`}</span>}
+          <span className="nx-hist-unit">{`${unit.money && !privacy ? "$" : "points"} to close, ${scopeWords(unit)}`}</span>
         </h4>
         {blank !== null || !served ? <p className="nx-meta">{blank}</p>
           : (
             <>
               <Burndown served={served} unit={unit} axis={axis!} span={dteWindow(served)} gutters={gutters!}
-                        closeDte={closeDte} />
+                        closeDte={closeDte} cross={cross} />
               {served.samples.some(hasCost) ? null
                 // every day kept only for its vol (#380): the IV chart below has them, the burndown none
                 : <p className="nx-meta">no day with a Cost to close yet: each was recorded out of hours, with no two-sided quote to price it</p>}
@@ -129,12 +159,13 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
       {blank === null && served ? (
         <section className="nx-hist" role="group" aria-label="IV by leg">
           <h4 className="nx-hist-h">IV by leg</h4>
-          <IvChart served={served} holding={holding} gutters={gutters!} />
+          <IvChart served={served} holding={holding} gutters={gutters!} cross={cross} />
         </section>
       ) : null}
       {/* where SPX was against the strikes (#298), from the same answer — nothing more is asked —
           and on the burndown's DTE window, so the days line up */}
-      {blank === null && served ? <SpxPath served={served} holding={holding} span={dteWindow(served)} gutters={gutters!} /> : null}
+      {blank === null && served ? <SpxPath served={served} holding={holding} span={dteWindow(served)} gutters={gutters!}
+                                                    cross={cross} /> : null}
     </>
   );
 }
@@ -148,14 +179,6 @@ function dteWindow(served: Samples): number {
 /** The IV chart's top and bottom margins, and the right margin every chart has at least. */
 const T = 10, B = 22, R = 10;
 
-/** The plot's margins, the SAME for every chart of one holding (#298): the burndown, the IV chart
- *  and where SPX was all put a DTE at the same x, so a day reads straight down the three. Each is
- *  as wide as the widest chart needs. */
-interface Gutters {
-  L: number;
-  R: number;
-}
-
 /** A market date in its dashed spelling: an expiry is stored either way, 2026-12-18 or 20261218,
  *  as `daysToExpiry` and `dteAtOpen` read it (`normalizeStrikeDate`). */
 const dashed = (iso: string) => iso.replace(/^(\d{4})-?(\d{2})-?(\d{2})$/, "$1-$2-$3");
@@ -168,7 +191,8 @@ const IV_H = 132;
 
 /** Each leg's IV per day, a line per leg named by its side and strike. A day with no IV is a gap,
  *  never a line drawn across it. In %, which privacy keeps (ADR 0023). */
-/** The IV chart's legs, value axis and the margins its labels need; null with no reading at all. */
+/** The IV chart's legs, value axis and the margins its labels need; null with no reading at all.
+ *  Its ticks are the scale's nice ones, gridded as the burndown's are. */
 function ivAxis(served: Samples, holding: Charted) {
   const legs = holding.legs.map((l) => ({
     code: legCode(holding.strike_date, l),
@@ -180,31 +204,36 @@ function ivAxis(served: Samples, holding: Charted) {
   if (readings.length === 0) return null;
   const hi = Math.max(...readings), lo = Math.min(...readings);
   const pad = Math.max((hi - lo) * 0.12, 0.5);
-  const [top, bottom] = [hi + pad, lo - pad];
-  const ticks = [hi, lo];
-  const label = (v: number) => `${v.toFixed(1)}%`;
+  const scale = scaleLinear<number>({ domain: [lo - pad, hi + pad], nice: 3 });
+  const [bottom, top] = scale.domain() as [number, number];
+  const ticks = scale.ticks(3);
+  const label = (v: number) => `${Number(v.toFixed(2))}%`;
   const L = Math.ceil(Math.max(...ticks.map((v) => textWidth(label(v))))) + 10;
   // the leg names sit at the right end of each line, so the plot stops short of them
   const RL = Math.ceil(Math.max(...legs.map((l) => textWidth(l.name)))) + 8;
   return { legs, top, bottom, ticks, label, L, RL };
 }
 
-function IvChart({ served, holding, gutters }: { served: Samples; holding: Charted; gutters: Gutters }) {
+function IvChart({ served, holding, gutters, cross }: {
+  served: Samples; holding: Charted; gutters: Gutters; cross: Cross;
+}) {
   const [box, W] = useWidth();
   const span = dteWindow(served);
   const scale = ivAxis(served, holding);
+  const x = dayScale(span, W, gutters);
+  const { svg: hands, onKeyDown, onFocus } = usePanel(cross, "iv", box, cross.stops.map((s) => x(s.dte)), W);
   if (scale === null) return <p className="nx-meta">no IV recorded on any day</p>;
   const { legs, top, bottom, ticks, label } = scale;
-  const { L, R: RL } = gutters;
-  const x = (dte: number) => L + ((span - dte) / span) * (W - L - RL);
-  const y = (v: number) => T + ((top - v) / (top - bottom)) * (IV_H - T - B);
+  const { L, R } = gutters;
+  const y = scaleLinear<number>({ domain: [bottom, top], range: [IV_H - B, T] });
+  const ivLegs: IvLeg[] = legs.map(({ code, leg }) => ({ code, leg }));
 
   // each leg's runs of consecutive days with a reading: a day without one breaks the line, and a
   // leg never read is not drawn at all
   const lines = legs.flatMap((leg) => {
     const drawn = runsOf(served.samples.map((s) => {
       const v = s.legs_iv?.[leg.code];
-      return typeof v === "number" ? { dte: s.dte, v } : null;
+      return typeof v === "number" ? { dte: s.dte, v, timing: s.timing } : null;
     }));
     const last = drawn.at(-1)?.at(-1);
     return last ? [{ leg, drawn, last, labelY: y(last.v) }] : [];
@@ -216,24 +245,65 @@ function IvChart({ served, holding, gutters }: { served: Samples; holding: Chart
   const over = (byY.at(-1)?.labelY ?? 0) - (IV_H - B);
   if (over > 0) for (const l of byY) l.labelY = Math.max(T, l.labelY - over);
 
+  const pointed = pointedStop(cross);
+  const read = pointed === null ? null : ivLines(pointed, ivLegs);
+  // where the crosshair meets each leg read that day
+  const met = pointed?.sample == null ? [] : legs.flatMap((leg) => {
+    const v = pointed.sample!.legs_iv?.[leg.code];
+    return typeof v === "number" ? [{ code: leg.code, y: y(v) }] : [];
+  });
+  const name = (leg: IvLeg["leg"]) => legText(leg, "minus");
+
   return (
-    <div className="nx-hist-chart" ref={box}>
-      <svg width={W} height={IV_H} viewBox={`0 0 ${W} ${IV_H}`} role="img" aria-label="each leg's implied volatility by day">
-        <g data-axis="y">
-          {ticks.map((v, i) => <text key={i} x={L - 6} y={y(v) + 4} textAnchor="end">{label(v)}</text>)}
-        </g>
-        {lines.map(({ leg, drawn, labelY, last }) => (
-          <g key={leg.code} data-leg={leg.code} className="nx-hist-leg" data-side={leg.short ? "short" : "long"}>
-            {drawn.map((run, i) => (
-              <polyline key={i} points={run.map((p) => `${x(p.dte).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ")} />
-            ))}
-            {drawn.flat().map((p) => <circle key={p.dte} data-dte={p.dte} cx={x(p.dte)} cy={y(p.v)} r={2} />)}
-            <SvgLeg leg={leg.leg} form="minus" x={x(last.dte) + 6} y={labelY + 4} />
+    <>
+      <div className="nx-hist-chart nx-cross nx-iv" ref={box} role="group" tabIndex={0} onKeyDown={onKeyDown}
+           onFocus={onFocus}
+           aria-label={`each leg's implied volatility by day, ${stepped(cross)}: arrow keys move from day to day`}>
+        <svg width={W} height={IV_H} viewBox={`0 0 ${W} ${IV_H}`} aria-hidden="true" {...hands}>
+          <rect data-plot="" x={L} y={T} width={Math.max(0, W - L - R)} height={IV_H - T - B} fill="none" />
+          <g data-grid="">
+            {ticks.map((v) => <line key={v} className="nx-bd-grid" x1={L} x2={W - R} y1={y(v)} y2={y(v)} />)}
           </g>
-        ))}
-        <text x={L} y={IV_H - 6} textAnchor="start">{`${span} DTE`}</text>
-        <text x={W - 4} y={IV_H - 6} textAnchor="end">expiry</text>
-      </svg>
-    </div>
+          <g data-axis="y">
+            {ticks.map((v) => <text key={v} x={L - 6} y={y(v) + 4} textAnchor="end">{label(v)}</text>)}
+          </g>
+          {lines.map(({ leg, drawn, labelY, last }) => (
+            <g key={leg.code} data-leg={leg.code} className="nx-hist-leg" data-side={leg.short ? "short" : "long"}>
+              {drawn.map((run) => (
+                <LinePath key={run[0]!.dte} data-iv-run="" data={run} x={(p) => x(p.dte)} y={(p) => y(p.v)} />
+              ))}
+              {drawn.flat().map((p) => (
+                <circle key={p.dte} data-dte={p.dte} data-mark={MARK[p.timing]} cx={x(p.dte)} cy={y(p.v)} r={2.25} />
+              ))}
+              <SvgLeg leg={leg.leg} form="minus" x={x(last.dte) + 6} y={labelY + 4} />
+            </g>
+          ))}
+          {pointed === null ? null : (
+            <g data-crosshair={pointed.on ?? "now"} className="nx-bd-cross" pointerEvents="none">
+              <line x1={x(pointed.dte)} x2={x(pointed.dte)} y1={T} y2={IV_H - B} />
+              {met.map((m) => (
+                <circle key={m.code} className="nx-bd-cross-day" data-mark={MARK[pointed.sample!.timing]}
+                        cx={x(pointed.dte)} cy={m.y} r={3.5} />
+              ))}
+            </g>
+          )}
+          <text x={L} y={IV_H - 6} textAnchor="start">{`${span} DTE`}</text>
+          <text x={W - 4} y={IV_H - 6} textAnchor="end">expiry</text>
+        </svg>
+        {read === null || pointed === null ? null : (
+          <CrossTip x={x(pointed.dte)} ys={met.length ? met.map((m) => m.y) : [(T + IV_H - B) / 2]}
+                    W={W} H={IV_H}>
+            <div className="nx-bd-tip-h">{read.day}</div>
+            {read.none !== null ? <div>{read.none}</div> : read.legs.map((l, i) => (
+              <div key={i} data-iv-leg=""><Leg leg={l.leg} form="minus" />{` ${l.words}`}</div>
+            ))}
+            {read.why === null ? null : <div className="nx-bd-tip-why">{read.why}</div>}
+          </CrossTip>
+        )}
+      </div>
+      <p className="nx-hist-said" role="status" aria-live={liveOf(cross, "iv")}>
+        {pointed === null ? "each leg's IV by day · point at a day for each leg's figure" : ivWords(pointed, ivLegs, name)}
+      </p>
+    </>
   );
 }

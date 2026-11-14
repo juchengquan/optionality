@@ -1089,6 +1089,34 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/pos-1/samples"),
   },
   {
+    // each short strike against THAT day's SPX (#395), with the Provider down — stored history only.
+    // A day with SPX and both IVs: points and σ. A day with SPX and one IV missing: that strike's
+    // points and no σ. A day with IVs and no SPX: each strike placed and no distance at all
+    name: "GET /positions/{id}/samples places each day's short strikes against that day's SPX",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [
+          sample({
+            position_id: "pos-1", observed_on: "2026-11-06", dte: 42, cost_to_close: 6.25,
+            observed_at: "2026-11-06 21:00:00.000000", spx: 6812.5,
+            legs_iv: { [C7300]: 14.5, [P6400]: 19.25 }, legs_delta: { [C7300]: 0.21, [P6400]: -0.18 },
+          }),
+          sample({
+            position_id: "pos-1", observed_on: "2026-11-07", dte: 41, cost_to_close: 6,
+            observed_at: "2026-11-07 21:00:00.000000", spx: 6830.25, legs_iv: { [C7300]: 14.25 },
+          }),
+          sample({
+            position_id: "pos-1", observed_on: "2026-11-08", dte: 40, cost_to_close: 5.75,
+            observed_at: "2026-11-08 21:00:00.000000", legs_iv: { [C7300]: 14, [P6400]: 19 },
+          }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
     // closed on the last day sampled: its history whole, held against the same schedule
     name: "GET /positions/{id}/samples serves a closed holding's history",
     world: world({

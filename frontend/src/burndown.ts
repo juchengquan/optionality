@@ -9,7 +9,9 @@ import type { Sample, Samples } from "./shared/api";
 import { paceOutcome, paceWords } from "./pace";
 
 /** How a Cost to close is said: money across the contracts at the contract size the valuation
- *  served, points per contract without one, and nothing a stranger could read under privacy. */
+ *  served, and points per contract without one — or under privacy, which hides dollars and anything
+ *  across the contracts held but keeps the per-contract points, as the table's value column, the
+ *  inspector's Entry, Target and Stop and the payoff do (the owner's call, #395). */
 export interface Unit {
   size: number;
   contracts: number;
@@ -25,25 +27,26 @@ const MONEY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD
 export type PricedSample = Sample & { cost_to_close: number };
 export const hasCost = (s: Sample): s is PricedSample => s.cost_to_close !== null;
 
+/** Whether a figure is said as money across the contracts: never under privacy. */
+const inMoney = (unit: Unit) => unit.money && !unit.hidden;
+
 export function say(points: number, unit: Unit): string {
-  if (unit.hidden) return "$•••";
-  if (unit.money) return MONEY.format(points * unit.contracts * unit.size);
+  if (inMoney(unit)) return MONEY.format(points * unit.contracts * unit.size);
   return `${points.toFixed(2)} pts`;
 }
 
 /** An axis label: as `say`, without the "pts" a tick has no room for, and to no more places than
  *  the tick needs. */
 function tickWords(points: number, unit: Unit): string {
-  if (unit.money) return MONEY.format(points * unit.contracts * unit.size);
+  if (inMoney(unit)) return MONEY.format(points * unit.contracts * unit.size);
   return String(Number(points.toFixed(2)));
 }
 
 /** What the chart's money is: across the contracts at the contract size, or per contract in points
  *  — said beside every figure, so it cannot read as the inspector's per-contract Cost to close in
- *  another unit. Nothing under privacy, where the count would give the size away. */
-export function scopeWords(unit: Unit): string | null {
-  if (unit.hidden) return null;
-  if (!unit.money) return "per contract";
+ *  another unit. Per contract under privacy, which never says the count. */
+export function scopeWords(unit: Unit): string {
+  if (!inMoney(unit)) return "per contract";
   return `${unit.contracts} contract${unit.contracts === 1 ? "" : "s"}`;
 }
 
@@ -79,8 +82,9 @@ function whyWords(s: Sample): string {
   }
 }
 
-/** The same reason, short enough for the tooltip, and nothing for a day in the hours. */
-function whyShort(s: Sample): string | null {
+/** The same reason, short enough for the tooltip, and nothing for a day in the hours. Said by the
+ *  IV and SPX panels' readouts too (`historyDays.ts`, #395). */
+export function whyShort(s: Sample): string | null {
   const at = newYorkTime(s.observed_at);
   if (s.timing === "unrecorded" || at === null) return "not timed: whether it was the close is not known";
   if (s.timing === "after-close") return `not the close: ${at} New York, after the 16:15 close`;
@@ -122,6 +126,24 @@ export function nowLines(now: { dte: number; cost: number }, unit: Unit) {
   const scope = scopeWords(unit);
   return { day: `valued now · ${now.dte} DTE`, cost: `to close${scope === null ? "" : `, ${scope}`}: ${say(now.cost, unit)}` };
 }
+
+/** What the burndown says of a day the shared crosshair stops on with no Cost to close (#380,
+ *  #395): a row kept for its vol readings out of hours, which is a stop in every panel because the
+ *  IV and SPX panels have its figures. */
+export const NO_COST_WORDS = "no Cost to close: no two-sided quote to price it";
+
+/** Such a day, line by line, as `tipLines` says a priced one — and no word about its timing: a
+ *  weekend row at 11:00 New York is "in hours" by the sweep's every-day rule (ADR 0011) while no leg
+ *  had a quote to price, and said together the two contradicted each other (#399's review). */
+export function noCostLines(s: Sample) {
+  return { day: `${dayWords(s.observed_on)} · ${s.dte} DTE`, cost: NO_COST_WORDS, why: null };
+}
+
+/** Such a day said in full, by the status line. */
+export const noCostWords = (s: Sample) => `${dayWords(s.observed_on)} · ${s.dte} DTE · ${NO_COST_WORDS}`;
+
+/** Today's valuation with no Cost to close — a stop for SPX's price alone. */
+export const NO_COST_NOW = "no Cost to close now";
 
 /** Today's valuation said in full, by the status line. */
 export function nowWords(now: { dte: number; cost: number }, unit: Unit): string {
@@ -170,11 +192,13 @@ export function costRuns<T extends { dte: number; before_correction: boolean }>(
 }
 
 /** The day whose x is nearest the pointer's: what a pointer anywhere on the chart means, since days
- *  a few pixels apart cannot each have a finger's width of their own. Null with no days. */
+ *  a few pixels apart cannot each have a finger's width of their own. Of two at one x the LATER:
+ *  in session today's valuation shares today's sample's x, and the earlier would hide it from every
+ *  pointer for good (the keys reach both). Null with no days. */
 export function nearestDay(xs: number[], at: number): number | null {
   if (xs.length === 0) return null;
   let best = 0;
-  xs.forEach((x, i) => { if (Math.abs(x - at) < Math.abs(xs[best]! - at)) best = i; });
+  xs.forEach((x, i) => { if (Math.abs(x - at) <= Math.abs(xs[best]! - at)) best = i; });
   return best;
 }
 
@@ -204,21 +228,23 @@ interface Valued {
   closed_on: string | null;
   cost_to_close?: number | null;
   dte?: number;
+  valued_from?: "live" | "close";
 }
 
-/** Today's valuation, from the book's latest one (polled in session, read once outside it): drawn
- *  apart from the closes, and only while held. */
+/** Today's valuation, from the book's latest one (polled in session): drawn apart from the closes,
+ *  and only while held. None outside the session, where the valuation IS the latest close (#380) —
+ *  already a day of the chart, and drawn again as "now" it was said twice (#399's review). */
 function nowOf(holding: Valued) {
-  return holding.closed_on === null && holding.cost_to_close != null && holding.dte !== undefined
-    && holding.dte >= 0 ? { dte: holding.dte, cost: holding.cost_to_close } : null;
+  return holding.closed_on === null && holding.valued_from !== "close" && holding.cost_to_close != null
+    && holding.dte !== undefined && holding.dte >= 0 ? { dte: holding.dte, cost: holding.cost_to_close } : null;
 }
 
 /** The burndown's value axis: fitted to the days, the plan, the Target and today — 0 always in it —
  *  at nice ticks. NOT to the Stop: at twice the Entry it set the top and squeezed every line into
  *  the bottom third (#360). A Stop above the scale is marked at its top edge (`off`)
  *  rather than drawn, and one inside it is drawn where it is. `L` is the left margin the labels
- *  need; under privacy there are none, and no gutter as wide as they would be, which would say how
- *  many digits they hid. */
+ *  need. Under privacy they are points per contract (#395): the dollar labels, and a gutter as wide
+ *  as they would be, are never drawn. */
 export function valueAxis(served: Samples, holding: Valued, unit: Unit) {
   const { levels, plan, samples } = served;
   const now = nowOf(holding);
@@ -239,8 +265,8 @@ export function valueAxis(served: Samples, holding: Valued, unit: Unit) {
   const stop = levels?.stop == null ? null
     // never below: a Stop is a credit's, above its Entry, and the scale always holds 0
     : { value: levels.stop, off: levels.stop > top ? "above" as const : null };
-  const labels = unit.hidden ? [] : ticks.map((v) => tickWords(v, unit));
-  const L = unit.hidden ? 8 : Math.ceil(Math.max(...labels.map(textWidth), 16)) + 10;
+  const labels = ticks.map((v) => tickWords(v, unit));
+  const L = Math.ceil(Math.max(...labels.map(textWidth), 16)) + 10;
   return { lo: bottom, hi: top, ticks, labels, stop, now, L };
 }
 

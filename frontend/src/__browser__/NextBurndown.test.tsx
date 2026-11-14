@@ -142,7 +142,9 @@ describe("the tooltip's measured height", () => {
     samples: Array.from({ length: 20 }, (_, i) => {
       const on = new Date(Date.UTC(2026, 10, 3 + i)).toISOString().slice(0, 10);
       return {
-        ...SAMPLES["h-calls"]!.samples[1]!, observed_on: on, dte: 45 - i,
+        // every day before today's valuation at 38 DTE: a day AT it would share its x, where a
+        // pointer reaches the valuation (the later stop, #399's review)
+        ...SAMPLES["h-calls"]!.samples[1]!, observed_on: on, dte: 58 - i,
         cost_to_close: 2 + 1.9 * Math.sin(i * 0.7), timing: i % 2 ? "close" : "after-close",
         observed_at: `${on} ${i % 2 ? "21:00:00" : "23:30:00"}+00:00`,
       };

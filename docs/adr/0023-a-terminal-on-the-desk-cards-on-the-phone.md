@@ -164,7 +164,11 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
     have read both as the market rising.
   - *(A fourth family, for what a leg IS — its type — since 2026-11-14 (#391): see the amendment
     at the end.)*
-- **Privacy:** a setting hides $ amounts and keeps %, Δ and DTE.
+- **Privacy:** a setting hides $ amounts and keeps %, Δ and DTE. *(Amended 2026-11-15, #395: it
+  hides dollars and anything across the contracts held, and keeps points per contract — so the
+  burndown's axis, Levels and crosshair readout say the per-contract Cost to close, plan and pace
+  gap in points, as the table's value column, the inspector's Entry, Target and Stop and the payoff
+  already did.)*
 - **Figures:**
   - tabular numerals, with fixed decimals per field (gamma loses its six places);
   - dark first;
@@ -173,7 +177,9 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   model exists, and that model is its own ADR: the backend map measured moomoo's IVs mispricing
   the far wings by 9–23% under a naive model. Never draw what the system does not know.
 - **The burndown** draws the daily samples against the planned decay of ADR 0011. A point that is
-  not a close (`observed_at`, ADR 0011's amendment) is marked as such.
+  not a close (`observed_at`, ADR 0011's amendment) is marked as such. *(Since #395 the IV chart
+  and "SPX against the strikes" beneath it share its crosshair: a day pointed at in any of the
+  three is crossed in all three, each with its own readout.)*
 
 ### How it ships
 
