@@ -14,7 +14,9 @@ clock's-mode consequence; it partly reverses #338's "closed holdings in REVIEW o
 amendment is what binds, and it is built (#371–#375, the last on 2026-11-14), with the
 corrections its build needed written into it and named there. **Amended 2026-11-14 (#380):** outside
 the session the holdings are valued from their latest close, by the service, and the market-closed
-line names that close (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+line names that close. **Amended 2026-11-15 (#394):** the saved picture is one plain table, from
+the desk and the phone alike, and "Copy as text" puts the same table on the clipboard as Markdown
+(last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -433,7 +435,7 @@ looked odd.
   (`shared/Legs.tsx`): its C/P letter — or the word, in the inspector's "short PUT 7150" — in its
   type's colour, and a short leg bold. That is the desk's legs column and inspector, the phone's
   cards and sheet (and their short Δ, where a holding has more than one short leg to name), the
-  palette, the saved picture, the closed trades, the strike strip's caption, the price map's
+  palette, the closed trades, the strike strip's caption, the price map's
   labels and band label, and the leg names of the IV and SPX charts. The colour goes where the
   letter is drawn; figures, P&L and the attention chips are untouched.
 - **The rule for a written leg:** a leg named beside its figure is coloured (a legs column, a
@@ -442,3 +444,46 @@ looked odd.
   link or a warning rather than as what the leg is.
 - **Colour is never the only signal.** Every place keeps its letter and its sign, character for
   character, and privacy is unaffected.
+
+## Amended 2026-11-15: the saved picture, one plain table (#394)
+
+Decided by the owner on 2026-11-15 (#394). The saved picture (#300) drew the page as it stood: A's
+table with its chips, fill bars, condor brackets, colours and the short rule form (#388) from the
+desk, and B's cards from the phone. It is now read later, by a person or another model, and a card
+lays each figure out in a place of its own while colour, bars and symbols carry meaning a reader of
+an image can miss. **This supersedes #300's "A's table from the desk, B's cards from the phone".**
+
+- **One plain table, from either arrangement.** The phone saves the desk's table, not cards. The
+  holdings first, then the watchlist, then the muted and expired rules, each grouped by expiry under
+  a heading row with its DTE; every column the viewer ticked (`ui_cols_combo`), under headers that
+  say their unit; a first column saying what each row is (a holding, "a condor with" its partner, a
+  rule on a holding, a watched spread, a rule on a leg of one, a quarantined or muted rule), since
+  the indent and the bracket are gone; and a **status column** in the page's own words for what the
+  screen says by colour or chip — `chipWords`'s ("ringing", "entry signal", "at stop · as of the
+  close", "manage-by"), "fault: " and the rule's error, "quarantined: " and its reason, and the
+  muted fold's reasons ("muted by you", "expired", "holding closed"). No state is new.
+- **Words and numbers only.** No chip, fill bar, bracket, sparkline, arrow or symbol shorthand, and
+  no colour: a leg is its letters and sign (`-C7300 +C7350`) without #391's type colour, the pace gap
+  its words ("behind by 0.40"), the strike strip the nearest short strike and its distance in words.
+  Dark ink on a white ground in either colour scheme, in a monospace face with tabular figures, at
+  13px; as wide as its widest row, so nothing is clipped or wrapped. The browser suite measures it,
+  at the desk and under the iPhone 13 profile: one ground, one ink, no drawn element, no type under
+  12px, nothing cut short, and the same table from both.
+- **Rules in full sentences** (`sentence`: "|delta| ≥ 0.2 — now -0.170, 0.030 away"). The screen
+  keeps the short form (#388).
+- **A header block says what the table is:** when it was taken, on New York's clock and on
+  DISPLAY_TZ's (`/health`'s `display_tz`); the session, in the page's words ("in session", or the
+  market-closed line's); how fresh the figures are (the Freshness line); any warning; the
+  References in the strip's words, with the time each was read outside the session; and the
+  needs-you line with every item named, since a picture cannot be opened to read "+N more". As on
+  the page, with nothing needing you the line is absent, which is not an all-clear.
+- **"Copy as text"** sits beside "Save as image" wherever that is offered — the header on the desk
+  and the phone, and the ⌘K palette — and puts the same view on the clipboard as Markdown: the
+  header block as lines above a Markdown table per section, an expiry's heading as a row with the
+  heading in its first cell, a pipe in a cell escaped. It says "copied as text", and where the
+  browser refuses the clipboard, or the page has none, says so with the browser's reason.
+- **One builder** (`snapshot/plain.ts`, pure) makes the rows and the words; the picture
+  (`Still.tsx`) and the text (`toMarkdown`) each only write them out, and a test reads both back
+  and requires the same rows and cells. Privacy goes in with the figures, so what the screen hides
+  ("$•••") both hide in the same words. Nothing interactive goes in, as before.
+

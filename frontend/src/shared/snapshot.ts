@@ -4,9 +4,9 @@
  *  foreignObject so the REAL engine paints it. That choice is not a preference: every colour is
  *  `oklch`, the page mixes them with `color-mix(in oklch, ...)` and a fill bar is a gradient.
  *  html2canvas re-implements CSS painting and can paint none of it — the cells where the urgency
- *  lives would come back blank, in an image already sent to someone. The proof is
- *  `__browser__/NextSnapshot.test.tsx`'s "paints the fills and the attention chips, in their own
- *  colours", in both schemes.
+ *  lives would come back blank, in an image already sent to someone. Since #394 the picture is a
+ *  plain table with one ground and one ink, so it no longer leans on that — but the real engine still
+ *  draws exactly the laid-out tree the browser suite measures (`__browser__/NextSnapshot.test.tsx`).
  */
 
 /** `optionality-20261021-1330.png` — dated, and sortable in a folder of them.

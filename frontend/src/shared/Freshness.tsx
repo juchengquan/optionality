@@ -1,4 +1,4 @@
-import { marketClock } from "./format";
+import { freshnessWords } from "./format";
 
 /** How fresh the figures are — one line, shared by the page and by the picture it saves.
  *
@@ -21,13 +21,6 @@ export function Freshness({ fetchedAt, polledAt, sweepSeconds }: {
   polledAt: string | null;
   sweepSeconds: number | null;
 }) {
-  const session = marketClock(fetchedAt);
-  return (
-    <p className="meta">
-      {fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep"}
-      {session ? ` · ${session}` : ""}
-      {polledAt ? ` · screen updated ${polledAt}` : ""}
-      {sweepSeconds ? ` · service sweeps every ${sweepSeconds}s` : ""}
-    </p>
-  );
+  return <p className="meta">{freshnessWords(fetchedAt, polledAt, sweepSeconds)}</p>;
 }
+

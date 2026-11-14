@@ -183,15 +183,14 @@ describe("the legs, each type marked for its colour and a short leg for its weig
     expect(legMarks(line())).toEqual(["-C7600 short CALL", "+C7650 long CALL"]);
   });
 
-  for (const arrangement of ["phone", "desk"] as const) {
-    it(`in the saved picture, on the ${arrangement}`, () => {
-      render(<Still arrangement={arrangement} quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
-                    holdingsAt="23:14:05" session privacy={false} entryStyle="opportunity"
-                    needs={[]} health={null} polledAt={null} error={null} references={[]} />);
-      const ic = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === "h-ic")!;
-      expect(legMarks(ic.querySelector(arrangement === "phone" ? ".nxp-legs" : '[data-col="legs"]')!)).toEqual(IC);
-    });
-  }
+  it("in the saved picture, as words only: the letters and signs, never a colour (#394)", () => {
+    render(<Still quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
+                  holdingsAt="23:14:05" session privacy={false} needs={[]} health={null} polledAt={null}
+                  error={null} references={[]} hidden={new Set()} takenAt={new Date("2026-11-16T15:00:00Z")} />);
+    const ic = [...document.querySelectorAll("tr")].find((tr) => tr.children[1]?.textContent === "1231_IC")!;
+    expect(ic.children[2]!.textContent).toBe("-C7400 +C7450 -P6300 +P6250");
+    expect(document.querySelectorAll(".nx-still .nx-leg, .nx-still [data-type]")).toHaveLength(0);
+  });
 });
 
 describe("the detail sheet", () => {
@@ -343,41 +342,6 @@ describe("one book, in session and out of it (#374)", () => {
   it("still draws the watchlist outside the session, so a banner about it has a card to lead to", () => {
     draw({ session: false });
     expect(refs(region("Watchlist"))).toContain("w-dec04");
-  });
-});
-
-describe("the phone's saved picture (#374)", () => {
-  /** what a holding is drawn as in the picture: its card's kind, and the holdings in condor groups */
-  function shape() {
-    const holdings = HOLDINGS.map((h) => h.id);
-    return {
-      heading: [...document.querySelectorAll(".nxp-book h2")].map((h) => h.textContent),
-      cards: holdings.map((id) => document.querySelector(`article.nxp-holding[data-ref="${id}"]`) !== null),
-      condors: document.querySelectorAll(".nxp-condor").length,
-      refs: [...document.querySelectorAll<HTMLElement>("[data-ref]")].map((el) => el.dataset.ref),
-    };
-  }
-  function picture(session: boolean) {
-    render(<Still arrangement="phone" quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
-                  holdingsAt="23:14:05" session={session} privacy={false} entryStyle="opportunity"
-                  needs={[]} health={null} polledAt={null} error={null} references={[]} />);
-  }
-
-  it("draws the book's cards in session and out of it, as the phone does, never a page per holding", () => {
-    draw();
-    const onScreen = refs(region("Holdings"));
-    cleanup();
-    picture(true);
-    const first = shape();
-    expect(first.heading[0]).toBe("Holdings");
-    expect(first.cards.every(Boolean)).toBe(true);
-    expect(first.condors).toBeGreaterThan(0);
-    expect(first.refs.slice(0, onScreen.length)).toEqual(onScreen);
-    for (const session of [true, false]) {
-      cleanup();
-      picture(session);
-      expect(shape(), `${session ? "in" : "out of"} session`).toEqual(first);
-    }
   });
 });
 

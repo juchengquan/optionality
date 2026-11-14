@@ -126,7 +126,7 @@ export type Hold = "edit" | "close" | "other" | null;
 export const HOLD_WHY = "finish or cancel the open form first";
 
 type ActionKey =
-  | "add" | "edit-monitor" | "close-holding" | "save-image" | "arrange-desk" | "arrange-phone" | "arrange-auto";
+  | "add" | "edit-monitor" | "close-holding" | "save-image" | "copy-text" | "arrange-desk" | "arrange-phone" | "arrange-auto";
 
 export interface PaletteAction {
   key: ActionKey;
@@ -171,8 +171,10 @@ export function paletteActions(s: {
       why: kind === null ? "nothing is selected"
         : kind === "holding" ? held("close") : "a Monitor is selected, not a holding",
     },
-    // the header's "save as image" (#300): a picture of the view, which changes nothing in it
+    // the header's "save as image" (#300): a picture of the view, which changes nothing in it; and
+    // beside it the same table as Markdown on the clipboard (#394)
     { key: "save-image", label: "Save the view as an image", detail: "", why: null },
+    { key: "copy-text", label: "Copy the view as text", detail: "", why: null },
     // the desk's own arrangement does not take the desk down, so it waits for no form; the phone's does
     ...ARRANGEMENTS.map(([key, choice, label]) => ({
       key, label, detail: s.choice === choice ? "in use" : "",

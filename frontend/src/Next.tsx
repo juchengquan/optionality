@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ImageDown, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
+import { ClipboardCopy, ImageDown, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
 
 import "./next.css";
 import {
@@ -15,7 +15,7 @@ import { clockTime } from "./shared/format";
 import { everyHoldingValued, valuedAt, valuedStamp } from "./levels";
 import { Freshness } from "./shared/Freshness";
 import {
-  readArrangement, readEntryStyle, readPrivacy, readRefresh, readUp, writeArrangement,
+  readArrangement, readEntryStyle, readHidden, readPrivacy, readRefresh, readUp, writeArrangement,
   writeEntryStyle, writePrivacy, writeRefresh, writeUp, type ArrangementChoice, type EntryStyle, type UpColour,
 } from "./shared/prefs";
 import { ReferenceStrip } from "./shared/ReferenceStrip";
@@ -46,6 +46,7 @@ import { beingOperated } from "./poll";
 import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
+import { copyView } from "./snapshot/copyText";
 
 /** The dashboard, at `/opt` (ADR 0023): built at `/opt/next` beside the page before it from #287,
  *  and the only page since the swap (#301).
@@ -228,6 +229,7 @@ export function Next() {
     } else if (a.key === "edit-monitor" && desk.id !== null) land(desk.id, "edit");
     else if (a.key === "close-holding" && desk.id !== null) land(desk.id, "close");
     else if (a.key === "save-image") saveViewNow.current();
+    else if (a.key === "copy-text") copyViewNow.current();
     else if (a.key === "arrange-desk") chooseArrangement("desk");
     else if (a.key === "arrange-phone") {
       chooseArrangement("phone");
@@ -284,12 +286,20 @@ export function Next() {
     />
   );
 
-  // the picture (#300), from the header's button and the palette alike: one press
-  const saveView = () => void save({
-    // the book, without the closed trades: a journal is not the book; and nothing to press
-    ...bookProps, journal: undefined, onRevalue: undefined, arrangement, needs: items, health: book.health, polledAt: book.polledAt,
-    error: book.error, references: book.references,
+  // the picture (#300) and its text (#394), from the header's buttons and the palette alike: one
+  // view of the book as it stands at the press — without the closed trades, since a journal is not
+  // the book — with every column the viewer ticked and the moment it was taken
+  const viewNow = (): StillProps => ({
+    quotes: bookProps.quotes, monitors: bookProps.monitors, holdings: bookProps.holdings,
+    holdingsError: bookProps.holdingsError, holdingsAt: bookProps.holdingsAt, holdingsServed: bookProps.holdingsServed,
+    session: bookProps.session, privacy: bookProps.privacy, needs: items, health: book.health, polledAt: book.polledAt,
+    error: book.error, references: book.references, hidden: readHidden(), takenAt: new Date(),
   });
+  const saveView = () => void save(viewNow());
+  // built and written inside the press: Safari grants the clipboard only while the gesture runs
+  const copyText = () => void copyView(viewNow());
+  const copyViewNow = useRef(copyText);
+  copyViewNow.current = copyText;
   const saveViewNow = useRef(saveView);
   saveViewNow.current = saveView;
 
@@ -303,6 +313,9 @@ export function Next() {
         <Button variant="ghost" size="sm" aria-label="save as image" disabled={shooting}
                 onClick={saveView}>
           <ImageDown className={shooting ? "animate-pulse" : undefined} />
+        </Button>
+        <Button variant="ghost" size="sm" aria-label="copy as text" onClick={copyText}>
+          <ClipboardCopy />
         </Button>
         <Button variant="ghost" size="sm" aria-label="refresh now" disabled={book.refreshing}
                 onClick={() => void book.refreshNow()}>

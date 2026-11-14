@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { servedWhen } from "../session";
 import { Still } from "../snapshot/Still";
 import type { Reference } from "../shared/api";
-import { ReferenceStrip, referenceTitle } from "../shared/ReferenceStrip";
+import { ReferenceStrip } from "../shared/ReferenceStrip";
+import { referenceTitle } from "../shared/readings";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -205,21 +206,22 @@ describe("outside the session, every reading says when it was read", () => {
     expect(readings()).toHaveLength(2);
   });
 
-  for (const arrangement of ["desk", "phone"] as const) {
-    it(`goes into the saved picture from the ${arrangement} with its time outside the session, and without it in`,
-      () => {
-        const still = (session: boolean) => render(
-          <Still arrangement={arrangement} quotes={[]} monitors={[]} holdings={[]} holdingsError={null}
-                 holdingsAt={null} session={session} privacy={false} entryStyle="opportunity"
-                 needs={[]} health={null} polledAt={null} error={null}
-                 references={[spx(), vix, spx({ id: "r3", label: "NDX", fetched_at: undefined as never })]} />);
-        still(false);
-        expect(readings()).toHaveLength(2);
-        for (const r of readings()) expect(r, "a reading drawn without its time").toMatch(/read at 21:04$/);
-        cleanup();
-        still(true);
-        expect(readings()).toHaveLength(3);
-        expect(readings().every((r) => !r.includes("read at"))).toBe(true);
-      });
-  }
+  it("goes into the saved picture with its time outside the session, and without it in (#394)", () => {
+    const still = (session: boolean) => render(
+      <Still quotes={[]} monitors={[]} holdings={[]} holdingsError={null}
+             holdingsAt={null} session={session} privacy={false}
+             needs={[]} health={null} polledAt={null} error={null} hidden={new Set()} takenAt={new Date()}
+             references={[spx(), vix, spx({ id: "r3", label: "NDX", fetched_at: undefined as never })]} />);
+    const line = () => [...document.querySelectorAll(".nx-still-lines > div")]
+      .find((d) => d.querySelector("dt")!.textContent === "References:")!.querySelector("dd")!.textContent!.split(" · ");
+    still(false);
+    // the strip's own words, each with the time it was read; one with no time is not said at all
+    expect(line()).toHaveLength(2);
+    for (const r of line()) expect(r, "a reading said without its time").toMatch(/read at 21:04$/);
+    cleanup();
+    still(true);
+    expect(line()).toHaveLength(3);
+    expect(line().every((r) => !r.includes("read at"))).toBe(true);
+  });
+
 });

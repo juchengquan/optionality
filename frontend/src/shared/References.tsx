@@ -9,7 +9,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 
 import type { Reference } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
-import { referenceTitle } from "./ReferenceStrip";
+import { referenceTitle } from "./readings";
 
 /** Which Securities are kept on the page, and the door for adding one (ADR 0018, 0019).
  *

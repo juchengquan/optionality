@@ -231,9 +231,6 @@ const DESK_KEYS = new Set([...COLUMNS.map((c) => c.key), ...RETIRED_KEYS]);
 /** The rule's sentence, as its column says it. */
 const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
 
-/** `tableRows` lives with the columns (`columns.ts`); the still (#300) reads it from here. */
-export { tableRows } from "./columns";
-
 // ---- the sections
 
 function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed, session, onRevalue, revaluing, ctx, picker }: BookProps & {
@@ -336,7 +333,7 @@ function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
 
 /** What a spread in the watchlist shares with a holding it only partly overlaps (#346), under its
  *  row: names and contracts only, so privacy has nothing to hide in it. */
-export function OverlapNote({ overlap }: { overlap: string | null | undefined }) {
+function OverlapNote({ overlap }: { overlap: string | null | undefined }) {
   return overlap ? <p className="nx-meta nxd-overlap" data-overlap="">{overlap}</p> : null;
 }
 
@@ -412,7 +409,7 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
 /** A rule's state is the attention family's chip (Book.tsx's `Chip`); a holding's Level and its
  *  Manage-by are drawn as the needs-you line draws them, with their kinds' glyphs — in the words
  *  `chipWords` gives the row, which outside the session say which valuation they are from (#354). */
-export function AttentionChip({ kind, words }: {
+function AttentionChip({ kind, words }: {
   kind: NonNullable<ReturnType<typeof attentionOf>>; words?: string | null;
 }) {
   if (kind === "fault" || kind === "entry" || kind === "alarm") return <Chip state={kind} />;
@@ -425,7 +422,7 @@ export function AttentionChip({ kind, words }: {
 
 /** One figure. The visually hidden label says which figure it is to a reader that does not see
  *  the header above it — the rows are a grid of spans, not a `<table>`. */
-export function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; privacy: boolean }) {
+function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; privacy: boolean }) {
   const text = column.text(row, privacy);
   if (text === "") return null;
   const strip = column.key === "strip" ? rowStrip(row) : null;
@@ -474,7 +471,7 @@ function outcomeOf(row: DeskRow, column: DeskColumn): "loss" | "gain" | undefine
 }
 
 /** How far the watched figure has come toward its threshold, as the service measured it. */
-export function Fill({ entry }: { entry: Entry }) {
+function Fill({ entry }: { entry: Entry }) {
   if (entry.fill === null || entry.error) return null;
   const fill = Math.max(0, Math.min(100, entry.fill));
   return (

@@ -1,11 +1,11 @@
-/** Saving the page as an image, from the desk (#300, ADR 0023).
+/** Saving the page as an image, from the desk (#300, #394; ADR 0023).
  *
- *  The old page's picture, carried over: a SECOND tree, off screen, at a width of its own — A's table with
- *  every ticked column whatever the room on screen, without a control in it, privacy honoured —
- *  rasterized by html-to-image, which paints oklch and `color-mix` because the real engine does
- *  the painting (`snapshot.ts` says why html2canvas cannot). `Rasterize.test.tsx` is the proof for
- *  `/opt`; this is the same proof for this page, on the delivered FILE: the fills and the
- *  attention chips are found in the tree, and their pixels in the PNG must be painted.
+ *  Since #394 the picture is ONE plain table, from the desk and the phone alike, for reading later:
+ *  a SECOND tree, off screen, as wide as its widest row — every ticked column whatever the room on
+ *  screen, a status column in words, without a control in it, privacy honoured — rasterized by
+ *  html-to-image. What is measured here is what a plain table promises and no jsdom can see: one
+ *  light ground and one ink in either colour scheme, no chip, bar, bracket or coloured leg, a
+ *  legible face, nothing clipped, and the same tree from the desk and from a phone-width window.
  *
  *  Every measurement of the tree is taken while the share sheet is still "open" (`catchShare`):
  *  the stage stays up exactly that long, so the tree read is the tree painted.
@@ -15,26 +15,27 @@ import { commands, page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
-import { COLUMNS } from "../desk/columns";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { readPicture } from "../testing/plainRead";
 import { settle } from "./nextBook";
-import { catchShare, CONTROLS, decode, forgetShare, placeIn, still } from "./picture";
+import { catchShare, CONTROLS, decode, forgetShare, still } from "./picture";
+import { bookTable, measurePlain, PLAIN_GROUND } from "../testing/plainPicture";
 
 /** Every node handed to the rasterizer, with its text as it stood at that moment: the picture's
  *  text cannot be read off its pixels, so it is read off the node the pixels were made from. */
-const captured = vi.hoisted(() => [] as { node: HTMLElement; text: string }[]);
+const captured = vi.hoisted(() => [] as { node: HTMLElement; text: string; html: string }[]);
 vi.mock("html-to-image", async (orig) => {
   const real = await orig<typeof import("html-to-image")>();
   return {
     ...real,
     toBlob: (node: HTMLElement, options?: object) => {
-      captured.push({ node, text: node.textContent ?? "" });
+      captured.push({ node, text: node.textContent ?? "", html: node.outerHTML });
       return real.toBlob(node, options);
     },
   };
 });
 
-/** One Reference, so the strip has something to say, with the service's stamp on its read (#371). */
+/** One Reference, so the header has something to say, with the service's stamp on its read (#371). */
 const references = [
   { id: "ref1", code: "US..SPX", label: "S&P 500", source: "moomoo", figure: 7612.25, change: 0.0042,
     field: "mid_price", name: "S&P 500", error: null, last_known: false, fetched_at: "2026-11-16 00:59:05+08:00" },
@@ -53,7 +54,7 @@ const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 600, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 600, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 /** Every route the page calls, answered by name, and every request kept. Anything else is a 404
@@ -91,8 +92,22 @@ async function show(width = 1280, quotes?: () => unknown): Promise<string[]> {
 const SUNDAY = new Date("2026-11-15T17:00:00Z");
 
 const press = () => fireEvent.click(screen.getByRole("button", { name: "save as image" }));
-const rowIn = (root: ParentNode, id: string) =>
-  [...root.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
+const rowOnScreen = (id: string) =>
+  [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
+/** A row of the picture, by the name in its second cell. */
+const rowNamed = (root: ParentNode, name: string) =>
+  [...root.querySelectorAll<HTMLTableRowElement>("tbody tr")].find((tr) => tr.children[1]?.textContent === name)!;
+
+/** Take one picture and hold the sheet open: the tree it was taken of, and the file. */
+async function take(): Promise<{ root: HTMLElement; file: File; release: () => void }> {
+  const shared = catchShare();
+  press();
+  await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+  const root = still()!;
+  expect(root, "the picture's tree is not up while the sheet is open").toBeTruthy();
+  expect(captured.at(-1)!.node, "the file was made from something other than the picture's tree").toBe(root);
+  return { root, file: shared.file()!, release: shared.release };
+}
 
 afterEach(async () => {
   cleanup();
@@ -101,114 +116,87 @@ afterEach(async () => {
   forgetShare();
   document.cookie = "ui_privacy=;path=/;max-age=0";
   document.cookie = "ui_cols_combo=;path=/;max-age=0";
+  document.cookie = "ui_arrangement=;path=/;max-age=0";
   await page.viewport(1280, 900);
 });
 
 describe("saving the desk as an image", () => {
-  for (const scheme of ["light", "dark"] as const) it(`paints the fills and the attention chips, in their own colours, ${scheme}`, async () => {
-    // dark first (ADR 0023): the tokens are redefined for the dark scheme, and painted again
+  for (const scheme of ["light", "dark"] as const) it(`is one plain table, dark on a light ground, in the ${scheme} scheme`, async () => {
+    // the page's tokens are redefined for the dark scheme; the picture is the same picture in both
     await commands.colorScheme(scheme);
     await show();
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    const root = still()!;
-    expect(root, "the picture's tree is not up while the sheet is open").toBeTruthy();
-    expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(root);
-    const png = await decode(shared.file()!);
-    const ratio = png.w / root.scrollWidth;
+    const { root, file, release } = await take();
+    expect(measurePlain(root)).toEqual({ grounds: [], inks: [], drawn: [], small: [], clipped: [] });
+    expect(readPicture(root).sections).toEqual(bookTable());
+    // and the file is painted on that ground: its corner is white, and a cell's words are not
+    const png = await decode(file);
+    expect(png.at(2, 2)).toBe(PLAIN_GROUND);
+    expect(png.w / root.scrollWidth).toBeGreaterThan(1);
+    release();
+  });
 
-    // a fired entry signal on the watchlist, a ringing risk rule under a holding, a calm spread
-    const entry = rowIn(root, "w-dec04");
-    const alarm = rowIn(root, "r-calls");
-    const calm = rowIn(root, "w-dec31");
-    const at = (el: Element, dx?: number) => png.at(...placeIn(root, el, ratio, dx));
-    const fill = (row: HTMLElement) => at(row.querySelector(".nxd-fill i")!);
-    const chip = (row: HTMLElement) => at(row.querySelector(".nx-chip")!, 3);
-    const ground = png.at(4, 4);
-
-    for (const [name, px] of [["entry fill", fill(entry)], ["alarm fill", fill(alarm)], ["calm fill", fill(calm)],
-      ["entry chip", chip(entry)], ["alarm chip", chip(alarm)]]) {
-      expect(px, `the ${name} came out transparent`).not.toMatch(/,0$/);
-      expect(px, `the ${name} is the page's own ground — it was not painted`).not.toBe(ground);
-    }
-    // the two attention colours are two colours, and a fired fill is not a calm one: if the
-    // backgrounds were dropped, each pair would collapse into one
-    expect(chip(entry), "the entry chip and the alarm chip are one colour").not.toBe(chip(alarm));
-    expect(fill(entry), "a fired fill is painted as a calm one").not.toBe(fill(calm));
-    expect(fill(alarm), "a ringing fill is painted as a calm one").not.toBe(fill(calm));
-    // and each fired row's bar and chip are ONE colour, its attention colour: a row's tint differs
-    // from row to row too, so the comparisons above would survive a chip or a bar left unpainted —
-    // the row's ground showing through instead — and this one cannot
-    expect(fill(entry), "the entry row's bar and chip differ — one of them was not painted").toBe(chip(entry));
-    expect(fill(alarm), "the ringing row's bar and chip differ — one of them was not painted").toBe(chip(alarm));
-    shared.release();
+  it("is the same tree from the desk and from a phone-width window", async () => {
+    await show(1280);
+    expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk");
+    const desk = await take();
+    const deskWidth = desk.root.getBoundingClientRect().width;
+    desk.release();
+    await expect.poll(() => document.querySelector(".nx-still-stage"), { timeout: 4000 }).toBeNull();
+    cleanup();
+    // by the screen's width, 390px is the phone
+    await show(390);
+    expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("phone");
+    const phone = await take();
+    expect(captured).toHaveLength(2);
+    // the moment differs by the time the two presses took, and nothing else may
+    const untimed = (html: string) => html.replace(/<dd>[^<]*\(New York\)[^<]*<\/dd>/, "");
+    expect(untimed(captured[1]!.html)).toBe(untimed(captured[0]!.html));
+    expect(phone.root.getBoundingClientRect().width).toBeCloseTo(deskWidth, 0);
+    phone.release();
   });
 
   // one set at every hour (#372): the picture draws it in session and out of it
   for (const when of ["in session", "outside the session"] as const) it(`holds every ticked column, though the inspector has taken the room for them, ${when}`, async () => {
     if (when === "outside the session") vi.setSystemTime(SUNDAY);
     await show(1000);
-    fireEvent.click(within(rowIn(document, "h-calls")).getAllByRole("button")[0]!);
+    fireEvent.click(within(rowOnScreen("h-calls")).getAllByRole("button")[0]!);
     await settle();
     const onScreen = [...document.querySelectorAll<HTMLElement>(".nxd .nxd-head [data-col]")].map((c) => c.dataset.col);
-    expect(onScreen.length, "the screen still has room for every column — nothing to prove")
-      .toBeLessThan(COLUMNS.length);
-
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    const root = still()!;
-    const pictured = [...root.querySelectorAll<HTMLElement>(".nxd-head [data-col]")].map((c) => c.dataset.col);
-    expect(pictured).toEqual(COLUMNS.map((c) => c.key));
-    expect(pictured).toEqual(["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage", "alarm"]);
-    // and nothing cut short inside its cell: a still image cannot be widened to read the rest
-    for (const cell of root.querySelectorAll<HTMLElement>(".nxd-row > [data-col]:not([data-col=alarm])")) {
-      expect(cell.scrollWidth, `"${cell.textContent}" is cut short`).toBeLessThanOrEqual(cell.clientWidth + 1);
-    }
-    expect(root.scrollWidth, "the picture shrank to the screen").toBeGreaterThanOrEqual(1000);
-    // and each header over its own column: the columns are in `ch`, which resolves in each row's
-    // own font, so a header row drawn smaller than the rows under it would sit out of line
-    const head = [...root.querySelectorAll<HTMLElement>(".nxd-head > [data-col]")];
-    const first = rowIn(root, "h-calls");
-    for (const h of head) {
-      const cell = first.querySelector<HTMLElement>(`:scope > [data-col="${h.dataset.col}"]`)!;
-      expect(h.getBoundingClientRect().left, `the ${h.dataset.col} header is out of line`)
-        .toBeCloseTo(cell.getBoundingClientRect().left, 0);
-      expect(h.getBoundingClientRect().width).toBeCloseTo(cell.getBoundingClientRect().width, 0);
-    }
-    shared.release();
+    expect(onScreen.length, "the screen still has room for every column — nothing to prove").toBeLessThan(11);
+    const { root, release } = await take();
+    const head = [...root.querySelector("thead tr")!.children].map((c) => c.textContent);
+    expect(head).toEqual([
+      "what", "name", "legs", "value (pts; a holding's cost to close)", "P&L ($)", "captured (%)", "pace gap (pts)",
+      "delta (a holding's short leg)", "SPX to the nearest short strike", "DTE (days)", "manage-by", "rule", "status",
+    ]);
+    // nothing cut short: a still image cannot be widened to read the rest
+    expect(measurePlain(root).clipped).toEqual([]);
+    release();
   });
 
   it("leaves out a column the viewer unticked", async () => {
     document.cookie = "ui_cols_combo=captured;path=/";
     await show();
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    const pictured = [...still()!.querySelectorAll<HTMLElement>(".nxd-head [data-col]")].map((c) => c.dataset.col);
-    expect(pictured).not.toContain("captured");
-    expect(pictured).toContain("pnl");
-    shared.release();
+    const { root, release } = await take();
+    const head = [...root.querySelector("thead tr")!.children].map((c) => c.textContent);
+    expect(head).not.toContain("captured (%)");
+    expect(head).toContain("P&L ($)");
+    release();
   });
 
   it("carries no control: nothing in a picture can be pressed", async () => {
     await show();
     // the inspector open and the price map shown, so there is something to leave out
-    fireEvent.click(within(rowIn(document, "h-calls")).getAllByRole("button")[0]!);
+    fireEvent.click(within(rowOnScreen("h-calls")).getAllByRole("button")[0]!);
     fireEvent.click(screen.getByRole("button", { name: "price map" }));
     await settle();
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    const root = still()!;
-    const controls = [...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80));
-    expect(controls).toEqual([]);
+    const { root, release } = await take();
+    expect([...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
     // the book is in it all the same: holdings, the rules under them, the watchlist, the quarantine
-    for (const id of ["h-puts", "h-calls", "h-ic", "r-calls", "w-dec04", "w-dec18-delta", "q-unknown"]) {
-      expect(rowIn(root, id), `${id} is not in the picture`).toBeTruthy();
+    for (const name of ["1218_P6400", "1218_C7300", "1231_IC", "1204_P6900", "261218 7150P", "261211 8000C"]) {
+      expect(rowNamed(root, name), `${name} is not in the picture`).toBeTruthy();
     }
-    shared.release();
+    release();
   });
 
   for (const when of ["in session", "outside the session"] as const) {
@@ -216,91 +204,81 @@ describe("saving the desk as an image", () => {
       document.cookie = "ui_privacy=on;path=/";
       if (when === "outside the session") vi.setSystemTime(SUNDAY);
       await show();
-      const shared = catchShare();
-      press();
-      await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-      // the node the rasterizer was handed IS the picture's tree, and its text — as it stood when
-      // it was handed over — is what is checked: no picture's pixels can be read for text
+      const { release } = await take();
       expect(captured, "one capture per press").toHaveLength(1);
-      expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(still());
       const text = captured[0]!.text;
       expect(text, "no P&L is drawn at all, so privacy proves nothing").toContain("$•••");
       expect(text).not.toMatch(/\$\s*[+-]?\d/);
       expect(text).not.toMatch(/[+-]\$\d/);
       expect(text).not.toMatch(/×\s*\d/);
-      shared.release();
+      release();
     });
   }
 
   it("says the dollar amounts with privacy off, which is what the test above hides", async () => {
     await show();
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    expect(captured[0]!.node).toBe(still());
+    const { release } = await take();
     expect(captured[0]!.text).toMatch(/[+-]\$\d/);
-    shared.release();
+    release();
+  });
+
+  it("says the rules in full sentences, while the screen keeps them short (#388)", async () => {
+    // wide enough for the rule's column, the widest, which the desk fits last (ADR 0008)
+    await show(1900);
+    // the screen's short form
+    expect(rowOnScreen("w-dec18-delta").querySelector('[data-col="alarm"]')!.textContent).toContain("|Δ| ≥ 0.20");
+    const { root, release } = await take();
+    const rule = [...root.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
+    expect(rowNamed(root, "261218 7150P").children[rule]!.textContent).toBe("|delta| ≥ 0.2 — now -0.170, 0.030 away");
+    expect(root.textContent).not.toMatch(/[↑↓▲▼Δ]/);
+    release();
   });
 
   it("carries the References in session, with no time, under a header that says so", async () => {
     // the one place a picture states SPX's level, from a figure the page already polls
     await show();
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    expect(captured[0]!.text).toContain("S&P 500");
-    expect(captured[0]!.text).toContain("7,612.25");
-    expect(captured[0]!.text).not.toContain("read at");
-    // the session, where the header once said the mode (#375)
-    expect(captured[0]!.node.querySelector(".nx-still-head")!.textContent).toBe("optionalityin session");
-    shared.release();
+    const { root, release } = await take();
+    const lines = readPicture(root).lines;
+    expect(lines.find((l) => l.label === "References")!.text).toBe("S&P 500 (moomoo) 7,612.25 +0.42%");
+    expect(lines.find((l) => l.label === "session")!.text).toBe("in session");
+    // when it was taken, in New York and in the service's own zone
+    expect(lines.find((l) => l.label === "taken")!.text).toMatch(/ \(New York\) · .* \(Asia\/Singapore\)$/);
+    release();
   });
 
   it("carries the References outside the session with the time each was read (#371)", async () => {
     vi.setSystemTime(SUNDAY);
     await show();
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    const strip = captured[0]!.node.querySelector(".references")!;
-    expect(strip.textContent).toBe("S&P 500 (moomoo) 7,612.25+0.42%read at 00:59");
-    // and the market-closed line, with no button: nothing in a picture can be pressed (the owner's
-    // book here carries no stamp, so the line says no time rather than the device's)
-    expect(captured[0]!.node.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed");
-    expect(captured[0]!.node.querySelector(".nx-mkt-closed button")).toBeNull();
-    // the header leaves the session to the market-closed line: said once, not twice
-    expect(captured[0]!.node.querySelector(".nx-still-head")!.textContent).toBe("optionality");
+    const { root, release } = await take();
+    const lines = readPicture(root).lines;
+    expect(lines.find((l) => l.label === "References")!.text).toBe("S&P 500 (moomoo) 7,612.25 +0.42% read at 00:59");
+    // the market-closed line's words (the owner's book here carries no stamp, so no time), once
+    expect(lines.find((l) => l.label === "session")!.text).toBe("market closed");
     expect(captured[0]!.text.split("market closed")).toHaveLength(2);
-    shared.release();
+    release();
   });
 
   it("is one moment: a poll that lands mid-capture changes the page, not the picture", async () => {
     let watched = 2.4;
     await show(1280, () => QUOTES.map((q) => q.id === "w-dec31"
       ? { ...q, watched, combo_value: watched, distance: 6 - watched } : q));
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    const before = still()!.textContent;
-    expect(rowIn(still()!, "w-dec31").textContent).toContain("2.40");
+    const { root, release } = await take();
+    const before = root.textContent;
+    expect(rowNamed(root, "1231_C7600").textContent).toContain("2.40");
     // the next answer differs, and lands while the picture's tree is still up
     watched = 5.55;
     fireEvent.click(screen.getByRole("button", { name: "refresh now" }));
-    await expect.poll(() => rowIn(document.querySelector(".nx-main")!, "w-dec31").textContent, { timeout: 4000 })
-      .toContain("5.55");
+    await expect.poll(() => rowOnScreen("w-dec31").textContent, { timeout: 4000 }).toContain("5.55");
     expect(still(), "the tree went before the poll landed — nothing tested").toBeTruthy();
     expect(still()!.textContent, "the picture took the poll's figures mid-capture").toBe(before);
-    shared.release();
+    release();
   });
 
   it("asks the service for nothing, and takes the tree down when it is done", async () => {
     const asked = await show();
     const before = asked.length;
-    const shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    expect(still()).toBeTruthy();
-    shared.release();
+    const { release } = await take();
+    release();
     await expect.poll(() => document.querySelector(".nx-still-stage"), { timeout: 4000 }).toBeNull();
     await settle();
     expect(asked.slice(before), "the press asked the service for something").toEqual([]);
@@ -320,3 +298,4 @@ describe("saving the desk as an image", () => {
     await expect.poll(() => document.querySelector(".nx-still-stage"), { timeout: 8000 }).toBeNull();
   });
 });
+

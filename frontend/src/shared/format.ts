@@ -160,3 +160,13 @@ export function marketClock(served: string | null | undefined): string | null {
   if (Number.isNaN(at.getTime())) return null;
   return MARKET_CLOCK.format(at);
 }
+
+/** The line's words, for the freshness line (`Freshness.tsx`) and the saved
+ *  picture's header and its text (#394). */
+export function freshnessWords(fetchedAt: string | null, polledAt: string | null, sweepSeconds: number | null): string {
+  const session = marketClock(fetchedAt);
+  return (fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep")
+    + (session ? ` · ${session}` : "")
+    + (polledAt ? ` · screen updated ${polledAt}` : "")
+    + (sweepSeconds ? ` · service sweeps every ${sweepSeconds}s` : "");
+}

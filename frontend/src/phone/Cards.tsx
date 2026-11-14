@@ -62,14 +62,13 @@ export function RuleLine({ entry, marked = true, children }: {
 
 export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen }: {
   placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
-  /** absent in the saved picture (#300), where nothing can be pressed */
-  onOpen?: () => void;
+  onOpen: () => void;
 }) {
   const { holding, rules } = placed;
   const hot = holding.schedule?.reached === "stop" || rules.some((r) => ruleState(r) === "alarm");
   return (
     <article className="nxp-card nxp-holding" data-ref={holding.id} data-state={hot ? "alarm" : "calm"}>
-      {onOpen ? <OpenCard name={holding.name} onOpen={onOpen} /> : null}
+      <OpenCard name={holding.name} onOpen={onOpen} />
       <header className="nxp-head">
         <span className="nxp-name">{holding.name}</span>
         <span className="nxp-legs"><Legs legs={holding.legs.map(heldLeg)} /></span>
@@ -115,12 +114,12 @@ export function Progress({ entry }: { entry: Entry }) {
  *  owns — with its progress toward the threshold and the rules that sit under it, and, for a
  *  spread that only partly overlaps a holding, what it shares and with whom (#346). */
 export function RuleCard({ entry, under, overlap = null, onOpen }: {
-  entry: Entry; under: Entry[]; overlap?: string | null; onOpen?: () => void;
+  entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
 }) {
   const state = ruleState(entry);
   return (
     <article className="nxp-card nxp-watch" data-ref={entry.id} data-state={state ?? "calm"}>
-      {onOpen ? <OpenCard name={entryName(entry)} onOpen={onOpen} /> : null}
+      <OpenCard name={entryName(entry)} onOpen={onOpen} />
       <header className="nxp-head">
         <span className="nxp-name">{entryName(entry)}</span>
         {entry.legs ? <span className="nxp-legs"><Legs legs={entry.legs.map(signedLeg)} /></span> : null}

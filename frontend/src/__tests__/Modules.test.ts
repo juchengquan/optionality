@@ -38,8 +38,8 @@ function resolved(spec: string): string | null {
 
 /** The modules that may not reach a component: pure data, measuring and formatting, plus the hook
  *  that runs React's machinery without rendering anything. */
-const PURE = ["shared/format.ts", "shared/snapshot.ts", "shared/useDismissOnBack.ts",
-  "shared/prefs.ts", "shared/groups.ts"];
+const PURE = ["shared/format.ts", "shared/snapshot.ts", "shared/useDismissOnBack.ts", "shared/readings.ts",
+  "shared/prefs.ts", "shared/groups.ts", "snapshot/plain.ts"];
 
 describe("the measuring and formatting path", () => {
   for (const file of PURE) {

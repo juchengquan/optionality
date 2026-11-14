@@ -28,6 +28,8 @@ vi.mock("../shared/snapshot", async (orig) => ({
 
 const { useSaveImage } = await import("../snapshot/useSaveImage");
 const { Next } = await import("../Next");
+const { holdingService } = await import("../testing/holdingService");
+const { readMarkdown, readPicture } = await import("../testing/plainRead");
 
 /** A promise the test settles: the capture, held in flight. */
 function pending<T>() {
@@ -196,5 +198,81 @@ describe("the page's button", () => {
     await act(async () => { capture.settle(new Blob(["png"])); });
     await waitFor(() => expect(button.disabled).toBe(false));
     expect(document.querySelector(".nx-still-stage")).toBeNull();
+  });
+});
+
+/** The page's two presses on one book (#394): the picture and the text, from the desk and the phone. */
+describe("one view from either arrangement, as a picture and as text", () => {
+  /** the page in an arrangement, on a fixed clock, and the node each picture was taken of */
+  async function open(arrangement: "desk" | "phone") {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-16T15:00:00Z") });
+    document.cookie = `ui_arrangement=${arrangement};path=/`;
+    window.fetch = holdingService().fetch;
+    render(<Next />);
+    await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
+  }
+  async function picture(): Promise<HTMLElement> {
+    const shots: HTMLElement[] = [];
+    toBlob.mockImplementation((node: HTMLElement) => {
+      shots.push(node.cloneNode(true) as HTMLElement);
+      return Promise.resolve(new Blob(["png"]));
+    });
+    fireEvent.click(screen.getByRole("button", { name: "save as image" }));
+    await waitFor(() => expect(shots).toHaveLength(1));
+    await waitFor(() => expect(document.querySelector(".nx-still-stage")).toBeNull());
+    return shots[0]!;
+  }
+  /** the device's clipboard, as the test has it */
+  const clipboard = (c: { writeText: (t: string) => Promise<void> } | undefined) =>
+    Object.defineProperty(navigator, "clipboard", { value: c, configurable: true });
+  afterEach(() => {
+    vi.useRealTimers();
+    Reflect.deleteProperty(navigator, "clipboard");
+    document.cookie = "ui_arrangement=;path=/;max-age=0";
+  });
+
+  it("is the same plain table from the desk and from the phone", async () => {
+    await open("desk");
+    const desk = await picture();
+    cleanup();
+    await open("phone");
+    expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("phone");
+    const phone = await picture();
+    expect(desk.querySelectorAll("tbody tr").length, "an empty picture proves nothing").toBeGreaterThan(5);
+    expect(phone.outerHTML).toBe(desk.outerHTML);
+  });
+
+  for (const arrangement of ["desk", "phone"] as const) {
+    it(`copies, from the ${arrangement}, the table the picture draws, and says so`, async () => {
+      const written: string[] = [];
+      clipboard({ writeText: (t: string) => { written.push(t); return Promise.resolve(); } });
+      await open(arrangement);
+      fireEvent.click(screen.getByRole("button", { name: "copy as text" }));
+      await waitFor(() => expect(added).toContainEqual({ title: "copied as text", type: "success" }));
+      expect(written).toHaveLength(1);
+      expect(written[0]).toMatch(/^# optionality\n/);
+      const shot = await picture();
+      expect(readMarkdown(written[0]!)).toEqual(readPicture(shot));
+    });
+  }
+
+  it("says why, where the browser refuses the clipboard", async () => {
+    clipboard({ writeText: () => Promise.reject(new DOMException("Write permission denied.", "NotAllowedError")) });
+    await open("phone");
+    fireEvent.click(screen.getByRole("button", { name: "copy as text" }));
+    await waitFor(() => expect(added).toContainEqual({
+      title: "could not copy — the browser refused the clipboard (Write permission denied.)", type: "error",
+    }));
+    expect(added.filter((t) => t.type === "success")).toEqual([]);
+  });
+
+  it("says why, where the page has no clipboard at all", async () => {
+    // outside a secure page the browser gives none
+    clipboard(undefined);
+    await open("desk");
+    fireEvent.click(screen.getByRole("button", { name: "copy as text" }));
+    await waitFor(() => expect(added).toContainEqual({
+      title: "could not copy — the browser refused the clipboard (there is no clipboard on this page)", type: "error",
+    }));
   });
 });

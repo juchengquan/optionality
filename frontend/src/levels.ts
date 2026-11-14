@@ -108,3 +108,14 @@ export function closeLineWords(holdings: readonly Holding[] | null): string | nu
 export function everyHoldingValued(holdings: readonly Holding[] | null, error: string | null): boolean {
   return holdings !== null && error === null && holdings.every((h) => h.valued_reason === null);
 }
+
+/** The market-closed line's words, for the line (`ClosedLine.tsx`) and the saved picture's header
+ *  (#394), so the two cannot word the session apart. `now` is the clock that decides whether a time
+ *  needs its date. */
+export function closedLineText(
+  at: string | null, served: string | null | undefined, holdings: readonly Holding[] | null,
+  now: Date = new Date(),
+): string {
+  const words = at === null ? null : served ? servedWhen(served, now) ?? at.slice(0, 5) : at.slice(0, 5);
+  return closeLineWords(holdings) ?? (words ? `market closed — valued at ${words}` : "market closed");
+}
