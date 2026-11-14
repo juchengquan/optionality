@@ -454,6 +454,30 @@ class TestAPriceWithNoBook:
         assert t.sent == []
         assert id_ not in s.silent_sweeps, "a held rule has no run of silence"
 
+    async def test_ends_a_run_of_silence_a_held_sweep_between_two_silent_ones_starts_the_count_again(
+        self, t: Sweeps
+    ) -> None:
+        # the run counts CONSECUTIVE sweeps with no figure, and a held sweep is an answer: kept from
+        # before the hold, the count would reach the limit here and quarantine the rule
+        id_ = t.combo()
+        a = build_spx_code(t.future(), "CALL", 8100)
+        state = {"held": False}
+
+        def fetch(codes: list[str]) -> list[dict[str, Any]]:
+            return [{"code": c, "name": c, "bid_price": 0, "ask_price": 0} for c in codes if state["held"] or c == a]
+
+        s = t.sweeper(fetch, quarantine_after_silent_sweeps=3)
+        await s.sweep()
+        await t.tick(s)  # two silent sweeps: one short of the limit
+        assert s.silent_sweeps.get(id_) == 2
+        state["held"] = True
+        await t.tick(s)  # every leg back, one with no book: held
+        state["held"] = False
+        await t.tick(s)  # the leg missing again: the first of a new run
+        assert t.row(id_)["enabled"] == 1
+        assert s.silent_sweeps.get(id_) == 1
+        assert t.sent == []
+
     async def test_still_counts_a_leg_the_provider_did_not_return_at_all(self, t: Sweeps) -> None:
         id_ = t.combo()
         a = build_spx_code(t.future(), "CALL", 8100)

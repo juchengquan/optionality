@@ -185,14 +185,22 @@ function dayWords(iso: string): string {
 export function paceExplained(
   samples: readonly PacedSample[], position: Position, now: Date,
 ): PaceExplained {
-  const m = measure(samples, position);
+  // The gap is at the last day with a Cost to close, and the vol part runs to that same day, so the
+  // three stay one instant. A day kept only for its vol readings (#380: no two-sided quote out of
+  // hours — a weekend, the small hours before the open) is SKIPPED, never the end of the split:
+  // otherwise every weekend read "has no Cost to close". Where no day has a cost, nothing is skipped
+  // and the last day says so.
+  let priced = samples.length - 1;
+  while (priced >= 0 && samples[priced]!.cost_to_close === null) priced -= 1;
+  const upTo = priced < 0 ? samples : samples.slice(0, priced + 1);
+  const m = measure(upTo, position);
   const measured = typeof m === "string" ? null : m;
   const reason = typeof m === "string" ? m
     : m.days === 0
       ? `only ${dayWords(m.from)}, the day it was Opened, is recorded: nothing has moved yet`
       : null;
 
-  const last = samples.length === 0 ? null : samples[samples.length - 1]!;
+  const last = upTo.length === 0 ? null : upTo[upTo.length - 1]!;
 
   let timing: PacedTiming | null = null;
   if (last !== null) {

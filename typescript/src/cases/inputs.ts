@@ -1118,8 +1118,15 @@ export const INPUTS: Record<string, CaseInput[]> = {
       args: [[paced[0], { ...paced[1]!, legs_iv: null }], condor, paceLater] },
     { fn: "paceExplained", name: "nothing recorded", args: [[], condor, paceLater] },
     { fn: "paceExplained", name: "Opened never declared", args: [paced, { ...condor, opened_at: null }, paceLater] },
-    { fn: "paceExplained", name: "no Cost to close at the last close",
-      args: [[paced[0], { ...paced[1]!, cost_to_close: null }], condor, paceLater] },
+    // a day kept only for its vol readings (#380) is skipped: Thu 4.40, Fri 3.05, Sat with no cost
+    // is split at Friday, the vol part to Friday too
+    { fn: "paceExplained", name: "a last day with no Cost to close is skipped, the split at the last close",
+      args: [[{ ...paced[0]!, cost_to_close: 4.4 }, { ...paced[1]!, cost_to_close: 3.05 },
+        { ...paced[2]!, cost_to_close: null }], condor, paceLater] },
+    { fn: "paceExplained", name: "a costless day between two closes is not the end of the split",
+      args: [[paced[0], { ...paced[1]!, cost_to_close: null }, paced[2]], condor, paceLater] },
+    { fn: "paceExplained", name: "no Cost to close on any day",
+      args: [paced.map((p) => ({ ...p, cost_to_close: null })), condor, paceLater] },
     { fn: "paceExplained", name: "no Entry, so no On-pace and no gap", args: [paced, { ...condor, entry: null }, paceLater] },
     { fn: "paceExplained", name: "no On-pace at a DTE beyond the open's",
       args: [[{ ...paced[0]!, dte: 46 }], condor, paceLater] },

@@ -448,6 +448,28 @@ describe("a price with no book (#380)", () => {
     expect(s.silentSweeps.has(id), "a held rule has no run of silence").toBe(false);
   });
 
+  it("ends a run of silence: a held sweep between two silent ones starts the count again", async () => {
+    // the run counts CONSECUTIVE sweeps with no figure, and a held sweep is an answer — so a leg that
+    // goes missing again afterwards starts from one. Kept from before the hold, the count would reach
+    // the limit here and quarantine a rule whose legs the Provider has been returning all along.
+    const id = combo();
+    const a = buildSpxCode(future(), "CALL", 8100);
+    let held = false;
+    const s = sweeper((codes) => Promise.resolve(codes
+      .filter((c) => held || c === a)
+      .map((c) => ({ code: c, name: c, bid_price: 0, ask_price: 0 }))), { quarantineAfterSilentSweeps: 3 });
+    await s.sweep();
+    await tick(s); // two silent sweeps: one short of the limit
+    expect(s.silentSweeps.get(id)).toBe(2);
+    held = true;
+    await tick(s); // every leg back, one with no book: held
+    held = false;
+    await tick(s); // the leg missing again: the first of a new run
+    expect(row(id)!.enabled).toBe(1);
+    expect(s.silentSweeps.get(id)).toBe(1);
+    expect(sent).toEqual([]);
+  });
+
   it("still counts a leg the Provider did not return at all: that is silence", async () => {
     const id = combo();
     const a = buildSpxCode(future(), "CALL", 8100);

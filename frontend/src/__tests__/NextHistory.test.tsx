@@ -297,6 +297,15 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(chart.querySelectorAll("[data-missed]")).toHaveLength(0);
   });
 
+  it("says why the burndown is empty when no day has a Cost to close yet (#380)", async () => {
+    const days = SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: null }));
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(within(chart).getByText(/no day with a Cost to close yet/)).toBeTruthy());
+    expect(chart.querySelectorAll("[data-sample]")).toHaveLength(0);
+  });
+
   it("draws the days summed before a leg's quantity was corrected apart, and says so (#359)", async () => {
     // corrected at 13:00 in Singapore on 6 Nov, which is midnight on the 6th in New York: the 3rd,
     // 4th and 5th were summed under the quantities as first recorded

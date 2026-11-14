@@ -125,7 +125,14 @@ def _day_words(iso: str) -> str:
 
 def pace_explained(samples: list[PacedSample], position: Position, now: datetime) -> PaceExplained:
     """The vol part, the gap at the last sample it splits, and why for each figure that is absent."""
-    m = _measure(samples, position)
+    # the gap is at the last day with a Cost to close, and the vol part runs to that same day, so the
+    # three stay one instant: a day kept only for its vol readings (#380) is SKIPPED. Where no day has
+    # a cost, nothing is skipped and the last day says so.
+    priced = len(samples) - 1
+    while priced >= 0 and samples[priced].cost_to_close is None:
+        priced -= 1
+    up_to = samples if priced < 0 else samples[: priced + 1]
+    m = _measure(up_to, position)
     measured = None if isinstance(m, str) else m
     if isinstance(m, str):
         reason: str | None = m
@@ -134,7 +141,7 @@ def pace_explained(samples: list[PacedSample], position: Position, now: datetime
     else:
         reason = None
 
-    last = samples[-1] if samples else None
+    last = up_to[-1] if up_to else None
 
     timing: PacedTiming | None = None
     if last is not None:

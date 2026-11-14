@@ -655,7 +655,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   of hours) still keeps the day for its vol readings, which the chain needs, and an empty cost NEVER
   replaces a stored one, at any hour; a costless row is incomplete, completed only by a reading with
   cost, IV and vega (ADR 0011, amended 2026-11-14). The burndown draws no point for it and does not
-  call it missed. A sweep that read nothing at all (a leg not returned) writes no row.
+  call it missed, and `/vol`'s split skips it: taken at the last day with a cost, vol part included. A sweep that read nothing at all (a leg not returned) writes no row.
   And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
   it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the

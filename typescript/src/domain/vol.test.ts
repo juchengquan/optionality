@@ -277,6 +277,21 @@ describe("the pace gap explained", () => {
     });
   });
 
+  it("skips a last day with no Cost to close: the split is at the last close, as one instant (#380)", () => {
+    // Thursday and Friday priced, Saturday kept only for its vol: moomoo quotes 0/0 out of hours.
+    // Taken at Saturday, every weekend read "has no Cost to close"; the vol part runs to Friday too,
+    // so vol + rest = gap stays one instant rather than charging Saturday's vol to Friday's gap.
+    const chain = [
+      paced(6.86, "2026-10-06", 45, FLAT, VEGA),
+      paced(6.9, "2026-10-07", 44, [11, 10, 22, 22], VEGA),
+      paced(null, "2026-10-08", 43, [12, 11, 23, 23], VEGA),
+    ];
+    const e = paceExplained(chain, condor(), LATER);
+    expect(e).toEqual(paceExplained(chain.slice(0, 2), condor(), LATER));
+    expect([e.at, e.to, e.gap]).toEqual(["2026-10-07", "2026-10-07", 6.9 - pace(44)]);
+    expect(e.rest).toBe(e.gap! - e.vol!);
+  });
+
   describe("says what the last sample is", () => {
     const at = (observed_at: string | null, now: Date) => paceExplained([
       { ...paced(6.86, "2026-10-06", 45, FLAT, VEGA), observed_at },
@@ -358,12 +373,12 @@ describe("the pace gap explained", () => {
       expect(why(e)).toEqual([null, null, null, r, r]);
     });
 
-    it("no Cost to close at the last sample, keeping the vol part", () => {
+    it("no Cost to close on any day: the last day says so, and the vol part is kept", () => {
       const e = paceExplained([
-        paced(6.86, "2026-10-06", 45, FLAT, VEGA),
+        paced(null, "2026-10-06", 45, FLAT, VEGA),
         paced(null, "2026-10-07", 44, [11, 10, 22, 22], VEGA),
       ], condor(), LATER);
-      expect([e.vol, e.reason]).toEqual([4, null]);
+      expect([e.vol, e.reason, e.at]).toEqual([4, null, "2026-10-07"]);
       const r = "7 Oct has no Cost to close";
       expect(why(e)).toEqual([null, null, null, r, r]);
     });

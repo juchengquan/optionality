@@ -31,7 +31,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchSamples, type Holding, type Samples } from "./shared/api";
-import { scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
+import { hasCost, scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
 import { Burndown, runsOf, useWidth } from "./BurndownChart";
 import { legCode } from "./legs";
 import { SpxPath, spxGutter } from "./SpxPath";
@@ -116,6 +116,9 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
             <>
               <Burndown served={served} unit={unit} axis={axis!} span={dteWindow(served)} gutters={gutters!}
                         closeDte={closeDte} />
+              {served.samples.some(hasCost) ? null
+                // every day kept only for its vol (#380): the IV chart below has them, the burndown none
+                : <p className="nx-meta">no day with a Cost to close yet: each was recorded out of hours, with no two-sided quote to price it</p>}
               {served.levels === null
                 ? <p className="nx-meta">no plan: Opened not recorded, so there is no schedule to draw</p> : null}
             </>

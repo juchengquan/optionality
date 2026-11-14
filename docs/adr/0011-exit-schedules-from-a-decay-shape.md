@@ -286,9 +286,11 @@ What reads a costless row:
 
 - **The burndown** draws no point for it. The row is there, so it is not hatched as a missed day,
   and the line breaks across it as it does across a gap.
-- **`/vol`'s gap** at such a day says it has no Cost to close. `paceExplained` already said so for
-  a null.
-- **The vol part is untouched.** It never read the cost.
+- **The pace SKIPS it.** `/vol`'s split (`paceExplained`) is taken at the last day WITH a Cost to
+  close, and the vol part runs to that same day, so vol + rest = gap stays one instant. Taken at a
+  costless last row, every weekend and every weekday's small hours would have read "has no Cost to
+  close". Only where no day has a cost does the last day say so.
+- **The vol chain itself** never read the cost, so a costless day still links the days either side.
 
 Valuing a holding from its latest close outside the session is the second half of #380, and is not
 decided here.
