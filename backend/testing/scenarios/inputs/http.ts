@@ -902,6 +902,76 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
+    // #387: out of the session a Provider that is down costs only the holding that needed it — a
+    // dash with the reason — and the holding with a close is served from it, where this was a 502
+    name: "GET /positions/values outside the session with the Provider down dashes only the holding with no close",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-wing", strategy: "call spread", entry: 1.5, opened_at: "2026-11-13",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7350 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+        ],
+        position_samples: [FRI, SAT],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // ...and on a weekday night, which is no weekend: Tuesday 20:00 New York, Tuesday's close stored
+    // for one holding and nothing for the other (#387 review)
+    name: "GET /positions/values on a weekday night with the Provider down dashes only the holding with no close",
+    world: world({
+      clock: "2026-11-11T01:00:00.000Z",
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-wing", strategy: "call spread", entry: 1.5, opened_at: "2026-11-10",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7350 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+        ],
+        position_samples: [closeRow("2026-11-10", 38, 3.3, "2026-11-10 21:14:59.000000")],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // ...and where no holding has a close, every one is a dash with the reason, as out of hours it
+    // would be with the Provider up: a 200, not the 502 the session still answers
+    name: "GET /positions/values outside the session with the Provider down and no close dashes every holding",
+    world: world({ clock: SATURDAY, tables: held, provider: { down: DOWN } }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // #387: a fallback row priced in the hours on a Saturday is no close, and says so — by the session
+    // closeSample asks, not by the hour
+    name: "GET /positions/values outside the session says a weekend reading it values from is no close",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        positions: [position({ id: "pos-1", opened_at: "2026-11-13" })],
+        position_samples: [
+          closeRow("2026-11-13", 35, 3.5, "2026-11-14 01:30:00.000000"), // Friday 20:30 New York
+          closeRow("2026-11-14", 34, 3.4, "2026-11-14 16:00:00.000000"), // Saturday 11:00
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
     // in the session the Provider's quote is the price, whatever is stored: unchanged by #380
     name: "GET /positions/values in the session values live though a close is stored",
     world: world({ tables: { ...held, position_samples: [THU, FRI] }, provider: { quotes: BOOK } }),

@@ -245,6 +245,27 @@ function takenInSession(observedAt: string | null): boolean {
   return inSession(storedInstant(observedAt!)!);
 }
 
+/** What the row a holding is valued from is (`closeSample`): `sampleTiming`, except that a row
+ *  observed on a day with no session — a weekend's, by New York's date, at ANY hour — is "weekend":
+ *  never "close", and never "before the open" or "after the close" of a session that day did not
+ *  have (#387).
+ *
+ *  `sampleTiming` calls a weekend's row in the hours "close" on purpose: on a chart of the samples it
+ *  carries Friday's close forward (ADR 0011). But a row a holding is VALUED from is a close only if
+ *  `closeSample` counts it as one, and that asks the session: a priced Saturday row is at most the
+ *  fallback, priced by a Provider that quotes at weekends, and must not read "as of the close" — nor
+ *  "after the close" at 20:00, as if Saturday had had one. The same weekday test as `closeSample`'s,
+ *  so the label and the choice cannot disagree. Holidays are not detected, as `inSession` does not
+ *  detect them. */
+export type ValuedTiming = SampleTiming | "weekend";
+
+export function valuedTiming(observedAt: string | null): ValuedTiming {
+  const timing = sampleTiming(observedAt);
+  if (timing === "unrecorded") return timing;
+  const weekday = WEEKDAY.format(storedInstant(observedAt!)!);
+  return weekday === "Sat" || weekday === "Sun" ? "weekend" : timing;
+}
+
 /** Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after
  *  the market day `day` (YYYY-MM-DD), by `now` (#380 review).
  *

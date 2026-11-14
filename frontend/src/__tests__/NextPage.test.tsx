@@ -968,6 +968,30 @@ describe("every item that needs you carries its glyph", () => {
   });
 });
 
+describe("settings' claim of a whole list", () => {
+  it("is withdrawn out of hours where a holding was not valued because the Provider was down (#387)", async () => {
+    // the service answers 200 out of the session, dashing the holding the failed call would have
+    // priced: a holding at its Level is the one need only a valuation shows, so nothing may claim
+    // that nothing needs you
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SUNDAY);
+    held = [];
+    await open();
+    await until(() => expect(held!.length).toBe(1));
+    await act(async () => {
+      held![0]!.settle(true, [{
+        ...holding, fetched_at: null, cost_to_close: null, pnl: null, captured: null, schedule: null,
+        valued_from: "live", valued_on: null, valued_timing: null,
+        valued_reason: "moomoo call failed: connect ECONNREFUSED 127.0.0.1:33333",
+      }]);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    const needs = screen.getByTestId("needs");
+    expect(needs.textContent).toContain("the holdings are not valued, so this may be short");
+    expect(needs.textContent).not.toContain("nothing needs you");
+  });
+});
+
 describe("settings", () => {
   it("gives its Back entry back when the desk turns into the phone with it open", async () => {
     // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls

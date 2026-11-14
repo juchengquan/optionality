@@ -364,6 +364,18 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "closeSample", name: "a costed Saturday noon row alone is the fallback, not a close",
       args: [[THU_EARLY, { ...SAT_FILL, observed_at: "2026-11-14 17:00:00.000000", cost_to_close: 3.1 }]] },
     { fn: "closeSample", name: "no row with a cost", args: [[SAT_FILL]] },
+    // what that row is said to be: a close only by the session closeSample asks (#387)
+    { fn: "valuedTiming", name: "Friday's close", args: [FRI_CLOSE.observed_at] },
+    { fn: "valuedTiming", name: "a Saturday noon row is no close", args: ["2026-11-14 17:00:00.000000"] },
+    { fn: "valuedTiming", name: "a Sunday row at 16:15 exactly", args: ["2026-11-15 21:15:00.000000"] },
+    { fn: "valuedTiming", name: "Thanksgiving noon, a holiday nothing detects", args: ["2026-11-26 17:00:00.000000"] },
+    { fn: "valuedTiming", name: "a reading after Friday's close", args: [FRI_EVENING.observed_at] },
+    { fn: "valuedTiming", name: "a Saturday fill just after midnight is the weekend's", args: [SAT_FILL.observed_at] },
+    { fn: "valuedTiming", name: "Saturday 20:00 is the weekend's, not after a close", args: ["2026-11-15 01:00:00.000000"] },
+    { fn: "valuedTiming", name: "the last millisecond of Sunday", args: ["2026-11-16 04:59:59.999000"] },
+    { fn: "valuedTiming", name: "Monday's first millisecond, before the open", args: ["2026-11-16 05:00:00.000000"] },
+    { fn: "valuedTiming", name: "no stamp", args: [null] },
+    { fn: "valuedTiming", name: "a stamp it cannot read", args: ["2026-11-14T17:00:00Z"] },
     { fn: "closeSample", name: "no rows", args: [[]] },
     // whether a whole weekday session has closed since a day: what bounds the manage-by wait
     { fn: "sessionClosedSince", name: "the same Monday, before its close", args: ["2026-11-09", at("2026-11-09T21:15:00.000Z")] },

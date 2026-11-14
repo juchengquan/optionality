@@ -27,6 +27,9 @@ figures are decided here; each surface only chooses how to say them.
 
 **Outside New York's session a holding is valued from its latest close** (#380): `values_from_close`
 decides, per holding, and only the holdings valued live are asked for. `holdings.ts` says why.
+**Out of the session a failed Provider call costs only the holdings that needed it** (#387): they are
+dashes with the failure's message (`unpriced`), and the rest are served from their closes; in the session
+the failure is still the caller's.
 """
 
 import math
@@ -36,7 +39,7 @@ from datetime import datetime
 from typing import Any, Literal, TypedDict, cast
 
 from optionality.exit import ExitPolicy, captured, dte_at_open, exit_levels
-from optionality.expiry import days_to_expiry, values_from_close
+from optionality.expiry import days_to_expiry, in_session, values_from_close
 from optionality.position import Position, contract_size, cost_to_close, pnl_at, position_leg_codes
 from optionality.quote import ByCode, DerivedSpx, derived_spx, display_records
 
@@ -82,6 +85,9 @@ class HoldingValue:
     dte: int
     #: "live" from the Provider's batch, or "close" from the stored row `close` (#380)
     valued_from: Literal["live", "close"]
+    #: why a holding valued live has no figures: out of the session, the failed Provider call's own message
+    #: (#387); None wherever the call was made and answered, or not needed
+    unpriced: str | None
     #: the stored row a close valuation is from; None for a live one
     close: PositionSampleRow | None
     #: the records the greeks, the legs' deltas and the strike distances are read from: the batch's, or
@@ -197,6 +203,7 @@ def _live(
     size: float | None,
     dte: int,
     settings: Settings,
+    unpriced: str | None,
 ) -> HoldingValue:
     cost = cost_to_close(position, by_code)
     return HoldingValue(
@@ -208,6 +215,7 @@ def _live(
         schedule=_schedule_of(row, cost, dte, dte, settings),
         dte=dte,
         valued_from="live",
+        unpriced=unpriced,
         close=None,
         records=by_code,
         spx=spx,
@@ -229,6 +237,7 @@ def _from_close(
         schedule=_schedule_of(row, cost, close["dte"], dte, settings),
         dte=dte,
         valued_from="close",
+        unpriced=None,
         close=close,
         records=_close_records(position, close),
         spx=DerivedSpx(price=close["spx"], reason=NO_CLOSE_SPX if close["spx"] is None else None),
@@ -242,8 +251,10 @@ async def holding_values(
 ) -> Valued:
     """Every holding still held, each valued live from ONE batch or from its latest close.
 
-    Raises if the batch fails: whether that is a 502 or a sentence in a Telegram reply is the caller's
-    business, not this module's. No batch is asked for where nothing is valued live.
+    Raises if the batch fails IN THE SESSION: whether that is a 502 or a sentence in a Telegram reply is
+    the caller's business, not this module's. Out of it a failed batch dashes the holdings valued live,
+    each with the failure's message, and serves the rest from their closes (#387). No batch is asked for
+    where nothing is valued live.
     """
     # what is HELD: a closed holding is kept with its history but valued no longer, and must not widen
     # the batch for contracts nobody holds (ADR 0022)
@@ -255,10 +266,21 @@ async def holding_values(
     closes = [close_of(db, row, now) for row in rows]
     live = [p for p, c in zip(positions, closes, strict=True) if c is None]
     by_code: ByCode = {}
+    unpriced: str | None = None
     if live:
         codes = _js_sorted({code for p in live for code in position_leg_codes(p)})
-        records = (await fetch_quotes(codes)).records
-        by_code = display_records(records, tz, now)
+        # only the CALL is caught: a fault of this service's own past it is no Provider's (#387 review)
+        records = None
+        try:
+            records = (await fetch_quotes(codes)).records
+        except Exception as err:
+            # in the session the batch is the price, and its failure is the whole answer's; out of it the
+            # holdings it would have priced are dashes with the reason, and the closes still stand (#387)
+            if in_session(now):
+                raise
+            unpriced = str(err)
+        if records is not None:
+            by_code = display_records(records, tz, now)
     batch_spx = derived_spx(list(by_code.values()))
     batch_size = contract_size(by_code)
 
@@ -266,7 +288,7 @@ async def holding_values(
     for row, position, close in zip(rows, positions, closes, strict=True):
         dte = days_to_expiry(row["strike_date"], now)
         values.append(
-            _live(row, position, by_code, batch_spx, batch_size, dte, settings)
+            _live(row, position, by_code, batch_spx, batch_size, dte, settings, unpriced)
             if close is None
             else _from_close(row, position, close, dte, settings)
         )

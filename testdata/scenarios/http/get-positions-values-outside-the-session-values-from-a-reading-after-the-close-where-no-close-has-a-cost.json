@@ -208,6 +208,7 @@
           "valued_from": "close",
           "valued_on": "2026-11-13",
           "valued_timing": "after-close",
+          "valued_reason": null,
           "dte": 34,
           "schedule": {
             "dte_at_open": 35,

@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   closeSample, daysToExpiry, inSampleHours, inSession, marketDate, sampleTiming, takesSample,
-  valuesFromClose, type SampleReadings,
+  valuedTiming, valuesFromClose, type SampleReadings,
 } from "./expiry.ts";
 
 describe("the market date", () => {
@@ -381,5 +381,27 @@ describe("valuesFromClose — live in the session, the latest close outside it (
 
   it("values live outside it where no row has a cost", () => {
     expect(valuesFromClose(at("2026-11-14T17:00:00Z"), [{ ...fri, cost_to_close: null }])).toBeNull();
+  });
+});
+
+describe("valuedTiming — what a row a holding is valued from is, by the session (#387)", () => {
+  it("is a close only for a row observed in a weekday's session", () => {
+    expect(valuedTiming("2026-11-13 21:14:59.561000")).toBe("close"); // Friday 16:14
+    expect(valuedTiming("2026-11-09 14:30:00.000000")).toBe("close"); // Monday 09:30
+  });
+
+  it("names a weekend row for what it is at any hour, never a close nor either side of one", () => {
+    expect(valuedTiming("2026-11-14 17:00:00.000000")).toBe("weekend"); // Saturday noon
+    expect(valuedTiming("2026-11-15 21:15:00.000000")).toBe("weekend"); // Sunday 16:15
+    expect(valuedTiming("2026-11-15 01:00:00.000000")).toBe("weekend"); // Saturday 20:00 (#387 review)
+    expect(valuedTiming("2026-11-14 05:00:12.407000")).toBe("weekend"); // Saturday 00:00
+    expect(valuedTiming("2026-11-16 04:59:59.999000")).toBe("weekend"); // Sunday 23:59:59.999
+  });
+
+  it("is a weekday row's own timing outside the hours, as sampleTiming says", () => {
+    expect(valuedTiming("2026-11-14 01:30:00.000000")).toBe("after-close"); // Friday 20:30
+    expect(valuedTiming("2026-11-16 05:00:00.000000")).toBe("before-open"); // Monday 00:00
+    expect(valuedTiming(null)).toBe("unrecorded");
+    expect(valuedTiming("not a time")).toBe("unrecorded");
   });
 });

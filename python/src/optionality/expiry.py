@@ -180,6 +180,21 @@ def _taken_in_session(observed_at: str | None) -> bool:
     return when is not None and in_session(when)
 
 
+type ValuedTiming = Literal["close", "before-open", "after-close", "unrecorded", "weekend"]
+
+
+def valued_timing(observed_at: str | None) -> ValuedTiming:
+    """What the row a holding is valued from is (`close_sample`): `sample_timing`, except that a row observed
+    on a day with no session — a weekend's, by New York's date, at ANY hour — is "weekend": never "close",
+    and never "before the open" or "after the close" of a session that day did not have (#387). The same
+    weekday test as `close_sample`'s, so the label and the choice cannot disagree. Mirrors `expiry.ts`."""
+    timing = sample_timing(observed_at)
+    when = None if observed_at is None else _stored_instant(observed_at)
+    if timing == "unrecorded" or when is None:
+        return "unrecorded"
+    return "weekend" if when.astimezone(ZoneInfo(MARKET_TZ)).weekday() >= 5 else timing
+
+
 def session_closed_since(day: str, now: datetime) -> bool:
     """Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after the
     market day `day`, by `now`: what bounds the manage-by notice's wait for a Cost to close (#380 review).

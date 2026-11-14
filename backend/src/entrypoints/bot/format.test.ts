@@ -230,8 +230,8 @@ describe("the help and the menu", () => {
 
 describe("closedLine — which close /holdings is valued from, out of session (#380)", () => {
   const row = (observed_on: string, observed_at: string | null) => ({ observed_on, observed_at });
-  /** only `close` is read, so a value is that and nothing else */
-  const valued = (close: ReturnType<typeof row> | null) => ({ close }) as unknown as HoldingValue;
+  /** only `close` and `unpriced` are read, so a value is those and nothing else */
+  const valued = (close: ReturnType<typeof row> | null) => ({ close, unpriced: null }) as unknown as HoldingValue;
   const FRI = row("2026-11-13", "2026-11-13 21:14:59.000000"); // 16:14 New York, EST
 
   it("names the close on New York's clock", () => {
@@ -255,5 +255,21 @@ describe("closedLine — which close /holdings is valued from, out of session (#
     expect(closedLine([valued(FRI), valued(row("2026-11-13", "2026-11-14 01:30:00.000000")), valued(null)]))
       .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading; 1 with no close, valued live");
     expect(closedLine([valued(null)])).toBe("market closed — no close recorded yet; valued live");
+  });
+
+  it("names a weekend reading by its time, never as a close (#387)", () => {
+    const sat = row("2026-11-14", "2026-11-14 16:00:00.000000"); // Saturday 11:00 New York
+    expect(closeWords(sat)).toBe("as of Sat 14 Nov 11:00");
+    // and it is no close to name before a weekday's, though it is in the hours and later
+    expect(closedLine([valued(FRI), valued(sat)]))
+      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading");
+  });
+
+  it("says a holding with no close was not valued where the Provider could not be asked (#387)", () => {
+    const failed = { close: null, unpriced: "OpenD down" } as unknown as HoldingValue;
+    expect(closedLine([valued(FRI), failed]))
+      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 with no close, and the Provider could not be asked");
+    expect(closedLine([failed, failed]))
+      .toBe("market closed — no close recorded yet, and the Provider could not be asked");
   });
 });

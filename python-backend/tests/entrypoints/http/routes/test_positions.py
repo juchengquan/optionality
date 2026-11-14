@@ -917,11 +917,55 @@ class TestPositionsValues:
 
         h = start_with(start, fetch)
         await post(h, condor())
+        # in the session, where the batch is the price (#387: out of it, see below)
+        h.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # Thursday 11:00 New York
         resp = await h.call("/positions/values")
         assert resp.status_code == 502
         detail = resp.json()["detail"]
         assert detail == "moomoo call failed: quota exceeded"
         assert "OpenD" not in detail
+
+    async def test_out_of_the_session_still_answers_502_for_a_fault_past_the_call(self, start):
+        # #387 review: the Provider answers; reading its answer then fails here, in the service
+        # (`display_records` copying a record), which is no Provider outage to serve the closes around
+        first = True
+
+        async def fetch(codes):
+            nonlocal first
+            if first:
+                first = False
+                return await priced_fetcher(codes)
+            return [None for _ in codes]
+
+        h = start_with(start, fetch)
+        await post(h, condor())
+        resp = await h.call("/positions/values")
+        assert resp.status_code == 502
+
+    async def test_out_of_the_session_dashes_a_holding_the_failed_call_would_have_priced(self, start):
+        # #387: with the 502's words
+        first = True
+
+        async def fetch(codes):
+            nonlocal first
+            if first:
+                first = False
+                return await priced_fetcher(codes)
+            raise RuntimeError("quota exceeded")
+
+        h = start_with(start, fetch)
+        await post(h, condor())
+        # 01:26 New York on a Friday: out of the session, and the holding has no close to be valued from
+        resp = await h.call("/positions/values")
+        assert resp.status_code == 200
+        [v] = resp.json()
+        assert {k: v[k] for k in ("cost_to_close", "pnl", "fetched_at", "valued_from", "valued_reason")} == {
+            "cost_to_close": None,
+            "pnl": None,
+            "fetched_at": None,
+            "valued_from": "live",
+            "valued_reason": "moomoo call failed: quota exceeded",
+        }
 
 
 class TestRecordingACreditAfterTheFact:

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Toaster, toast } from "@/components/ui/toast";
 import { clockTime } from "./shared/format";
-import { valuedAt, valuedStamp } from "./levels";
+import { everyHoldingValued, valuedAt, valuedStamp } from "./levels";
 import { Freshness } from "./shared/Freshness";
 import {
   readArrangement, readEntryStyle, readPrivacy, readRefresh, readUp, writeArrangement,
@@ -276,7 +276,7 @@ export function Next() {
       choice={choice} onChoice={chooseArrangement}
       refresh={book.refresh} onRefresh={(n) => { book.setRefresh(n); writeRefresh(n); }}
       health={book.health} needs={everything}
-      complete={holdings !== null && book.holdingsError === null}
+      complete={everyHoldingValued(holdings, book.holdingsError)}
       holdingsAt={book.holdingsAt}
       references={book.references} referencesPending={book.referencesPending}
       onAddReference={(body) => book.act(() => addReference(body))}

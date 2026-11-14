@@ -669,16 +669,21 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   price. `valuesFromClose` decides per holding: in the session always live; outside it the latest row
   with a Cost to close taken IN the session — a weekday's hours, so a weekend row is never "the
   close" (`closeSample`) — else the latest with a cost of any timing,
-  stated as such (`valued_timing`); a row summed before a quantity correction is no candidate; and a
+  stated as such (`valued_timing`, from `valuedTiming`: the same session test, so a weekend row at
+  any hour is `weekend` — never `close`, nor "after the close" of a session it had not, #387); a row summed before a quantity correction is no candidate; and a
   holding with no such row is valued live — a dash, never 0. Only the holdings valued live are asked
-  for, so a book wholly valued from its closes makes NO market-data call. A close's Levels, schedule
+  for, so a book wholly valued from its closes makes NO market-data call — and out of the session a
+  FAILED call costs only the holdings it would have priced: each a dash with `valued_reason` (the
+  502's words), the rest served from their closes, where it was a 502 for the whole book (#387). In
+  the session a failed call is still the whole answer's 502. A close's Levels, schedule
   and pace are at ITS OWN DTE, while the holding's `dte` and `manage_by_due` are today's; its greeks
   are its legs' stored delta and vega (no gamma or theta stored: dashes), its strike distances its
   stored SPX and IVs. The answer says `valued_from`, `valued_on` and `valued_timing`, and its
   `fetched_at` is the row's observed time, so the page's chips and market-closed line ("market
   closed — as of the close, Fri 13 Nov 16:14", New York's clock) and the bot's one line under its
-  table say which close. The manage-by notice, sent once, is HELD until it has a cost to say: the
-  batch's, else out of the session the latest close's, named — but at most until a whole weekday
+  table say which close. The manage-by notice, sent once, is HELD until it has a cost to say, and
+  it is the cost the page and the bot say (#387): the batch's in the session, and out of it the latest
+  close's, named, even where the batch prices the holding overnight — but at most until a whole weekday
   session has closed inside the window (`sessionClosedSince`), after which it goes without its "now"
   line, stamped. The
   watchlist has no close: out of the session the page says a price rule's last reading beside its

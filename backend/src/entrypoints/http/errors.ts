@@ -25,5 +25,12 @@ export const notFound = (what: string) => httpError(404, `${what} not found`);
  *  place.
  */
 export function providerFailed(name: string, err: unknown): HTTPException {
-  return httpError(502, `${name} call failed: ${err instanceof Error ? err.message : String(err)}`);
+  return httpError(502, providerFailedWords(name, err));
+}
+
+/** The sentence alone, for where a failed call is said beside the figures rather than as the
+ *  answer: out of the session `/positions/values` serves the closes and gives each holding the
+ *  call would have priced this as its `valued_reason` (#387). One sentence, so the two cannot drift. */
+export function providerFailedWords(name: string, err: unknown): string {
+  return `${name} call failed: ${err instanceof Error ? err.message : String(err)}`;
 }

@@ -12,6 +12,12 @@
  *  latest with a cost of any timing (stated by the caller); and live where no row has a cost, which
  *  out of hours is a dash, never a 0. Only the holdings valued live are asked for, so a book wholly
  *  valued from its closes asks the Provider nothing.
+ *
+ *  **Out of the session a failed Provider call costs only the holdings that needed it** (#387): they
+ *  are dashes with the reason (`unpriced`), and the rest are served from their closes. Out of hours
+ *  a holding valued live would be a dash anyway, so a 502 for the whole book would withhold every
+ *  close for a figure nobody could have had. In the session the batch is the price, and a failure
+ *  is still the caller's to report.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -21,14 +27,14 @@ import {
 import {
   captured, dteAtOpen, exitLevels, exitPolicy, type ExitLevels,
 } from "optionality/domain/exit";
-import { daysToExpiry, valuesFromClose } from "optionality/domain/expiry";
+import { daysToExpiry, inSession, valuesFromClose } from "optionality/domain/expiry";
 import { derivedSpx, type DerivedSpx } from "optionality/domain/quote";
 import { listPositionSamples, openPositions } from "./db/queries/index.ts";
 import type { PositionRow, PositionSampleRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
 import { toPosition } from "./hydrate.ts";
 import { beforeCorrection } from "./correct-legs.ts";
-import { displayRecords, type QuoteFetcher } from "optionality/quotes";
+import { displayRecords, type QuoteFetcher, type QuoteRecord } from "optionality/quotes";
 
 export interface HoldingValue {
   row: PositionRow;
@@ -49,6 +55,9 @@ export interface HoldingValue {
   dte: number;
   /** "live" from the Provider's batch, or "close" from the stored row `close` (#380) */
   valuedFrom: "live" | "close";
+  /** why a holding valued live has no figures: out of the session, the failed Provider call's own
+   *  message (#387); null wherever the call was made and answered, or not needed */
+  unpriced: string | null;
   /** the stored row a close valuation is from; null for a live one */
   close: PositionSampleRow | null;
   /** the records the greeks, the legs' deltas and the strike distances are read from: the batch's
@@ -134,8 +143,10 @@ function scheduleOf(
 
 /** Every holding still held, each valued live from ONE batch or from its latest close.
  *
- *  Throws if the batch fails: whether that is a 502 or a sentence in a Telegram reply is the
- *  caller's business, not this module's. No batch is asked for where nothing is valued live.
+ *  Throws if the batch fails IN THE SESSION: whether that is a 502 or a sentence in a Telegram reply
+ *  is the caller's business, not this module's. Out of it a failed batch dashes the holdings valued
+ *  live, each with the failure's message, and serves the rest from their closes (#387). No batch is
+ *  asked for where nothing is valued live.
  */
 export async function holdingValues(
   db: DatabaseSync, fetchQuotes: QuoteFetcher, now: Date, settings: Settings, tz: string,
@@ -149,10 +160,21 @@ export async function holdingValues(
   const closes = rows.map((row) => closeOf(db, row, now));
   const live = positions.filter((_, i) => closes[i] === null);
   let byCode: ByCode = {};
+  let unpriced: string | null = null;
   if (live.length > 0) {
     const codes = [...new Set(live.flatMap((p) => positionLegCodes(p)))].sort();
-    const { records } = await fetchQuotes(codes);
-    byCode = displayRecords(records, tz, now);
+    // only the CALL is caught: a fault of this service's own past it is no Provider's, and must not
+    // be said as "moomoo call failed" (#387 review)
+    let records: QuoteRecord[] | null = null;
+    try {
+      ({ records } = await fetchQuotes(codes));
+    } catch (err) {
+      // in the session the batch is the price, and its failure is the whole answer's; out of it the
+      // holdings it would have priced are dashes with the reason, and the closes still stand (#387)
+      if (inSession(now)) throw err;
+      unpriced = err instanceof Error ? err.message : String(err);
+    }
+    if (records !== null) byCode = displayRecords(records, tz, now);
   }
   const batchSpx = derivedSpx(Object.values(byCode));
   const batchSize = contractSize(byCode);
@@ -168,7 +190,7 @@ export async function holdingValues(
           row, position, cost, pnl: pnlAt(position, cost, batchSize),
           captured: captured(position.entry, cost),
           schedule: scheduleOf(row, cost, dte, dte, settings), dte,
-          valuedFrom: "live", close: null, records: byCode, spx: batchSpx,
+          valuedFrom: "live", unpriced, close: null, records: byCode, spx: batchSpx,
           contractSize: batchSize, figuresDte: dte,
         };
       }
@@ -177,7 +199,7 @@ export async function holdingValues(
         row, position, cost, pnl: pnlAt(position, cost, close.contract_size),
         captured: captured(position.entry, cost),
         schedule: scheduleOf(row, cost, close.dte, dte, settings), dte,
-        valuedFrom: "close", close, records: closeRecords(position, close),
+        valuedFrom: "close", unpriced: null, close, records: closeRecords(position, close),
         spx: { price: close.spx, reason: close.spx === null ? NO_CLOSE_SPX : null },
         contractSize: close.contract_size, figuresDte: close.dte,
       };

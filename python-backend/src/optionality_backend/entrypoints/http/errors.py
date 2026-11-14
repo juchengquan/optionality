@@ -29,4 +29,11 @@ def provider_failed(name: str, err: BaseException) -> HTTPException:
     corrected the same leak in `verifyContracts`, and the sweeper's degraded default; two copies of the
     sentence is how it survived in a third place.
     """
-    return http_error(502, f"{name} call failed: {err}")
+    return http_error(502, provider_failed_words(name, err))
+
+
+def provider_failed_words(name: str, err: BaseException | str) -> str:
+    """The sentence alone, for where a failed call is said beside the figures rather than as the answer:
+    out of the session `/positions/values` gives each holding the call would have priced this as its
+    `valued_reason` (#387). One sentence, so the two cannot drift. Mirrors `errors.ts`."""
+    return f"{name} call failed: {err}"

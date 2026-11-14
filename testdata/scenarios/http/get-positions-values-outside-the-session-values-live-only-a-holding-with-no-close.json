@@ -275,6 +275,7 @@
           "valued_from": "live",
           "valued_on": null,
           "valued_timing": null,
+          "valued_reason": null,
           "dte": 34,
           "schedule": {
             "dte_at_open": 35,
@@ -364,6 +365,7 @@
           "valued_from": "close",
           "valued_on": "2026-11-13",
           "valued_timing": "close",
+          "valued_reason": null,
           "dte": 34,
           "schedule": {
             "dte_at_open": 67,

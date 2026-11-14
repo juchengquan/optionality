@@ -817,11 +817,43 @@ describe("/positions/values", () => {
       throw new Error("quota exceeded");
     });
     await post(condor());
+    // in the session, where the batch is the price (#387: out of it, see below)
+    h.now = new Date("2026-10-01T15:00:00Z"); // Thursday 11:00 New York
     const resp = await h.call("/positions/values");
     expect(resp.status).toBe(502);
     const detail = (await body(resp)).detail as string;
     expect(detail).toBe("moomoo call failed: quota exceeded");
     expect(detail).not.toMatch(/OpenD/);
+  });
+
+  it("out of the session still answers 502 for a fault past the call, never dashing it as the Provider's (#387 review)", async () => {
+    // the Provider answers; reading its answer then fails here, in the service (`displayRecords`
+    // copying a record), which is no Provider outage to serve the closes around
+    let first = true;
+    start(async (codes) => {
+      if (first) { first = false; return pricedFetcher(codes); }
+      return codes.map((code) => ({ code, get update_time(): string { throw new Error("a bug of our own"); } }));
+    });
+    await post(condor());
+    const resp = await h.call("/positions/values");
+    expect(resp.status).toBe(502);
+  });
+
+  it("out of the session dashes a holding the failed call would have priced, with the 502's words (#387)", async () => {
+    let first = true;
+    start(async (codes) => {
+      if (first) { first = false; return pricedFetcher(codes); }
+      throw new Error("quota exceeded");
+    });
+    await post(condor());
+    // 01:26 New York on a Friday: out of the session, and the holding has no close to be valued from
+    const resp = await h.call("/positions/values");
+    expect(resp.status).toBe(200);
+    const [v] = await body(resp);
+    expect(v).toMatchObject({
+      cost_to_close: null, pnl: null, fetched_at: null, valued_from: "live",
+      valued_reason: "moomoo call failed: quota exceeded",
+    });
   });
 });
 
