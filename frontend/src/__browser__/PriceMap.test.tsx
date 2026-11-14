@@ -15,7 +15,7 @@ import { DeskBook } from "../desk/DeskBook";
 import { SpxPath, spxGutter } from "../SpxPath";
 import { stillCross } from "../testing/cross";
 import type { Entry } from "../shared/api";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer, served } from "../testing/ownerBook";
+import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer, watchSamplesAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
 const health = {
@@ -45,7 +45,7 @@ function serve(): void {
     const method = init?.method ?? "GET";
     const ok = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
     // the payoff (POST for a draft, GET for a holding) and a holding's samples: reads, answered
-    const read = payoffAnswer(path) ?? samplesAnswer(path) ?? volAnswer(path);
+    const read = payoffAnswer(path) ?? samplesAnswer(path) ?? watchSamplesAnswer(path) ?? volAnswer(path);
     if (read) return ok(read);
     if (method === "GET") {
       if (path === "/quotes") return ok(quotes);
@@ -55,6 +55,8 @@ function serve(): void {
       // every holding on record, which the closed trades' fold reads (#296, #373): none is closed
       if (path === "/positions") return ok(HOLDINGS);
       if (path === "/references") return ok([]);
+      // each rule's last close, read out of the session (#402)
+      if (path === "/monitors/closes") return ok([]);
     }
     unanswered.push(`${method} ${path}`);
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: "not answered" }) });
