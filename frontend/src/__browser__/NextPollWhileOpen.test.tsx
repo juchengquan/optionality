@@ -1,6 +1,6 @@
-/** Where the focus actually goes when the desk's Settings or its column picker opens on `/opt/next`
- *  — which decides whether the page keeps polling. Carried from `PollWhileOpen.test.tsx` (#337), which asks it of
- *  today's `App` and goes with it in #301; the phone's sheets are `NextPollWhileOpen.iphone`'s.
+/** Where the focus actually goes when the desk's Settings or its column picker opens — which
+ *  decides whether the page keeps polling. Carried from `PollWhileOpen.test.tsx` (#337), which asked
+ *  it of the old page's `App` until #301 deleted both; the phone's sheets are `NextPollWhileOpen.iphone`'s.
  *
  *  jsdom leaves the focus where it was when a sheet opens, so the unit suite cannot answer this: the
  *  poll waits while the focus is inside a surface marked `data-poll="hold"` (Next.tsx), and a real

@@ -480,7 +480,7 @@ describe("one column set, in session and out of it (#372)", () => {
 });
 
 describe("the columns", () => {
-  it("carry over today's column choice", () => {
+  it("carry over the old page's column choice", () => {
     document.cookie = "ui_cols_combo=pnl.legs.delta;path=/";
     render(<DeskBook {...props()} />);
     expect(headers()).toEqual(["name", "value", "captured", "pace_gap", "strip", "dte", "manage", "alarm"]);

@@ -124,10 +124,10 @@ describe("reading a cookie somebody else wrote", () => {
   });
 });
 
-/** The redesigned page's own (ADR 0023). Each is read where nothing has been chosen, and each has
+/** The page's own since the redesign (ADR 0023). Each is read where nothing has been chosen, and each has
  *  a default that is the design's, not the browser's: green-up, an entry rule that fires looks like
  *  the good news it is, figures shown, and the width deciding the arrangement. */
-describe("the redesigned page's preferences", () => {
+describe("the page's own preferences", () => {
   it("defaults to green-up, and remembers red-up", () => {
     expect(readUp()).toBe("green");
     writeUp("red");

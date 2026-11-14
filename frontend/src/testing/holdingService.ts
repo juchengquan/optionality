@@ -1,4 +1,4 @@
-/** A small service for the suites that change a holding from `/opt/next` (#294): the owner-shaped
+/** A small service for the suites that change a holding from the page (#294): the owner-shaped
  *  book (`ownerBook.ts`) behind every route the page calls, which REMEMBERS what it was sent — an
  *  edit, a close, a correction or a delete changes what the next read answers, as the real one does.
  *

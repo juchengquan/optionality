@@ -1,6 +1,6 @@
-/** Saving the redesigned page as an image, from the desk (#300, ADR 0023).
+/** Saving the page as an image, from the desk (#300, ADR 0023).
  *
- *  `/opt`'s picture carried over: a SECOND tree, off screen, at a width of its own — A's table with
+ *  The old page's picture, carried over: a SECOND tree, off screen, at a width of its own — A's table with
  *  every ticked column whatever the room on screen, without a control in it, privacy honoured —
  *  rasterized by html-to-image, which paints oklch and `color-mix` because the real engine does
  *  the painting (`snapshot.ts` says why html2canvas cannot). `Rasterize.test.tsx` is the proof for

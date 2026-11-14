@@ -35,7 +35,7 @@ describe("a new contract draft", () => {
     });
   });
 
-  it("offers the six fields today's form offers, IV among them: one contract is not a sum", () => {
+  it("offers the six fields the old page's form offered, IV among them: one contract is not a sum", () => {
     expect([...CONTRACT_FIELDS]).toEqual([
       "option_delta", "mid_price", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
     ]);

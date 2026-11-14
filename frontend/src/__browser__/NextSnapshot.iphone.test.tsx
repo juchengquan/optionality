@@ -1,4 +1,4 @@
-/** Saving the redesigned page as an image, from the phone (#300, ADR 0023), under Playwright's
+/** Saving the page as an image, from the phone (#300, ADR 0023), under Playwright's
  *  iPhone profile. The picture is B's cards, drawn again off screen at the picture's own width —
  *  so every phone gives the same picture of one book — without a control in it and with privacy
  *  honoured. The fills and the attention chips are found in that tree, and their pixels in the

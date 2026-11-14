@@ -46,8 +46,8 @@ import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
 
-/** The dashboard, at `/opt` (ADR 0023): built at `/opt/next` beside the old page from #287, and
- *  in its place since the swap (#301).
+/** The dashboard, at `/opt` (ADR 0023): built at `/opt/next` beside the page before it from #287,
+ *  and the only page since the swap (#301).
  *
  *  A shell: the arrangement, the colours, the needs-you line and Settings, around the book — the
  *  desk's table or the phone's cards. Arrangements are state, never routes (ADR 0005), so this is

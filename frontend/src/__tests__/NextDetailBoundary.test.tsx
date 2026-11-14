@@ -2,7 +2,7 @@
  *
  *  Found by the browser suites: a row with no `spx` field at all reached the payoff chart as
  *  `undefined`, its range came out NaN, `pnlAt` read past the end of its corners and threw — and
- *  with no error boundary in `/opt/next`, React unmounted the whole page. Two fixes, held here:
+ *  with no error boundary in the page, React unmounted the whole page. Two fixes, held here:
  *  `shared/api.ts` reads a missing `spx` as null, and each holding's or rule's detail (the desk's
  *  inspector, the phone's sheet) is drawn inside `DetailBoundary`, which says that one could not be
  *  drawn and leaves the rest up.

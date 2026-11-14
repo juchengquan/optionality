@@ -1,4 +1,4 @@
-/** The pace explained (#333, ADR 0011): the gap in words wherever `/opt/next` shows it, and in the
+/** The pace explained (#333, ADR 0011): the gap in words wherever the page shows it, and in the
  *  desk's inspector and the phone's holding detail the DTE at open, the √T working, the target on
  *  decay alone and the split of the gap that `/positions/{id}/vol` serves — read once when a
  *  holding is opened, never polled, and never shown under another holding.

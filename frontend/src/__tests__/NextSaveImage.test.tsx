@@ -1,5 +1,5 @@
-/** The redesigned page's press that saves it as an image (#300), as a sequence: `/opt`'s
- *  `UseSnapshot.test.tsx` for `next/snapshot/useSaveImage.ts`. What a picture LOOKS like is the
+/** The page's press that saves it as an image (#300), as a sequence: the old page's
+ *  `UseSnapshot.test.tsx` for `snapshot/useSaveImage.ts`. What a picture LOOKS like is the
  *  browser suite's (`__browser__/NextSnapshot*.test.tsx`); this is what the press does on every
  *  path the browser suite never takes — a capture that fails, a page that goes mid-capture, a
  *  device with no share sheet, and a second press — none of which leaves a PNG to look at.

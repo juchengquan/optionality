@@ -1,4 +1,4 @@
-/** Which rule sits where, and what is bracketed with what: the redesign's book as a model, before
+/** Which rule sits where, and what is bracketed with what: the book as a model, before
  *  either arrangement draws it (ADR 0023). The desk table (#289) and the phone cards (#290) both
  *  draw THIS, so they cannot group one book two ways.
  *

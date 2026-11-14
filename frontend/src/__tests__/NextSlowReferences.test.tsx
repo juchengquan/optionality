@@ -1,5 +1,5 @@
-/** A slow Reference source holds up nothing on `/opt/next` (#335), as it holds up nothing on `/opt`
- *  since #308 (`SlowReferences.test.tsx`, against `App`).
+/** A slow Reference source holds up nothing (#335), as it held up nothing on the old page from #308
+ *  (`SlowReferences.test.tsx`, against its `App`, which #301 deleted).
  *
  *  `/references` makes one bounded call per source, and a source that accepts a request and never
  *  answers it costs the whole 8 s request timeout — measured on 2026-11-10, every call, while

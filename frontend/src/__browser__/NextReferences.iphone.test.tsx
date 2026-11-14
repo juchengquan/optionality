@@ -1,5 +1,5 @@
-/** The Reference strip on a phone, on `/opt/next` (ADR 0018) — carried from `References.test.tsx`
- *  (#337), which measures it on today's `App` at a phone's width and goes with it in #301. Runs in
+/** The Reference strip on a phone (ADR 0018) — carried from `References.test.tsx` (#337), which
+ *  measured it on the old page's `App` at a phone's width until #301 deleted both. Runs in
  *  the suite's `iphone` instance: Playwright's iPhone profile, touch and a coarse pointer.
  *
  *  A green suite can hide an unusable UI: the figures are index-sized and each carries a label, a

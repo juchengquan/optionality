@@ -1,4 +1,4 @@
-/** Changing a holding from `/opt/next` (#294): what the edit, the close and the correction post,
+/** Changing a holding (#294): what the edit, the close and the correction post,
  *  what each refuses before posting anything, and how a closed holding's Monitors are said. Every
  *  body is parsed with the route's own schema, so the forms cannot drift from what the routes take.
  */

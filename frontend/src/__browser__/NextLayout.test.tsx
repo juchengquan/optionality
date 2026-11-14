@@ -1,4 +1,4 @@
-/** The redesigned page at the desk, measured in a real layout engine (ADR 0008, ADR 0023).
+/** The page at the desk, measured in a real layout engine (ADR 0008, ADR 0023).
  *  The phone is measured in `NextLayout.iphone.test.tsx`, under an iPhone profile. */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { commands, page } from "@vitest/browser/context";

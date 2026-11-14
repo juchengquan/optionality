@@ -32,7 +32,7 @@ export function ColumnPicker({
         }
       />
       {/* the poll must not land while this is open: which columns are OFFERED comes from the
-          measured fit, so a reload can reflow this very list under the pointer (next/poll.ts) */}
+          measured fit, so a reload can reflow this very list under the pointer (poll.ts) */}
       <PopoverContent data-poll="hold">
         <div role="group" aria-label={`${label} columns`} className="flex flex-col gap-2">
           {all.map((c) => (

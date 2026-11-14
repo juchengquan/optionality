@@ -2,7 +2,7 @@ import type { Entry, Health, Holding, Monitor } from "./shared/api";
 import { shortContract, shortDate } from "./shared/format";
 import { overlapOf } from "./placement";
 
-/** What needs you, for the redesigned page (ADR 0012, amended by ADR 0023).
+/** What needs you, for the page (ADR 0012, amended by ADR 0023).
  *
  *  The rule is ADR 0012's and unchanged: built only from what the page already polls, it appears
  *  when something needs you and says nothing otherwise, and that silence is not an all-clear. Two
@@ -10,8 +10,8 @@ import { overlapOf } from "./placement";
  *  nothing now watches what it watched. And a fired rule on the WATCHLIST is an entry signal —
  *  a spread worth selling — which is good news and must not be filed as an alarm.
  *
- *  It was a second `needs()` beside the old page's `TopLine.tsx`, while both pages existed; the
- *  swap (#301) deleted that one.
+ *  It was built as a second `needs()` beside the old page's `TopLine.tsx`, which the swap (#301)
+ *  deleted; this is the only one.
  */
 export type NeedKind = "fault" | "stop" | "alarm" | "entry" | "target" | "manage";
 

@@ -301,7 +301,7 @@ describe("what recording a holding does to the rest of the book (#336)", () => {
     expect(within(form).getByTestId("hold-links").textContent).toBe(
       "Also linked to it, by the service, as it links every rule no holding owns: "
       // a combo naming a contract the new holding does not hold is drawn in the Watchlist (#346);
-      // /opt/next shows no rule row's Entry or P&L, so the form claims none
+      // the page shows no rule row's Entry or P&L, so the form claims none
       + "cs spread value — drawn in the Watchlist, with a note of the contracts it shares with it.");
   });
 

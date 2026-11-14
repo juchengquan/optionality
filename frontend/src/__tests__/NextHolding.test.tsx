@@ -1,4 +1,4 @@
-/** Editing, closing, correcting and deleting a holding from `/opt/next` (#294), on the desk's
+/** Editing, closing, correcting and deleting a holding (#294), on the desk's
  *  inspector and the phone's sheet, against a service that remembers what it was sent
  *  (`testing/holdingService.ts`). Behaviour only; what the phone must MEASURE — 44pt targets, 16px
  *  boxes, nothing past the edge — is `__browser__/NextHolding.iphone.test.tsx`.

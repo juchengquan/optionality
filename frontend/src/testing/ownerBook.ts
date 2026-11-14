@@ -1,4 +1,4 @@
-/** One book shaped like the owner's, for both of the redesign's arrangements (#289, #290): the desk
+/** One book shaped like the owner's, for both of the page's arrangements (#289, #290): the desk
  *  table and the phone cards are held to the SAME fixture, so neither can group it differently.
  *
  *  - spreads on the watchlist over three expiries, one with its short leg's delta rule under it,

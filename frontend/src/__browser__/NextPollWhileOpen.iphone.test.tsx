@@ -1,6 +1,6 @@
-/** Where the focus actually goes when a phone's sheet opens on `/opt/next` — which decides whether
- *  the page keeps polling. Carried from `PollWhileOpen.test.tsx` (#337), which asks it of today's
- *  `App` and goes with it in #301. Runs in the suite's `iphone` instance.
+/** Where the focus actually goes when a phone's sheet opens — which decides whether the page keeps
+ *  polling. Carried from `PollWhileOpen.test.tsx` (#337), which asked it of the old page's `App`
+ *  until #301 deleted both. Runs in the suite's `iphone` instance.
  *
  *  The detail sheet follows the live figures, so a focus trap that landed inside something marked
  *  `data-poll="hold"` would freeze exactly what it is open to show. The Add sheet is the other way

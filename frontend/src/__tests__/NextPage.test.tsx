@@ -1,4 +1,4 @@
-/** The redesigned page as a whole (ADR 0023, #287): what it asks the service for in session and out
+/** The page as a whole (ADR 0023, #287): what it asks the service for in session and out
  *  of it, that it draws the same page at every hour, and the settings that change what it draws. Layout is the browser suite's (`NextLayout`); this is
  *  behaviour, which jsdom can answer.
  */

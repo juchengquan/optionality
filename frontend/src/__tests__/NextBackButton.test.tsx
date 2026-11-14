@@ -1,5 +1,5 @@
-/** Back closes a sheet on `/opt/next` (ADR 0005, ADR 0023) — carried from `BackButton.test.tsx`
- *  (#337), which holds it against today's `App` and goes with it in #301.
+/** Back closes a sheet (ADR 0005, ADR 0023) — carried from `BackButton.test.tsx` (#337), which
+ *  held it against the old page's `App` until #301 deleted both.
  *
  *  The interesting case is not that it works: it is that closing a sheet some OTHER way has to take
  *  its history entry back too, or the next press of Back does nothing at all and looks like the page

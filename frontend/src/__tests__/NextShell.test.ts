@@ -1,4 +1,4 @@
-/** The redesigned page's decisions that are not drawing: which arrangement, and whether New York's
+/** The page's decisions that are not drawing: which arrangement, and whether New York's
  *  session is open (ADR 0023, amended 2026-11-13: one page, by the session).
  *
  *  The arrangement is state, not a route (ADR 0005), with a default that can be overridden; the
