@@ -1,14 +1,14 @@
-/** The price map panel (#298) and REVIEW's "where SPX was against my strikes" on the desk, MEASURED
+/** The price map panel (#298) and the history's "where SPX was against my strikes" on the desk, MEASURED
  *  in a real layout engine at 900, 1280 and 2560px:
  *  - opening the panel leaves the table's measured fit exactly as it was (ADR 0008, `useDeskFit`):
  *    the same columns, inspector shut and open, and nothing pushed sideways;
  *  - every label on the map is inside it and clear of every other, and SPX's line is on it;
  *  - picking a spread on the map picks its row, in a real browser too;
- *  - the SPX-by-day chart in REVIEW's inspector keeps its labels inside and apart.
+ *  - the SPX-by-day chart in the inspector's history keeps its labels inside and apart.
  *  The page is served the owner-shaped book, every route it calls answered explicitly. */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { DeskBook } from "../next/desk/DeskBook";
@@ -231,7 +231,12 @@ describe("the price map panel", () => {
   });
 });
 
-describe("where SPX was against the strikes, in REVIEW's inspector", () => {
+/** A Sunday, 12:00 New York: outside the session, where the inspector's history starts open
+ *  whichever mode is on screen (#372). In session it starts shut. */
+const OUTSIDE_THE_SESSION = new Date("2026-11-15T17:00:00Z");
+
+describe("where SPX was against the strikes, in the inspector outside the session", () => {
+  beforeEach(() => { vi.setSystemTime(OUTSIDE_THE_SESSION); });
   for (const width of [900, 1280, 2560]) {
     it(`at ${width}px, keeps its labels inside it and apart, for a spread and a 4-leg condor`, async () => {
       await show(width, "Review");
@@ -241,6 +246,9 @@ describe("where SPX was against the strikes, in REVIEW's inspector", () => {
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
         const chart = within(insp).getByRole("group", { name: "SPX against the strikes" });
         const svg = chart.querySelector("svg")!;
+        // the inspector scrolls, and since #372 the history's toggle sits above the chart: it is
+        // measured where a reader scrolls it to
+        svg.scrollIntoView({ block: "nearest" });
         expect(labelFaults(svg, `${id} at ${width}px`)).toEqual([]);
         expect(inside(svg.getBoundingClientRect(), insp.getBoundingClientRect())).toBe(true);
       }
@@ -249,7 +257,8 @@ describe("where SPX was against the strikes, in REVIEW's inspector", () => {
   }
 });
 
-describe("the three REVIEW charts share their plot", () => {
+describe("the history's three charts share their plot", () => {
+  beforeEach(() => { vi.setSystemTime(OUTSIDE_THE_SESSION); });
   for (const width of [1280, 2560]) for (const privacy of [false, true]) {
     it(`at ${width}px${privacy ? ", privacy on" : ""}, put a day at the same x in each`, async () => {
       if (privacy) document.cookie = "ui_privacy=on;path=/";

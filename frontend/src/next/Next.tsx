@@ -84,8 +84,9 @@ export function Next() {
   // The clock's mode unless the owner chose one. A choice lasts until the clock's own mode next
   // changes: LIVE picked at 08:00 New York becomes the clock's at the open and REVIEW at the
   // close. Choosing what the clock would pick hands the page straight back to it. Since #371 the
-  // choice changes only what is DRAWN: LIVE picked at 21:00 New York draws LIVE's columns from
-  // one valuation, and polls nothing more than the line, until #375 removes the switch.
+  // choice changes neither what is fetched nor, since #372, the desk's columns, which are one set
+  // at every hour: what is left of it is which views are drawn — the phone's pages, REVIEW's
+  // closed trades — until #375 removes the switch.
   const byClock = clockMode(now);
   const [chosen, setChosen] = useState<Mode | null>(null);
   useEffect(() => { setChosen(null); }, [byClock]);

@@ -21,7 +21,7 @@ const health = {
   settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
 };
 
-/** Every holding with an exit schedule, so REVIEW's pace columns have something to say. */
+/** Every holding with an exit schedule, so the pace gap's column has something to say. */
 const scheduled = HOLDINGS.map((h) => ({
   ...h, schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4,
     target_dte: 11, manage_by_dte: 21, reached: null, manage_by_due: false },
@@ -314,7 +314,7 @@ describe("the payoff at expiry fits in the inspector (#291)", () => {
   });
 });
 
-describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), and in LIVE opened (#353)", () => {
+describe("the burndown and the IV chart fit in the inspector: open outside the session, opened in it (#372)", () => {
   /** Each chart drawn at the inspector's measured width: every piece inside the inspector's box,
    *  no label cut by its own SVG, nothing scrolling sideways — and the line under the burndown
    *  saying why a day is not the close when the pointer rests on it. */
@@ -350,14 +350,19 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), a
 
   // the call spread's week, with a day missing its IV; and the 4-leg condor's two days, whose
   // calls end half a point of IV apart, which put their names on top of each other
-  // in LIVE with its history section opened (#353), as in REVIEW where it is open from the start
+  // the session decides whether the section starts open (#372), never the mode: each is measured
+  // with the other mode on screen, so a page that still keyed it on the mode would fail here
   const cases = [["h-calls", 7], ["h-ic", 2]] as const;
-  for (const mode of ["review", "live"] as const) for (const width of [900, 1280, 2560]) for (const [id, days] of cases) {
-    it(`${id}'s at ${width}px in ${mode}`, async () => {
+  const whens = [["outside the session", "live"], ["in session", "review"]] as const;
+  for (const [when, mode] of whens) for (const width of [900, 1280, 2560]) for (const [id, days] of cases) {
+    it(`${id}'s at ${width}px ${when}`, async () => {
+      if (when === "outside the session") vi.setSystemTime(SUNDAY);
       await show(mode, width);
       await inspect(id);
       const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
-      if (mode === "live") await userEvent.click(within(insp).getByRole("button", { name: "history" }));
+      const toggle = within(insp).getByRole("button", { name: "history" });
+      expect(toggle.getAttribute("aria-expanded")).toBe(when === "in session" ? "false" : "true");
+      if (when === "in session") await userEvent.click(toggle);
       await settle();
       const charts = [...insp.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
       // worth nothing unless every chart is there to be measured, at a usable size: the burndown,
@@ -373,10 +378,15 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), a
       expect(insp.scrollWidth).toBeLessThanOrEqual(insp.clientWidth);
       expect(overflowsSideways()).toBe(false);
       expect(misfits()).toEqual([]);
+      // beside the table, never over it, its history open
+      const box = insp.getBoundingClientRect();
+      expect(box.left).toBeGreaterThanOrEqual(table().getBoundingClientRect().right);
+      expect(box.right).toBeLessThanOrEqual(document.documentElement.clientWidth);
     });
   }
 
   it("says why a day is not the close when the pointer rests on it", async () => {
+    vi.setSystemTime(SUNDAY);
     await show("review", 1280);
     await inspect("h-calls");
     await settle();
@@ -397,6 +407,7 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), a
   });
 
   it("is one tab stop, whose arrow keys move from day to day", async () => {
+    vi.setSystemTime(SUNDAY);
     await show("review", 1280);
     await inspect("h-calls");
     await settle();
@@ -410,8 +421,8 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), a
     expect(document.querySelector(".nxd-inspector [data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-04");
   });
 
-  it("is drawn in LIVE when opened, and not before", async () => {
-    await show("live", 1280);
+  it("is drawn in session when opened, and not before, whichever mode", async () => {
+    await show("review", 1280);
     await inspect("h-calls");
     const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
     expect(insp.querySelector(".nx-hist")).toBeNull();
@@ -429,9 +440,56 @@ describe("the burndown and the IV chart fit in the inspector in REVIEW (#295), a
 });
 
 describe("columns are dropped as measured (ADR 0008)", () => {
+  /** The one set (#372), in the order drawn, and the order it survives narrowing in. */
+  const ONE_SET = ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage", "alarm"];
+  const SURVIVAL = ["value", "pnl", "delta", "pace_gap", "dte", "manage", "strip", "captured", "legs", "alarm"];
+
+  /** Each drawn column's measured width, for a failure to say. */
+  const widths = () => [...document.querySelectorAll<HTMLElement>(".nxd-head [data-col]")]
+    .map((c) => `${c.dataset.col} ${Math.round(c.getBoundingClientRect().width)}px`).join(", ");
+
+  // what each width draws, measured in this engine with the owner's book; the same in either mode,
+  // because there is one set (#372) — both modes are on screen until #375 takes the switch away
+  const DRAWN: Record<number, { shut: string[]; open: string[] }> = {
+    // the pace gap written signed (#379) is 75px where its words took 122: room for SPX → short at
+    // 900 shut and at 1280 open, which the words had pushed off
+    900: {
+      shut: ["name", "value", "pnl", "pace_gap", "delta", "strip", "dte", "manage"],
+      open: ["name", "value", "pnl", "pace_gap", "delta", "dte"],
+    },
+    1280: {
+      shut: ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage"],
+      open: ["name", "value", "pnl", "pace_gap", "delta", "strip", "dte", "manage"],
+    },
+    2560: { shut: ONE_SET, open: ONE_SET },
+  };
+  for (const mode of ["live", "review"] as const) {
+    for (const width of [900, 1280, 2560]) {
+      it(`at ${width}px in ${mode}, drops in the survival order, with the inspector shut and open`, async () => {
+        await show(mode, width);
+        for (const state of ["shut", "open"] as const) {
+          if (state === "open") await inspect("h-calls");
+          const drawn = shown();
+          // the survival order's first n, drawn in the one set's order: nothing skipped for a narrower one
+          const kept = SURVIVAL.slice(0, drawn.length - 1);
+          expect(drawn, `${state}: ${widths()}`).toEqual(ONE_SET.filter((k) => k === "name" || kept.includes(k)));
+          expect(drawn, `${state}: ${widths()}`).toEqual(DRAWN[width]![state]);
+          expect(misfits(), `${state}: ${widths()}`).toEqual([]);
+          expect(overflowsSideways()).toBe(false);
+          // the gap signed, its words to a pointer and, in place of the sign, to a reader
+          const gap = rowOf("h-calls").querySelector<HTMLElement>('[data-col="pace_gap"]')!;
+          expect(gap.querySelector<HTMLElement>(".nxd-v")!.textContent).toBe("+0.47");
+          expect(gap.querySelector<HTMLElement>(".nxd-v")!.title).toBe("behind by 0.47");
+          expect(gap.querySelector(".sr-only")!.textContent).toBe("pace gap behind by 0.47");
+          expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
+        }
+      });
+    }
+  }
+
   it("draws every column on a wide desk and fewer on a narrow one", async () => {
     await show("live", 2560);
-    expect(shown()).toEqual(["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage", "alarm"]);
+    expect(shown()).toEqual(ONE_SET);
     cleanup();
     await show("live", 900);
     await inspect("h-calls");

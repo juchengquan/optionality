@@ -145,20 +145,23 @@ describe("saving the desk as an image", () => {
     shared.release();
   });
 
-  it("holds every ticked column, though the inspector has taken the room for them", async () => {
-    await show("live", 1000);
+  // one set at every hour (#372): the picture draws it whichever mode is on screen, until #375
+  // takes the switch away
+  for (const mode of ["live", "review"] as const) it(`holds every ticked column, though the inspector has taken the room for them, in ${mode}`, async () => {
+    await show(mode, 1000);
     fireEvent.click(within(rowIn(document, "h-calls")).getAllByRole("button")[0]!);
     await settle();
     const onScreen = [...document.querySelectorAll<HTMLElement>(".nxd .nxd-head [data-col]")].map((c) => c.dataset.col);
     expect(onScreen.length, "the screen still has room for every column — nothing to prove")
-      .toBeLessThan(COLUMNS.live.length);
+      .toBeLessThan(COLUMNS.length);
 
     const shared = catchShare();
     press();
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
     const root = still()!;
     const pictured = [...root.querySelectorAll<HTMLElement>(".nxd-head [data-col]")].map((c) => c.dataset.col);
-    expect(pictured).toEqual(COLUMNS.live.map((c) => c.key));
+    expect(pictured).toEqual(COLUMNS.map((c) => c.key));
+    expect(pictured).toEqual(["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage", "alarm"]);
     // and nothing cut short inside its cell: a still image cannot be widened to read the rest
     for (const cell of root.querySelectorAll<HTMLElement>(".nxd-row > [data-col]:not([data-col=alarm])")) {
       expect(cell.scrollWidth, `"${cell.textContent}" is cut short`).toBeLessThanOrEqual(cell.clientWidth + 1);

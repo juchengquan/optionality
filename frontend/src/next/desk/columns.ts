@@ -8,17 +8,16 @@
  *  for is blank, not a dash, because a dash reads as "the figure has not arrived".
  *
  *  Every figure is one the service served. Nothing here models a price: a pace is the schedule's
- *  `on_pace` and `pace_gap`, the gap in words, never a curve drawn on screen (ADR 0023: "never draw what the system
- *  does not know"). The two pieces of arithmetic are a subtraction of two served day counts (days
+ *  `on_pace` and `pace_gap` — the gap signed in the table and in words everywhere else (#379) —
+ *  never a curve drawn on screen (ADR 0023: "never draw what the system does not know"). The two pieces of arithmetic are a subtraction of two served day counts (days
  *  left before the Manage-by) and a share as a percentage.
  */
 import type { Entry, Holding, Monitor } from "../../shared/api";
 import { DASH, heldLegs, legSummary } from "../../shared/format";
-import type { Mode } from "../mode";
 import type { BookModel } from "../placement";
 import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
 import { servedDelta } from "../legs";
-import { paceWords } from "../pace";
+import { paceSigned, paceWords } from "../pace";
 import { LEVEL_WORDS, levelWords } from "../levels";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
@@ -39,6 +38,9 @@ export interface DeskColumn {
   /** what the cell says, for the drawing, the inspector and the measuring alike; empty where the
    *  row has nothing to say in this column */
   text: (row: DeskRow, privacy: boolean) => string;
+  /** what the cell MEANS, where `text` is a compact form of it: said to a reader and a pointer
+   *  beside the drawn text, and in the inspector instead of it */
+  words?: (row: DeskRow, privacy: boolean) => string;
 }
 
 // ---- figures, with fixed decimals per field (ADR 0023)
@@ -248,24 +250,20 @@ const MANAGE: DeskColumn = {
   }),
 };
 
+/** Not a column (ADR 0023, amended 2026-11-13): the inspector's figure only, beside the pace gap
+ *  the table draws, which already says how far from it the holding is. */
 const ON_PACE: DeskColumn = {
   key: "on_pace", label: "on pace", text: holdingOnly((h) => h.schedule ? points(h.schedule.on_pace) : DASH),
 };
 
 const PACE_GAP: DeskColumn = {
-  // Cost to close less on-pace, said in words (CONTEXT.md: Pace gap): BEHIND is costing more than
-  // the plan, and a bare sign beside a P&L invites reading it the wrong way round (ADR 0011)
+  // Cost to close less on-pace (CONTEXT.md: Pace gap): BEHIND is costing more than the plan. The
+  // table writes it signed, + behind, to leave room for the market's columns (the owner, #379);
+  // the sign is never alone — the outcome colour, and the words to a pointer and a reader, go
+  // with it, because a bare sign beside a P&L invites reading it the wrong way round (ADR 0011)
   key: "pace_gap", label: "pace gap",
-  text: holdingOnly((h) => h.schedule ? paceWords(h.schedule.pace_gap) : DASH),
-};
-
-const TO_MANAGE: DeskColumn = {
-  key: "to_manage", label: "DTE → manage-by",
-  text: holdingOnly((h) => {
-    const s = h.schedule;
-    if (!s) return DASH;
-    return s.manage_by_due ? `${h.dte} · due` : `${h.dte} → ${s.manage_by_dte}`;
-  }),
+  text: holdingOnly((h) => h.schedule ? paceSigned(h.schedule.pace_gap) : DASH),
+  words: holdingOnly((h) => h.schedule ? paceWords(h.schedule.pace_gap) : DASH),
 };
 
 const ALARM: DeskColumn = {
@@ -274,23 +272,32 @@ const ALARM: DeskColumn = {
   text: (r) => r.kind === "rule" ? sentence(r.entry) : r.kind === "quarantined" ? quarantineSentence(r.monitor) : "",
 };
 
-/** The columns, in the order they are DRAWN. */
-export const COLUMNS: Record<Mode, readonly DeskColumn[]> = {
-  live: [NAME, LEGS, VALUE, PNL, CAPTURED, DELTA, STRIP, DTE, MANAGE, ALARM],
-  // REVIEW is after the close, to understand: the outcome and the plan, not the market (ADR 0023)
-  review: [NAME, LEGS, PNL, CAPTURED, ON_PACE, PACE_GAP, TO_MANAGE, ALARM],
-};
+/** The columns, in the order they are DRAWN: one set at every hour (ADR 0023, amended 2026-11-13:
+ *  one page, by the session; #372). What was LIVE's, with the pace gap beside P&L and captured,
+ *  where a reader compares it. */
+export const COLUMNS: readonly DeskColumn[] = [
+  NAME, LEGS, VALUE, PNL, CAPTURED, PACE_GAP, DELTA, STRIP, DTE, MANAGE, ALARM,
+];
+
+/** What the inspector lists for a row, whether the table drew it or not: every column, and "on
+ *  pace" beside the pace gap, which no longer has a column of its own. */
+export const FIGURES: readonly DeskColumn[] = COLUMNS.flatMap((c) => c === PACE_GAP ? [ON_PACE, c] : [c]);
+
+/** Keys the desk once drew and no longer does (#372): REVIEW's "on pace" and "DTE → manage-by".
+ *  A viewer who hid one keeps it in the column cookie, where it hides nothing; the picker's reset
+ *  clears them with the desk's own. */
+export const RETIRED_KEYS: readonly string[] = ["on_pace", "to_manage"];
 
 export const PINNED = "name";
 
 /** The order columns SURVIVE in, which is not the order they are drawn in. The widest goes last
  *  (ADR 0008): fitting stops at the first column that does not fit, so a wide column early on
  *  would starve every column behind it. The rule's sentence is the widest, and when it drops the
- *  fill bar moves into the name cell and the inspector still says it whole. */
-export const PRIORITY: Record<Mode, readonly string[]> = {
-  live: ["value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm"],
-  review: ["pnl", "captured", "pace_gap", "on_pace", "to_manage", "legs", "alarm"],
-};
+ *  fill bar moves into the name cell and the inspector still says it whole. The pace gap survives
+ *  DTE: it is the figure REVIEW was opened for, and DTE is in each expiry's heading anyway. */
+export const PRIORITY: readonly string[] = [
+  "value", "pnl", "delta", "pace_gap", "dte", "manage", "strip", "captured", "legs", "alarm",
+];
 
 /** Cell padding, in characters: half a character each side, plus the gap the grid leaves. */
 const PAD_CH = 1.5;
@@ -320,29 +327,29 @@ export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: b
  *  inspector beside it is where every figure is said whole. The hidden ones are the viewer's
  *  choice and are never drawn. Returned in the drawing order. */
 export function fitColumns(
-  mode: Mode, available: number, hidden: ReadonlySet<string>, widthOf: (key: string) => number,
+  available: number, hidden: ReadonlySet<string>, widthOf: (key: string) => number,
 ): DeskColumn[] {
   const kept = new Set([PINNED]);
   let used = widthOf(PINNED);
-  for (const key of PRIORITY[mode]) {
+  for (const key of PRIORITY) {
     if (hidden.has(key)) continue;
     const w = widthOf(key);
     if (used + w > available) break;
     kept.add(key);
     used += w;
   }
-  return COLUMNS[mode].filter((c) => kept.has(c.key));
+  return COLUMNS.filter((c) => kept.has(c.key));
 }
 
 /** What a column picker should offer: exactly the columns ticking would draw at this width. */
 export function offerable(
-  mode: Mode, available: number, hidden: ReadonlySet<string>, widthOf: (key: string) => number,
+  available: number, hidden: ReadonlySet<string>, widthOf: (key: string) => number,
 ): Set<string> {
   const out = new Set<string>();
-  for (const key of PRIORITY[mode]) {
+  for (const key of PRIORITY) {
     const without = new Set(hidden);
     without.delete(key);
-    if (fitColumns(mode, available, without, widthOf).some((c) => c.key === key)) out.add(key);
+    if (fitColumns(available, without, widthOf).some((c) => c.key === key)) out.add(key);
   }
   return out;
 }

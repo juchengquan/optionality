@@ -83,12 +83,14 @@ const splitOf = async (root: HTMLElement) => {
   return pace.querySelector<HTMLElement>("[data-split]")!;
 };
 
-describe("the gap in words, in the desk's REVIEW columns", () => {
-  it("says behind or ahead and by how much, in the outcome colour, and a dash without a schedule", () => {
+describe("the gap in the desk's column: signed, its words beside it for a pointer and a reader (#379)", () => {
+  it("writes behind as + and ahead as −, in the outcome colour, and a dash without a schedule", () => {
     render(<DeskBook {...props()} />);
-    expect(paceCell("h-calls")?.textContent).toBe("behind by 0.47");
+    expect(paceCell("h-calls")?.textContent).toBe("+0.47");
+    expect(paceCell("h-calls")?.title).toBe("behind by 0.47");
     expect(paceCell("h-calls")?.dataset.outcome).toBe("loss");
-    expect(paceCell("h-puts")?.textContent).toBe("ahead by 0.50");
+    expect(paceCell("h-puts")?.textContent).toBe("\u22120.50");
+    expect(paceCell("h-puts")?.title).toBe("ahead by 0.50");
     expect(paceCell("h-puts")?.dataset.outcome).toBe("gain");
     expect(paceCell("h-ic")?.textContent).toBe("—");
   });
