@@ -1,5 +1,5 @@
-/** Does a reload wipe a half-typed box? On `/opt/next` (#337) — carried from `Wipe.test.tsx`, which
- *  asks it of today's `App` and goes with it in #301.
+/** Does a reload wipe a half-typed box? Carried from `Wipe.test.tsx` (#337), which asked it of the
+ *  old page's `App` until #301 deleted both.
  *
  *  The poll waits while a form is held open (`NextPollGuard`), but the manual refresh consults no
  *  guard by design — a press is not something done to you — and a save elsewhere reloads the page
@@ -13,7 +13,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Monitor } from "../shared/api";
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage, type PageService } from "../testing/pageService";
 
 afterEach(() => {

@@ -10,7 +10,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { closedBookService as service, days } from "../testing/closedBook";
 import { holdingService, type HoldingService } from "../testing/holdingService";
 import { HOLDINGS } from "../testing/ownerBook";

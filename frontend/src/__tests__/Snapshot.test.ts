@@ -2,7 +2,7 @@
  *  picture is captured in, and how it reaches the device.
  *
  *  These groups were in `Snapshot.test.tsx`, which also rendered the old page's `SnapshotView` and
- *  so went with it (#301). The module they hold is the redesign's too (`next/snapshot/useSaveImage.ts`
+ *  so went with it (#301). The module they hold is the page's too (`snapshot/useSaveImage.ts`
  *  calls all three), so they come back here importing nothing else.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -26,7 +26,7 @@ describe("the box the image is captured in", () => {
   // produced all three truncations at once: columns, cell text, and the bottom of the image.
   //
   // Reading scrollWidth/scrollHeight off the stage rather than its offset size is the CALLER's
-  // (`next/snapshot/useSaveImage.ts`); `captureBox` takes those two numbers and decides only the
+  // (`snapshot/useSaveImage.ts`); `captureBox` takes those two numbers and decides only the
   // resolution, which is what is held here.
   it("keeps the doubled resolution whenever it fits", () => {
     // the common case must not get worse: a normal book is nowhere near the caps

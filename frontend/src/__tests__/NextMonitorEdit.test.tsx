@@ -7,17 +7,17 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { MonitorPatch } from "backend/schemas";
 import type { Entry, Monitor } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../next/MonitorEdit";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../MonitorEdit";
 import {
   deletesOn, draftOf, draftWords, patchOf, ruleOfEntry, ruleOfMonitor, spotOf,
-} from "../next/edit";
-import { sentence } from "../next/needs";
-import { Next } from "../next/Next";
+} from "../edit";
+import { sentence } from "../needs";
+import { Next } from "../Next";
 import { serveEditing } from "../testing/editBook";
 import { until } from "../testing/until";
-import { PhoneBook } from "../next/phone/PhoneBook";
+import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 afterEach(cleanup);

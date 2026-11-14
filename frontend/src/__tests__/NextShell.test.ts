@@ -1,4 +1,4 @@
-/** The redesigned page's decisions that are not drawing: which arrangement, and whether New York's
+/** The page's decisions that are not drawing: which arrangement, and whether New York's
  *  session is open (ADR 0023, amended 2026-11-13: one page, by the session).
  *
  *  The arrangement is state, not a route (ADR 0005), with a default that can be overridden; the
@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { arrangementFor, DESK_FROM } from "../next/arrangement";
-import { inSession, servedWhen, sessionEdge } from "../next/session";
+import { arrangementFor, DESK_FROM } from "../arrangement";
+import { inSession, servedWhen, sessionEdge } from "../session";
 
 describe("the measured width chooses the arrangement", () => {
   it("puts the cards on anything narrower than the desk and the terminal on the rest", () => {

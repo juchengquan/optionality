@@ -5,8 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SpreadsIn } from "backend/schemas";
-import { AddSpread } from "../next/AddSpread";
-import { Next } from "../next/Next";
+import { AddSpread } from "../AddSpread";
+import { Next } from "../Next";
 import type { Monitor } from "../shared/api";
 import { draftPayoff } from "../__browser__/nextBook";
 

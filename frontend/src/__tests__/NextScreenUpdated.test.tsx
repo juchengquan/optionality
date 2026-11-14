@@ -1,6 +1,6 @@
-/** When this SCREEN last fetched, which is not when the service last did — on `/opt/next` (#337),
- *  carried from `ScreenUpdated.test.tsx`, which holds it against today's `App` and goes with it in
- *  #301.
+/** When this SCREEN last fetched, which is not when the service last did — carried from
+ *  `ScreenUpdated.test.tsx` (#337), which held it against the old page's `App` until #301 deleted
+ *  both.
  *
  *  2026-10-20: "refresh immediately does not work". The clock was fine — what was missing was any
  *  evidence of it. The service's `fetched_at` moves on its own cadence whatever the page does, and
@@ -12,7 +12,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage } from "../testing/pageService";
 
 afterEach(() => {

@@ -1,4 +1,4 @@
-/** The redesigned page on a phone, under Playwright's iPhone profile (ADR 0023): touch, a coarse
+/** The page on a phone, under Playwright's iPhone profile (ADR 0023): touch, a coarse
  *  pointer and a 390px screen. Runs in the suite's `iphone` instance only.
  *
  *  What a phone needs that a desk does not: nothing pushed sideways, a 44pt target for every
@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { longBook, overflowsSideways, serveBook, settle } from "./nextBook";
 
 async function show() {

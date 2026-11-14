@@ -10,7 +10,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { holdingService, type HoldingService } from "../testing/holdingService";
 import { settle } from "./nextBook";
 import { catchShare, forgetShare } from "./picture";

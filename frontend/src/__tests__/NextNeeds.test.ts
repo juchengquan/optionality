@@ -1,6 +1,6 @@
-/** The redesigned page's needs-you line (ADR 0012, amended by ADR 0023).
+/** The page's needs-you line (ADR 0012, amended by ADR 0023).
  *
- *  Two things are new against the line at `/opt`. A QUARANTINED rule is named as a fault: the
+ *  Two things are new against the old page's line (#301 deleted it). A QUARANTINED rule is named as a fault: the
  *  service switched it off itself, so nothing is watching what it watched, and that used to be said
  *  only in a muted table at the foot of the page. And a fired rule on the WATCHLIST is an entry
  *  signal — a spread worth selling — not an alarm about something held, so it is its own kind.
@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Entry, Health, Holding, Monitor } from "../shared/api";
-import { isEntrySignal, needsYou, sentence, toneOf } from "../next/needs";
+import { isEntrySignal, needsYou, sentence, toneOf } from "../needs";
 import { OVERLAP_HOLDINGS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const health = (over: Partial<{ ok: boolean; bad: boolean }> = {}) => ({

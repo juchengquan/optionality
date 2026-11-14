@@ -35,7 +35,7 @@ export function ConfirmDelete({
         }
       />
       {/* a reload would re-render the row this is anchored in and take the question away
-          mid-decision, so it holds the poll off (next/poll.ts) */}
+          mid-decision, so it holds the poll off (poll.ts) */}
       <AlertDialogContent data-poll="hold">
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {name}?</AlertDialogTitle>

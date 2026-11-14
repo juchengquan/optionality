@@ -1,5 +1,5 @@
-/** The Reference strip at a desk, on `/opt/next` (ADR 0018) — carried from `References.test.tsx`
- *  (#337), which measures it on today's `App` and goes with it in #301. The phone's widths are
+/** The Reference strip at a desk (ADR 0018) — carried from `References.test.tsx` (#337), which
+ *  measured it on the old page's `App` until #301 deleted both. The phone's widths are
  *  `NextReferences.iphone.test.tsx`'s.
  *
  *  Measured in session (the suite's pinned clock) and outside it, where every reading also carries
@@ -9,7 +9,7 @@ import { cleanup, render } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { overflowsSideways, settle } from "./nextBook";
 import { serveReferences, stripLines } from "./nextCarried";
 

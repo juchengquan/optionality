@@ -7,10 +7,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Holding, Samples } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { HistoryOnDemand } from "../next/HistoryOnDemand";
-import { PhoneBook } from "../next/phone/PhoneBook";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { HistoryOnDemand } from "../HistoryOnDemand";
+import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
 /** Every request the page made, as `METHOD path`. */

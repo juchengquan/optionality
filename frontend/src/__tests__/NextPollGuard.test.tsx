@@ -1,9 +1,9 @@
-/** The poll waits while a form is held open, on `/opt/next` (#337) — carried from
- *  `PollGuard.test.tsx`, which holds it against today's `App` and goes with it in #301.
+/** The poll waits while a form is held open (#337) — carried from `PollGuard.test.tsx`, which held
+ *  it against the old page's `App` until #301 deleted both.
  *
  *  A poll redraws the book, so it must not land while something is being operated. What holds it is
  *  a surface that says so itself, `data-poll="hold"`, and the focus inside it; a list of such things
- *  rots, as `/opt`'s did when its column picker stopped being a `<details>`. So these open the REAL
+ *  rots, as the old page's did when its column picker stopped being a `<details>`. So these open the REAL
  *  controls and count the polls, rather than reading the selector: retiring the next one fails here
  *  instead of going quiet. That an open sheet on its own does NOT hold it is `NextRefresh`'s.
  *
@@ -14,7 +14,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage, SPX_REFERENCE, type PageService } from "../testing/pageService";
 import { until } from "../testing/until";
 

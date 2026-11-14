@@ -9,7 +9,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { serveRuleEdits, type Refusals } from "../testing/ruleEdits";
 import { settle } from "./nextBook";
 

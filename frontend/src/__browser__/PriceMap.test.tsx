@@ -10,9 +10,9 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { page } from "@vitest/browser/context";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
-import { DeskBook } from "../next/desk/DeskBook";
-import { SpxPath, spxGutter } from "../next/SpxPath";
+import { Next } from "../Next";
+import { DeskBook } from "../desk/DeskBook";
+import { SpxPath, spxGutter } from "../SpxPath";
 import type { Entry } from "../shared/api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";

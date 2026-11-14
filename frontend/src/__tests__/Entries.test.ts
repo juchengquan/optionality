@@ -17,7 +17,7 @@ const read = (file: string) => readFileSync(`${FRONTEND}/${file}`, "utf8");
 describe("the HTML entries", () => {
   it("serves the redesign at /opt", () => {
     const page = read("index.html");
-    expect(page).toContain(`<script type="module" src="/src/next/main.tsx"></script>`);
+    expect(page).toContain(`<script type="module" src="/src/main.tsx"></script>`);
     expect(page).toContain(`viewport-fit=cover`);
   });
 

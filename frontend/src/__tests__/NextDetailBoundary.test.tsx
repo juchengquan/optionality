@@ -2,7 +2,7 @@
  *
  *  Found by the browser suites: a row with no `spx` field at all reached the payoff chart as
  *  `undefined`, its range came out NaN, `pnlAt` read past the end of its corners and threw — and
- *  with no error boundary in `/opt/next`, React unmounted the whole page. Two fixes, held here:
+ *  with no error boundary in the page, React unmounted the whole page. Two fixes, held here:
  *  `shared/api.ts` reads a missing `spx` as null, and each holding's or rule's detail (the desk's
  *  inspector, the phone's sheet) is drawn inside `DetailBoundary`, which says that one could not be
  *  drawn and leaves the rest up.
@@ -10,14 +10,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage } from "../testing/pageService";
 
 /** When set, the payoff chart of the watched spread `w-dec18` throws as it draws: a stand-in for
  *  any fault inside a detail, the boundary's subject. */
 const fault = vi.hoisted(() => ({ on: false }));
-vi.mock("../next/Payoff", async (orig) => {
-  const real = await orig<typeof import("../next/Payoff")>();
+vi.mock("../Payoff", async (orig) => {
+  const real = await orig<typeof import("../Payoff")>();
   return {
     ...real,
     WatchedPayoff: (props: Parameters<typeof real.WatchedPayoff>[0]) => {

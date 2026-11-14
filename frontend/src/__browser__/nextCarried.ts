@@ -1,4 +1,4 @@
-/** For the browser suites carried from today's page to `/opt/next` (#337). Not a test file, so it
+/** For the browser suites carried over from the old page before the swap (#337, #301). Not a test file, so it
  *  may not import `testing/` (`make check-test-support`). */
 import { serveBook } from "./nextBook";
 

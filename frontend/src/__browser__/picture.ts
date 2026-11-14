@@ -1,4 +1,4 @@
-/** What the redesigned page's "save as image" suites share (#300): the share sheet stood in for,
+/** What the page's "save as image" suites share (#300): the share sheet stood in for,
  *  the PNG decoded back into pixels, and the off-screen tree read while it is up.
  *
  *  Not test support for the service: plain browser helpers, like `nextBook.ts` beside it. */

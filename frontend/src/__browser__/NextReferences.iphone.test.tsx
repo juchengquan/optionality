@@ -1,5 +1,5 @@
-/** The Reference strip on a phone, on `/opt/next` (ADR 0018) — carried from `References.test.tsx`
- *  (#337), which measures it on today's `App` at a phone's width and goes with it in #301. Runs in
+/** The Reference strip on a phone (ADR 0018) — carried from `References.test.tsx` (#337), which
+ *  measured it on the old page's `App` at a phone's width until #301 deleted both. Runs in
  *  the suite's `iphone` instance: Playwright's iPhone profile, touch and a coarse pointer.
  *
  *  A green suite can hide an unusable UI: the figures are index-sized and each carries a label, a
@@ -14,7 +14,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { overflowsSideways, settle } from "./nextBook";
 import { serveReferences, stripLines } from "./nextCarried";
 

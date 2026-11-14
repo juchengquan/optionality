@@ -7,11 +7,11 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Samples } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { PhoneBook } from "../next/phone/PhoneBook";
-import { spxRange, spxRuns } from "../next/spxdays";
-import { SpxPath, spxGutter } from "../next/SpxPath";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { PhoneBook } from "../phone/PhoneBook";
+import { spxRange, spxRuns } from "../spxdays";
+import { SpxPath, spxGutter } from "../SpxPath";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 
 let asked: string[] = [];

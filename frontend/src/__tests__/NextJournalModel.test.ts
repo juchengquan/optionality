@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Recorded } from "../shared/api";
-import { journalOf, madeWords, storedWords } from "../next/journal";
+import { journalOf, madeWords, storedWords } from "../journal";
 
 const row = (id: string, over: Partial<Recorded>): Recorded => ({
   id, name: id, strategy: null, strike_date: "2026-12-18", contracts: 1, entry: 2,

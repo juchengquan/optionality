@@ -1,4 +1,4 @@
-/** One book for the redesigned page's layout suites, shaped like the owner's: spreads on three
+/** One book for the page's layout suites, shaped like the owner's: spreads on three
  *  expiries with a short leg's delta rule under one of them, a holding with a risk rule, a rule
  *  that fired, and one the service quarantined — so the needs-you line has something to say. */
 const health = {

@@ -1,6 +1,6 @@
-/** The Reference strip on `/opt/next`, and the Settings panel that keeps one (ADR 0018) — carried
- *  from `References.test.tsx` (#337), which holds them against today's `App` and goes with it in
- *  #301. A slow source is `NextSlowReferences.test.tsx`'s; the strip outside the session, `NextPage`'s.
+/** The Reference strip, and the Settings panel that keeps one (ADR 0018) — carried from
+ *  `References.test.tsx` (#337), which held them against the old page's `App` until #301 deleted
+ *  both. A slow source is `NextSlowReferences.test.tsx`'s; the strip outside the session, `NextPage`'s.
  *
  *  Both arrangements: Settings is the desk's side panel and the phone's tab, and the strip sits on
  *  both. 10:00 New York on a Tuesday, in session, where the strip is polled.
@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SOURCES } from "backend/schemas";
 
 import type { Reference } from "../shared/api";
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage, SPX_REFERENCE as SPX, type PageService } from "../testing/pageService";
 
 afterEach(() => {

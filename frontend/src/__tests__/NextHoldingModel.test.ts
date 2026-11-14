@@ -1,4 +1,4 @@
-/** Changing a holding from `/opt/next` (#294): what the edit, the close and the correction post,
+/** Changing a holding (#294): what the edit, the close and the correction post,
  *  what each refuses before posting anything, and how a closed holding's Monitors are said. Every
  *  body is parsed with the route's own schema, so the forms cannot drift from what the routes take.
  */
@@ -8,7 +8,7 @@ import { ClosePositionIn, PositionPatch } from "backend/schemas";
 import type { Holding, Monitor } from "../shared/api";
 import {
   aboutQuantities, closeBody, closeDay, correctedLegs, correctionBody, correctionWords, followersOf, editBody, editDraft, exitPrefill, fates, type Watching,
-} from "../next/holding";
+} from "../holding";
 
 const held = {
   id: "h1", name: "1218_P7150", strike_date: "2026-12-18", contracts: 2, entry: 1.5,

@@ -1,4 +1,4 @@
-/** The whole page's service for the suites carried over from `/opt` to `/opt/next` (#337): the
+/** The whole page's service for the suites carried over from the old page (#337, #301): the
  *  owner's book behind every route (`serveEditing`, which writes), with what those suites need to
  *  see and to steer on top of it —
  *

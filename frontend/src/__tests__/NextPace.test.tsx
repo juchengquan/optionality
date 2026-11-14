@@ -1,4 +1,4 @@
-/** The pace explained (#333, ADR 0011): the gap in words wherever `/opt/next` shows it, and in the
+/** The pace explained (#333, ADR 0011): the gap in words wherever the page shows it, and in the
  *  desk's inspector and the phone's holding detail the DTE at open, the √T working, the target on
  *  decay alone and the split of the gap that `/positions/{id}/vol` serves — read once when a
  *  holding is opened, never polled, and never shown under another holding.
@@ -10,9 +10,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Holding, Vol } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { PhoneBook } from "../next/phone/PhoneBook";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, VOLS } from "../testing/ownerBook";
 
 /** Every request the page made, as `METHOD path`. */

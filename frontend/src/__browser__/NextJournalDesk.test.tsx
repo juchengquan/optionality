@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { closedBookService } from "../testing/closedBook";
 import { overflowsSideways, settle } from "./nextBook";
 

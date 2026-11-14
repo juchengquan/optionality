@@ -8,7 +8,7 @@ import type { Sample, Samples } from "../shared/api";
 import {
   correctionDte, costRuns, nearestDay, nowLines, sampleWords, stepDay, tipLines, tipPlace, valueAxis,
   type Unit,
-} from "../next/burndown";
+} from "../burndown";
 
 const money: Unit = { size: 100, contracts: 2, money: true, hidden: false };
 const points: Unit = { size: 1, contracts: 2, money: false, hidden: false };

@@ -6,13 +6,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { Added, Entry } from "../shared/api";
-import type { SpreadsBody } from "../next/add";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { ruleOfEntry } from "../next/edit";
-import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../next/MonitorEdit";
-import { Next } from "../next/Next";
-import { PhoneBook } from "../next/phone/PhoneBook";
+import type { SpreadsBody } from "../add";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { ruleOfEntry } from "../edit";
+import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../MonitorEdit";
+import { Next } from "../Next";
+import { PhoneBook } from "../phone/PhoneBook";
 import { QUOTES } from "../testing/ownerBook";
 import { CONDOR, CS, serveRuleEdits, splitBook } from "../testing/ruleEdits";
 
@@ -301,7 +301,7 @@ describe("what recording a holding does to the rest of the book (#336)", () => {
     expect(within(form).getByTestId("hold-links").textContent).toBe(
       "Also linked to it, by the service, as it links every rule no holding owns: "
       // a combo naming a contract the new holding does not hold is drawn in the Watchlist (#346);
-      // /opt/next shows no rule row's Entry or P&L, so the form claims none
+      // the page shows no rule row's Entry or P&L, so the form claims none
       + "cs spread value — drawn in the Watchlist, with a note of the contracts it shares with it.");
   });
 

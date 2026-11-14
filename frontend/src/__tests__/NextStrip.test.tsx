@@ -8,12 +8,12 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { COLUMNS, type DeskRow } from "../next/desk/columns";
-import { PhoneBook } from "../next/phone/PhoneBook";
-import { StrikeStrip } from "../next/StrikeStrip";
-import { cellWords, distanceWords, joinStrips, nearest, scaleOf, stripOfEntry, stripOfHolding } from "../next/strip";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { COLUMNS, type DeskRow } from "../desk/columns";
+import { PhoneBook } from "../phone/PhoneBook";
+import { StrikeStrip } from "../StrikeStrip";
+import { cellWords, distanceWords, joinStrips, nearest, scaleOf, stripOfEntry, stripOfHolding } from "../strip";
 import { HOLDINGS, MONITORS, QUOTES, served } from "../testing/ownerBook";
 
 afterEach(cleanup);

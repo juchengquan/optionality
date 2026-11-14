@@ -22,7 +22,7 @@ h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.3rem; }
 
 /* The base the page builds on (ADR 0007): shadcn's tokens for everything generic -- surfaces,
    borders, focus rings -- and the grid a table of figures needs. The page's own colours, the
-   ones no design system has an opinion about, are next/next.css's (ADR 0023). The old page's
+   ones no design system has an opinion about, are next.css's (ADR 0023). The old page's
    alarm ramp and badge colours lived here and went with it (#301). */
 :root {
   color-scheme: light dark;

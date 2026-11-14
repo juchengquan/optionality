@@ -1,7 +1,7 @@
 /** Every figure of a rule's contract or combo, in the desk's inspector and the phone's sheet (#332).
  *
- *  Today's sheet at `/opt` lists a contract's bid, ask, last trade, IV and every greek, and a
- *  combo's greeks (ADR 0008: "the sheet shows every figure"). These hold `/opt/next` to the same:
+ *  The old page's sheet listed a contract's bid, ask, last trade, IV and every greek, and a
+ *  combo's greeks (ADR 0008: "the sheet shows every figure"). These hold the page to the same:
  *  each figure the service served, at the decimals ADR 0023 fixes per field, and each one it did
  *  not serve as a dash WITH its reason — never 0, and never a sum worked out here.
  *
@@ -10,10 +10,10 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Entry } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { PhoneBook } from "../next/phone/PhoneBook";
-import { ruleFigures, wholeMissing } from "../next/quotefigures";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { PhoneBook } from "../phone/PhoneBook";
+import { ruleFigures, wholeMissing } from "../quotefigures";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 afterEach(cleanup);

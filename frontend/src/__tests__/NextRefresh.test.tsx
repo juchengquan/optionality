@@ -1,6 +1,6 @@
-/** The poll's cadence, the refresh setting and the manual refresh, on `/opt/next` (#337) — carried
- *  from `Refresh.test.tsx` and `Interval.test.tsx`, which hold them against today's `App` and go
- *  with it in #301.
+/** The poll's cadence, the refresh setting and the manual refresh (#337) — carried from
+ *  `Refresh.test.tsx` and `Interval.test.tsx`, which held them against the old page's `App` until
+ *  #301 deleted all three.
  *
  *  Every poll and every press is a live call: `/quotes` is one full-watchlist snapshot from the
  *  Provider (ADR 0010). So the button guards against overlapping itself, and restarts the poll
@@ -13,7 +13,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage, type PageService } from "../testing/pageService";
 import { until } from "../testing/until";
 
@@ -136,7 +136,7 @@ describe.each(arrangements)("on the %s, the poll's cadence", (arrangement) => {
     expect(svc.count("/quotes"), "it never polled at 60s").toBe(before + 1);
   });
 
-  /** The half a mutation sweep found nothing stating on `/opt` (Interval.test.tsx): the default is
+  /** The half a mutation sweep found nothing stating on the old page (Interval.test.tsx): the default is
    *  the service's own cadence, so the cookie and the sweep are only told apart when they differ. */
   it("is the one remembered from an earlier visit, not the service's", async () => {
     document.cookie = "ui_refresh=60;path=/";

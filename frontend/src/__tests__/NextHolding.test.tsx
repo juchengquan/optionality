@@ -1,4 +1,4 @@
-/** Editing, closing, correcting and deleting a holding from `/opt/next` (#294), on the desk's
+/** Editing, closing, correcting and deleting a holding (#294), on the desk's
  *  inspector and the phone's sheet, against a service that remembers what it was sent
  *  (`testing/holdingService.ts`). Behaviour only; what the phone must MEASURE — 44pt targets, 16px
  *  boxes, nothing past the edge — is `__browser__/NextHolding.iphone.test.tsx`.
@@ -7,8 +7,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Holding, Monitor } from "../shared/api";
-import { HoldingActions } from "../next/HoldingActions";
-import { Next } from "../next/Next";
+import { HoldingActions } from "../HoldingActions";
+import { Next } from "../Next";
 import { holdingService, type HoldingService } from "../testing/holdingService";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 

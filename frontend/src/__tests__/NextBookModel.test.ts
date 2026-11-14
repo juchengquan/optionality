@@ -1,9 +1,9 @@
-/** Which rule sits where, and what is bracketed with what: the redesign's book as a model, before
+/** Which rule sits where, and what is bracketed with what: the book as a model, before
  *  either arrangement draws it (ADR 0023; #289 the desk, #290 the phone). Both arrangements draw
  *  THIS, so the phone cannot group the owner's book differently from the desk. */
 import { describe, expect, it } from "vitest";
 
-import { namesUnheldContract, overlapOf, placeBook } from "../next/placement";
+import { namesUnheldContract, overlapOf, placeBook } from "../placement";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 

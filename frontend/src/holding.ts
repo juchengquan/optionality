@@ -1,0 +1,235 @@
+/** Changing a holding from the page (#294): editing what was recorded, closing it, correcting a
+ *  close, and saying what became of its Monitors. Pure, so what each form posts is decided and
+ *  tested here; `HoldingActions.tsx` and `ClosedResult.tsx` only draw it.
+ *
+ *  Three routes, all of them the service's (ADR 0022), none new:
+ *  - `PATCH /positions/{id}` takes Entry, contracts and Opened on a held holding, and a leg's
+ *    QUANTITY (#359) — never its name or any other part of its legs ("a different structure is a
+ *    different holding"), and never a null for any of them.
+ *  - `POST /positions/{id}/close` takes the Exit and the day. The Exit is SIGNED LIKE COST TO CLOSE,
+ *    which is how `/positions/values` serves `cost_to_close`, so the prefill is that figure as it
+ *    stands: a long's sale is negative there and stays negative here.
+ *  - the same PATCH takes `exit` and `closed_on` on a CLOSED holding, which is how a mistyped close
+ *    is corrected without losing the samples a delete would take.
+ */
+import type { Holding, Monitor } from "./shared/api";
+import { GROUPS } from "./shared/groups";
+
+/** A number as typed: null for blank, NaN for something that is not one. */
+function typed(text: string): number | null {
+  const t = text.trim().replace(/^−/, "-");
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : Number.NaN;
+}
+
+/** The Exit a close starts with: the served Cost to close, signed as served.
+ *
+ *  Rounded to six places and no further, which removes the float noise a sum of mids carries
+ *  (2.35 − 1.15 is 1.2000000000000002) and nothing a quoted mid can be — a mid is at worst to the
+ *  half-cent of a nickel spread, 0.0125, so the figure posted is the figure served. Blank where none
+ *  was served: the close keeps a blank as unknown rather than guessing one. */
+export function exitPrefill(cost: number | null): string {
+  return cost === null ? "" : String(Number(cost.toFixed(6)));
+}
+
+/** Today's New York market day, or the expiry if that came first: nothing is held past one, and the
+ *  service refuses a later day. ISO dates compare as text. */
+export function closeDay(strikeDate: string, today: string): string {
+  return strikeDate < today ? strikeDate : today;
+}
+
+export interface CloseDraft {
+  /** as typed, signed like Cost to close */
+  exit: string;
+  /** YYYY-MM-DD, or blank to leave it to the service */
+  closedOn: string;
+}
+
+type Out<T> = { body: T } | { error: string };
+
+function exitOf(text: string): number | null | { error: string } {
+  const exit = typed(text);
+  return Number.isNaN(exit) ? { error: `the exit is not a number: ${text.trim()}` } : exit;
+}
+
+/** What `POST /positions/{id}/close` is sent. */
+export function closeBody(d: CloseDraft): Out<{ exit: number | null; closed_on?: string }> {
+  const exit = exitOf(d.exit);
+  if (exit !== null && typeof exit === "object") return exit;
+  return { body: d.closedOn === "" ? { exit } : { exit, closed_on: d.closedOn } };
+}
+
+/** What `PATCH /positions/{id}` is sent to correct a close: only what changed from the close AS THE
+ *  SERVICE HAS IT, like `editBody`. Two forms can correct one close — the close's account and the
+ *  journal's entry (#296) — and a field sent unchanged from a form opened earlier would put back
+ *  what the other just corrected. A cleared Exit is a change, sent as null: blank is an answer, "I
+ *  do not know what I paid", and leaving it out would keep the old Exit. */
+export function correctionBody(
+  served: { exit: number | null; closed_on: string }, d: CloseDraft,
+): Out<{ exit?: number | null; closed_on?: string }> {
+  const exit = exitOf(d.exit);
+  if (exit !== null && typeof exit === "object") return exit;
+  if (d.closedOn === "") return { error: "type the day it was closed" };
+  const body: { exit?: number | null; closed_on?: string } = {};
+  if (exit !== served.exit) body.exit = exit;
+  if (d.closedOn !== served.closed_on) body.closed_on = d.closedOn;
+  return Object.keys(body).length === 0 ? { error: "nothing changed" } : { body };
+}
+
+export interface EditDraft {
+  entry: string;
+  contracts: string;
+  /** Opened, a New York market day */
+  opened: string;
+  /** each leg's quantity as typed, in the order the holding records its legs (#359) */
+  qty: string[];
+}
+
+type Edited = Pick<Holding, "entry" | "contracts" | "opened_at" | "legs">;
+type HeldLeg = Holding["legs"][number];
+/** a leg as PATCH takes it: the service serves `option_type` as text, and takes CALL or PUT */
+type SentLeg = Omit<HeldLeg, "option_type"> & { option_type: "CALL" | "PUT" };
+
+export function editDraft(h: Edited): EditDraft {
+  return {
+    entry: h.entry === null ? "" : String(h.entry),
+    contracts: String(h.contracts),
+    opened: h.opened_at ?? "",
+    qty: h.legs.map((l) => String(l.qty ?? 1)),
+  };
+}
+
+/** The most of one Contract a leg may hold, as the service refuses (#351's `MAX_LEG_QTY`). */
+const MAX_QTY = 10;
+
+/** A leg as the inspector writes it: `short PUT 7100`. */
+export const legWords = (l: HeldLeg) => `${l.side} ${l.option_type} ${l.strike}`;
+
+/** Each leg's quantity as typed, or the first leg whose quantity cannot be one. */
+function quantities(h: Edited, d: EditDraft): number[] | { error: string; at: "qty" } {
+  const out: number[] = [];
+  for (const [i, leg] of h.legs.entries()) {
+    const q = typed(d.qty[i] ?? "");
+    if (q === null || !Number.isInteger(q) || q < 1 || q > MAX_QTY) {
+      return { error: `${legWords(leg)}: a quantity is a whole number from 1 to ${MAX_QTY}`, at: "qty" };
+    }
+    out.push(q);
+  }
+  return out;
+}
+
+/** The holding's legs with the quantities typed, in the shape PATCH takes them — each quantity only
+ *  where it is not 1, as the service stores it — or null where none changed or one cannot be read.
+ *  What the correction's preview is drawn from. */
+export function correctedLegs(h: Edited, d: EditDraft): SentLeg[] | null {
+  const qty = quantities(h, d);
+  if (!Array.isArray(qty) || qty.every((q, i) => q === (h.legs[i]!.qty ?? 1))) return null;
+  return h.legs.map((l, i) => ({
+    side: l.side, option_type: l.option_type as SentLeg["option_type"], strike: l.strike,
+    ...(qty[i] === 1 ? {} : { qty: qty[i] }),
+  }));
+}
+
+/** What `PATCH /positions/{id}` is sent: only what changed. The route takes no null for any of
+ *  these, so a field cleared is refused here, in words, rather than sent and refused there. */
+export function editBody(
+  h: Edited, d: EditDraft,
+): Out<{ entry?: number; contracts?: number; opened_at?: string; legs?: SentLeg[] }> | { error: string; at: "qty" } {
+  const body: { entry?: number; contracts?: number; opened_at?: string; legs?: SentLeg[] } = {};
+  const entry = typed(d.entry);
+  if (Number.isNaN(entry)) return { error: `the entry is not a number: ${d.entry.trim()}` };
+  if (entry === null && h.entry !== null) return { error: "the entry cannot be cleared here — type what was taken in" };
+  if (entry !== null && entry !== h.entry) body.entry = entry;
+  const contracts = typed(d.contracts);
+  if (contracts === null || !Number.isInteger(contracts) || contracts < 1) {
+    return { error: "contracts must be a whole number, 1 or more" };
+  }
+  if (contracts !== h.contracts) body.contracts = contracts;
+  if (d.opened === "" && h.opened_at !== null) {
+    return { error: "Opened cannot be cleared here — type the New York trading day it was put on" };
+  }
+  if (d.opened !== "" && d.opened !== h.opened_at) body.opened_at = d.opened;
+  // a leg's quantity, corrected (#359): every leg is sent, so the service can see it is the same
+  // structure, and only when one differs
+  const qty = quantities(h, d);
+  if (!Array.isArray(qty)) return qty;
+  const legs = correctedLegs(h, d);
+  if (legs !== null) body.legs = legs;
+  return Object.keys(body).length === 0 ? { error: "nothing changed" } : { body };
+}
+
+/** A Monitor the page knew was watching the holding before it closed. */
+export interface Watching {
+  id: string;
+  name: string;
+}
+
+export interface Fate {
+  id: string;
+  name: string;
+  /** what became of it, in words */
+  fate: string;
+}
+
+const reasonWords = (reason: string | null) =>
+  GROUPS.find(([r]) => r === reason)?.[1] ?? "Reason not recorded";
+
+/** What became of each Monitor, as the service now reports it: the close's own list of the rules
+ *  it switched off, and `/monitors` read back AFTER the close for the rest. Nothing is inferred
+ *  here — a rule handed to another holding says so because the service now links it there. */
+export function fates(
+  watching: Watching[], after: Monitor[], disabled: { id: string; code: string }[],
+): Fate[] {
+  const byId = new Map(after.map((m) => [m.id, m]));
+  const off = new Set(disabled.map((m) => m.id));
+  const named = [
+    ...watching,
+    // a rule the close switched off that the page did not know about: the service's word wins
+    ...disabled.filter((d) => !watching.some((w) => w.id === d.id)).map((d) => ({ id: d.id, name: d.code })),
+  ];
+  return named.map(({ id, name }) => {
+    const m = byId.get(id);
+    if (off.has(id) || (m && !m.enabled && m.disabled_reason === "holding-closed")) {
+      return { id, name, fate: "switched off — holding closed" };
+    }
+    if (!m) return { id, name, fate: "no longer listed by the service" };
+    if (m.positions.length > 0) {
+      const to = `handed to ${m.positions.map((p) => p.name).join(", ")}`;
+      return { id, name, fate: m.enabled ? to : `${to}; it was already off (${reasonWords(m.disabled_reason)})` };
+    }
+    if (!m.enabled) return { id, name, fate: `linked to nothing; it was already off (${reasonWords(m.disabled_reason)})` };
+    return { id, name, fate: "kept on, linked to no holding" };
+  });
+}
+
+/** The rules a quantity's correction will rewrite, as far as the page can tell before the save
+ *  (#359): each one linked to this holding as the whole of what it values, naming each of its
+ *  contracts on exactly one leg. The service decides — it recomputes the scope under the old
+ *  quantities — and its answer says what it did (`correctionWords`); this only words the promise. */
+export function followersOf(h: Pick<Holding, "id" | "legs">, monitors: Monitor[]): Monitor[] {
+  return monitors.filter((m) => m.legs && m.scope === "all" && m.positions.some((p) => p.id === h.id)
+    && h.legs.every((l) =>
+      m.legs!.filter((ml) => ml.option_type === l.option_type && ml.strike === l.strike).length === 1));
+}
+
+/** Whether a refusal of a save is about the quantities, and so said beside them: the service's own
+ *  words for a correction it refuses, or a schema refusal at a leg. Anything else — the holding gone,
+ *  the network down, Opened refused — is said where every other refusal is. */
+export function aboutQuantities(text: string): boolean {
+  return /only a leg's quantity can be corrected|a leg's quantity is corrected only while it is held|legs\[\d+\]/
+    .test(text);
+}
+
+/** What a correction did, as the service answered it: each rule whose legs took the new
+ *  quantities, and each whose scope moved. Empty when it touched no rule. */
+export function correctionWords(answer: {
+  followed_monitors: { id: string; code: string }[];
+  rescoped_monitors: { id: string; code: string; scope: "all" | "leg" | null }[];
+}): string[] {
+  const scopeWords = { all: "now values the whole holding", leg: "now watches part of it" } as const;
+  return [
+    ...answer.followed_monitors.map((m) => `${m.code} took the new quantities and starts unrung`),
+    ...answer.rescoped_monitors.map((m) => `${m.code} ${m.scope === null ? "no longer covers it" : scopeWords[m.scope]}`),
+  ];
+}

@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SpreadsIn } from "backend/schemas";
-import { AddSpread } from "../next/AddSpread";
+import { AddSpread } from "../AddSpread";
 import type { Monitor } from "../shared/api";
 
 /** Every request, as `METHOD path` with its parsed body. */

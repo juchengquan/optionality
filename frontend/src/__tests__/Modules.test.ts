@@ -55,9 +55,9 @@ describe("the measuring and formatting path", () => {
     // the press takes a REF to the stage. Importing `Still` would make the flow and the picture one
     // module, and the picture is a second tree precisely so it can differ from the screen (#300).
     // The old page held its `useSnapshot.ts` to the same against `SnapshotView` (#301 deleted both).
-    const named = imports("next/snapshot/useSaveImage.ts");
-    expect(named).not.toContain("next/snapshot/Still");
-    expect(named).not.toContain("next/Next");
+    const named = imports("snapshot/useSaveImage.ts");
+    expect(named).not.toContain("snapshot/Still");
+    expect(named).not.toContain("Next");
     expect(named).toContain("shared/snapshot"); // the reader still reads: a dead pattern passes the two above
   });
 });

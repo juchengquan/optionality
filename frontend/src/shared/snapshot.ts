@@ -39,7 +39,7 @@ export const SIDE_LIMIT = 8_192;
  *  overflowing it is simply absent from the image: measured in a real browser with the stage one
  *  pixel narrower than its widest table, 161px of a 13-column combo table fell outside the picture
  *  in Chromium and 204px in WebKit (the old page's tables, #301). Nothing in the picture's tree
- *  clips (`next/snapshot/still.css`), so the scroll size is the true extent of the figures rather
+ *  clips (`snapshot/still.css`), so the scroll size is the true extent of the figures rather
  *  than the extent of a window onto them.
  *
  *  The resolution is a CEILING of 2 that comes down as far as the limits demand. A flat 2 is what

@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import { MonitorPatch, SpreadsIn, TotalEntryIn } from "backend/schemas";
 import type { Entry, Holding, Monitor } from "../shared/api";
-import { contractCode, ruleWords } from "../next/add";
+import { contractCode, ruleWords } from "../add";
 import {
   contractOfCode, draftOf, holdBody, holdDraft, holdLinks, holdOffered, holdToast, patchOf,
   renameNote, ruleOfEntry, ruleOfMonitor, splitOffered, splitPreview, splitCounts, spotOf, totalOf, uniqueName,
-} from "../next/edit";
+} from "../edit";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { CONDOR, splitBook } from "../testing/ruleEdits";
 import { bookOf, scenario } from "../testing/scenarioBook";

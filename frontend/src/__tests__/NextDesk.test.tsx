@@ -9,11 +9,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, tableRows, type DeskRow } from "../next/desk/columns";
-import { Next } from "../next/Next";
-import { placeBook } from "../next/placement";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, tableRows, type DeskRow } from "../desk/columns";
+import { Next } from "../Next";
+import { placeBook } from "../placement";
 import { readHidden } from "../shared/prefs";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
@@ -480,7 +480,7 @@ describe("one column set, in session and out of it (#372)", () => {
 });
 
 describe("the columns", () => {
-  it("carry over today's column choice", () => {
+  it("carry over the old page's column choice", () => {
     document.cookie = "ui_cols_combo=pnl.legs.delta;path=/";
     render(<DeskBook {...props()} />);
     expect(headers()).toEqual(["name", "value", "captured", "pace_gap", "strip", "dte", "manage", "alarm"]);
