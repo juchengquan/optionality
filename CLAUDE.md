@@ -336,10 +336,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   that ambiguous), and a UNIQUE clash inside the write is the checks' own 409, not a 500.
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
   **One page, the redesign (ADR 0023)**, since the swap of 2026-11-13 (#301) deleted the old one:
-  `index.html` loads `src/next/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
+  `index.html` loads `src/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
   0023 as amended 2026-11-13, "one page, by the session"; #371–#375): the desk draws one column
   set and the phone three tabs (Book, Add, Settings), the closed trades fold at the bottom of the
-  book. New York's session (`src/next/session.ts`) decides only: what is FETCHED; the
+  book. New York's session (`src/session.ts`) decides only: what is FETCHED; the
   market-closed line; whether a figure (a Level chip, a Reference) says when it was read; what the
   needs-you line states (holdings' Levels only in session); whether a holding's history starts
   open (outside the session) in the desk's inspector and the phone's sheet; and the saved
@@ -351,12 +351,15 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   directory (`try_files {path}/index.html`) so it needs no trailing-slash redirect either;
   `src/__tests__/Entries.test.ts` holds both entries. **The redirect is temporary: remove it
   after 2026-12-31** — the file, its `next` build input, its case in `Entries.test.ts`, and the
-  `{path}/index.html` entry in the Caddyfile's `try_files` with its comment. The page's source is still `src/next/`, a
-  name left from the rollout — moving it up into `src/` is a rename of its own, not yet done.
-  Beside it, `src/shared/` (`api.ts`, `format.ts`, `prefs.ts`, the References panel and strip,
+  `{path}/index.html` entry in the Caddyfile's `try_files` with its comment. The page's source is
+  `src/` itself (moved up from `src/next/`, the rollout's name, in #363): its modules at the top,
+  with `desk/`, `phone/` and `snapshot/` for what only one arrangement or the saved picture draws.
+  Beside them, `src/shared/` (`api.ts`, `format.ts`, `prefs.ts`, the References panel and strip,
   `Freshness`, the column picker, `groups.ts`, `app.css`), `src/components/` (shadcn's),
   `src/testing/` (the suites' services and books) and `vite-env.d.ts`, which `shared/api.ts` needs
-  for `import.meta.env`. Nothing sits at the top of `src/` but that file. The cookies kept their
+  for `import.meta.env`. The page's component and most of its test files are still named `Next*`
+  (`Next.tsx`, `NextDesk.test.tsx`, …) — the rollout's name again, left
+  for a rename of its own. The cookies kept their
   names through the swap, so a viewer's choices carried over; the old page's signal, band and
   grouping cookies are simply never read.
 - `entrypoints/http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
@@ -567,7 +570,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
-  By New York's session (09:30–16:15, weekdays; `frontend/src/next/session.ts`) and by nothing
+  By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing
   else — the page has no mode (#371, #375): in session it polls `/positions/values` and `/references` with it — three calls
   per poll per open tab, where the old page made two; outside the session it reads those two once
   each time it is asked — on opening, at each edge of the session (one slept through included), on

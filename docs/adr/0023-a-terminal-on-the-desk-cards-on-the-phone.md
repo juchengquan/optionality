@@ -170,7 +170,7 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   test held to the import graph (#337), so the deletion was mechanical. `/opt/next` is kept as a
   page that sends a bookmark on to `/opt/`; it is a page and not a Caddy redirect because tailscale
   strips the prefix and rewrites no `Location`, so only the build, which knows `UI_BASE`, can name
-  `/opt/`. The source stays in `frontend/src/next/` for now; moving it up into `src/` is a rename
+  `/opt/`. The source stayed in `frontend/src/next/` until #363 moved it up into `src/`, a rename
   of its own. ADR 0005's "no client-side router" holds: modes and arrangements are state, not
   routes. *(Since 2026-11-13 there are no modes: arrangements are the only such state.)*
 - **The prototype is rewritten, not promoted.** It was written without tests and against a static
