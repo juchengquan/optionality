@@ -26,6 +26,7 @@
       "monitors": [],
       "monitor_positions": [],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -585,6 +586,46 @@
                                   "one_sigma"
                                 ]
                               }
+                            },
+                            "last_close": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "observed_on": {
+                                      "type": "string"
+                                    },
+                                    "observed_at": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "timing": {
+                                      "type": "string",
+                                      "enum": [
+                                        "close",
+                                        "before-open",
+                                        "after-close",
+                                        "weekend",
+                                        "unrecorded"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "price",
+                                    "observed_on",
+                                    "observed_at",
+                                    "timing"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           },
                           "required": [
@@ -612,7 +653,8 @@
                             "distance",
                             "spx",
                             "spx_reason",
-                            "short_strikes"
+                            "short_strikes",
+                            "last_close"
                           ]
                         }
                       }
@@ -1391,6 +1433,253 @@
               "responses": {
                 "204": {
                   "description": "no content"
+                },
+                "404": {
+                  "description": "no such record",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "in": "path",
+                  "name": "id",
+                  "required": true
+                }
+              ],
+              "tags": [
+                "monitors"
+              ]
+            }
+          },
+          "/monitors/{id}/samples": {
+            "get": {
+              "operationId": "getMonitorsByIdSamples",
+              "summary": "A watched rule's daily closes",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "contracts": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "price_rule": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "threshold": {
+                                    "type": "number"
+                                  },
+                                  "direction": {
+                                    "type": "string"
+                                  },
+                                  "compare": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "threshold",
+                                  "direction",
+                                  "compare"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "samples": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "observed_on": {
+                                  "type": "string"
+                                },
+                                "observed_at": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "timing": {
+                                  "type": "string",
+                                  "enum": [
+                                    "close",
+                                    "before-open",
+                                    "after-close",
+                                    "unrecorded"
+                                  ]
+                                },
+                                "dte": {
+                                  "type": "number"
+                                },
+                                "price": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "legs_iv": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "legs_vega": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "legs_delta": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "spx": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "short_strikes": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "code": {
+                                        "type": "string"
+                                      },
+                                      "option_type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "CALL",
+                                          "PUT"
+                                        ]
+                                      },
+                                      "strike": {
+                                        "type": "number"
+                                      },
+                                      "delta": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "points": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "sigma": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "one_sigma": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "code",
+                                      "option_type",
+                                      "strike",
+                                      "delta",
+                                      "points",
+                                      "sigma",
+                                      "one_sigma"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "observed_on",
+                                "observed_at",
+                                "timing",
+                                "dte",
+                                "price",
+                                "legs_iv",
+                                "legs_vega",
+                                "legs_delta",
+                                "spx",
+                                "short_strikes"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "contracts",
+                          "price_rule",
+                          "samples"
+                        ]
+                      }
+                    }
+                  }
                 },
                 "404": {
                   "description": "no such record",
@@ -2673,6 +2962,172 @@
                               ]
                             }
                           },
+                          "before_entry": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "observed_on": {
+                                  "type": "string"
+                                },
+                                "observed_at": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "timing": {
+                                  "type": "string",
+                                  "enum": [
+                                    "close",
+                                    "before-open",
+                                    "after-close",
+                                    "unrecorded"
+                                  ]
+                                },
+                                "dte": {
+                                  "type": "number"
+                                },
+                                "cost_to_close": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "on_pace": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "legs_iv": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "legs_vega": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "legs_delta": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "spx": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "short_strikes": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "code": {
+                                        "type": "string"
+                                      },
+                                      "option_type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "CALL",
+                                          "PUT"
+                                        ]
+                                      },
+                                      "strike": {
+                                        "type": "number"
+                                      },
+                                      "delta": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "points": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "sigma": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "one_sigma": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "code",
+                                      "option_type",
+                                      "strike",
+                                      "delta",
+                                      "points",
+                                      "sigma",
+                                      "one_sigma"
+                                    ]
+                                  }
+                                },
+                                "before_correction": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "observed_on",
+                                "observed_at",
+                                "timing",
+                                "dte",
+                                "cost_to_close",
+                                "on_pace",
+                                "legs_iv",
+                                "legs_vega",
+                                "legs_delta",
+                                "spx",
+                                "short_strikes",
+                                "before_correction"
+                              ]
+                            }
+                          },
                           "qty_corrected_at": {
                             "type": [
                               "string",
@@ -2684,6 +3139,7 @@
                           "levels",
                           "plan",
                           "samples",
+                          "before_entry",
                           "qty_corrected_at"
                         ]
                       }

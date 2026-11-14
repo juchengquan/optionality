@@ -106,6 +106,8 @@ async function endpoints() {
     payoff: await (await client.positions[":id"].payoff.$get({ param: id })).json(),
     // the daily samples (#295): a holding's history charts, read once when that history is drawn
     samples: await (await client.positions[":id"].samples.$get({ param: id })).json(),
+    // a watched rule's daily closes (#402): its history charts, read once when that history is drawn
+    watchSamples: await (await client.monitors[":id"].samples.$get({ param: id })).json(),
     draftPayoff: await client.positions.payoff.$post({
       json: { legs: [{ side: "short", option_type: "PUT", strike: 7100 }], entry: 1.5 },
     }),
@@ -250,6 +252,14 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["spx"], number | null>>,
   // each day's short strikes against that day's SPX, which the history's SPX readout shows (#395)
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["short_strikes"], StrikeDistance[]>>,
+  // the days watched before entry carry the same shape, so the burndown draws them as one series (#402)
+  Checked<Exactly<Ok<E["samples"]>["before_entry"][number]["cost_to_close"], number | null>>,
+  // a watched rule's history: its price each day, and the price rule its value is drawn against
+  Checked<Exactly<Ok<E["watchSamples"]>["samples"][number]["price"], number | null>>,
+  Checked<Exactly<Ok<E["watchSamples"]>["price_rule"],
+    { id: string; threshold: number; direction: string; compare: string } | null>>,
+  // what a watched row's value and payoff fall back on out of the session (#402)
+  Checked<Exactly<NonNullable<Ok<E["quotes"]>[number]["last_close"]>["price"], number>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.

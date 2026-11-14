@@ -5,13 +5,14 @@
  *
  *  - every DECISION the engine takes is named by some outcome here. A decision is a function the
  *    engine imports from `domain/` (ADR 0017 put every decision there) or one it exports for a
- *    sweep's batch (`engine/positions.ts`); anything it imports that is arithmetic rather than a
+ *    sweep's batch (`engine/positions.ts`, `engine/watching.ts`); anything it imports that is arithmetic rather than a
  *    decision is on `NOT_A_DECISION`, with its reason. A new import is therefore either a new
  *    outcome or a sentence saying why not — never silence.
  *  - every `disabled_reason` the engine writes appears in some scenario's rows, so a new kind of
  *    quarantine cannot arrive without a tick that shows it.
  *
- *  Derived by reading `engine/sweeper.ts`, `engine/health.ts` and `engine/positions.ts` branch by
+ *  Derived by reading `engine/sweeper.ts`, `engine/health.ts`, `engine/positions.ts` and
+ *  `engine/watching.ts` branch by
  *  branch: every path that writes a row, sends a message, or deliberately does neither. Two paths
  *  are left out because no WORLD can reach them, only a fault injected beneath one: a row whose
  *  write SQLite refuses mid-sweep (`sweeper.test.ts` uses a trigger), and a rule muted while the
@@ -319,6 +320,41 @@ export const OUTCOMES: readonly Outcome[] = [
       && s.expect.rows.position_samples === undefined && s.world.tables.position_samples.length === 0,
   },
   {
+    // the close of what is WATCHED (#402): a day keyed by the contracts an enabled rule watches
+    name: "watch-sample-recorded",
+    decision: "recordWatchSamples",
+    shows: (s) => (s.expect.rows.watch_samples?.added ?? []).some((r) => r.legs_mid !== null),
+  },
+  {
+    // no contract with a book: the day kept for its vol with NO price, never a 0.00 (#380)
+    name: "watch-sample-kept-without-a-price",
+    decision: "recordWatchSamples",
+    shows: (s) => askedBookless(s) && !inSampleHours(new Date(s.world.clock))
+      && (s.expect.rows.watch_samples?.added ?? []).some((r) => r.legs_mid === null && r.legs_iv !== null),
+  },
+  {
+    // every calendar day, a weekend's included, as a holding's samples
+    name: "watch-sample-on-a-weekend",
+    decision: "recordWatchSamples",
+    shows: (s) => (s.expect.rows.watch_samples?.added ?? []).some((r) =>
+      [0, 6].includes(new Date(`${String(r.observed_on)}T12:00:00Z`).getUTCDay())),
+  },
+  {
+    // after the close a settled day is the close: a moved mark does not reach it
+    name: "watch-close-left-alone-after-hours",
+    decision: "recordWatchSamples",
+    shows: (s) => !inSampleHours(new Date(s.world.clock)) && priced(s)
+      && s.world.tables.watch_samples.some((r) => r.observed_on === marketDate(new Date(s.world.clock)))
+      && s.expect.rows.watch_samples === undefined,
+  },
+  {
+    // the contracts an open holding holds exactly are the holding's: no watch history beside it
+    name: "watch-sample-left-to-the-holding",
+    decision: "recordWatchSamples",
+    shows: (s) => priced(s) && s.world.tables.monitors.some((m) => m.enabled)
+      && (s.expect.rows.position_samples?.added ?? []).length > 0 && s.expect.rows.watch_samples === undefined,
+  },
+  {
     name: "manage-by-notice",
     decision: "noticeManageBy",
     shows: (s) => said(s, /^⏰ /)
@@ -372,10 +408,10 @@ export const NOT_A_DECISION: Readonly<Record<string, string>> = {
   alarmPolicy: "reads two knobs for alarmTransition",
   degradedPolicy: "reads two knobs for degradedVerdict",
   flappingPolicy: "reads the knobs for flappingVerdict",
-  monitorLegCodes: "which codes a rule asks for; every outcome that fetches asks",
+  monitorLegCodes: "which codes a rule asks for, and which a watch sample keeps; every outcome that fetches asks",
   positionLegCodes: "which codes a holding asks for; every sample outcome asks",
-  daysToExpiry: "arithmetic inside recordSamples and noticeManageBy",
-  marketDate: "the day recordSamples keys a sample on",
+  daysToExpiry: "arithmetic inside recordSamples, recordWatchSamples and noticeManageBy",
+  marketDate: "the day recordSamples and recordWatchSamples key a sample on",
   dteAtOpen: "arithmetic inside noticeManageBy",
   onPace: "arithmetic inside noticeManageBy",
   costToClose: "arithmetic inside recordSamples and noticeManageBy",

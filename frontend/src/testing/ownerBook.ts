@@ -202,6 +202,7 @@ function history(h: Holding, days: Day[]): Samples {
       };
     }),
     qty_corrected_at: null,
+    before_entry: [],
   };
 }
 

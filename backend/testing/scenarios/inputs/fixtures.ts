@@ -56,7 +56,7 @@ export const provider = (over: Partial<Provider> = {}): Provider => ({
 });
 
 const EMPTY: Tables = {
-  positions: [], monitors: [], monitor_positions: [], position_samples: [],
+  positions: [], monitors: [], monitor_positions: [], position_samples: [], watch_samples: [],
   reference_securities: [],
 };
 
@@ -139,6 +139,13 @@ export const link = (monitorId: string, positionId: string): Row =>
 export function sample(over: Row & { position_id: string; observed_on: string }): Row {
   return { dte: 39, cost_to_close: 3.1, legs_iv: null, legs_vega: null, legs_delta: null, observed_at: null,
     spx: null, contract_size: null, ...over };
+}
+
+/** A day of the watch history of a set of contracts (#402): `contracts` the codes as given, keyed
+ *  as the sampler keys them — sorted and joined by commas. */
+export function watchDay(codes: string[], over: Row & { observed_on: string }): Row {
+  return { contracts: [...codes].sort().join(","), dte: 39, legs_mid: null, legs_iv: null, legs_vega: null,
+    legs_delta: null, observed_at: "2026-11-06 21:14:00.000000", spx: null, contract_size: null, ...over };
 }
 
 export function reference(over: Row & { id: string; code: string }): Row {

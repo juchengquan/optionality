@@ -30,6 +30,10 @@ export const COLUMNS = {
     // appended, because ALTER TABLE adds at the end
     "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx", "contract_size",
   ],
+  watch_samples: [
+    "contracts", "observed_on", "dte", "legs_mid", "legs_iv", "legs_vega", "legs_delta",
+    "observed_at", "spx", "contract_size",
+  ],
   monitor_positions: ["monitor_id", "position_id"],
   reference_securities: ["id", "code", "label", "source", "created_at"],
   /** bookkeeping: COLUMNS covers every table the schema creates, and a table left out of it is a
@@ -56,6 +60,7 @@ export const NULLABLE = {
   position_samples: [
     "cost_to_close", "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx", "contract_size",
   ],
+  watch_samples: ["legs_mid", "legs_iv", "legs_vega", "legs_delta", "spx", "contract_size"],
   monitor_positions: [],
   reference_securities: ["label"],
   schema_migrations: [],
@@ -175,6 +180,30 @@ export interface PositionSampleRow {
   contract_size: number | null;
 }
 
+/** One watched set of contracts' day (#402, migration 0014): what the contracts an enabled rule
+ *  watches were worth at the close, keyed by the contracts rather than by any rule, so a history
+ *  survives its rule and is found again by a holding of the same contracts. */
+export interface WatchSampleRow {
+  /** the contract codes, sorted and joined by commas (`contractSetKey`) — no signs, no quantities */
+  contracts: string;
+  observed_on: string;
+  dte: number;
+  /** JSON text: contract code -> mid. Null where a contract had no two-sided quote (#380): a value
+   *  is a sum over every leg, so half a map is no price. A rule's value and a holding's Cost to
+   *  close are worked out from it when read, under the rule's signs or the holding's sides. */
+  legs_mid: string | null;
+  /** JSON text, contract code -> IV, all or nothing, as `position_samples.legs_iv` */
+  legs_iv: string | null;
+  legs_vega: string | null;
+  legs_delta: string | null;
+  /** when the sweep that wrote it ran, UTC: every row has one */
+  observed_at: string;
+  /** SPX as the writing sweep's batch implied it (`derivedSpx`, ADR 0024), or null */
+  spx: number | null;
+  /** the batch's contract size (`contractSize`), or null; never assumed */
+  contract_size: number | null;
+}
+
 export interface MonitorPositionRow {
   monitor_id: string;
   position_id: string;
@@ -198,6 +227,9 @@ type _MonitorPositions = Checked<
 type _PositionSamples = Checked<
   Exact<keyof PositionSampleRow, (typeof COLUMNS.position_samples)[number]>
 >;
+type _WatchSamples = Checked<
+  Exact<keyof WatchSampleRow, (typeof COLUMNS.watch_samples)[number]>
+>;
 type _References = Checked<
   Exact<keyof ReferenceRow, (typeof COLUMNS.reference_securities)[number]>
 >;
@@ -219,6 +251,9 @@ type _MonitorPositionsNull = Checked<
 type _PositionSamplesNull = Checked<
   Exact<NullableKeys<PositionSampleRow> & string, (typeof NULLABLE.position_samples)[number]>
 >;
+type _WatchSamplesNull = Checked<
+  Exact<NullableKeys<WatchSampleRow> & string, (typeof NULLABLE.watch_samples)[number]>
+>;
 type _ReferencesNull = Checked<
   Exact<NullableKeys<ReferenceRow> & string, (typeof NULLABLE.reference_securities)[number]>
 >;
@@ -234,7 +269,7 @@ type _SchemaMigrationsNull = Checked<
  *  and `npm run typecheck` names the column that is missing and from which side.
  */
 export type SchemaChecks = [
-  _Monitors, _Positions, _MonitorPositions, _PositionSamples, _References, _SchemaMigrations,
-  _MonitorsNull, _PositionsNull, _MonitorPositionsNull, _PositionSamplesNull, _ReferencesNull,
-  _SchemaMigrationsNull,
+  _Monitors, _Positions, _MonitorPositions, _PositionSamples, _WatchSamples, _References,
+  _SchemaMigrations, _MonitorsNull, _PositionsNull, _MonitorPositionsNull, _PositionSamplesNull,
+  _WatchSamplesNull, _ReferencesNull, _SchemaMigrationsNull,
 ];

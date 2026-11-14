@@ -176,6 +176,7 @@
         }
       ],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -250,7 +251,8 @@
               "sigma": null,
               "one_sigma": null
             }
-          ]
+          ],
+          "last_close": null
         },
         {
           "id": "mon-1",
@@ -298,7 +300,8 @@
           "distance": 0.09,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": []
+          "short_strikes": [],
+          "last_close": null
         }
       ]
     },

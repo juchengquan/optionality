@@ -67,6 +67,7 @@ class TestTheSchema:
             "positions",
             "reference_securities",
             "schema_migrations",
+            "watch_samples",
         ]
 
     def test_carries_what_adr_0011_added_beyond_the_python_s_schema(self, db):

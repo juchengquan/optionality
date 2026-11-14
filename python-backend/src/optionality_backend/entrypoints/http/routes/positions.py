@@ -91,6 +91,7 @@ from ....schemas.position import (
     PositionPatch,
     stored_qty,
 )
+from ....watch_history import before_entry
 from ..deps import Deps
 from ..errors import http_error, not_found, provider_failed, provider_failed_words
 from ..validate import valid
@@ -327,6 +328,11 @@ class SamplesOut(BaseModel):
     plan: list[PlanPointOut]
     #: oldest first, none after the day it closed (ADR 0022)
     samples: list[SampleOut]
+    #: the days its contracts were WATCHED before it was entered (#402): the watch history of exactly these
+    #: contracts, every day before Opened — or before the day it was recorded, where nobody said — each
+    #: valued as this holding values itself, Cost to close by side, with no On-pace and never before a
+    #: correction. Kept apart from `samples`, so nothing that reads a holding's own history sees one.
+    before_entry: list[SampleOut]
     #: when a held leg's quantity was last corrected, in DISPLAY_TZ, or None if never (#359)
     qty_corrected_at: str | None
 
@@ -650,6 +656,15 @@ def position_routes(deps: Deps) -> APIRouter:
                 for timing in [sample_timing(s["observed_at"])]
             ],
             "qty_corrected_at": display_stored(row["qty_corrected_at"], tz),
+            "before_entry": [
+                {
+                    **{k: v for k, v in day.items() if k != "value"},
+                    "cost_to_close": day["value"],
+                    "on_pace": None,
+                    "before_correction": False,
+                }
+                for day in before_entry(db, row, to_position(row), tz)
+            ],
         }
 
     @router.get("/{id}/payoff", summary="A holding's payoff at expiry", response_model=PayoffOut)

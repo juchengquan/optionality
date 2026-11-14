@@ -61,6 +61,7 @@
       ],
       "monitor_positions": [],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -116,7 +117,8 @@
           "distance": 0.09,
           "spx": null,
           "spx_reason": "no option in the batch has both a last trade and a premium",
-          "short_strikes": []
+          "short_strikes": [],
+          "last_close": null
         }
       ]
     },

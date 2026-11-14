@@ -386,6 +386,79 @@ class TestAHoldingsDailySamples:
         assert (await h.call("/positions/nope/samples")).status_code == 404
 
 
+class TestTheDaysItsContractsWereWatchedBeforeItWasEntered:
+    """#402: the watch history of exactly the holding's contracts, before Opened, as its Cost to close."""
+
+    @staticmethod
+    def watched(h, codes, on, dte, mids, at, iv=None, spx=None):
+        h.db.execute(
+            """insert into watch_samples (contracts, observed_on, dte, legs_mid, legs_iv, observed_at, spx)
+               values (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                ",".join(sorted(codes)),
+                on,
+                dte,
+                None if mids is None else json.dumps(dict(zip(codes, mids, strict=True))),
+                None if iv is None else json.dumps(dict.fromkeys(codes, iv)),
+                at,
+                spx,
+            ),
+        )
+
+    @staticmethod
+    def codes():
+        return [build_spx_code(EXPIRY, leg["option_type"], leg["strike"]) for leg in CONDOR_LEGS]
+
+    async def test_serves_the_watch_days_before_opened_valued_as_the_holdings_cost_to_close_by_side(self, start):
+        h, id_ = await TestAHoldingsDailySamples.made(start, opened_at="2026-10-06", entry=3)
+        codes = self.codes()
+        # short 8050C and 7100P, long 8075C and 7075P: 2.0 - 1.0 + 1.5 - 0.5 = 2.00 to close
+        self.watched(h, codes, "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000", iv=14, spx=6600)
+        self.watched(h, codes, "2026-10-03", 76, None, "2026-10-03 14:00:00.000000")
+        # the day it was entered is the holding's own, and after it too
+        self.watched(h, codes, "2026-10-06", 73, [9, 1, 1, 1], "2026-10-06 20:00:00.000000")
+        self.watched(h, codes, "2026-10-07", 72, [9, 1, 1, 1], "2026-10-07 20:00:00.000000")
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert data["samples"] == []
+        assert data["before_entry"] == [
+            {
+                "observed_on": "2026-10-02", "observed_at": "2026-10-03 04:14:00+08:00", "timing": "close",
+                "dte": 77, "cost_to_close": 2, "on_pace": None, "legs_iv": dict.fromkeys(codes, 14),
+                "legs_vega": None, "legs_delta": None, "spx": 6600, "before_correction": False, "short_strikes": ANY,
+            },
+            {
+                "observed_on": "2026-10-03", "observed_at": "2026-10-03 22:00:00+08:00", "timing": "close",
+                "dte": 76, "cost_to_close": None, "on_pace": None, "legs_iv": None, "legs_vega": None,
+                "legs_delta": None, "spx": None, "before_correction": False, "short_strikes": ANY,
+            },
+        ]  # fmt: skip
+        # the holding's shorts placed against that day's SPX
+        assert [[s["strike"], s["points"]] for s in data["before_entry"][0]["short_strikes"]] == [
+            [8050, 1450],
+            [7100, -500],
+        ]
+
+    async def test_reads_them_by_contracts_alone_another_structures_history_is_not_this_holdings(self, start):
+        h, id_ = await TestAHoldingsDailySamples.made(start, opened_at="2026-10-06", entry=3)
+        self.watched(h, self.codes()[:2], "2026-10-02", 77, [2, 1], "2026-10-02 20:14:00.000000")
+        assert (await h.call(f"/positions/{id_}/samples")).json()["before_entry"] == []
+
+    async def test_ends_them_at_the_day_it_was_recorded_where_nobody_said_when_it_was_opened(self, start):
+        # the harness's clock: recorded 2026-10-02 in New York
+        h, id_ = await TestAHoldingsDailySamples.made(start, entry=3)
+        self.watched(h, self.codes(), "2026-10-01", 78, [2, 1, 1.5, 0.5], "2026-10-01 20:14:00.000000")
+        self.watched(h, self.codes(), "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000")
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert [s["observed_on"] for s in data["before_entry"]] == ["2026-10-01"]
+
+    async def test_leaves_the_holdings_own_samples_and_the_pace_read_from_them_as_they_were(self, start):
+        h, id_ = await TestAHoldingsDailySamples.made(start, opened_at="2026-10-06", entry=3)
+        self.watched(h, self.codes(), "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000")
+        TestAHoldingsDailySamples.sample(h, id_, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000")
+        data = (await h.call(f"/positions/{id_}/samples")).json()
+        assert [s["observed_on"] for s in data["samples"]] == ["2026-10-06"]
+
+
 PUT_SPREAD = [
     {"side": "short", "option_type": "PUT", "strike": 7100},
     {"side": "long", "option_type": "PUT", "strike": 7075},

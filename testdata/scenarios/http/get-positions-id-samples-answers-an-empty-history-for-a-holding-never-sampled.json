@@ -62,6 +62,7 @@
       "monitors": [],
       "monitor_positions": [],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -259,6 +260,7 @@
           }
         ],
         "samples": [],
+        "before_entry": [],
         "qty_corrected_at": null
       }
     },

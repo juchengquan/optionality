@@ -164,6 +164,27 @@ class TestTheSchemaFileItself:
             )
         db.close()
 
+    def test_declares_watch_samples_one_row_per_set_of_contracts_per_day_belonging_to_no_rule(self, tmp_path):
+        """#402."""
+        db = create_database(tmp_path / "watch.db")
+
+        def put(mid: str) -> None:
+            db.execute(
+                "insert or replace into watch_samples (contracts, observed_on, dte, legs_mid, observed_at)"
+                " values ('US.SPXW261218P6750000,US.SPXW261218P6800000', '2026-11-13', 35, ?,"
+                " '2026-11-13 21:14:00.000000')",
+                (mid,),
+            )
+
+        put('{"US.SPXW261218P6750000":3.1,"US.SPXW261218P6800000":4.2}')
+        put('{"US.SPXW261218P6750000":3.0,"US.SPXW261218P6800000":4.1}')
+        rows = db.execute("select legs_mid from watch_samples").fetchall()
+        assert rows == [('{"US.SPXW261218P6750000":3.0,"US.SPXW261218P6800000":4.1}',)]
+        # no foreign key: a history outlives the rule that watched it, and is found again by whatever
+        # next watches or holds the same contracts — no rule of that name need exist
+        assert db.execute("select count(*) from pragma_foreign_key_list('watch_samples')").fetchone() == (0,)
+        db.close()
+
 
 class Test0004ALegsSideIsLongOrShort:
     """ADR 0013."""

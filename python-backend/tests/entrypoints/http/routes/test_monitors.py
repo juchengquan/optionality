@@ -10,6 +10,7 @@ import re
 
 import pytest
 from harness import days_from_now, json_body, poisonable, quoting
+from optionality.contract import build_spx_code
 
 # relative to the HARNESS's clock, not the real one — see NOW in tests/harness.py
 days_ahead = days_from_now
@@ -719,6 +720,146 @@ class TestQuotes:
         id_ = (await post(h, single())).json()["id"]
         await patch(h, id_, {"enabled": False})
         assert (await h.call("/quotes")).json() == []
+
+
+class TestAWatchedRulesDailyCloses:
+    """#402: stored history and nothing live — the Provider answers creation and then refuses."""
+
+    @staticmethod
+    def start_closed(start):
+        state = {"open": True}
+
+        async def fetch(codes):
+            if not state["open"]:
+                raise RuntimeError("the history asked the Provider")
+            return [{"code": c} for c in codes]
+
+        return start(fetch_quotes=fetch), state
+
+    @staticmethod
+    def code_of(type_, strike):
+        return build_spx_code(future(), type_, strike)
+
+    @staticmethod
+    def watched(h, codes, on, dte, mids, at, iv=None, spx=None):
+        h.db.execute(
+            """insert into watch_samples (contracts, observed_on, dte, legs_mid, legs_iv, observed_at, spx)
+               values (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                ",".join(sorted(codes)),
+                on,
+                dte,
+                None if mids is None else json.dumps(dict(zip(codes, mids, strict=True))),
+                None if iv is None else json.dumps(dict.fromkeys(codes, iv)),
+                at,
+                spx,
+            ),
+        )
+
+    def spread_codes(self):
+        return [self.code_of("CALL", 8100), self.code_of("CALL", 8150)]
+
+    async def test_serves_each_day_valued_under_the_rules_own_signs_with_its_strikes_against_that_days_spx(self, start):
+        h, state = self.start_closed(start)
+        id_ = (await post(h, combo(field="mid_price", threshold=1.5, direction="above"))).json()["id"]
+        state["open"] = False
+        codes = self.spread_codes()
+        # +8100 −8150: 5.00 − 2.00 = 3.00
+        self.watched(h, codes, "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000", iv=12, spx=6600)
+        self.watched(h, codes, "2026-10-02", 30, None, "2026-10-03 01:00:00.000000")
+        resp = await h.call(f"/monitors/{id_}/samples")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["contracts"] == codes
+        assert data["price_rule"] == {"id": id_, "threshold": 1.5, "direction": "above", "compare": "abs"}
+        first, second = data["samples"]
+        assert {k: v for k, v in first.items() if k != "short_strikes"} == {
+            "observed_on": "2026-10-01", "observed_at": "2026-10-02 04:14:00+08:00", "timing": "close", "dte": 31,
+            "price": 3, "legs_iv": dict.fromkeys(codes, 12), "legs_vega": None, "legs_delta": None, "spx": 6600,
+        }  # fmt: skip
+        # minus is short: the 8150 call
+        assert [[s["strike"], s["points"]] for s in first["short_strikes"]] == [[8150, 1550]]
+        assert {k: v for k, v in second.items() if k != "short_strikes"} == {
+            "observed_on": "2026-10-02", "observed_at": "2026-10-03 09:00:00+08:00", "timing": "after-close",
+            "dte": 30, "price": None, "legs_iv": None, "legs_vega": None, "legs_delta": None, "spx": None,
+        }  # fmt: skip
+
+    async def test_finds_the_spreads_price_rule_for_a_rule_that_watches_its_delta_and_none_where_there_is_none(
+        self, start
+    ):
+        h, _ = self.start_closed(start)
+        delta = (await post(h, combo(field="option_delta", threshold=0.3, direction="above"))).json()["id"]
+        assert (await h.call(f"/monitors/{delta}/samples")).json()["price_rule"] is None
+        price = (await post(h, combo(field="mid_price", threshold=2, direction="above"))).json()["id"]
+        assert (await h.call(f"/monitors/{delta}/samples")).json()["price_rule"] == {
+            "id": price, "threshold": 2, "direction": "above", "compare": "abs",
+        }  # fmt: skip
+
+    async def test_keeps_the_history_through_an_edit_and_serves_it_to_every_rule_on_the_same_contracts(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, combo(field="mid_price"))).json()["id"]
+        self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000")
+        assert (await patch(h, id_, {"threshold": 4})).status_code == 200
+        assert len((await h.call(f"/monitors/{id_}/samples")).json()["samples"]) == 1
+        # the same contracts the other way round, named otherwise: one history, its own value
+        other = (
+            await post(
+                h,
+                combo(
+                    name="debit",
+                    field="mid_price",
+                    legs=[
+                        {"sign": -1, "option_type": "CALL", "strike": 8100},
+                        {"sign": 1, "option_type": "CALL", "strike": 8150},
+                    ],
+                ),
+            )
+        ).json()["id"]
+        assert [s["price"] for s in (await h.call(f"/monitors/{other}/samples")).json()["samples"]] == [-3]
+
+    async def test_serves_a_single_contracts_history_as_its_mid_its_own_strike_placed(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, single(strike=8100))).json()["id"]
+        self.watched(h, [self.code_of("CALL", 8100)], "2026-10-01", 31, [5], "2026-10-01 20:14:00.000000")
+        (day,) = (await h.call(f"/monitors/{id_}/samples")).json()["samples"]
+        assert day["price"] == 5
+        assert [s["strike"] for s in day["short_strikes"]] == [8100]
+
+    async def test_answers_an_empty_history_for_a_rule_whose_contracts_were_never_recorded(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, single())).json()["id"]
+        assert (await h.call(f"/monitors/{id_}/samples")).json()["samples"] == []
+
+    async def test_is_404_for_a_rule_that_does_not_exist(self, start):
+        h, _ = self.start_closed(start)
+        assert (await h.call("/monitors/nope/samples")).status_code == 404
+
+    async def test_on_quotes_is_the_latest_close_in_a_session_with_when_and_what_it_was(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, combo(field="option_delta", threshold=0.3, direction="above"))).json()["id"]
+        # a Thursday's close, then that evening's reading: the close is what the price is drawn at
+        self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000")
+        self.watched(h, self.spread_codes(), "2026-10-02", 30, [6, 2], "2026-10-03 01:00:00.000000")
+        (row,) = (await h.call("/quotes")).json()
+        assert row["id"] == id_
+        assert row["last_close"] == {
+            "price": 3, "observed_on": "2026-10-01", "observed_at": "2026-10-02 04:14:00+08:00", "timing": "close",
+        }  # fmt: skip
+
+    async def test_on_quotes_is_the_latest_reading_with_a_price_where_no_close_has_one(self, start):
+        h, _ = self.start_closed(start)
+        await post(h, combo(field="mid_price"))
+        self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-02 01:00:00.000000")
+        (row,) = (await h.call("/quotes")).json()
+        assert row["last_close"]["price"] == 3
+        assert row["last_close"]["timing"] == "after-close"
+
+    async def test_on_quotes_is_null_for_a_rule_with_no_day_priced(self, start):
+        h, _ = self.start_closed(start)
+        await post(h, combo(field="mid_price"))
+        self.watched(h, self.spread_codes(), "2026-10-01", 31, None, "2026-10-01 20:14:00.000000")
+        (row,) = (await h.call("/quotes")).json()
+        assert row["last_close"] is None
 
 
 class TestTotalEntry:

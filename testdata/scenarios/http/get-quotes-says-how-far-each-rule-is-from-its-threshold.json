@@ -190,6 +190,7 @@
       ],
       "monitor_positions": [],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -259,7 +260,8 @@
               "sigma": null,
               "one_sigma": null
             }
-          ]
+          ],
+          "last_close": null
         },
         {
           "id": "mon-past",
@@ -302,7 +304,8 @@
           "distance": -0.25,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": []
+          "short_strikes": [],
+          "last_close": null
         },
         {
           "id": "mon-at",
@@ -345,7 +348,8 @@
           "distance": 0,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": []
+          "short_strikes": [],
+          "last_close": null
         },
         {
           "id": "mon-unpriced",
@@ -372,7 +376,8 @@
           "distance": null,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": []
+          "short_strikes": [],
+          "last_close": null
         },
         {
           "id": "mon-inside",
@@ -413,7 +418,8 @@
           "distance": 3,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": []
+          "short_strikes": [],
+          "last_close": null
         }
       ]
     },

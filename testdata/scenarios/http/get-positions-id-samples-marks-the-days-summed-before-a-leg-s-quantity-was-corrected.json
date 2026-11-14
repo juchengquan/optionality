@@ -129,6 +129,7 @@
           "contract_size": null
         }
       ],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -456,6 +457,7 @@
             "before_correction": false
           }
         ],
+        "before_entry": [],
         "qty_corrected_at": "2026-11-08 23:00:00+08:00"
       }
     },

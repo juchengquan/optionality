@@ -343,6 +343,70 @@ describe("a holding's daily samples, served for the burndown and the IV chart (#
     start(refusing);
     expect((await h.call("/positions/nope/samples")).status).toBe(404);
   });
+
+  describe("the days its contracts were watched before it was entered (#402)", () => {
+    /** A day of the watch history of a set of contracts, each contract's mid as given. */
+    const watched = (codes: string[], on: string, dte: number, mids: number[] | null, at: string,
+      over: { iv?: number; spx?: number } = {}) => {
+      h.db.prepare(
+        `insert into watch_samples (contracts, observed_on, dte, legs_mid, legs_iv, observed_at, spx)
+         values (?, ?, ?, ?, ?, ?, ?)`,
+      ).run([...codes].sort().join(","), on, dte,
+        mids === null ? null : JSON.stringify(Object.fromEntries(codes.map((c, i) => [c, mids[i]]))),
+        over.iv === undefined ? null : JSON.stringify(Object.fromEntries(codes.map((c) => [c, over.iv]))),
+        at, over.spx ?? null);
+    };
+
+    it("serves the watch days before Opened, valued as the holding's Cost to close, by side", async () => {
+      const id = await made({ opened_at: "2026-10-06", entry: 3 });
+      // short 8050C and 7100P, long 8075C and 7075P: 2.0 - 1.0 + 1.5 - 0.5 = 2.00 to close
+      watched(legCodes(), "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000", { iv: 14, spx: 6600 });
+      watched(legCodes(), "2026-10-03", 76, null, "2026-10-03 14:00:00.000000");
+      // the day it was entered is the holding's own, and after it too
+      watched(legCodes(), "2026-10-06", 73, [9, 1, 1, 1], "2026-10-06 20:00:00.000000");
+      watched(legCodes(), "2026-10-07", 72, [9, 1, 1, 1], "2026-10-07 20:00:00.000000");
+      const data = await body(await h.call(`/positions/${id}/samples`));
+      expect(data.samples).toEqual([]);
+      expect(data.before_entry).toEqual([
+        {
+          observed_on: "2026-10-02", observed_at: "2026-10-03 04:14:00+08:00", timing: "close", dte: 77,
+          cost_to_close: 2, on_pace: null, legs_iv: JSON.parse(flat(14)), legs_vega: null, legs_delta: null,
+          spx: 6600, before_correction: false, short_strikes: expect.any(Array),
+        },
+        {
+          observed_on: "2026-10-03", observed_at: "2026-10-03 22:00:00+08:00", timing: "close", dte: 76,
+          cost_to_close: null, on_pace: null, legs_iv: null, legs_vega: null, legs_delta: null,
+          spx: null, before_correction: false, short_strikes: expect.any(Array),
+        },
+      ]);
+      // the holding's shorts placed against that day's SPX
+      expect(data.before_entry[0].short_strikes.map((s: { strike: number; points: number }) => [s.strike, s.points]))
+        .toEqual([[8050, 1450], [7100, -500]]);
+    });
+
+    it("reads them by contracts alone: another structure's history is not this holding's", async () => {
+      const id = await made({ opened_at: "2026-10-06", entry: 3 });
+      watched(legCodes().slice(0, 2), "2026-10-02", 77, [2, 1], "2026-10-02 20:14:00.000000");
+      expect((await body(await h.call(`/positions/${id}/samples`))).before_entry).toEqual([]);
+    });
+
+    it("ends them at the day it was recorded, where nobody said when it was Opened", async () => {
+      // the harness's clock: recorded 2026-10-02 in New York
+      const id = await made({ entry: 3 });
+      watched(legCodes(), "2026-10-01", 78, [2, 1, 1.5, 0.5], "2026-10-01 20:14:00.000000");
+      watched(legCodes(), "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000");
+      const data = await body(await h.call(`/positions/${id}/samples`));
+      expect(data.before_entry.map((s: { observed_on: string }) => s.observed_on)).toEqual(["2026-10-01"]);
+    });
+
+    it("leaves the holding's own samples, and the pace read from them, as they were", async () => {
+      const id = await made({ opened_at: "2026-10-06", entry: 3 });
+      watched(legCodes(), "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000");
+      sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000");
+      const data = await body(await h.call(`/positions/${id}/samples`));
+      expect(data.samples.map((s: { observed_on: string }) => s.observed_on)).toEqual(["2026-10-06"]);
+    });
+  });
 });
 
 describe("the payoff at expiry (#291)", () => {

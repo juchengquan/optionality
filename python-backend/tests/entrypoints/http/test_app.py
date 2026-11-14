@@ -31,6 +31,7 @@ SURFACE = {
     "GET /docs",
     "GET /health",
     "GET /monitors",
+    "GET /monitors/:id/samples",
     "GET /openapi.json",
     "GET /positions",
     "GET /positions/:id/payoff",
@@ -198,7 +199,7 @@ class TestTheBearerToken:
         # GET, each with no body: auth runs before validation too.
         h = start()
         doors = {d for d in served(h.app) if d.split(" ")[1] not in OPEN}
-        assert len(doors) == 20, "the real number of doors"
+        assert len(doors) == 21, "the real number of doors"
         for door in sorted(doors):
             method, path = door.split(" ")
             resp = await h.call(path.replace(":id", "x"), method=method, anonymous=True)

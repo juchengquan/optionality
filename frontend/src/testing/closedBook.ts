@@ -55,8 +55,9 @@ const OLD_SAMPLES: Samples = {
     }],
   })),
   qty_corrected_at: null,
+  before_entry: [],
 };
-const EMPTY: Samples = { levels: null, plan: [], samples: [], qty_corrected_at: null };
+const EMPTY: Samples = { levels: null, plan: [], samples: [], qty_corrected_at: null, before_entry: [] };
 
 /** The book behind a service; `over` changes a closed trade as stored, by its id. */
 export function closedBookService(over: Record<string, Partial<Holding>> = {}): HoldingService {

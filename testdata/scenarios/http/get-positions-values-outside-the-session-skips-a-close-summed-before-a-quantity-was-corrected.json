@@ -193,6 +193,7 @@
           "contract_size": 100
         }
       ],
+      "watch_samples": [],
       "reference_securities": []
     }
   },

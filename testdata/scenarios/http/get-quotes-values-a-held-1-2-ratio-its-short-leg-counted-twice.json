@@ -144,6 +144,7 @@
         }
       ],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -230,7 +231,8 @@
               "sigma": null,
               "one_sigma": null
             }
-          ]
+          ],
+          "last_close": null
         }
       ]
     },

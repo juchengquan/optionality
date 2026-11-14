@@ -19,7 +19,12 @@ import {
 import type { MonitorRow } from "../../../db/rows.ts";
 import { fromSqliteBool, toSqliteBool } from "../../../db/values.ts";
 import { exitPolicy } from "optionality/domain/exit";
-import { comboFieldError } from "optionality/domain/monitor";
+import { comboFieldError, monitorLegCodes } from "optionality/domain/monitor";
+import { toMonitor } from "../../../hydrate.ts";
+import { contractSetKey, ruleHistory, ruleLastClose } from "../../../watch-history.ts";
+
+/** The field a price rule watches: what a watched spread's history is drawn against (#402). */
+const PRICE_FIELD = "mid_price";
 import { httpError, notFound, providerFailed } from "../errors.ts";
 import { applyTotalEntry, editedMonitor, watchlistQuotes } from "../../../monitors.ts";
 import {
@@ -55,7 +60,62 @@ const MonitorOut = z.object({
   created_at: z.string().nullable(),
 });
 
+/** A spread's short strike placed against SPX (`strikeDistances`, #297): what the strike strip
+ *  draws. Shared with `/positions/values`, whose holdings carry the same list. */
+export const StrikeDistanceOut = z.object({
+  code: z.string(),
+  option_type: z.enum(["CALL", "PUT"]),
+  strike: z.number(),
+  /** the leg's own delta from the same batch, or null where it served none */
+  delta: z.number().nullable(),
+  /** how far SPX has still to move to reach the strike: positive while it has not, negative by
+   *  how far past. Null where there is no SPX, which `spx_reason` explains. */
+  points: z.number().nullable(),
+  /** `points` in σ to expiry, from the leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365)).
+   *  Null without points, an IV, or a day left to expiry. */
+  sigma: z.number().nullable(),
+  /** one σ of SPX to expiry, in points, from the leg's own IV: SPX × IV% / 100 × √(DTE / 365)
+   *  (`oneSigma`, #298) — the price map's ±1σ band. Null without an SPX, an IV, or a day left. */
+  one_sigma: z.number().nullable(),
+});
+
+/** One stored day of the contracts a rule watches (#402): what its history charts draw. */
+const WatchDayOut = z.object({
+  /** the New York market day it is that day's row for */
+  observed_on: z.string(),
+  /** the instant it was observed, in DISPLAY_TZ; null where the stored stamp cannot be read */
+  observed_at: z.string().nullable(),
+  /** whether it is the day's close, and if not why (`sampleTiming`): what the chart marks */
+  timing: z.enum(["close", "before-open", "after-close", "unrecorded"]),
+  dte: z.number(),
+  /** the rule's PRICE that day, under its own signs and quantities, whatever field it watches — a
+   *  delta rule's spread still has one. Null where a contract had no two-sided quote (#380). */
+  price: z.number().nullable(),
+  legs_iv: z.record(z.string(), z.number()).nullable(),
+  legs_vega: z.record(z.string(), z.number()).nullable(),
+  legs_delta: z.record(z.string(), z.number()).nullable(),
+  /** SPX as the writing sweep's batch implied it (ADR 0024), or null */
+  spx: z.number().nullable(),
+  /** a combo's short legs (minus is short), or a single contract's own strike, against THIS day's
+   *  SPX, worked out here and never in the browser (ADR 0005) */
+  short_strikes: z.array(StrikeDistanceOut),
+});
+
+/** A watched rule's history (#402): every day the sweep stored for the contracts it watches. */
+const WatchSamplesOut = z.object({
+  /** the contracts the history is kept for, sorted: every rule on exactly these shares it */
+  contracts: z.array(z.string()),
+  /** the rule whose threshold the value is drawn against: this one where it watches the price, else
+   *  the price rule on the same spread (the same code), or null where there is none (#402) */
+  price_rule: z.object({
+    id: z.string(), threshold: z.number(), direction: z.string(), compare: z.string(),
+  }).nullable(),
+  /** oldest first */
+  samples: z.array(WatchDayOut),
+});
+
 const list = documented("List monitors", { 200: z.array(MonitorOut) });
+const samples = documented("A watched rule's daily closes", { 200: WatchSamplesOut }, [404]);
 const create = documented("Create a monitor, single or combo", { 201: MonitorOut }, [409]);
 const update = documented("Update a monitor", { 200: MonitorOut }, [404, 409]);
 const totalEntry = documented("Spread a total entry across the holding", { 200: z.object({ ok: z.literal(true) }) }, [404]);
@@ -205,6 +265,24 @@ export function monitorRoutes(deps: Deps) {
       return update.reply(c, 200, one(updateMonitorFields(db, id, editedMonitor(row, changes))));
     })
 
+    /** A watched rule's daily closes (#402): what the sweep stored for the contracts it watches, valued
+     *  under its signs. Stored history, so no Provider call — which is why this is not on CLAUDE.md's
+     *  list of market-data calls — and asked for once when a watched row's history is drawn, never
+     *  polled. Kept by the contracts, so it survives the rule being edited or replaced. */
+    .get("/:id/samples", samples, (c) => {
+      const row = findMonitor(db, c.req.param("id"));
+      if (!row) throw notFound("monitor");
+      const monitor = toMonitor(row);
+      const priceRow = row.field === PRICE_FIELD ? row : findMonitorByCodeField(db, row.code, PRICE_FIELD);
+      return samples.reply(c, 200, {
+        contracts: contractSetKey(monitorLegCodes(monitor)).split(","),
+        price_rule: priceRow === undefined ? null : {
+          id: priceRow.id, threshold: priceRow.threshold, direction: priceRow.direction, compare: priceRow.compare,
+        },
+        samples: ruleHistory(db, monitor, tz).map(({ value, ...day }) => ({ ...day, price: value })),
+      });
+    })
+
     .post("/:id/total-entry", totalEntry, valid("json", TotalEntryIn), async (c) => {
       const id = c.req.param("id");
       if (!findMonitor(db, id)) throw notFound("monitor");
@@ -259,25 +337,6 @@ const QuoteOut = z.looseObject({
 });
 
 /** One watchlist row: everything needed to draw it, with no arithmetic left for the client. */
-/** A spread's short strike placed against SPX (`strikeDistances`, #297): what the strike strip
- *  draws. Shared with `/positions/values`, whose holdings carry the same list. */
-export const StrikeDistanceOut = z.object({
-  code: z.string(),
-  option_type: z.enum(["CALL", "PUT"]),
-  strike: z.number(),
-  /** the leg's own delta from the same batch, or null where it served none */
-  delta: z.number().nullable(),
-  /** how far SPX has still to move to reach the strike: positive while it has not, negative by
-   *  how far past. Null where there is no SPX, which `spx_reason` explains. */
-  points: z.number().nullable(),
-  /** `points` in σ to expiry, from the leg's own IV: points / (SPX × IV% / 100 × √(DTE / 365)).
-   *  Null without points, an IV, or a day left to expiry. */
-  sigma: z.number().nullable(),
-  /** one σ of SPX to expiry, in points, from the leg's own IV: SPX × IV% / 100 × √(DTE / 365)
-   *  (`oneSigma`, #298) — the price map's ±1σ band. Null without an SPX, an IV, or a day left. */
-  one_sigma: z.number().nullable(),
-});
-
 const EntryOut = z.object({
   id: z.string(),
   code: z.string(),
@@ -347,6 +406,18 @@ const EntryOut = z.object({
   spx_reason: z.string().nullable(),
   /** a combo's short legs placed against `spx` (#297); empty for a single contract */
   short_strikes: z.array(StrikeDistanceOut),
+  /** the rule's PRICE at its latest close, from the stored history of the contracts it watches
+   *  (#402): the latest day with a price taken in a session, else the latest with a price at all —
+   *  said with when it was observed and what it is (`valuedTiming`), so an evening's reading is never
+   *  called a close. Under the rule's own signs, whatever field it watches. What the page draws a
+   *  payoff at, and shows for a value, where there is no live price; null where no day had one. A
+   *  database read, not a market-data call. */
+  last_close: z.object({
+    price: z.number(),
+    observed_on: z.string(),
+    observed_at: z.string().nullable(),
+    timing: z.enum(["close", "before-open", "after-close", "weekend", "unrecorded"]),
+  }).nullable(),
 });
 
 const quotes = documented("Live quotes for the whole watchlist", { 200: z.array(EntryOut) }, [502]);
@@ -357,14 +428,25 @@ const quotes = documented("Live quotes for the whole watchlist", { 200: z.array(
  *  `watchlistQuotes` rather than through this route. */
 export function quoteRoutes(deps: Deps) {
   return new Hono().get("/quotes", quotes, async (c) => {
+    // each row's last close, from the stored history (#402): read from the database after the one
+    // call, never a call of its own. A rule that cannot be read has none.
+    const lastClose = (rules: Map<string, MonitorRow>, id: string) => {
+      const row = rules.get(id);
+      if (!row) return null;
+      try {
+        return ruleLastClose(deps.db, toMonitor(row), deps.settings.displayTz);
+      } catch {
+        return null;
+      }
+    };
     try {
-      return quotes.reply(c, 200,
-        await watchlistQuotes(deps.db, deps.settings.displayTz, deps.provider.fetchQuotes, {
-          includeCombos: true,
-          now: deps.now(),
-          policy: exitPolicy(deps.settings),
-        }),
-      );
+      const entries = await watchlistQuotes(deps.db, deps.settings.displayTz, deps.provider.fetchQuotes, {
+        includeCombos: true,
+        now: deps.now(),
+        policy: exitPolicy(deps.settings),
+      });
+      const rules = new Map(listMonitors(deps.db).map((m) => [m.id, m]));
+      return quotes.reply(c, 200, entries.map((e) => ({ ...e, last_close: lastClose(rules, e.id) })));
     } catch (err) {
       throw providerFailed(deps.provider.name, err);
     }

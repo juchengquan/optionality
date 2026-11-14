@@ -11,6 +11,8 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
+import { buildSpxCode } from "optionality/domain/contract";
+
 import { type Harness, body, daysFromNow, harness, json, poisonable, quoting } from "../../../../testing/harness.ts";
 
 let h: Harness;
@@ -808,5 +810,132 @@ describe("/monitors/:id/total-entry", () => {
     h = harness();
     const id = (await body(await post(single()))).id;
     expect((await h.call(`/monitors/${id}/total-entry`, json({}))).status).toBe(422);
+  });
+});
+
+describe("a watched rule's daily closes (#402)", () => {
+  /** Stored history and nothing live: a Provider that answers creation and then refuses. */
+  let open = true;
+  const start = () => {
+    open = true;
+    h = harness({
+      fetchQuotes: (codes) => (open ? Promise.resolve(codes.map((code) => ({ code })))
+        : Promise.reject(new Error("the history asked the Provider"))),
+    });
+  };
+  const codeOf = (type: "CALL" | "PUT", strike: number) => buildSpxCode(future(), type, strike);
+  const watched = (codes: string[], on: string, dte: number, mids: number[] | null, at: string,
+    over: { iv?: number; spx?: number } = {}) => {
+    h.db.prepare(
+      `insert into watch_samples (contracts, observed_on, dte, legs_mid, legs_iv, observed_at, spx)
+       values (?, ?, ?, ?, ?, ?, ?)`,
+    ).run([...codes].sort().join(","), on, dte,
+      mids === null ? null : JSON.stringify(Object.fromEntries(codes.map((c, i) => [c, mids[i]]))),
+      over.iv === undefined ? null : JSON.stringify(Object.fromEntries(codes.map((c) => [c, over.iv]))),
+      at, over.spx ?? null);
+  };
+  const spreadCodes = () => [codeOf("CALL", 8100), codeOf("CALL", 8150)];
+
+  it("serves each day valued under the rule's own signs, with its strikes against that day's SPX", async () => {
+    start();
+    const id = (await body(await post(combo({ field: "mid_price", threshold: 1.5, direction: "above" })))).id;
+    open = false;
+    // +8100 −8150: 5.00 − 2.00 = 3.00
+    watched(spreadCodes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000", { iv: 12, spx: 6600 });
+    watched(spreadCodes(), "2026-10-02", 30, null, "2026-10-03 01:00:00.000000");
+    const resp = await h.call(`/monitors/${id}/samples`);
+    expect(resp.status).toBe(200);
+    const data = await body(resp);
+    expect(data.contracts).toEqual(spreadCodes());
+    expect(data.price_rule).toEqual({ id, threshold: 1.5, direction: "above", compare: "abs" });
+    expect(data.samples).toEqual([
+      {
+        observed_on: "2026-10-01", observed_at: "2026-10-02 04:14:00+08:00", timing: "close", dte: 31,
+        price: 3, legs_iv: { [spreadCodes()[0]!]: 12, [spreadCodes()[1]!]: 12 }, legs_vega: null,
+        legs_delta: null, spx: 6600,
+        // minus is short: the 8150 call
+        short_strikes: [expect.objectContaining({ strike: 8150, points: 1550 })],
+      },
+      {
+        observed_on: "2026-10-02", observed_at: "2026-10-03 09:00:00+08:00", timing: "after-close", dte: 30,
+        price: null, legs_iv: null, legs_vega: null, legs_delta: null, spx: null, short_strikes: [expect.any(Object)],
+      },
+    ]);
+  });
+
+  it("finds the spread's price rule for a rule that watches its delta, and none where there is none", async () => {
+    start();
+    const delta = (await body(await post(combo({ field: "option_delta", threshold: 0.3, direction: "above" })))).id;
+    expect((await body(await h.call(`/monitors/${delta}/samples`))).price_rule).toBeNull();
+    const price = (await body(await post(combo({ field: "mid_price", threshold: 2, direction: "above" })))).id;
+    expect((await body(await h.call(`/monitors/${delta}/samples`))).price_rule)
+      .toEqual({ id: price, threshold: 2, direction: "above", compare: "abs" });
+  });
+
+  it("keeps the history through an edit, and serves it to every rule on the same contracts", async () => {
+    start();
+    const id = (await body(await post(combo({ field: "mid_price" })))).id;
+    watched(spreadCodes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000");
+    expect((await patch(id, { threshold: 4 })).status).toBe(200);
+    expect((await body(await h.call(`/monitors/${id}/samples`))).samples).toHaveLength(1);
+    // the same contracts the other way round, named otherwise: one history, its own value
+    const other = (await body(await post(combo({
+      name: "debit", field: "mid_price",
+      legs: [{ sign: -1, option_type: "CALL", strike: 8100 }, { sign: 1, option_type: "CALL", strike: 8150 }],
+    })))).id;
+    expect((await body(await h.call(`/monitors/${other}/samples`))).samples.map((s: { price: number }) => s.price))
+      .toEqual([-3]);
+  });
+
+  it("serves a single contract's history as its mid, its own strike placed", async () => {
+    start();
+    const id = (await body(await post(single({ strike: 8100 })))).id;
+    watched([codeOf("CALL", 8100)], "2026-10-01", 31, [5], "2026-10-01 20:14:00.000000");
+    const [day] = (await body(await h.call(`/monitors/${id}/samples`))).samples;
+    expect(day.price).toBe(5);
+    expect(day.short_strikes.map((s: { strike: number }) => s.strike)).toEqual([8100]);
+  });
+
+  it("answers an empty history for a rule whose contracts were never recorded", async () => {
+    start();
+    const id = (await body(await post(single()))).id;
+    expect((await body(await h.call(`/monitors/${id}/samples`))).samples).toEqual([]);
+  });
+
+  it("is 404 for a rule that does not exist", async () => {
+    start();
+    expect((await h.call("/monitors/nope/samples")).status).toBe(404);
+  });
+
+  describe("on /quotes, the last close beside each row", () => {
+    it("is the latest close in a session, with when and what it was", async () => {
+      start();
+      const id = (await body(await post(combo({ field: "option_delta", threshold: 0.3, direction: "above" })))).id;
+      open = true;
+      // a Thursday's close, then that evening's reading: the close is what the price is drawn at
+      watched(spreadCodes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000");
+      watched(spreadCodes(), "2026-10-02", 30, [6, 2], "2026-10-03 01:00:00.000000");
+      const [row] = await body(await h.call("/quotes"));
+      expect(row.id).toBe(id);
+      expect(row.last_close).toEqual({
+        price: 3, observed_on: "2026-10-01", observed_at: "2026-10-02 04:14:00+08:00", timing: "close",
+      });
+    });
+
+    it("is the latest reading with a price where no close has one, said for what it is", async () => {
+      start();
+      await post(combo({ field: "mid_price" }));
+      watched(spreadCodes(), "2026-10-01", 31, [5, 2], "2026-10-02 01:00:00.000000");
+      const [row] = await body(await h.call("/quotes"));
+      expect(row.last_close).toMatchObject({ price: 3, timing: "after-close" });
+    });
+
+    it("is null for a rule with no day priced", async () => {
+      start();
+      await post(combo({ field: "mid_price" }));
+      watched(spreadCodes(), "2026-10-01", 31, null, "2026-10-01 20:14:00.000000");
+      const [row] = await body(await h.call("/quotes"));
+      expect(row.last_close).toBeNull();
+    });
   });
 });

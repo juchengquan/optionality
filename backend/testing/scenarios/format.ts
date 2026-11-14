@@ -17,7 +17,8 @@ export type Row = Record<string, unknown>;
  *  key. `schema_migrations` is deliberately not one: it is bookkeeping, stamped with the time a
  *  database was made, and no door reads it. */
 export const TABLES = [
-  "positions", "monitors", "monitor_positions", "position_samples", "reference_securities",
+  "positions", "monitors", "monitor_positions", "position_samples", "watch_samples",
+  "reference_securities",
 ] as const;
 export type TableName = (typeof TABLES)[number];
 export type Tables = Record<TableName, Row[]>;
@@ -29,6 +30,7 @@ export const JSON_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   monitors: ["legs"],
   positions: ["legs"],
   position_samples: ["legs_iv", "legs_vega", "legs_delta"],
+  watch_samples: ["legs_mid", "legs_iv", "legs_vega", "legs_delta"],
 };
 
 /** One market-data vendor, as a table of what it answers.
