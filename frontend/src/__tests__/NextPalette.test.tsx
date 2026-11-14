@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { holdingService } from "../testing/holdingService";
+import { legMarks } from "../testing/legs";
 
 const COOKIES = ["ui_arrangement", "ui_privacy", "ui_cols_combo", "ui_pricemap"];
 afterEach(() => {
@@ -53,6 +54,19 @@ async function run(user: ReturnType<typeof userEvent.setup>, q: string) {
   await user.keyboard("{Enter}");
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
 }
+
+describe("what it says of each thing it finds (#391)", () => {
+  it("writes a holding's legs with each type marked for its colour and a short leg for its weight", async () => {
+    const { user } = await open();
+    await chord(user);
+    await user.type(box(), "1231_IC");
+    const ic = options().find((o) => o.querySelector("[data-label]")!.textContent === "1231_IC"
+      && o.textContent!.includes("holding"))!;
+    const detail = ic.querySelector(".nx-palette-detail")!;
+    expect(detail.textContent).toBe("holding · 261231 · -C7400 +C7450 -P6300 +P6250");
+    expect(legMarks(detail)).toEqual(["-C7400 short CALL", "+C7450 long CALL", "-P6300 short PUT", "+P6250 long PUT"]);
+  });
+});
 
 describe("opening and closing it", () => {
   it("opens on Ctrl+K off a Mac, as a dialog whose combobox has the focus", async () => {

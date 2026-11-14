@@ -350,7 +350,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `src/` itself (moved up from `src/next/`, the rollout's name, in #363): its modules at the top,
   with `desk/`, `phone/` and `snapshot/` for what only one arrangement or the saved picture draws.
   Beside them, `src/shared/` (`api.ts`, `format.ts`, `prefs.ts`, the References panel and strip,
-  `Freshness`, the column picker, `groups.ts`, `app.css`), `src/components/` (shadcn's),
+  `Freshness`, the column picker, `groups.ts`, `app.css`, and `Legs.tsx`, which every place that writes a leg draws it through — its type in `--call`/`--put`, a short leg bold, #391), `src/components/` (shadcn's),
   `src/testing/` (the suites' services and books) and `vite-env.d.ts`, which `shared/api.ts` needs
   for `import.meta.env`. The page's component and most of its test files are still named `Next*`
   (`Next.tsx`, `NextDesk.test.tsx`, …) — the rollout's name again, left

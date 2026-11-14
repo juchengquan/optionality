@@ -43,8 +43,21 @@
 .nx-add-qty { width: 100%; min-width: 0; text-align: center; }
 .nx-add-unleg { display: inline-flex; align-items: center; justify-content: center; padding: 0.25rem 0.5rem; }
 .nx-add-unleg svg { width: 0.875rem; height: 0.875rem; }
-/* a short leg and a long one look different at a glance, which is the mistake this form catches */
+/* a short leg and a long one look different at a glance, which is the mistake this form catches:
+   by weight and a sign, never a hue (#391) — short solid with "−", long a dashed outline with "+"
+   (`SideSign`, hidden from a reader: the button's words are its name). */
 .nx-add-toggle[data-side="short"] { background: var(--foreground); color: var(--background); }
+.nx-sign { font-weight: 800; margin-right: 0.25em; }
+:is(.nx-add-toggle, .nx-seg button)[data-side="long"] { border-style: dashed; }
+/* a leg's type in its hue (#391): tinted, and the chosen one of the contract's pair solid with the
+   page's ground as its ink. The mode pairs carry no type, and stay the neutral control above. */
+:is(.nx-add-toggle, .nx-seg button)[data-type="CALL"] { --type: var(--call); }
+:is(.nx-add-toggle, .nx-seg button)[data-type="PUT"] { --type: var(--put); }
+:is(.nx-add-toggle, .nx-seg button)[data-type] {
+  color: var(--type); border-color: var(--type);
+  background: color-mix(in oklch, var(--type) 12%, transparent);
+}
+.nx-seg button[data-type][aria-pressed="true"] { background: var(--type); color: var(--background); }
 
 .nx-add-monitors { display: flex; flex-direction: column; gap: 0.375rem; }
 .nx-add-monitor { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem 0.5rem; font-size: 0.875rem; }

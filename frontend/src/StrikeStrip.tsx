@@ -14,7 +14,8 @@
  */
 import { DASH } from "./shared/format";
 import type { Holding } from "./shared/api";
-import { deltaWords, distanceWords, scaleOf, strikeName, stripOfHolding, type Strip } from "./strip";
+import { deltaWords, distanceWords, scaleOf, stripOfHolding, type Strip } from "./strip";
+import { Leg } from "./shared/Legs";
 import "./StrikeStrip.css";
 
 export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?: boolean }) {
@@ -59,7 +60,8 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
         </span>
         {strip.shorts.map((k) => (
           <span key={k.code}>
-            {`${strikeName(k)} ${deltaWords(k.delta)}${strip.spx === null ? "" : ` · ${distanceWords(k)}`}`}
+            <Leg leg={{ short: true, option_type: k.option_type, strike: k.strike }} form="name" />
+            {` ${deltaWords(k.delta)}${strip.spx === null ? "" : ` · ${distanceWords(k)}`}`}
           </span>
         ))}
       </figcaption>

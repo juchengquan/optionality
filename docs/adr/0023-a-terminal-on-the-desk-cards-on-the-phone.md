@@ -160,6 +160,8 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
     differs in lightness and shape too, a filled chip with a glyph.
   - The old palette made a ringing row and an error message the same red; a red-up viewer would
     have read both as the market rising.
+  - *(A fourth family, for what a leg IS — its type — since 2026-11-14 (#391): see the amendment
+    at the end.)*
 - **Privacy:** a setting hides $ amounts and keeps %, Δ and DTE.
 - **Figures:**
   - tabular numerals, with fixed decimals per field (gamma loses its six places);
@@ -390,3 +392,37 @@ so the same valuation became dashes. This part says what the page shows instead.
 
 The page's refresh still values the book once more; outside the session that now re-reads the
 latest close, which changes only after the next session.
+
+## Amended 2026-11-14: a fourth colour family, for what a leg is (#391)
+
+Decided by the owner on 2026-11-14 (#391), choosing variant D of a prototype (branch
+`prototype/leg-colours`, never merged). Every pair on the add form had been the same grey control,
+the chosen one turned white, so a leg entered as the wrong type was easy to miss until the payoff
+looked odd.
+
+- **Type, by hue.** CALL is teal (oklch hue 195), PUT orange (hue 50 on the light ground, 55 on
+  the dark), `--call` and `--put` beside the other families in `next.css`, in both schemes. A type
+  is not a direction: neither flips for a red-up viewer. The hues sit away from direction's red
+  (27) and green (150) and from attention's magenta, violet and blue; PUT's orange lies between red
+  and the warning's amber, and differs from the warning by shape, since a warning is a filled chip
+  with a glyph and a type is a letter or a tinted button. The prototype's light values were
+  darkened to pass the contrast the browser suite holds, as it holds the attention colours: each at
+  4.5:1 as text on the page, as text on its own 12% tint, and as the fill under the page's ground,
+  on both grounds.
+- **Side, by weight and a sign — never a hue.** A short leg is solid and bold with a "−", a long
+  one outlined (dashed on the add form) with a "+". Variants E and F gave the side a hue as well;
+  they were tried and not chosen. The wheel is already crowded by three families, every hue left
+  for a side sat near one of them, and the sign already says the side wherever a leg is written.
+- **The add form.** A leg's type button is tinted in its type (12% fill, coloured text and
+  border); of the one contract's PUT/CALL pair, the chosen one is solid, with the page's ground as
+  its ink. The side buttons carry the sign and the weight, in no hue. The mode pairs ("a spread" /
+  "one contract", "I hold it" / "Watch it") stay the neutral control.
+- **Across the book**, every place that writes a leg draws it through one component
+  (`shared/Legs.tsx`): its C/P letter — or the word, in the inspector's "short PUT 7150" — in its
+  type's colour, and a short leg bold. That is the desk's legs column and inspector, the phone's
+  cards and sheet (and their short Δ, where a holding has more than one short leg to name), the
+  palette, the saved picture, the closed trades, the strike strip's caption, the price map's
+  labels, and the leg names of the IV and SPX charts. The colour goes where the letter is drawn;
+  figures, P&L and the attention chips are untouched.
+- **Colour is never the only signal.** Every place keeps its letter and its sign, character for
+  character, and privacy is unaffected.

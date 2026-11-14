@@ -31,6 +31,8 @@
 import { useEffect, useState } from "react";
 
 import { fetchSamples, type Holding, type Samples } from "./shared/api";
+import { heldLeg, legText } from "./shared/format";
+import { SvgLeg } from "./shared/Legs";
 import { hasCost, scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
 import { Burndown, runsOf, useWidth } from "./BurndownChart";
 import { legCode } from "./legs";
@@ -170,7 +172,8 @@ const IV_H = 132;
 function ivAxis(served: Samples, holding: Charted) {
   const legs = holding.legs.map((l) => ({
     code: legCode(holding.strike_date, l),
-    name: `${l.side === "short" ? "−" : "+"}${l.option_type[0]}${l.strike}`,
+    leg: heldLeg(l),
+    name: legText(heldLeg(l), "minus"),
     short: l.side === "short",
   }));
   const readings = served.samples.flatMap((s) => Object.values(s.legs_iv ?? {}));
@@ -225,7 +228,7 @@ function IvChart({ served, holding, gutters }: { served: Samples; holding: Chart
               <polyline key={i} points={run.map((p) => `${x(p.dte).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ")} />
             ))}
             {drawn.flat().map((p) => <circle key={p.dte} data-dte={p.dte} cx={x(p.dte)} cy={y(p.v)} r={2} />)}
-            <text x={x(last.dte) + 6} y={labelY + 4}>{leg.name}</text>
+            <SvgLeg leg={leg.leg} form="minus" x={x(last.dte) + 6} y={labelY + 4} />
           </g>
         ))}
         <text x={L} y={IV_H - 6} textAnchor="start">{`${span} DTE`}</text>

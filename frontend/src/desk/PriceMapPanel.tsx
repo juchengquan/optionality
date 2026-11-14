@@ -24,6 +24,7 @@ import {
   bandWords, domainOf, slotRows, spxWords, ticksOf, type MapSpread, type PriceMap,
 } from "../pricemap";
 import { distanceWords, nearest, strikeName } from "../strip";
+import { SvgLegSpan } from "../shared/Legs";
 
 /** Text widths at the map's 11px tabular figures, near enough to leave room. */
 const textWidth = (text: string, px = 11) => text.length * px * 0.6;
@@ -182,7 +183,11 @@ function Spread({ spread: s, x, top, selected, onSelect }: {
       ))}
       {placed.map(({ k, above }) => (
         <text key={`t${k.code}`} className="nxm-label" x={x(k.strike)} y={above ? barY - 6 : barY + 24}
-              textAnchor="middle">{labelOf(k)}</text>
+              textAnchor="middle">
+          {/* `labelOf`'s words, the short strike drawn as a leg: its type in its colour (#391) */}
+          <SvgLegSpan leg={{ short: true, option_type: k.option_type, strike: k.strike }} form="name" />
+          {` ${deltaShort(k.delta)}`}
+        </text>
       ))}
     </g>
   );

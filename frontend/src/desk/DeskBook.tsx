@@ -3,7 +3,8 @@ import { X } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { ColumnPicker } from "../shared/ColumnPickers";
-import { shortDate } from "../shared/format";
+import { heldLeg, shortDate, signedLeg, type WrittenLeg } from "../shared/format";
+import { Leg, Legs } from "../shared/Legs";
 
 import { GROUPS } from "../shared/groups";
 import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../shared/prefs";
@@ -22,7 +23,7 @@ import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, FIGURES, RETIRED_KEYS, rowId, rowName, rowStrip, tableRows,
+  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, FIGURES, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
@@ -441,6 +442,9 @@ export function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColum
     );
   }
   const label = column.key === "value" && row.kind === "holding" ? "cost to close" : column.label;
+  if (column.key === "legs") {
+    return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Legs legs={rowLegs(row)} /></span></>;
+  }
   if (column.key === "pnl" && row.kind === "holding") {
     return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Money value={row.holding.pnl} privacy={privacy} /></span></>;
   }
@@ -580,7 +584,7 @@ function HoldingDetail({ row, session, privacy, partners, onSelect }: {
           {`condor with ${partner.name} →`}
         </button>
       ) : null}
-      <Legs legs={h.legs.map((l) => `${l.side}${qtyWords(l.qty)} ${l.option_type} ${l.strike}`)} />
+      <LegList legs={h.legs.map(heldLeg)} />
       <InspectorStrip holding={h} partner={partner} />
       {/* the recorded days (ADR 0023, #295), read once when the section opens (#353): shut in
           session and open outside it (#372). The detail is keyed by the holding, so the session
@@ -616,7 +620,7 @@ function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; o
           + (overlap ? "" : ` · ${entry.held ? "on something held" : "watch only"}`)}
       </p>
       {overlap ? <p className="nx-meta" data-overlap="">{overlap}</p> : null}
-      {entry.legs ? <Legs legs={entry.legs.map((l) => `${l.sign < 0 ? "short" : "long"}${qtyWords(l.qty)} ${l.option_type} ${l.strike}`)} /> : null}
+      {entry.legs ? <LegList legs={entry.legs.map(signedLeg)} /> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
       {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} /> : null}
       {/* every figure of its contract or combo, the reason beside each dash (#332) */}
@@ -644,13 +648,12 @@ function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined
   );
 }
 
-/** " 2×" after a leg's side where it holds more than one of its contract, nothing for one (#351). */
-const qtyWords = (qty: number | undefined) => (qty === undefined || qty === 1 ? "" : ` ${qty}×`);
-
-function Legs({ legs }: { legs: string[] }) {
+/** The inspector's legs in words, `short 2× PUT 7150`: a quantity after the side where it holds
+ *  more than one of its contract (#351), and each type in its colour (#391). */
+function LegList({ legs }: { legs: WrittenLeg[] }) {
   return (
     <ul className="nxd-legs" aria-label="legs">
-      {legs.map((l, i) => <li key={`${i}:${l}`}>{l}</li>)}
+      {legs.map((l, i) => <li key={`${i}:${l.option_type}${l.strike}`}><Leg leg={l} form="words" /></li>)}
     </ul>
   );
 }

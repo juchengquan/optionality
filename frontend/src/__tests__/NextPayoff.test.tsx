@@ -13,6 +13,7 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 import { until } from "../testing/until";
+import { legMarks } from "../testing/legs";
 
 /** Every request the page made, as `METHOD path body`. */
 let asked: string[] = [];
@@ -153,6 +154,9 @@ describe("a watched spread's payoff", () => {
     expect(asked[0]).toContain('{"side":"long","option_type":"PUT","strike":7100,"qty":2}');
     // and the inspector writes it beside its side
     expect(screen.getByRole("list", { name: "legs" }).textContent).toContain("long 2× PUT 7100");
+    // a watched spread's legs in the inspector, each type marked for its colour (#391)
+    expect(legMarks(screen.getByRole("list", { name: "legs" })))
+      .toEqual(["short PUT 7150 short PUT", "long 2× PUT 7100 long PUT"]);
   });
 
   it("asks again when its value moves, since the curve is drawn at it", async () => {

@@ -4,22 +4,39 @@ import type { Leg } from "./api";
 
 export const DASH = "—";
 
-/** `-2C8150`: one leg, short as minus, with its quantity where it is not 1 (#351). */
-const legWord = (short: boolean, qty: number | undefined, type: string, strike: number) =>
-  `${short ? "-" : "+"}${qty === undefined || qty === 1 ? "" : qty}${type[0]}${strike}`;
+/** A leg as the page writes it: its side (`short` unset for the one contract a rule watches,
+ *  which is no position and has no side), its type, its strike and its quantity, absent for one. */
+export interface WrittenLeg { short?: boolean; option_type: string; strike: number; qty?: number }
 
-/** +C8100 -C8150: the signs are what the signed-sum engine keys off, so a leg entered
- *  backwards is visible at a glance. A quantity sits between the sign and the contract: `-2C8150`. */
-export function legSummary(legs: readonly Leg[]): string {
-  return legs.map((l) => legWord(l.sign < 0, l.qty, l.option_type, l.strike)).join(" ");
+/** How a place writes a leg: `signs` as the book writes it, `-2C8150`; `minus` with a true minus,
+ *  as the charts write it, `−2C8150`; `words` as the inspector writes it, `short 2× CALL 8150`; and
+ *  `name`, its contract alone, `C8150`, as the strike strip and the SPX chart name a strike. */
+export type LegForm = "signs" | "minus" | "words" | "name";
+
+/** +C8100 -C8150: the signs are what the signed-sum engine keys off, so a leg entered backwards is
+ *  visible at a glance. A quantity sits between the sign and the contract, `-2C8150`, and a
+ *  quantity of one is not written (#351). Every place that writes a leg draws it through
+ *  `shared/Legs.tsx`, from these parts.
+ *
+ *  A leg's text in three parts — before its type, its type, after it — so the drawing can mark the
+ *  type for its colour (#391) and still write exactly these characters. */
+export function legParts(l: WrittenLeg, form: LegForm): [string, string, string] {
+  const many = l.qty !== undefined && l.qty !== 1;
+  if (form === "words") {
+    return [`${l.short === undefined ? "" : l.short ? "short " : "long "}${many ? `${l.qty}× ` : ""}`, l.option_type, ` ${l.strike}`];
+  }
+  if (form === "name") return ["", l.option_type[0]!, String(l.strike)];
+  const sign = l.short === undefined ? "" : l.short ? (form === "minus" ? "−" : "-") : "+";
+  return [`${sign}${many ? l.qty : ""}`, l.option_type[0]!, String(l.strike)];
 }
 
-/** `-P7150 +P7100`: a holding's legs as the watchlist writes a combo's, short as minus, with each
- *  leg's quantity where it is not 1 (`-2P7100`). Every place that writes a holding's or a closed
- *  trade's legs writes them with this. */
-export function heldLegs(legs: readonly { side: string; option_type: string; strike: number; qty?: number }[]): string {
-  return legs.map((l) => legWord(l.side === "short", l.qty, l.option_type, l.strike)).join(" ");
-}
+export const legText = (l: WrittenLeg, form: LegForm): string => legParts(l, form).join("");
+
+/** A signed leg (`sign`, a combo's) and a held one (`side`, a holding's) as a written leg. */
+export const signedLeg = (l: Leg): WrittenLeg =>
+  ({ short: l.sign < 0, option_type: l.option_type, strike: l.strike, qty: l.qty });
+export const heldLeg = (l: { side: string; option_type: string; strike: number; qty?: number }): WrittenLeg =>
+  ({ short: l.side === "short", option_type: l.option_type, strike: l.strike, qty: l.qty });
 
 /** "SPXW 261016 8050.00C" → "261016 8050C".
  *

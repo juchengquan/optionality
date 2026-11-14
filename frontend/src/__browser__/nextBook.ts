@@ -155,17 +155,34 @@ export function oklab(value: string): { L: number; a: number; b: number } {
   return { L, a: C * Math.cos(h), b: C * Math.sin(h) };
 }
 
-/** WCAG relative luminance of an oklch() colour, through OKLab and linear sRGB. */
-export function luminance(value: string): number {
+/** An oklch() colour as linear sRGB, through OKLab. */
+function linear(value: string): [number, number, number] {
   const { L, a, b } = oklab(value);
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
   const clamp = (x: number) => Math.min(1, Math.max(0, x));
-  const R = clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
-  const G = clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
-  const B = clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
-  return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+  return [clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+}
+
+const toLuminance = ([R, G, B]: [number, number, number]) => 0.2126 * R + 0.7152 * G + 0.0722 * B;
+
+/** WCAG relative luminance of an oklch() colour, through OKLab and linear sRGB. */
+export function luminance(value: string): number {
+  return toLuminance(linear(value));
+}
+
+/** The contrast of a colour's text against a tint of itself — `share` of it over `ground`, as a
+ *  translucent fill composites, in gamma-encoded sRGB — as a leg type's pair button draws it (#391). */
+export function contrastOnTint(colour: string, ground: string, share: number): number {
+  const encode = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055);
+  const decode = (x: number) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+  const [c, g] = [linear(colour).map(encode), linear(ground).map(encode)];
+  const tint = toLuminance(c.map((x, i) => decode(share * x + (1 - share) * g[i]!)) as [number, number, number]);
+  const [hi, lo] = [luminance(colour), tint].sort((p, q) => q - p);
+  return (hi! + 0.05) / (lo! + 0.05);
 }
 
 export function contrast(x: string, y: string): number {

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { readUp, type EntryStyle } from "../shared/prefs";
 import { useDismissOnBack } from "../shared/useDismissOnBack";
-import { ClosedTradeDetail, tradeLegs } from "../ClosedTrade";
+import { ClosedTradeDetail, TradeLegs } from "../ClosedTrade";
 import { madeWords, storedWords, type ClosedTrade, type Journal } from "../journal";
 
 export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDeleted }: {
@@ -41,7 +41,7 @@ export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDele
                               onClick={() => setOpenId(t.id)} />
                       <header className="nxp-head">
                         <span className="nxp-name">{t.name}</span>
-                        <span className="nxp-legs">{tradeLegs(t)}</span>
+                        <span className="nxp-legs"><TradeLegs trade={t} /></span>
                       </header>
                       <div className="nxj-made">
                         <span data-fig="made" data-outcome={t.realized_points === null ? undefined
@@ -94,7 +94,7 @@ function TradeSheet({ trade, privacy, entryStyle, onClose, onCorrected, onDelete
                     initialFocus={title}>
         <SheetHeader>
           <SheetTitle ref={title} tabIndex={-1}>{shown?.name ?? ""}</SheetTitle>
-          <SheetDescription>{shown ? `closed on ${shown.closed_on} · ${tradeLegs(shown)}` : ""}</SheetDescription>
+          <SheetDescription>{shown ? <>{`closed on ${shown.closed_on} · `}<TradeLegs trade={shown} /></> : ""}</SheetDescription>
         </SheetHeader>
         <div className="nxp-sheet-body">
           {shown ? <ClosedTradeDetail trade={shown} privacy={privacy} onCorrected={onCorrected}

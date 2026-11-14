@@ -2,10 +2,12 @@
  *  the rules that are switched off. Each card is ONE target — a tap anywhere opens its detail
  *  sheet — and carries `data-ref`, as each rule inside it does, so a needs-you banner can lead to
  *  it (NeedsLine.tsx: `reveal`). */
+import { Fragment } from "react";
 import { OctagonAlert } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
-import { legSummary } from "../shared/format";
+import { heldLeg, signedLeg } from "../shared/format";
+import { Leg, Legs } from "../shared/Legs";
 import { Chip, Money } from "../Book";
 import { levelWords } from "../levels";
 import { paceOutcome, paceWords } from "../pace";
@@ -13,7 +15,7 @@ import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName, QUARANTINED } from "../needs";
 import { RuleWords } from "../RuleWords";
 import type { PlacedHolding } from "../placement";
-import { holdingLegs, mutedWords, percent, points, shortDeltas, shortDeltaWords } from "./figures";
+import { mutedWords, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
 import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
@@ -70,7 +72,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
       {onOpen ? <OpenCard name={holding.name} onOpen={onOpen} /> : null}
       <header className="nxp-head">
         <span className="nxp-name">{holding.name}</span>
-        <span className="nxp-legs">{holdingLegs(holding)}</span>
+        <span className="nxp-legs"><Legs legs={holding.legs.map(heldLeg)} /></span>
         <span className="nxp-pill">{`${holding.dte} DTE`}</span>
       </header>
       <div className="nxp-hero">
@@ -81,7 +83,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
       </div>
       <dl className="nxp-facts">
         <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
-        <div><dt>short Δ</dt><dd>{shortDeltaWords(shortDeltas(holding, quotes, monitors))}</dd></div>
+        <div><dt>short Δ</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
         {/* the pace gap, which the phone once drew only on a page per holding after the close: one book
             now, at every hour (#374) */}
         <div><dt>pace gap</dt><dd data-outcome={paceOutcome(holding.schedule?.pace_gap)}>
@@ -121,7 +123,7 @@ export function RuleCard({ entry, under, overlap = null, onOpen }: {
       {onOpen ? <OpenCard name={entryName(entry)} onOpen={onOpen} /> : null}
       <header className="nxp-head">
         <span className="nxp-name">{entryName(entry)}</span>
-        {entry.legs ? <span className="nxp-legs">{legSummary(entry.legs)}</span> : null}
+        {entry.legs ? <span className="nxp-legs"><Legs legs={entry.legs.map(signedLeg)} /></span> : null}
         {state ? <Chip state={state} /> : null}
       </header>
       {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
@@ -157,5 +159,21 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Each short leg's delta, the leg named in its type's colour and bold as a short leg is (#391),
+ *  where a holding has more than one; the one figure alone where it has one. */
+export function ShortDeltaWords({ holding, quotes, monitors }: { holding: Holding; quotes: Entry[]; monitors: Monitor[] }) {
+  const said = shortDeltaWords(shortDeltas(holding, quotes, monitors));
+  if (typeof said === "string") return <>{said}</>;
+  return (
+    <>
+      {said.map((d, i) => (
+        <Fragment key={`${d.leg.option_type}${d.leg.strike}`}>
+          {i > 0 ? " · " : null}<Leg leg={{ ...d.leg, short: true }} form="name" />{d.words}
+        </Fragment>
+      ))}
+    </>
   );
 }

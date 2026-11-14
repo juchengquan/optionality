@@ -15,6 +15,7 @@ import { Plus, X } from "lucide-react";
 import { addSpreads, type Added, type Monitor, type Payoff } from "./shared/api";
 import { Button } from "@/components/ui/button";
 import { marketDay } from "./shared/format";
+import { SideSign } from "./shared/Legs";
 import {
   addLeg, addSpread, deltaEnabled, isCreditStop, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
   removeLeg, removeSpread, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, valueEnabled,
@@ -188,12 +189,12 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
               <li key={l.key} className="nx-add-leg" data-side={l.side}>
                 <button type="button" className="nx-add-toggle" data-side={l.side}
                         aria-label={`spread ${n}, leg ${j + 1} side: ${l.side} — flip`}
-                        onClick={() => onChange(flipSide(draft, s.key, j))}>{l.side}</button>
+                        onClick={() => onChange(flipSide(draft, s.key, j))}><SideSign side={l.side} />{l.side}</button>
                 {/* how many of the contract, "1" until changed: a butterfly's middle, a ratio's 2 (#351) */}
                 <input aria-label={`spread ${n}, leg ${j + 1} quantity`} className="nx-add-qty" inputMode="numeric"
                        value={l.qty} autoComplete="off"
                        onChange={(e) => onChange(setLeg(draft, s.key, j, { qty: e.target.value }))} />
-                <button type="button" className="nx-add-toggle"
+                <button type="button" className="nx-add-toggle" data-type={l.option_type}
                         aria-label={`spread ${n}, leg ${j + 1} type: ${l.option_type} — change`}
                         onClick={() => onChange(setLeg(draft, s.key, j, { option_type: l.option_type === "PUT" ? "CALL" : "PUT" }))}>
                   {l.option_type}
