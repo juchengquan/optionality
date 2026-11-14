@@ -321,8 +321,9 @@ this file's rows:
   row was observed at, so a Friday close is paced as Friday: Saturday's DTE would charge it a day of
   decay it has not had. Whether manage-by is due stays today's, since it is a deadline.
 - **The manage-by notice** (above: "exactly one notice") is held until it has a cost to say — the
-  sweep's batch, else outside the session the latest close, named in the notice with its pace at
-  that row's DTE — because a notice that goes once without its "now" line goes without it for good.
+  sweep's batch in the session, and outside it the latest close even where the batch prices the
+  holding overnight, so the notice, the page and `/holdings` say one cost (#387), named in the notice
+  with its pace at that row's DTE — because a notice that goes once without its "now" line goes without it for good.
   The hold is bounded (`sessionClosedSince`): once a whole weekday session has closed since the
   holding entered its window with still no cost, the notice goes without its "now" line, stamped,
   rather than never.

@@ -1,0 +1,240 @@
+{
+  "name": "GET /positions/values outside the session with the Provider down and no close dashes every holding",
+  "world": {
+    "clock": "2026-11-14T17:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": "leg",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-2",
+          "code": "dec-calls",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "scope": "calls",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-1",
+          "position_id": "pos-1"
+        },
+        {
+          "monitor_id": "mon-2",
+          "position_id": "pos-1"
+        }
+      ],
+      "position_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/positions/values",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 22:30:00+08:00",
+          "opened_at": "2026-10-12",
+          "closed_on": null,
+          "exit": null,
+          "realized_points": null,
+          "cost_to_close": null,
+          "pnl": null,
+          "captured": null,
+          "contract_size": null,
+          "spx": null,
+          "spx_reason": "no SPX option in the batch to derive it from",
+          "greeks": {
+            "option_delta": null,
+            "option_gamma": null,
+            "option_theta": null,
+            "option_vega": null
+          },
+          "legs_delta": null,
+          "short_strikes": [
+            {
+              "code": "US.SPXW261218C7300000",
+              "option_type": "CALL",
+              "strike": 7300,
+              "delta": null,
+              "points": null,
+              "sigma": null,
+              "one_sigma": null
+            },
+            {
+              "code": "US.SPXW261218P6400000",
+              "option_type": "PUT",
+              "strike": 6400,
+              "delta": null,
+              "points": null,
+              "sigma": null,
+              "one_sigma": null
+            }
+          ],
+          "fetched_at": null,
+          "valued_from": "live",
+          "valued_on": null,
+          "valued_timing": null,
+          "valued_reason": "moomoo call failed: connect ECONNREFUSED 127.0.0.1:33333",
+          "dte": 34,
+          "schedule": {
+            "dte_at_open": 67,
+            "on_pace": 4.559130579594211,
+            "pace_gap": null,
+            "target": 3.2,
+            "stop": 12.8,
+            "target_dte": 17,
+            "manage_by_dte": 21,
+            "reached": null,
+            "manage_by_due": false
+          }
+        }
+      ]
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000",
+          "US.SPXW261218C7350000",
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}

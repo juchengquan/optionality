@@ -52,6 +52,26 @@ describe("naming the close", () => {
     expect(closeLineWords(null)).toBeNull();
   });
 
+  it("says a weekend reading by its time, never as a close (#387)", () => {
+    // Saturday 11:00 New York, 00:00 on Sunday in DISPLAY_TZ
+    const sat = fromClose("b", { valued_on: "2026-11-14", valued_timing: "weekend", fetched_at: "2026-11-15 00:00:00+08:00" });
+    expect(closeWords(sat)).toBe("as of Sat 14 Nov 11:00");
+    expect(closeLineWords([fromClose("a"), sat]))
+      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading");
+    expect(levelWords("stop", sat, false)).toBe("at stop · as of the last reading");
+  });
+
+  it("says a holding with no close was not valued where the Provider could not be asked, the bot's words (#387)", () => {
+    const unasked = (id: string) => holding(id, {
+      strike_date: "2026-12-31", legs, fetched_at: null, cost_to_close: null, pnl: null,
+      valued_reason: "moomoo call failed: connect ECONNREFUSED 127.0.0.1:33333",
+    });
+    expect(closeLineWords([fromClose("a"), unasked("b")]))
+      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 with no close, and the Provider could not be asked");
+    expect(closeLineWords([unasked("a"), unasked("b")]))
+      .toBe("market closed — no close recorded yet, and the Provider could not be asked");
+  });
+
   it("draws the line with the close, and the time it was valued at where nothing is from one", () => {
     render(<ClosedLine at="05:14:59" served="2026-11-14 05:14:59+08:00" holdings={[fromClose("a")]} className="x" />);
     expect(screen.getByText("market closed — as of the close, Fri 13 Nov 16:14")).toBeTruthy();

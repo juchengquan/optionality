@@ -1060,6 +1060,43 @@ class TestTheManageByNotice:
         assert self.notices(b) == ["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]
         assert self.notified_at(b, id_)
 
+    async def test_out_of_hours_says_the_latest_close_though_the_batch_prices_it_overnight(self, b: Book) -> None:
+        # #387: a Provider that quotes overnight prices the leg at 3.90, but the page and the bot value the
+        # holding from yesterday's close out of the session, so the notice says that one
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
+        await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
+        assert len(self.notices(b)) == 1
+        assert "entry 6.86 · 4.40 at the 2026-09-30 close" in self.notices(b)[0]
+        assert "now" not in self.notices(b)[0]
+
+    async def test_out_of_hours_with_no_close_says_the_reading_this_sweep_just_stored(self, b: Book) -> None:
+        # #387: the sweep fills the day from its own batch before the notice, and that costed row before the
+        # open is what the page and the bot value the holding from now
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 4.4})).sweep()
+        notice = "⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · 4.40 on 2026-10-01, before the open"
+        assert self.notices(b) == [f"{notice}\non-pace 4.69 — ahead by 0.29"]
+        assert self.notified_at(b, id_)
+
+    async def test_in_the_session_says_the_batch_s_cost_though_a_close_is_stored(self, b: Book) -> None:
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # 11:00 New York, Thursday
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
+        await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
+        assert len(self.notices(b)) == 1
+        assert "entry 6.86 · now 3.90" in self.notices(b)[0]
+
+    async def test_names_a_weekend_reading_it_is_valued_from_by_its_day_never_as_a_close(self, b: Book) -> None:
+        # #387: Saturday 3 October, 13:00 New York; no weekday close has a cost, and Saturday's noon row was
+        # priced by a Provider that quotes at weekends — the fallback, which is no close
+        b.now = datetime(2026, 10, 3, 17, 0, tzinfo=UTC)
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        self.close_row(b, id_, "2026-10-03", "2026-10-03 16:00:00.000000", 4.1, 21)
+        await b.sweeper(self.priceless(b, 21)).sweep()
+        assert len(self.notices(b)) == 1
+        assert "entry 6.86 · 4.10 on 2026-10-03\n" in self.notices(b)[0]
+
     async def test_in_the_session_with_no_price_holds_it_whatever_close_is_stored(self, b: Book) -> None:
         b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # 11:00 New York, Thursday
         id_ = self.held(b, "condor", b.days_from_now(-24), 21)
@@ -1086,12 +1123,14 @@ class TestWhatOnlyThePythonCanGetWrong:
         # `entry ${row.entry}` is String(6.86), and every figure after it is toFixed(2): half away from
         # zero on the exact binary value, two decimals always
         self.held_condor(b)
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # in the session, where the batch's cost is "now" (#387)
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 4.4})).sweep()
         assert b.sent == ["⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · now 4.40\non-pace 4.69 — ahead by 0.29"]
 
     async def test_writes_an_entry_with_no_fraction_as_javascript_does(self, b: Book) -> None:
         # a REAL column answers 2.0 in Python, and `String(2)` is "2"
         self.held_condor(b, entry=2.0)
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # in the session, where the batch's cost is "now" (#387)
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 1.5})).sweep()
         assert b.sent[0].startswith("⏰ condor is at 21 DTE — manage by 21\nentry 2 · now 1.50\non-pace")
 

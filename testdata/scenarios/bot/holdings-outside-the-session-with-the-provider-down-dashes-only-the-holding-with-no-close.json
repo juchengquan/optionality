@@ -1,0 +1,174 @@
+{
+  "name": "/holdings outside the session with the Provider down dashes only the holding with no close",
+  "world": {
+    "clock": "2026-11-14T17:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        },
+        {
+          "id": "pos-2",
+          "name": "dec-call-wing",
+          "strategy": "call spread",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 1.5,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7500
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-11-13",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-13",
+          "dte": 35,
+          "cost_to_close": 3.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-13 21:14:59.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-14",
+          "dte": 34,
+          "cost_to_close": null,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-14 05:00:12.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        }
+      ],
+      "reference_securities": []
+    }
+  },
+  "update": {
+    "update_id": 1,
+    "message": {
+      "chat": {
+        "id": 42
+      },
+      "text": "/holdings"
+    }
+  },
+  "expect": {
+    "reply": {
+      "chat_id": "42",
+      "text": "<pre>holding        cost  P&amp;L  note\ndec-call-wing  —     —        —\ndec-condor     3.25  315      ahead 1.38</pre>\nmarket closed — as of the close, Fri 13 Nov 16:14; 1 with no close, and the Provider could not be asked",
+      "parse_mode": "HTML"
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7350000",
+          "US.SPXW261218C7500000"
+        ]
+      ]
+    }
+  }
+}

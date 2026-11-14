@@ -2124,12 +2124,19 @@
                                     "close",
                                     "before-open",
                                     "after-close",
+                                    "weekend",
                                     "unrecorded"
                                   ]
                                 },
                                 {
                                   "type": "null"
                                 }
+                              ]
+                            },
+                            "valued_reason": {
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "dte": {
@@ -2238,6 +2245,7 @@
                             "valued_from",
                             "valued_on",
                             "valued_timing",
+                            "valued_reason",
                             "dte",
                             "schedule"
                           ]

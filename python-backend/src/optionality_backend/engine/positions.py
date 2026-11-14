@@ -30,7 +30,7 @@ from datetime import date, datetime, timedelta
 
 from optionality.contract import normalize_strike_date
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import days_to_expiry, market_date, sample_timing, session_closed_since, takes_sample
+from optionality.expiry import days_to_expiry, market_date, session_closed_since, takes_sample, valued_timing
 from optionality.js import js_string, to_fixed
 from optionality.position import contract_size, cost_to_close, leg_readings
 from optionality.quote import ByCode, derived_spx
@@ -78,9 +78,10 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
     live book were already inside 21 DTE when this shipped, so without it the first sweep after the
     deploy would have fired three retroactive notices and looked like a fault.
 
-    **Held until there is a Cost to close to say** (#380): valued from the sweep's own batch where that
-    prices it, and otherwise, outside the session, from the holding's latest close (`close_of`), that
-    close's day said beside the figure and its pace at that close's own DTE — and where neither gives a
+    **Held until there is a Cost to close to say** (#380): valued as `/holdings` and the page value the
+    holding (#387) — in the session from the sweep's own batch, and outside it from the holding's latest
+    close (`close_of`) even where the batch prices it overnight, that close's day said beside the figure
+    and its pace at that close's own DTE; out of the session with no row that has a cost, the batch's — and where neither gives a
     cost the notice is not sent and not stamped, and the next sweep asks again. The wait is BOUNDED: once a
     whole session has closed since the holding entered the window (`session_closed_since`) with still no
     cost, the notice goes without its "now" line, stamped as usual, rather than never.
@@ -94,10 +95,10 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
             if dte < 0 or dte > settings.exit_manage_by_dte:
                 continue
 
-            # the batch's own cost when it has one; else, out of the session, the latest close's
-            live = cost_to_close(to_position(row), by_code)
-            close = close_of(deps.db, row, at) if live is None else None
-            cost = live if close is None else close["cost_to_close"]
+            # valued as `/holdings` and the page value it (#387): out of the session from the latest close
+            # whatever the batch says, and live in the session, or where no row has a cost
+            close = close_of(deps.db, row, at)
+            cost = cost_to_close(to_position(row), by_code) if close is None else close["cost_to_close"]
             # no cost yet: HELD, unsent and unstamped, until a sweep has one to say
             # — but not for ever: once a whole session has closed since the holding entered the window with
             # still no price, it goes without its "now" line, as it did before #380
@@ -137,8 +138,8 @@ def _window_entered(strike_date: str, opened_at: str, manage_by_dte: int) -> str
 
 def _close_words(close: PositionSampleRow) -> str:
     """Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's
-    own timing where no close had a cost — never passed off as a close."""
-    timing = sample_timing(close["observed_at"])
+    own timing where no close had a cost — never passed off as a close, a weekend's included (#387)."""
+    timing = valued_timing(close["observed_at"])
     if timing == "close":
         return f"at the {close['observed_on']} close"
     if timing == "after-close":

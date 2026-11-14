@@ -300,6 +300,7 @@ def standing(**schedule: Any) -> str:
         schedule=full | schedule,
         dte=30,
         valued_from="live",
+        unpriced=None,
         close=None,
         records={},
         spx=DerivedSpx(price=None, reason="none"),
@@ -318,8 +319,8 @@ class TestClosedLine:
 
     @staticmethod
     def valued(close: Any) -> Any:
-        """only `close` is read"""
-        return SimpleNamespace(close=close)
+        """only `close` and `unpriced` are read"""
+        return SimpleNamespace(close=close, unpriced=None)
 
     FRI: ClassVar[dict[str, str]] = {"observed_on": "2026-11-13", "observed_at": "2026-11-13 21:14:59.000000"}
 
@@ -350,3 +351,25 @@ class TestClosedLine:
             == "market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading; 1 with no close, valued live"
         )
         assert closed_line([v(None)]) == "market closed — no close recorded yet; valued live"
+
+    def test_names_a_weekend_reading_by_its_time_never_as_a_close(self):
+        # #387
+        sat = self.row("2026-11-14", "2026-11-14 16:00:00.000000")  # Saturday 11:00 New York
+        assert close_words(sat) == "as of Sat 14 Nov 11:00"
+        # and it is no close to name before a weekday's, though it is in the hours and later
+        assert (
+            closed_line([self.valued(self.FRI), self.valued(sat)])
+            == "market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading"
+        )
+
+    def test_says_a_holding_with_no_close_was_not_valued_where_the_provider_could_not_be_asked(self):
+        # #387
+        failed = SimpleNamespace(close=None, unpriced="OpenD down")
+        assert (
+            closed_line([self.valued(self.FRI), failed])
+            == "market closed — as of the close, Fri 13 Nov 16:14; 1 with no close, and the Provider could not be asked"
+        )
+        assert (
+            closed_line([failed, failed])
+            == "market closed — no close recorded yet, and the Provider could not be asked"
+        )

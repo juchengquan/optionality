@@ -6,12 +6,13 @@ backend/src/holdings.ts has no test of its own: its two callers' suites rely on 
 (ported beside the bot, in `tests/entrypoints/bot/test_bot.py`). What those rely on is held here, on
 the module itself: one batch, asked for each contract once and never when nothing is held; the figures
 per holding in the listing's order; a schedule only where an Opened was declared, read with the exit
-policy in Settings; and a batch that fails raising to the caller, which decides whether that is a 502
-or a sentence.
+policy in Settings; and a batch that fails in the session raising to the caller, which decides whether
+that is a 502 or a sentence — out of it, a dash with the failure's message (#387).
 """
 
 import json
 import math
+from datetime import UTC, datetime
 
 import pytest
 from harness import NOW, fake_fetcher, priced_fetcher
@@ -22,6 +23,8 @@ from optionality_backend.env import settings_for
 from optionality_backend.holdings import holding_values
 
 TZ = "Asia/Singapore"
+#: Thursday 11:00 New York: in the session, where a failed batch is the caller's to say (#387)
+IN_SESSION = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)
 #: 28 DTE at the harness's clock, 2026-10-02
 EXPIRY = "2026-10-30"
 CONDOR = [
@@ -90,8 +93,25 @@ class TestOneBatch:
         async def down(codes):
             raise ConnectionRefusedError("connect ECONNREFUSED 127.0.0.1:33333")
 
+        # in the session, where the batch is the price (#387: out of it, below)
         with pytest.raises(ConnectionRefusedError, match="ECONNREFUSED"):
-            await holding_values(db, fake_fetcher(down), NOW, settings_for(), TZ)
+            await holding_values(db, fake_fetcher(down), IN_SESSION, settings_for(), TZ)
+
+    async def test_out_of_the_session_dashes_what_the_failed_batch_would_have_priced(self, db):
+        # #387: a holding with no close is a dash with the failure's message, and nothing is raised
+        hold(db, "a")
+
+        async def down(codes):
+            raise ConnectionRefusedError("connect ECONNREFUSED 127.0.0.1:33333")
+
+        valued = await holding_values(db, fake_fetcher(down), NOW, settings_for(), TZ)
+        [v] = valued.values
+        assert (v.valued_from, v.cost, v.pnl, v.unpriced) == (
+            "live",
+            None,
+            None,
+            "connect ECONNREFUSED 127.0.0.1:33333",
+        )
 
     async def test_answers_the_batch_by_code_stamped_in_the_display_zone(self, db):
         # the route reads the contract size and the greeks from it, so it is the displayed records

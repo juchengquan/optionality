@@ -41,7 +41,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.contract import build_spx_code
 from optionality.exit import dte_at_open, exit_levels, on_pace
-from optionality.expiry import market_date, sample_timing
+from optionality.expiry import market_date, sample_timing, valued_timing
 from optionality.monitor import monitor_leg_codes
 from optionality.payoff import payoff_at_expiry
 from optionality.position import (
@@ -224,8 +224,12 @@ class PositionValues(PositionOut):
     valued_from: Literal["live", "close"]
     #: the New York market day of the row a close valuation is from; None when live
     valued_on: str | None
-    #: what that row is (`sample_timing`); None when live
-    valued_timing: Literal["close", "before-open", "after-close", "unrecorded"] | None
+    #: what that row is (`valued_timing`): a "weekend" reading is never a "close" (#387); None when live
+    valued_timing: Literal["close", "before-open", "after-close", "weekend", "unrecorded"] | None
+    #: why a holding valued live has no figures, in words: out of the session, the Provider call that would
+    #: have priced it failed, and the rest of the book is still served from its closes (#387). None wherever
+    #: it was valued — and in the session, where that failure is the route's 502.
+    valued_reason: str | None
     #: days left where the option trades, the same reckoning the dashboard's column uses: TODAY's,
     #: whatever the figures are from. Levels and the pace are at the close's own DTE (#380, F5).
     dte: float
@@ -484,9 +488,10 @@ def position_routes(deps: Deps) -> APIRouter:
         def one(v: HoldingValue) -> dict[str, Any]:
             # a close's stamp is when that row was observed: the clock the page's chips and its
             # market-closed line read
-            timing = None if v.close is None else sample_timing(v.close["observed_at"])
+            timing = None if v.close is None else valued_timing(v.close["observed_at"])
             if v.close is None:
-                stamp = fetched
+                # a holding the failed call would have priced was read at no time at all (#387)
+                stamp = fetched if v.unpriced is None else None
             elif timing == "unrecorded":
                 stamp = None
             else:
@@ -518,6 +523,8 @@ def position_routes(deps: Deps) -> APIRouter:
                 "valued_from": v.valued_from,
                 "valued_on": None if v.close is None else v.close["observed_on"],
                 "valued_timing": timing,
+                # the 502's own words, which in the session would be the whole answer
+                "valued_reason": None if v.unpriced is None else f"{deps.provider.name} call failed: {v.unpriced}",
                 "dte": v.dte,
                 "schedule": v.schedule,
             }

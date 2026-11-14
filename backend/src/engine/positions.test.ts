@@ -1004,6 +1004,47 @@ describe("the manage-by notice", () => {
     expect(notifiedAt(id)).toBeTruthy();
   });
 
+  it("out of hours says the latest close though the batch prices it overnight, as /holdings does (#387)", async () => {
+    // 01:00 New York: a Provider that quotes overnight prices the leg at 3.90, but the page and the
+    // bot value the holding from yesterday's close out of the session, so the notice says that one
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain("entry 6.86 · 4.40 at the 2026-09-30 close");
+    expect(notices()[0]).not.toContain("now");
+  });
+
+  it("out of hours with no close, says the reading this sweep just stored, as /holdings would (#387)", async () => {
+    // 01:00 New York and no row yet: the sweep fills the day from its own batch before the notice,
+    // and that costed row before the open is what the page and the bot value the holding from now
+    const id = held("condor", daysFromNow(-24), 21);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 })).sweep();
+    expect(notices()).toEqual(["⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · 4.40 on 2026-10-01, before the open"
+      + "\non-pace 4.69 — ahead by 0.29"]);
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
+  it("in the session says the batch's cost though a close is stored (#387)", async () => {
+    now = new Date("2026-10-01T15:00:00Z"); // 11:00 New York, Thursday
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain("entry 6.86 · now 3.90");
+  });
+
+  it("names a weekend reading it is valued from by its day, never as a close (#387)", async () => {
+    // Saturday 3 October, 13:00 New York: no weekday close has a cost, and Saturday's noon row was
+    // priced by a Provider that quotes at weekends — the fallback, which is no close
+    now = new Date("2026-10-03T17:00:00Z");
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-10-03", "2026-10-03 16:00:00.000000", 4.1, 21);
+    await sweeper(priceless(21)).sweep();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain("entry 6.86 · 4.10 on 2026-10-03\n");
+  });
+
   it("holds it no longer than a whole session: still no cost after one, it goes without its now line (#380)", async () => {
     // 01:00 New York on Thursday 1 October, at 19 DTE: the window opened on Tuesday the 29th at 21,
     // and Tuesday's and Wednesday's sessions have closed since with no price and no close

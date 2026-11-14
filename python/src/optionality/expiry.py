@@ -180,6 +180,19 @@ def _taken_in_session(observed_at: str | None) -> bool:
     return when is not None and in_session(when)
 
 
+type ValuedTiming = Literal["close", "before-open", "after-close", "unrecorded", "weekend"]
+
+
+def valued_timing(observed_at: str | None) -> ValuedTiming:
+    """What the row a holding is valued from is (`close_sample`): `sample_timing`, except that a row in the
+    hours on a day with no session — a weekend's — is "weekend", never "close" (#387). The same session
+    test `close_sample` asks, so the label and the choice cannot disagree. Mirrors `expiry.ts`."""
+    timing = sample_timing(observed_at)
+    if timing != "close":
+        return timing
+    return "close" if _taken_in_session(observed_at) else "weekend"
+
+
 def session_closed_since(day: str, now: datetime) -> bool:
     """Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after the
     market day `day`, by `now`: what bounds the manage-by notice's wait for a Cost to close (#380 review).

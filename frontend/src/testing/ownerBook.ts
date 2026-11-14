@@ -83,7 +83,7 @@ export function holding(id: string, over: Partial<Holding> & { strike_date: stri
     id, name: id, strategy: null, contracts: 1, entry: 2, created_at: null, opened_at: "2026-11-03",
     closed_on: null, exit: null, realized_points: null, cost_to_close: 1, pnl: 100, captured: 0.5,
     contract_size: 100, spx: SPX, spx_reason: null, greeks: {}, legs_delta: null, short_strikes: [],
-    fetched_at: "x", valued_from: "live", valued_on: null, valued_timing: null, dte: 38, schedule: null, ...over,
+    fetched_at: "x", valued_from: "live", valued_on: null, valued_timing: null, valued_reason: null, dte: 38, schedule: null, ...over,
   } as Holding;
 }
 

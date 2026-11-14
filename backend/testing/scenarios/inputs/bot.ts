@@ -79,6 +79,43 @@ export const BOT: readonly BotInput[] = [
     update: message("/holdings"),
   },
   {
+    // #387: out of the session a Provider that is down dashes only the holding with no close, and
+    // the line says why; the holding with a close is still served from it
+    name: "/holdings outside the session with the Provider down dashes only the holding with no close",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        positions: [
+          ...held.positions,
+          position({
+            id: "pos-2", name: "dec-call-wing", strategy: "call spread", entry: 1.5, opened_at: "2026-11-13",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7350 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+        ],
+        position_samples: [FRIDAY_CLOSE, SATURDAY_FILL],
+      },
+      provider: { down: DOWN },
+    }),
+    update: message("/holdings"),
+  },
+  {
+    // #387: a reading priced in the hours on a Saturday is no close: the line says when it was
+    name: "/holdings outside the session says a weekend reading it values from is no close",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        ...held,
+        position_samples: [{ ...FRIDAY_CLOSE, observed_at: "2026-11-14 01:30:00.000000" },
+          { ...SATURDAY_FILL, cost_to_close: 3.1, observed_at: "2026-11-14 16:00:00.000000" }],
+      },
+      provider: { down: DOWN },
+    }),
+    update: message("/holdings"),
+  },
+  {
     name: "/holdings with nothing held",
     world: world(),
     update: message("/holdings"),

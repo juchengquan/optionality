@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { marketDate, sampleTiming } from "optionality/domain/expiry";
+import { marketDate, sampleTiming, valuedTiming } from "optionality/domain/expiry";
 import { dteAtOpen, exitLevels, exitPolicy, onPace } from "optionality/domain/exit";
 import {
   POSITION_GREEK_FIELDS, legReadings, positionGreek, positionLegCodes, realizedPoints,
@@ -137,10 +137,15 @@ const PositionValues = PositionOut.extend({
   valued_from: z.enum(["live", "close"]),
   /** the New York market day of the row a close valuation is from; null when live */
   valued_on: z.string().nullable(),
-  /** what that row is (`sampleTiming`): the day's "close", or — where no row with a cost was taken
-   *  in the hours — a reading from "after-close", "before-open", or one "unrecorded"; null when
-   *  live. Said beside the figures so an evening's reading is never passed off as a close. */
-  valued_timing: z.enum(["close", "before-open", "after-close", "unrecorded"]).nullable(),
+  /** what that row is (`valuedTiming`): the day's "close", or — where no row with a cost was taken
+   *  in a session — a reading from "after-close", "before-open", the hours of a "weekend" (#387), or
+   *  one "unrecorded"; null when live. Said beside the figures so an evening's reading, or a
+   *  Saturday's, is never passed off as a close. */
+  valued_timing: z.enum(["close", "before-open", "after-close", "weekend", "unrecorded"]).nullable(),
+  /** why a holding valued live has no figures, in words: out of the session, the Provider call that
+   *  would have priced it failed, and the rest of the book is still served from its closes (#387).
+   *  Null wherever it was valued — and in the session, where that failure is the route's 502. */
+  valued_reason: z.string().nullable(),
   /** days left where the option trades, the same reckoning the dashboard's column uses: TODAY's,
    *  whatever the figures are from. Levels and the pace are at the close's own DTE (#380, F5). */
   dte: z.number(),
@@ -355,7 +360,9 @@ export function positionRoutes(deps: Deps) {
      *  Outside New York's session a holding is valued from its latest close instead (#380,
      *  `holdings.ts`), and only the holdings with no close are asked for — none, usually, so the
      *  route then makes no call at all. A close states its day and timing, and its observed time
-     *  is the stamp; its greeks are its legs' stored delta and vega (no gamma, no theta). */
+     *  is the stamp; its greeks are its legs' stored delta and vega (no gamma, no theta). Out of
+     *  the session a failed call is no 502: the holdings it would have priced are dashes with
+     *  `valued_reason`, and the closes are served (#387). */
     .get("/values", values, async (c) => {
       const now = deps.now();
       let valued;
@@ -371,7 +378,7 @@ export function positionRoutes(deps: Deps) {
       return values.reply(c, 200, held.map((v) => {
         // a close's stamp is when that row was observed: the clock the page's chips and its
         // market-closed line read, so neither calls a Friday close "valued at" Saturday's hour
-        const timing = v.close === null ? null : sampleTiming(v.close.observed_at);
+        const timing = v.close === null ? null : valuedTiming(v.close.observed_at);
         return {
           ...out(v.row),
           cost_to_close: v.cost,
@@ -388,11 +395,14 @@ export function positionRoutes(deps: Deps) {
             v.position.legs.filter((l) => l.side === "short")
               .map((l) => buildSpxCode(v.position.strike_date, l.option_type, l.strike)),
             v.records, v.spx.price, v.figuresDte),
-          fetched_at: v.close === null ? fetched
+          // a holding the failed call would have priced was read at no time at all (#387)
+          fetched_at: v.close === null ? (v.unpriced === null ? fetched : null)
             : timing === "unrecorded" ? null : displayStored(v.close.observed_at, tz),
           valued_from: v.valuedFrom,
           valued_on: v.close?.observed_on ?? null,
           valued_timing: timing,
+          // the 502's own words, which in the session would be the whole answer
+          valued_reason: v.unpriced === null ? null : `${deps.provider.name} call failed: ${v.unpriced}`,
           dte: v.dte,
           schedule: v.schedule,
         };

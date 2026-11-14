@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
-from optionality.expiry import MARKET_TZ, sample_timing
+from optionality.expiry import MARKET_TZ, valued_timing
 from optionality.js import js_string, to_fixed
 from optionality.monitor import threshold_fault
 
@@ -240,7 +240,7 @@ def _day_words(day: date) -> str:
 
 def _new_york_when(observed_at: str | None) -> str | None:
     """ "Fri 13 Nov 16:14": a stored UTC stamp on New York's clock, or None where it is unreadable."""
-    if observed_at is None or sample_timing(observed_at) == "unrecorded":
+    if observed_at is None or valued_timing(observed_at) == "unrecorded":
         return None
     when = datetime.fromisoformat(f"{observed_at[:10]}T{observed_at[11:23]}").replace(tzinfo=UTC)
     ny = when.astimezone(ZoneInfo(MARKET_TZ))
@@ -249,33 +249,40 @@ def _new_york_when(observed_at: str | None) -> str | None:
 
 def close_words(close: PositionSampleRow) -> str:
     """Which stored row a holding was valued from, in words: "as of the close, Fri 13 Nov 16:14" — or,
-    where no row with a cost was taken in the hours, that reading's own timing (#380)."""
+    where no row with a cost was taken in a session, that reading's own timing (#380), a weekend's said by
+    its time alone (`valued_timing`, #387)."""
     when = _new_york_when(close["observed_at"])
-    timing = sample_timing(close["observed_at"])
+    timing = valued_timing(close["observed_at"])
     if timing == "close":
         return f"as of the close, {when}"
     if timing == "after-close":
         return f"as of {when}, after the close"
     if timing == "before-open":
         return f"as of {when}, before the open"
+    if timing == "weekend":
+        return f"as of {when}"
     return f"as of {_day_words(date.fromisoformat(close['observed_on']))}, at a time not recorded"
 
 
 def closed_line(values: list[HoldingValue]) -> str:
     """The one line `/holdings` adds under its table outside the session (#380): which close the figures
     are from, how many holdings were valued from another row, and how many had none and were valued
-    live. Mirrors `format.ts`' `closedLine`."""
+    live — or, where the Provider could not be asked for them, were not valued at all (#387). Mirrors
+    `format.ts`' `closedLine`."""
     closes = [v.close for v in values if v.close is not None]
     live = len(values) - len(closes)
+    # one call prices every holding valued live, so either all of them were asked or none was
+    unasked = any(v.close is None and v.unpriced is not None for v in values)
+    live_words = "and the Provider could not be asked" if unasked else "valued live"
     if not closes:
-        return "market closed — no close recorded yet; valued live"
+        return f"market closed — no close recorded yet{', ' if unasked else '; '}{live_words}"
 
     def later(a: PositionSampleRow, b: PositionSampleRow) -> bool:
         return b["observed_on"] > a["observed_on"] or (
             b["observed_on"] == a["observed_on"] and (b["observed_at"] or "") > (a["observed_at"] or "")
         )
 
-    in_hours = [c for c in closes if sample_timing(c["observed_at"]) == "close"]
+    in_hours = [c for c in closes if valued_timing(c["observed_at"]) == "close"]
     pool = in_hours or closes
     latest = pool[0]
     for c in pool[1:]:
@@ -283,14 +290,14 @@ def closed_line(values: list[HoldingValue]) -> str:
             latest = c
 
     def key(c: PositionSampleRow) -> tuple[str, str]:
-        return (c["observed_on"], sample_timing(c["observed_at"]))
+        return (c["observed_on"], valued_timing(c["observed_at"]))
 
     others = sum(1 for c in closes if key(c) != key(latest))
     line = f"market closed — {close_words(latest)}"
     if others > 0:
         line += f"; {others} as of another reading"
     if live > 0:
-        line += f"; {live} with no close, valued live"
+        line += f"; {live} with no close, {live_words}"
     return line
 
 

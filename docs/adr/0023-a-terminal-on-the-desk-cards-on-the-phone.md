@@ -340,9 +340,14 @@ so the same valuation became dashes. This part says what the page shows instead.
   close taken in 09:30–16:15 New York; where none was, the latest with a cost of any timing, its
   timing stated (F6); and where none has a cost, live as before — a dash out of hours, never a 0.
   Only the holdings valued live are asked for, so the usual evening valuation makes no market-data
-  call at all.
+  call at all. **And where that call fails** (#387, 2026-11-14), outside the session only, it costs
+  only the holdings that needed it: each is a dash with `valued_reason` (the 502's own words, "moomoo
+  call failed: …"), and the rest are served from their closes, where it had been a 502 for the whole
+  book. In the session a failed call is still the 502 the page reports.
 - **What it carries.** The answer gains `valued_from` (`live` or `close`), `valued_on` (the
-  sample's market day) and `valued_timing` (its `sampleTiming`). Its `fetched_at`, the stamp every
+  sample's market day) and `valued_timing` (its `valuedTiming`: `sampleTiming`, except that a row in
+  the hours of a weekend is `weekend`, never `close` — the same session test that chooses the row,
+  #387). Its `fetched_at`, the stamp every
   Level chip and the market-closed line read (#354), is the sample's observed time. P&L uses the
   contract size each sample now stores (F3, migration 0013; earlier rows have none, so their P&L
   is a dash). Levels, the schedule and the pace use the sample's own DTE (F5); the holding's DTE and
@@ -351,7 +356,9 @@ so the same valuation became dashes. This part says what the page shows instead.
 - **The words.** The market-closed line names the close on New York's clock, since the close is
   New York's: "market closed — as of the close, Fri 13 Nov 16:14", a reading that is not a close as
   "as of Fri 13 Nov 20:30, after the close", then how many holdings were valued from another row and
-  how many had none ("1 with no close, valued live"). A chip from a close says "at target · as of
+  how many had none ("1 with no close, valued live" — or "1 with no close, and the Provider could
+  not be asked", #387). A weekend's reading is said by its time alone, "as of Sat 14 Nov 11:00"
+  (#387). A chip from a close says "at target · as of
   the close" and no time, so the page still states one clock for a valuation. The bot keeps its
   four columns and adds the same line under the table, outside the session only.
 - **The watchlist** has no samples to fall back on (F8). The service serves its dash; the page puts
@@ -359,13 +366,15 @@ so the same valuation became dashes. This part says what the page shows instead.
   market-closed line says the close — "no figure out of session; last 3.05 at Fri 13 Nov 16:14" —
   so the page states one clock for the close; and only a reading taken IN the session: one read outside it may be the
   0 a 0/0 quote stored before #380, and nothing else tells the two apart.
-- **The manage-by notice**, sent once, waits for a cost rather than going without one: the sweep's
-  batch, else outside the session the latest close, named in it. The wait is bounded: once a whole
+- **The manage-by notice**, sent once, waits for a cost rather than going without one, and says
+  the cost the page and the bot say (#387): the sweep's batch in the session, and outside it the
+  latest close, named in it, even where the batch prices the holding overnight. The wait is bounded: once a whole
   weekday session has closed since the holding entered its window with still no cost, it goes
   without its "now" line, as before, and is stamped.
 - **A close is a weekday's.** A row counts as a close only if it was observed in the session — a
   weekday's 09:30–16:15 — so a priced Saturday-noon row (possible where a Provider quotes at the
-  weekend) never beats Friday's close; it is at most the fallback, stated by its timing.
+  weekend) never beats Friday's close; it is at most the fallback, stated by its timing — as a
+  `weekend` reading, never as a close (#387).
 
 The page's refresh still values the book once more; outside the session that now re-reads the
 latest close, which changes only after the next session.

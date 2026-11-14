@@ -381,6 +381,6 @@ export const NOT_A_DECISION: Readonly<Record<string, string>> = {
   costToClose: "arithmetic inside recordSamples and noticeManageBy",
   legReadings: "arithmetic inside recordSamples",
   contractSize: "the size recordSamples stores beside a row's cost (#380)",
-  sampleTiming: "the words noticeManageBy names a close's timing in (#380)",
+  valuedTiming: "the words noticeManageBy names a close's timing in (#380), a weekend's included (#387)",
   normalizeStrikeDate: "reading the expiry noticeManageBy counts the manage-by window back from",
 };

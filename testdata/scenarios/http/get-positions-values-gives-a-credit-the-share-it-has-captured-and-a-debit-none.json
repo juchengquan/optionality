@@ -235,6 +235,7 @@
           "valued_from": "live",
           "valued_on": null,
           "valued_timing": null,
+          "valued_reason": null,
           "dte": 39,
           "schedule": {
             "dte_at_open": 67,
@@ -287,6 +288,7 @@
           "valued_from": "live",
           "valued_on": null,
           "valued_timing": null,
+          "valued_reason": null,
           "dte": 39,
           "schedule": {
             "dte_at_open": 67,
@@ -355,6 +357,7 @@
           "valued_from": "live",
           "valued_on": null,
           "valued_timing": null,
+          "valued_reason": null,
           "dte": 39,
           "schedule": {
             "dte_at_open": 67,

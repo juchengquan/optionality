@@ -14,7 +14,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import {
-  daysToExpiry, marketDate, sampleTiming, sessionClosedSince, takesSample,
+  daysToExpiry, marketDate, sessionClosedSince, takesSample, valuedTiming,
 } from "optionality/domain/expiry";
 import { normalizeStrikeDate } from "optionality/domain/contract";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
@@ -55,9 +55,11 @@ export interface PositionSweepDeps {
  *  **Held until there is a Cost to close to say** (#380). The notice goes once, so one sent without
  *  its "now" line is without it for good — and the manage-by DTE is first crossed just after New
  *  York's midnight, when moomoo quotes every option bid 0 / ask 0 and the batch prices nothing. So
- *  it is valued from the sweep's own batch where that prices it, and otherwise, outside the
- *  session, from the holding's latest close as `/holdings` would value it (`closeOf`), with that
- *  close's day said beside the figure and its pace at that close's own DTE. Where neither gives a
+ *  it is valued as `/holdings` and the page value the holding (#387): in the session from the
+ *  sweep's own batch, and outside it from the holding's latest close (`closeOf`) even where the
+ *  batch prices it overnight, with that close's day said beside the figure and its pace at that
+ *  close's own DTE — so the three never quote two costs for one holding. Out of the session with
+ *  no row that has a cost, the batch's, as the page's live valuation would be. Where neither gives a
  *  cost the notice is not sent and not stamped, and the next sweep asks again — in the session at
  *  the latest, where the batch prices it. The wait is BOUNDED: once a whole session has closed since
  *  the holding entered the window (`sessionClosedSince`) with still no cost, the notice goes without
@@ -74,10 +76,11 @@ export async function noticeManageBy(
       const dte = daysToExpiry(row.strike_date, at);
       if (dte < 0 || dte > settings.exitManageByDte) continue;
 
-      // the batch's own cost when it has one; else, out of the session, the latest close's
-      const live = costToClose(toPosition(row), byCode);
-      const close = live === null ? closeOf(deps.db, row, at) : null;
-      const cost = close === null ? live : close.cost_to_close;
+      // valued as `/holdings` and the page value it (#387): out of the session from the latest close
+      // whatever the batch says — an overnight quote must not make the notice say "now X" while
+      // they say "as of the close, Y" — and live in the session, or where no row has a cost
+      const close = closeOf(deps.db, row, at);
+      const cost = close === null ? costToClose(toPosition(row), byCode) : close.cost_to_close;
       // no cost yet: HELD, unsent and unstamped, until a sweep has one to say — but not for ever: once
       // a whole session has closed since the holding entered the window with still no price, a wait
       // will not bring one, and it goes without its "now" line, as it did before #380
@@ -117,9 +120,10 @@ function windowEntered(strikeDate: string, openedAt: string, manageByDte: number
 }
 
 /** Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's
- *  own timing where no close had a cost (`closeSample`'s fallback) — never passed off as a close. */
+ *  own timing where no close had a cost (`closeSample`'s fallback) — never passed off as a close,
+ *  a weekend's reading included (`valuedTiming`, #387). */
 function closeWords(close: { observed_on: string; observed_at: string | null }): string {
-  switch (sampleTiming(close.observed_at)) {
+  switch (valuedTiming(close.observed_at)) {
     case "close": return `at the ${close.observed_on} close`;
     case "after-close": return `on ${close.observed_on}, after the close`;
     case "before-open": return `on ${close.observed_on}, before the open`;

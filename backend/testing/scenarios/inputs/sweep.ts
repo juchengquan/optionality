@@ -666,6 +666,30 @@ export const SWEEP: readonly SweepInput[] = [
     }),
   },
   {
+    // #387: out of hours the notice says the close the page and /holdings value the holding from,
+    // even where the batch prices it overnight — so the three never quote two costs for one holding
+    name: "out of hours a manage-by notice is valued from the latest close though the batch prices it",
+    outcomes: ["manage-by-notice-from-the-close"],
+    world: world({
+      clock: SATURDAY_MIDNIGHT,
+      tables: {
+        positions: [november],
+        position_samples: [
+          sample({
+            position_id: "pos-nov", observed_on: "2026-11-13", dte: 14, cost_to_close: 2.25,
+            observed_at: "2026-11-13 21:14:59.000000", contract_size: 100,
+          }),
+          // Saturday's row is already filled, and before the open a priced reading leaves it be
+          sample({
+            position_id: "pos-nov", observed_on: "2026-11-14", dte: 13, cost_to_close: null,
+            observed_at: "2026-11-14 05:00:05.000000",
+          }),
+        ],
+      },
+      provider: { quotes: NOVEMBER_QUOTES },
+    }),
+  },
+  {
     name: "an empty book is swept without asking the Provider anything",
     outcomes: ["nothing-to-sweep"],
     world: world(),
