@@ -167,7 +167,9 @@ describe("a breach", () => {
     values[b] = 30.7;
     await s.sweep(); // -4.3 <= -4.05
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toContain("-4.300");
+    // a combo's signed value at or below a negative figure is its cost to close at or above it,
+    // and is said so, as the dashboard says it (#388)
+    expect(sent[0]).toBe("⚠️ sep-condor: close crossed ≥ 4.05 — 4.30  ▲ past 0.25");
 
     values[b] = 30.35;
     await s.sweep(); // -3.95 back above
@@ -382,7 +384,7 @@ describe("a value it cannot read", () => {
     expect(calls[0]).toEqual([a, b].sort());
     expect(sent).toHaveLength(1); // 26.4 - 19.25 = 7.15 <= 10
     expect(sent[0]).toContain("sep-condor");
-    expect(sent[0]).toContain("7.150");
+    expect(sent[0]).toBe("⚠️ sep-condor: |val| fell ≤ 10.00 — 7.15  ▼ past 2.85");
     const m = row(id)!;
     expect(m.triggered).toBe(1);
     expect(m.last_value).toBeCloseTo(7.15, 10);
@@ -505,6 +507,13 @@ describe("the expiry lifecycle", () => {
     // "starting" for ever — none of which anything asserted (mutation sweep, 2026-11-09).
     expect(s.health.lastSweepOk()).toBe(true);
     expect(s.health.alarmState()).toEqual({ label: "active", bad: false });
+  });
+
+  it("names an expiring combo by its own rule, a spread's value, read off the row unhydrated (#388)", async () => {
+    combo({ strike_date: past() });
+    await sweeper(() => Promise.resolve([])).sweep();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatch(new RegExp(`^ℹ️ monitor sep-condor \\|val\\| ≤ 10\\.00 expired \\(${past()}\\) — muted; auto-removes in \\d+ days$`));
   });
 
   it("is still watching on the expiry day itself, and still fetches it", async () => {

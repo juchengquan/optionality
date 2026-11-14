@@ -57,7 +57,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from optionality.alarm import AlarmPolicy, AlarmState, alarm_transition
+from optionality.alarm import AlarmPolicy, AlarmState, RuleShape, alarm_transition
 from optionality.js import js_string
 from optionality.js import truthy as js_truthy
 from optionality.lifecycle import (
@@ -329,7 +329,18 @@ class MonitorSweeper:
                 # the decision is `optionality.lifecycle.expiry_verdict` (ADR 0017); this applies it
                 verdict = expiry_verdict(
                     ExpiringMonitor(
-                        code=monitor["code"], strike_date=monitor["strike_date"], enabled=bool(monitor["enabled"])
+                        code=monitor["code"],
+                        strike_date=monitor["strike_date"],
+                        enabled=bool(monitor["enabled"]),
+                        # the row is not hydrated here, and need not be: the short rule needs only
+                        # whether it is a combo, and an unreadable one still expires (#388)
+                        rule=RuleShape(
+                            field=monitor["field"],
+                            combo=monitor["legs"] is not None,
+                            compare=monitor["compare"],
+                            direction=monitor["direction"],
+                            threshold=monitor["threshold"],
+                        ),
                     ),
                     today,
                     retention,

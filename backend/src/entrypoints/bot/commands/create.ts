@@ -59,7 +59,7 @@ export const watch: Command = async (ctx: BotContext, args) => {
     direction, compare,
   });
   if (isFault(made)) return say(made);
-  return ruleText(`Watching ${code}`, field, threshold, direction, compare);
+  return ruleText(`Watching ${code}`, { field, combo: false, compare, direction, threshold });
 };
 
 export const watchcombo: Command = async (ctx: BotContext, args) => {
@@ -98,6 +98,6 @@ export const watchcombo: Command = async (ctx: BotContext, args) => {
   });
   if (isFault(made)) return say(made);
   return ruleText(
-    `Watching combo ${name} (${legs.length} legs)`, field, threshold, direction, compare,
+    `Watching combo ${name} (${legs.length} legs)`, { field, combo: true, compare, direction, threshold },
   );
 };

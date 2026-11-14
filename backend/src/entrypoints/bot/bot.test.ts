@@ -28,6 +28,10 @@ const FUTURE = "2026-11-01";
 const OPENED = "2026-09-17";
 const YYMMDD = "261101";
 const FAR = "2026-11-11";
+/** `/monitors` for the two rules of "says each rule in the short form", character for character */
+const MONITORS_TABLE = "<pre>contract      rule           last   state\n"
+  + "bear-cs       close ≥ 4.05   3.05   armed\n"
+  + "261101 C8100  |mid| ≥ 30.00  26.41  armed</pre>";
 
 let dir: string;
 let db: ReturnType<typeof createDatabase>;
@@ -192,7 +196,7 @@ describe("/watch", () => {
     expect(monitors()[0]!.field).toBe("mid_price");
 
     await b.handleUpdate(update("/monitors"));
-    expect(last()).toContain("≤30.0"); // the threshold cell carries the direction
+    expect(last()).toContain("|mid| ≤ 30.00"); // the rule cell carries the direction
   });
 
   it("replies with usage for anything it cannot read", async () => {
@@ -285,7 +289,8 @@ describe("/watchcombo", () => {
   it("takes the signed keyword, and a negative threshold with it", async () => {
     const b = bot();
     await b.handleUpdate(update(`/watchcombo bear-cs ${FUTURE} -C8100 +C8150 -4.05 signed below`));
-    expect(last()).toContain("-4.05");
+    // a spread's signed value at or below a negative figure is its cost to close at or above it (#388)
+    expect(last()).toBe("Watching combo bear-cs (2 legs): alarm when close ≥ 4.05");
     const m = monitors()[0]!;
     expect(m.compare).toBe("signed");
     expect(m.threshold).toBe(-4.05);
@@ -340,8 +345,8 @@ describe("/watchcombo", () => {
       { sign: 1, option_type: "CALL", strike: 8100 }, { sign: -1, option_type: "CALL", strike: 8150, qty: 2 },
     ]));
     await b.handleUpdate(update("/combo ratio"));
-    expect(last()).toContain("-2");
-    expect(last()).toContain("-12.1"); // 26.4 − 2 × 19.25
+    expect(last()).toContain("\u22122");
+    expect(last()).toContain("\u221212.1"); // 26.4 − 2 × 19.25
   });
 
   it("says so for a combo that does not exist", async () => {
@@ -392,14 +397,15 @@ describe("/monitors", () => {
     expect(last()).toContain("off");
   });
 
-  it("shows four places for a field with no format of its own", async () => {
+  it("says each rule in the short form, in four columns, a price to the cent (#388)", async () => {
     const b = bot();
     await b.handleUpdate(update(`/watch ${FUTURE} CALL 8100 30 mid_price`));
-    db.prepare("update monitors set last_value = 26.41235").run();
+    await b.handleUpdate(update(`/watchcombo bear-cs ${FUTURE} -C8100 +C8150 -4.05 signed below`));
+    db.prepare("update monitors set last_value = 26.41235 where legs is null").run();
+    db.prepare("update monitors set last_value = -3.05 where legs is not null").run();
     await b.handleUpdate(update("/monitors"));
-    // four places, rounded on the stored double exactly as Python's .4f does — checked against it
-    // across a range of values by the `diff-api` differential, which went with the Python (#145)
-    expect(last()).toContain("26.4123");
+    expect(last()).toBe(MONITORS_TABLE);
+    for (const line of last().replace(/<\/?pre>/g, "").split("\n")) expect(line.length).toBeLessThanOrEqual(42);
   });
 
   it("shows an em dash for a monitor that has never been swept", async () => {
@@ -445,7 +451,7 @@ describe("the live tables", () => {
     const reply = last();
     expect(reply).toContain("0.166"); // delta, three places
     expect(reply).toContain("0.00012"); // gamma, five — three would show every gamma as 0.000
-    expect(reply).toContain("-1.12"); // theta, two
+    expect(reply).toContain("\u22121.12"); // theta, two
     expect(reply).not.toContain("22.012"); // IV moved to /vol
     expect(lastParams().parse_mode).toBe("HTML");
   });
@@ -576,7 +582,8 @@ describe("/threshold", () => {
     const b = bot();
     await b.handleUpdate(update(`/watchcombo sep-condor ${FUTURE} +C8100 -C8150 10 below`));
     await b.handleUpdate(update("/threshold sep-condor 25"));
-    expect(last()).toContain("25");
+    // said back as the combo's rule: a spread's value, not a contract's mid (#388)
+    expect(last()).toBe("sep-condor: alarm when |val| ≤ 25.00");
     expect(monitors().find((m) => m.code === "sep-condor")!.threshold).toBe(25);
 
     await b.handleUpdate(update(`/watch ${FUTURE} CALL 6500 0.6`));

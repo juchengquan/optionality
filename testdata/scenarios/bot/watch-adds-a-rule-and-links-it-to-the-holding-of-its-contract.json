@@ -130,7 +130,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "Watching US.SPXW261218C7300000: alarm when abs(option_delta) ≥ 0.3",
+      "text": "Watching US.SPXW261218C7300000: alarm when |Δ| ≥ 0.30",
       "parse_mode": null
     },
     "rows": {

@@ -15,26 +15,29 @@ import { fromSqliteBool } from "../../../db/values.ts";
 import { toMonitor } from "../../../hydrate.ts";
 import { watchlistQuotes } from "../../../monitors.ts";
 import type { QuoteRecord } from "optionality/quotes";
-import { FIELD_SHORT, fmtValue, hasFormat, pyNumber, table } from "../format.ts";
+import { figureShort, ruleShort, type RuleShape } from "optionality/domain/alarm";
+import { FIELD_SHORT, fmtValue, pyNumber, table } from "../format.ts";
 
 /** A figure that may not have arrived, rendered the way its own field wants. */
 function cell(value: unknown, render: (n: number) => string): string {
   return value === undefined || value === null ? "—" : render(Number(value));
 }
 
+/** The stored rules, each in the short form the alarms use (#388): its rule, its last figure and
+ *  its state — four columns, where the field and the threshold were two of five. A held credit's
+ *  stop reads `close ≥ 9.44` beside its last cost to close, as the dashboard says it. */
 export const monitors: Command = (ctx) => {
   const rows = listMonitors(ctx.db);
   if (rows.length === 0) return EMPTY_WATCHLIST;
-  return table(["contract", "field", "last", "thr", "state"], rows.map((m) => {
+  return table(["contract", "rule", "last", "state"], rows.map((m) => {
     let state = fromSqliteBool(m.triggered) ? "🔔" : "armed";
     if (!fromSqliteBool(m.enabled)) state = "off";
-    // three places for a field with a format of its own, four for everything else — a mid of
-    // 26.4000 reads as spurious precision, and a delta of 0.0456 loses the figure that matters
-    const last = m.last_value === null ? "—"
-      : hasFormat(m.field) ? fmtValue(m.field, m.last_value)
-      : m.last_value.toFixed(4);
-    const thr = `${m.direction === "below" ? "≤" : "≥"}${pyNumber(m.threshold)}`;
-    return [shortSpxCode(m.code), FIELD_SHORT[m.field] ?? m.field, last, thr, state];
+    const rule: RuleShape = {
+      field: m.field, combo: m.legs !== null, compare: m.compare, direction: m.direction,
+      threshold: m.threshold,
+    };
+    const last = m.last_value === null ? "—" : figureShort(rule, m.last_value);
+    return [shortSpxCode(m.code), ruleShort(rule), last, state];
   }));
 };
 
@@ -107,7 +110,8 @@ export const combo: Command = async (ctx, args) => {
     const value = byCode[code]?.[monitor.field];
     // a quantity beside its sign, `-2`, as the dashboard writes one (#351); one says nothing more
     const qty = leg.qty ?? 1;
-    const sign = `${leg.sign > 0 ? "+" : "-"}${qty === 1 ? "" : qty}`;
+    // the real minus, as /help writes a short leg and every table writes a figure (#388)
+    const sign = `${leg.sign > 0 ? "+" : "\u2212"}${qty === 1 ? "" : qty}`;
     if (value === undefined || value === null) {
       rows.push([sign, shortSpxCode(code), "—"]);
       complete = false;

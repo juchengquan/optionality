@@ -39,7 +39,10 @@ export const threshold: Command = (ctx, args) => {
   const bad = thresholdError(monitor.compare, value);
   if (bad) return bad;
   updateMonitorFields(ctx.db, monitor.id, { threshold: value });
-  return ruleText(monitor.code, monitor.field, value, monitor.direction, monitor.compare);
+  return ruleText(monitor.code, {
+    field: monitor.field, combo: monitor.legs !== null, compare: monitor.compare,
+    direction: monitor.direction, threshold: value,
+  });
 };
 
 export const rename: Command = (ctx, args) => {

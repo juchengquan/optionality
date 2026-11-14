@@ -11,9 +11,9 @@ import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../MonitorEdit";
 import {
-  deletesOn, draftOf, draftWords, patchOf, ruleOfEntry, ruleOfMonitor, spotOf,
+  deletesOn, draftOf, draftSentence, draftWords, patchOf, ruleOfEntry, ruleOfMonitor, spotOf,
 } from "../edit";
-import { sentence } from "../needs";
+import { sentence, shortSentence } from "../needs";
 import { Next } from "../Next";
 import { serveEditing } from "../testing/editBook";
 import { until } from "../testing/until";
@@ -105,11 +105,16 @@ describe("the draft and what it sends", () => {
     expect(spotOf("monitor not found")).toBe("form");
   });
 
-  it("words the draft as the served sentence words the rule, so the two read alike", () => {
+  it("words the draft as the served line words the rule, so the two read alike", () => {
     const rule = ruleOfEntry(SPREAD);
-    // the rule part of the served sentence is exactly the draft's when nothing has changed
-    expect(sentence(SPREAD).startsWith(`${draftWords(rule, draftOf(rule))} — `)).toBe(true);
+    // the rule part of the served line is the draft's when nothing has changed, but for the places
+    // the served one writes its threshold to (#388); the sentence and the draft's own sentence alike
+    const served = shortSentence(SPREAD).split("   ")[0]!;
+    expect(served.startsWith(draftWords(rule, draftOf(rule)))).toBe(true);
+    expect(sentence(SPREAD).startsWith(`${draftSentence(rule, draftOf(rule))} — `)).toBe(true);
     expect(draftWords(rule, { ...draftOf(rule), compare: "signed", direction: "below", threshold: "-1" }))
+      .toBe("val ≤ -1");
+    expect(draftSentence(rule, { ...draftOf(rule), compare: "signed", direction: "below", threshold: "-1" }))
       .toBe("spread value ≤ -1");
   });
 
@@ -143,14 +148,21 @@ describe("editing a rule in place", () => {
     controls({ entry: DELTA });
     const form = await openEditor("261218 7150P delta");
     const draft = within(form).getByTestId("draft");
-    expect(draft.textContent).toBe("|delta| ≥ 0.2");
+    // drawn short as typed (#388), and said in words
+    const drawn = () => draft.querySelector<HTMLElement>(".nx-rule-short")!;
+    expect(drawn().textContent).toBe("|Δ| ≥ 0.2");
+    expect(drawn().title).toBe("|delta| ≥ 0.2");
     choose(form, "threshold", "0.3");
-    expect(draft.textContent).toBe("|delta| ≥ 0.3");
+    expect(drawn().textContent).toBe("|Δ| ≥ 0.3");
     choose(form, "compare", "signed");
     choose(form, "direction", "below");
-    expect(draft.textContent).toBe("delta ≤ 0.3");
+    expect(drawn().textContent).toBe("Δ ≤ 0.3");
+    expect(draft.querySelector(".sr-only")!.textContent).toBe("delta ≤ 0.3");
     // the figure and how far it is are the SERVED row's, said as such until it is saved
-    expect(within(form).getByTestId("served").textContent).toBe(`as saved: ${sentence(DELTA)}`);
+    const served = within(form).getByTestId("served");
+    expect(served.querySelector(".nx-rule-short")!.textContent).toBe(shortSentence(DELTA));
+    expect(served.querySelector<HTMLElement>(".nx-rule-short")!.title).toBe(sentence(DELTA));
+    expect(served.querySelector(".sr-only")!.textContent).toBe(sentence(DELTA));
   });
 
   it("opens on the rule as saved, not on a draft that was cancelled", async () => {

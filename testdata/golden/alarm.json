@@ -32,7 +32,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_7100: option_delta 0.420 crossed ≥ 0.3"
+        "notice": "⚠️ 1120_7100: |Δ| crossed ≥ 0.30 — 0.420  ▲ past 0.120"
       }
     },
     {
@@ -65,7 +65,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_7100: option_delta 0.210 fell ≤ 0.3"
+        "notice": "⚠️ 1120_7100: |Δ| fell ≤ 0.30 — 0.210  ▼ past 0.090"
       }
     },
     {
@@ -100,7 +100,7 @@
       ],
       "expect": {
         "triggered": false,
-        "notice": "✅ 1120_7100: option_delta 0.120 back below 0.3"
+        "notice": "✅ 1120_7100: |Δ| back below 0.30 — 0.120  ↑0.180"
       }
     },
     {
@@ -135,7 +135,7 @@
       ],
       "expect": {
         "triggered": false,
-        "notice": "✅ 1120_7100: option_delta 0.440 back above 0.3"
+        "notice": "✅ 1120_7100: |Δ| back above 0.30 — 0.440  ↓0.140"
       }
     },
     {
@@ -205,7 +205,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_7100: option_delta 0.420 crossed ≥ 0.3"
+        "notice": "⚠️ 1120_7100: |Δ| crossed ≥ 0.30 — 0.420  ▲ past 0.120"
       }
     },
     {
@@ -240,7 +240,7 @@
       ],
       "expect": {
         "triggered": null,
-        "notice": "⚠️ 1120_7100: option_delta 0.420 still ≥ 0.3 (reminder)"
+        "notice": "⚠️ 1120_7100: |Δ| still ≥ 0.30 — 0.420  ▲ past 0.120 (reminder)"
       }
     },
     {
@@ -378,12 +378,12 @@
       ],
       "expect": {
         "triggered": null,
-        "notice": "⚠️ 1120_7100: option_delta 0.420 still ≥ 0.3 (reminder)"
+        "notice": "⚠️ 1120_7100: |Δ| still ≥ 0.30 — 0.420  ▲ past 0.120 (reminder)"
       }
     },
     {
       "fn": "alarmTransition",
-      "name": "the figure is three decimals, rounded as JavaScript rounds",
+      "name": "the figure is to its field's places, rounded as JavaScript rounds",
       "args": [
         {
           "code": "US.SPXW261120C7100000",
@@ -411,7 +411,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_7100: option_delta 0.313 crossed ≥ 0.3"
+        "notice": "⚠️ 1120_7100: |Δ| crossed ≥ 0.30 — 0.313  ▲ past 0.013"
       }
     },
     {
@@ -444,7 +444,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_7100: option_delta 0.063 fell ≤ 0.3"
+        "notice": "⚠️ 1120_7100: |Δ| fell ≤ 0.30 — 0.063  ▼ past 0.237"
       }
     },
     {
@@ -477,12 +477,12 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_7100: option_delta 0.300 crossed ≥ 0.3"
+        "notice": "⚠️ 1120_7100: |Δ| crossed ≥ 0.30 — 0.300  ▲ at"
       }
     },
     {
       "fn": "alarmTransition",
-      "name": "a negative reading breaches below the negated threshold",
+      "name": "a negative reading crosses as its size",
       "args": [
         {
           "code": "US.SPXW261120C7100000",
@@ -510,7 +510,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_P6500: option_delta -0.420 fell ≤ -0.3"
+        "notice": "⚠️ 1120_P6500: |Δ| crossed ≥ 0.30 — −0.420  ▲ past 0.120"
       }
     },
     {
@@ -545,12 +545,12 @@
       ],
       "expect": {
         "triggered": null,
-        "notice": "⚠️ 1120_P6500: option_delta -0.420 still ≤ -0.3 (reminder)"
+        "notice": "⚠️ 1120_P6500: |Δ| still ≥ 0.30 — −0.420  ▲ past 0.120 (reminder)"
       }
     },
     {
       "fn": "alarmTransition",
-      "name": "and recovers back ABOVE the negated threshold",
+      "name": "and its size comes back below",
       "args": [
         {
           "code": "US.SPXW261120C7100000",
@@ -580,7 +580,7 @@
       ],
       "expect": {
         "triggered": false,
-        "notice": "✅ 1120_P6500: option_delta -0.120 back above -0.3"
+        "notice": "✅ 1120_P6500: |Δ| back below 0.30 — −0.120  ↑0.180"
       }
     },
     {
@@ -613,12 +613,12 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_P6500: option_delta -0.030 crossed ≥ -0.05"
+        "notice": "⚠️ 1120_P6500: |Δ| fell ≤ 0.05 — −0.030  ▼ past 0.020"
       }
     },
     {
       "fn": "alarmTransition",
-      "name": "a reading of exactly zero is not mirrored",
+      "name": "a reading of exactly zero",
       "args": [
         {
           "code": "US.SPXW261120C7100000",
@@ -646,12 +646,12 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_P6500: option_delta 0.000 fell ≤ 0.05"
+        "notice": "⚠️ 1120_P6500: |Δ| fell ≤ 0.05 — 0.000  ▼ past 0.050"
       }
     },
     {
       "fn": "alarmTransition",
-      "name": "an integer threshold is written without a trailing zero",
+      "name": "an integer threshold is written to its places",
       "args": [
         {
           "code": "US.SPXW261120C7100000",
@@ -679,12 +679,12 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_IC: mid_price 6.500 crossed ≥ 5"
+        "notice": "⚠️ 1120_IC: |mid| crossed ≥ 5.00 — 6.50  ▲ past 1.50"
       }
     },
     {
       "fn": "alarmTransition",
-      "name": "and a negated integer threshold likewise",
+      "name": "and beside a negative figure likewise",
       "args": [
         {
           "code": "US.SPXW261120C7100000",
@@ -712,12 +712,12 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_IC: mid_price -6.500 fell ≤ -5"
+        "notice": "⚠️ 1120_IC: |mid| crossed ≥ 5.00 — −6.50  ▲ past 1.50"
       }
     },
     {
       "fn": "alarmTransition",
-      "name": "a signed rule is left exactly as it was",
+      "name": "a signed rule keeps its signs",
       "args": [
         {
           "code": "US.SPXW261120C7100000",
@@ -745,7 +745,810 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_P6500: option_delta -0.420 fell ≤ -0.1"
+        "notice": "⚠️ 1120_P6500: Δ fell ≤ −0.10 — −0.420  ▼ past 0.320"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a held credit's stop is the cost to close crossing up",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": -9.44,
+          "direction": "below",
+          "compare": "signed",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        -9.6,
+        "1120_IC",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_IC: close crossed ≥ 9.44 — 9.60  ▲ past 0.16"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "and back below its cost",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": -9.44,
+          "direction": "below",
+          "compare": "signed",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        -3.05,
+        "1120_IC",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:53:20.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": false,
+        "notice": "✅ 1120_IC: close back below 9.44 — 3.05  ↑6.39"
+      }
+    },
+    {
+      "fn": "ruleShape",
+      "name": "a single contract",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        }
+      ],
+      "expect": {
+        "field": "option_delta",
+        "combo": false,
+        "compare": "abs",
+        "direction": "above",
+        "threshold": 0.3
+      }
+    },
+    {
+      "fn": "ruleShape",
+      "name": "a combo, by its legs",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        }
+      ],
+      "expect": {
+        "field": "mid_price",
+        "combo": true,
+        "compare": "abs",
+        "direction": "above",
+        "threshold": 2.5
+      }
+    },
+    {
+      "fn": "ruleShape",
+      "name": "empty legs are a single contract",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": []
+        }
+      ],
+      "expect": {
+        "field": "option_delta",
+        "combo": false,
+        "compare": "abs",
+        "direction": "above",
+        "threshold": 0.3
+      }
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a magnitude in bars",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        }
+      ],
+      "expect": "|Δ| ≥ 0.20"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a signed figure without",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "signed",
+          "direction": "above",
+          "threshold": 0.2
+        }
+      ],
+      "expect": "Δ ≥ 0.20"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a below rule",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "below",
+          "threshold": 0.2
+        }
+      ],
+      "expect": "|Δ| ≤ 0.20"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a spread's price is val",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51
+        }
+      ],
+      "expect": "|val| ≥ 4.51"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a contract's price is mid",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 30
+        }
+      ],
+      "expect": "|mid| ≥ 30.00"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "gamma, to the places it was typed",
+      "args": [
+        {
+          "field": "option_gamma",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.0012
+        }
+      ],
+      "expect": "|Γ| ≥ 0.0012"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "theta",
+      "args": [
+        {
+          "field": "option_theta",
+          "combo": false,
+          "compare": "signed",
+          "direction": "below",
+          "threshold": -1.5
+        }
+      ],
+      "expect": "Θ ≤ −1.50"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "vega is nu",
+      "args": [
+        {
+          "field": "option_vega",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 3
+        }
+      ],
+      "expect": "|ν| ≥ 3.00"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "IV",
+      "args": [
+        {
+          "field": "option_implied_volatility",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 25
+        }
+      ],
+      "expect": "|IV| ≥ 25.00"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "an unknown field as it is stored",
+      "args": [
+        {
+          "field": "bid_price",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 1
+        }
+      ],
+      "expect": "|bid_price| ≥ 1.00"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a threshold typed to three places keeps them",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.125
+        }
+      ],
+      "expect": "|Δ| ≥ 0.125"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a held credit's stop is the cost to close",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": true,
+          "compare": "signed",
+          "direction": "below",
+          "threshold": -9.44
+        }
+      ],
+      "expect": "close ≥ 9.44"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a below rule on a positive spread value is no cost",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": true,
+          "compare": "signed",
+          "direction": "below",
+          "threshold": 1.5
+        }
+      ],
+      "expect": "val ≤ 1.50"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a negative signed threshold has the real minus",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "signed",
+          "direction": "below",
+          "threshold": -0.1
+        }
+      ],
+      "expect": "Δ ≤ −0.10"
+    },
+    {
+      "fn": "figureShort",
+      "name": "a negative delta as served, real minus",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        -0.087
+      ],
+      "expect": "−0.087"
+    },
+    {
+      "fn": "figureShort",
+      "name": "a price to the cent",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        2.1
+      ],
+      "expect": "2.10"
+    },
+    {
+      "fn": "figureShort",
+      "name": "a gamma to four places",
+      "args": [
+        {
+          "field": "option_gamma",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        0.00123
+      ],
+      "expect": "0.0012"
+    },
+    {
+      "fn": "figureShort",
+      "name": "an exact binary half rounds as JavaScript rounds",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        0.0625
+      ],
+      "expect": "0.063"
+    },
+    {
+      "fn": "figureShort",
+      "name": "a cost to close is the cost",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": true,
+          "compare": "signed",
+          "direction": "below",
+          "threshold": -9.44
+        },
+        -3.05
+      ],
+      "expect": "3.05"
+    },
+    {
+      "fn": "figureShort",
+      "name": "a negative that rounds to zero keeps its sign",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        -0.0004
+      ],
+      "expect": "−0.000"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "an above rule points up",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        0.113
+      ],
+      "expect": "↑0.113"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "a below rule points down",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "below",
+          "threshold": 0.2
+        },
+        0.113
+      ],
+      "expect": "↓0.113"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "at the threshold",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        0
+      ],
+      "expect": "▲ at"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "at the threshold, below",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "below",
+          "threshold": 0.2
+        },
+        0
+      ],
+      "expect": "▼ at"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "past an above rule",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        -0.05
+      ],
+      "expect": "▲ past 0.050"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "past a below rule",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "below",
+          "threshold": 0.2
+        },
+        -0.05
+      ],
+      "expect": "▼ past 0.050"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "a cost to close rises to its stop",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": true,
+          "compare": "signed",
+          "direction": "below",
+          "threshold": -9.44
+        },
+        6.39
+      ],
+      "expect": "↑6.39"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "a price to the cent",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        },
+        2.41
+      ],
+      "expect": "↑2.41"
+    },
+    {
+      "fn": "figureShort",
+      "name": "a mid to the places its threshold was typed with",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.505
+        },
+        4.506
+      ],
+      "expect": "4.506"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "past a threshold typed to the tenth of a cent",
+      "args": [
+        {
+          "field": "mid_price",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.505
+        },
+        -0.001
+      ],
+      "expect": "▲ past 0.001"
+    },
+    {
+      "fn": "figureShort",
+      "name": "a gamma to its threshold's five places",
+      "args": [
+        {
+          "field": "option_gamma",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.00015
+        },
+        0.0001
+      ],
+      "expect": "0.00010"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "a gamma's distance to its threshold's five places",
+      "args": [
+        {
+          "field": "option_gamma",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.00015
+        },
+        0.00005
+      ],
+      "expect": "↑0.00005"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "a distance that rounds to zero is under the last place, not zero",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.3
+        },
+        1e-7
+      ],
+      "expect": "↑<0.001"
+    },
+    {
+      "fn": "distanceShort",
+      "name": "and past it likewise",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.3
+        },
+        -0.0004
+      ],
+      "expect": "▲ past <0.001"
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a breach past a finely typed threshold says by how much",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "mid_price",
+          "threshold": 4.505,
+          "direction": "above",
+          "compare": "abs"
+        },
+        4.506,
+        "1120_7100",
+        {
+          "triggered": false,
+          "lastAlarmAt": null
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": true,
+        "notice": "⚠️ 1120_7100: |mid| crossed ≥ 4.505 — 4.506  ▲ past 0.001"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a gamma back below a five-place threshold",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_gamma",
+          "threshold": 0.00015,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.0001,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:53:20.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": false,
+        "notice": "✅ 1120_7100: |Γ| back below 0.00015 — 0.00010  ↑0.00005"
+      }
+    },
+    {
+      "fn": "alarmTransition",
+      "name": "a hair below its threshold is not at it",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        0.2999999,
+        "1120_7100",
+        {
+          "triggered": true,
+          "lastAlarmAt": {
+            "$date": "2026-11-01T10:53:20.000Z"
+          }
+        },
+        {
+          "cooldownSeconds": 900,
+          "repeatSeconds": 3600
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "triggered": false,
+        "notice": "✅ 1120_7100: |Δ| back below 0.30 — 0.300  ↑<0.001"
       }
     }
   ]

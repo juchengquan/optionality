@@ -284,7 +284,15 @@ export class MonitorSweeper {
       for (const monitor of listMonitors(db)) {
         // the decision is `domain/lifecycle.expiryVerdict` (ADR 0017); this applies it
         const verdict = expiryVerdict(
-          { code: monitor.code, strike_date: monitor.strike_date, enabled: Boolean(monitor.enabled) },
+          {
+            code: monitor.code, strike_date: monitor.strike_date, enabled: Boolean(monitor.enabled),
+            // the row is not hydrated here, and need not be: the short rule needs only whether it is
+            // a combo, and an unreadable one still expires (#388)
+            rule: {
+              field: monitor.field, combo: monitor.legs !== null, compare: monitor.compare,
+              direction: monitor.direction, threshold: monitor.threshold,
+            },
+          },
           today, retention,
         );
         if (verdict.notice !== null) notices.push(verdict.notice);

@@ -30,10 +30,12 @@ and a column that wraps is a table that cannot be read at all.
 
 import html
 import math
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
+from optionality.alarm import RuleShape, rule_short
 from optionality.expiry import MARKET_TZ, valued_timing
 from optionality.js import js_string, to_fixed
 from optionality.monitor import threshold_fault
@@ -172,6 +174,13 @@ def fit_cell(cell: str, room: int) -> str:
     return "".join(chars[:head_n]) + "…" + "".join(chars[len(chars) - tail_n :])
 
 
+def minus_sign(cell: str) -> str:
+    """A figure's leading minus as the real one, U+2212 (#388): "-0.85" is "−0.85". Only a cell that IS
+    a negative number — a name like `bear-cs` is left alone."""
+    text = js_text(cell)
+    return f"\u2212{text[1:]}" if re.match(r"-[\d.]", text, re.ASCII) else cell
+
+
 def table(headers: list[str], rows: list[list[str]]) -> str:
     """A `<pre>` table with space-aligned columns.
 
@@ -186,6 +195,9 @@ def table(headers: list[str], rows: list[list[str]]) -> str:
 
     def measure(cells: list[list[str]]) -> list[list[str]]:
         return [[escape_html(js_text(cell)) for cell in row] for row in cells]
+
+    # one minus in every table: the rule's short form writes U+2212 (#388), so a figure cell does too
+    rows = [[minus_sign(cell) for cell in row] for row in rows]
 
     def widths_of(all_rows: list[list[str]]) -> list[int]:
         return [max(_width(row[i]) if i < len(row) else 0 for row in all_rows) for i in range(len(headers))]
@@ -301,11 +313,6 @@ def closed_line(values: list[HoldingValue]) -> str:
     return line
 
 
-def has_format(field: str) -> bool:
-    """Whether this field has a format of its own, which decides 3 places against 4."""
-    return field in _FIELD_FORMATS
-
-
 def fmt_value(key: str, value: object) -> str:
     """A figure, to the places its field deserves."""
     places = _FIELD_FORMATS.get(key)
@@ -333,11 +340,10 @@ def threshold_error(compare: str, threshold: float) -> str | None:
             return None
 
 
-def rule_text(prefix: str, field: str, threshold: float, direction: str, compare: str) -> str:
-    """What a rule means, said back to the owner so a mistyped direction is visible at once."""
-    sign = "≤" if direction == "below" else "≥"
-    metric = field if compare == "signed" else f"abs({field})"
-    return f"{prefix}: alarm when {metric} {sign} {js_string(threshold)}"
+def rule_text(prefix: str, rule: RuleShape) -> str:
+    """What a rule means, said back to the owner so a mistyped direction is visible at once — in the
+    short form every other message uses (#388): "Watching X: alarm when |Δ| ≥ 0.60"."""
+    return f"{prefix}: alarm when {rule_short(rule)}"
 
 
 def py_number(value: float) -> str:

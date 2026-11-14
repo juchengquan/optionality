@@ -138,7 +138,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ dec-fly: mid_price -0.250 crossed ≥ -0.3"
+      "⚠️ dec-fly: |val| fell ≤ 0.30 — −0.25  ▼ past 0.05"
     ],
     "rows": {
       "monitors": {

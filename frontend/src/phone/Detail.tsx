@@ -14,7 +14,8 @@ import { DetailBoundary } from "../DetailBoundary";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome, paceWords } from "../pace";
-import { entryName, fieldWords, sentence } from "../needs";
+import { entryName, fieldWords } from "../needs";
+import { RuleWords } from "../RuleWords";
 import { LevelChip, Progress, RuleLine } from "./Cards";
 import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
@@ -159,7 +160,7 @@ function RuleDetail({ entry, under, overlap = null }: {
         {state ? <p><Chip state={state} /></p> : null}
         {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
         <Progress entry={entry} />
-        <p className="nxp-sentence">{sentence(entry)}</p>
+        <p className="nxp-sentence"><RuleWords entry={entry} /></p>
         {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
         <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
         {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}

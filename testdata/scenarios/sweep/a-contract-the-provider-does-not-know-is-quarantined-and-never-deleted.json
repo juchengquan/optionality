@@ -117,8 +117,8 @@
   },
   "expect": {
     "messages": [
-      "⚠️ monitor US.SPXW261218C7300000 disabled: unknown contract US.SPXW261218C7300000 (delisted or never existed)",
-      "⚠️ SPXW 261218 7350C: option_delta 0.150 crossed ≥ 0.1"
+      "⚠️ monitor US.SPXW261218C7300000 |Δ| ≥ 0.30 disabled: unknown contract US.SPXW261218C7300000 (delisted or never existed)",
+      "⚠️ SPXW 261218 7350C: |Δ| crossed ≥ 0.10 — 0.150  ▲ past 0.050"
     ],
     "rows": {
       "monitors": {

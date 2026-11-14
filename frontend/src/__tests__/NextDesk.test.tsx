@@ -8,14 +8,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Entry, Holding } from "../shared/api";
+import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, tableRows, type DeskRow } from "../desk/columns";
 import { Next } from "../Next";
 import { placeBook } from "../placement";
 import { readHidden } from "../shared/prefs";
-import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
+import { HOLDINGS, monitor, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 function props(over: Partial<BookProps> = {}): BookProps {
@@ -83,9 +83,14 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
     expect(row("w-lone").dataset.nested).toBeUndefined();
   });
 
-  it("gives every rule its fill bar and its sentence", () => {
+  it("gives every rule its fill bar, and its short form with its sentence to a pointer and a reader (#388)", () => {
     render(<DeskBook {...props()} />);
-    expect(cellText("w-dec18-delta", "alarm")).toBe("|delta| ≥ 0.2 — now -0.170, 0.030 away");
+    const full = "|delta| ≥ 0.2 — now -0.170, 0.030 away";
+    expect(cellText("w-dec18-delta", "alarm")).toBe("|Δ| ≥ 0.20   \u22120.170  ↑0.030");
+    const drawn = cell("w-dec18-delta", "alarm")!.querySelector<HTMLElement>(".nxd-v")!;
+    expect(drawn.title).toBe(full);
+    expect(drawn.getAttribute("aria-hidden")).toBe("true");
+    expect(cell("w-dec18-delta", "alarm")!.querySelector(".sr-only")!.textContent).toBe(`rule ${full}`);
     const bar = cell("w-dec18", "alarm")!.querySelector<HTMLElement>("[data-fill]")!;
     expect(bar.dataset.fill).toBe("40");
   });
@@ -192,7 +197,9 @@ describe("how a rule looks in each state", () => {
     render(<DeskBook {...props()} />);
     expect(row("q-unknown").dataset.state).toBe("fault");
     expect(row("q-unknown").querySelector(".nx-chip")!.getAttribute("data-attention")).toBe("fault");
-    expect(cellText("q-unknown", "alarm")).toBe("|delta| ≥ 0.1 — the provider does not know its contract");
+    expect(cellText("q-unknown", "alarm")).toBe("|Δ| ≥ 0.10 — the provider does not know its contract");
+    expect(cell("q-unknown", "alarm")!.querySelector<HTMLElement>(".nxd-v")!.title)
+      .toBe("|delta| ≥ 0.1 — the provider does not know its contract");
   });
 
   it("keeps muted and expired rules in a collapsed group, apart from the quarantined", () => {
@@ -204,6 +211,21 @@ describe("how a rule looks in each state", () => {
     expect(names.join(" ")).toContain("Muted by you");
     expect(names.join(" ")).toContain("Expired");
     expect(group.textContent).not.toContain("261211");
+  });
+
+  it("says a held credit's stop as the cost to close it draws, quarantined or muted (review of #388)", () => {
+    const stop = { code: "1218_C7300", option_type: "CMB", strike: 0, field: "mid_price", threshold: -4.05,
+      direction: "below", compare: "signed", enabled: false,
+      legs: [{ sign: -1, option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7350 }] } satisfies Partial<Monitor>;
+    render(<DeskBook {...props({ monitors: [...MONITORS,
+      monitor("q-stop", { ...stop, disabled_reason: "no-figure" }),
+      monitor("m-stop", { ...stop, disabled_reason: "manual" })] })} />);
+    const drawn = cell("q-stop", "alarm")!.querySelector<HTMLElement>(".nxd-v")!;
+    expect(drawn.textContent).toBe("close ≥ 4.05 — its figure never arrives");
+    expect(drawn.title).toBe("cost to close ≥ 4.05 — its figure never arrives");
+    const muted = [...screen.getByText(/muted and expired/i).closest("details")!.querySelectorAll<HTMLElement>(".nx-rule-short")]
+      .find((el) => el.textContent === "close ≥ 4.05")!;
+    expect(muted.title).toBe("cost to close ≥ 4.05");
   });
 
   it("changes only the fired entry row when entries are set to look like risk", () => {

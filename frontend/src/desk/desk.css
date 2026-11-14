@@ -120,7 +120,7 @@
 .nxd-row[data-nested] .nxd-name { font-weight: 400; }
 .nxd-row .nx-chip { font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; font-size: 0.6875rem; flex: none; }
 .nxd-row [data-col="alarm"] { display: flex; align-items: center; gap: 1ch; }
-.nxd-row [data-col="alarm"] .nxd-v { overflow: hidden; text-overflow: ellipsis; }
+.nxd-row [data-col="alarm"] .nxd-v { overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 
 /* the bracket joining a condor's two held spreads: one piece on each row it passes, so it runs from
    the first holding's row to the second's whatever rules sit under either */

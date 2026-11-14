@@ -93,7 +93,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "Watching US.SPXW261218P6400000: alarm when option_delta ≤ -0.25",
+      "text": "Watching US.SPXW261218P6400000: alarm when Δ ≤ −0.25",
       "parse_mode": null
     },
     "rows": {

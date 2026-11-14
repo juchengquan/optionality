@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BOT_COMMANDS, HELP_TEXT, TABLE_WIDTH, closeWords, closedLine, escapeHtml, fitCell, fmtValue, hasFormat,
+  BOT_COMMANDS, HELP_TEXT, TABLE_WIDTH, closeWords, closedLine, escapeHtml, fitCell, fmtValue, minusSign,
   pyNumber, ruleText, table, thresholdError,
 } from "./format.ts";
 import type { HoldingValue } from "../../holdings.ts";
@@ -106,7 +106,7 @@ describe("a name too long for the table (#351)", () => {
 
   it("leaves every table that already fits exactly as it was", () => {
     const rows = [["dec-calls", "mid", "-1.0000", "≥4.0", "armed"]];
-    expect(lines(table(["contract", "field", "last", "thr", "state"], rows))[1]).toBe("dec-calls  mid    -1.0000  ≥4.0  armed");
+    expect(lines(table(["contract", "field", "last", "thr", "state"], rows))[1]).toBe("dec-calls  mid    \u22121.0000  ≥4.0  armed");
     expect(fitCell("short", 10)).toBe("short");
   });
 
@@ -121,12 +121,9 @@ describe("fmtValue", () => {
     expect(fmtValue("option_delta", 0.512345)).toBe("0.512");
     expect(fmtValue("option_delta", 0.5)).toBe("0.500");
     expect(fmtValue("option_implied_volatility", 21.45678)).toBe("21.457");
-    expect(hasFormat("option_delta")).toBe(true);
-    expect(hasFormat("option_implied_volatility")).toBe(true);
   });
 
   it("gives everything else Python's str()", () => {
-    expect(hasFormat("mid_price")).toBe(false);
     expect(fmtValue("mid_price", 4.5)).toBe("4.5");
     expect(fmtValue("mid_price", 5)).toBe("5.0");
     expect(fmtValue("bid_price", 1)).toBe("1.0");
@@ -193,15 +190,30 @@ describe("thresholdError", () => {
   });
 });
 
+describe("one minus in every table (#388)", () => {
+  it("writes a negative figure with the real minus, and leaves a name alone", () => {
+    expect(minusSign("-0.85")).toBe("\u22120.85");
+    expect(minusSign("-.5")).toBe("\u2212.5");
+    expect(minusSign("bear-cs")).toBe("bear-cs");
+    expect(minusSign("-")).toBe("-");
+    expect(table(["c", "delta"], [["x", "-0.850"]])).toBe("<pre>c  delta\nx  \u22120.850</pre>");
+  });
+});
+
 describe("ruleText", () => {
-  it("says the rule back in full, so a mistyped direction is visible at once", () => {
-    expect(ruleText("Watching US.X", "option_delta", 0.6, "above", "abs"))
-      .toBe("Watching US.X: alarm when abs(option_delta) ≥ 0.6");
-    expect(ruleText("US.X", "mid_price", 30, "below", "abs"))
-      .toBe("US.X: alarm when abs(mid_price) ≤ 30");
-    // signed drops the abs(), because the sign is the point
-    expect(ruleText("bear-cs", "mid_price", -4.05, "below", "signed"))
-      .toBe("bear-cs: alarm when mid_price ≤ -4.05");
+  const rule = (field: string, combo: boolean, threshold: number, direction: string, compare: string) =>
+    ({ field, combo, threshold, direction, compare });
+  it("says the rule back in the short form, so a mistyped direction is visible at once (#388)", () => {
+    expect(ruleText("Watching US.X", rule("option_delta", false, 0.6, "above", "abs")))
+      .toBe("Watching US.X: alarm when |Δ| ≥ 0.60");
+    expect(ruleText("US.X", rule("mid_price", false, 30, "below", "abs")))
+      .toBe("US.X: alarm when |mid| ≤ 30.00");
+    // signed drops the bars, because the sign is the point
+    expect(ruleText("bear-cs", rule("option_delta", false, -0.15, "below", "signed")))
+      .toBe("bear-cs: alarm when Δ ≤ \u22120.15");
+    // and a spread's signed value at or below a negative figure is its cost to close
+    expect(ruleText("bear-cs", rule("mid_price", true, -4.05, "below", "signed")))
+      .toBe("bear-cs: alarm when close ≥ 4.05");
   });
 });
 

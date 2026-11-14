@@ -10,6 +10,7 @@
  *  phone and a column that wraps is a table that cannot be read at all.
  */
 import { MARKET_TZ, valuedTiming } from "optionality/domain/expiry";
+import { ruleShort, type RuleShape } from "optionality/domain/alarm";
 import { thresholdFault } from "optionality/domain/monitor";
 import type { HoldingValue } from "../../holdings.ts";
 
@@ -105,6 +106,12 @@ export function fitCell(cell: string, room: number): string {
   return `${chars.slice(0, headN).join("")}…${chars.slice(chars.length - tailN).join("")}`;
 }
 
+/** A figure's leading minus as the real one, U+2212, as the short form writes it (#388): "-0.85" is
+ *  "−0.85". Only a cell that IS a negative number — a name like `bear-cs` is left alone. */
+export function minusSign(cell: string): string {
+  return /^-[\d.]/.test(String(cell)) ? `\u2212${String(cell).slice(1)}` : cell;
+}
+
 /** A `<pre>` table with space-aligned columns.
  *
  *  Widths are measured on the ESCAPED text, as the Python does. That is arguably wrong — `&amp;` is
@@ -118,6 +125,8 @@ export function fitCell(cell: string, room: number): string {
  */
 export function table(headers: string[], rows: string[][]): string {
   const measure = (cells: string[][]) => cells.map((row) => row.map((cell) => escapeHtml(String(cell))));
+  // one minus in every table: the rule's short form writes U+2212 (#388), so a figure cell does too
+  rows = rows.map((row) => row.map(minusSign));
   let escaped = measure([headers, ...rows]);
   const widthsOf = (all: string[][]) =>
     headers.map((_, i) => Math.max(...all.map((row) => (row[i] ?? "").length)));
@@ -217,11 +226,6 @@ export function closedLine(values: readonly HoldingValue[]): string {
   return line;
 }
 
-/** Whether this field has a format of its own, which decides 3 places against 4. */
-export function hasFormat(field: string): boolean {
-  return field in FIELD_FORMATS;
-}
-
 /** A figure, to the places its field deserves. */
 export function fmtValue(key: string, value: unknown): string {
   const places = FIELD_FORMATS[key];
@@ -250,13 +254,10 @@ export function thresholdError(compare: string, threshold: number): string | nul
   }
 }
 
-/** What a rule means, said back to the owner so a mistyped direction is visible at once. */
-export function ruleText(
-  prefix: string, field: string, threshold: number, direction: string, compare: string,
-): string {
-  const sign = direction === "below" ? "≤" : "≥";
-  const metric = compare === "signed" ? field : `abs(${field})`;
-  return `${prefix}: alarm when ${metric} ${sign} ${threshold}`;
+/** What a rule means, said back to the owner so a mistyped direction is visible at once — in the
+ *  short form every other message uses (#388): "Watching X: alarm when |Δ| ≥ 0.60". */
+export function ruleText(prefix: string, rule: RuleShape): string {
+  return `${prefix}: alarm when ${ruleShort(rule)}`;
 }
 
 /** A float as Python's `str()` renders it.

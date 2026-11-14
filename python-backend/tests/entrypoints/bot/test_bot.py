@@ -12,6 +12,7 @@ What only the Python can get wrong is at the end.
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,6 +34,12 @@ FUTURE = "2026-11-01"
 OPENED = "2026-09-17"
 YYMMDD = "261101"
 FAR = "2026-11-11"
+#: `/monitors` for the two rules of the short-form test, character for character
+MONITORS_TABLE = (
+    "<pre>contract      rule           last   state\n"
+    "bear-cs       close ≥ 4.05   3.05   armed\n"
+    "261101 C8100  |mid| ≥ 30.00  26.41  armed</pre>"
+)
 
 
 def echo(codes: list[str]) -> list[dict[str, Any]]:
@@ -205,7 +212,7 @@ class TestWatch:
         assert chat.monitors()[0]["field"] == "mid_price"
 
         await b.handle_update(update("/monitors"))
-        assert "≤30.0" in chat.last()  # the threshold cell carries the direction
+        assert "|mid| ≤ 30.00" in chat.last()  # the rule cell carries the direction
 
     async def test_replies_with_usage_for_anything_it_cannot_read(self, chat):
         b = chat.bot()
@@ -292,7 +299,8 @@ class TestWatchcombo:
     async def test_takes_the_signed_keyword_and_a_negative_threshold_with_it(self, chat):
         b = chat.bot()
         await b.handle_update(update(f"/watchcombo bear-cs {FUTURE} -C8100 +C8150 -4.05 signed below"))
-        assert "-4.05" in chat.last()
+        # a spread's signed value at or below a negative figure is its cost to close at or above it (#388)
+        assert chat.last() == "Watching combo bear-cs (2 legs): alarm when close ≥ 4.05"
         m = chat.monitors()[0]
         assert m["compare"] == "signed"
         assert m["threshold"] == -4.05
@@ -343,8 +351,8 @@ class TestWatchcombo:
             (FUTURE, to_sqlite_json(legs)),
         )
         await b.handle_update(update("/combo ratio"))
-        assert "-2" in chat.last()
-        assert "-12.1" in chat.last()  # 26.4 − 2 × 19.25
+        assert "\u22122" in chat.last()
+        assert "\u221212.1" in chat.last()  # 26.4 − 2 × 19.25
 
     async def test_says_so_for_a_combo_that_does_not_exist(self, chat):
         await chat.bot().handle_update(update("/combo ghost"))
@@ -390,13 +398,16 @@ class TestMonitors:
         await b.handle_update(update("/monitors"))
         assert "off" in chat.last()
 
-    async def test_shows_four_places_for_a_field_with_no_format_of_its_own(self, chat):
+    async def test_says_each_rule_in_the_short_form_in_four_columns_a_price_to_the_cent_388(self, chat):
         b = chat.bot()
         await b.handle_update(update(f"/watch {FUTURE} CALL 8100 30 mid_price"))
-        chat.db.execute("update monitors set last_value = 26.41235")
+        await b.handle_update(update(f"/watchcombo bear-cs {FUTURE} -C8100 +C8150 -4.05 signed below"))
+        chat.db.execute("update monitors set last_value = 26.41235 where legs is null")
+        chat.db.execute("update monitors set last_value = -3.05 where legs is not null")
         await b.handle_update(update("/monitors"))
-        # four places, rounded on the stored double exactly as JavaScript's .toFixed(4) does
-        assert "26.4123" in chat.last()
+        assert chat.last() == MONITORS_TABLE
+        for line in re.sub(r"</?pre>", "", chat.last()).split("\n"):
+            assert len(line) <= 42
 
     async def test_shows_an_em_dash_for_a_monitor_that_has_never_been_swept(self, chat):
         b = chat.bot()
@@ -455,7 +466,7 @@ class TestTheLiveTables:
         reply = chat.last()
         assert "0.166" in reply  # delta, three places
         assert "0.00012" in reply  # gamma, five — three would show every gamma as 0.000
-        assert "-1.12" in reply  # theta, two
+        assert "\u22121.12" in reply  # theta, two
         assert "22.012" not in reply  # IV moved to /vol
         assert chat.last_params()["parse_mode"] == "HTML"
 
@@ -543,7 +554,8 @@ class TestThreshold:
         b = chat.bot()
         await b.handle_update(update(f"/watchcombo sep-condor {FUTURE} +C8100 -C8150 10 below"))
         await b.handle_update(update("/threshold sep-condor 25"))
-        assert "25" in chat.last()
+        # said back as the combo's rule: a spread's value, not a contract's mid (#388)
+        assert chat.last() == "sep-condor: alarm when |val| ≤ 25.00"
         assert next(m for m in chat.monitors() if m["code"] == "sep-condor")["threshold"] == 25
 
         await b.handle_update(update(f"/watch {FUTURE} CALL 6500 0.6"))

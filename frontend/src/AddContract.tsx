@@ -16,7 +16,8 @@ import {
   CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces,
   contractSaveWords, refusalSpot, thresholdFault, type ContractDraft, type ContractSpot,
 } from "./contract";
-import { fieldWords, ruleWords } from "./needs";
+import { fieldWords, ruleWords, shortRule } from "./needs";
+import { ShortWords } from "./RuleWords";
 import { DraftPreview } from "./Payoff";
 
 export function AddContract({
@@ -77,8 +78,12 @@ export function AddContract({
   const ruleOn = draft.rule || !held;
   const replacing = contractReplaces(draft, monitors);
   const type = draft.option_type.toLowerCase();
+  const typed = draft.threshold.trim() || "…";
+  // drawn short (#388), said in words
   const words = `${draft.strike.trim() || "…"} ${type} `
-    + ruleWords(draft.field, false, draft.compare, draft.direction, draft.threshold.trim() || "…");
+    + shortRule({ field: draft.field, combo: false, compare: draft.compare, direction: draft.direction, threshold: typed });
+  const wordsFull = `${draft.strike.trim() || "…"} ${type} `
+    + ruleWords(draft.field, false, draft.compare, draft.direction, typed);
   const preview = contractPreview(draft);
   return (
     <form className="nx-add nx-add-contract" aria-label="add one contract" onSubmit={(e) => void save(e)}
@@ -170,7 +175,7 @@ export function AddContract({
                   <small className="nx-meta">{draft.rule ? "a Monitor on this contract" : "no rule: the holding alone"}</small>
                 </div>
               ) : null}
-              <p className="nx-add-sentence" data-testid="contract-draft" aria-live="polite">{ruleOn ? words : "no Monitor"}</p>
+              <p className="nx-add-sentence" data-testid="contract-draft" aria-live="polite">{ruleOn ? <ShortWords short={words} full={wordsFull} /> : "no Monitor"}</p>
               <div className="nx-add-rule-fields">
                 <label className="nx-add-field">
                   <span>what it watches</span>

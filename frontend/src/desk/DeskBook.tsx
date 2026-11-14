@@ -10,7 +10,8 @@ import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../shared/
 import { Chip, Money, type BookProps } from "../Book";
 import { ClosedLine } from "../ClosedLine";
 import { Glyph } from "../NeedsLine";
-import { monitorName, fieldWords } from "../needs";
+import { monitorName, shapeOf, shortRule, storedRuleWords } from "../needs";
+import { ShortWords } from "../RuleWords";
 import { HistoryOnDemand } from "../HistoryOnDemand";
 import { PaceExplained } from "../PaceExplained";
 import { paceOutcome } from "../pace";
@@ -351,7 +352,8 @@ function Muted({ monitors }: { monitors: Monitor[] }) {
         {monitors.map((m) => (
           <li key={m.id} data-ref={m.id}>
             <span className="nxd-name">{monitorName(m)}</span>
-            <span>{`${fieldWords(m.field, Boolean(m.legs))} ${m.direction === "below" ? "≤" : "≥"} ${m.threshold}`}</span>
+            <span><ShortWords short={shortRule(shapeOf(m))}
+                              full={storedRuleWords(m.field, Boolean(m.legs), m.compare, m.direction, m.threshold)} /></span>
             <span className="nx-meta">{reason(m)}</span>
             <MonitorControls rule={ruleOfMonitor(m)} served={null} />
           </li>
@@ -628,12 +630,13 @@ function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; o
 function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined" }> }) {
   const m = row.monitor;
   const text = ALARM_COLUMN.text(row, false);
+  const words = ALARM_COLUMN.words!(row, false);
   return (
     <>
       <p className="nx-meta">{`${m.strike_date} · ${m.code}`}</p>
       <div className="nxd-monitor" data-state="fault">
         <AttentionChip kind="fault" />
-        <span>{text}</span>
+        <span><ShortWords short={text} full={words} /></span>
       </div>
       <p className="nx-meta">Nothing watches what this rule watched until it is fixed or removed.</p>
       <MonitorControls rule={ruleOfMonitor(m)} served={null} />
@@ -664,7 +667,7 @@ function Monitors({ entries }: { entries: Entry[] }) {
           return (
             <li key={e.id} className="nxd-monitor" data-state={a ?? "calm"}>
               {a ? <AttentionChip kind={a} /> : null}
-              <span>{ALARM_COLUMN.text(row, false)}</span>
+              <span><ShortWords short={ALARM_COLUMN.text(row, false)} full={ALARM_COLUMN.words!(row, false)} /></span>
               <Fill entry={e} />
               <MonitorControls rule={ruleOfEntry(e)} served={e} />
             </li>

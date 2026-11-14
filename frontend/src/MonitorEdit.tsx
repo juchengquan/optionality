@@ -30,12 +30,13 @@ import { DASH, marketDay } from "./shared/format";
 import { ruleWords as replacedWords, type SpreadsBody } from "./add";
 import { refusalSpot, type ContractSpot } from "./contract";
 import {
-  deletesOn, draftOf, draftWords, fieldsFor, holdBody, holdDraft, holdLinks, holdOffered, patchOf,
+  deletesOn, draftOf, draftSentence, draftWords, fieldsFor, holdBody, holdDraft, holdLinks, holdOffered, patchOf,
   QUARANTINE_WHY, renameNote, ruleLabel, ruleOfMonitor, splitCounts, splitOffered, splitPreview, spotOf, stateOf,
   totalOf, uniqueName,
   type Draft, type HoldDraft, type PatchBody, type Rule, type Spot,
 } from "./edit";
-import { fieldWords, sentence } from "./needs";
+import { fieldWords } from "./needs";
+import { RuleWords, ShortWords } from "./RuleWords";
 import "./monitor-edit.css";
 
 export interface MonitorActions {
@@ -319,8 +320,10 @@ function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, on
             // inspector, which closes on an Escape nobody handled, stays open
             if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel(); }
           }}>
-      <p className="nx-mon-draft" data-testid="draft" aria-live="polite">{draftWords(rule, draft)}</p>
-      {served ? <p className="nx-meta" data-testid="served">{`as saved: ${sentence(served)}`}</p> : null}
+      <p className="nx-mon-draft" data-testid="draft" aria-live="polite">
+        <ShortWords short={draftWords(rule, draft)} full={draftSentence(rule, draft)} />
+      </p>
+      {served ? <p className="nx-meta" data-testid="served">{"as saved: "}<RuleWords entry={served} /></p> : null}
       <div className="nx-mon-fields">
         {rule.combo ? (
           <div className="nx-mon-field nx-mon-name">

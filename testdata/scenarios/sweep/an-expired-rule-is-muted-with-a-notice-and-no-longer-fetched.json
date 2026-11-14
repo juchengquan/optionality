@@ -54,7 +54,7 @@
   },
   "expect": {
     "messages": [
-      "ℹ️ monitor US.SPXW261107C7300000 expired (2026-11-07) — muted; auto-removes in 7 days"
+      "ℹ️ monitor US.SPXW261107C7300000 |Δ| ≥ 0.30 expired (2026-11-07) — muted; auto-removes in 7 days"
     ],
     "rows": {
       "monitors": {

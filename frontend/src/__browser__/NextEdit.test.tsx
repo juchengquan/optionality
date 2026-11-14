@@ -54,14 +54,19 @@ describe("editing a Monitor from the inspector", () => {
     const form = within(panel).getByRole("form", { name: `editing ${DELTA}` });
     await userEvent.fill(within(form).getByLabelText("threshold"), "0.3");
     // the draft follows the typing; the distance is still the saved rule's until the service says
-    expect(within(form).getByTestId("draft").textContent).toBe("|delta| ≥ 0.3");
-    expect(within(form).getByTestId("served").textContent).toMatch(/0\.030 away$/);
+    // drawn short (#388), and said in words
+    expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|Δ| ≥ 0.3");
+    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|delta| ≥ 0.3");
+    expect(within(form).getByTestId("served").querySelector(".nx-rule-short")!.textContent).toMatch(/↑0\.030$/);
+    expect(within(form).getByTestId("served").querySelector(".sr-only")!.textContent).toMatch(/0\.030 away$/);
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
 
     await waitFor(() => expect(within(inspector()).queryByRole("form")).toBeNull());
     expect(writes).toEqual([{ what: `PATCH /monitors/w-dec18-delta`, body: { threshold: 0.3 } }]);
     // the service's figure, from the reload: 0.3 − |−0.17|
     expect(within(inspector()).getByText(/^\|delta\| ≥ 0\.3 — now -0\.170, 0\.130 away$/)).toBeTruthy();
+    expect([...inspector().querySelectorAll(".nx-rule-short")].map((el) => el.textContent))
+      .toContain("|Δ| ≥ 0.30   \u22120.170  ↑0.130");
   });
 
   it("sends every field it can change, as the route takes them", async () => {
@@ -73,7 +78,8 @@ describe("editing a Monitor from the inspector", () => {
     await userEvent.selectOptions(within(form).getByLabelText("direction"), "below");
     await userEvent.selectOptions(within(form).getByLabelText("compare"), "signed");
     await userEvent.fill(within(form).getByLabelText("threshold"), "-0.5");
-    expect(within(form).getByTestId("draft").textContent).toBe("vega ≤ -0.5");
+    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("vega ≤ -0.5");
+    expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("ν ≤ -0.5");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0]!.body).toEqual({ field: "option_vega", direction: "below", compare: "signed", threshold: -0.5 });
