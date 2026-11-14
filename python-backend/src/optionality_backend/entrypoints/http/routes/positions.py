@@ -283,6 +283,11 @@ class SampleOut(BaseModel):
     legs_delta: dict[str, float] | None
     #: SPX's price as the writing sweep's batch implied it (ADR 0024), or None
     spx: float | None
+    #: each short strike placed against THIS day's SPX (`strike_distances`, #395), with that day's IV and delta —
+    #: what the history's SPX readout shows, worked out here and never in the browser (ADR 0005). Points are
+    #: None on a day without SPX, σ on a day without the leg's IV or with no day left to expiry, as the
+    #: domain answers.
+    short_strikes: list[StrikeDistanceOut]
     #: observed before the LATEST correction of a leg's quantity (#359), so its Cost to close may be another
     #: structure's — kept as it was, because nothing stored can re-sum it. Its IV, vega and delta are one
     #: contract's readings and stay true. One stamp per holding, so a correction undone (3→2→3) leaves the
@@ -593,6 +598,21 @@ def position_routes(deps: Deps) -> APIRouter:
         levels = (
             None if opened_dte is None else exit_levels(row["entry"], opened_dte, opened_dte, _exit_policy(settings))
         )
+        # the held shorts, as the strike strip places them (`/positions/values`)
+        shorts = [
+            build_spx_code(row["strike_date"], leg.option_type, leg.strike)
+            for leg in to_position(row).legs
+            if leg.side == "short"
+        ]
+
+        def short_strikes(s: Any) -> list[dict[str, Any]]:
+            # that day's readings as the domain reads a batch's: a leg's IV and delta by its code
+            iv, delta = _leg_map(s["legs_iv"]) or {}, _leg_map(s["legs_delta"]) or {}
+            by_code = {
+                code: {"option_implied_volatility": iv.get(code), "option_delta": delta.get(code)} for code in shorts
+            }
+            return [d.model_dump() for d in strike_distances(shorts, by_code, s["spx"], s["dte"])]
+
         plan = []
         for dte in range(opened_dte if opened_dte is not None else -1, -1, -1):
             pace = on_pace(row["entry"], opened_dte, dte)
@@ -623,6 +643,7 @@ def position_routes(deps: Deps) -> APIRouter:
                     "legs_vega": _leg_map(s["legs_vega"]),
                     "legs_delta": _leg_map(s["legs_delta"]),
                     "spx": s["spx"],
+                    "short_strikes": short_strikes(s),
                     "before_correction": before_correction(s["observed_at"], row["qty_corrected_at"]),
                 }
                 for s in list_position_samples(db, id_)

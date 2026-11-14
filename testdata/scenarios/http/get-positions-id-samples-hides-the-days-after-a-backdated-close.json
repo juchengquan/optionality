@@ -307,6 +307,26 @@
             "legs_vega": null,
             "legs_delta": null,
             "spx": null,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": null,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": null,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              }
+            ],
             "before_correction": false
           }
         ],

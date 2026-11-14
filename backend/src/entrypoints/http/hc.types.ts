@@ -248,6 +248,8 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["on_pace"], number | null>>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["legs_iv"], Record<string, number> | null>>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["spx"], number | null>>,
+  // each day's short strikes against that day's SPX, which the history's SPX readout shows (#395)
+  Checked<Exactly<Ok<E["samples"]>["samples"][number]["short_strikes"], StrikeDistance[]>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.
