@@ -28,7 +28,7 @@ import { holdingValues } from "../../../holdings.ts";
 import type { MonitorRow, PositionRow } from "../../../db/rows.ts";
 import { newId, toSqliteBool, toSqliteJson } from "../../../db/values.ts";
 import { toSqlDatetime } from "../../../db/time.ts";
-import { httpError, notFound, providerFailed } from "../errors.ts";
+import { httpError, notFound, providerFailed, providerFailedWords } from "../errors.ts";
 import { paceExplained, type PacedSample } from "optionality/domain/vol";
 import { toMonitor, toPosition } from "../../../hydrate.ts";
 import { adoptOrphanMonitors } from "../../../monitors.ts";
@@ -138,7 +138,7 @@ const PositionValues = PositionOut.extend({
   /** the New York market day of the row a close valuation is from; null when live */
   valued_on: z.string().nullable(),
   /** what that row is (`valuedTiming`): the day's "close", or — where no row with a cost was taken
-   *  in a session — a reading from "after-close", "before-open", the hours of a "weekend" (#387), or
+   *  in a session — a reading from "after-close", "before-open", any hour of a "weekend" (#387), or
    *  one "unrecorded"; null when live. Said beside the figures so an evening's reading, or a
    *  Saturday's, is never passed off as a close. */
   valued_timing: z.enum(["close", "before-open", "after-close", "weekend", "unrecorded"]).nullable(),
@@ -402,7 +402,7 @@ export function positionRoutes(deps: Deps) {
           valued_on: v.close?.observed_on ?? null,
           valued_timing: timing,
           // the 502's own words, which in the session would be the whole answer
-          valued_reason: v.unpriced === null ? null : `${deps.provider.name} call failed: ${v.unpriced}`,
+          valued_reason: v.unpriced === null ? null : providerFailedWords(deps.provider.name, v.unpriced),
           dte: v.dte,
           schedule: v.schedule,
         };

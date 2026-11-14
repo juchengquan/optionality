@@ -92,7 +92,7 @@ from ....schemas.position import (
     stored_qty,
 )
 from ..deps import Deps
-from ..errors import http_error, not_found, provider_failed
+from ..errors import http_error, not_found, provider_failed, provider_failed_words
 from ..validate import valid
 from .monitors import StrikeDistanceOut
 
@@ -524,7 +524,7 @@ def position_routes(deps: Deps) -> APIRouter:
                 "valued_on": None if v.close is None else v.close["observed_on"],
                 "valued_timing": timing,
                 # the 502's own words, which in the session would be the whole answer
-                "valued_reason": None if v.unpriced is None else f"{deps.provider.name} call failed: {v.unpriced}",
+                "valued_reason": None if v.unpriced is None else provider_failed_words(deps.provider.name, v.unpriced),
                 "dte": v.dte,
                 "schedule": v.schedule,
             }

@@ -100,3 +100,11 @@ export function closeLineWords(holdings: readonly Holding[] | null): string | nu
   if (live > 0) line += `; ${live} with no close, ${liveWords}`;
   return line;
 }
+
+/** Whether every holding was VALUED, which is what lets the needs-you list claim to be whole (ADR
+ *  0012): an answer arrived, without an error, and no holding in it is one the service could not
+ *  value because the Provider could not be asked out of the session (`valued_reason`, #387) — a 200
+ *  of dashes is no valuation, and a holding at its Level is the one need only a valuation shows. */
+export function everyHoldingValued(holdings: readonly Holding[] | null, error: string | null): boolean {
+  return holdings !== null && error === null && holdings.every((h) => h.valued_reason === null);
+}

@@ -269,15 +269,18 @@ async def holding_values(
     unpriced: str | None = None
     if live:
         codes = _js_sorted({code for p in live for code in position_leg_codes(p)})
+        # only the CALL is caught: a fault of this service's own past it is no Provider's (#387 review)
+        records = None
         try:
             records = (await fetch_quotes(codes)).records
-            by_code = display_records(records, tz, now)
         except Exception as err:
             # in the session the batch is the price, and its failure is the whole answer's; out of it the
             # holdings it would have priced are dashes with the reason, and the closes still stand (#387)
             if in_session(now):
                 raise
             unpriced = str(err)
+        if records is not None:
+            by_code = display_records(records, tz, now)
     batch_spx = derived_spx(list(by_code.values()))
     batch_size = contract_size(by_code)
 

@@ -390,14 +390,17 @@ describe("valuedTiming — what a row a holding is valued from is, by the sessio
     expect(valuedTiming("2026-11-09 14:30:00.000000")).toBe("close"); // Monday 09:30
   });
 
-  it("names a weekend row in the hours for what it is, never a close", () => {
+  it("names a weekend row for what it is at any hour, never a close nor either side of one", () => {
     expect(valuedTiming("2026-11-14 17:00:00.000000")).toBe("weekend"); // Saturday noon
     expect(valuedTiming("2026-11-15 21:15:00.000000")).toBe("weekend"); // Sunday 16:15
+    expect(valuedTiming("2026-11-15 01:00:00.000000")).toBe("weekend"); // Saturday 20:00 (#387 review)
+    expect(valuedTiming("2026-11-14 05:00:12.407000")).toBe("weekend"); // Saturday 00:00
+    expect(valuedTiming("2026-11-16 04:59:59.999000")).toBe("weekend"); // Sunday 23:59:59.999
   });
 
-  it("is the row's own timing outside the hours, as sampleTiming says", () => {
+  it("is a weekday row's own timing outside the hours, as sampleTiming says", () => {
     expect(valuedTiming("2026-11-14 01:30:00.000000")).toBe("after-close"); // Friday 20:30
-    expect(valuedTiming("2026-11-14 05:00:12.407000")).toBe("before-open"); // Saturday 00:00
+    expect(valuedTiming("2026-11-16 05:00:00.000000")).toBe("before-open"); // Monday 00:00
     expect(valuedTiming(null)).toBe("unrecorded");
     expect(valuedTiming("not a time")).toBe("unrecorded");
   });

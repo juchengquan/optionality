@@ -669,8 +669,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   price. `valuesFromClose` decides per holding: in the session always live; outside it the latest row
   with a Cost to close taken IN the session — a weekday's hours, so a weekend row is never "the
   close" (`closeSample`) — else the latest with a cost of any timing,
-  stated as such (`valued_timing`, from `valuedTiming`: the same session test, so a weekend row in
-  the hours is `weekend`, never `close`, #387); a row summed before a quantity correction is no candidate; and a
+  stated as such (`valued_timing`, from `valuedTiming`: the same session test, so a weekend row at
+  any hour is `weekend` — never `close`, nor "after the close" of a session it had not, #387); a row summed before a quantity correction is no candidate; and a
   holding with no such row is valued live — a dash, never 0. Only the holdings valued live are asked
   for, so a book wholly valued from its closes makes NO market-data call — and out of the session a
   FAILED call costs only the holdings it would have priced: each a dash with `valued_reason` (the

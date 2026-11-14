@@ -925,6 +925,29 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
+    // ...and on a weekday night, which is no weekend: Tuesday 20:00 New York, Tuesday's close stored
+    // for one holding and nothing for the other (#387 review)
+    name: "GET /positions/values on a weekday night with the Provider down dashes only the holding with no close",
+    world: world({
+      clock: "2026-11-11T01:00:00.000Z",
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-wing", strategy: "call spread", entry: 1.5, opened_at: "2026-11-10",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7350 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+        ],
+        position_samples: [closeRow("2026-11-10", 38, 3.3, "2026-11-10 21:14:59.000000")],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
     // ...and where no holding has a close, every one is a dash with the reason, as out of hours it
     // would be with the Provider up: a 200, not the 502 the session still answers
     name: "GET /positions/values outside the session with the Provider down and no close dashes every holding",

@@ -925,6 +925,23 @@ class TestPositionsValues:
         assert detail == "moomoo call failed: quota exceeded"
         assert "OpenD" not in detail
 
+    async def test_out_of_the_session_still_answers_502_for_a_fault_past_the_call(self, start):
+        # #387 review: the Provider answers; reading its answer then fails here, in the service
+        # (`display_records` copying a record), which is no Provider outage to serve the closes around
+        first = True
+
+        async def fetch(codes):
+            nonlocal first
+            if first:
+                first = False
+                return await priced_fetcher(codes)
+            return [None for _ in codes]
+
+        h = start_with(start, fetch)
+        await post(h, condor())
+        resp = await h.call("/positions/values")
+        assert resp.status_code == 502
+
     async def test_out_of_the_session_dashes_a_holding_the_failed_call_would_have_priced(self, start):
         # #387: with the 502's words
         first = True

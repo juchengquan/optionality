@@ -345,8 +345,9 @@ so the same valuation became dashes. This part says what the page shows instead.
   call failed: …"), and the rest are served from their closes, where it had been a 502 for the whole
   book. In the session a failed call is still the 502 the page reports.
 - **What it carries.** The answer gains `valued_from` (`live` or `close`), `valued_on` (the
-  sample's market day) and `valued_timing` (its `valuedTiming`: `sampleTiming`, except that a row in
-  the hours of a weekend is `weekend`, never `close` — the same session test that chooses the row,
+  sample's market day) and `valued_timing` (its `valuedTiming`: `sampleTiming`, except that a row
+  observed on a weekend, by New York's date and at any hour, is `weekend` — never `close`, nor
+  "after the close" of a session that day did not have — the same weekday test that chooses the row,
   #387). Its `fetched_at`, the stamp every
   Level chip and the market-closed line read (#354), is the sample's observed time. P&L uses the
   contract size each sample now stores (F3, migration 0013; earlier rows have none, so their P&L

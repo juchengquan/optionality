@@ -34,7 +34,7 @@ import type { PositionRow, PositionSampleRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
 import { toPosition } from "./hydrate.ts";
 import { beforeCorrection } from "./correct-legs.ts";
-import { displayRecords, type QuoteFetcher } from "optionality/quotes";
+import { displayRecords, type QuoteFetcher, type QuoteRecord } from "optionality/quotes";
 
 export interface HoldingValue {
   row: PositionRow;
@@ -163,15 +163,18 @@ export async function holdingValues(
   let unpriced: string | null = null;
   if (live.length > 0) {
     const codes = [...new Set(live.flatMap((p) => positionLegCodes(p)))].sort();
+    // only the CALL is caught: a fault of this service's own past it is no Provider's, and must not
+    // be said as "moomoo call failed" (#387 review)
+    let records: QuoteRecord[] | null = null;
     try {
-      const { records } = await fetchQuotes(codes);
-      byCode = displayRecords(records, tz, now);
+      ({ records } = await fetchQuotes(codes));
     } catch (err) {
       // in the session the batch is the price, and its failure is the whole answer's; out of it the
       // holdings it would have priced are dashes with the reason, and the closes still stand (#387)
       if (inSession(now)) throw err;
       unpriced = err instanceof Error ? err.message : String(err);
     }
+    if (records !== null) byCode = displayRecords(records, tz, now);
   }
   const batchSpx = derivedSpx(Object.values(byCode));
   const batchSize = contractSize(byCode);

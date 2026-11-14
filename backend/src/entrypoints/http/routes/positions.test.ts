@@ -826,6 +826,19 @@ describe("/positions/values", () => {
     expect(detail).not.toMatch(/OpenD/);
   });
 
+  it("out of the session still answers 502 for a fault past the call, never dashing it as the Provider's (#387 review)", async () => {
+    // the Provider answers; reading its answer then fails here, in the service (`displayRecords`
+    // copying a record), which is no Provider outage to serve the closes around
+    let first = true;
+    start(async (codes) => {
+      if (first) { first = false; return pricedFetcher(codes); }
+      return codes.map((code) => ({ code, get update_time(): string { throw new Error("a bug of our own"); } }));
+    });
+    await post(condor());
+    const resp = await h.call("/positions/values");
+    expect(resp.status).toBe(502);
+  });
+
   it("out of the session dashes a holding the failed call would have priced, with the 502's words (#387)", async () => {
     let first = true;
     start(async (codes) => {
