@@ -1,52 +1,59 @@
-/** The payoff at expiry, drawn (#291, ADR 0023): a held spread's at its Entry, and a watched
- *  spread's at its current value, in the desk's inspector and the phone's detail sheet.
+/** The payoff at expiry, drawn (#291; on visx with a crosshair readout since #396, ADR 0023): a
+ *  held spread's at its Entry, and a watched spread's at its current value, in the desk's inspector
+ *  and the phone's detail sheet, and a spread nobody has saved yet in the add form's preview.
  *
  *  AT EXPIRY ONLY. No T+0 curve, no "today" line and no probability: the service has no pricing
  *  model, and ADR 0023 says never to draw what the system does not know. So SPX's marker is a
  *  vertical line and NOT a dot on the curve — a dot would read as "what it is worth now", which an
- *  expiry curve does not say.
+ *  expiry curve does not say. Its price is the DERIVED one (ADR 0024), never a Reference's.
  *
  *  The figures are the service's (`payoffAtExpiry`, served by `/positions/{id}/payoff` and
- *  `POST /positions/payoff`); this only joins its corners. The curve bends only at the strikes, so
- *  the P&L at each strike and the slope beyond the outer two are all of it, and a straight line
- *  between them is the curve rather than an approximation of it.
+ *  `POST /positions/payoff`), each leg's quantity in them (#351); `payoffChart.ts` joins their
+ *  corners and adds no maths. What is drawn, matching the burndown (`BurndownChart.tsx`):
+ *  - the curve, the gain above zero and the loss below it shaded in the OUTCOME colours (visx's
+ *    `Threshold`), and the zero line;
+ *  - each strike a dashed rule, its legs named beneath it through `shared/Legs` in their type's
+ *    colour (#391), joined where they would overlap;
+ *  - each breakeven a dot on the zero line, labelled with its price;
+ *  - the maximum profit and loss as labelled rules where they are finite, and at the drawing's edge,
+ *    with an arrow, where the window does not reach them;
+ *  - SPX's derived price as a vertical marker.
  *
- *  Hand-written SVG rather than visx: the whole drawing is a polyline through at most six corners,
- *  two shaded areas, a few rules and labels, and one linear scale per axis. visx would add 15–30 KB
- *  of scales and shapes to the bundle for arithmetic that is one line each here, and a dependency
- *  for both arrangements to agree on; the prototype's three charts were hand-written for the same
- *  reason. (The burndown moved to visx in #360, for a crosshair this chart has no use for; the
- *  scales are in the bundle since, but the arithmetic here is still one line each.) Its width is
- *  MEASURED rather than scaled from a viewBox, so text stays its own size in a 272px inspector and
- *  on a 390px phone alike.
+ *  **The crosshair** reads out the P&L at expiry at any SPX price in the window, with the price and
+ *  its distance from SPX's: in points per contract, and in money across the contracts held where
+ *  the valuation served a contract size — masked under privacy, which keeps the points, as they
+ *  say no count. A mouse points by moving, and snaps onto a strike, a breakeven or SPX within a few
+ *  pixels so each can be read exactly. A finger chooses by a tap (a second tap, a tap outside the
+ *  chart or a scroll lets go) or by a drag gone sideways, which scrubs, while a vertical one still
+ *  scrolls the page (`touch-action: pan-y`). The arrow keys step along SPX through every step and
+ *  every marked price, starting from SPX's; Home and End go to the window's ends; Escape lets go,
+ *  and with nothing chosen is left to the page, whose inspector it closes. ONE tab stop. The
+ *  tooltip is for the eye and hidden from a screen reader; the line beneath says the same in full,
+ *  and is what is announced (a polite live region).
+ *
+ *  visx for the scale and the shapes only (`@visx/scale`, `shape`, `threshold`, already in the
+ *  bundle for the burndown); the labels and the tooltip are placed here, for the reasons
+ *  `BurndownChart.tsx` gives. Its width is MEASURED rather than scaled from a viewBox, so text
+ *  stays its own size in a 272px inspector and on a 390px phone alike.
  */
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { scaleLinear } from "@visx/scale";
+import { LinePath } from "@visx/shape";
+import { Threshold } from "@visx/threshold";
 
 import { fetchDraftPayoff, fetchPayoff, type DraftPayoff, type Entry, type Holding, type Payoff } from "./shared/api";
+import { heldLeg, legText, signedLeg, type WrittenLeg } from "./shared/format";
+import { SvgLegSpan } from "./shared/Legs";
 import { fieldWords } from "./needs";
+import { textWidth, tipPlace } from "./burndown";
+import {
+  labelRows, level, payoffWindow, pnlAt, pnlWords, priceStops, readout, shortWords, snapPrice, stepPrice,
+  type PayoffUnit,
+} from "./payoffChart";
 import "./payoff.css";
 
-/** How a P&L is said: money for a holding whose contract size the valuation served, points
- *  otherwise; and nothing at all a stranger could read when privacy is on. */
-interface Unit {
-  /** points to the figure shown: the contract size, or 1 for points */
-  size: number;
-  money: boolean;
-  hidden: boolean;
-}
-
-const MONEY = new Intl.NumberFormat("en-US", {
-  style: "currency", currency: "USD", maximumFractionDigits: 0, signDisplay: "exceptZero",
-});
-
-function say(points: number, unit: Unit): string {
-  if (unit.hidden) return "$•••";
-  if (unit.money) return MONEY.format(points * unit.size);
-  return `${points > 0 ? "+" : ""}${points.toFixed(2)} pts`;
-}
-
-/** An SPX level: whole where it is whole, else to the cent. */
-const level = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(2));
+/** One spread nobody holds: one contract, in points, and no money to hide. */
+const POINTS: PayoffUnit = { contracts: 1, size: null, hidden: false, perContract: false };
 
 interface PayoffState {
   /** the payoff on screen, and the key it was asked for under */
@@ -99,11 +106,11 @@ const PRICE_FIELDS: ReadonlySet<string> = new Set(["mid_price"]);
 export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy: boolean }) {
   const { id, entry, contracts } = holding;
   const state = usePayoff(id, entry === null ? null : `${id}|${entry}|${contracts}`, () => fetchPayoff(id));
-  const unit: Unit = {
-    size: holding.contract_size ?? 1, money: holding.contract_size !== null, hidden: privacy,
-  };
+  // points per contract, and money across the contracts held at the size the valuation served
+  const unit: PayoffUnit = { contracts, size: holding.contract_size, hidden: privacy, perContract: true };
   return (
-    <PayoffFigure state={state} unit={unit} spx={holding.spx} spxReason={holding.spx_reason}
+    <PayoffFigure state={state} unit={unit} legs={holding.legs.map(heldLeg)}
+                  spx={holding.spx} spxReason={holding.spx_reason}
                   blank={entry === null ? "no Entry recorded, so there is no credit to draw it at" : null} />
   );
 }
@@ -133,7 +140,7 @@ export function WatchedPayoff({ entry }: { entry: Entry }) {
     ? `watches the ${fieldWords(entry.field, true)}, which is no price to draw it at`
     : draft === null ? "no current value to draw it at" : null;
   return (
-    <PayoffFigure state={state} unit={{ size: 1, money: false, hidden: false }}
+    <PayoffFigure state={state} unit={POINTS} legs={shownLegs(state) ?? (entry.legs ?? []).map(signedLeg)}
                   spx={entry.spx} spxReason={entry.spx_reason} blank={blank}
                   note={`no Entry: drawn at its current value, ${Math.abs(credit).toFixed(2)}, as the ${credit < 0 ? "debit" : "credit"}`} />
   );
@@ -171,9 +178,15 @@ export function DraftPreview({ subject, draft, blank, note, spx, spxReason, onDr
   // moment ago must not leave the old curve standing as current
   const state = asked && raw !== null && asked.shown !== raw ? { ...asked, updating: true } : asked;
   return (
-    <PayoffFigure state={state} unit={{ size: 1, money: false, hidden: false }} spx={spx} spxReason={spxReason}
+    <PayoffFigure state={state} unit={POINTS} legs={shownLegs(asked) ?? []} spx={spx} spxReason={spxReason}
                   blank={draft === null ? blank : null} note={note} />
   );
+}
+
+/** The legs of the draft whose curve is on screen — which, while a newer one is asked for, is the
+ *  last one — so the strikes named under a curve are always that curve's. */
+function shownLegs(state: PayoffState | null): WrittenLeg[] | null {
+  return state?.shown ? (JSON.parse(state.shown) as DraftPayoff).legs.map(heldLeg) : null;
 }
 
 /** `value`, once it has stopped changing for `ms`: a strike typed digit by digit asks once. A
@@ -188,8 +201,8 @@ function useSettled<T>(value: T | null, ms: number): T | null {
   return value === null ? null : settled;
 }
 
-function PayoffFigure({ state, unit, spx, spxReason, blank, note }: {
-  state: PayoffState | null; unit: Unit; spx: number | null; spxReason: string | null;
+function PayoffFigure({ state, unit, legs, spx, spxReason, blank, note }: {
+  state: PayoffState | null; unit: PayoffUnit; legs: WrittenLeg[]; spx: number | null; spxReason: string | null;
   /** why nothing is drawn, when nothing can be */
   blank: string | null;
   note?: string;
@@ -200,11 +213,11 @@ function PayoffFigure({ state, unit, spx, spxReason, blank, note }: {
         : (
           <>
             {note ? <p className="nx-meta nx-payoff-note">{note}</p> : null}
-            <Chart payoff={state.payoff} unit={unit} spx={spx} />
+            <Chart payoff={state.payoff} unit={unit} legs={legs} spx={spx} />
             {spx === null ? <p className="nx-meta nx-payoff-spx">{`SPX — ${spxReason ?? "no price"}`}</p> : null}
             <dl className="nx-payoff-kv">
-              <div><dt>max profit</dt><dd>{state.payoff.max_profit === null ? "no ceiling" : say(state.payoff.max_profit, unit)}</dd></div>
-              <div><dt>max loss</dt><dd>{state.payoff.max_loss === null ? "no floor" : say(state.payoff.max_loss, unit)}</dd></div>
+              <div><dt>max profit</dt><dd>{state.payoff.max_profit === null ? "no ceiling" : pnlWords(state.payoff.max_profit, unit)}</dd></div>
+              <div><dt>max loss</dt><dd>{state.payoff.max_loss === null ? "no floor" : pnlWords(state.payoff.max_loss, unit)}</dd></div>
               <div><dt>breakevens</dt><dd>{state.payoff.breakevens.length === 0 ? "none" : state.payoff.breakevens.map(level).join(" · ")}</dd></div>
             </dl>
           </>
@@ -218,24 +231,20 @@ function PayoffFigure({ state, unit, spx, spxReason, blank, note }: {
   );
 }
 
-/** The P&L at expiry with SPX at `s`, joining the served corners: straight between strikes, and
- *  on at the served slope beyond the outer two. */
-function pnlAt(p: Payoff, s: number): number {
-  const at = p.at_strikes;
-  if (at.length === 0) return p.max_profit ?? 0;
-  const first = at[0]!, last = at[at.length - 1]!;
-  if (s <= first.spx) return first.pnl + p.slope_below * (s - first.spx);
-  if (s >= last.spx) return last.pnl + p.slope_above * (s - last.spx);
-  const i = at.findIndex((a) => a.spx >= s);
-  const [a, b] = [at[i - 1]!, at[i]!];
-  return a.pnl + ((b.pnl - a.pnl) * (s - a.spx)) / (b.spx - a.spx);
-}
+/** The plot's height, and the margins: above it for SPX's label, below it a row for each line of
+ *  labels — the legs, then the breakevens — so a drawing with more of them grows rather than
+ *  crowding them. */
+const PLOT = 146, T = 18, L = 8, R = 8, ROW = 12;
+/** Room inside the plot above the highest P&L and below the lowest, for their labels. */
+const ROOM = 14;
+/** The tooltip's width, or the chart's where that is narrower. */
+const TIP_W = 184;
+/** How far a finger must move sideways, and more sideways than up or down, before it scrubs. */
+const SCRUB = 10;
+/** How near, in pixels, a pointer must come to a strike, a breakeven or SPX to land on it. */
+const REACH = 6;
 
-const H = 168, R = 10, T = 18, B = 20;
-/** A label's width at the chart's 11px tabular figures, near enough to leave it room. */
-const textWidth = (text: string) => text.length * 6.6;
-
-function Chart({ payoff, unit, spx }: { payoff: Payoff; unit: Unit; spx: number | null }) {
+function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; legs: WrittenLeg[]; spx: number | null }) {
   // drawn at its measured width, so its text is the size it says wherever it sits
   const box = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(320);
@@ -249,61 +258,180 @@ function Chart({ payoff, unit, spx }: { payoff: Payoff; unit: Unit; spx: number 
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const clip = useId().replace(/[^\w-]/g, "");
+  const id = useId().replace(/[^\w-]/g, "");
+  const [pointed, setPointed] = useState<number | null>(null);
+  const tipBox = useRef<HTMLDivElement>(null);
+  const [tipH, setTipH] = useState(0);
+  useLayoutEffect(() => {
+    const h = tipBox.current?.offsetHeight;
+    if (h && h !== tipH) setTipH(h);
+  });
 
-  // the window: every strike, every breakeven and SPX, with room either side to show the slopes
+  const win = payoffWindow(payoff, spx);
+  const { d0, d1 } = win;
   const strikes = payoff.at_strikes.map((a) => a.spx);
-  const xs = [...strikes, ...payoff.breakevens, ...(spx === null ? [] : [spx])];
-  const lo = Math.min(...xs), hi = Math.max(...xs);
-  const pad = Math.max((hi - lo) * 0.15, 10);
-  const [d0, d1] = [lo - pad, hi + pad];
-  const corners = [d0, ...strikes.filter((k) => k > d0 && k < d1), d1].map((s) => [s, pnlAt(payoff, s)] as const);
-  const ys = corners.map(([, v]) => v);
-  const top = Math.max(...ys, 0), bottom = Math.min(...ys, 0);
-  const span = top - bottom || 1;
-  const [topLabel, bottomLabel] = [say(top, unit), say(bottom, unit)];
-  // the axis's gutter is as wide as its widest label, which is a money figure or a points one
-  const L = Math.ceil(Math.max(textWidth(topLabel), textWidth(bottomLabel), 24)) + 10;
-  const x = (s: number) => L + ((s - d0) / (d1 - d0)) * (W - L - R);
-  const y = (v: number) => T + ((top + span * 0.08 - v) / (span * 1.16)) * (H - T - B);
+  const corners = [d0, ...strikes.filter((k) => k > d0 && k < d1), d1].map((s) => ({ s, v: pnlAt(payoff, s) }));
+  const top = Math.max(...corners.map((c) => c.v), 0), bottom = Math.min(...corners.map((c) => c.v), 0);
+  const x = scaleLinear<number>({ domain: [d0, d1], range: [L, W - R] });
+  // each strike's legs named beneath it, and each breakeven's price, joined where they would overlap
+  const legLabels = labelRows([...legs].sort((a, b) => a.strike - b.strike)
+    .filter((l) => l.strike >= d0 && l.strike <= d1)
+    // a little wider than plain figures: a short leg is drawn bold
+    .map((l) => ({ x: x(l.strike), w: textWidth(legText(l, "minus")) * 1.1, leg: l })), 6, 2, W - 2);
+  const beLabels = labelRows(payoff.breakevens.map((b) => ({ x: x(b), w: textWidth(`BE ${level(b)}`), b })), 6, 2, W - 2);
+  /** A label pressed against an edge is anchored TO that edge, so it never depends on how good the
+   *  estimate of its width was. */
+  const anchored = (c: { x: number; w: number }) => (c.x - c.w / 2 <= 2.5 ? { x: 2, textAnchor: "start" as const }
+    : c.x + c.w / 2 >= W - 2.5 ? { x: W - 2, textAnchor: "end" as const } : { x: c.x, textAnchor: "middle" as const });
+  const legRows = legLabels.reduce((n, c) => Math.max(n, c.row + 1), 0);
+  const rows = legRows + beLabels.reduce((n, c) => Math.max(n, c.row + 1), 0);
+  const B = ROW * Math.max(rows, 1) + 5, H = T + PLOT + B;
+  /** Where the `row`th line of labels under the plot sits. */
+  const rowY = (row: number) => H - B + 13 + ROW * row;
+  const y = scaleLinear<number>({ domain: [bottom, top === bottom ? bottom + 1 : top], range: [H - B - ROOM, T + ROOM] });
+  const marks = [...strikes, ...payoff.breakevens, ...(spx === null ? [] : [spx])];
+  const stops = priceStops(win, marks);
 
-  const curve = corners.map(([s, v], i) => `${i ? "L" : "M"}${x(s).toFixed(1)},${y(v).toFixed(1)}`).join("");
-  const area = `${curve}L${x(d1).toFixed(1)},${y(0).toFixed(1)}L${x(d0).toFixed(1)},${y(0).toFixed(1)}Z`;
+  // the price chosen, while it is still inside the window drawn: a new draft may have moved it
+  const at = pointed !== null && pointed >= d0 && pointed <= d1 ? pointed : null;
+  const priceAt = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    // the drawing is its measured width, but should the box ever be scaled the pointer is not
+    const px = (e.clientX - r.left) * (r.width > 0 ? W / r.width : 1);
+    return snapPrice(x.invert(px), marks, win, (REACH * (d1 - d0)) / Math.max(1, W - L - R));
+  };
+  const pick = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => setPointed(priceAt(e));
+  // A mouse points by moving. A finger chooses only by a TAP, or by a drag gone sideways: never on
+  // touching down, which a vertical scroll that starts on the chart does too
+  const kind = useRef("mouse");
+  const touch = useRef<{ x0: number; y0: number; scrubbing: boolean } | null>(null);
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    kind.current = e.pointerType;
+    if (e.pointerType === "mouse") pick(e);
+    else touch.current = { x0: e.clientX, y0: e.clientY, scrubbing: false };
+  };
+  const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === "mouse") { pick(e); return; }
+    const t = touch.current;
+    if (!t) return;
+    const [dx, dy] = [Math.abs(e.clientX - t.x0), Math.abs(e.clientY - t.y0)];
+    if (!t.scrubbing && (dx < SCRUB || dx <= dy)) return;
+    t.scrubbing = true;
+    pick(e);
+  };
+  const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const t = touch.current;
+    touch.current = null;
+    if (kind.current === "mouse") { pick(e); return; }
+    // a scrub ends on the price it reached; a tap chooses one, or lets go of the one chosen
+    if (t?.scrubbing) return;
+    const price = priceAt(e);
+    setPointed(price === at ? null : price);
+  };
+  // the page took the touch — a scroll — so nothing the finger did chooses a price
+  const onPointerCancel = () => { touch.current = null; setPointed(null); };
+  useEffect(() => {
+    if (pointed === null) return;
+    const away = (e: PointerEvent) => {
+      if (e.target instanceof Node && !box.current?.contains(e.target)) setPointed(null);
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [pointed]);
+  const onKey = (e: React.KeyboardEvent) => {
+    const next = stepPrice(e.key, at, stops, spx);
+    if (next === undefined) return;
+    e.preventDefault();
+    setPointed(next === "clear" ? null : next);
+  };
+
+  const said = at === null ? null : readout(at, payoff, unit, spx);
+  const pnl = at === null ? 0 : pnlAt(payoff, at);
+  const tip = said === null ? null : (() => {
+    const tipW = Math.min(TIP_W, W);
+    return { tipW, ...tipPlace({ x: x(at!), y: y(pnl), W, H, tipW, tipH }) };
+  })();
+
+  // the maximums, where finite: on their rule inside the window's figures, else at its edge
+  const maxima = ([["profit", payoff.max_profit], ["loss", payoff.max_loss]] as const)
+    .filter((m): m is readonly ["profit" | "loss", number] => m[1] !== null)
+    .filter(([kind, v]) => kind === "profit" || v !== payoff.max_profit)
+    .map(([kind, v]) => {
+      const off = v > top + 1e-9 ? "above" : v < bottom - 1e-9 ? "below" : null;
+      const at = off === "above" ? T : off === "below" ? H - B : y(v);
+      return { kind, v, off, at, words: `${off === "above" ? "▲ " : off === "below" ? "▼ " : ""}max ${kind} ${shortWords(v, unit)}` };
+    });
   const spxX = spx === null ? null : x(spx);
 
   return (
-    <div className="nx-payoff-chart" ref={box}>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img"
-           aria-label={`payoff at expiry, SPX ${level(Math.round(d0))} to ${level(Math.round(d1))}`}>
-        <defs>
-          <clipPath id={`${clip}-up`}><rect x={0} y={0} width={W} height={y(0)} /></clipPath>
-          <clipPath id={`${clip}-down`}><rect x={0} y={y(0)} width={W} height={H} /></clipPath>
-        </defs>
-        <path d={area} className="nx-payoff-gain" clipPath={`url(#${clip}-up)`} />
-        <path d={area} className="nx-payoff-loss" clipPath={`url(#${clip}-down)`} />
-        <line className="nx-payoff-zero" x1={L} x2={W - R} y1={y(0)} y2={y(0)} />
-        {strikes.map((k) => (
-          <line key={k} className="nx-payoff-strike" x1={x(k)} x2={x(k)} y1={T} y2={H - B} />
-        ))}
-        <path d={curve} className="nx-payoff-curve" data-curve="" />
-        {payoff.breakevens.map((b) => (
-          <g key={b} data-breakeven={b}>
-            <circle cx={x(b)} cy={y(0)} r={2.75} className="nx-payoff-be" />
-            <text x={Math.min(Math.max(x(b), L + 16), W - R - 16)} y={H - 6} textAnchor="middle">
-              {level(Math.round(b))}
+    <>
+      <div className="nx-payoff-chart" ref={box} role="group" tabIndex={0} onKeyDown={onKey}
+           aria-label={`payoff at expiry by SPX price, ${level(d0)} to ${level(d1)}: arrow keys move along SPX`}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true"
+             onPointerMove={onPointerMove} onPointerDown={onPointerDown} onClick={onClick}
+             onPointerCancel={onPointerCancel}
+             onPointerLeave={(e) => { if (e.pointerType === "mouse") setPointed(null); }}>
+          <Threshold id={`${id}-pnl`} data={corners} x={(c) => x(c.s)} y0={(c) => y(c.v)} y1={() => y(0)}
+                     clipAboveTo={T} clipBelowTo={H - B}
+                     aboveAreaProps={{ className: "nx-payoff-gain" }} belowAreaProps={{ className: "nx-payoff-loss" }} />
+          <line data-zero="" className="nx-payoff-zero" x1={L} x2={W - R} y1={y(0)} y2={y(0)} />
+          {strikes.filter((k) => k >= d0 && k <= d1).map((k) => (
+            <line key={k} data-strike={k} className="nx-payoff-strike" x1={x(k)} x2={x(k)} y1={T} y2={H - B} />
+          ))}
+          {maxima.map((m) => (
+            <g key={m.kind} className="nx-payoff-max" data-kind={m.kind} data-off={m.off ?? undefined}>
+              <line x1={L} x2={W - R} y1={m.at} y2={m.at} />
+              <text data-max={m.kind} x={W - R} y={m.kind === "profit" ? m.at - 4 : m.at + 12} textAnchor="end">{m.words}</text>
+            </g>
+          ))}
+          <LinePath data-curve="" className="nx-payoff-curve" data={corners} x={(c) => x(c.s)} y={(c) => y(c.v)} />
+          {payoff.breakevens.map((b) => (
+            <g key={b} data-breakeven={b}>
+              <circle cx={x(b)} cy={y(0)} r={2.75} className="nx-payoff-be" />
+            </g>
+          ))}
+          {legLabels.map((c) => (
+            <text key={`${c.row}:${c.items.map((i) => legText(i.leg, "minus")).join()}`} data-strikes="" {...anchored(c)} y={rowY(c.row)}>
+              {c.items.map((i, n) => (
+                <Fragment key={n}>{n > 0 ? " " : null}<SvgLegSpan leg={i.leg} /></Fragment>
+              ))}
             </text>
-          </g>
-        ))}
-        {spxX === null ? null : (
-          <g data-marker="spx" className="nx-payoff-marker">
-            <line x1={spxX} x2={spxX} y1={T - 4} y2={H - B} />
-            <text x={spxX > W * 0.6 ? spxX - 4 : spxX + 4} y={T - 6}
-                  textAnchor={spxX > W * 0.6 ? "end" : "start"}>{`SPX ${spx!.toFixed(2)}`}</text>
-          </g>
+          ))}
+          {beLabels.map((c) => (
+            <text key={c.items.map((i) => i.b).join()} data-breakeven-label="" className="nx-payoff-be-label"
+                  {...anchored(c)} y={rowY(legRows + c.row)}>
+              {`BE ${c.items.map((i) => level(i.b)).join(" · ")}`}
+            </text>
+          ))}
+          {spxX === null ? null : (
+            <g data-marker="spx" className="nx-payoff-marker">
+              <line x1={spxX} x2={spxX} y1={T - 4} y2={H - B} />
+              <text x={spxX > W * 0.6 ? spxX - 4 : spxX + 4} y={T - 6}
+                    textAnchor={spxX > W * 0.6 ? "end" : "start"}>{`SPX ${spx!.toFixed(2)}`}</text>
+            </g>
+          )}
+          {at === null ? null : (
+            <g data-crosshair={at} className="nx-payoff-cross" pointerEvents="none">
+              <line x1={x(at)} x2={x(at)} y1={T} y2={H - B} />
+              <line x1={L} x2={W - R} y1={y(pnl)} y2={y(pnl)} />
+              <circle cx={x(at)} cy={y(pnl)} r={4.75} data-outcome={pnl > 0 ? "gain" : pnl < 0 ? "loss" : undefined} />
+            </g>
+          )}
+        </svg>
+        {tip === null || said === null ? null : (
+          <div className="nx-payoff-tip" ref={tipBox} data-tip="" aria-hidden="true"
+               style={{ left: tip.left, top: tip.top, width: tip.tipW }}>
+            <div className="nx-payoff-tip-h">{said.price}</div>
+            {said.away === null ? null : <div className="nx-payoff-tip-away">{said.away}</div>}
+            <div className="nx-payoff-tip-pnl" data-outcome={pnl > 0 ? "gain" : pnl < 0 ? "loss" : undefined}>{said.pnl}</div>
+          </div>
         )}
-        <text x={L - 6} y={y(top) + 4} textAnchor="end">{topLabel}</text>
-        <text x={L - 6} y={y(bottom) + 4} textAnchor="end">{bottomLabel}</text>
-      </svg>
-    </div>
+      </div>
+      {/* announced politely as it changes; not a `status` ROLE, which the holding's actions beside
+          it already are, and a page with two is ambiguous about which one speaks for the holding */}
+      <p className="nx-payoff-said" aria-live="polite" aria-atomic="true" data-said="">
+        {said?.words ?? "point at a price, or use the arrow keys, for the P&L at expiry there"}
+      </p>
+    </>
   );
 }

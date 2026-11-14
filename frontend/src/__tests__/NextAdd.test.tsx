@@ -175,7 +175,7 @@ describe("the add form", () => {
     expect(screen.queryByRole("status", { name: "spread 1's stop" })).toBeNull();
     // and the new legs' payoff, once served, says the stop can fire after all
     await waitFor(() => expect(drafts().at(-1)?.legs[1]?.strike).toBe(7000));
-    await screen.findByRole("img", { name: /payoff at expiry/ });
+    await screen.findByRole("group", { name: /payoff at expiry by SPX price/ });
     expect(screen.queryByRole("status", { name: "spread 1's stop" })).toBeNull();
   });
 
@@ -351,6 +351,31 @@ describe("a quantity per leg (#351)", () => {
 
 describe("the preview", () => {
 
+  it("redraws as a strike is typed: the legs named under it, and the readout off the new curve (#396)", async () => {
+    open();
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "1.50");
+    const chart = await screen.findByRole("group", { name: /payoff at expiry by SPX price/ });
+    const payoff = screen.getByRole("group", { name: "payoff at expiry" });
+    const strikes = () => [...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ");
+    const said = () => payoff.querySelector("[data-said]")!.textContent ?? "";
+    await waitFor(() => expect(strikes()).toBe("+P7100 −P7150"));
+    fireEvent.keyDown(chart, { key: "Home" });
+    // below both strikes: the 50-point width less the 1.50 taken, per contract
+    expect(said()).toMatch(/: -48\.50 pts$/);
+
+    // the long leg typed a digit at a time, from 7100 to 7050
+    type("spread 1, leg 2 strike", "705");
+    type("spread 1, leg 2 strike", "7050");
+    await waitFor(() => expect(strikes()).toBe("+P7050 −P7150"));
+    const redrawn = screen.getByRole("group", { name: /payoff at expiry by SPX price/ });
+    fireEvent.keyDown(redrawn, { key: "Home" });
+    expect(said()).toMatch(/: -98\.50 pts$/);
+    fireEvent.keyDown(redrawn, { key: "End" });
+    expect(said()).toMatch(/: \+1\.50 pts$/);
+  });
+
   it("asks for the payoff once the strikes are typed, per contract, and again when a side flips", async () => {
     open();
     expect(screen.getByText("type the strikes to see its payoff at expiry")).toBeTruthy();
@@ -365,7 +390,7 @@ describe("the preview", () => {
       ],
       entry: 1.5, contracts: 1,
     });
-    await screen.findByRole("img", { name: /payoff at expiry/ });
+    await screen.findByRole("group", { name: /payoff at expiry by SPX price/ });
 
     fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 2 side: long — flip" }));
     // at once, before the pause that settles the typing: the curve on screen is no longer this
