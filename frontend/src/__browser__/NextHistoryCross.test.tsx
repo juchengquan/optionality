@@ -5,7 +5,7 @@
  *  the IV and SPX panels' colours the tokens', light and dark. The phone's 390 is
  *  `NextHistoryCross.iphone.test.tsx`'s; what each readout SAYS is the jsdom suite's
  *  (`NextHistory.test.tsx`). */
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { commands, page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -31,7 +31,9 @@ function serve(id: string, samples: Samples = SAMPLES[id]!) {
 
 /** The three panels, in order: the burndown, the IV chart, SPX's path. */
 async function draw(id: string, width: number, privacy = false) {
-  await page.viewport(Math.max(width, 400) + 40, 1000);
+  // tall enough that no panel is ever scrolled to: a hover that scrolls the page moves the panels
+  // under a mouse already placed, and Chrome's catch-up boundary events then let go of the day
+  await page.viewport(Math.max(width, 400) + 40, 1400);
   serve(id);
   render(<div className="nx" style={{ width, padding: 0 }}><HoldingHistory holding={holdingOf(id)} privacy={privacy} /></div>);
   await settle();
@@ -70,11 +72,20 @@ describe("a mouse in any panel crosses the day in all three", () => {
       const days = [...panels[0]!.querySelectorAll<SVGGElement>("[data-sample]")];
       for (const [p, panel] of panels.entries()) {
         const svg = panel.querySelector("svg")!;
-        const box = svg.getBoundingClientRect();
         for (const day of days) {
+          const box = svg.getBoundingClientRect();
           const c = day.querySelector("circle")!.getBoundingClientRect();
-          await userEvent.hover(svg, { position: { x: c.left + c.width / 2 - box.left, y: 6 } });
+          // half way down the plot, as the burndown's own suite points: a hover 6px from the panel's
+          // top was intermittently lost under the whole suite's load (cause not pinned down)
+          await userEvent.hover(svg, { position: { x: c.left + c.width / 2 - box.left, y: box.height / 2 } });
           const on = day.dataset.sample!;
+          // a pointermove is a continuous event, which React renders on its next frame rather than at
+          // once: under the whole suite's load that frame came after the check, so wait for it
+          await waitFor(() => {
+            if (panels.some((o) => o.querySelector("[data-crosshair]")?.getAttribute("data-crosshair") !== on)) {
+              throw new Error("not crossed yet");
+            }
+          }, { timeout: 1000 }).catch(() => undefined);
           for (const [q, other] of panels.entries()) {
             const crossed = other.querySelector("[data-crosshair]")?.getAttribute("data-crosshair");
             if (crossed !== on) { faults.push(`${on} from panel ${p}: panel ${q} crossed ${crossed}`); continue; }
