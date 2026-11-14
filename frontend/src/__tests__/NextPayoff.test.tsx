@@ -6,7 +6,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Entry, Holding } from "../shared/api";
+import type { DraftPayoff, Entry, Holding, Payoff } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { PhoneBook } from "../phone/PhoneBook";
@@ -67,11 +67,11 @@ describe("a holding's payoff, in the desk's inspector", () => {
     const insp = await inspect("h-ic", "1231_IC");
     const payoff = await payoffOf(insp);
     expect(asked).toEqual(["GET /positions/h-ic/payoff"]);
-    expect(within(payoff).getByRole("img", { name: /payoff at expiry/ })).toBeTruthy();
+    expect(within(payoff).getByRole("group", { name: /payoff at expiry by SPX price/ })).toBeTruthy();
     expect(payoff.querySelector("[data-curve]")?.getAttribute("d")).toMatch(/^M/);
-    // points across its two contracts times the contract size the valuation served (100): money
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+$1,000");
-    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("-$9,000");
+    // points per contract, and money across its two contracts at the contract size served (100)
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · +$1,000");
+    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("-45.00 pts per contract · -$9,000");
     expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295 · 7405");
     expect(payoff.querySelectorAll("[data-breakeven]")).toHaveLength(2);
   });
@@ -90,14 +90,15 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(within(payoff).getByText(`SPX — ${reason}`)).toBeTruthy();
   });
 
-  it("hides every $ figure under privacy, and keeps the breakevens and SPX", async () => {
+  it("hides every $ figure under privacy, and keeps the points per contract, the breakevens and SPX", async () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC", { privacy: true }));
     const text = payoff.textContent ?? "";
     expect(text).not.toMatch(/\$\d/);
-    // the points are the money divided by a size the privacy setting also hides, so they go too
-    expect(text).not.toMatch(/\d pts/);
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("$•••");
-    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("$•••");
+    // points PER CONTRACT say no count; across the contracts held, times 100 they would be the money
+    expect(text).not.toMatch(/\b10\.00 pts|-90\.00 pts/);
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · $•••");
+    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("-45.00 pts per contract · $•••");
+    expect(payoff.querySelector("[data-max='profit']")?.textContent).toBe("max profit +5.00 pts");
     expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295 · 7405");
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
@@ -270,5 +271,206 @@ describe("a combo drawn in the Watchlist because it names a contract its holding
     const payoff = await payoffOf(sheet);
     expect(within(payoff).getByText(/drawn at its current value, 1\.50, as the credit/)).toBeTruthy();
     expect(sheet.querySelector("[data-overlap]")!.textContent).toBe("contains 1231_7700's C7700");
+  });
+});
+
+/** The chart's crosshair readout (#396): the P&L at expiry at any SPX price, by pointer, finger
+ *  and keyboard. jsdom lays nothing out, so the chart is drawn at its default 320px and a pointer's
+ *  `clientX` is its x across the drawing. */
+describe("the crosshair readout (#396)", () => {
+  /** A draft's payoff as the service works it out (`payoffAtExpiry`): the corners at the strikes and
+   *  the slopes beyond, each leg as many times as its quantity. Breakevens and maximums are not
+   *  read by the test that uses it. */
+  function draftPayoff(body: DraftPayoff): Payoff {
+    const n = body.contracts ?? 1;
+    const pnl = (s: number) => n * body.legs.reduce((sum, l) => {
+      const worth = (l.option_type === "CALL" ? Math.max(0, s - l.strike) : Math.max(0, l.strike - s)) * (l.qty ?? 1);
+      return sum + (l.side === "long" ? worth : -worth);
+    }, body.entry);
+    const ks = [...new Set(body.legs.map((l) => l.strike))].sort((a, b) => a - b);
+    return {
+      at_strikes: ks.map((k) => ({ spx: k, pnl: pnl(k) })),
+      slope_below: pnl(ks[0]!) - pnl(ks[0]! - 1), slope_above: pnl(ks.at(-1)! + 1) - pnl(ks.at(-1)!),
+      breakevens: [], max_profit: null, max_loss: null,
+    };
+  }
+
+  const chart = (payoff: HTMLElement) => within(payoff).getByRole("group", { name: /payoff at expiry by SPX/ });
+  const svg = (payoff: HTMLElement) => payoff.querySelector<SVGSVGElement>(".nx-payoff-chart svg")!;
+  /** What is announced: the line beneath the chart, a polite live region. */
+  const said = (payoff: HTMLElement) => {
+    const line = payoff.querySelector("[data-said]")!;
+    expect(line.getAttribute("aria-live")).toBe("polite");
+    return line.textContent;
+  };
+  const HINT = "point at a price, or use the arrow keys, for the P&L at expiry there";
+  const tip = (payoff: HTMLElement) => payoff.querySelector("[data-tip]")?.textContent ?? null;
+  /** The x of the curve's zero crossing nearest `near`, from the path drawn: where the curve itself
+   *  meets the zero line, whatever the labels say. */
+  function zeroCrossings(payoff: HTMLElement): number[] {
+    const d = payoff.querySelector("[data-curve]")!.getAttribute("d")!;
+    const pts = [...d.matchAll(/[ML]\s*(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])] as const);
+    const zero = Number(payoff.querySelector("[data-zero]")!.getAttribute("y1"));
+    const out: number[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      const [[x0, y0], [x1, y1]] = [pts[i - 1]!, pts[i]!];
+      if ((y0 - zero) * (y1 - zero) < 0) out.push(x0 + ((x1 - x0) * (zero - y0)) / (y1 - y0));
+    }
+    return out;
+  }
+
+  it("reads out the P&L at a breakeven a mouse points at: nothing made, nothing lost", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const be = payoff.querySelector<SVGCircleElement>("[data-breakeven='6295'] circle")!;
+    fireEvent.pointerMove(svg(payoff), { clientX: Number(be.getAttribute("cx")), clientY: 60, pointerType: "mouse" });
+    expect(tip(payoff)).toBe("SPX 6295605.50 below SPX now0.00 pts per contract · $0");
+    // a mouse passing over is shown, never announced: the live line speaks for a choice only
+    expect(said(payoff)).toBe(HINT);
+    expect(payoff.querySelector("[data-crosshair]")).toBeTruthy();
+    fireEvent.pointerLeave(svg(payoff), { pointerType: "mouse" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    expect(tip(payoff)).toBeNull();
+  });
+
+  it("reads out the price between the strikes in points per contract and money across the count", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const k = payoff.querySelector<SVGLineElement>("[data-strike='7400']")!;
+    fireEvent.pointerMove(svg(payoff), { clientX: Number(k.getAttribute("x1")), clientY: 60, pointerType: "mouse" });
+    expect(tip(payoff)).toBe("SPX 7400499.50 above SPX now+5.00 pts per contract · +$1,000");
+    expect(said(payoff)).toBe(HINT);
+    // a key chooses, and then it is announced; a mouse passing again goes back to the hint
+    fireEvent.keyDown(chart(payoff), { key: "ArrowRight" });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7405, /);
+    fireEvent.pointerMove(svg(payoff), { clientX: Number(k.getAttribute("x1")), clientY: 60, pointerType: "mouse" });
+    expect(said(payoff)).toBe(HINT);
+  });
+
+  it("steps along SPX with the keys, from SPX's own price, and lets go on Escape", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const keys = chart(payoff);
+    expect(keys.tabIndex).toBe(0);
+    fireEvent.keyDown(keys, { key: "ArrowRight" });
+    expect(said(payoff)).toBe("at expiry with SPX at 6900.50, at SPX now: +5.00 pts per contract · +$1,000");
+    fireEvent.keyDown(keys, { key: "End" });
+    // past the call wing every point SPX rises costs nothing more: the maximum loss
+    expect(said(payoff)).toMatch(/: -45\.00 pts per contract · -\$9,000$/);
+    fireEvent.keyDown(keys, { key: "Home" });
+    expect(said(payoff)).toMatch(/below SPX now: -45\.00 pts per contract · -\$9,000$/);
+    // the arrows stop on a breakeven on the way, so it can be landed on exactly
+    let seen = "";
+    for (let i = 0; i < 200 && !seen.includes("SPX at 6295,"); i++) {
+      fireEvent.keyDown(keys, { key: "ArrowRight" });
+      seen = said(payoff) ?? "";
+    }
+    expect(seen).toContain(": 0.00 pts per contract · $0");
+    fireEvent.keyDown(keys, { key: "Escape" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+  });
+
+  it("hides the $ under privacy and keeps the points, per contract", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC", { privacy: true }));
+    fireEvent.keyDown(chart(payoff), { key: "ArrowRight" });
+    expect(said(payoff)).toBe("at expiry with SPX at 6900.50, at SPX now: +5.00 pts per contract · $•••");
+    expect(tip(payoff)).toContain("+5.00 pts per contract");
+    expect(payoff.textContent).not.toMatch(/\$\d/);
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · $•••");
+  });
+
+  it("chooses a price by a tap, and lets go of it on a second", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const k = Number(payoff.querySelector("[data-strike='6300']")!.getAttribute("x1"));
+    fireEvent.pointerDown(svg(payoff), { clientX: k, clientY: 60, pointerType: "touch" });
+    // touching down alone chooses nothing: it may be the start of a scroll
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    fireEvent.click(svg(payoff), { clientX: k, clientY: 60 });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 6300,/);
+    fireEvent.pointerDown(svg(payoff), { clientX: k, clientY: 60, pointerType: "touch" });
+    fireEvent.click(svg(payoff), { clientX: k, clientY: 60 });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+  });
+
+  it("leaves an Escape with nothing chosen to the page, which closes the inspector", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const keys = chart(payoff);
+    fireEvent.keyDown(keys, { key: "ArrowRight" });
+    // the first Escape lets go of the price, and is the chart's
+    fireEvent.keyDown(keys, { key: "Escape" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    expect(screen.getByRole("complementary", { name: "inspector: 1231_IC" })).toBeTruthy();
+    // the next one, with nothing chosen, goes on to the page
+    fireEvent.keyDown(keys, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull());
+  });
+
+  it("scrubs with a finger dragged sideways, and chooses nothing with one dragged up or down", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const xOf = (k: string) => Number(payoff.querySelector(`[data-strike='${k}']`)!.getAttribute("x1"));
+    const [k0, k1] = [xOf("6300"), xOf("7400")];
+    // a vertical drag is the page's scroll: nothing chosen
+    fireEvent.pointerDown(svg(payoff), { clientX: k0, clientY: 40, pointerType: "touch" });
+    fireEvent.pointerMove(svg(payoff), { clientX: k0 + 4, clientY: 120, pointerType: "touch" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    fireEvent.pointerCancel(svg(payoff), { pointerType: "touch" });
+    // a sideways one scrubs: the crosshair follows the finger, and says where it is
+    fireEvent.pointerDown(svg(payoff), { clientX: k0, clientY: 60, pointerType: "touch" });
+    fireEvent.pointerMove(svg(payoff), { clientX: k0 + 4, clientY: 60, pointerType: "touch" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    fireEvent.pointerMove(svg(payoff), { clientX: (k0 + k1) / 2, clientY: 62, pointerType: "touch" });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at \d+, .*: \+5\.00 pts per contract · \+\$1,000$/);
+    fireEvent.pointerMove(svg(payoff), { clientX: k1, clientY: 62, pointerType: "touch" });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400, /);
+    // lifting the finger keeps the price it reached
+    fireEvent.pointerUp(svg(payoff), { pointerType: "touch" });
+    fireEvent.click(svg(payoff), { clientX: k1, clientY: 62 });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400, /);
+  });
+
+  it("labels each breakeven with the domain's figure, drawn where the curve crosses zero", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const marks = [...payoff.querySelectorAll<SVGGElement>("[data-breakeven]")];
+    expect(marks.map((m) => Number(m.dataset.breakeven))).toEqual([6295, 7405]);
+    expect([...payoff.querySelectorAll("[data-breakeven-label]")].map((t) => t.textContent)).toEqual(["BE 6295", "BE 7405"]);
+    const crossings = zeroCrossings(payoff);
+    expect(crossings).toHaveLength(2);
+    marks.forEach((m, i) => {
+      expect(Number(m.querySelector("circle")!.getAttribute("cx"))).toBeCloseTo(crossings[i]!, 0);
+    });
+  });
+
+  it("states the maximum profit and loss on the chart where they are finite", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    expect(payoff.querySelector("[data-max='profit']")?.textContent).toBe("max profit +$1,000");
+    expect(payoff.querySelector("[data-max='loss']")?.textContent).toBe("max loss -$9,000");
+  });
+
+  it("names each strike's legs, coloured by type", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const names = [...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent);
+    expect(names.join(" ")).toBe("+P6250 −P6300 −C7400 +C7450");
+    expect([...payoff.querySelectorAll("[data-strikes] .nx-leg-t")].map((t) => (t as HTMLElement).dataset.type))
+      .toEqual(["PUT", "PUT", "CALL", "CALL"]);
+  });
+
+  it("reads each leg's quantity, as the service drew it (#351)", async () => {
+    // the service's payoff worked from the legs asked for, each as many times as its quantity
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "null")) as DraftPayoff | null;
+      asked.push(`${init?.method ?? "GET"} ${String(url).replace(/^.*\/api/, "")}`);
+      return Promise.resolve(body
+        ? { ok: true, status: 200, json: () => Promise.resolve(draftPayoff(body)) }
+        : { ok: false, status: 404, json: () => Promise.resolve({ detail: "not served here" }) });
+    }));
+    // three of the long leg: below both strikes the P&L moves two points for each point SPX does,
+    // where a readout that took each leg once would move it none
+    const ratio = QUOTES.map((q) => (q.id === "w-dec18"
+      ? { ...q, legs: q.legs!.map((l, i) => (i === 1 ? { ...l, qty: 3 } : l)) } : q) as Entry);
+    const payoff = await payoffOf(await inspect("w-dec18", "1218_P7150", { quotes: ratio }));
+    fireEvent.keyDown(chart(payoff), { key: "Home" });
+    const price = Number(/SPX at ([\d.]+)/.exec(said(payoff) ?? "")![1]);
+    expect(price).toBeLessThan(7100);
+    // short one 7150 put, long THREE 7100 puts, sold for 2.40
+    const pnl = 2.4 - (7150 - price) + 3 * (7100 - price);
+    expect(said(payoff)).toBe(`at expiry with SPX at ${price}, ${(6900.5 - price).toFixed(2)} below SPX now: +${pnl.toFixed(2)} pts`);
+    expect([...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ")).toBe("+3P7100 −P7150");
   });
 });

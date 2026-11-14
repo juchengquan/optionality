@@ -15,7 +15,7 @@
  *    INCLUDING their labels (`slotRows`), and the plot is inset by a label's half-width, so a label
  *    on the outermost strike stays inside. Measured in the browser suite at 900, 1280 and 2560px.
  *
- *  Hand-written SVG at its measured width, as `Payoff.tsx` is.
+ *  Hand-written SVG at its measured width, as `SpxPath.tsx` is (the payoff moved to visx in #396).
  */
 import { useLayoutEffect, useRef, useState } from "react";
 

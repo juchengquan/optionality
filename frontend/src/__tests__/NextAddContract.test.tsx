@@ -268,7 +268,7 @@ describe("a held contract", () => {
     await waitFor(() => expect(asked.filter((a) => a.what === "POST /positions/payoff").at(-1)?.body).toEqual({
       legs: [{ side: "short", option_type: "PUT", strike: 7150 }], entry: 2.4, contracts: 1,
     }));
-    await screen.findByRole("img", { name: /payoff at expiry/ });
+    await screen.findByRole("group", { name: /payoff at expiry by SPX price/ });
     expect(screen.getByText("per contract, at a credit of 2.40")).toBeTruthy();
   });
 

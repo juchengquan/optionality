@@ -306,7 +306,7 @@ describe("the payoff at expiry fits in the inspector (#291)", () => {
   it("keeps its text its own size in the narrowest inspector, rather than shrinking it to fit", async () => {
     await show(900);
     await inspect("h-ic");
-    const label = document.querySelector<SVGTextElement>(".nxd-inspector [data-breakeven] text")!;
+    const label = document.querySelector<SVGTextElement>(".nxd-inspector [data-breakeven-label]")!;
     expect(label.getBoundingClientRect().height).toBeGreaterThanOrEqual(10);
   });
 });
