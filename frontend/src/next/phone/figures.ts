@@ -32,7 +32,7 @@ export function contractsWords(contracts: number, privacy: boolean): string {
   return privacy ? "×•••" : `×${contracts}`;
 }
 
-export interface ShortDelta {
+interface ShortDelta {
   /** "C7300": which short leg, said only when a holding has more than one */
   leg: string;
   delta: number | null;

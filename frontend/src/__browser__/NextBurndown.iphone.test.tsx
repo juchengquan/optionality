@@ -1,6 +1,6 @@
 /** The burndown on visx (#360) on the phone, under Playwright's iPhone profile — touch, `isMobile`,
  *  a 390px screen: in a holding's sheet, whose history is open from the start outside the session
- *  (#374, where REVIEW's one-holding page drew it before), inside the screen with its tooltip inside
+ *  (#374, where a one-holding page drew it after the close before), inside the screen with its tooltip inside
  *  the chart for every day; and touched with a real finger (Chrome's own touch events, through CDP),
  *  where a horizontal drag scrubs the days and a vertical swipe still scrolls the sheet. The desk's
  *  widths are `NextBurndown.test.tsx`'s. */

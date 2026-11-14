@@ -19,7 +19,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** Noon in New York, in the session, so the phone opens on LIVE's cards whatever the clock says. */
+/** Noon in New York, in the session, whatever the clock says. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
 /** The rules as `/monitors` serves them, the condor's own value rule carrying its legs and its scope. */

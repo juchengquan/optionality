@@ -403,8 +403,9 @@ export function ExitField({ value, onChange, served, valuedAt, expired = false, 
   value: string; onChange: (v: string) => void;
   /** the Cost to close the field was prefilled from, as last valued */
   served?: number | null;
-  /** when that valuation was made, as the service stamped it: in REVIEW it is the one read made on
-   *  entering the mode, and in LIVE the form may have been open a while, so "now" would be untrue */
+  /** when that valuation was made, as the service stamped it: outside the session it is the one
+   *  read made on opening or at the session's edge, and in session the form may have been open a
+   *  while, so "now" would be untrue */
   valuedAt?: string | null;
   /** past its expiry: the Cost to close is gone, and a worthless expiry is an Exit of 0 */
   expired?: boolean;

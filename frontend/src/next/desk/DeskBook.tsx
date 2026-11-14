@@ -247,7 +247,7 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed,
         ? <p className="nx-meta nxd-note">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
       {holdings === null && holdingsError === null ? <p className="nx-meta nxd-note">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nx-meta nxd-note">nothing held</p> : null}
-      {/* outside the session, whichever mode (#371): when the service valued what is drawn, and the
+      {/* outside the session (#371): when the service valued what is drawn, and the
           refresh that values it again */}
       {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} onRefresh={onRevalue}
                               refreshing={revaluing} className="nx-meta nxd-note" /> : null}
@@ -408,7 +408,7 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
 
 /** A rule's state is the attention family's chip (Book.tsx's `Chip`); a holding's Level and its
  *  Manage-by are drawn as the needs-you line draws them, with their kinds' glyphs — in the words
- *  `chipWords` gives the row, which in REVIEW say which valuation they are from (#354). */
+ *  `chipWords` gives the row, which outside the session say which valuation they are from (#354). */
 export function AttentionChip({ kind, words }: {
   kind: NonNullable<ReturnType<typeof attentionOf>>; words?: string | null;
 }) {
@@ -503,7 +503,7 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
         {row.kind === "holding" ? <HoldingDetail row={row} session={session} privacy={privacy} partners={partners} onSelect={onSelect} />
           : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null} />
             : <QuarantinedDetail row={row} />}
-        {/* by the session, not the mode (#371): what is polled is what updates */}
+        {/* by the session (#371): what is polled is what updates */}
         <p className="nx-meta nxd-note">{session ? "live: updates with every poll" : "as last valued"}</p>
         {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
             carried to the next row selected */}

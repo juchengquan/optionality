@@ -336,7 +336,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   that ambiguous), and a UNIQUE clash inside the write is the checks' own 409, not a 500.
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
   **One page, the redesign (ADR 0023)**, since the swap of 2026-11-13 (#301) deleted the old one:
-  `index.html` loads `src/next/main.tsx`. It was built at `/opt/next` beside the old page, slice
+  `index.html` loads `src/next/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
+  0023 as amended 2026-11-13, "one page, by the session"; #371–#375): the desk draws one column
+  set and the phone three tabs (Book, Add, Settings), the closed trades fold at the bottom of the
+  book. New York's session (`src/next/session.ts`) decides only: what is FETCHED; the
+  market-closed line; whether a figure (a Level chip, a Reference) says when it was read; what the
+  needs-you line states (holdings' Levels only in session); whether a holding's history starts
+  open (outside the session) in the desk's inspector and the phone's sheet; and the saved
+  picture's header ("in session", or nothing beside its market-closed line). It was built at `/opt/next` beside the old page, slice
   by slice (#287 onward), and `next/index.html` is kept as a second build entry that only sends a
   bookmark of `/opt/next` on to `/opt/` — a meta refresh and a `location.replace` to `%BASE_URL%`,
   which Vite fills with `UI_BASE`. A page and not a Caddy redirect because tailscale strips the
@@ -555,13 +562,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
   an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history
-  is drawn — REVIEW's inspector, a phone sheet opened outside the session (#374), or a history
-  section opened by hand (#353) — and never
+  is drawn — the desk's inspector or a phone sheet opened outside the session (#372, #374),
+  where it starts open, or a history section opened by hand (#353) — and never
   polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
-  By New York's session (09:30–16:15, weekdays; `frontend/src/next/session.ts`), never by the mode
-  on screen (#371): in session it polls `/positions/values` and `/references` with it — three calls
+  By New York's session (09:30–16:15, weekdays; `frontend/src/next/session.ts`) and by nothing
+  else — the page has no mode (#371, #375): in session it polls `/positions/values` and `/references` with it — three calls
   per poll per open tab, where the old page made two; outside the session it reads those two once
   each time it is asked — on opening, at each edge of the session (one slept through included), on
   the refresh button, on opening Settings, and after every write the page makes — and polls neither.) `/references` is a call of its own rather than part of that batch for containment, not for cost:

@@ -28,7 +28,7 @@ import { isCostToClose } from "./needs";
 export type Side = "short" | "long";
 export type OptionType = "CALL" | "PUT";
 
-export interface LegDraft {
+interface LegDraft {
   /** the leg's own, kept while legs around it come and go: what the form keys its row by, so a
    *  box the owner is typing in stays theirs when a leg above it is removed */
   key: string;
@@ -69,7 +69,7 @@ export interface AddDraft {
 }
 
 /** A leg as `POST /spreads` and the payoff take it: its quantity only where it is not 1 (#351). */
-export interface LegBody {
+interface LegBody {
   side: Side;
   option_type: OptionType;
   strike: number;
@@ -77,7 +77,7 @@ export interface LegBody {
 }
 
 /** One spread as `POST /spreads` takes it. */
-export interface SpreadBody {
+interface SpreadBody {
   name: string;
   legs: LegBody[];
   held: boolean;
@@ -105,10 +105,10 @@ export const MIN_LEGS = 2;
 export const MAX_LEGS = 6;
 
 /** The most of one contract a leg may hold: `MAX_LEG_QTY`, the route's (#351). */
-export const MAX_QTY = 10;
+const MAX_QTY = 10;
 
 /** A held spread's short-leg delta Monitor, unless another is typed (ADR 0023). */
-export const HELD_DELTA = "0.30";
+const HELD_DELTA = "0.30";
 
 let keys = 0;
 const nextKey = () => `s${++keys}`;
@@ -333,7 +333,7 @@ export function deltaEnabled(s: SpreadDraft): boolean {
   return s.deltaOn ?? s.legs.some((l) => l.side === "short");
 }
 
-export function deltaDefault(held: boolean): string {
+function deltaDefault(held: boolean): string {
   return held ? HELD_DELTA : "";
 }
 

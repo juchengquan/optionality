@@ -10,9 +10,8 @@ import { DetailSheet, type Subject } from "./Detail";
 import { expiryWords } from "./figures";
 
 /** The phone's book, arrangement B (ADR 0023, #290): cards and the detail sheet — ONE book, the
- *  same cards in session and out of it, whichever mode the page holds (#374; ADR 0023 amended
- *  2026-11-13). REVIEW's one holding per screen went with that amendment: a holding's history is
- *  in its sheet, open from the start outside the session.
+ *  same cards in session and out of it (#374; ADR 0023 amended 2026-11-13), with no pager: a
+ *  holding's history is in its sheet, open from the start outside the session.
  *
  *  It DRAWS `placeBook` and decides nothing about where a rule sits, so the phone cannot group the
  *  owner's book differently from the desk. What is open in the sheet is held as an id and looked

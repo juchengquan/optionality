@@ -8,8 +8,8 @@
  *  picture, a "saved", or the reason it could not.
  *
  *  What it dropped is that page's fetch. It asked for the holdings on the press because its
- *  panel might never have been opened; this one already holds every figure it draws — LIVE polls
- *  them and REVIEW read them on entering — so the picture is drawn from what the page has and the
+ *  panel might never have been opened; this one already holds every figure it draws — polled in
+ *  session, read once outside it — so the picture is drawn from what the page has and the
  *  press asks the service for nothing.
  *
  *  The page's figures are HELD from the press (`frame`), and the picture is drawn from that copy:
@@ -31,7 +31,7 @@ export const STILL = "nx-still";
 
 /** What a capture that failed says, when what it threw is not an Error: html-to-image rejects
  *  with the DOM Event of an image that would not decode, which reads "[object Event]". */
-export const NOT_DRAWN = "the image could not be drawn";
+const NOT_DRAWN = "the image could not be drawn";
 
 export function useSaveImage<T>(): {
   /** the page's figures as they were at the press, while the picture's tree must be mounted;

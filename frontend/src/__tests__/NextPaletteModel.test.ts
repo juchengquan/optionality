@@ -118,21 +118,23 @@ describe("its actions", () => {
   const row = (id: string) => rows.find((r) => (r.kind === "holding" ? r.holding.id
     : r.kind === "rule" ? r.entry.id : r.monitor.id) === id)!;
   const why = (selected: DeskRow | null) => Object.fromEntries(
-    paletteActions({ mode: "live", choice: "auto", selected }).map((a) => [a.key, a.why]));
+    paletteActions({ choice: "auto", selected }).map((a) => [a.key, a.why]));
 
   it("offers every one, in a stable order", () => {
-    expect(paletteActions({ mode: "live", choice: "auto", selected: null }).map((a) => a.label)).toEqual([
+    expect(paletteActions({ choice: "auto", selected: null }).map((a) => a.label)).toEqual([
       "Add a spread or contract", "Edit the selected Monitor", "Close the selected holding", "Save the view as an image",
-      "Switch to Review",
       "Arrangement: desk", "Arrangement: phone", "Arrangement: by the screen's width",
     ]);
-    expect(paletteActions({ mode: "review", choice: "desk", selected: null })
-      .find((a) => a.key === "mode")!.label).toBe("Switch to Live");
+    // one page, with no switch (#375): nothing offers a mode, at any choice or selection
+    for (const choice of ["auto", "desk", "phone"] as const) {
+      expect(paletteActions({ choice, selected: null }).map((a) => a.label).join(" | "))
+        .not.toMatch(/switch|live|review|mode/i);
+    }
   });
 
   it("closes the two that need a selection, and says why", () => {
     expect(why(null)).toMatchObject({
-      add: null, "edit-monitor": "nothing is selected", "close-holding": "nothing is selected", mode: null,
+      add: null, "edit-monitor": "nothing is selected", "close-holding": "nothing is selected", "save-image": null,
     });
     expect(why(row("h-calls"))).toMatchObject({
       "edit-monitor": "a holding is selected: select one of its Monitors", "close-holding": null,
@@ -146,11 +148,11 @@ describe("its actions", () => {
 
   it("refuses what would carry off a form being typed into, and nothing else", () => {
     const why = (selected: DeskRow | null, hold: "edit" | "close" | "other" | null, autoIsPhone = false) =>
-      Object.fromEntries(paletteActions({ mode: "live", choice: "desk", selected, hold, autoIsPhone })
+      Object.fromEntries(paletteActions({ choice: "desk", selected, hold, autoIsPhone })
         .map((a) => [a.key, a.why]));
     const HOLD = "finish or cancel the open form first";
     // the selected rule's own editor is open: editing it again is landing on it, closing is not
-    expect(why(row("w-dec18"), "edit")).toMatchObject({ "edit-monitor": null, add: null, mode: null, "save-image": null });
+    expect(why(row("w-dec18"), "edit")).toMatchObject({ "edit-monitor": null, add: null, "save-image": null });
     expect(why(row("h-calls"), "close")).toMatchObject({ "close-holding": null });
     // another form open: neither form action, and not the phone, which unmounts the desk
     expect(why(row("w-dec18"), "other")).toMatchObject({ "edit-monitor": HOLD, "arrange-phone": HOLD });
@@ -165,13 +167,13 @@ describe("its actions", () => {
 
   it("names what it acts on", () => {
     const of = (selected: DeskRow) => Object.fromEntries(
-      paletteActions({ mode: "live", choice: "auto", selected }).map((a) => [a.key, a.detail]));
+      paletteActions({ choice: "auto", selected }).map((a) => [a.key, a.detail]));
     expect(of(row("h-calls"))["close-holding"]).toBe("1218_C7300");
     expect(of(row("w-dec18-delta"))["edit-monitor"]).toBe("261218 7150P");
   });
 
   it("says which arrangement is in use", () => {
-    const detail = (choice: "auto" | "desk" | "phone") => paletteActions({ mode: "live", choice, selected: null })
+    const detail = (choice: "auto" | "desk" | "phone") => paletteActions({ choice, selected: null })
       .filter((a) => a.key.startsWith("arrange")).map((a) => a.detail);
     expect(detail("desk")).toEqual(["in use", "", ""]);
     expect(detail("auto")).toEqual(["", "", "in use"]);

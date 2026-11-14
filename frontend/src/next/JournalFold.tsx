@@ -1,6 +1,6 @@
 /** The closed trades folded at the bottom of the book (#373, ADR 0023 amended 2026-11-13), on the
- *  desk and the phone alike: the last thing in the book, after the watchlist, drawn at every hour
- *  and in either mode.
+ *  desk and the phone alike: the last thing in the book, after the watchlist, drawn at every hour,
+ *  in session and out of it.
  *
  *  - **Shut on every load, and until first opened it mounts nothing**: no row, and so nothing
  *    asked. The page holds whether it is open, and reads the journal only once it has been opened

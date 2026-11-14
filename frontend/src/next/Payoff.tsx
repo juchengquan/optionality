@@ -93,7 +93,7 @@ function usePayoff(subject: string, key: string | null, load: () => Promise<Payo
  *  of asks is a price but not what the spread sells for (that is short bids less long asks), so
  *  the mid, which every figure on this page already prices by, is the one value it is honest to
  *  draw at. */
-export const PRICE_FIELDS: ReadonlySet<string> = new Set(["mid_price"]);
+const PRICE_FIELDS: ReadonlySet<string> = new Set(["mid_price"]);
 
 /** A holding's payoff, at the Entry it was taken for, over the contracts held. */
 export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy: boolean }) {
@@ -220,7 +220,7 @@ function PayoffFigure({ state, unit, spx, spxReason, blank, note }: {
 
 /** The P&L at expiry with SPX at `s`, joining the served corners: straight between strikes, and
  *  on at the served slope beyond the outer two. */
-export function pnlAt(p: Payoff, s: number): number {
+function pnlAt(p: Payoff, s: number): number {
   const at = p.at_strikes;
   if (at.length === 0) return p.max_profit ?? 0;
   const first = at[0]!, last = at[at.length - 1]!;

@@ -23,9 +23,9 @@ afterEach(() => {
   for (const n of COOKIES) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
-/** 18:00 New York on Thursday 12 November, after the close: the page opens in REVIEW. */
+/** 18:00 New York on Thursday 12 November, after the close. */
 const AFTER_CLOSE = new Date("2026-11-12T23:00:00Z");
-/** Noon in New York the same day, in the session: the page opens in LIVE. */
+/** Noon in New York the same day, in the session. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
 async function open(
@@ -73,7 +73,7 @@ async function openTrade(name: string): Promise<HTMLElement> {
 /** The journal's row for `id`, read past the phone's sheet, which hides the page beneath it. */
 const rowOf = (id: string) => document.querySelector<HTMLElement>(`[aria-label="closed trades"] [data-closed="${id}"]`);
 
-/** 1231_IC closed from its live detail in REVIEW, at `exit`: the close's account, once it is drawn. */
+/** 1231_IC closed from its detail outside the session, at `exit`: the close's account, once it is drawn. */
 async function closeHeld(arrangement: "desk" | "phone", exit?: string): Promise<HTMLElement> {
   // drawn, not only asked for: a loaded runner answers the valuation after `open` returns
   await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
@@ -220,7 +220,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(asked(s, "/positions")).toBe(1);
     });
 
-    it("lists a holding closed in REVIEW at once, newest first", async () => {
+    it("lists a holding closed outside the session at once, newest first", async () => {
       const s = service();
       await open(arrangement, s);
       await entries();
@@ -524,22 +524,11 @@ describe("folded at the bottom of the book (#373)", () => {
     });
   }
 
-  it("keeps the fold as it was across a switch of mode, and asks nothing for it", async () => {
-    const s = service();
-    await open("desk", s, { at: IN_SESSION });
-    expect((await entries()).map((r) => r.dataset.closed)).toEqual(["c-blank", "c-tie", "c-old"]);
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    expect(fold().getAttribute("aria-expanded")).toBe("true");
-    expect(rowOf("c-old")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
-    expect(rowOf("c-old")).not.toBeNull();
-    expect(asked(s, "/positions")).toBe(1);
-  });
-
   it("on the phone, is the last thing in the book, at every hour, picked by no tab (#374)", async () => {
     const s = service();
     await open("phone", s, { at: IN_SESSION });
-    expect(within(screen.getByRole("navigation", { name: "views" })).queryByRole("button", { name: "Review" })).toBeNull();
+    expect(within(screen.getByRole("navigation", { name: "views" })).getAllByRole("button").map((b) => b.textContent))
+      .toEqual(["Book", "Add", "Settings"]);
     expect(await entries()).toHaveLength(3);
     expect(book().lastElementChild).toBe(screen.getByRole("region", { name: "closed trades" }));
     expect(asked(s, "/positions")).toBe(1);

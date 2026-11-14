@@ -21,7 +21,7 @@ import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/o
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
+    session: true, privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -351,9 +351,9 @@ describe("with the inspector open, the table stays live", () => {
     expect(cellText("h-calls", "pnl")).toBe("-$310");
   });
 
-  it("on the page's own poll, in LIVE", async () => {
+  it("on the page's own poll, in session", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
-    // a Monday in the session, so the clock picks LIVE; only the clock and the interval are faked
+    // a Monday in the session, so the page polls; only the clock and the interval are faked
     vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: new Date("2026-11-09T15:00:00Z") });
     let holdings: Holding[] = HOLDINGS;
     const health = {
@@ -381,21 +381,18 @@ describe("with the inspector open, the table stays live", () => {
   });
 });
 
-describe("one column set, in either mode (#372)", () => {
+describe("one column set, in session and out of it (#372)", () => {
   const scheduled: Holding[] = HOLDINGS.map((h) => ({
     ...h, schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4,
       target_dte: 11, manage_by_dte: 21, reached: null, manage_by_due: false },
   }));
   const ONE_SET = ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage", "alarm"];
 
-  // both modes are still on screen until #375 takes the switch away; each draws the one set
-  for (const mode of ["live", "review"] as const) {
-    for (const session of [true, false]) {
-      it(`draws Live's columns and the pace gap in ${mode}, ${session ? "in" : "outside"} the session`, () => {
-        render(<DeskBook {...props({ mode, session, holdings: scheduled })} />);
-        expect(headers()).toEqual(ONE_SET);
-      });
-    }
+  for (const session of [true, false]) {
+    it(`draws the one set, the pace gap with it, ${session ? "in" : "outside"} the session`, () => {
+      render(<DeskBook {...props({ session, holdings: scheduled })} />);
+      expect(headers()).toEqual(ONE_SET);
+    });
   }
 
   it("draws no on-pace column and no DTE → manage-by", () => {
@@ -472,15 +469,12 @@ describe("one column set, in either mode (#372)", () => {
   }
 
   it("says when the holdings were valued, outside the session, where nothing re-values them", () => {
-    render(<DeskBook {...props({ mode: "review", holdingsAt: "23:14:05" })} />);
+    render(<DeskBook {...props({ session: false, holdingsAt: "23:14:05" })} />);
     expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
   });
 
-  it("says it by the session, whichever mode: in Live outside it, and not in Review in it (#371)", () => {
-    render(<DeskBook {...props({ mode: "live", session: false, holdingsAt: "23:14:05" })} />);
-    expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
-    cleanup();
-    render(<DeskBook {...props({ mode: "review", session: true, holdingsAt: "23:14:05" })} />);
+  it("says nothing of it in the session, where the holdings are polled (#371)", () => {
+    render(<DeskBook {...props({ session: true, holdingsAt: "23:14:05" })} />);
     expect(document.querySelector(".nx-mkt-closed")).toBeNull();
   });
 });
@@ -547,7 +541,7 @@ describe("the column choice is shared with /opt, and only the desk's part of it 
     expect(headers()).toContain("pnl");
   });
 
-  it("loads a cookie that hid REVIEW's retired columns, hides nothing for them, and resets them (#372)", async () => {
+  it("loads a cookie that hid the retired columns, hides nothing for them, and resets them (#372)", async () => {
     document.cookie = "ui_cols_combo=gamma.on_pace.to_manage;path=/";
     render(<DeskBook {...props()} />);
     expect(headers()).toEqual(COLUMNS.map((c) => c.key));

@@ -18,7 +18,7 @@ afterEach(() => {
   document.cookie = "ui_arrangement=;path=/;max-age=0";
 });
 
-/** Noon in New York, in the session, so the page opens in LIVE whatever the machine's clock says. */
+/** Noon in New York, in the session, whatever the machine's clock says. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
 async function openDesk(width = 1440): Promise<HoldingService> {

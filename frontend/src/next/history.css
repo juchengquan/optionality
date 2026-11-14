@@ -54,7 +54,7 @@
 /* a closed holding's last day (#296): the samples end here, and the plan runs on to expiry */
 .nx-hist-close line { stroke: var(--foreground); stroke-width: 1; opacity: 0.6; }
 .nx-hist-close text { fill: var(--foreground); }
-/* a holding's history on demand in LIVE (#353): a disclosure, shut until asked for. On the phone
+/* a holding's history on demand (#353): a disclosure, shut in session until asked for. On the phone
    its toggle is 44px as every control there is (next.css, the phone arrangement's rule) */
 .nx-hist-od { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
 .nx-hist-od-toggle {

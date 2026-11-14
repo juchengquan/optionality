@@ -4,7 +4,7 @@
  *  labels inside it and clear of each other, with SPX's dot on the scale. That the table as a whole
  *  still fits with the strip's column in it is `NextDesk.test.tsx`'s, which measures every cell.
  */
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -31,7 +31,7 @@ function serve(quotes: object[], holdings: object[]): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     // the payoff beside the strip is a read, POST included, and is answered (#291)
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
-    // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
+    // and a holding's samples (#295), a read too: an empty list in their place would break the page
     const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""))
       // and the pace split (#333), read once when a holding is opened
       ?? volAnswer(String(url).replace(/^.*\/api/, ""));
@@ -50,8 +50,6 @@ async function show(width: number, priced = true) {
   await page.viewport(width, 900);
   serve(priced ? QUOTES : QUOTES.map(bare), priced ? HOLDINGS : HOLDINGS.map(bare));
   render(<Next />);
-  await settle();
-  fireEvent.click(screen.getByRole("button", { name: "Live" }));
   await settle();
 }
 

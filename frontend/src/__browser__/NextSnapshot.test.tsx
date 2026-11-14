@@ -79,16 +79,16 @@ function serve(quotes: () => unknown = () => QUOTES): string[] {
   return asked;
 }
 
-async function show(mode: "live" | "review" = "live", width = 1280,
-                    quotes?: () => unknown): Promise<string[]> {
+/** The page at a width, on the suite's pinned clock (in session) unless the test set another. */
+async function show(width = 1280, quotes?: () => unknown): Promise<string[]> {
   await page.viewport(width, 900);
   const asked = serve(quotes);
   render(<Next />);
   await settle();
-  fireEvent.click(screen.getByRole("button", { name: mode === "live" ? "Live" : "Review" }));
-  await settle();
   return asked;
 }
+/** A Sunday, 12:00 New York: outside the session. */
+const SUNDAY = new Date("2026-11-15T17:00:00Z");
 
 const press = () => fireEvent.click(screen.getByRole("button", { name: "save as image" }));
 const rowIn = (root: ParentNode, id: string) =>
@@ -145,10 +145,10 @@ describe("saving the desk as an image", () => {
     shared.release();
   });
 
-  // one set at every hour (#372): the picture draws it whichever mode is on screen, until #375
-  // takes the switch away
-  for (const mode of ["live", "review"] as const) it(`holds every ticked column, though the inspector has taken the room for them, in ${mode}`, async () => {
-    await show(mode, 1000);
+  // one set at every hour (#372): the picture draws it in session and out of it
+  for (const when of ["in session", "outside the session"] as const) it(`holds every ticked column, though the inspector has taken the room for them, ${when}`, async () => {
+    if (when === "outside the session") vi.setSystemTime(SUNDAY);
+    await show(1000);
     fireEvent.click(within(rowIn(document, "h-calls")).getAllByRole("button")[0]!);
     await settle();
     const onScreen = [...document.querySelectorAll<HTMLElement>(".nxd .nxd-head [data-col]")].map((c) => c.dataset.col);
@@ -211,10 +211,11 @@ describe("saving the desk as an image", () => {
     shared.release();
   });
 
-  for (const mode of ["live", "review"] as const) {
-    it(`hides every $ amount and every contract count under privacy, in ${mode.toUpperCase()}`, async () => {
+  for (const when of ["in session", "outside the session"] as const) {
+    it(`hides every $ amount and every contract count under privacy, ${when}`, async () => {
       document.cookie = "ui_privacy=on;path=/";
-      await show(mode);
+      if (when === "outside the session") vi.setSystemTime(SUNDAY);
+      await show();
       const shared = catchShare();
       press();
       await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
@@ -241,46 +242,41 @@ describe("saving the desk as an image", () => {
     shared.release();
   });
 
-  it("carries the References in session, with no time, whichever mode", async () => {
+  it("carries the References in session, with no time, under a header that says so", async () => {
     // the one place a picture states SPX's level, from a figure the page already polls
-    await show("live");
-    let shared = catchShare();
+    await show();
+    const shared = catchShare();
     press();
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
     expect(captured[0]!.text).toContain("S&P 500");
     expect(captured[0]!.text).toContain("7,612.25");
     expect(captured[0]!.text).not.toContain("read at");
-    shared.release();
-    await expect.poll(() => document.querySelector(".nx-still-stage"), { timeout: 4000 }).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    await settle();
-    shared = catchShare();
-    press();
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    expect(captured[1]!.text).toContain("7,612.25");
+    // the session, where the header once said the mode (#375)
+    expect(captured[0]!.node.querySelector(".nx-still-head")!.textContent).toBe("optionalityin session");
     shared.release();
   });
 
-  for (const mode of ["live", "review"] as const) {
-    it(`carries the References outside the session in ${mode} with the time each was read (#371)`, async () => {
-      vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday
-      await show(mode);
-      const shared = catchShare();
-      press();
-      await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-      const strip = captured[0]!.node.querySelector(".references")!;
-      expect(strip.textContent).toBe("S&P 500 (moomoo) 7,612.25+0.42%read at 00:59");
-      // and the market-closed line, with no button: nothing in a picture can be pressed (the owner's
-      // book here carries no stamp, so the line says no time rather than the device's)
-      expect(captured[0]!.node.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed");
-      expect(captured[0]!.node.querySelector(".nx-mkt-closed button")).toBeNull();
-      shared.release();
-    });
-  }
+  it("carries the References outside the session with the time each was read (#371)", async () => {
+    vi.setSystemTime(SUNDAY);
+    await show();
+    const shared = catchShare();
+    press();
+    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
+    const strip = captured[0]!.node.querySelector(".references")!;
+    expect(strip.textContent).toBe("S&P 500 (moomoo) 7,612.25+0.42%read at 00:59");
+    // and the market-closed line, with no button: nothing in a picture can be pressed (the owner's
+    // book here carries no stamp, so the line says no time rather than the device's)
+    expect(captured[0]!.node.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed");
+    expect(captured[0]!.node.querySelector(".nx-mkt-closed button")).toBeNull();
+    // the header leaves the session to the market-closed line: said once, not twice
+    expect(captured[0]!.node.querySelector(".nx-still-head")!.textContent).toBe("optionality");
+    expect(captured[0]!.text.split("market closed")).toHaveLength(2);
+    shared.release();
+  });
 
   it("is one moment: a poll that lands mid-capture changes the page, not the picture", async () => {
     let watched = 2.4;
-    await show("live", 1280, () => QUOTES.map((q) => q.id === "w-dec31"
+    await show(1280, () => QUOTES.map((q) => q.id === "w-dec31"
       ? { ...q, watched, combo_value: watched, distance: 6 - watched } : q));
     const shared = catchShare();
     press();

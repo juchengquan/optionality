@@ -21,7 +21,7 @@ afterEach(() => {
   for (const n of COOKIES) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
-/** Noon in New York, in the session: the page opens in LIVE. */
+/** Noon in New York, in the session. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
 async function open(arrangement: "desk" | "phone" = "desk", privacy = false) {
@@ -256,14 +256,15 @@ describe("its actions", () => {
     expect(options()[0]!.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("switches the mode, and back", async () => {
+  it("offers no switch of mode: the page is one at every hour (#375)", async () => {
     const { user } = await open();
-    const page = document.querySelector<HTMLElement>(".nx")!;
-    expect(page.dataset.mode).toBe("live");
-    await run(user, "switch to review");
-    await waitFor(() => expect(page.dataset.mode).toBe("review"));
-    await run(user, "switch to live");
-    await waitFor(() => expect(page.dataset.mode).toBe("live"));
+    for (const typed of ["switch", "live", "review", "mode"]) {
+      await chord(user);
+      await user.type(box(), typed);
+      expect(within(palette()).queryAllByRole("option").map((o) => o.textContent).join(" | "), typed).not.toMatch(/switch|\blive\b|review|mode/i);
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
+    }
   });
 
   it("forces the arrangement through the page's own setting", async () => {
@@ -374,6 +375,8 @@ describe("after review (#329)", () => {
   });
 
   it("will not carry a draft off: finds, and the phone, wait until the open form is done", async () => {
+    // a desk-wide screen, so "by the screen's width" stays the desk: jsdom's own clientWidth is 0
+    vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(1280);
     const { user } = await open();
     await run(user, "1218_C7300 holding");
     await run(user, "close the selected");
@@ -391,12 +394,17 @@ describe("after review (#329)", () => {
     await user.clear(box());
     await user.type(box(), "arrangement: phone");
     expect(options()[0]!.getAttribute("aria-disabled")).toBe("true");
-    // a mode switch keeps the form, so it is offered, and the form is still there after it
+    // "by the screen's width" keeps the desk at 1280px (past DESK_FROM's 900), so it keeps the
+    // form: it is offered, it really changes the choice, and the form is still there after
+    expect(document.cookie).toMatch(/ui_arrangement=desk/);
     await user.clear(box());
-    await user.type(box(), "switch to review");
+    await user.type(box(), "arrangement: by the screen");
+    expect(options()[0]!.textContent).toMatch(/by the screen's width/);
     expect(options()[0]!.getAttribute("aria-disabled")).toBeNull();
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(document.querySelector(".nx")!.getAttribute("data-mode")).toBe("review"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
+    expect(document.cookie).toMatch(/ui_arrangement=auto/);
+    expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("desk");
     expect(screen.getByRole("form", { name: "close 1218_C7300" })).toBe(form);
     expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
   });

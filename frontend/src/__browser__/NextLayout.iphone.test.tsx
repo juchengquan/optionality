@@ -72,7 +72,7 @@ describe("under the iPhone profile", () => {
     await show();
     const bar = screen.getByRole("navigation", { name: "views" });
     const tabs = within(bar).getAllByRole("button");
-    // three since #374: the book, whatever the hour, and no mode to pick
+    // three since #374: the book, whatever the hour
     expect(tabs.map((t) => t.textContent)).toEqual(["Book", "Add", "Settings"]);
     const tops = new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top)));
     expect(tops.size).toBe(1);
@@ -94,7 +94,35 @@ describe("under the iPhone profile", () => {
   });
 });
 
-describe("the Live view", () => {
+/** The phone's header (#374, unchanged by #375): "optionality" and the two buttons it carries,
+ *  one row, inside the gutter. It never had the desk's switch; this holds it as it is. */
+describe("the header", () => {
+  for (const outside of [false, true]) {
+    it(`is the title and two buttons on one row, inside the screen, ${outside ? "outside the session" : "in session"}`, async () => {
+      if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // Sunday 12:00 New York
+      await show();
+      const head = document.querySelector<HTMLElement>(".nx-head")!;
+      const kids = [...head.children] as HTMLElement[];
+      const [title, spacer, ...buttons] = kids;
+      expect(title!.tagName).toBe("H1");
+      expect(spacer!.classList.contains("nx-spacer")).toBe(true);
+      expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["save as image", "refresh now"]);
+      expect(within(head).queryByRole("group")).toBeNull();
+      expect(head.textContent).not.toMatch(/live|review|by the clock|your choice/i);
+      const box = (el: Element) => el.getBoundingClientRect();
+      const gap = parseFloat(getComputedStyle(head).columnGap);
+      expect(box(spacer!).left - box(title!).right).toBeCloseTo(gap, 0);
+      expect(new Set(kids.map((k) => Math.round(box(k).top + box(k).height / 2))).size, "not one row").toBe(1);
+      const inner = box(head).right - parseFloat(getComputedStyle(head).paddingRight);
+      expect(box(buttons.at(-1)!).right).toBeCloseTo(inner, 0);
+      expect(inner).toBeLessThanOrEqual(document.documentElement.clientWidth - 16 + 0.5);
+      for (const b of buttons) expect(Math.min(box(b).width, box(b).height)).toBeGreaterThanOrEqual(44);
+      expect(overflowsSideways()).toBe(false);
+    });
+  }
+});
+
+describe("the Book tab", () => {
   it("pushes nothing sideways", async () => {
     await show();
     expect(overflowsSideways()).toBe(false);

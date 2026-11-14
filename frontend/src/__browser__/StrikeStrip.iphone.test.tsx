@@ -33,7 +33,7 @@ function serve(quotes: object[], holdings: object[]): void {
   window.fetch = ((url: string, init?: RequestInit) => {
     // the payoff beside the strip is a read, POST included, and is answered (#291)
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
-    // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
+    // and a holding's samples (#295), a read too: an empty list in their place would break the page
     const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""))
       // and the pace split (#333), read once when a holding is opened
       ?? volAnswer(String(url).replace(/^.*\/api/, ""));

@@ -8,7 +8,7 @@
  */
 import type { Sample } from "../shared/api";
 
-export interface SpxDay {
+interface SpxDay {
   on: string;
   dte: number;
   spx: number;

@@ -12,11 +12,10 @@ import type { Monitor } from "../shared/api";
 import { shortDate } from "../shared/format";
 import type { ArrangementChoice } from "../shared/prefs";
 import { rowName, tableRows, type DeskRow } from "./desk/columns";
-import type { Mode } from "./mode";
 import { fieldWords, monitorName } from "./needs";
 import type { BookModel } from "./placement";
 
-export type FindKind =
+type FindKind =
   | "holding" | "watched spread" | "Monitor" | "quarantined Monitor" | "muted Monitor" | "expired Monitor";
 
 export interface Findable {
@@ -123,8 +122,8 @@ export type Hold = "edit" | "close" | "other" | null;
 
 export const HOLD_WHY = "finish or cancel the open form first";
 
-export type ActionKey =
-  | "add" | "edit-monitor" | "close-holding" | "save-image" | "mode" | "arrange-desk" | "arrange-phone" | "arrange-auto";
+type ActionKey =
+  | "add" | "edit-monitor" | "close-holding" | "save-image" | "arrange-desk" | "arrange-phone" | "arrange-auto";
 
 export interface PaletteAction {
   key: ActionKey;
@@ -145,7 +144,7 @@ const ARRANGEMENTS: [ActionKey, ArrangementChoice, string][] = [
 /** The palette's actions. Two act on the selected row and are closed, with the reason, when the
  *  selection is not what they act on: a holding is not a Monitor, nor a Monitor a holding. */
 export function paletteActions(s: {
-  mode: Mode; choice: ArrangementChoice; selected: DeskRow | null;
+  choice: ArrangementChoice; selected: DeskRow | null;
   /** what holds the desk (`holdOnDesk`): a form whose draft a jump or another form would discard */
   hold?: Hold;
   /** whether "by the screen's width" would make this screen the phone, which unmounts the desk */
@@ -171,8 +170,7 @@ export function paletteActions(s: {
     },
     // the header's "save as image" (#300): a picture of the view, which changes nothing in it
     { key: "save-image", label: "Save the view as an image", detail: "", why: null },
-    // neither a mode nor the desk's own arrangement takes the desk down, so neither waits for a form
-    { key: "mode", label: s.mode === "live" ? "Switch to Review" : "Switch to Live", detail: "", why: null },
+    // the desk's own arrangement does not take the desk down, so it waits for no form; the phone's does
     ...ARRANGEMENTS.map(([key, choice, label]) => ({
       key, label, detail: s.choice === choice ? "in use" : "",
       why: hold !== null && (choice === "phone" || (choice === "auto" && s.autoIsPhone)) ? HOLD_WHY : null,

@@ -20,7 +20,7 @@ afterEach(() => {
   for (const n of COOKIES) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
-/** Noon in New York on 12 November, in the session, so the page opens in LIVE: 01:00 on the 13th
+/** Noon in New York on 12 November, in the session: 01:00 on the 13th
  *  in Singapore, where the owner reads it. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 

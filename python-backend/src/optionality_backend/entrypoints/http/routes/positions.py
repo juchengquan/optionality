@@ -544,9 +544,10 @@ def position_routes(deps: Deps) -> APIRouter:
         response_model=SamplesOut,
     )
     async def samples(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:
-        """A holding's daily samples, open or closed (#295): what REVIEW's burndown and IV chart draw.
+        """A holding's daily samples, open or closed (#295): what the dashboard's history charts draw.
 
-        Stored history, so no Provider call, and asked for once when REVIEW opens a holding, never polled.
+        Stored history, so no Provider call, and asked for once when a holding's history is drawn
+        (open from the start outside the session, opened by hand in it), never polled.
         On-pace is `on_pace` at each sample's DTE and at every DTE to expiry, the same figure
         `/positions/values` serves today: the plan is the service's, never redrawn in the browser. A
         backdated close hides the later rows (`list_position_samples`, ADR 0022)."""

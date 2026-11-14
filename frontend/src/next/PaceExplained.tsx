@@ -1,5 +1,5 @@
 /** A holding's pace explained (#333, ADR 0011), in the desk's inspector and the phone's holding
- *  detail, in LIVE and REVIEW alike: the DTE it was opened at, the √T working of its On-pace, the
+ *  detail, in session and out of it alike: the DTE it was opened at, the √T working of its On-pace, the
  *  DTE decay alone reaches the Target at, and what `/positions/{id}/vol` says of the gap — vol's
  *  part and the rest, or why it cannot split it and how many vol points would cover it.
  *
@@ -11,7 +11,7 @@
  *    one the vol part runs to (ADR 0011, 2026-11-12), which the route says is that day's close, a
  *    reading in hours still running, before the open or after the close. The live gap is the
  *    holding's own figure beside this, in words, and is not said again here.
- *  - **Read once, when opened, and never polled**, in either mode: the split changes at most once a
+ *  - **Read once, when opened, and never polled**, at any hour: the split changes at most once a
  *    market day. A new valuation of the same holding asks nothing more; an answer is kept under
  *    the id it answered, so another holding's split is never shown under this one while its own is
  *    asked for (`useSamples` in History.tsx, the same guard).

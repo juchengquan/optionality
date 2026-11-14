@@ -1,10 +1,10 @@
 /** The desk's terminal measured in a real layout engine (ADR 0008, ADR 0023, #289): nothing pushed
- *  sideways from a 900px desk to a 2560px one, in either mode, with the inspector open or shut;
+ *  sideways from a 900px desk to a 2560px one, in session and out of it, with the inspector open or shut;
  *  columns dropped by measuring the room and the text rather than by any breakpoint; and the
  *  entry-style setting recolouring the fired entry row and nothing else. The behaviour is the
  *  jsdom suite's (`__tests__/NextDesk.test.tsx`).
  */
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,7 +36,7 @@ function serveOwnerBook(extra: object[] = []): void {
   const quotes = [...QUOTES, ...extra];
   window.fetch = ((url: string, init?: RequestInit) => {
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
-    // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
+    // and a holding's samples (#295), a read too: an empty list in their place would break the page
     const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""))
       // and the pace split (#333), read once when a holding is opened
       ?? volAnswer(String(url).replace(/^.*\/api/, ""));
@@ -56,15 +56,12 @@ const rowOf = (id: string) =>
   [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
 const shown = () => [...document.querySelectorAll<HTMLElement>(".nxd-head [data-col]")].map((c) => c.dataset.col!);
 
-/** The page in the mode asked for: the clock picks one, and the switch overrides it. */
-async function show(mode: "live" | "review", width: number, extra: object[] = [], height = 900) {
+/** The page at a width, on the suite's pinned clock (in session) unless the test set another. */
+async function show(width: number, extra: object[] = [], height = 900) {
   await page.viewport(width, height);
   serveOwnerBook(extra);
   render(<Next />);
   await settle();
-  fireEvent.click(screen.getByRole("button", { name: mode === "live" ? "Live" : "Review" }));
-  await settle();
-  expect(document.querySelector<HTMLElement>(".nx")!.dataset.mode).toBe(mode);
 }
 
 async function inspect(id: string) {
@@ -104,10 +101,11 @@ afterEach(async () => {
 });
 
 describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => {
-  for (const mode of ["live", "review"] as const) {
+  for (const when of ["in session", "outside the session"] as const) {
     for (const width of [900, 1280, 2560]) {
-      it(`at ${width}px in ${mode}, with the inspector shut and open`, async () => {
-        await show(mode, width);
+      it(`at ${width}px ${when}, with the inspector shut and open`, async () => {
+        if (when === "outside the session") vi.setSystemTime(SUNDAY);
+        await show(width);
         expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("desk");
         expect(overflowsSideways()).toBe(false);
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
@@ -126,8 +124,8 @@ describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => 
   }
 });
 
-/** A holding's Level chip says, in REVIEW, when the holding was valued (#354), so it is longer
- *  there: every holding at a Level — the longest, "manage-by · as valued at 00:59", among them —
+/** A holding's Level chip says, outside the session, when the holding was valued (#354), so it is
+ *  longer there: every holding at a Level — the longest, "manage-by · as valued at 00:59", among them —
  *  and the table still fits, the chip drawn whole inside its cell, and in the inspector too. */
 /** A Sunday, 12:00 New York: outside the session, at an hour that would be in it on a weekday. */
 const SUNDAY = new Date("2026-11-15T17:00:00Z");
@@ -152,15 +150,15 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
     });
   }
 
-  for (const mode of ["live", "review"] as const) {
+  for (const outsideIt of [false, true]) {
     for (const width of [900, 1280, 2560]) {
-      it(`at ${width}px in ${mode}, with the inspector shut and open`, async () => {
-        // the session decides the chip's words (#371): REVIEW is measured outside it, LIVE in it
-        if (mode === "review") vi.setSystemTime(SUNDAY);
-        await show(mode, width);
+      it(`at ${width}px ${outsideIt ? "outside the session" : "in session"}, with the inspector shut and open`, async () => {
+        // the session decides the chip's words (#371)
+        if (outsideIt) vi.setSystemTime(SUNDAY);
+        await show(width);
         const chip = (id: string) => rowOf(id).querySelector(".nx-chip")!.textContent;
-        expect(chip("h-calls")).toBe(mode === "review" ? "at stop · as valued at 00:59" : "at stop");
-        expect(chip("h-ic")).toBe(mode === "review" ? "manage-by · as valued at 00:59" : "manage-by");
+        expect(chip("h-calls")).toBe(outsideIt ? "at stop · as valued at 00:59" : "at stop");
+        expect(chip("h-ic")).toBe(outsideIt ? "manage-by · as valued at 00:59" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
         expect(misfits()).toEqual([]);
@@ -169,7 +167,7 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
         await inspect("h-ic");
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
         expect(insp.querySelector(".nx-chip")!.textContent)
-          .toBe(mode === "review" ? "manage-by · as valued at 00:59" : "manage-by");
+          .toBe(outsideIt ? "manage-by · as valued at 00:59" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(misfits()).toEqual([]);
         expect(cutChips(table())).toEqual([]);
@@ -180,8 +178,8 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
 });
 
 /** "market closed — valued at 01:00" and its refresh (#371), above the holdings outside the session:
- *  whole, on one box that nothing pushes sideways, at every desk width, in either mode, with the
- *  inspector shut and open. */
+ *  whole, on one box that nothing pushes sideways, at every desk width, with the inspector shut and
+ *  open. */
 describe("the market-closed line fits", () => {
   beforeEach(() => {
     vi.setSystemTime(SUNDAY);
@@ -201,27 +199,25 @@ describe("the market-closed line fits", () => {
     });
   }
 
-  for (const mode of ["live", "review"] as const) {
-    for (const width of [900, 1280, 2560]) {
-      it(`at ${width}px in ${mode}, with the inspector shut and open`, async () => {
-        await show(mode, width);
-        const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
-        expect(line.textContent).toBe("market closed — valued at 01:00refresh");
-        const button = within(line).getByRole("button", { name: "refresh the valuation" });
-        expect(button.getBoundingClientRect().width).toBeGreaterThan(0);
-        expect(clipped(line)).toEqual([]);
-        expect(overflowsSideways()).toBe(false);
+  for (const width of [900, 1280, 2560]) {
+    it(`at ${width}px, with the inspector shut and open`, async () => {
+      await show(width);
+      const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
+      expect(line.textContent).toBe("market closed — valued at 01:00refresh");
+      const button = within(line).getByRole("button", { name: "refresh the valuation" });
+      expect(button.getBoundingClientRect().width).toBeGreaterThan(0);
+      expect(clipped(line)).toEqual([]);
+      expect(overflowsSideways()).toBe(false);
 
-        await inspect("h-ic");
-        expect(clipped(document.querySelector<HTMLElement>(".nx-mkt-closed")!)).toEqual([]);
-        expect(overflowsSideways()).toBe(false);
-      });
-    }
+      await inspect("h-ic");
+      expect(clipped(document.querySelector<HTMLElement>(".nx-mkt-closed")!)).toEqual([]);
+      expect(overflowsSideways()).toBe(false);
+    });
   }
 
   it("is not drawn in session", async () => {
     vi.setSystemTime(new Date("2026-11-12T17:00:00Z"));
-    await show("review", 1280);
+    await show(1280);
     expect(document.querySelector(".nx-mkt-closed")).toBeNull();
   });
 });
@@ -240,11 +236,12 @@ describe("the pace explained fits in the inspector (#333)", () => {
   }
 
   // the call spread's split declined with the route's reason and what would cover the gap; the put
-  // spread's split whole — in both modes, since the inspector explains the pace in both
-  for (const mode of ["live", "review"] as const) for (const width of [900, 1280, 2560]) {
+  // spread's split whole — in session and out of it, since the inspector explains the pace in both
+  for (const when of ["in session", "outside the session"] as const) for (const width of [900, 1280, 2560]) {
     for (const id of ["h-calls", "h-puts"]) {
-      it(`${id}'s at ${width}px in ${mode}`, async () => {
-        await show(mode, width);
+      it(`${id}'s at ${width}px ${when}`, async () => {
+        if (when === "outside the session") vi.setSystemTime(SUNDAY);
+        await show(width);
         await inspect(id);
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
         const pace = within(insp).getByRole("region", { name: "the pace explained" });
@@ -289,7 +286,7 @@ describe("the payoff at expiry fits in the inspector (#291)", () => {
   for (const width of [900, 1280, 2560]) {
     for (const [id, what] of [["h-ic", "a held condor"], ["w-dec18", "a watched spread"]] as const) {
       it(`${what}'s, at ${width}px`, async () => {
-        await show("live", width);
+        await show(width);
         await inspect(id);
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
         const svg = insp.querySelector<SVGSVGElement>(".nx-payoff svg");
@@ -307,7 +304,7 @@ describe("the payoff at expiry fits in the inspector (#291)", () => {
   }
 
   it("keeps its text its own size in the narrowest inspector, rather than shrinking it to fit", async () => {
-    await show("live", 900);
+    await show(900);
     await inspect("h-ic");
     const label = document.querySelector<SVGTextElement>(".nxd-inspector [data-breakeven] text")!;
     expect(label.getBoundingClientRect().height).toBeGreaterThanOrEqual(10);
@@ -350,14 +347,13 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
 
   // the call spread's week, with a day missing its IV; and the 4-leg condor's two days, whose
   // calls end half a point of IV apart, which put their names on top of each other
-  // the session decides whether the section starts open (#372), never the mode: each is measured
-  // with the other mode on screen, so a page that still keyed it on the mode would fail here
+  // the session decides whether the section starts open (#372)
   const cases = [["h-calls", 7], ["h-ic", 2]] as const;
-  const whens = [["outside the session", "live"], ["in session", "review"]] as const;
-  for (const [when, mode] of whens) for (const width of [900, 1280, 2560]) for (const [id, days] of cases) {
+  const whens = ["outside the session", "in session"] as const;
+  for (const when of whens) for (const width of [900, 1280, 2560]) for (const [id, days] of cases) {
     it(`${id}'s at ${width}px ${when}`, async () => {
       if (when === "outside the session") vi.setSystemTime(SUNDAY);
-      await show(mode, width);
+      await show(width);
       await inspect(id);
       const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
       const toggle = within(insp).getByRole("button", { name: "history" });
@@ -387,7 +383,7 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
 
   it("says why a day is not the close when the pointer rests on it", async () => {
     vi.setSystemTime(SUNDAY);
-    await show("review", 1280);
+    await show(1280);
     await inspect("h-calls");
     await settle();
     const evening = document.querySelector<SVGGElement>(".nxd-inspector [data-sample][data-timing='after-close']")!;
@@ -408,7 +404,7 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
 
   it("is one tab stop, whose arrow keys move from day to day", async () => {
     vi.setSystemTime(SUNDAY);
-    await show("review", 1280);
+    await show(1280);
     await inspect("h-calls");
     await settle();
     const days = document.querySelector<HTMLElement>(".nxd-inspector .nx-hist-chart[role='group']")!;
@@ -421,8 +417,8 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
     expect(document.querySelector(".nxd-inspector [data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-04");
   });
 
-  it("is drawn in session when opened, and not before, whichever mode", async () => {
-    await show("review", 1280);
+  it("is drawn in session when opened, and not before", async () => {
+    await show(1280);
     await inspect("h-calls");
     const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
     expect(insp.querySelector(".nx-hist")).toBeNull();
@@ -448,8 +444,8 @@ describe("columns are dropped as measured (ADR 0008)", () => {
   const widths = () => [...document.querySelectorAll<HTMLElement>(".nxd-head [data-col]")]
     .map((c) => `${c.dataset.col} ${Math.round(c.getBoundingClientRect().width)}px`).join(", ");
 
-  // what each width draws, measured in this engine with the owner's book; the same in either mode,
-  // because there is one set (#372) — both modes are on screen until #375 takes the switch away
+  // what each width draws, measured in this engine with the owner's book, in session: one set at
+  // every hour (#372)
   const DRAWN: Record<number, { shut: string[]; open: string[] }> = {
     // the pace gap written signed (#379) is 75px where its words took 122: room for SPX → short at
     // 900 shut and at 1280 open, which the words had pushed off
@@ -463,42 +459,40 @@ describe("columns are dropped as measured (ADR 0008)", () => {
     },
     2560: { shut: ONE_SET, open: ONE_SET },
   };
-  for (const mode of ["live", "review"] as const) {
-    for (const width of [900, 1280, 2560]) {
-      it(`at ${width}px in ${mode}, drops in the survival order, with the inspector shut and open`, async () => {
-        await show(mode, width);
-        for (const state of ["shut", "open"] as const) {
-          if (state === "open") await inspect("h-calls");
-          const drawn = shown();
-          // the survival order's first n, drawn in the one set's order: nothing skipped for a narrower one
-          const kept = SURVIVAL.slice(0, drawn.length - 1);
-          expect(drawn, `${state}: ${widths()}`).toEqual(ONE_SET.filter((k) => k === "name" || kept.includes(k)));
-          expect(drawn, `${state}: ${widths()}`).toEqual(DRAWN[width]![state]);
-          expect(misfits(), `${state}: ${widths()}`).toEqual([]);
-          expect(overflowsSideways()).toBe(false);
-          // the gap signed, its words to a pointer and, in place of the sign, to a reader
-          const gap = rowOf("h-calls").querySelector<HTMLElement>('[data-col="pace_gap"]')!;
-          expect(gap.querySelector<HTMLElement>(".nxd-v")!.textContent).toBe("+0.47");
-          expect(gap.querySelector<HTMLElement>(".nxd-v")!.title).toBe("behind by 0.47");
-          expect(gap.querySelector(".sr-only")!.textContent).toBe("pace gap behind by 0.47");
-          expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
-        }
-      });
-    }
+  for (const width of [900, 1280, 2560]) {
+    it(`at ${width}px, drops in the survival order, with the inspector shut and open`, async () => {
+      await show(width);
+      for (const state of ["shut", "open"] as const) {
+        if (state === "open") await inspect("h-calls");
+        const drawn = shown();
+        // the survival order's first n, drawn in the one set's order: nothing skipped for a narrower one
+        const kept = SURVIVAL.slice(0, drawn.length - 1);
+        expect(drawn, `${state}: ${widths()}`).toEqual(ONE_SET.filter((k) => k === "name" || kept.includes(k)));
+        expect(drawn, `${state}: ${widths()}`).toEqual(DRAWN[width]![state]);
+        expect(misfits(), `${state}: ${widths()}`).toEqual([]);
+        expect(overflowsSideways()).toBe(false);
+        // the gap signed, its words to a pointer and, in place of the sign, to a reader
+        const gap = rowOf("h-calls").querySelector<HTMLElement>('[data-col="pace_gap"]')!;
+        expect(gap.querySelector<HTMLElement>(".nxd-v")!.textContent).toBe("+0.47");
+        expect(gap.querySelector<HTMLElement>(".nxd-v")!.title).toBe("behind by 0.47");
+        expect(gap.querySelector(".sr-only")!.textContent).toBe("pace gap behind by 0.47");
+        expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
+      }
+    });
   }
 
   it("draws every column on a wide desk and fewer on a narrow one", async () => {
-    await show("live", 2560);
+    await show(2560);
     expect(shown()).toEqual(ONE_SET);
     cleanup();
-    await show("live", 900);
+    await show(900);
     await inspect("h-calls");
     expect(shown().length).toBeLessThan(10);
     expect(shown()[0]).toBe("name");
   });
 
   it("only ever gains columns as the window widens, never trades one for another", async () => {
-    await show("live", 900);
+    await show(900);
     await inspect("w-dec18");
     let before = shown();
     for (let width = 940; width <= 1700; width += 40) {
@@ -512,7 +506,7 @@ describe("columns are dropped as measured (ADR 0008)", () => {
   });
 
   it("drops columns when the text grows, at the same width — which no breakpoint can see", async () => {
-    await show("live", 1280);
+    await show(1280);
     await inspect("h-ic");
     const at16 = shown();
     document.documentElement.style.fontSize = "22px";
@@ -525,7 +519,7 @@ describe("columns are dropped as measured (ADR 0008)", () => {
 
   it("moves the fill bar into the name cell when the rule's column has dropped", async () => {
     document.cookie = "ui_cols_combo=alarm;path=/";
-    await show("live", 1280);
+    await show(1280);
     expect(shown()).not.toContain("alarm");
     expect(rowOf("w-dec18").querySelector('[data-col="name"] [data-fill]')).toBeTruthy();
   });
@@ -537,7 +531,7 @@ describe("the header row", () => {
       ...QUOTES.find((q) => q.id === "w-dec31")!, id: `more-${i}`, code: `0115_C${7000 + i * 10}`,
       strike_date: "2027-01-15",
     }));
-    await show("live", 1280, more, 700);
+    await show(1280, more, 700);
     const head = document.querySelector<HTMLElement>(".nxd-head")!;
     expect(document.documentElement.scrollHeight).toBeGreaterThan(1400);
     window.scrollTo(0, 600);
@@ -560,7 +554,7 @@ describe("the bracket and the attention colours, as drawn", () => {
 
   for (const [what, extra] of [["with the fixture's rules", []], ["with rules under both spreads", underBoth]] as const) {
     it(`joins exactly the condor's two holding rows, ${what}`, async () => {
-      await show("live", 1280, [...extra]);
+      await show(1280, [...extra]);
       const parts = [...document.querySelectorAll<HTMLElement>(".nxd-bracket")]
         .map((b) => b.getBoundingClientRect()).sort((a, b) => a.top - b.top);
       expect(parts.length).toBeGreaterThan(0);
@@ -578,11 +572,11 @@ describe("the bracket and the attention colours, as drawn", () => {
       const chip = row.querySelector(".nx-chip");
       return [id, `${getComputedStyle(row).backgroundColor} ${chip ? getComputedStyle(chip).backgroundColor : "-"}`];
     }));
-    await show("live", 1280);
+    await show(1280);
     const opportunity = paint();
     cleanup();
     document.cookie = "ui_entry=risk;path=/";
-    await show("live", 1280);
+    await show(1280);
     const risk = paint();
     expect(risk["w-dec04"]).not.toBe(opportunity["w-dec04"]);
     // and it now looks exactly like the fired risk rule

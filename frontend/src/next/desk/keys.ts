@@ -33,7 +33,7 @@ export interface DeskSelection {
 export const NOTHING_SELECTED: DeskSelection = { id: null, open: false };
 
 /** Whether a key pressed at `target` is being typed into something. */
-export function typingInto(target: EventTarget | null): boolean {
+function typingInto(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   if (target.closest("input, textarea, select")) return true;
   // the attribute as well as the property: what inherits it is editable too, and jsdom has no
@@ -53,7 +53,7 @@ function holding(desk: Element | null, selector: string): Element[] {
 }
 
 /** Whether something else owns the keyboard now: a dialog, or a form open on the desk. */
-export function keysAreElsewhere(desk: Element | null): boolean {
+function keysAreElsewhere(desk: Element | null): boolean {
   if (document.querySelector('[role="dialog"], [role="alertdialog"], .nx-add-panel')) return true;
   return holding(desk, 'form, [data-poll="hold"]').length > 0;
 }

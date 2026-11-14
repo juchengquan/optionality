@@ -10,7 +10,7 @@ import type { Need } from "./needs";
 /** The cadences offered, as the old page's Service panel offered them. */
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 
-export interface SettingsProps {
+interface SettingsProps {
   up: UpColour; onUp: (up: UpColour) => void;
   entryStyle: EntryStyle; onEntryStyle: (style: EntryStyle) => void;
   privacy: boolean; onPrivacy: (on: boolean) => void;
@@ -21,7 +21,7 @@ export interface SettingsProps {
   needs: Need[];
   /** whether the list can claim to be whole: only with every holding valued (ADR 0012) */
   complete: boolean;
-  /** when the holdings it read were valued — polled in LIVE, asked for again on opening in REVIEW */
+  /** when the holdings it read were valued — polled in session, asked for again on opening outside it */
   holdingsAt: string | null;
   references: Reference[];
   onAddReference: (body: { code: string; label?: string; source: Source }) => Promise<boolean>;

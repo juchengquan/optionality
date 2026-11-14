@@ -1,5 +1,5 @@
 /** Outside the session the Level chips say when they were valued (#354, the owner's decision (b),
- *  ADR 0023; re-keyed from REVIEW to New York's session by #371 and the amendment of 2026-11-13).
+ *  ADR 0023; re-keyed from the old Review view to New York's session by #371 and the amendment of 2026-11-13).
  *
  *  The needs-you line uses only what is polled (ADR 0012), and outside the session the holdings are
  *  not polled: they are valued once. So there the line says nothing of a holding's Levels, while
@@ -7,7 +7,7 @@
  *  read as a disagreement, so the chip says which valuation it is from — "at stop · as valued at
  *  23:04" — on every surface that draws one: the desk's row and inspector, the phone's card, page
  *  and sheet, and the saved picture. In session the line and the chip read the same poll, and
- *  agree, with no time on the chip. WHICHEVER MODE is on screen: the mode decides neither.
+ *  agree, with no time on the chip. Nothing but the session decides either (#375: there is no mode).
  */
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -104,15 +104,11 @@ const EVENING_STAMP = "2026-11-10 06:23:11+08:00";
 /** the clock a chip states for the default stamp at `now` */
 const valuedTime = (now: string) => (now === EVENING ? "06:23" : "23:04");
 
-async function open(arrangement: Arrangement, now: string, chip = true, mode?: "Live" | "Review") {
+async function open(arrangement: Arrangement, now: string, chip = true) {
   document.cookie = `ui_arrangement=${arrangement};path=/`;
   if (now === EVENING && stamp === "2026-11-08 23:04:11+08:00") stamp = EVENING_STAMP;
   at(now);
   render(<Next />);
-  if (mode) {
-    // the owner's choice, by hand: the desk's switch, the only one since #374
-    fireEvent.click(within(screen.getByRole("group", { name: "mode" })).getByRole("button", { name: mode }));
-  }
   await until(() => expect(document.querySelector(chip ? '[data-ref="p1"] .nx-chip' : '[data-ref="p1"]')).toBeTruthy());
 }
 
@@ -159,11 +155,9 @@ describe("the words", () => {
 });
 
 describe("outside the session, a holding's chip and the needs-you line never contradict each other", () => {
-  for (const [when, now, mode] of [
-    ["on a Sunday", SUNDAY, undefined], ["on an evening with Live picked", EVENING, "Live"],
-  ] as const) {
+  for (const [when, now] of [["on a Sunday", SUNDAY], ["on an evening", EVENING]] as const) {
     it(`on the desk ${when}: the row and the inspector say which valuation, and the line says nothing of it`, async () => {
-      await open("desk", now, true, mode);
+      await open("desk", now, true);
       const t = valuedTime(now);
       expect(chipIn(document, "p1")).toBe(`at stop · as valued at ${t}`);
       expect(chipIn(document, "p2")).toBe(`manage-by · as valued at ${t}`);
@@ -194,22 +188,20 @@ describe("outside the session, a holding's chip and the needs-you line never con
 });
 
 describe("in session they read the same poll and agree, so the chip carries no time", () => {
-  for (const mode of [undefined, "Review"] as const) {
-    it(`on the desk${mode ? ", with Review picked" : ""}`, async () => {
-      await open("desk", SESSION, true, mode);
-      await until(() => expect(line()).toContain("1231_7000P at stop"));
-      expect(chipIn(document, "p1")).toBe("at stop");
-      expect(line()).toContain("1204_6900P at its manage-by");
-      expect(chipIn(document, "p2")).toBe("manage-by");
+  it("on the desk", async () => {
+    await open("desk", SESSION, true);
+    await until(() => expect(line()).toContain("1231_7000P at stop"));
+    expect(chipIn(document, "p1")).toBe("at stop");
+    expect(line()).toContain("1204_6900P at its manage-by");
+    expect(chipIn(document, "p2")).toBe("manage-by");
 
-      // the inspector draws the row's chip, bare as the row's is
-      fireEvent.click(within(document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!)
-        .getByRole("button", { name: "1231_7000P" }));
-      const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
-      expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop");
-      expect(inspector.textContent).toContain("live: updates with every poll");
-    });
-  }
+    // the inspector draws the row's chip, bare as the row's is
+    fireEvent.click(within(document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!)
+      .getByRole("button", { name: "1231_7000P" }));
+    const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
+    expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop");
+    expect(inspector.textContent).toContain("live: updates with every poll");
+  });
 
   it("on the phone's card and its sheet", async () => {
     await open("phone", SESSION);
@@ -246,16 +238,16 @@ describe("outside the session a rule linked to a holding does not say the holdin
     // the stop reached since the holdings were valued: the poll's schedule says it, the row cannot
     holdings = [{ ...holding, schedule }, due];
     quotes = [spread, linked()];
-    await open("desk", EVENING, false, "Live");
+    await open("desk", EVENING, false);
     expect(chipIn(document, "p1")).toBeNull();
     await act(async () => { vi.advanceTimersByTime(15_000); });
     expect(line()).not.toContain("at stop");
     expect(line()).not.toContain("1231_7000P");
   });
 
-  it("while in session it says it, from the poll, with Review picked too", async () => {
+  it("while in session it says it, from the poll", async () => {
     quotes = [spread, linked()];
-    await open("desk", SESSION, true, "Review");
+    await open("desk", SESSION, true);
     await until(() => expect(line()).toContain("1231_7000P at stop"));
   });
 });
@@ -279,7 +271,7 @@ describe("one clock for a valuation", () => {
   });
 
   it("moves the line and the chip on together by the line's own refresh", async () => {
-    await open("desk", SUNDAY, true, "Live");
+    await open("desk", SUNDAY, true);
     stamp = "2026-11-08 23:11:02+08:00";
     fireEvent.click(within(document.querySelector<HTMLElement>(".nx-mkt-closed")!)
       .getByRole("button", { name: "refresh the valuation" }));
@@ -310,27 +302,31 @@ describe("a valuation from another day says its date (#371's review)", () => {
 });
 
 describe("the saved picture says which valuation, outside the session only", () => {
-  function picture(arrangement: Arrangement, mode: "live" | "review", session: boolean) {
+  function picture(arrangement: Arrangement, session: boolean) {
     at(SUNDAY); // the stamp is today's, so its time alone
     render(<Still arrangement={arrangement} quotes={[spread] as never} monitors={[]}
                   holdings={[holding, due] as unknown as Holding[]} holdingsError={null} holdingsAt="23:04:15"
-                  mode={mode} session={session} privacy={false} entryStyle="opportunity" needs={[]} health={null}
+                  session={session} privacy={false} entryStyle="opportunity" needs={[]} health={null}
                   polledAt={null} error={null} references={[]} />);
   }
 
   for (const arrangement of ["desk", "phone"] as Arrangement[]) {
-    for (const mode of ["live", "review"] as const) {
-      it(`from the ${arrangement} in ${mode}`, () => {
-        picture(arrangement, mode, false);
-        expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
-        expect(document.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed — valued at 23:04");
-        // nothing in a picture can be pressed
-        expect(document.querySelector(".nx-mkt-closed button")).toBeNull();
-        cleanup();
-        picture(arrangement, mode, true);
-        expect(chipIn(document, "p1")).toBe("at stop");
-        expect(document.querySelector(".nx-mkt-closed")).toBeNull();
-      });
-    }
+    it(`from the ${arrangement}`, () => {
+      const head = () => document.querySelector(".nx-still-head")!.textContent;
+      picture(arrangement, false);
+      expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
+      expect(document.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed — valued at 23:04");
+      // the header says the session, where it once said the mode (#375) — outside it, nothing:
+      // the market-closed line says it, and the picture says it once
+      expect(head()).toBe("optionality");
+      expect(document.body.textContent!.split("market closed")).toHaveLength(2);
+      // nothing in a picture can be pressed
+      expect(document.querySelector(".nx-mkt-closed button")).toBeNull();
+      cleanup();
+      picture(arrangement, true);
+      expect(chipIn(document, "p1")).toBe("at stop");
+      expect(document.querySelector(".nx-mkt-closed")).toBeNull();
+      expect(head()).toBe("optionalityin session");
+    });
   }
 });

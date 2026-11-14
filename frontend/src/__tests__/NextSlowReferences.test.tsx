@@ -73,8 +73,7 @@ function serve(refuse = false) {
 const arrangements = ["phone", "desk"] as const;
 type Arrangement = (typeof arrangements)[number];
 
-/** The page at 10:00 New York on a Tuesday, which is LIVE: the only mode that draws the strip and
- *  polls its References. */
+/** The page at 10:00 New York on a Tuesday, in session: where it polls its References. */
 async function open(arrangement: Arrangement, { poll = false } = {}) {
   // the poll's timer made fake only where a test drives it: the page's other waits stay real
   const toFake = poll ? ["Date", "setInterval", "clearInterval"] as const : ["Date"] as const;

@@ -32,7 +32,7 @@ function serveOwnerBook(quotes: object[] = QUOTES, holdings: object[] = HOLDINGS
   window.fetch = ((url: string, init?: RequestInit) => {
     // the payoff's POST is a read, and is answered (#291)
     const payoff = payoffAnswer(String(url).replace(/^.*\/api/, ""));
-    // and REVIEW's samples (#295), a read too: an empty list in their place would break the page
+    // and a holding's samples (#295), a read too: an empty list in their place would break the page
     const read = payoff ?? samplesAnswer(String(url).replace(/^.*\/api/, ""))
       // and the pace split (#333), read once when a holding is opened
       ?? volAnswer(String(url).replace(/^.*\/api/, ""));

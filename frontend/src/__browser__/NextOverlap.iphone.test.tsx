@@ -35,7 +35,7 @@ function serveOverlap(): void {
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
     }
     const path = String(url).replace(/^.*\/api/, "");
-    // REVIEW's samples (#295), a read: none recorded yet, rather than a list that is not one
+    // a holding's samples (#295), a read: none recorded yet, rather than a list that is not one
     if (/\/samples$/.test(path)) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(SAMPLES) });
     }

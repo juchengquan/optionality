@@ -3,8 +3,8 @@
  *  beneath the burndown and the IV chart, on the same DTE axis as both.
  *
  *  - **Every figure is the service's.** Each day's price is the sample's own `spx`, derived by the
- *    sweep that wrote it from its batch (ADR 0024); SPX now is the valuation's `spx`, from REVIEW's
- *    one batch. Nothing here is a Reference's figure.
+ *    sweep that wrote it from its batch (ADR 0024); SPX now is the valuation's `spx`, from the book's
+ *    latest batch. Nothing here is a Reference's figure.
  *  - **A day without SPX's price is a gap**, never a point at zero: rows stored before SPX was
  *    recorded (migration 0010) are null, and so is a day whose batch could not give it. The line
  *    breaks there, the range ignores it, and the count of such days is said beneath.

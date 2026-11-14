@@ -1,6 +1,6 @@
-/** The burndown and the IV chart in REVIEW (#295, ADR 0023): in the desk's inspector, drawn from
- *  `/positions/{id}/samples` — and in LIVE, on demand, in the inspector and the phone's holding
- *  sheet (#353), which opens it from the start outside the session (#374). Behaviour only —
+/** The burndown and the IV chart (#295, ADR 0023), drawn from `/positions/{id}/samples` in the
+ *  desk's inspector and the phone's holding sheet: open from the start outside the session (#372,
+ *  #374), on demand in it (#353). Behaviour only —
  *  what is asked for and when, what is drawn from what was served, what an off-close point says
  *  and what privacy hides. That the charts FIT is measured by the browser suite. */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -37,7 +37,7 @@ afterEach(() => {
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "review", session: (over.mode ?? "review") === "live", privacy: false, entryStyle: "opportunity", ...over,
+    session: false, privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -88,7 +88,7 @@ function corners(el: Element | null): [number, number][] {
   return [...text.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
 }
 
-describe("the burndown, in the desk's inspector in REVIEW", () => {
+describe("the burndown, in the desk's inspector outside the session", () => {
   it("asks for the holding's samples once, by its id, and draws a point for every day", async () => {
     const { insp } = await inspect("h-calls", "1218_C7300");
     const chart = await burndownOf(insp);
@@ -570,7 +570,7 @@ describe("the value axis (#360)", () => {
   });
 });
 
-describe("switching holdings in REVIEW", () => {
+describe("switching holdings outside the session", () => {
   /** Each holding's samples answered when the test says, as a slow service would. */
   function held() {
     const waiting = new Map<string, () => void>();
@@ -651,16 +651,14 @@ describe("in the phone's holding sheet outside the session, open from the start 
     return screen.getByRole("dialog");
   }
 
-  for (const mode of ["live", "review"] as const) {
-    it(`is the sheet's chart at once, read once for its holding and no other, with ${mode} held`, async () => {
-      draw({ mode });
-      const sheet = await sheetOf("1218_C7300");
-      const chart = await burndownOf(sheet);
-      await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
-      expect(await ivOf(sheet)).toBeTruthy();
-      expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
-    });
-  }
+  it("is the sheet's chart at once, read once for its holding and no other", async () => {
+    draw();
+    const sheet = await sheetOf("1218_C7300");
+    const chart = await burndownOf(sheet);
+    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+    expect(await ivOf(sheet)).toBeTruthy();
+    expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
+  });
 
   it("says why a point is not a close when it is tapped", async () => {
     draw();
@@ -694,7 +692,7 @@ describe("in the phone's holding sheet outside the session, open from the start 
   });
 });
 
-/** The section that opens a holding's history in LIVE (#353), wherever it is drawn. */
+/** The section that opens a holding's history (#353), wherever it is drawn. */
 const toggleOf = (root: HTMLElement) => within(root).getByRole("button", { name: "history" });
 
 /** Its toggle's state, and the box it controls: named by `aria-controls`, and there to be named
@@ -706,9 +704,9 @@ function disclosure(root: HTMLElement) {
   return { expanded: toggle.getAttribute("aria-expanded"), body: body! };
 }
 
-describe("in LIVE, on demand (#353): the desk's inspector", () => {
+describe("in session, on demand (#353): the desk's inspector", () => {
   it("is drawn when opened, and not before: shut, it asks for nothing", async () => {
-    const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+    const { insp } = await inspect("h-calls", "1218_C7300", { session: true });
     await within(insp).findByRole("group", { name: "payoff at expiry" });
     expect(disclosure(insp).expanded).toBe("false");
     expect(disclosure(insp).body.hidden).toBe(true);
@@ -719,14 +717,14 @@ describe("in LIVE, on demand (#353): the desk's inspector", () => {
     expect(disclosure(insp).expanded).toBe("true");
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
-    // the three charts REVIEW draws, from the same one answer
+    // the three charts drawn open outside the session, from the same one answer
     expect(await ivOf(insp)).toBeTruthy();
     expect(await within(insp).findByRole("group", { name: "SPX against the strikes" })).toBeTruthy();
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
   });
 
   it("asks nothing more when shut and opened again, or when a poll brings a new valuation", async () => {
-    const { view, insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+    const { view, insp } = await inspect("h-calls", "1218_C7300", { session: true });
     fireEvent.click(toggleOf(insp));
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
@@ -737,7 +735,7 @@ describe("in LIVE, on demand (#353): the desk's inspector", () => {
     expect(disclosure(insp).body.hidden).toBe(false);
     expect((await burndownOf(insp)).querySelectorAll("[data-sample]")).toHaveLength(7);
     // a poll: the same holdings, as new objects
-    view.rerender(<DeskBook {...props({ mode: "live", holdings: HOLDINGS.map((h) => ({ ...h })) })} />);
+    view.rerender(<DeskBook {...props({ session: true, holdings: HOLDINGS.map((h) => ({ ...h })) })} />);
     await act(async () => { await Promise.resolve(); });
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
   });
@@ -750,15 +748,15 @@ describe("in LIVE, on demand (#353): the desk's inspector", () => {
         const answer = /\/samples$/.test(path) ? body : payoffAnswer(path) ?? volAnswer(path);
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer) });
       }));
-      const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+      const { insp } = await inspect("h-calls", "1218_C7300", { session: true });
       fireEvent.click(within(insp).getByRole("button", { name: "history" }));
       expect(await within(insp).findByText(/the samples could not be read — the service answered without them/))
         .toBeTruthy();
     });
   }
 
-  it("hides the $ axis under privacy, as REVIEW does", async () => {
-    const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live", privacy: true });
+  it("hides the $ axis under privacy, as it is outside the session", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300", { session: true, privacy: true });
     fireEvent.click(toggleOf(insp));
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelector("[data-costs]")).toBeTruthy());
@@ -777,7 +775,7 @@ describe("in LIVE, on demand (#353): the desk's inspector", () => {
         resolve({ ok: true, status: 200, json: () => Promise.resolve(samples) })));
     }));
     const answer = async (path: string) => { await act(async () => { waiting.get(path)!(); await Promise.resolve(); }); };
-    const { insp } = await inspect("h-calls", "1218_C7300", { mode: "live" });
+    const { insp } = await inspect("h-calls", "1218_C7300", { session: true });
     fireEvent.click(toggleOf(insp));
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
     fireEvent.click(within(deskRow("h-puts")).getByRole("button", { name: "1218_P6400" }));
@@ -795,9 +793,9 @@ describe("in LIVE, on demand (#353): the desk's inspector", () => {
   });
 });
 
-describe("in LIVE, on demand (#353): the phone's holding sheet", () => {
+describe("in session, on demand (#353): the phone's holding sheet", () => {
   const draw = (over: Partial<BookProps> = {}) =>
-    render(<div className="nx"><PhoneBook {...props({ mode: "live", session: true, ...over })} /></div>);
+    render(<div className="nx"><PhoneBook {...props({ session: true, ...over })} /></div>);
 
   it("is shut until opened, then reads the samples once, however often it is shut and opened", async () => {
     draw();
@@ -815,15 +813,6 @@ describe("in LIVE, on demand (#353): the phone's holding sheet", () => {
     fireEvent.click(toggleOf(sheet));
     expect(disclosure(sheet).body.hidden).toBe(false);
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
-  });
-
-  it("is shut in session whichever mode is held: the session decides, not the mode (#374)", async () => {
-    draw({ mode: "review" });
-    fireEvent.click(screen.getByRole("button", { name: "details of 1218_C7300" }));
-    const sheet = screen.getByRole("dialog");
-    expect(disclosure(sheet).expanded).toBe("false");
-    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
-    expect(samplesAsked()).toEqual([]);
   });
 });
 

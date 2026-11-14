@@ -10,12 +10,12 @@ import { servedWhen } from "./session";
  *  at the change of session, or by the refresh — rather than polled. The chip is drawn from that
  *  one valuation, so it says which one — "at stop · as valued at 21:04" — and the two cannot read
  *  as a disagreement (the owner's decision (b), ADR 0023 as amended 2026-11-13). In session the
- *  line and the chip read the same poll, and the chip carries no time. The mode on screen plays no
- *  part in either.
+ *  line and the chip read the same poll, and the chip carries no time. Nothing but the session
+ *  decides either.
  *
  *  ONE function for the words, so the desk's row, its inspector, the phone's page and sheet, the
  *  saved picture and the desk's fitting, which counts the chip's characters, say the same thing. */
-export type Level = "stop" | "target" | "manage";
+type Level = "stop" | "target" | "manage";
 
 export const LEVEL_WORDS: Record<Level, string> = {
   stop: "at stop", target: "at target", manage: "manage-by",

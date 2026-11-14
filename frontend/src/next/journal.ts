@@ -6,7 +6,7 @@
  *  figure out: what a trade made is the service's `realized_points`, and a figure nobody recorded is
  *  said as unknown rather than as 0, which would read as a trade that broke even.
  *
- *  - **Read on first opening the section**, at any hour and in either mode, and again only after a
+ *  - **Read on first opening the section**, at any hour, in session or out, and again only after a
  *    write that changes it — a close, a correction, a delete. Never polled: a closed holding does
  *    not move (ADR 0023). Shutting the section and opening it again asks nothing.
  *  - **Never before it is opened.** A page nobody opens the section on never asks for it; the book

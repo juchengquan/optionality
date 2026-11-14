@@ -98,7 +98,7 @@ const samples = {
   })),
   // as the service answers since #359: none of these days was summed before a correction. Missing,
   // the burndown read `undefined` as a correction and threw — unseen while this suite ran in
-  // session, where REVIEW's pages (which draw it) only appeared by hand
+  // session, where the history is drawn only when opened by hand
   qty_corrected_at: null,
 };
 
@@ -111,7 +111,7 @@ export function serveBook(extra: object[] = []): void {
     if (/\/payoff$/.test(String(url))) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(payoff) });
     }
-    // and so are REVIEW's samples (#295): an empty list in their place would break the page
+    // and so are a holding's samples (#295): an empty list in their place would break the page
     if (/\/samples$/.test(String(url))) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(samples) });
     }

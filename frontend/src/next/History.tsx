@@ -1,6 +1,7 @@
 /** A holding's recorded history, drawn (#295, ADR 0023): the burndown and the IV chart, in the desk's
- *  inspector in REVIEW — and in LIVE and the phone's holding sheet, on demand, behind
- *  `HistoryOnDemand` (#353), which the sheet opens from the start outside the session (#374).
+ *  inspector and the phone's holding sheet behind `HistoryOnDemand` (#353), which both open from the
+ *  start outside the session and leave shut in it (#372, #374); and in a closed trade's detail in
+ *  the journal (`ClosedTrade`).
  *
  *  Everything drawn is the service's (`/positions/{id}/samples`): each day's Cost to close, the
  *  planned decay at every DTE from the open (`onPace`, ADR 0011), the Target, the Stop and
@@ -8,9 +9,10 @@
  *  computes no curve: the plan is a polyline through the served DTEs, so the √ shape is the
  *  service's and not a guess redrawn here.
  *
- *  - **Read once, when opened.** The samples are asked for when a holding is shown in REVIEW (or
- *    its history opened in LIVE), by its id, and never again while it stays shown: a row changes
- *    at most once a market day, and no poll reads it, in either mode (ADR 0023). A new valuation of
+ *  - **Read once, when opened.** The samples are asked for when a holding's history is drawn —
+ *    opened by hand, or open from the start outside the session — by its id, and never again while
+ *    it stays shown: a row changes at most once a market day, and no poll reads it, in session or
+ *    out (ADR 0023). A new valuation of
  *    the same holding asks nothing more.
  *  - **A point that is not a close is drawn hollow**, and says why when pointed at — hovered on the
  *    desk, tapped or scrubbed on the phone, or stepped to with the keys — in the crosshair's
@@ -144,7 +146,7 @@ const T = 10, B = 22, R = 10;
 /** The plot's margins, the SAME for every chart of one holding (#298): the burndown, the IV chart
  *  and where SPX was all put a DTE at the same x, so a day reads straight down the three. Each is
  *  as wide as the widest chart needs. */
-export interface Gutters {
+interface Gutters {
   L: number;
   R: number;
 }

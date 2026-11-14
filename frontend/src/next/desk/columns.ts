@@ -54,13 +54,13 @@ const MONEY = new Intl.NumberFormat("en-US", {
 });
 
 /** As `Money` in Book.tsx draws it: the same characters, so the measuring counts what is drawn. */
-export function moneyText(value: number | null, privacy: boolean): string {
+function moneyText(value: number | null, privacy: boolean): string {
   if (value === null) return DASH;
   return privacy ? "$•••" : MONEY.format(value);
 }
 
 /** `-C7300 +C7350`: a holding's legs as the watchlist writes a combo's, short as minus. */
-export function holdingLegs(holding: Holding): string {
+function holdingLegs(holding: Holding): string {
   return heldLegs(holding.legs);
 }
 
@@ -75,7 +75,7 @@ function contractOf(code: string): { type: "C" | "P"; strike: number } | null {
  *  null, never a figure derived on screen: the holding's `greeks` are a signed sum over its legs
  *  and are not the short leg's delta. Where two legs are short (a 4-leg condor) it is the larger
  *  in size: the wing closer to the money. */
-export function shortLegDelta(holding: Holding, rules: Entry[]): number | null {
+function shortLegDelta(holding: Holding, rules: Entry[]): number | null {
   let found: number | null = null;
   for (const leg of holding.legs.filter((l) => l.side === "short")) {
     const served = servedDelta(holding, leg);
@@ -104,7 +104,7 @@ function quoted(entry: Entry, name: string): number | null {
 }
 
 /** What a quarantined rule watches and why nothing watches it now. */
-export function quarantineSentence(m: Monitor): string {
+function quarantineSentence(m: Monitor): string {
   const sign = m.direction === "below" ? "≤" : "≥";
   const words = fieldWords(m.field, Boolean(m.legs));
   const why = (m.disabled_reason && QUARANTINED[m.disabled_reason]) ?? "switched off by the service";
@@ -143,7 +143,7 @@ export function rowName(row: DeskRow): string {
 
 /** The attention a row asks for, drawn as a chip in the name cell, which never drops: a breach
  *  can never be hidden by the room running out (ADR 0008's fallback chain, kept). */
-export type Attention = "fault" | "entry" | "alarm" | "stop" | "target" | "manage";
+type Attention = "fault" | "entry" | "alarm" | "stop" | "target" | "manage";
 
 export function attentionOf(row: DeskRow): Attention | null {
   if (row.kind === "quarantined") return "fault";
@@ -234,7 +234,7 @@ const STRIP: DeskColumn = {
 };
 
 /** The compact strip's width, in characters: what `charsOf` adds for the drawing beside the words. */
-export const STRIP_CH = 10;
+const STRIP_CH = 10;
 
 const DTE: DeskColumn = {
   key: "dte", label: "DTE",
@@ -273,8 +273,8 @@ const ALARM: DeskColumn = {
 };
 
 /** The columns, in the order they are DRAWN: one set at every hour (ADR 0023, amended 2026-11-13:
- *  one page, by the session; #372). What was LIVE's, with the pace gap beside P&L and captured,
- *  where a reader compares it. */
+ *  one page, by the session; #372): the set the desk drew in session before then, with the pace
+ *  gap moved beside P&L and captured, where a reader compares it. */
 export const COLUMNS: readonly DeskColumn[] = [
   NAME, LEGS, VALUE, PNL, CAPTURED, PACE_GAP, DELTA, STRIP, DTE, MANAGE, ALARM,
 ];
@@ -283,7 +283,8 @@ export const COLUMNS: readonly DeskColumn[] = [
  *  pace" beside the pace gap, which no longer has a column of its own. */
 export const FIGURES: readonly DeskColumn[] = COLUMNS.flatMap((c) => c === PACE_GAP ? [ON_PACE, c] : [c]);
 
-/** Keys the desk once drew and no longer does (#372): REVIEW's "on pace" and "DTE → manage-by".
+/** Keys the desk once drew outside the session and no longer does (#372): "on pace" and "DTE →
+ *  manage-by".
  *  A viewer who hid one keeps it in the column cookie, where it hides nothing; the picker's reset
  *  clears them with the desk's own. */
 export const RETIRED_KEYS: readonly string[] = ["on_pace", "to_manage"];
@@ -294,7 +295,8 @@ export const PINNED = "name";
  *  (ADR 0008): fitting stops at the first column that does not fit, so a wide column early on
  *  would starve every column behind it. The rule's sentence is the widest, and when it drops the
  *  fill bar moves into the name cell and the inspector still says it whole. The pace gap survives
- *  DTE: it is the figure REVIEW was opened for, and DTE is in each expiry's heading anyway. */
+ *  DTE: it is the figure a holding is looked at after the close for, and DTE is in each expiry's
+ *  heading anyway. */
 export const PRIORITY: readonly string[] = [
   "value", "pnl", "delta", "pace_gap", "dte", "manage", "strip", "captured", "legs", "alarm",
 ];

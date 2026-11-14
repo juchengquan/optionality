@@ -35,7 +35,6 @@ import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { holdToast } from "./edit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
-import { clockMode, type Mode } from "./mode";
 import { inSession, servedWhen, sessionEdge, useSessionClock } from "./session";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
@@ -50,13 +49,17 @@ import { useSaveImage } from "./snapshot/useSaveImage";
 /** The dashboard, at `/opt` (ADR 0023): built at `/opt/next` beside the old page from #287, and
  *  in its place since the swap (#301).
  *
- *  A shell first: the arrangement, the mode, the colours, the needs-you line and Settings, around a
- *  plain list of the book that the desk table and the phone cards replace. Modes and arrangements
- *  are state, never routes (ADR 0005), so this is one page whichever is showing.
+ *  A shell: the arrangement, the colours, the needs-you line and Settings, around the book — the
+ *  desk's table or the phone's cards. Arrangements are state, never routes (ADR 0005), so this is
+ *  one page whichever is showing.
  *
- *  What the page FETCHES, and what its needs-you line says, follow New York's session instead of
- *  the mode (#371; ADR 0023 amended 2026-11-13): `session` is computed here, once, and handed to
- *  everything that asks. The mode still picks the columns and views until #372–#375 remove it.
+ *  ONE page at every hour, with no switch (ADR 0023, amended 2026-11-13: one page, by the
+ *  session; #371–#375). What it draws is the same in session and out of it — the desk's one column
+ *  set, the phone's three tabs, the closed trades folded at the bottom of the book. New York's
+ *  session decides only: what it FETCHES; the market-closed line; whether a figure says when it
+ *  was read; what the needs-you line states (holdings' Levels only in session); whether a
+ *  holding's history starts open (outside it), in the inspector and the phone's sheet; and the
+ *  saved picture's header. `session` is computed here, once, and handed to everything that asks.
  */
 export function Next() {
   const [up, setUp] = useState(readUp);
@@ -75,26 +78,12 @@ export function Next() {
   }, [arrangement]);
 
   // New York's session, read off the clock every 15 s and on coming back into view: what the page
-  // fetches and what the needs-you line says follow it, whichever mode is on screen (#371).
+  // fetches and what the needs-you line says follow it, and nothing else does (#371).
   const now = useSessionClock();
   const session = inSession(now);
   // and WHICH session it is in or after: a tab asleep from Monday 20:00 to Tuesday 20:00 New York
   // reads `false` at both ends, and must still value the book again when it wakes
   const edge = sessionEdge(now).getTime();
-  // The clock's mode unless the owner chose one. A choice lasts until the clock's own mode next
-  // changes: LIVE picked at 08:00 New York becomes the clock's at the open and REVIEW at the
-  // close. Choosing what the clock would pick hands the page straight back to it. Since #371 the
-  // choice changes neither what is fetched nor, since #372, the desk's columns, which are one set
-  // at every hour: what is left of it is which views are drawn — the phone's pages, REVIEW's
-  // closed trades — until #375 removes the switch.
-  const byClock = clockMode(now);
-  const [chosen, setChosen] = useState<Mode | null>(null);
-  useEffect(() => { setChosen(null); }, [byClock]);
-  // the phone has no way to pick a mode (#374), so a choice made on the desk does not follow it
-  // there, where nothing could undo it: the phone is the clock's
-  useEffect(() => { if (phone) setChosen(null); }, [phone]);
-  const mode = chosen ?? byClock;
-  const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
   const book = useBook(session, edge);
   // the picture (#300): the press, and the page's figures as they were at it — the off-screen tree
@@ -103,7 +92,7 @@ export function Next() {
   const shooting = pictured !== null;
   // the closed trades (#296), folded at the bottom of the book (#373): shut on every load, read
   // the first time the fold is opened and then after each write that changes them — a close, a
-  // correction, a delete — whether it is open or shut by then; never polled, at any hour or mode.
+  // correction, a delete — whether it is open or shut by then; never polled, in session or out.
   // A write made before the fold was ever opened reads nothing: the first opening reads it all
   const [journalOpen, setJournalOpen] = useState(false);
   const [journalOpened, setJournalOpened] = useState(false);
@@ -213,8 +202,8 @@ export function Next() {
   const hold = useMemo(() => (paletteOpen ? holdOnDesk(document.querySelector(".nxd")) : null), [paletteOpen]);
   const autoIsPhone = arrangementFor(width, "auto") === "phone";
   const actions = useMemo(
-    () => paletteActions({ mode, choice, selected: selectedRow, hold, autoIsPhone }),
-    [mode, choice, selectedRow, hold, autoIsPhone],
+    () => paletteActions({ choice, selected: selectedRow, hold, autoIsPhone }),
+    [choice, selectedRow, hold, autoIsPhone],
   );
   // the desk's selection is the desk's: the phone has none, and coming back to the desk must not
   // reopen an inspector on a row picked before it went
@@ -235,7 +224,6 @@ export function Next() {
     } else if (a.key === "edit-monitor" && desk.id !== null) land(desk.id, "edit");
     else if (a.key === "close-holding" && desk.id !== null) land(desk.id, "close");
     else if (a.key === "save-image") saveViewNow.current();
-    else if (a.key === "mode") pickMode(mode === "live" ? "review" : "live");
     else if (a.key === "arrange-desk") chooseArrangement("desk");
     else if (a.key === "arrange-phone") {
       chooseArrangement("phone");
@@ -243,15 +231,14 @@ export function Next() {
       toast.add({ title: "the phone arrangement: Settings switches it back", type: "success" });
     }
     else if (a.key === "arrange-auto") chooseArrangement("auto");
-  }, [adding, panelId, desk.id, setDesk, pickMode, mode, chooseArrangement]);
+  }, [adding, panelId, desk.id, setDesk, chooseArrangement]);
   const shortcut = paletteShortcut();
 
   // the line uses only what is polled (ADR 0012): holdings are polled in session and valued once
   // outside it, so outside it the line says no holding's Levels — not even through a rule linked
   // to one, whose schedule `/quotes` serves (#354, re-keyed to the session by #371): each holding's
-  // chip says them, "as valued at", and the market-closed line says when. Whichever mode is on
-  // screen. The book is still DRAWN with them outside the session, so they still say which combos
-  // are drawn apart (#346)
+  // chip says them, "as valued at", and the market-closed line says when. The book is still DRAWN
+  // with them outside the session, so they still say which combos are drawn apart (#346)
   const items = useMemo(
     () => needsYou(book.quotes, book.monitors, book.health, session ? holdings : null, holdings, session),
     [book.quotes, book.monitors, book.health, holdings, session],
@@ -264,7 +251,7 @@ export function Next() {
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
     quotes: book.quotes, monitors: book.monitors, holdings,
-    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, mode, session, privacy, entryStyle, writes,
+    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, session, privacy, entryStyle, writes,
     onRevalue: () => void book.refreshNow(), revaluing: book.refreshing,
     journal: (
       <JournalFold open={journalOpen} onToggle={toggleJournal}
@@ -304,11 +291,10 @@ export function Next() {
 
   return (
     <MonitorActionsContext.Provider value={monitorActions}>
-    <div className="nx" data-arrangement={arrangement} data-mode={mode} data-up={up}
+    <div className="nx" data-arrangement={arrangement} data-up={up}
          data-entry={entryStyle}>
       <header className="nx-head">
         <h1>optionality</h1>
-        {phone ? null : <ModeSwitch mode={mode} byClock={chosen === null} onPick={pickMode} />}
         <span className="nx-spacer" />
         <Button variant="ghost" size="sm" aria-label="save as image" disabled={shooting}
                 onClick={saveView}>
@@ -342,7 +328,7 @@ export function Next() {
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
                    sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
         <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={revealRow} />
-        {/* the market, in either mode (#371): polled in session; outside it read once with the
+        {/* the market, at every hour (#371): polled in session; outside it read once with the
             holdings, and every reading says when — a figure frozen at a read would otherwise be
             taken for current (ADR 0018) */}
         <ReferenceStrip references={book.references} timeOf={session ? undefined : servedWhen} />
@@ -409,25 +395,11 @@ function landOnMuted(id: string) {
   listed.focus();
 }
 
-/** LIVE or REVIEW on the desk, and whose choice it is. */
-function ModeSwitch({ mode, byClock, onPick }: {
-  mode: Mode; byClock: boolean; onPick: (m: Mode) => void;
-}) {
-  return (
-    <div className="nx-mode" role="group" aria-label="mode">
-      <button type="button" aria-pressed={mode === "live"} onClick={() => onPick("live")}>Live</button>
-      <button type="button" aria-pressed={mode === "review"} onClick={() => onPick("review")}>Review</button>
-      <span className="nx-meta">{byClock ? "by the clock" : "your choice"}</span>
-    </div>
-  );
-}
-
 /** The phone's bottom bar (#374; ADR 0023 amended 2026-11-13): the Book, Settings a screen of its
  *  own, and Add, which opens the add form as a bottom sheet over whichever is showing (#293).
  *
- *  It picks no mode: the phone draws one book whatever the mode, and nothing on the phone can
- *  change it — the header's switch is the desk's alone — so what the phone fetches follows the
- *  session and nothing else. #375 removes the mode itself. */
+ *  The same three tabs at every hour: the Book is one book in session and out of it, and what the
+ *  phone fetches follows the session and nothing else. */
 function TabBar({ settings, adding, onBook, onAdd, onSettings }: {
   settings: boolean; adding: boolean; onBook: () => void; onAdd: () => void; onSettings: () => void;
 }) {
@@ -520,7 +492,7 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>,
   return { holdings, writes, outcomes, dismissOutcome };
 }
 
-/** What the page reads, and when: by New York's session, never by the mode on screen (#371; ADR
+/** What the page reads, and when: by New York's session, and by nothing else on screen (#371; ADR
  *  0023 amended 2026-11-13).
  *
  *  The LINE's inputs — the watchlist, the rules and health — are polled at every hour: the

@@ -398,7 +398,7 @@ describe("from both arrangements", () => {
     const { quotes, monitors, holdings } = splitBook();
     return {
       quotes, monitors, holdings, holdingsError: null, holdingsAt: null,
-      mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
+      session: true, privacy: false, entryStyle: "opportunity", ...over,
     };
   }
   const wrap = (a: MonitorActions, ui: React.ReactNode) =>

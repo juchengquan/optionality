@@ -5,9 +5,8 @@ import { servedWhen } from "./session";
 /** "market closed — valued at 21:04", with a button that values the book once more (#371; ADR
  *  0023 amended 2026-11-13: one page, by the session).
  *
- *  Drawn outside New York's session only, on the desk and the phone alike and whatever the mode on
- *  screen, because that is when the holdings and the References are valued once rather than
- *  polled. The time is the SERVICE's stamp on the valuation (`valuedAt`), the clock every Level
+ *  Drawn outside New York's session only, on the desk and the phone alike, because that is when
+ *  the holdings and the References are valued once rather than polled. The time is the SERVICE's stamp on the valuation (`valuedAt`), the clock every Level
  *  chip states "as valued at" (#354), so the line and the chips cannot disagree. None is said
  *  while nothing is valued, or after a valuation failed: the page says why beside it.
  *
