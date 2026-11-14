@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 
-import { ClosedTradeDetail, tradeLegs } from "../ClosedTrade";
+import { ClosedTradeDetail, TradeLegs } from "../ClosedTrade";
 import { madeWords, storedWords, type Journal } from "../journal";
 
 export function DeskJournal({ journal, privacy, onCorrected, onDeleted }: {
@@ -48,7 +48,7 @@ export function DeskJournal({ journal, privacy, onCorrected, onDeleted }: {
                                 aria-controls={t.id === selected ? detailId : undefined}
                                 onClick={() => setSelected((s) => (s === t.id ? null : t.id))}>{t.name}</button>
                       </th>
-                      <td>{tradeLegs(t)}</td>
+                      <td><TradeLegs trade={t} /></td>
                       <td data-fig="opened">{t.opened_at ?? "not recorded"}</td>
                       <td data-fig="closed">{t.closed_on}</td>
                       <td data-fig="entry" data-align="end">{storedWords(t.entry)}</td>

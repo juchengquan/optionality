@@ -155,17 +155,34 @@ export function oklab(value: string): { L: number; a: number; b: number } {
   return { L, a: C * Math.cos(h), b: C * Math.sin(h) };
 }
 
-/** WCAG relative luminance of an oklch() colour, through OKLab and linear sRGB. */
-export function luminance(value: string): number {
+/** An oklch() colour as linear sRGB, through OKLab. */
+function linear(value: string): [number, number, number] {
   const { L, a, b } = oklab(value);
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
   const clamp = (x: number) => Math.min(1, Math.max(0, x));
-  const R = clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
-  const G = clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
-  const B = clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
-  return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+  return [clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+}
+
+const toLuminance = ([R, G, B]: [number, number, number]) => 0.2126 * R + 0.7152 * G + 0.0722 * B;
+
+/** WCAG relative luminance of an oklch() colour, through OKLab and linear sRGB. */
+export function luminance(value: string): number {
+  return toLuminance(linear(value));
+}
+
+/** The contrast of a colour's text against a tint of itself — `share` of it over `ground`, as a
+ *  translucent fill composites, in gamma-encoded sRGB — as a leg type's pair button draws it (#391). */
+export function contrastOnTint(colour: string, ground: string, share: number): number {
+  const encode = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055);
+  const decode = (x: number) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+  const [c, g] = [linear(colour).map(encode), linear(ground).map(encode)];
+  const tint = toLuminance(c.map((x, i) => decode(share * x + (1 - share) * g[i]!)) as [number, number, number]);
+  const [hi, lo] = [luminance(colour), tint].sort((p, q) => q - p);
+  return (hi! + 0.05) / (lo! + 0.05);
 }
 
 export function contrast(x: string, y: string): number {
@@ -268,4 +285,48 @@ export function serveContract(spreads?: { status: number; body: object }): { wha
     return reply(404, { detail: `${method} ${path} is not served here` });
   }) as unknown as typeof fetch;
   return writes;
+}
+
+/** A computed colour — `oklch(L C h / a)`, `rgb()`/`rgba()` or `color(srgb r g b / a)`, as Chromium
+ *  serializes one — as gamma-encoded sRGB and its alpha. */
+function srgbOf(computed: string): { rgb: [number, number, number]; alpha: number } {
+  const n = (x: string) => (x === "none" ? 0 : x.endsWith("%") ? Number(x.slice(0, -1)) / 100 : Number(x));
+  const ok = /^oklch\(\s*([\d.%]+|none)\s+([\d.%]+|none)\s+([\d.]+|none)\s*(?:\/\s*([\d.%]+))?\s*\)$/.exec(computed);
+  if (ok) {
+    const [L, C, h] = [n(ok[1]!), n(ok[2]!), n(ok[3]!)];
+    const encode = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055);
+    return { rgb: linear(`oklch(${L} ${C} ${h})`).map(encode) as [number, number, number], alpha: ok[4] ? n(ok[4]) : 1 };
+  }
+  const rgb = /^rgba?\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\s*\)$/.exec(computed);
+  if (rgb) return { rgb: [1, 2, 3].map((i) => Number(rgb[i]) / 255) as [number, number, number], alpha: rgb[4] ? Number(rgb[4]) : 1 };
+  const srgb = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.%]+))?\s*\)$/.exec(computed);
+  if (srgb) return { rgb: [1, 2, 3].map((i) => Number(srgb[i])) as [number, number, number], alpha: srgb[4] ? n(srgb[4]) : 1 };
+  throw new Error(`not a colour this reads: "${computed}"`);
+}
+
+/** The ground `el` is drawn on, as the browser composites it: every background from the page up
+ *  to `el` itself, each over the ones beneath it (gamma-encoded sRGB, as a translucent fill is). */
+function groundOf(el: Element): [number, number, number] {
+  const layers: { rgb: [number, number, number]; alpha: number }[] = [];
+  for (let e: Element | null = el; e; e = e.parentElement) {
+    const bg = getComputedStyle(e).backgroundColor;
+    const c = srgbOf(bg);
+    if (c.alpha > 0) layers.push(c);
+    if (c.alpha >= 1) break;
+  }
+  let ground: [number, number, number] = [1, 1, 1];
+  for (const { rgb, alpha } of layers.reverse()) ground = ground.map((g, i) => alpha * rgb[i]! + (1 - alpha) * g) as typeof ground;
+  return ground;
+}
+
+const decodedLuminance = (rgb: [number, number, number]) =>
+  toLuminance(rgb.map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)) as [number, number, number]);
+
+/** The contrast of `el`'s text against the ground it is actually drawn on (WCAG). */
+export function contrastInSitu(el: Element): number {
+  const text = srgbOf(getComputedStyle(el).color);
+  const ground = groundOf(el);
+  const ink = ground.map((g, i) => text.alpha * text.rgb[i]! + (1 - text.alpha) * g) as [number, number, number];
+  const [hi, lo] = [decodedLuminance(ink), decodedLuminance(ground)].sort((p, q) => q - p);
+  return (hi! + 0.05) / (lo! + 0.05);
 }

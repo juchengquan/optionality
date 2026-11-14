@@ -13,6 +13,7 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { spxRange, spxRuns } from "../spxdays";
 import { SpxPath, spxGutter } from "../SpxPath";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
+import { legMarks } from "../testing/legs";
 
 let asked: string[] = [];
 let samples: (path: string) => Samples | null = samplesAnswer;
@@ -121,6 +122,8 @@ describe("in the desk's inspector, outside the session", () => {
     expect([...chart.querySelectorAll<SVGElement>("[data-strike]")].map((g) => g.dataset.strike).sort())
       .toEqual(["6250", "6300", "7400", "7450"]);
     expect(chart.querySelectorAll("[data-spx-day]")).toHaveLength(1);
+    // each strike named by its leg, the type marked for its colour and a short leg for its weight (#391)
+    expect(legMarks(chart)).toEqual(["C7400 short CALL", "C7450 long CALL", "P6300 short PUT", "P6250 long PUT"]);
   });
 
   it("reads the samples once: the chart shares the burndown's answer", async () => {

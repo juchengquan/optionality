@@ -5,7 +5,8 @@ import { useEffect, useRef } from "react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DASH, legSummary } from "../shared/format";
+import { DASH, heldLeg, signedLeg } from "../shared/format";
+import { Legs } from "../shared/Legs";
 import { readUp, type EntryStyle } from "../shared/prefs";
 import { useDismissOnBack } from "../shared/useDismissOnBack";
 import { Chip, Money } from "../Book";
@@ -16,8 +17,8 @@ import { PaceExplained } from "../PaceExplained";
 import { paceOutcome, paceWords } from "../pace";
 import { entryName, fieldWords } from "../needs";
 import { RuleWords } from "../RuleWords";
-import { LevelChip, Progress, RuleLine } from "./Cards";
-import { contractsWords, delta, expiryWords, holdingLegs, percent, points, shortDeltas, shortDeltaWords } from "./figures";
+import { LevelChip, Progress, RuleLine, ShortDeltaWords } from "./Cards";
+import { contractsWords, delta, expiryWords, percent, points } from "./figures";
 import { ruleState } from "./state";
 import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { stripOfEntry } from "../strip";
@@ -98,7 +99,8 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
       <SheetHeader>
         <SheetTitle>{holding.name}</SheetTitle>
         <SheetDescription>
-          {`${holdingLegs(holding)} · ${contractsWords(holding.contracts, privacy)} · ${expiryWords(holding.strike_date)} · ${holding.dte} DTE`}
+          <Legs legs={holding.legs.map(heldLeg)} />
+          {` · ${contractsWords(holding.contracts, privacy)} · ${expiryWords(holding.strike_date)} · ${holding.dte} DTE`}
         </SheetDescription>
       </SheetHeader>
       <div className="nxp-sheet-body">
@@ -117,7 +119,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
         <dl className="nxp-facts">
           <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
           <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
-          <div><dt>short Δ</dt><dd>{shortDeltaWords(shortDeltas(holding, quotes, monitors))}</dd></div>
+          <div><dt>short Δ</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
           <div><dt>opened</dt><dd>{holding.opened_at ?? DASH}</dd></div>
           <div><dt>Δ</dt><dd>{delta(g.option_delta)}</dd></div>
           <div><dt>γ</dt><dd>{greek(g.option_gamma, 4)}</dd></div>
@@ -153,7 +155,8 @@ function RuleDetail({ entry, under, overlap = null }: {
       <SheetHeader>
         <SheetTitle>{entryName(entry)}</SheetTitle>
         <SheetDescription>
-          {`${entry.legs ? `${legSummary(entry.legs)} · ` : ""}${expiryWords(entry.strike_date)} · ${entry.dte} DTE`}
+          {entry.legs ? <><Legs legs={entry.legs.map(signedLeg)} />{" · "}</> : null}
+          {`${expiryWords(entry.strike_date)} · ${entry.dte} DTE`}
         </SheetDescription>
       </SheetHeader>
       <div className="nxp-sheet-body">

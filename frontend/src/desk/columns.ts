@@ -13,7 +13,7 @@
  *  left before the Manage-by) and a share as a percentage.
  */
 import type { Entry, Holding, Monitor } from "../shared/api";
-import { DASH, heldLegs, legSummary } from "../shared/format";
+import { DASH, heldLeg, legText, signedLeg, type WrittenLeg } from "../shared/format";
 import type { BookModel } from "../placement";
 import {
   entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortRule, shortSentence, storedRuleWords,
@@ -61,9 +61,11 @@ function moneyText(value: number | null, privacy: boolean): string {
   return privacy ? "$•••" : MONEY.format(value);
 }
 
-/** `-C7300 +C7350`: a holding's legs as the watchlist writes a combo's, short as minus. */
-function holdingLegs(holding: Holding): string {
-  return heldLegs(holding.legs);
+/** The legs a row writes in its legs column: a holding's, or a rule's on a spread; none for a
+ *  rule on one contract. `Cell` draws them, each type in its colour (#391). */
+export function rowLegs(row: DeskRow): WrittenLeg[] {
+  if (row.kind === "holding") return row.holding.legs.map(heldLeg);
+  return row.kind === "rule" && row.entry.legs ? row.entry.legs.map(signedLeg) : [];
 }
 
 /** moomoo's `US.SPXW261218P7150000` as the type and strike it names, or null for anything else. */
@@ -189,8 +191,8 @@ const NAME: DeskColumn = { key: "name", label: "spread", align: "left", text: (r
 
 const LEGS: DeskColumn = {
   key: "legs", label: "legs", align: "left",
-  text: (r) => r.kind === "holding" ? holdingLegs(r.holding)
-    : r.kind === "rule" && r.entry.legs ? legSummary(r.entry.legs) : "",
+  // `-C7300 +C7350`: a holding's legs as the watchlist writes a combo's, short as minus
+  text: (r) => rowLegs(r).map((l) => legText(l, "signs")).join(" "),
 };
 
 const VALUE: DeskColumn = {

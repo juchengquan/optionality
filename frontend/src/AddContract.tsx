@@ -11,6 +11,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { addSpreads, type Added, type Monitor } from "./shared/api";
+import { SideSign } from "./shared/Legs";
 import { Button } from "@/components/ui/button";
 import {
   CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces,
@@ -119,7 +120,7 @@ export function AddContract({
             <div className="nx-add-row">
               <div className="nx-seg" role="group" aria-label="type">
                 {(["PUT", "CALL"] as const).map((t) => (
-                  <button key={t} type="button" aria-pressed={draft.option_type === t}
+                  <button key={t} type="button" data-type={t} aria-pressed={draft.option_type === t}
                           onClick={() => set({ option_type: t })}>{t}</button>
                 ))}
               </div>
@@ -135,8 +136,8 @@ export function AddContract({
                 <div className="nx-add-row">
                   <div className="nx-seg" role="group" aria-label="side">
                     {(["short", "long"] as const).map((s) => (
-                      <button key={s} type="button" aria-pressed={draft.side === s}
-                              onClick={() => set({ side: s })}>{s}</button>
+                      <button key={s} type="button" data-side={s} aria-pressed={draft.side === s}
+                              onClick={() => set({ side: s })}><SideSign side={s} />{s}</button>
                     ))}
                   </div>
                   <label className="nx-add-field nx-add-entry">

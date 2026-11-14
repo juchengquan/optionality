@@ -11,11 +11,12 @@
  *  away behind it, and the inspector's heading or an editor's first box could not take the focus.
  *  Only the desk mounts this, so the phone registers no chord (ADR 0023: parity is by touch there).
  */
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 
 import type { EntryStyle, UpColour } from "./shared/prefs";
 import { isPaletteChord, matching, onMac, tokens, type Findable, type PaletteAction } from "./commands";
+import { Legs } from "./shared/Legs";
 import "./palette.css";
 
 /** What the owner chose: a thing found, or an action. */
@@ -24,7 +25,7 @@ export type Chosen = { find: Findable } | { action: PaletteAction };
 interface Option {
   key: string;
   label: string;
-  detail: string;
+  detail: ReactNode;
   /** why it cannot run now */
   why: string | null;
   group: string;
@@ -118,7 +119,7 @@ function Search({ found, findWhy, actions, onChoose }: {
 
   const options = useMemo<Option[]>(() => {
     const finds: Option[] = matching(found, query).map((f) => ({
-      key: `f:${f.ref}`, label: f.name, detail: f.detail, why: findWhy, group: "go to", chosen: { find: f },
+      key: `f:${f.ref}`, label: f.name, detail: <FindDetail parts={f.parts} />, why: findWhy, group: "go to", chosen: { find: f },
     }));
     const acts: Option[] = matching(actions, query).map((a) => ({
       key: `a:${a.key}`, label: a.label, detail: a.detail, why: a.why, group: "action", chosen: { action: a },
@@ -185,4 +186,10 @@ function Search({ found, findWhy, actions, onChoose }: {
       </ul>
     </>
   );
+}
+
+/** What a thing found is, its legs each drawn in their type's colour (#391): `Findable.detail`'s
+ *  characters exactly. */
+function FindDetail({ parts }: { parts: Findable["parts"] }) {
+  return <>{parts.before}<Legs legs={parts.legs} />{parts.after}</>;
 }

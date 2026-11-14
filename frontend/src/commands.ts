@@ -9,7 +9,7 @@
  *    threshold or a P&L is the table's to say, live, not a list's to freeze at the moment it opened.
  */
 import type { Monitor } from "./shared/api";
-import { shortDate } from "./shared/format";
+import { heldLeg, legText, shortDate, signedLeg, type WrittenLeg } from "./shared/format";
 import type { ArrangementChoice } from "./shared/prefs";
 import { rowName, tableRows, type DeskRow } from "./desk/columns";
 import { fieldWords, monitorName } from "./needs";
@@ -25,18 +25,18 @@ export interface Findable {
   name: string;
   /** what it is, its expiry and its strikes, in words */
   detail: string;
+  /** the same, in its parts: the legs apart, so the palette draws each type in its colour (#391) */
+  parts: { before: string; legs: WrittenLeg[]; after: string };
   /** the words typed text is matched against, lower case (`tokens`) */
   words: string[];
 }
 
 /** A leg; `short` unset for the one contract a rule watches, which is not a position. */
-type Leg = { short?: boolean; type: string; strike: number; qty?: number };
+type Leg = WrittenLeg;
 
 /** `-2P7150 +P7100`: legs as the table writes them, short as minus and a quantity where it is not 1
  *  (#351); `P7150` for a rule's contract. */
-const legWords = (legs: Leg[]) =>
-  legs.map((l) => `${l.short === undefined ? "" : l.short ? "-" : "+"}${(l.qty ?? 1) === 1 ? "" : l.qty}${l.type[0]}${l.strike}`)
-    .join(" ");
+const legWords = (legs: Leg[]) => legs.map((l) => legText(l, "signs")).join(" ");
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
@@ -54,7 +54,7 @@ function dateWords(iso: string): string[] {
 }
 
 /** A strike alone and with its side, `7150` and `p7150`. */
-const strikeWords = (legs: Leg[]) => legs.flatMap((l) => [String(l.strike), `${l.type[0]}${l.strike}`]);
+const strikeWords = (legs: Leg[]) => legs.flatMap((l) => [String(l.strike), `${l.option_type[0]}${l.strike}`]);
 
 /** moomoo's `US.SPXW261218P7150000` as the strike it names, or null for anything else. */
 function strikeOf(code: string): number | null {
@@ -66,22 +66,25 @@ function strikeOf(code: string): number | null {
  *  expiry, its strikes and what it watches — NEVER a contract's code: moomoo writes a strike with
  *  three zeros after it (`…P6700000`), so "7000" found a 6700 put inside one. */
 function findable(ref: string, kind: FindKind, name: string, date: string, legs: Leg[], field: string | null): Findable {
-  const detail = [kind, shortDate(date), legWords(legs), field].filter(Boolean).join(" · ");
+  // the legs apart, for the palette to draw; the detail is the same parts as one text
+  const before = [kind, shortDate(date)].filter(Boolean).join(" · ");
+  const parts = { before: legs.length > 0 ? `${before} · ` : before, legs, after: field ? ` · ${field}` : "" };
+  const detail = `${parts.before}${legWords(legs)}${parts.after}`;
   const words = [name, ...tokens(name), ...tokens(kind), ...dateWords(date), ...strikeWords(legs), ...tokens(field ?? "")]
     .map((w) => w.toLowerCase()).filter(Boolean);
-  return { ref, kind, name, detail, words: [...new Set(words)] };
+  return { ref, kind, name, detail, parts, words: [...new Set(words)] };
 }
 
 function ofRow(row: DeskRow): Findable {
   if (row.kind === "holding") {
     const h = row.holding;
-    const legs = h.legs.map((l) => ({ short: l.side === "short", type: l.option_type, strike: l.strike, qty: l.qty }));
+    const legs = h.legs.map(heldLeg);
     return findable(h.id, "holding", h.name, h.strike_date, legs, null);
   }
   if (row.kind === "rule") {
     const e = row.entry;
     const legs = e.legs
-      ? e.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike, qty: l.qty }))
+      ? e.legs.map(signedLeg)
       : single(e.option_type, strikeOf(e.code));
     // a spread in the watchlist, the one that only partly overlaps a holding included (#346)
     const kind: FindKind = e.legs && (!e.held || Boolean(row.overlap)) ? "watched spread" : "Monitor";
@@ -92,13 +95,13 @@ function ofRow(row: DeskRow): Findable {
 
 function ofMonitor(m: Monitor, kind: FindKind): Findable {
   const legs = m.legs
-    ? m.legs.map((l) => ({ short: l.sign < 0, type: l.option_type, strike: l.strike, qty: l.qty }))
+    ? m.legs.map(signedLeg)
     : single(m.option_type, strikeOf(m.code) ?? m.strike);
   return findable(m.id, kind, monitorName(m), m.strike_date, legs, fieldWords(m.field, Boolean(m.legs)));
 }
 
 /** The single contract a rule watches, as one leg with no side. */
-const single = (type: string, strike: number | null): Leg[] => (strike === null ? [] : [{ type, strike }]);
+const single = (type: string, strike: number | null): Leg[] => (strike === null ? [] : [{ option_type: type, strike }]);
 
 /** Everything the palette can find, in the order the desk draws it. */
 export function findables(placed: BookModel): Findable[] {

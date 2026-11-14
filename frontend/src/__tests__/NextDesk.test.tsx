@@ -15,6 +15,7 @@ import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, tableRows, type Desk
 import { Next } from "../Next";
 import { placeBook } from "../placement";
 import { readHidden } from "../shared/prefs";
+import { legMarks } from "../testing/legs";
 import { HOLDINGS, monitor, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
@@ -71,6 +72,15 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
     expect(document.querySelectorAll('.nxd-row[data-ref="h-ic"]')).toHaveLength(1);
     expect(cellText("h-ic", "legs")).toBe("-C7400 +C7450 -P6300 +P6250");
     expect(document.querySelectorAll("[data-bracket]")).toHaveLength(1);
+  });
+
+  it("writes each leg with its type marked for its colour and a short leg for its weight (#391)", () => {
+    render(<DeskBook {...props()} />);
+    expect(legMarks(cell("h-ic", "legs")!))
+      .toEqual(["-C7400 short CALL", "+C7450 long CALL", "-P6300 short PUT", "+P6250 long PUT"]);
+    // a watched spread's, and a rule's on a held spread
+    expect(legMarks(cell("w-dec31", "legs")!)).toEqual(["-C7600 short CALL", "+C7650 long CALL"]);
+    expect(legMarks(cell("r-ic", "legs")!)).toHaveLength(4);
   });
 
   it("sits a short leg's delta rule under its spread, and a rule matching no spread alone", () => {
@@ -251,6 +261,8 @@ describe("the inspector", () => {
     expect(within(insp).getByRole("heading", { name: "1218_C7300" })).toBeTruthy();
     expect(insp.textContent).toContain("short CALL 7300");
     expect(insp.textContent).toContain("long CALL 7350");
+    expect(legMarks(within(insp).getByRole("list", { name: "legs" })))
+      .toEqual(["short CALL 7300 short CALL", "long CALL 7350 long CALL"]);
     expect(within(insp).getByText("cost to close").nextElementSibling!.textContent).toBe("4.40");
     // its Monitors, each with its sentence
     expect(insp.textContent).toContain("|spread value| ≥ 4 — now 4.40, past it by 0.40");

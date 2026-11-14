@@ -17,12 +17,14 @@ import { Correction } from "./ClosedResult";
 import { DeleteAsk } from "./HoldingActions";
 import { HoldingHistory } from "./History";
 import { madeWords, storedWords, type ClosedTrade } from "./journal";
-import { heldLegs } from "./shared/format";
+import { heldLeg } from "./shared/format";
+import { Legs } from "./shared/Legs";
 import { contractsWords } from "./phone/figures";
 
-/** `-P6000 +P5950`: the legs as the book writes a holding's, short as minus. */
-export function tradeLegs(trade: ClosedTrade): string {
-  return heldLegs(trade.legs);
+/** `-P6000 +P5950`: the legs as the book writes a holding's, short as minus, each type in its
+ *  colour (#391). */
+export function TradeLegs({ trade }: { trade: ClosedTrade }) {
+  return <Legs legs={trade.legs.map(heldLeg)} />;
 }
 
 export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, heading = false }: {
@@ -48,7 +50,7 @@ export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, 
     <section id={id} className="nx-trade" aria-label={`closed trade ${trade.name}`}>
       {heading ? <h3 ref={title} tabIndex={-1} className="nx-trade-h">{trade.name}</h3> : null}
       <dl className="nx-trade-facts">
-        <div><dt>legs</dt><dd>{tradeLegs(trade)}</dd></div>
+        <div><dt>legs</dt><dd><TradeLegs trade={trade} /></dd></div>
         <div><dt>expiry</dt><dd>{trade.strike_date}</dd></div>
         {/* the count goes under privacy: contracts × points × 100 is the dollars it hides */}
         <div><dt>contracts</dt><dd data-fig="contracts">{contractsWords(trade.contracts, privacy)}</dd></div>

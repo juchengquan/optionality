@@ -16,7 +16,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { Holding, Samples } from "./shared/api";
+import { heldLeg, legText } from "./shared/format";
 import { spxRange, spxRuns, unrecorded } from "./spxdays";
+import { SvgLeg } from "./shared/Legs";
 
 const H = 156, T = 10, B = 22;
 
@@ -48,7 +50,7 @@ const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
  *  holding (#296) has neither a valuation nor a "now". */
 type Charted = Pick<Holding, "legs" | "closed_on"> & Partial<Pick<Holding, "spx" | "dte">>;
 
-const namesOf = (holding: Charted) => holding.legs.map((l) => `${l.option_type[0]}${l.strike}`);
+const namesOf = (holding: Charted) => holding.legs.map((l) => legText(heldLeg(l), "name"));
 
 /** The left margin this chart's strike names need, for the margins all three charts share. */
 export const spxGutter = (holding: Charted) =>
@@ -64,10 +66,7 @@ export function SpxPath({ served, holding, span, gutters }: {
   const missing = unrecorded(served.samples);
   const gapWords = missing === 0 ? null
     : `${missing} day${missing === 1 ? "" : "s"} stored without SPX's price: a gap, never zero`;
-  const names = namesOf(holding);
-  const strikes = holding.legs.map((l, i) => ({
-    i, strike: l.strike, side: l.side, type: l.option_type, name: names[i]!,
-  }));
+  const strikes = holding.legs.map((l, i) => ({ i, strike: l.strike, side: l.side, type: l.option_type }));
   const now = holding.closed_on === null && typeof holding.spx === "number" && holding.dte !== undefined
     && holding.dte >= 0
     ? { dte: holding.dte, spx: holding.spx } : null;
@@ -119,7 +118,8 @@ export function SpxPath({ served, holding, span, gutters }: {
           {strikes.map((k) => (
             <g key={k.i} data-strike={k.strike} data-side={k.side} className="nx-spxp-k">
               <line x1={L} x2={W - R} y1={y(k.strike)} y2={y(k.strike)} />
-              <text x={L - 6} y={labelAt.get(k.i)! + 4} textAnchor="end">{k.name}</text>
+              <SvgLeg leg={{ short: k.side === "short", option_type: k.type, strike: k.strike }} form="name"
+                      x={L - 6} y={labelAt.get(k.i)! + 4} textAnchor="end" />
             </g>
           ))}
           {runs.map((run) => (

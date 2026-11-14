@@ -1,7 +1,7 @@
 /** What the phone's cards say about a holding or a rule, in words and fixed places. Nothing here is
  *  computed: every figure is the service's (ADR 0005), and this only names and spells it. */
 import type { Entry, Holding, Monitor } from "../shared/api";
-import { DASH, heldLegs } from "../shared/format";
+import { DASH } from "../shared/format";
 import { servedDelta } from "../legs";
 
 /** "Fri 18 Dec 2026": an expiry as a date to read, not a key. Read as a calendar date in UTC, so
@@ -21,11 +21,6 @@ export const percent = (share: number | null) => share === null ? DASH : `${Math
 /** Δ to three places, as a rule's sentence writes it (needs.ts: PLACES). */
 export const delta = (n: number | null | undefined) => n === null || n === undefined ? DASH : n.toFixed(3);
 
-/** `-P7150 +P7100`: a holding's legs as the watchlist writes a combo's, short as minus. */
-export function holdingLegs(holding: Holding): string {
-  return heldLegs(holding.legs);
-}
-
 /** "×2", or "×•••" under privacy: contracts × points × 100 is the dollar amount privacy hides, so
  *  the count beside a figure in points goes with it (owner's decision, #314). */
 export function contractsWords(contracts: number, privacy: boolean): string {
@@ -33,8 +28,8 @@ export function contractsWords(contracts: number, privacy: boolean): string {
 }
 
 interface ShortDelta {
-  /** "C7300": which short leg, said only when a holding has more than one */
-  leg: string;
+  /** which short leg, `C7300`, said only when a holding has more than one */
+  leg: { option_type: string; strike: number };
   delta: number | null;
 }
 
@@ -45,18 +40,21 @@ export function shortDeltas(holding: Holding, quotes: Entry[], monitors: Monitor
   const byId = new Map(quotes.map((q) => [q.id, q]));
   return holding.legs.filter((l) => l.side === "short").map((l) => {
     const served = servedDelta(holding, l);
-    if (served !== null) return { leg: `${l.option_type[0]}${l.strike}`, delta: served };
+    const leg = { option_type: l.option_type, strike: l.strike };
+    if (served !== null) return { leg, delta: served };
     const rule = monitors.find((m) => m.legs === null && m.strike_date === holding.strike_date
       && m.option_type === l.option_type && m.strike === l.strike && byId.get(m.id)?.quote);
     const figure = rule ? byId.get(rule.id)?.quote?.option_delta : undefined;
-    return { leg: `${l.option_type[0]}${l.strike}`, delta: typeof figure === "number" ? figure : null };
+    return { leg, delta: typeof figure === "number" ? figure : null };
   });
 }
 
-export function shortDeltaWords(deltas: ShortDelta[]): string {
+/** The short legs' deltas as the card and the sheet say them: the one figure, or each leg named
+ *  `C7300 0.120 · P6300 -0.250` — the name drawn as a leg by `ShortDeltaWords` (Cards.tsx, #391). */
+export function shortDeltaWords(deltas: ShortDelta[]): string | { leg: ShortDelta["leg"]; words: string }[] {
   if (deltas.length === 0) return DASH;
   if (deltas.length === 1) return delta(deltas[0]!.delta);
-  return deltas.map((d) => `${d.leg} ${delta(d.delta)}`).join(" · ");
+  return deltas.map((d) => ({ leg: d.leg, words: ` ${delta(d.delta)}` }));
 }
 
 /** Why a rule that is off is off, when it is not a quarantine: somebody's choice or the calendar. */

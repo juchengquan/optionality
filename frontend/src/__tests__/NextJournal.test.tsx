@@ -14,6 +14,7 @@ import { Next } from "../Next";
 import { closedBookService as service, days } from "../testing/closedBook";
 import { holdingService, type HoldingService } from "../testing/holdingService";
 import { HOLDINGS } from "../testing/ownerBook";
+import { legMarks } from "../testing/legs";
 
 const COOKIES = ["ui_arrangement", "ui_privacy", "ui_refresh"];
 afterEach(() => {
@@ -120,6 +121,8 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(fig(blank, "made")).toBe("unknown");
       // read from the one listing, with no market call
       expect(asked(s, "/positions")).toBe(1);
+      // each leg's type marked for its colour, a short leg for its weight (#391)
+      expect(legMarks(old)).toEqual(["-P6000 short PUT", "+P5950 long PUT"]);
     });
 
     it("hides what each made and every contract count under privacy, and keeps Entry and Exit per contract", async () => {
@@ -158,6 +161,14 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(burndown.querySelector("[data-now]")).toBeNull();
       expect(await within(trade).findByRole("group", { name: "IV by leg" })).toBeTruthy();
       expect(asked(s, "/positions/c-old/samples")).toBe(1);
+      // its legs in its facts, and on the phone in the sheet's line under its name (#391)
+      const facts = [...trade.querySelectorAll("dt")].find((dt) => dt.textContent === "legs")!.nextElementSibling!;
+      expect(legMarks(facts)).toEqual(["-P6000 short PUT", "+P5950 long PUT"]);
+      if (arrangement === "phone") {
+        const line = (await screen.findByRole("dialog")).querySelector("[data-slot='sheet-description']")!;
+        expect(line.textContent).toBe("closed on 2026-11-06 · -P6000 +P5950");
+        expect(legMarks(line)).toEqual(["-P6000 short PUT", "+P5950 long PUT"]);
+      }
     });
 
     it("reads the journal once and each trade's samples once, and polls neither", async () => {

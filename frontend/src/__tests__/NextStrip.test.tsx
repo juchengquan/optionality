@@ -15,6 +15,11 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { StrikeStrip } from "../StrikeStrip";
 import { cellWords, distanceWords, joinStrips, nearest, scaleOf, stripOfEntry, stripOfHolding } from "../strip";
 import { HOLDINGS, MONITORS, QUOTES, served } from "../testing/ownerBook";
+import { legMarks } from "../testing/legs";
+
+/** What the strip's caption says, line by line: each short strike's name is drawn as a leg (#391),
+ *  so a line is read whole rather than found as one text node. */
+const said = (fig: HTMLElement) => [...fig.querySelectorAll("figcaption > span")].map((l) => l.textContent);
 
 afterEach(cleanup);
 
@@ -103,8 +108,10 @@ describe("the strip as drawn", () => {
     expect([...fig.querySelectorAll<HTMLElement>(".nxs-k[data-side=long]")].map((k) => k.textContent))
       .toEqual(["7450", "6250"]);
     expect(within(fig).getByText("SPX 6900.50")).toBeTruthy();
-    expect(within(fig).getByText("C7400 Δ 0.120 · 499.50 pts · 1.25σ away")).toBeTruthy();
-    expect(within(fig).getByText("P6300 Δ −0.250 · 600.50 pts · 1.50σ away")).toBeTruthy();
+    expect(said(fig)).toContain("C7400 Δ 0.120 · 499.50 pts · 1.25σ away");
+    expect(said(fig)).toContain("P6300 Δ −0.250 · 600.50 pts · 1.50σ away");
+    // each short strike named with its type marked for its colour, bold as a short leg is (#391)
+    expect(legMarks(fig.querySelector("figcaption")!)).toEqual(["C7400 short CALL", "P6300 short PUT"]);
   });
 
   it("with no derived price, still draws the strikes and Δ, and shows a dash with its reason", () => {
@@ -180,14 +187,14 @@ describe("on the desk (arrangement A)", () => {
     const inspector = screen.getByRole("complementary", { name: /inspector/ });
     const fig = within(inspector).getByRole("figure", { name: "strike strip" });
     expect([...fig.querySelectorAll(".nxs-k[data-side=short] b")].map((k) => k.textContent)).toEqual(["7300", "6400"]);
-    expect(within(fig).getByText("C7300 Δ 0.330 · 399.50 pts · 1.00σ away")).toBeTruthy();
+    expect(said(fig)).toContain("C7300 Δ 0.330 · 399.50 pts · 1.00σ away");
   });
 
   it("draws a watched spread's strip in the inspector, and none for a single contract", () => {
     render(<DeskBook {...deskProps()} />);
     fireEvent.click(within(deskRow("w-dec18")).getByRole("button", { name: /./ }));
     const fig = within(screen.getByRole("complementary", { name: /inspector/ })).getByRole("figure", { name: "strike strip" });
-    expect(within(fig).getByText("P7150 Δ −0.170 · 249.50 pts · 0.62σ past it")).toBeTruthy();
+    expect(said(fig)).toContain("P7150 Δ −0.170 · 249.50 pts · 0.62σ past it");
     fireEvent.click(within(deskRow("w-lone")).getByRole("button", { name: /./ }));
     expect(within(screen.getByRole("complementary", { name: /inspector/ })).queryByRole("figure")).toBeNull();
   });
@@ -217,7 +224,7 @@ describe("on the phone (arrangement B)", () => {
     fireEvent.click(within(card("h-puts")).getByRole("button", { name: "details of 1218_P6400" }));
     const sheet = await screen.findByRole("dialog");
     const fig = within(sheet).getByRole("figure", { name: "strike strip" });
-    expect(within(fig).getByText("P6400 Δ −0.210 · 500.50 pts · 1.25σ away")).toBeTruthy();
+    expect(said(fig)).toContain("P6400 Δ −0.210 · 500.50 pts · 1.25σ away");
   });
 
   it("with no derived price, a card's strip keeps its strikes and Δ, and gives a dash and the reason", () => {

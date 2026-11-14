@@ -9,6 +9,7 @@ import type { Entry, Holding } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
+import { legMarks } from "../testing/legs";
 
 let asked: string[] = [];
 
@@ -82,6 +83,9 @@ describe("the panel", () => {
     expect([...map.querySelectorAll<SVGElement>("[data-spread]")].map((s) => [s.dataset.spread, s.dataset.kind]))
       .toEqual([["w-dec04", "watched"], ["h-calls", "held"], ["h-puts", "held"], ["w-dec18", "watched"],
         ["h-ic", "held"], ["w-dec31", "watched"]]);
+    // each short strike's label names its leg, the type marked for its colour (#391)
+    const ic = map.querySelector<SVGElement>("[data-spread='h-ic']")!;
+    expect(legMarks(ic)).toEqual(["P6300 short PUT", "C7400 short CALL"]);
   });
 
   it("draws SPX's price as one line through every lane, and a served ±1σ band in each", () => {
@@ -90,7 +94,10 @@ describe("the panel", () => {
     expect(map.querySelectorAll("[data-spx-line]")).toHaveLength(1);
     expect(within(map).getByText("SPX 6900.50")).toBeTruthy();
     expect(map.querySelectorAll("[data-band]")).toHaveLength(3);
-    expect(within(map).getByText(/±1σ \d+ pts · P7150's IV/)).toBeTruthy();
+    const sigma = [...map.querySelectorAll(".nxm-sigma")];
+    expect(sigma.map((t) => t.textContent)).toContainEqual(expect.stringMatching(/^±1σ \d+ pts · P7150's IV$/));
+    // the strike named beside its figure is drawn as a leg, as the strike strip's caption is (#391)
+    expect(sigma.flatMap((t) => legMarks(t))).toContain("P7150 short PUT");
   });
 
   it("says why there is no SPX line rather than drawing one at zero, and draws no band", () => {

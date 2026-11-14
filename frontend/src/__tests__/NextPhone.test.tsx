@@ -14,6 +14,7 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { Still } from "../snapshot/Still";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
+import { legMarks } from "../testing/legs";
 
 afterEach(cleanup);
 
@@ -156,6 +157,41 @@ describe("the cards, on the owner's book", () => {
     expect(within(card("w-dec18")).getByText(/no figure/)).toBeTruthy();
     expect(within(card("w-dec31")).getByRole("progressbar")).toBeTruthy();
   });
+});
+
+describe("the legs, each type marked for its colour and a short leg for its weight (#391)", () => {
+  const IC = ["-C7400 short CALL", "+C7450 long CALL", "-P6300 short PUT", "+P6250 long PUT"];
+
+  it("on a holding's card and a watched spread's, and where the card names each short leg by its Δ", () => {
+    draw();
+    expect(legMarks(within(card("h-ic")).getByText("short Δ").nextElementSibling!))
+      .toEqual(["C7400 short CALL", "P6300 short PUT"]);
+    expect(legMarks(card("h-ic").querySelector(".nxp-legs")!)).toEqual(IC);
+    expect(legMarks(card("w-dec31").querySelector(".nxp-legs")!)).toEqual(["-C7600 short CALL", "+C7650 long CALL"]);
+  });
+
+  it("in the detail sheet of each", async () => {
+    draw();
+    fireEvent.click(within(card("h-ic")).getByRole("button", { name: /details of/ }));
+    const line = () => screen.getByRole("dialog").querySelector("[data-slot='sheet-description']")!;
+    await screen.findByRole("dialog");
+    expect(legMarks(line())).toEqual(IC);
+    act(() => { window.history.back(); });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(within(card("w-dec31")).getByRole("button", { name: /details of/ }));
+    await screen.findByRole("dialog");
+    expect(legMarks(line())).toEqual(["-C7600 short CALL", "+C7650 long CALL"]);
+  });
+
+  for (const arrangement of ["phone", "desk"] as const) {
+    it(`in the saved picture, on the ${arrangement}`, () => {
+      render(<Still arrangement={arrangement} quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
+                    holdingsAt="23:14:05" session privacy={false} entryStyle="opportunity"
+                    needs={[]} health={null} polledAt={null} error={null} references={[]} />);
+      const ic = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === "h-ic")!;
+      expect(legMarks(ic.querySelector(arrangement === "phone" ? ".nxp-legs" : '[data-col="legs"]')!)).toEqual(IC);
+    });
+  }
 });
 
 describe("the detail sheet", () => {

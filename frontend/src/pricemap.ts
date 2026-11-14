@@ -177,10 +177,17 @@ export function priceMapOf(placed: BookModel, line: SpxLine): PriceMap {
   return { ...line, lanes: out };
 }
 
+/** "±1σ 401 pts · P7150's IV" in its parts — before the strike, the strike, after it — so the panel
+ *  draws the strike named beside its figure as a leg (#391); with no band, why, and no strike. */
+export function bandParts(lane: Lane): { before: string; strike: ShortStrike | null; after: string } {
+  if (!lane.band) return { before: lane.bandWhy ?? "", strike: null, after: "" };
+  return { before: `±1σ ${lane.band.strike.one_sigma!.toFixed(0)} pts · `, strike: lane.band.strike, after: "'s IV" };
+}
+
 /** "±1σ 401 pts · P7150's IV": the band's width and whose IV it was worked from. */
 export function bandWords(lane: Lane): string {
-  if (!lane.band) return lane.bandWhy ?? "";
-  return `±1σ ${lane.band.strike.one_sigma!.toFixed(0)} pts · ${strikeName(lane.band.strike)}'s IV`;
+  const { before, strike, after } = bandParts(lane);
+  return `${before}${strike ? strikeName(strike) : ""}${after}`;
 }
 
 /** The axis: every strike, SPX and every band, padded so nothing sits on an edge. */

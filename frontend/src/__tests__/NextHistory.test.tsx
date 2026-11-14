@@ -12,6 +12,7 @@ import { DeskBook } from "../desk/DeskBook";
 import { HistoryOnDemand } from "../HistoryOnDemand";
 import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
+import { legMarks } from "../testing/legs";
 
 /** Every request the page made, as `METHOD path`. */
 let asked: string[] = [];
@@ -645,6 +646,8 @@ describe("the IV chart", () => {
     await waitFor(() => expect(chart.querySelectorAll("[data-leg]")).toHaveLength(4));
     const legs = [...chart.querySelectorAll<SVGElement>("[data-leg]")];
     expect(legs.map((l) => l.querySelector("text")?.textContent)).toEqual(["−C7400", "+C7450", "−P6300", "+P6250"]);
+    // each name's type marked for its colour, a short leg's for its weight (#391)
+    expect(legMarks(chart)).toEqual(["−C7400 short CALL", "+C7450 long CALL", "−P6300 short PUT", "+P6250 long PUT"]);
     expect(legs.map((l) => corners(l.querySelector("polyline")).length)).toEqual([2, 2, 2, 2]);
   });
 

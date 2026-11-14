@@ -7,7 +7,7 @@
 /* app.css gives body a margin; this page draws edge to edge and pads its own regions */
 body { margin: 0; }
 
-/* THREE COLOUR FAMILIES, and the rule between them.
+/* FOUR COLOUR FAMILIES, and the rules between them.
    - DIRECTION (up/down) follows the viewer's setting, green-up by default.
    - OUTCOME (P&L) follows the same setting.
    - ATTENTION (alarm, warning, fault, entry signal) NEVER flips, and never shares the "down"
@@ -18,7 +18,17 @@ body { margin: 0; }
    on hues away from red (27°) and green (150°): magenta, violet, blue. Warning is a dark ochre on
    the light ground and a pale amber on the dark one. The browser suite holds every one of them at
    least 0.15 apart in OKLab from both direction colours and 0.08 apart in lightness, a chip's
-   text at 4.5:1 against its fill, and a glyph at 3:1 against the page, in both schemes. */
+   text at 4.5:1 against its fill, and a glyph at 3:1 against the page, in both schemes.
+   - TYPE (#391): what a leg IS. CALL teal (195°), PUT orange (50°), in both schemes and whichever
+     way up the viewer reads: a type is not a direction. Off the direction hues and the attention
+     ones; PUT's orange sits between red and the warning's amber, and differs from the warning by
+     shape, since a warning is a filled chip with a glyph and a type is a letter or a tinted button.
+     A leg's SIDE has no hue: short is weight and a "−", long a dashed outline and a "+" — two hues
+     for the side were tried (prototype variants E and F) and not chosen. The browser suite holds
+     every type letter and button at 4.5:1 against the ground it is composited onto (rows plain,
+     selected and tinted, the inspector, the palette's selected option, a card, the add form's tints
+     and fills) in both schemes, and each type a floor away in OKLab: CALL from PUT 0.23, from entry
+     0.07, from green 0.10; PUT from red 0.085, from the warning 0.11 (ADR 0023). */
 /* `.nx-tokens` is a surface drawn in a portal outside the page — the desk's Settings panel — and
    carries the same tokens, so its glyphs are in their kinds' colours too */
 :is(.nx, .nx-tokens) {
@@ -35,6 +45,9 @@ body { margin: 0; }
   --entry: oklch(0.45 0.11 230);
   --chip-ink: oklch(0.99 0 0);
   --warn-ink: oklch(0.99 0 0);
+
+  --call: oklch(0.49 0.1 195);
+  --put: oklch(0.52 0.15 50);
 }
 .nx {
   --nx-gutter: 1.5rem;
@@ -53,9 +66,20 @@ body { margin: 0; }
     --fault: oklch(0.54 0.17 300);
     --entry: oklch(0.52 0.11 230);
     --warn-ink: oklch(0.2 0.02 75);
+    --call: oklch(0.74 0.11 195);
+    --put: oklch(0.76 0.14 55);
   }
 }
 :is(.nx, .nx-tokens)[data-up="red"] { --up: var(--red); --down: var(--green); }
+
+/* a leg as written (`shared/Legs.tsx`): its type letter in the type's colour, a short leg bold —
+   the sign and the strike keep the place's own colour, and the letter and the sign are always there */
+.nx-leg[data-side="short"] { font-weight: 700; }
+/* a chart's leg names are fitted to margins worked out from their length (`textWidth`): there a
+   short leg is the semibold the SPX chart always drew it in, which those margins hold */
+svg .nx-leg[data-side="short"] { font-weight: 600; }
+.nx-leg-t[data-type="CALL"] { color: var(--call); fill: var(--call); }
+.nx-leg-t[data-type="PUT"] { color: var(--put); fill: var(--put); }
 
 [data-outcome="gain"] { color: var(--gain); }
 [data-outcome="loss"] { color: var(--loss); }
