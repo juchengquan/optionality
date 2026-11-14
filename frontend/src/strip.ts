@@ -87,8 +87,10 @@ export function cellWords(strip: Strip): string {
  *  a dash where there is no distance. */
 export function compactWords(k: ShortStrike): string {
   if (k.points === null) return DASH;
-  const sign = (n: number) => n < 0 ? "−" : "";
-  return `${sign(k.points)}${Math.round(Math.abs(k.points))}${k.sigma === null ? "" : ` · ${sign(k.sigma)}${pts(k.sigma)}σ`}`;
+  // the sign of what is WRITTEN: a distance that rounds to nothing is "0", never "−0"
+  const signed = (n: number, text: string) => `${n < 0 && Number(text) !== 0 ? "−" : ""}${text}`;
+  const points = signed(k.points, String(Math.round(Math.abs(k.points))));
+  return `${points}${k.sigma === null ? "" : ` · ${signed(k.sigma, pts(k.sigma))}σ`}`;
 }
 
 /** "P6400": which short strike, as the legs column writes it. */

@@ -81,6 +81,9 @@ describe("what a strip is made of", () => {
     expect(compactWords(served("2026-12-18", "PUT", 7150, -0.6, 38))).toBe("−250 · −0.62σ");
     expect(compactWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), sigma: null })).toBe("501");
     expect(compactWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), points: null, sigma: null })).toBe("—");
+    // under half a point either side rounds to nothing, which has no sign
+    expect(compactWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), points: -0.3, sigma: -0.001 })).toBe("0 · 0.00σ");
+    expect(compactWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), points: 0.3, sigma: 0.001 })).toBe("0 · 0.00σ");
   });
 
   it("says a distance in points and σ, away or past it, and a dash without one", () => {

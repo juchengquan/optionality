@@ -521,7 +521,8 @@ References' line.**
 - **Short headers:** "name", "legs", "value", "P&L ($)", "captured (%)", "pace gap (pts)", "Δ",
   "SPX→short", "DTE", "manage-by", "rule" — those the viewer ticked.
 - **SPX→short, compact:** `C8050 488 · 1.64σ` — the nearest short strike, whole points, σ to two
-  places, no "pts" and no "away"; a strike SPX is past with its sign as served, `C6800 −101 · −0.25σ`
+  places, no "pts" and no "away"; a strike SPX is past with its sign as served, `C6800 −101 · −0.25σ`,
+  and a distance that rounds to nothing `0 · 0.00σ`, never with a sign
   (`strip.ts`: `compactWords`).
 - **The References a list,** one per item: a nested list in the Markdown, a line each in the picture.
 - **The value column is always the price** — a contract's mid, a spread's value — on the page (the
@@ -533,7 +534,8 @@ References' line.**
 - **Out of the session, the watchlist's last in-session price.** moomoo quotes every leg bid 0 /
   ask 0 out of hours, which is no price, and a watched spread has no close to fall back on, so a
   WATCHLIST row's value says the price rule's last reading in the session (`last_reading`, #380)
-  with its time on New York's clock, `4.12 (Fri 16:14)`, and a dash where there is none (a
+  with its time on New York's clock, `4.12 (Fri 16:14)` — its date too once it is older than six
+  days, `(Fri 6 Nov 16:14)`, as the rule's short line then says it — and a dash where there is none (a
   contract watched only on its delta, or never read in the session). A reading taken out of the
   session — the stored 0.0 of a Saturday night — is never shown. The same on the desk, the
   phone (a watch card adds a "value" line out of the session only) and the picture; in the session

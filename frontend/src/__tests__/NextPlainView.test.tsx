@@ -190,17 +190,20 @@ describe("every state the status column carried is still named, in the header or
     expect(cell(view, "1204_P6900", "rule")).toBe("|spread value| ≥ 6 — now 6.20, past it by 0.20");
   });
 
-  it("a rule muted by hand, expired, off with its holding, or for no recorded reason: a heading per reason", () => {
+  it("a rule muted by hand, expired, off with its holding, for no recorded reason or an unknown one: a heading per reason", () => {
     const off = (id: string, reason: string | null) =>
       monitor(id, { code: id, strike: 8000 + id.length, enabled: false, disabled_reason: reason });
     const view = plainView(input({ quotes: [], monitors: [
       off("m1", "manual"), off("m22", "expired"), off("m333", "holding-closed"), off("m4444", null), off("m55555", "manual"),
+      // a reason the page has no words for is still listed, under its own name, after the rest
+      off("m666666", "sunset"),
     ] }));
     const muted = view.sections.find((s) => s.title === "Muted and expired")!;
     // the desk's fold's order, in the phone's words
     expect(muted.groups.map((g) => [g.heading, g.rows.map((r) => r[0])])).toEqual([
       ["expired", ["261218 8003C"]], ["its holding closed", ["261218 8004C"]],
       ["muted by hand", ["261218 8002C", "261218 8006C"]], ["reason not recorded", ["261218 8005C"]],
+      ["sunset", ["261218 8007C"]],
     ]);
     // the rule in words, with no figure: nothing watches it
     expect(muted.groups[0]!.rows[0]![view.columns.indexOf("rule")]).toBe("|delta| ≥ 0.1");

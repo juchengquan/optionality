@@ -144,11 +144,15 @@ export function marketDayWords(day: string): string | null {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
-/** "Fri 16:14": `newYorkWhen` without the date, for the short form of a rule's last reading (#388),
- *  where the weekday is enough — the reading is the last session's, within the week. */
-export function newYorkWeekdayWhen(served: string | null | undefined): string | null {
+/** "Fri 16:14": `newYorkWhen` without the date, for the short form of a rule's last reading (#388)
+ *  and the watchlist's last price (#400), where the weekday is enough — the reading is the last
+ *  session's, within the week. One older than six days says its date, "Fri 6 Nov 16:14"
+ *  (`newYorkWhen`), since a weekday alone would name the wrong week.
+ *  @param now the clock that decides how old it is */
+export function newYorkWeekdayWhen(served: string | null | undefined, now: Date = new Date()): string | null {
   const instant = servedInstant(served);
   if (instant === null) return null;
+  if (now.getTime() - instant.getTime() > 6 * DAY_MS) return newYorkWhen(served);
   const parts = Object.fromEntries(NEW_YORK_WALL.formatToParts(instant).map((p) => [p.type, p.value]));
   const day = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
   return `${WEEKDAYS[day.getUTCDay()]} ${parts.hour}:${parts.minute}`;

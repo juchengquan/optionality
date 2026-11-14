@@ -8,9 +8,11 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Entry } from "../shared/api";
 import { sentence, shortDistance, shortFigure, shortRule, shortSentence, type RuleShape } from "../needs";
+
+afterEach(() => { vi.useRealTimers(); });
 
 const GOLDEN = [".", ".."].map((d) => resolve(process.cwd(), d, "testdata/golden/alarm.json"))
   .find((f) => existsSync(f))!;
@@ -70,10 +72,20 @@ describe("a rule's short line", () => {
   });
 
   it("draws a dash for no figure, and the last reading in the session with its New York weekday", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // Sunday 12:00 New York
     expect(shortSentence(entry({ watched: null, distance: null }))).toBe("|val| ≥ 4.51   —");
     // 05:14:59 Singapore on Saturday is 16:14 New York on Friday
     expect(shortSentence(entry({ threshold: 5.51, watched: null, distance: null,
       last_reading: { value: 3.05, at: "2026-11-14 05:14:59+08:00" } }))).toBe("|val| ≥ 5.51   —  last 3.05 Fri 16:14");
+  });
+
+  it("dates a last reading older than six days, where a weekday would name the wrong week (#400)", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-15T17:00:00Z"));
+    // Friday 6 Nov 16:14 New York, nine days before
+    expect(shortSentence(entry({ threshold: 5.51, watched: null, distance: null,
+      last_reading: { value: 3.05, at: "2026-11-07 05:14:59+08:00" } }))).toBe("|val| ≥ 5.51   —  last 3.05 Fri 6 Nov 16:14");
   });
 
   it("is always narrower than the sentence it stands for", () => {
