@@ -108,6 +108,13 @@ export type Sample = Samples["samples"][number];
 export const fetchSamples = (id: string) =>
   read<Samples>(client.positions[":id"].samples.$get({ param: { id } }), `/positions/${id}/samples`);
 
+/** A watched rule's daily closes (#402): what the sweep stored for the contracts it watches, each
+ *  day's price under the rule's own signs, with the price rule its value is drawn against. Stored
+ *  history and no Provider call: asked once when a watched row's history is drawn, never polled. */
+export type WatchSamples = Exclude<Infer<typeof client.monitors[":id"]["samples"]["$get"]>, { detail: string }>;
+export const fetchWatchSamples = (id: string) =>
+  read<WatchSamples>(client.monitors[":id"].samples.$get({ param: { id } }), `/monitors/${id}/samples`);
+
 /** A structure's payoff at expiry, in points across its contracts (#291): the P&L at each strike,
  *  the slope beyond the outer two, the breakevens and the maximums. At expiry only (ADR 0023).
  *

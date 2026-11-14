@@ -17,6 +17,9 @@ export interface Unit {
   contracts: number;
   money: boolean;
   hidden: boolean;
+  /** what the figure is called in the readouts: "to close" for a holding, "value" for a watched
+   *  row's history (#402) */
+  what?: string;
 }
 
 const MONEY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -110,7 +113,7 @@ export function tipLines(s: PricedSample, unit: Unit) {
   const scope = scopeWords(unit);
   return {
     day: `${dayWords(s.observed_on)} · ${s.dte} DTE`,
-    cost: `to close${scope === null ? "" : `, ${scope}`}: ${say(s.cost_to_close, unit)}`,
+    cost: `${unit.what ?? "to close"}${scope === null ? "" : `, ${scope}`}: ${say(s.cost_to_close, unit)}`,
     pace: s.on_pace === null ? null : `on pace ${say(s.on_pace, unit)}`,
     gap: gapOf(s),
     why: whyShort(s),
@@ -124,7 +127,7 @@ export function tipLines(s: PricedSample, unit: Unit) {
  *  day, since it is drawn apart from the closes and has no plan or reason of its own. */
 export function nowLines(now: { dte: number; cost: number }, unit: Unit) {
   const scope = scopeWords(unit);
-  return { day: `valued now · ${now.dte} DTE`, cost: `to close${scope === null ? "" : `, ${scope}`}: ${say(now.cost, unit)}` };
+  return { day: `valued now · ${now.dte} DTE`, cost: `${unit.what ?? "to close"}${scope === null ? "" : `, ${scope}`}: ${say(now.cost, unit)}` };
 }
 
 /** What the burndown says of a day the shared crosshair stops on with no Cost to close (#380,
@@ -245,12 +248,13 @@ function nowOf(holding: Valued) {
  *  rather than drawn, and one inside it is drawn where it is. `L` is the left margin the labels
  *  need. Under privacy they are points per contract (#395): the dollar labels, and a gutter as wide
  *  as they would be, are never drawn. */
-export function valueAxis(served: Samples, holding: Valued, unit: Unit) {
+export function valueAxis(served: Samples, holding: Valued, unit: Unit, also: number[] = []) {
   const { levels, plan, samples } = served;
   const now = nowOf(holding);
+  // `also`: a watched row's threshold, drawn against its value (#402)
   const values = [
     0, ...samples.filter(hasCost).map((s) => s.cost_to_close), ...plan.map((p) => p.on_pace),
-    ...(levels?.target == null ? [] : [levels.target]), ...(now ? [now.cost] : []),
+    ...(levels?.target == null ? [] : [levels.target]), ...(now ? [now.cost] : []), ...also,
   ];
   let hi = Math.max(...values), lo = Math.min(...values);
   // every figure at zero: a scale of one value has no height to draw in

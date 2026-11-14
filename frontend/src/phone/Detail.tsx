@@ -72,7 +72,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
             {shown.kind === "holding" ? (
               <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
                              privacy={privacy} session={session} />
-            ) : <RuleDetail entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null} />}
+            ) : <RuleDetail entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null}
+                            session={session} privacy={privacy} />}
             {shown.kind === "holding" && writes ? (
               <div className="nxp-sheet-body">
                 <HoldingActions key={shown.holding.id} holding={shown.holding} monitors={monitors} rules={shown.rules}
@@ -146,8 +147,8 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
   );
 }
 
-function RuleDetail({ entry, under, overlap = null }: {
-  entry: Entry; under: Entry[]; overlap?: string | null;
+function RuleDetail({ entry, under, overlap = null, session, privacy }: {
+  entry: Entry; under: Entry[]; overlap?: string | null; session: boolean; privacy: boolean;
 }) {
   const state = ruleState(entry);
   return (
@@ -168,7 +169,7 @@ function RuleDetail({ entry, under, overlap = null }: {
         <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
         {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
         {/* a combo drawn in the watchlist apart from its holding is a watched spread here too (#346) */}
-        {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} /> : null}
+        {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} session={session} /> : null}
         <dl className="nxp-facts">
           <div><dt>watches</dt><dd>{fieldWords(entry.field, Boolean(entry.legs))}</dd></div>
           <div><dt>compare</dt><dd>{entry.compare === "abs" ? "its size" : "signed"}</dd></div>
@@ -182,6 +183,8 @@ function RuleDetail({ entry, under, overlap = null }: {
             <ul className="nxp-rules">{under.map((r) => <EditableLine key={r.id} entry={r} />)}</ul>
           </>
         ) : null}
+        {/* a watched row's daily closes (#402), opened as a holding's history is (#374) */}
+        {!entry.held || overlap ? <HistoryOnDemand watched={entry} privacy={privacy} defaultOpen={!session} /> : null}
       </div>
     </>
   );

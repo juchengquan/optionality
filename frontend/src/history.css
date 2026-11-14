@@ -107,3 +107,15 @@
 .nx-hist-point[data-before-correction] [data-mark] { opacity: 0.45; }
 .nx-hist-corrected line { stroke: var(--foreground); stroke-width: 1; stroke-dasharray: 1 3; opacity: 0.7; }
 .nx-hist-corrected text { fill: var(--foreground); }
+
+/* the days a holding's contracts were watched before it was entered (#402): faint in every panel,
+   each a line of its own, with a rule where it was entered */
+.nx-hist-costs[data-costs="before-entry"] { opacity: 0.35; }
+.nx-hist-point[data-before-entry] [data-mark] { opacity: 0.35; }
+.nx-hist-leg path[data-iv-run="before-entry"], .nx-spxp-line[data-spx-run="before-entry"] { opacity: 0.35; }
+.nx-hist-leg circle[data-before-entry], .nx-spxp-day[data-before-entry] { opacity: 0.35; }
+.nx-hist-entered line { stroke: var(--foreground); stroke-width: 1; stroke-dasharray: 4 2; opacity: 0.6; }
+.nx-hist-entered text { fill: var(--foreground); }
+/* a watched row's price rule's threshold, drawn across its value (#402) */
+.nx-hist-threshold line { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 5 3; }
+.nx-hist-threshold text { fill: var(--warn); font-weight: 600; }

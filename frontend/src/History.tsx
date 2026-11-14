@@ -34,7 +34,7 @@ import { useEffect, useRef, useState } from "react";
 import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";
 
-import { fetchSamples, type Holding, type Samples } from "./shared/api";
+import { fetchSamples, fetchWatchSamples, type Entry, type Holding, type Samples } from "./shared/api";
 import { heldLeg, legText } from "./shared/format";
 import { Leg, SvgLeg } from "./shared/Legs";
 import { hasCost, scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
@@ -43,45 +43,48 @@ import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross,
 import { ivLines, ivWords, MARK, nowDte, stopsOf, type IvLeg } from "./historyDays";
 import { legCode } from "./legs";
 import { SpxPath, spxGutter } from "./SpxPath";
+import { BEFORE_ENTRY_WORDS, beforeEntryDays, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry } from "./watchhistory";
 import "./history.css";
 
-interface SamplesState {
+interface Answer<T> {
   id: string;
-  samples?: Samples;
+  samples?: T;
   error?: string;
 }
 
-/** The samples for `id`, asked for once per id: a new Holding object for the same id (a poll, a
+/** An answer for `id`, asked for once per id: a new Holding object for the same id (a poll, a
  *  refresh) asks nothing. What is kept is the last ANSWER, under the id it answered: it is shown
  *  only while that is still the id asked about, so another holding's days are never drawn under
  *  this one while its own are asked for, and an answer for a holding no longer shown lands
  *  nowhere. A 200 that carries no days — null, a string, an object without its list — is said as
  *  a failure: kept as an answer, it left the charts on "reading the samples…" for ever (#353). */
-function useSamples(id: string): SamplesState | null {
-  const [state, setState] = useState<SamplesState | null>(null);
+function useAnswer<T>(id: string, fetch: (id: string) => Promise<T>): Answer<T> | null {
+  const [state, setState] = useState<Answer<T> | null>(null);
   useEffect(() => {
     let live = true;
-    fetchSamples(id).then(
+    fetch(id).then(
       (samples: unknown) => {
         if (!live) return;
-        setState(isSamples(samples) ? { id, samples }
+        setState(isSamples(samples) ? { id, samples: samples as T }
           : { id, error: "the service answered without them" });
       },
       (err: unknown) => { if (live) setState({ id, error: err instanceof Error ? err.message : String(err) }); },
     );
     return () => { live = false; };
-  }, [id]);
+    // the fetch is a module function, the same on every render: the id is what is asked about
+  }, [id, fetch]);
   return state?.id === id ? state : null;
 }
 
 /** Whether an answer is the samples at all: an object carrying its list of days. */
-function isSamples(body: unknown): body is Samples {
+function isSamples(body: unknown): boolean {
   return typeof body === "object" && body !== null && Array.isArray((body as { samples?: unknown }).samples);
 }
 
 /** What the charts draw a holding from: its legs and its count, and — only while it is held and
  *  valued — today's figures. A closed holding (#296) is drawn from `GET /positions`, which carries
- *  none of them: no contract size, so its money is points per contract, and no "now". */
+ *  none of them: no contract size, so its money is points per contract, and no "now". A watched row
+ *  (#402) is drawn as a holding of one, with no valuation (`watchedCharted`). */
 export type Charted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">
   & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "spx" | "short_strikes" | "valued_from">>;
 
@@ -110,13 +113,13 @@ function useCross(id: string, served: Samples | undefined, holding: Charted): Cr
 }
 
 export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy: boolean }) {
-  const state = useSamples(holding.id);
+  const state = useAnswer(holding.id, fetchSamples);
   const size = holding.contract_size ?? null;
   const unit: Unit = {
     size: size ?? 1, contracts: holding.contracts, money: size !== null, hidden: privacy,
   };
-  const served = state?.samples;
-  const cross = useCross(holding.id, served, holding);
+  // the days its contracts were watched before it was entered, drawn first and faint (#402)
+  const served = state?.samples ? withBeforeEntry(state.samples) : undefined;
   const blank = state?.error !== undefined ? `the samples could not be read — ${state.error}`
     : !served ? "reading the samples…"
       : served.samples.length === 0 ? (holding.closed_on === null
@@ -125,8 +128,45 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
         // before every one of them, which the service hides (ADR 0022)
         : "no daily samples for this trade: it closed before its first sample, or its close was backdated before all of them")
         : null;
+  return (
+    <HistoryPanels id={holding.id} holding={holding} served={served} blank={blank} unit={unit} privacy={privacy}
+                   title="Burndown" noCost="no day with a Cost to close yet: each was recorded out of hours, with no two-sided quote to price it" />
+  );
+}
+
+/** A watched row's history (#402): its value each day against its price rule's threshold, its legs'
+ *  IV and SPX against its strikes — the holding's three panels and their crosshair, from the watch
+ *  history of the contracts it watches (`/monitors/{id}/samples`). In points per contract: a watched
+ *  row has no count and no money of its own. */
+export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: boolean }) {
+  const state = useAnswer(entry.id, fetchWatchSamples);
+  const holding = watchedCharted(entry);
+  const unit: Unit = { size: 1, contracts: 1, money: false, hidden: privacy, what: "value" };
+  const served = state?.samples ? watchedSamples(state.samples) : undefined;
+  const threshold = state?.samples ? thresholdOf(state.samples) : null;
+  const blank = state?.error !== undefined ? `the closes could not be read — ${state.error}`
+    : !served ? "reading the closes…"
+      : served.samples.length === 0
+        ? "no daily closes recorded yet: the sweep writes one a day while it is watched"
+        : null;
+  return (
+    <HistoryPanels id={entry.id} holding={holding} served={served} blank={blank} unit={unit} privacy={privacy}
+                   threshold={threshold}
+                   title={threshold === null ? "Value" : "Value against the threshold"}
+                   noCost="no day with a price yet: each was recorded out of hours, with no two-sided quote to price it" />
+  );
+}
+
+/** The three panels of a history — the value by day, each leg's IV, SPX against the strikes — on
+ *  one DTE axis with one crosshair, for a holding or a watched row. */
+function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCost, threshold = null }: {
+  id: string; holding: Charted; served: Samples | undefined; blank: string | null; unit: Unit; privacy: boolean;
+  title: string; noCost: string; threshold?: number | null;
+}) {
+  const cross = useCross(id, served, holding);
+  const before = served ? beforeEntryDays(served) : new Set<string>();
   // one pair of margins for all three charts, so a DTE is at the same x in each (#298)
-  const axis = blank !== null || !served ? null : valueAxis(served, holding, unit);
+  const axis = blank !== null || !served ? null : valueAxis(served, holding, unit, threshold === null ? [] : [threshold]);
   const gutters: Gutters | null = axis === null || !served ? null : (() => {
     const iv = ivAxis(served, holding);
     return {
@@ -138,20 +178,20 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
   const closeDte = holding.closed_on === null ? null : daysTo(holding.closed_on, holding.strike_date);
   return (
     <>
-      <section className="nx-hist" role="group" aria-label="burndown">
+      <section className="nx-hist" role="group" aria-label={title === "Burndown" ? "burndown" : title.toLowerCase()}>
         <h4 className="nx-hist-h">
-          Burndown
-          <span className="nx-hist-unit">{`${unit.money && !privacy ? "$" : "points"} to close, ${scopeWords(unit)}`}</span>
+          {title}
+          <span className="nx-hist-unit">{`${unit.money && !privacy ? "$" : "points"} ${unit.what ?? "to close"}, ${scopeWords(unit)}`}</span>
         </h4>
         {blank !== null || !served ? <p className="nx-meta">{blank}</p>
           : (
             <>
               <Burndown served={served} unit={unit} axis={axis!} span={dteWindow(served)} gutters={gutters!}
-                        closeDte={closeDte} cross={cross} />
+                        closeDte={closeDte} cross={cross} before={before} threshold={threshold} />
               {served.samples.some(hasCost) ? null
                 // every day kept only for its vol (#380): the IV chart below has them, the burndown none
-                : <p className="nx-meta">no day with a Cost to close yet: each was recorded out of hours, with no two-sided quote to price it</p>}
-              {served.levels === null
+                : <p className="nx-meta">{noCost}</p>}
+              {served.levels === null && title === "Burndown"
                 ? <p className="nx-meta">no plan: Opened not recorded, so there is no schedule to draw</p> : null}
             </>
           )}
@@ -159,13 +199,13 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
       {blank === null && served ? (
         <section className="nx-hist" role="group" aria-label="IV by leg">
           <h4 className="nx-hist-h">IV by leg</h4>
-          <IvChart served={served} holding={holding} gutters={gutters!} cross={cross} />
+          <IvChart served={served} holding={holding} gutters={gutters!} cross={cross} before={before} />
         </section>
       ) : null}
       {/* where SPX was against the strikes (#298), from the same answer — nothing more is asked —
           and on the burndown's DTE window, so the days line up */}
       {blank === null && served ? <SpxPath served={served} holding={holding} span={dteWindow(served)} gutters={gutters!}
-                                                    cross={cross} /> : null}
+                                                    cross={cross} before={before} /> : null}
     </>
   );
 }
@@ -214,8 +254,10 @@ function ivAxis(served: Samples, holding: Charted) {
   return { legs, top, bottom, ticks, label, L, RL };
 }
 
-function IvChart({ served, holding, gutters, cross }: {
+function IvChart({ served, holding, gutters, cross, before }: {
   served: Samples; holding: Charted; gutters: Gutters; cross: Cross;
+  /** the days, by market day, that are before entry (#402): drawn faint, a line of their own */
+  before: ReadonlySet<string>;
 }) {
   const [box, W] = useWidth();
   const span = dteWindow(served);
@@ -231,12 +273,18 @@ function IvChart({ served, holding, gutters, cross }: {
   // each leg's runs of consecutive days with a reading: a day without one breaks the line, and a
   // leg never read is not drawn at all
   const lines = legs.flatMap((leg) => {
-    const drawn = runsOf(served.samples.map((s) => {
+    const point = (s: Samples["samples"][number]) => {
       const v = s.legs_iv?.[leg.code];
-      return typeof v === "number" ? { dte: s.dte, v, timing: s.timing } : null;
-    }));
+      return typeof v === "number" ? { dte: s.dte, v, timing: s.timing, watched: before.has(s.observed_on) } : null;
+    };
+    const drawn = runsOf(served.samples.map(point));
+    // the days watched before entry and the days held, each a line of their own (#402)
+    const split = [false, true].flatMap((watched) => runsOf(served.samples.map((s) => {
+      const p = point(s);
+      return p !== null && p.watched === watched ? p : null;
+    })));
     const last = drawn.at(-1)?.at(-1);
-    return last ? [{ leg, drawn, last, labelY: y(last.v) }] : [];
+    return last ? [{ leg, drawn, split, last, labelY: y(last.v) }] : [];
   });
   // two legs ending at nearly the same IV would print their names over each other: each is pushed
   // down below the one above it, then the whole column back up if it ran off the bottom
@@ -267,13 +315,15 @@ function IvChart({ served, holding, gutters, cross }: {
           <g data-axis="y">
             {ticks.map((v) => <text key={v} x={L - 6} y={y(v) + 4} textAnchor="end">{label(v)}</text>)}
           </g>
-          {lines.map(({ leg, drawn, labelY, last }) => (
+          {lines.map(({ leg, drawn, split, labelY, last }) => (
             <g key={leg.code} data-leg={leg.code} className="nx-hist-leg" data-side={leg.short ? "short" : "long"}>
-              {drawn.map((run) => (
-                <LinePath key={run[0]!.dte} data-iv-run="" data={run} x={(p) => x(p.dte)} y={(p) => y(p.v)} />
+              {split.map((run) => (
+                <LinePath key={run[0]!.dte} data-iv-run={run[0]!.watched ? "before-entry" : ""} data={run}
+                          x={(p) => x(p.dte)} y={(p) => y(p.v)} />
               ))}
               {drawn.flat().map((p) => (
-                <circle key={p.dte} data-dte={p.dte} data-mark={MARK[p.timing]} cx={x(p.dte)} cy={y(p.v)} r={2.25} />
+                <circle key={p.dte} data-dte={p.dte} data-mark={MARK[p.timing]}
+                        data-before-entry={p.watched ? "" : undefined} cx={x(p.dte)} cy={y(p.v)} r={2.25} />
               ))}
               <SvgLeg leg={leg.leg} form="minus" x={x(last.dte) + 6} y={labelY + 4} />
             </g>
@@ -298,11 +348,14 @@ function IvChart({ served, holding, gutters, cross }: {
               <div key={i} data-iv-leg=""><Leg leg={l.leg} form="minus" />{` ${l.words}`}</div>
             ))}
             {read.why === null ? null : <div className="nx-bd-tip-why">{read.why}</div>}
+            {pointed.on !== null && before.has(pointed.on)
+              ? <div className="nx-bd-tip-why" data-before-entry="">{BEFORE_ENTRY_WORDS}</div> : null}
           </CrossTip>
         )}
       </div>
       <p className="nx-hist-said" role="status" aria-live={liveOf(cross, "iv")}>
-        {pointed === null ? "each leg's IV by day · point at a day for each leg's figure" : ivWords(pointed, ivLegs, name)}
+        {pointed === null ? "each leg's IV by day · point at a day for each leg's figure"
+          : ivWords(pointed, ivLegs, name) + (pointed.on !== null && before.has(pointed.on) ? ` — ${BEFORE_ENTRY_WORDS}` : "")}
       </p>
     </>
   );

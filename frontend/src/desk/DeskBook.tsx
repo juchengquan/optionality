@@ -504,7 +504,8 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
       {/* the heading and its close stay outside: a detail that cannot be drawn can still be shut */}
       <DetailBoundary key={subject} what={row.kind === "holding" ? "holding" : "rule"}>
         {row.kind === "holding" ? <HoldingDetail row={row} session={session} privacy={privacy} partners={partners} onSelect={onSelect} />
-          : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null} />
+          : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null}
+                                              session={session} privacy={privacy} />
             : <QuarantinedDetail row={row} />}
         {/* by the session (#371): what is polled is what updates */}
         <p className="nx-meta nxd-note">{session ? "live: updates with every poll" : "as last valued"}</p>
@@ -604,7 +605,9 @@ function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holdi
   return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
-function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; overlap: string | null }) {
+function RuleDetail({ entry, rows, overlap, session, privacy }: {
+  entry: Entry; rows: DeskRow[]; overlap: string | null; session: boolean; privacy: boolean;
+}) {
   const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
     r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
   return (
@@ -619,11 +622,14 @@ function RuleDetail({ entry, rows, overlap }: { entry: Entry; rows: DeskRow[]; o
       {overlap ? <p className="nx-meta" data-overlap="">{overlap}</p> : null}
       {entry.legs ? <LegList legs={entry.legs.map(signedLeg)} /> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-      {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} /> : null}
+      {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} session={session} /> : null}
       {/* every figure of its contract or combo, the reason beside each dash (#332) */}
       <RuleFigures entry={entry} className="nxd-kv" />
       {entry.error ? <p className="nxd-why">{entry.error}</p> : null}
       <Monitors entries={[entry, ...under.map((r) => r.entry)]} />
+      {/* a watched row's daily closes (#402), opened as a holding's history is: open outside the
+          session, shut in it (#372) */}
+      {!entry.held || overlap ? <HistoryOnDemand watched={entry} privacy={privacy} defaultOpen={!session} /> : null}
     </>
   );
 }
