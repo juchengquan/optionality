@@ -54,19 +54,19 @@ describe("renaming a combo from the inspector", () => {
   it("sends the name through PATCH, and the inspector is the service's renamed rule", async () => {
     const writes = await openDesk();
     const panel = await inspect("1218_P7150");
-    await userEvent.click(within(panel).getByRole("button", { name: "edit 1218_P7150 spread value" }));
-    const form = within(panel).getByRole("form", { name: "editing 1218_P7150 spread value" });
+    await userEvent.click(within(panel).getByRole("button", { name: "edit 1218_P7150 value" }));
+    const form = within(panel).getByRole("form", { name: "editing 1218_P7150 value" });
     await userEvent.fill(within(form).getByLabelText("name"), "dec-put");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18", body: { name: "dec-put" } }]));
-    await within(inspector()).findByRole("button", { name: "edit dec-put spread value" });
+    await within(inspector()).findByRole("button", { name: "edit dec-put value" });
   });
 
   it("says a name already taken beside the name, on screen and on top", async () => {
     const writes = await openDesk();
     const panel = await inspect("1218_P7150");
-    await userEvent.click(within(panel).getByRole("button", { name: "edit 1218_P7150 spread value" }));
-    const form = within(panel).getByRole("form", { name: "editing 1218_P7150 spread value" });
+    await userEvent.click(within(panel).getByRole("button", { name: "edit 1218_P7150 value" }));
+    const form = within(panel).getByRole("form", { name: "editing 1218_P7150 value" });
     // the 12-31 call spread's value rule is on mid_price too
     await userEvent.fill(within(form).getByLabelText("name"), "1231_C7600");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
@@ -82,8 +82,8 @@ describe("splitting a total entry from a holding's inspector", () => {
   it("shows what each holding gets, sends the total, and the holding's Entry is the service's after", async () => {
     const writes = await openDesk();
     const panel = await inspect("1218_P6400");
-    await userEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
-    const form = within(panel).getByRole("form", { name: "split a total entry across 1218_IC spread value" });
+    await userEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC value" }));
+    const form = within(panel).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");
     const table = within(form).getByRole("table");
     // inside the form it is part of: wider, it spilled past the inspector's edge, which scrolling
@@ -105,8 +105,8 @@ describe("splitting a total entry from a holding's inspector", () => {
     const refusal = "every wing here has a rule of its own — set them individually";
     await openDesk({ totalEntry: () => [422, refusal] });
     const panel = await inspect("1218_P6400");
-    await userEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
-    const form = within(panel).getByRole("form", { name: "split a total entry across 1218_IC spread value" });
+    await userEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC value" }));
+    const form = within(panel).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");
     await userEvent.click(within(form).getByRole("button", { name: "save the split" }));
     const alert = await within(form).findByRole("alert");
@@ -120,8 +120,8 @@ describe("recording a holding of a watched contract from the inspector", () => {
   it("posts it through POST /spreads, and the holding takes the rule's place", async () => {
     const writes = await openDesk();
     const panel = await inspect("261231 8000C");
-    await userEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C delta" }));
-    const form = within(panel).getByRole("form", { name: "record a holding of 261231 8000C delta" });
+    await userEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C Δ" }));
+    const form = within(panel).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
     expect(visible(within(form).getByTestId("hold-replaces"))).toBe(true);
     await userEvent.fill(within(form).getByLabelText("entry, per contract"), "0.8");
     await userEvent.click(within(form).getByRole("button", { name: "Record holding" }));
@@ -144,8 +144,8 @@ describe("recording a holding of a watched contract from the inspector", () => {
     const refusal = "position '1231_C8000' already exists";
     await openDesk({ spreads: () => [409, refusal] });
     const panel = await inspect("261231 8000C");
-    await userEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C delta" }));
-    const form = within(panel).getByRole("form", { name: "record a holding of 261231 8000C delta" });
+    await userEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C Δ" }));
+    const form = within(panel).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
     await userEvent.click(within(form).getByRole("button", { name: "Record holding" }));
     const alert = await within(form).findByRole("alert");
     expect(alert.textContent).toBe(refusal);

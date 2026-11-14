@@ -878,7 +878,7 @@ describe("the needs-you line", () => {
       at(now);
       await open();
       const line = screen.getByRole("status", { name: "needs you" });
-      expect(line.textContent).toContain("261211 8300C delta quarantined — the provider does not know its contract");
+      expect(line.textContent).toContain("261211 8300C Δ quarantined — the provider does not know its contract");
       expect(line.getAttribute("data-tone")).toBe("bad");
     });
   }
@@ -926,9 +926,9 @@ describe("the book", () => {
     at(SESSION);
     await open();
     const row = document.querySelector('[data-ref="w1"]')!;
-    expect(row.textContent).toContain("|spread value| ≥ 6.01 — now 2.00, 4.01 away");
+    expect(row.textContent).toContain("|value| ≥ 6.01 — now 2.00, 4.01 away");
     expect(document.querySelector('[data-ref="w2"]')!.textContent)
-      .toContain("|delta| ≥ 0.2 — now -0.150, 0.050 away");
+      .toContain("|Δ| ≥ 0.20 — now −0.150, 0.050 away");
     // nested: inside the spread's own list item, not beside it
     expect(row.closest("li")!.contains(document.querySelector('[data-ref="w2"]'))).toBe(true);
   });

@@ -23,7 +23,7 @@
  *    without a word (ADR 0011).
  */
 import type { DraftPayoff, Monitor, Payoff } from "./shared/api";
-import { isCostToClose } from "./needs";
+import { storedRuleWords } from "./needs";
 
 export type Side = "short" | "long";
 export type OptionType = "CALL" | "PUT";
@@ -444,16 +444,11 @@ function planned(d: AddDraft, s: SpreadDraft): { code: string; field: string }[]
   return out;
 }
 
-/** A rule in words, the way the form names one it will replace. */
+/** A rule in words, the way the form names one it will replace: its name, then the rule as every
+ *  sentence words it (`needs.ts`'s `storedRuleWords`, one vocabulary since #404). */
 export function ruleWords(m: Monitor): string {
-  const op = m.direction === "below" ? "≤" : "≥";
-  const at = m.threshold.toFixed(2);
-  if (m.legs && isCostToClose(m.field, true, m.compare, m.direction, m.threshold)) {
-    return `${m.code} cost to close ≥ ${(-m.threshold).toFixed(2)}`;
-  }
-  if (m.legs) return `${m.code} ${m.field === "mid_price" ? "value" : m.field} ${op} ${at}`;
-  const what = m.field === "option_delta" ? (m.compare === "abs" ? "|Δ|" : "Δ") : m.field;
-  return `${m.strike} ${m.option_type.toLowerCase()} ${what} ${op} ${at}`;
+  const rule = storedRuleWords(m.field, Boolean(m.legs), m.compare, m.direction, m.threshold);
+  return m.legs ? `${m.code} ${rule}` : `${m.strike} ${m.option_type.toLowerCase()} ${rule}`;
 }
 
 /** Per spread, the WATCH rules saving it will replace (owner's decision on #322): a Monitor already

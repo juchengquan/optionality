@@ -374,7 +374,7 @@ class TestAValueItCannotRead:
         assert calls[0] == sorted([a, b])
         assert len(t.sent) == 1  # 26.4 - 19.25 = 7.15 <= 10
         assert "sep-condor" in t.sent[0]
-        assert t.sent[0] == "⚠️ sep-condor: |val| fell ≤ 10.00 — 7.15  ▼ past 2.85"
+        assert t.sent[0] == "⚠️ sep-condor: |value| fell ≤ 10.00 — 7.15  ▼ past 2.85"
         m = t.row(id_)
         assert m["triggered"] == 1
         # vitest's toBeCloseTo(7.15, 10): within half of 1e-10
@@ -503,7 +503,7 @@ class TestTheExpiryLifecycle:
         await t.sweeper(lambda codes: []).sweep()
         assert len(t.sent) == 1
         assert re.fullmatch(
-            rf"ℹ️ monitor sep-condor \|val\| ≤ 10\.00 expired \({t.past()}\) — muted; auto-removes in \d+ days",
+            rf"ℹ️ monitor sep-condor \|value\| ≤ 10\.00 expired \({t.past()}\) — muted; auto-removes in \d+ days",
             t.sent[0],
         )
 

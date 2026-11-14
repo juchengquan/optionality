@@ -136,14 +136,21 @@ export function toneOf(items: Need[], entryLooksLikeRisk: boolean): Tone {
   return items.some((n) => n.kind === "manage") ? "warn" : "good";
 }
 
-/** What a rule watches, in words: a combo's figure is the spread's, a leg's is the contract's. */
-export function fieldWords(field: string, combo: boolean): string {
+/** What a rule watches, in the one vocabulary every place a rule is worded uses (#404): a price is
+ *  `value`, a spread's and a single contract's alike — the name beside it says which — and the
+ *  Greeks are their letters, Δ Γ Θ ν. The full sentence and the short form both say it, and both are
+ *  held to the domain's golden cases (`alarm.ts`'s `ruleShort`) by `NextRuleShort.test.ts`. Vega is
+ *  `ν`, not `V`, which would read as a value. An unknown field is written as it is stored.
+ *
+ *  `_combo` changes nothing since #404 and is accepted only so a caller still passing it compiles
+ *  (#403's `Payoff.tsx`); drop it once nothing does. */
+export function fieldWords(field: string, _combo?: boolean): string {
   switch (field) {
-    case "mid_price": return combo ? "spread value" : "mid";
-    case "option_delta": return combo ? "spread delta" : "delta";
-    case "option_gamma": return combo ? "spread gamma" : "gamma";
-    case "option_theta": return combo ? "spread theta" : "theta";
-    case "option_vega": return combo ? "spread vega" : "vega";
+    case "mid_price": return "value";
+    case "option_delta": return "Δ";
+    case "option_gamma": return "Γ";
+    case "option_theta": return "Θ";
+    case "option_vega": return "ν";
     case "option_implied_volatility": return "IV";
     default: return field;
   }
@@ -163,58 +170,65 @@ export function isCostToClose(
   return combo && field === "mid_price" && compare === "signed" && direction === "below" && threshold < 0;
 }
 
-/** "|spread value| ≥ 6.01": a rule in words, with no figure — the sentence's first half, and the
- *  whole of what the editor's draft says as it is typed (#292), so the two cannot word it apart.
- *  The threshold is printed as given: typed text in a draft, the stored number in a sentence. */
+/** "|value| ≥ 6.01": a rule in words, with no figure — the sentence's first half, and the whole of
+ *  what the editor's draft says as it is typed (#292), so the two cannot word it apart. A typed
+ *  threshold is printed as typed; a stored number as the short form writes it (#404): two places at
+ *  least, every place it carries, and a real minus. */
 export function ruleWords(
-  field: string, combo: boolean, compare: string, direction: string, threshold: number | string,
+  field: string, _combo: boolean, compare: string, direction: string, threshold: number | string,
 ): string {
   const sign = direction === "below" ? "≤" : "≥";
-  const words = fieldWords(field, combo);
-  return `${compare === "abs" ? `|${words}|` : words} ${sign} ${threshold}`;
+  const words = fieldWords(field);
+  const t = typeof threshold === "string" ? threshold : thresholdText(threshold);
+  return `${compare === "abs" ? `|${words}|` : words} ${sign} ${t}`;
 }
+
+/** A stored threshold as the short form writes it: to two places at least and every place it
+ *  carries, with the real minus. */
+const thresholdText = (t: number) => minus(t.toFixed(typedPlaces(t)));
 
 /** A stored rule in words, as `sentence` begins it: a held credit's signed stop said as the cost to
  *  close it watches (`isCostToClose`), anything else as `ruleWords` says it. What the page says to a
  *  pointer and a reader wherever it DRAWS the rule short, so the two never word a stop apart: the
- *  short form draws "close ≥ 4.05", and this says "cost to close ≥ 4.05", never "spread value ≤ -4.05". */
+ *  short form draws "close ≥ 4.05", and this says "cost to close ≥ 4.05", never "value ≤ −4.05". */
 export function storedRuleWords(
   field: string, combo: boolean, compare: string, direction: string, threshold: number,
 ): string {
-  return isCostToClose(field, combo, compare, direction, threshold) ? `cost to close ≥ ${-threshold}`
+  return isCostToClose(field, combo, compare, direction, threshold) ? `cost to close ≥ ${thresholdText(-threshold)}`
     : ruleWords(field, combo, compare, direction, threshold);
 }
 
-/** "|spread value| ≥ 6.01 — now -2.00, 4.01 away"; "cost to close ≥ 11 — now 2.00, 9.00 away" for a
- *  held credit's signed stop (`isCostToClose`).
+/** "|value| ≥ 6.01 — now −2.00, 4.01 away"; "cost to close ≥ 11.00 — now 2.00, 9.00 away" for a
+ *  held credit's signed stop (`isCostToClose`). The short form's words, places and minus (#404),
+ *  said in full: the distance in words rather than an arrow.
  *
  *  Every figure in it is the service's: `watched` is the very figure the bell and the fill bar were
  *  drawn from, and `distance` is the domain's `thresholdDistance` (ADR 0005 — nothing is assembled
- *  here). The threshold is printed as the owner typed it.
+ *  here).
  *
  *  Under compare `abs` the rule compares the figure's SIZE, and the bars say so: a credit spread
  *  summed with its short leg negative is a negative figure, and a short put's delta is negative,
- *  so "now -2.00, 4.01 away" reads true beside `|spread value| ≥ 6.01` where it would not beside a
- *  bare "spread value ≥ 6.01". The figure itself is shown as served, never made absolute here. */
+ *  so "now −2.00, 4.01 away" reads true beside `|value| ≥ 6.01` where it would not beside a bare
+ *  "value ≥ 6.01". The figure itself is shown as served, never made absolute here. */
 export function sentence(entry: Entry): string {
-  // a signed stop is said as the cost to close it watches, and its figure as that cost: the
-  // distance is the same either way round
-  const cost = isCostToClose(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
+  // a signed stop is said as the cost to close it watches, and its figure as that cost
+  // (`shortFigure`): the distance is the same either way round
   const rule = storedRuleWords(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
-  const places = PLACES[entry.field] ?? 2;
+  const r = shapeOf(entry);
+  const places = shownPlaces(r);
   if (entry.watched === null) {
     // out of the session, the sweep's last reading in it, with its time, beside the dash (#380) — on
     // New York's clock, as the market-closed line names the close, so the page states one clock
     const last = entry.last_reading;
     if (!last) return `${rule} — no figure`;
     const when = newYorkWhen(last.at);
-    return `${rule} — no figure out of session; last ${(cost ? -last.value : last.value).toFixed(places)}${when ? ` at ${when}` : ""}`;
+    return `${rule} — no figure out of session; last ${shortFigure(r, last.value)}${when ? ` at ${when}` : ""}`;
   }
-  const now = `now ${(cost ? -entry.watched : entry.watched).toFixed(places)}`;
+  const now = `now ${shortFigure(r, entry.watched)}`;
   const d = entry.distance;
   if (d === null) return `${rule} — ${now}`;
-  const where = d > 0 ? `${d.toFixed(places)} away`
-    : d === 0 ? "at the threshold" : `past it by ${(-d).toFixed(places)}`;
+  const where = d > 0 ? `${sizeText(d, places)} away`
+    : d === 0 ? "at the threshold" : `past it by ${sizeText(-d, places)}`;
   return `${rule} — ${now}, ${where}`;
 }
 
@@ -237,20 +251,6 @@ export function shapeOf(r: { field: string; legs?: unknown[] | null; compare: st
   };
 }
 
-/** What a rule watches, as a symbol: `val` a spread's price, `mid` a contract's, and the Greeks'
- *  letters. Vega is `ν`, not `V`, which beside `val` would read as a value. */
-export function fieldSymbol(field: string, combo: boolean): string {
-  switch (field) {
-    case "mid_price": return combo ? "val" : "mid";
-    case "option_delta": return "Δ";
-    case "option_gamma": return "Γ";
-    case "option_theta": return "Θ";
-    case "option_vega": return "ν";
-    case "option_implied_volatility": return "IV";
-    default: return field;
-  }
-}
-
 const shapeIsCost = (r: RuleShape) => isCostToClose(r.field, r.combo, r.compare, r.direction, r.threshold);
 /** whether the rule as SAID is at-or-above, which the arrows follow: a cost to close is said `≥` */
 const saysAbove = (r: RuleShape) => shapeIsCost(r) || r.direction !== "below";
@@ -263,12 +263,12 @@ const minus = (text: string) => (text.startsWith("-") ? `\u2212${text.slice(1)}`
 export function shortRule(r: Omit<RuleShape, "threshold"> & { threshold: number | string }): string {
   const typed = typeof r.threshold === "string";
   const cost = !typed && shapeIsCost(r as RuleShape);
-  const symbol = fieldSymbol(r.field, r.combo);
+  const symbol = fieldWords(r.field);
   const subject = cost ? "close" : r.compare === "abs" ? `|${symbol}|` : symbol;
   const sign = cost || r.direction !== "below" ? "≥" : "≤";
   if (typeof r.threshold === "string") return `${subject} ${sign} ${r.threshold}`;
   const t = cost ? -r.threshold : r.threshold;
-  return `${subject} ${sign} ${minus(t.toFixed(typedPlaces(t)))}`;
+  return `${subject} ${sign} ${thresholdText(t)}`;
 }
 
 /** The places a threshold was typed with: two at least, and as many more as it carries. */
@@ -304,9 +304,9 @@ export function shortDistance(r: RuleShape, distance: number): string {
 /** The rule's line in the short form (#388), what the page DRAWS — `sentence` stays its title and
  *  its accessible name:
  *
- *    |val| ≥ 4.51   2.10  ↑2.41
+ *    |value| ≥ 4.51   2.10  ↑2.41
  *    |Δ| ≥ 0.20   −0.087  ▲ past 0.050
- *    |val| ≥ 5.51   —  last 3.05 Fri 16:14
+ *    |value| ≥ 5.51   —  last 3.05 Fri 16:14
  *
  *  Three spaces after the rule and two before the distance, drawn as they are (`white-space:
  *  pre-wrap` on the line). Every figure is the service's, as in `sentence`. */

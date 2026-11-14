@@ -62,15 +62,25 @@ function strikeOf(code: string): number | null {
   return m ? Number(m[1]) / 1000 : null;
 }
 
+/** What a rule watches, as it is SPOKEN, for finding it: the page writes the field as a symbol
+ *  (`fieldWords`, #404), and nobody types "Δ" into a search box. */
+const SPOKEN: Record<string, string> = {
+  mid_price: "value price mid", option_delta: "delta", option_gamma: "gamma", option_theta: "theta",
+  option_vega: "vega", option_implied_volatility: "IV",
+};
+
 /** One thing the palette finds. Its words are its name (whole, and in its parts), what it is, its
- *  expiry, its strikes and what it watches — NEVER a contract's code: moomoo writes a strike with
- *  three zeros after it (`…P6700000`), so "7000" found a 6700 put inside one. */
-function findable(ref: string, kind: FindKind, name: string, date: string, legs: Leg[], field: string | null): Findable {
+ *  expiry, its strikes and what it watches, as it is spoken (`SPOKEN`) —
+ *  NEVER a contract's code: moomoo writes a strike with three zeros after it (`…P6700000`), so
+ *  "7000" found a 6700 put inside one. */
+function findable(ref: string, kind: FindKind, name: string, date: string, legs: Leg[], storedField: string | null): Findable {
+  const field = storedField === null ? null : fieldWords(storedField);
   // the legs apart, for the palette to draw; the detail is the same parts as one text
   const before = [kind, shortDate(date)].filter(Boolean).join(" · ");
   const parts = { before: legs.length > 0 ? `${before} · ` : before, legs, after: field ? ` · ${field}` : "" };
   const detail = `${parts.before}${legWords(legs)}${parts.after}`;
-  const words = [name, ...tokens(name), ...tokens(kind), ...dateWords(date), ...strikeWords(legs), ...tokens(field ?? "")]
+  const words = [name, ...tokens(name), ...tokens(kind), ...dateWords(date), ...strikeWords(legs),
+    ...tokens(storedField === null ? "" : SPOKEN[storedField] ?? storedField)]
     .map((w) => w.toLowerCase()).filter(Boolean);
   return { ref, kind, name, detail, parts, words: [...new Set(words)] };
 }
@@ -88,7 +98,7 @@ function ofRow(row: DeskRow): Findable {
       : single(e.option_type, strikeOf(e.code));
     // a spread in the watchlist, the one that only partly overlaps a holding included (#346)
     const kind: FindKind = e.legs && (!e.held || Boolean(row.overlap)) ? "watched spread" : "Monitor";
-    return findable(e.id, kind, rowName(row), e.strike_date, legs, fieldWords(e.field, Boolean(e.legs)));
+    return findable(e.id, kind, rowName(row), e.strike_date, legs, e.field);
   }
   return ofMonitor(row.monitor, "quarantined Monitor");
 }
@@ -97,7 +107,7 @@ function ofMonitor(m: Monitor, kind: FindKind): Findable {
   const legs = m.legs
     ? m.legs.map(signedLeg)
     : single(m.option_type, strikeOf(m.code) ?? m.strike);
-  return findable(m.id, kind, monitorName(m), m.strike_date, legs, fieldWords(m.field, Boolean(m.legs)));
+  return findable(m.id, kind, monitorName(m), m.strike_date, legs, m.field);
 }
 
 /** The single contract a rule watches, as one leg with no side. */

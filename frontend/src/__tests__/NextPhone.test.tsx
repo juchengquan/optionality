@@ -51,7 +51,7 @@ describe("the cards, on the owner's book", () => {
       g.items.flatMap(({ entry, under }) => [entry.id, ...under.map((u) => u.id)]));
     expect(refs(region("Watchlist"))).toEqual(expected);
     const spread = card("w-dec18");
-    expect(within(spread).getByText(/\|delta\| ≥ 0\.2/)).toBeTruthy();
+    expect(within(spread).getByText(/\|Δ\| ≥ 0\.20 — now/)).toBeTruthy();
   });
 
   it("group both by expiry, under a heading per expiry", () => {
@@ -105,7 +105,7 @@ describe("the cards, on the owner's book", () => {
     draw();
     const c = card("w-dec18");
     expect(within(c).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("40");
-    expect(within(c).getByText(/\|spread value\| ≥ 6 — now 2\.40, 3\.60 away/)).toBeTruthy();
+    expect(within(c).getByText(/\|value\| ≥ 6\.00 — now 2\.40, 3\.60 away/)).toBeTruthy();
   });
 
   it("style a fired entry as an entry signal, and a fired rule on a holding as ringing", () => {
@@ -200,15 +200,15 @@ describe("the detail sheet", () => {
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("heading", { name: "1218_C7300" })).toBeTruthy();
     expect(within(sheet).getByText("cost to close")).toBeTruthy();
-    expect(within(sheet).getByText(/\|spread value\| ≥ 4/)).toBeTruthy();
+    expect(within(sheet).getByText(/\|value\| ≥ 4\.00 — now/)).toBeTruthy();
   });
 
   it("opens from a watchlist card with its sentence and the leg rules under it", async () => {
     draw();
     fireEvent.click(within(card("w-dec18")).getByRole("button", { name: /details of 1218_P7150/ }));
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByText(/\|spread value\| ≥ 6/)).toBeTruthy();
-    expect(within(sheet).getByText(/\|delta\| ≥ 0\.2/)).toBeTruthy();
+    expect(within(sheet).getByText(/\|value\| ≥ 6\.00 — now/)).toBeTruthy();
+    expect(within(sheet).getByText(/\|Δ\| ≥ 0\.20 — now/)).toBeTruthy();
   });
 
   it("closes on Back without leaving the page", async () => {

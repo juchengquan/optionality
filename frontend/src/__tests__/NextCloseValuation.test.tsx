@@ -106,7 +106,7 @@ describe("a watched rule out of hours (F8)", () => {
     const [e] = withLastKnown([rule], [stored(3.05, FRIDAY_CLOSE)], false);
     expect(e!.last_reading).toEqual({ value: 3.05, at: FRIDAY_CLOSE });
     // on New York's clock, as the market-closed line names the same close: one clock on the page
-    expect(sentence(e!)).toBe("|spread value| ≥ 6.01 — no figure out of session; last 3.05 at Fri 13 Nov 16:14");
+    expect(sentence(e!)).toBe("|value| ≥ 6.01 — no figure out of session; last 3.05 at Fri 13 Nov 16:14");
   });
 
   it("never presents a reading taken out of the session — the 0 a bid 0 / ask 0 once stored", () => {
@@ -114,7 +114,7 @@ describe("a watched rule out of hours (F8)", () => {
     // New York on a Saturday
     expect(lastKnown(rule, stored(0, "2026-11-14 14:47:28+08:00"), false)).toBeNull();
     const [e] = withLastKnown([rule], [stored(0, "2026-11-14 14:47:28+08:00")], false);
-    expect(sentence(e!)).toBe("|spread value| ≥ 6.01 — no figure");
+    expect(sentence(e!)).toBe("|value| ≥ 6.01 — no figure");
   });
 
   it("adds nothing in the session, to a row with its own figure, or where nothing was read", () => {

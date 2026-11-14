@@ -25,6 +25,7 @@ from optionality_backend.db.open import create_database
 from optionality_backend.db.queries.sql import row, rows
 from optionality_backend.db.values import to_sqlite_json
 from optionality_backend.entrypoints.bot.bot import BotDeps, TelegramBot
+from optionality_backend.entrypoints.bot.format import TABLE_WIDTH
 from optionality_backend.env import settings_for
 
 #: Fixed, so a date-relative expectation cannot drift into a different market day overnight.
@@ -36,9 +37,9 @@ YYMMDD = "261101"
 FAR = "2026-11-11"
 #: `/monitors` for the two rules of the short-form test, character for character
 MONITORS_TABLE = (
-    "<pre>contract      rule           last   state\n"
-    "bear-cs       close ≥ 4.05   3.05   armed\n"
-    "261101 C8100  |mid| ≥ 30.00  26.41  armed</pre>"
+    "<pre>contract      rule             last   state\n"
+    "bear-cs       close ≥ 4.05     3.05   armed\n"
+    "261101 C8100  |value| ≥ 30.00  26.41  armed</pre>"
 )
 
 
@@ -212,7 +213,7 @@ class TestWatch:
         assert chat.monitors()[0]["field"] == "mid_price"
 
         await b.handle_update(update("/monitors"))
-        assert "|mid| ≤ 30.00" in chat.last()  # the rule cell carries the direction
+        assert "|value| ≤ 30.00" in chat.last()  # the rule cell carries the direction
 
     async def test_replies_with_usage_for_anything_it_cannot_read(self, chat):
         b = chat.bot()
@@ -407,7 +408,7 @@ class TestMonitors:
         await b.handle_update(update("/monitors"))
         assert chat.last() == MONITORS_TABLE
         for line in re.sub(r"</?pre>", "", chat.last()).split("\n"):
-            assert len(line) <= 42
+            assert len(line) <= TABLE_WIDTH
 
     async def test_shows_an_em_dash_for_a_monitor_that_has_never_been_swept(self, chat):
         b = chat.bot()
@@ -555,7 +556,7 @@ class TestThreshold:
         await b.handle_update(update(f"/watchcombo sep-condor {FUTURE} +C8100 -C8150 10 below"))
         await b.handle_update(update("/threshold sep-condor 25"))
         # said back as the combo's rule: a spread's value, not a contract's mid (#388)
-        assert chat.last() == "sep-condor: alarm when |val| ≤ 25.00"
+        assert chat.last() == "sep-condor: alarm when |value| ≤ 25.00"
         assert next(m for m in chat.monitors() if m["code"] == "sep-condor")["threshold"] == 25
 
         await b.handle_update(update(f"/watch {FUTURE} CALL 6500 0.6"))

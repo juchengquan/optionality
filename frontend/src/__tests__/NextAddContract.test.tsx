@@ -173,8 +173,8 @@ describe("a watched contract", () => {
     open();
     const options = [...(screen.getByLabelText("what it watches") as HTMLSelectElement).options];
     expect(options.map((o) => [o.value, o.textContent])).toEqual([
-      ["option_delta", "delta"], ["mid_price", "mid"], ["option_implied_volatility", "IV"],
-      ["option_theta", "theta"], ["option_vega", "vega"], ["option_gamma", "gamma"],
+      ["option_delta", "Δ"], ["mid_price", "value"], ["option_implied_volatility", "IV"],
+      ["option_theta", "Θ"], ["option_vega", "ν"], ["option_gamma", "Γ"],
     ]);
   });
 
@@ -184,8 +184,8 @@ describe("a watched contract", () => {
     // drawn short (#388), said and titled in words
     const draft = screen.getByTestId("contract-draft");
     expect(draft.querySelector(".nx-rule-short")!.textContent).toBe("7150 put |Δ| ≥ 0.15");
-    expect(draft.querySelector<HTMLElement>(".nx-rule-short")!.title).toBe("7150 put |delta| ≥ 0.15");
-    expect(draft.querySelector(".sr-only")!.textContent).toBe("7150 put |delta| ≥ 0.15");
+    expect(draft.querySelector<HTMLElement>(".nx-rule-short")!.title).toBe("7150 put |Δ| ≥ 0.15");
+    expect(draft.querySelector(".sr-only")!.textContent).toBe("7150 put |Δ| ≥ 0.15");
   });
 
   it("says a signed threshold of 0 beside the box as it is typed, and sends nothing", () => {

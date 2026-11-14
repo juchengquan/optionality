@@ -102,8 +102,8 @@ function reading(rule: RuleShape, monitor: Monitor, value: number): string {
 }
 
 /** A rule as its short form needs it (#388): the five facts of a Monitor that its words turn on.
- *  `combo` rather than the legs, because the words need only whether it is one — a spread's price
- *  is its `val`, a contract's its `mid` — and the expiry notice reads a row it has not hydrated. */
+ *  `combo` rather than the legs, because the words need only whether it is one — only a spread's
+ *  price can be a cost to close — and the expiry notice reads a row it has not hydrated. */
 export interface RuleShape {
   field: string;
   combo: boolean;
@@ -120,11 +120,14 @@ export function ruleShape(monitor: Pick<Monitor, "field" | "compare" | "directio
   };
 }
 
-/** What a rule watches, as a symbol (#388). Vega is `ν`, the Greek letter the other three are, and
- *  not `V`, which beside `val` would read as a value. An unknown field is written as it is stored. */
-function fieldSymbol(field: string, combo: boolean): string {
+/** What a rule watches, as a symbol (#388): a price is `value`, a spread's and a single
+ *  contract's alike (#404) — the name beside it says which — and the Greeks are their letters.
+ *  Vega is `ν`, the Greek letter the other three are, and not `V`, which would read as a value.
+ *  An unknown field is written as it is stored. The full sentence the page writes uses these words
+ *  too (`frontend/src/needs.ts`'s `fieldWords`, held to these cases). */
+function fieldSymbol(field: string): string {
   switch (field) {
-    case "mid_price": return combo ? "val" : "mid";
+    case "mid_price": return "value";
     case "option_delta": return "Δ";
     case "option_gamma": return "Γ";
     case "option_theta": return "Θ";
@@ -156,7 +159,7 @@ function saysAbove(rule: RuleShape): boolean {
 /** "|Δ|", "Δ", "close": the left of the rule — bars for a magnitude, as the comparison reads it. */
 function subjectOf(rule: RuleShape): string {
   if (isCostToClose(rule)) return "close";
-  const symbol = fieldSymbol(rule.field, rule.combo);
+  const symbol = fieldSymbol(rule.field);
   return rule.compare === "abs" ? `|${symbol}|` : symbol;
 }
 
@@ -189,7 +192,7 @@ function sizeText(size: number, places: number): string {
   return Number(size.toFixed(places)) === 0 ? `<${(10 ** -places).toFixed(places)}` : size.toFixed(places);
 }
 
-/** "|Δ| ≥ 0.20", "close ≥ 9.44", "val ≤ −1.50": a rule in symbols, with no figure (#388). */
+/** "|Δ| ≥ 0.20", "close ≥ 9.44", "value ≤ −1.50": a rule in symbols, with no figure (#388). */
 export function ruleShort(rule: RuleShape): string {
   return `${subjectOf(rule)} ${saysAbove(rule) ? "≥" : "≤"} ${thresholdText(rule)}`;
 }

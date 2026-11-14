@@ -238,7 +238,7 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
           ) : null}
           <div className="nx-add-monitors" role="group" aria-label={`spread ${n}'s Monitors`}>
             <MonitorLine on={valueOn} onToggle={() => set({ valueOn: !valueOn })} label={`spread ${n} value Monitor`}
-                         words={isCreditStop(held, s) ? "cost to close ≥" : "spread value ≥"}
+                         words={isCreditStop(held, s) ? "cost to close ≥" : "value ≥"}
                          hint={valueHint(held, s)}
                          value={valueShown(held, s)} onValue={(v) => set({ valueAt: v })}
                          inputLabel={`spread ${n} value threshold`} />

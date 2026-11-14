@@ -64,7 +64,7 @@ async function openEditor(label: string) {
 describe("renaming a combo from its editor", () => {
   it("has a name box for a combo, which sends the new name through PATCH", async () => {
     const { sent } = controls(SPREAD);
-    const form = await openEditor("1218_P7150 spread value");
+    const form = await openEditor("1218_P7150 value");
     const box = within(form).getByLabelText("name") as HTMLInputElement;
     expect(box.value).toBe("1218_P7150");
     type(form, "name", "dec-put-spread");
@@ -74,14 +74,14 @@ describe("renaming a combo from its editor", () => {
 
   it("has no name box for a single contract", async () => {
     controls(DELTA);
-    const form = await openEditor("261218 7150P delta");
+    const form = await openEditor("261218 7150P Δ");
     expect(within(form).queryByLabelText("name")).toBeNull();
   });
 
   it("says a name already taken beside the name, in the service's words", async () => {
     const refusal = "monitor for (1231_C7600, mid_price) already exists";
     controls(SPREAD, { patch: vi.fn(async () => { throw new Error(refusal); }) });
-    const form = await openEditor("1218_P7150 spread value");
+    const form = await openEditor("1218_P7150 value");
     type(form, "name", "1231_C7600");
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     const alert = await within(form).findByRole("alert");
@@ -93,7 +93,7 @@ describe("renaming a combo from its editor", () => {
 
   it("refuses a blank name beside the name, and sends nothing", async () => {
     const { sent } = controls(SPREAD);
-    const form = await openEditor("1218_P7150 spread value");
+    const form = await openEditor("1218_P7150 value");
     type(form, "name", " ");
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     const alert = within(form).getByRole("alert");
@@ -104,14 +104,14 @@ describe("renaming a combo from its editor", () => {
 
   it("says, for a held spread, that its holding keeps the name it was recorded with", async () => {
     controls(HELD);
-    const form = await openEditor("1218_C7300 spread value");
+    const form = await openEditor("1218_C7300 value");
     expect(form.textContent).toContain(
       "Renames this Monitor only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
   });
 });
 
 describe("splitting a total entry", () => {
-  const LABEL = "1218_IC spread value";
+  const LABEL = "1218_IC value";
 
   it("is offered on a rule over two holdings, and not on a rule over one", () => {
     controls(CONDOR);
@@ -181,7 +181,7 @@ describe("splitting a total entry", () => {
 });
 
 describe("recording a holding of a watched contract", () => {
-  const LABEL = "261231 8000C delta";
+  const LABEL = "261231 8000C Δ";
 
   it("is offered on a watched contract, and not on a spread or a held contract", () => {
     controls(LONE);
@@ -284,7 +284,7 @@ describe("recording a holding of a watched contract", () => {
 });
 
 describe("what recording a holding does to the rest of the book (#336)", () => {
-  const LABEL = "261231 8000C delta";
+  const LABEL = "261231 8000C Δ";
   /** a watched 8000/8050 call spread `cs`, which holds the contract, and a rule on another strike */
   function withSpread() {
     const { monitors, holdings } = splitBook();
@@ -302,7 +302,7 @@ describe("what recording a holding does to the rest of the book (#336)", () => {
       "Also linked to it, by the service, as it links every rule no holding owns: "
       // a combo naming a contract the new holding does not hold is drawn in the Watchlist (#346);
       // the page shows no rule row's Entry or P&L, so the form claims none
-      + "cs spread value — drawn in the Watchlist, with a note of the contracts it shares with it.");
+      + "cs value — drawn in the Watchlist, with a note of the contracts it shares with it.");
   });
 
   it("says it cannot tell which rules it takes while the holdings are not read", () => {
@@ -358,7 +358,7 @@ describe("a draft against the rule as it was opened", () => {
       </MonitorActionsContext.Provider>
     );
     const { rerender } = render(ui(SPREAD));
-    const form = await openEditor("1218_P7150 spread value");
+    const form = await openEditor("1218_P7150 value");
     // renamed elsewhere — another tab — and served by the next poll while this editor is open
     rerender(ui({ ...SPREAD, code: "dec-put" }));
     type(form, "threshold", "3");
@@ -368,7 +368,7 @@ describe("a draft against the rule as it was opened", () => {
 });
 
 describe("the split, guarded", () => {
-  const LABEL = "1218_IC spread value";
+  const LABEL = "1218_IC value";
 
   it("sends once for two submits in one tick, and cannot be cancelled while it is on its way", () => {
     const totalEntry = vi.fn(() => new Promise<void>(() => undefined));
@@ -409,21 +409,21 @@ describe("from both arrangements", () => {
     wrap(value, <DeskBook {...book()} />);
     fireEvent.click(screen.getByRole("button", { name: "1218_P6400" }));
     let panel = screen.getByRole("complementary", { name: /^inspector/ });
-    fireEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     fireEvent.change(within(panel).getByLabelText("total entry, per contract"), { target: { value: "6.4" } });
     fireEvent.click(within(panel).getByRole("button", { name: "save the split" }));
     await waitFor(() => expect(sent).toHaveLength(1));
 
     fireEvent.click(screen.getByRole("button", { name: "1218_P7150" }));
     panel = screen.getByRole("complementary", { name: /^inspector/ });
-    fireEvent.click(within(panel).getByRole("button", { name: "edit 1218_P7150 spread value" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "edit 1218_P7150 value" }));
     fireEvent.change(within(panel).getByLabelText("name"), { target: { value: "dec-put" } });
     fireEvent.click(within(panel).getByRole("button", { name: "save" }));
     await waitFor(() => expect(sent).toHaveLength(2));
 
     fireEvent.click(screen.getByRole("button", { name: "261231 8000C" }));
     panel = screen.getByRole("complementary", { name: /^inspector/ });
-    fireEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C delta" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C Δ" }));
     fireEvent.click(within(panel).getByRole("button", { name: "Record holding" }));
     await waitFor(() => expect(sent).toHaveLength(3));
     expect(sent.map((s) => s.what)).toEqual(["TOTAL", "PATCH", "SPREADS"]);
@@ -434,12 +434,12 @@ describe("from both arrangements", () => {
     wrap(value, <div className="nx"><PhoneBook {...book()} /></div>);
     fireEvent.click(screen.getByRole("button", { name: "details of 1218_P6400" }));
     let sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     // Escape cancels the form and leaves the sheet open: its dismissal does not ask if it was handled
     fireEvent.keyDown(within(sheet).getByLabelText("total entry, per contract"), { key: "Escape" });
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole("dialog")).not.toBeNull();
-    fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     fireEvent.change(within(sheet).getByLabelText("total entry, per contract"), { target: { value: "6.4" } });
     fireEvent.click(within(sheet).getByRole("button", { name: "save the split" }));
     await waitFor(() => expect(sent).toHaveLength(1));
@@ -448,11 +448,11 @@ describe("from both arrangements", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
     sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 spread value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 value" }));
     fireEvent.keyDown(within(sheet).getByLabelText("name"), { key: "Escape" });
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole("dialog")).not.toBeNull();
-    fireEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 spread value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 value" }));
     fireEvent.change(within(sheet).getByLabelText("name"), { target: { value: "dec-put" } });
     fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
     await waitFor(() => expect(sent).toHaveLength(2));
@@ -461,12 +461,12 @@ describe("from both arrangements", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "details of 261231 8000C" }));
     sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
     fireEvent.keyDown(within(sheet).getByLabelText("entry, per contract"), { key: "Escape" });
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole("dialog")).not.toBeNull();
     expect(within(sheet).queryByRole("form")).toBeNull();
-    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
     fireEvent.click(within(sheet).getByRole("button", { name: "Record holding" }));
     await waitFor(() => expect(sent).toHaveLength(3));
     expect(sent.map((s) => s.what)).toEqual(["TOTAL", "PATCH", "SPREADS"]);
@@ -481,7 +481,7 @@ describe("through the page, against a service that writes", () => {
     render(<Next />);
     fireEvent.click(await screen.findByRole("button", { name: "details of 261231 8000C" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
     fireEvent.change(within(sheet).getByLabelText("entry, per contract"), { target: { value: "0.8" } });
     fireEvent.click(within(sheet).getByRole("button", { name: "Record holding" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
@@ -497,9 +497,9 @@ describe("through the page, against a service that writes", () => {
     render(<Next />);
     fireEvent.click(await screen.findByRole("button", { name: "details of 261231 8000C" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
     fireEvent.click(within(sheet).getByRole("button", { name: "Record holding" }));
-    expect(await screen.findByText("recorded 1231_C8000, replacing 1 watch rule; also linked to it: cs spread value"))
+    expect(await screen.findByText("recorded 1231_C8000, replacing 1 watch rule; also linked to it: cs value"))
       .toBeTruthy();
   });
 
@@ -510,7 +510,7 @@ describe("through the page, against a service that writes", () => {
     render(<Next />);
     fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P6400" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     fireEvent.change(within(sheet).getByLabelText("total entry, per contract"), { target: { value: "6.4" } });
     fireEvent.click(within(sheet).getByRole("button", { name: "save the split" }));
     await waitFor(() => expect(writes).toEqual([{ what: "POST /monitors/r-condor/total-entry", body: { entry: 6.4 } }]));
@@ -525,10 +525,10 @@ describe("through the page, against a service that writes", () => {
     render(<Next />);
     fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 spread value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 value" }));
     fireEvent.change(within(sheet).getByLabelText("name"), { target: { value: "dec-put" } });
     fireEvent.click(within(sheet).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18", body: { name: "dec-put" } }]));
-    await within(sheet).findByRole("button", { name: "edit dec-put spread value" });
+    await within(sheet).findByRole("button", { name: "edit dec-put value" });
   });
 });

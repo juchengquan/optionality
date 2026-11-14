@@ -68,8 +68,8 @@ describe("renaming a combo from the sheet", () => {
   it("renames it, the name box 16px and 44pt, and keeps the sheet open when Escape cancels", async () => {
     const writes = await show();
     const sheet = await openSheet("1218_P7150");
-    await userEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 spread value" }));
-    let form = within(sheet).getByRole("form", { name: "editing 1218_P7150 spread value" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 value" }));
+    let form = within(sheet).getByRole("form", { name: "editing 1218_P7150 value" });
     expect(form.querySelectorAll("input, select")).toHaveLength(5);
     measured(sheet, form);
     await userEvent.click(within(form).getByLabelText("name"));
@@ -78,19 +78,19 @@ describe("renaming a combo from the sheet", () => {
     await animationsDone();
     expect(screen.queryByRole("dialog")).not.toBeNull();
 
-    await userEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 spread value" }));
-    form = within(sheet).getByRole("form", { name: "editing 1218_P7150 spread value" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 value" }));
+    form = within(sheet).getByRole("form", { name: "editing 1218_P7150 value" });
     await userEvent.fill(within(form).getByLabelText("name"), "dec-put");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18", body: { name: "dec-put" } }]));
-    await within(sheet).findByRole("button", { name: "edit dec-put spread value" });
+    await within(sheet).findByRole("button", { name: "edit dec-put value" });
   });
 
   it("says a name already taken in the sheet, on screen and on top", async () => {
     await show();
     const sheet = await openSheet("1218_P7150");
-    await userEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 spread value" }));
-    const form = within(sheet).getByRole("form", { name: "editing 1218_P7150 spread value" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 value" }));
+    const form = within(sheet).getByRole("form", { name: "editing 1218_P7150 value" });
     await userEvent.fill(within(form).getByLabelText("name"), "1231_C7600");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     const alert = await within(form).findByRole("alert");
@@ -103,8 +103,8 @@ describe("splitting a total entry from a holding's sheet", () => {
   it("shows what each holding gets inside 390px, and the holding's Entry is the service's after", async () => {
     const writes = await show();
     const sheet = await openSheet("1218_P6400");
-    await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
-    const form = within(sheet).getByRole("form", { name: "split a total entry across 1218_IC spread value" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
+    const form = within(sheet).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");
     const table = within(form).getByRole("table");
     expect(table.getBoundingClientRect().right).toBeLessThanOrEqual(form.getBoundingClientRect().right + 0.5);
@@ -113,7 +113,7 @@ describe("splitting a total entry from a holding's sheet", () => {
     await userEvent.keyboard("{Escape}");
     await animationsDone();
     expect(screen.queryByRole("dialog")).not.toBeNull();
-    await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     await userEvent.fill(within(sheet).getByLabelText("total entry, per contract"), "6.4");
     await userEvent.click(within(sheet).getByRole("button", { name: "save the split" }));
     await waitFor(() => expect(writes).toEqual([{ what: "POST /monitors/r-condor/total-entry", body: { entry: 6.4 } }]));
@@ -124,8 +124,8 @@ describe("splitting a total entry from a holding's sheet", () => {
     const refusal = "set the other wings' credits first";
     await show({ totalEntry: () => [422, refusal] });
     const sheet = await openSheet("1218_P6400");
-    await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC spread value" }));
-    const form = within(sheet).getByRole("form", { name: "split a total entry across 1218_IC spread value" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
+    const form = within(sheet).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");
     await userEvent.click(within(form).getByRole("button", { name: "save the split" }));
     const alert = await within(form).findByRole("alert");
@@ -138,8 +138,8 @@ describe("recording a holding of a watched contract from its sheet", () => {
   it("records it through POST /spreads, every box 16px and 44pt, and the holding reaches the book", async () => {
     const writes = await show();
     const sheet = await openSheet("261231 8000C");
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
-    const form = within(sheet).getByRole("form", { name: "record a holding of 261231 8000C delta" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
+    const form = within(sheet).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
     expect(form.querySelectorAll("input, select")).toHaveLength(5);
     measured(sheet, form);
     await userEvent.click(within(form).getByLabelText("entry, per contract"));
@@ -148,7 +148,7 @@ describe("recording a holding of a watched contract from its sheet", () => {
     await animationsDone();
     expect(screen.queryByRole("dialog")).not.toBeNull();
 
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
     await userEvent.fill(within(sheet).getByLabelText("entry, per contract"), "0.8");
     await userEvent.click(within(sheet).getByRole("button", { name: "Record holding" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
@@ -165,8 +165,8 @@ describe("recording a holding of a watched contract from its sheet", () => {
     const refusal = "the provider does not know US.SPXW261231C8000000";
     await show({ spreads: () => [422, refusal] });
     const sheet = await openSheet("261231 8000C");
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
-    const form = within(sheet).getByRole("form", { name: "record a holding of 261231 8000C delta" });
+    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
+    const form = within(sheet).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
     await userEvent.click(within(form).getByRole("button", { name: "Record holding" }));
     const alert = await within(form).findByRole("alert");
     expect(alert.textContent).toBe(refusal);
@@ -177,7 +177,7 @@ describe("recording a holding of a watched contract from its sheet", () => {
     document.cookie = "ui_privacy=on; path=/";
     await show();
     const sheet = await openSheet("261231 8000C");
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C delta" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
     const box = within(sheet).getByLabelText("contracts");
     expect(getComputedStyle(box).getPropertyValue("-webkit-text-security")).toBe("disc");
   });

@@ -147,9 +147,10 @@ def _width(cell: str) -> int:
     return len(cell.encode("utf-16-le")) // 2
 
 
-#: The widest a table row may be (CLAUDE.md: about forty monospace characters). 42, not 40, because
-#: `/monitors` already writes 41 with a twelve-character contract, and that row is not to change.
-TABLE_WIDTH = 42
+#: The widest a table row may be (CLAUDE.md: about forty monospace characters). 43, not 40, because
+#: `/monitors` writes 43 with a twelve-character contract — 41 until #404 wrote a price rule as
+#: `|value|`, two wider than `|mid|` — and that row is not to change.
+TABLE_WIDTH = 43
 #: The narrowest a shortened name is made, whatever the other columns take.
 _FIT_FLOOR = 12
 

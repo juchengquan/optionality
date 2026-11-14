@@ -108,14 +108,15 @@ describe("the draft and what it sends", () => {
   it("words the draft as the served line words the rule, so the two read alike", () => {
     const rule = ruleOfEntry(SPREAD);
     // the rule part of the served line is the draft's when nothing has changed, but for the places
-    // the served one writes its threshold to (#388); the sentence and the draft's own sentence alike
+    // the served one writes its threshold to (#388); the sentence and the draft's own sentence alike,
+    // in the same words since #404
     const served = shortSentence(SPREAD).split("   ")[0]!;
     expect(served.startsWith(draftWords(rule, draftOf(rule)))).toBe(true);
-    expect(sentence(SPREAD).startsWith(`${draftSentence(rule, draftOf(rule))} — `)).toBe(true);
+    expect(sentence(SPREAD).startsWith(draftSentence(rule, draftOf(rule)))).toBe(true);
     expect(draftWords(rule, { ...draftOf(rule), compare: "signed", direction: "below", threshold: "-1" }))
-      .toBe("val ≤ -1");
+      .toBe("value ≤ -1");
     expect(draftSentence(rule, { ...draftOf(rule), compare: "signed", direction: "below", threshold: "-1" }))
-      .toBe("spread value ≤ -1");
+      .toBe("value ≤ -1");
   });
 
   it("says the day an expired rule is deleted: the first sweep after its retention", () => {
@@ -128,7 +129,7 @@ describe("the draft and what it sends", () => {
 describe("editing a rule in place", () => {
   it("edits every field and sends the change, the threshold as a number", async () => {
     const { sent } = controls({ entry: DELTA });
-    const label = "261218 7150P delta";
+    const label = "261218 7150P Δ";
     const form = await openEditor(label);
     choose(form, "what it watches", "mid_price");
     choose(form, "direction", "below");
@@ -146,18 +147,18 @@ describe("editing a rule in place", () => {
 
   it("follows the draft as it is typed, and keeps the distance the service's", async () => {
     controls({ entry: DELTA });
-    const form = await openEditor("261218 7150P delta");
+    const form = await openEditor("261218 7150P Δ");
     const draft = within(form).getByTestId("draft");
     // drawn short as typed (#388), and said in words
     const drawn = () => draft.querySelector<HTMLElement>(".nx-rule-short")!;
     expect(drawn().textContent).toBe("|Δ| ≥ 0.2");
-    expect(drawn().title).toBe("|delta| ≥ 0.2");
+    expect(drawn().title).toBe("|Δ| ≥ 0.2");
     choose(form, "threshold", "0.3");
     expect(drawn().textContent).toBe("|Δ| ≥ 0.3");
     choose(form, "compare", "signed");
     choose(form, "direction", "below");
     expect(drawn().textContent).toBe("Δ ≤ 0.3");
-    expect(draft.querySelector(".sr-only")!.textContent).toBe("delta ≤ 0.3");
+    expect(draft.querySelector(".sr-only")!.textContent).toBe("Δ ≤ 0.3");
     // the figure and how far it is are the SERVED row's, said as such until it is saved
     const served = within(form).getByTestId("served");
     expect(served.querySelector(".nx-rule-short")!.textContent).toBe(shortSentence(DELTA));
@@ -167,13 +168,13 @@ describe("editing a rule in place", () => {
 
   it("opens on the rule as saved, not on a draft that was cancelled", async () => {
     controls({ entry: DELTA });
-    let form = await openEditor("261218 7150P delta");
+    let form = await openEditor("261218 7150P Δ");
     choose(form, "what it watches", "mid_price");
     choose(form, "direction", "below");
     choose(form, "compare", "signed");
     choose(form, "threshold", "9");
     fireEvent.click(within(form).getByRole("button", { name: "cancel" }));
-    form = await openEditor("261218 7150P delta");
+    form = await openEditor("261218 7150P Δ");
     const values = ["what it watches", "direction", "compare", "threshold"]
       .map((l) => (within(form).getByLabelText(l) as HTMLInputElement).value);
     expect(values).toEqual(["option_delta", "above", "abs", "0.2"]);
@@ -187,18 +188,18 @@ describe("editing a rule in place", () => {
       </MonitorActionsContext.Provider>
     );
     const { rerender } = render(ui(DELTA));
-    let form = await openEditor("261218 7150P delta");
+    let form = await openEditor("261218 7150P Δ");
     fireEvent.click(within(form).getByRole("button", { name: "cancel" }));
     // changed elsewhere — another tab, the bot's /threshold — and served by the next poll
     rerender(ui({ ...DELTA, threshold: 0.35, direction: "below" }));
-    form = await openEditor("261218 7150P delta");
+    form = await openEditor("261218 7150P Δ");
     expect((within(form).getByLabelText("threshold") as HTMLInputElement).value).toBe("0.35");
     expect((within(form).getByLabelText("direction") as HTMLSelectElement).value).toBe("below");
   });
 
   it("offers a combo no IV, which does not add up across its legs", async () => {
     controls({ entry: SPREAD });
-    const form = await openEditor("1218_P7150 spread value");
+    const form = await openEditor("1218_P7150 value");
     const options = [...within(form).getByLabelText<HTMLSelectElement>("what it watches").options].map((o) => o.value);
     expect(options).not.toContain("option_implied_volatility");
     expect(options).toContain("mid_price");
@@ -207,7 +208,7 @@ describe("editing a rule in place", () => {
   it("says a signed threshold of 0 beside the threshold, in the service's words, and keeps the draft", async () => {
     const refusal = "signed threshold cannot be 0; use e.g. ±0.01";
     controls({ entry: DELTA }, { patch: vi.fn(async () => { throw new Error(refusal); }) });
-    const form = await openEditor("261218 7150P delta");
+    const form = await openEditor("261218 7150P Δ");
     choose(form, "compare", "signed");
     choose(form, "threshold", "0");
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
@@ -224,7 +225,7 @@ describe("editing a rule in place", () => {
   it("says a field refusal beside what it watches", async () => {
     const refusal = "monitor for (US.SPXW261218P7150000, mid_price) already exists";
     controls({ entry: DELTA }, { patch: vi.fn(async () => { throw new Error(refusal); }) });
-    const form = await openEditor("261218 7150P delta");
+    const form = await openEditor("261218 7150P Δ");
     choose(form, "what it watches", "mid_price");
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     const alert = await within(form).findByRole("alert");
@@ -233,7 +234,7 @@ describe("editing a rule in place", () => {
 
   it("asks the service nothing for a threshold that is not a number", async () => {
     const { sent } = controls({ entry: DELTA });
-    const form = await openEditor("261218 7150P delta");
+    const form = await openEditor("261218 7150P Δ");
     choose(form, "threshold", "0x10");
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     expect(within(form).getByRole("alert").textContent).toBe("the threshold is not a number");
@@ -242,14 +243,14 @@ describe("editing a rule in place", () => {
 
   it("cancels on Escape, handing the focus back to edit, and Escape goes no further", async () => {
     controls({ entry: DELTA });
-    const form = await openEditor("261218 7150P delta");
+    const form = await openEditor("261218 7150P Δ");
     expect(document.activeElement).toBe(within(form).getByLabelText("threshold"));
     const outside = vi.fn((e: KeyboardEvent) => e.defaultPrevented);
     document.addEventListener("keydown", outside);
     fireEvent.keyDown(within(form).getByLabelText("threshold"), { key: "Escape" });
     document.removeEventListener("keydown", outside);
     expect(screen.queryByRole("form")).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "edit 261218 7150P delta" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "edit 261218 7150P Δ" }));
     // the inspector closes on an Escape nobody handled: this one never reaches it unhandled
     expect(outside.mock.results.filter((r) => r.value !== true)).toEqual([]);
   });
@@ -258,13 +259,13 @@ describe("editing a rule in place", () => {
 describe("mute, unmute and delete", () => {
   it("mutes a rule that is on", async () => {
     const { sent } = controls({ entry: DELTA });
-    fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P Δ" }));
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: DELTA.id, body: { enabled: false } }]));
   });
 
   it("says what unmuting a rule switched off with its holding does", async () => {
     const { sent } = controls({ monitor: { ...monitor("m-muted"), disabled_reason: "holding-closed" } });
-    const unmute = screen.getByRole("button", { name: "unmute 261218 8000C delta, no longer held" });
+    const unmute = screen.getByRole("button", { name: "unmute 261218 8000C Δ, no longer held" });
     expect(unmute.textContent).toBe("unmute (no longer held)");
     fireEvent.click(unmute);
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: "m-muted", body: { enabled: true } }]));
@@ -272,14 +273,14 @@ describe("mute, unmute and delete", () => {
 
   it("unmutes a rule muted by hand", async () => {
     const { sent } = controls({ monitor: monitor("m-muted") });
-    fireEvent.click(screen.getByRole("button", { name: "unmute 261218 8000C delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "unmute 261218 8000C Δ" }));
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: "m-muted", body: { enabled: true } }]));
   });
 
   it("asks before deleting, and deletes nothing when kept", async () => {
     const { sent } = controls({ entry: DELTA });
-    fireEvent.click(screen.getByRole("button", { name: "delete 261218 7150P delta" }));
-    const ask = screen.getByRole("group", { name: "delete 261218 7150P delta?" });
+    fireEvent.click(screen.getByRole("button", { name: "delete 261218 7150P Δ" }));
+    const ask = screen.getByRole("group", { name: "delete 261218 7150P Δ?" });
     expect(sent).toEqual([]);
     // the safe answer has the focus, so an Enter pressed by habit keeps the rule
     expect(document.activeElement).toBe(within(ask).getByRole("button", { name: "keep it" }));
@@ -287,14 +288,14 @@ describe("mute, unmute and delete", () => {
     expect(screen.queryByRole("group", { name: /^delete/ })).toBeNull();
     expect(sent).toEqual([]);
 
-    fireEvent.click(screen.getByRole("button", { name: "delete 261218 7150P delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "delete 261218 7150P Δ" }));
     fireEvent.click(screen.getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(sent).toEqual([{ what: "DELETE", id: DELTA.id }]));
   });
 
   it("says a refused mute beside the buttons, where it was pressed", async () => {
     controls({ entry: DELTA }, { patch: vi.fn(async () => { throw new Error("monitor not found"); }) });
-    fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P Δ" }));
     expect((await screen.findByRole("alert")).textContent).toBe("monitor not found");
   });
 });
@@ -310,9 +311,9 @@ describe("while a write is in flight, and after it", () => {
   it("takes no second action while a mute is on its way", () => {
     const p = pending();
     controls({ entry: DELTA }, { patch: p.write });
-    fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "mute 261218 7150P Δ" }));
     for (const name of ["edit", "mute", "delete"]) {
-      expect([name, screen.getByRole("button", { name: `${name} 261218 7150P delta` }).hasAttribute("disabled")])
+      expect([name, screen.getByRole("button", { name: `${name} 261218 7150P Δ` }).hasAttribute("disabled")])
         .toEqual([name, true]);
     }
   });
@@ -320,9 +321,9 @@ describe("while a write is in flight, and after it", () => {
   it("cannot be kept once the delete is on its way, nor deleted twice", () => {
     const p = pending();
     controls({ entry: DELTA }, { remove: p.write });
-    fireEvent.click(screen.getByRole("button", { name: "delete 261218 7150P delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "delete 261218 7150P Δ" }));
     fireEvent.click(screen.getByRole("button", { name: "delete it" }));
-    const ask = screen.getByRole("group", { name: "delete 261218 7150P delta?" });
+    const ask = screen.getByRole("group", { name: "delete 261218 7150P Δ?" });
     expect(within(ask).getByRole("button", { name: "keep it" }).hasAttribute("disabled")).toBe(true);
     expect(within(ask).getByRole("button", { name: "delete it" }).hasAttribute("disabled")).toBe(true);
     expect(p.write).toHaveBeenCalledOnce();
@@ -331,20 +332,20 @@ describe("while a write is in flight, and after it", () => {
   it("takes no switch back on twice while the first is on its way", () => {
     const p = pending();
     controls({ monitor: monitor("q-unknown") }, { patch: p.write });
-    fireEvent.click(screen.getByRole("button", { name: "switch 261211 8000C delta back on" }));
+    fireEvent.click(screen.getByRole("button", { name: "switch 261211 8000C Δ back on" }));
     fireEvent.click(screen.getByRole("button", { name: "switch it on" }));
     expect(screen.getByRole("button", { name: "switch it on" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "keep it off" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: "switch 261211 8000C delta back on" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "switch 261211 8000C Δ back on" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("hands the focus to its edit button when the rule is still drawn here after a mute", async () => {
     controls({ entry: DELTA });
-    const mute = screen.getByRole("button", { name: "mute 261218 7150P delta" });
+    const mute = screen.getByRole("button", { name: "mute 261218 7150P Δ" });
     mute.focus();
     fireEvent.click(mute);
     await until(() =>
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: "edit 261218 7150P delta" })));
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "edit 261218 7150P Δ" })));
   });
 
   it("hands the focus to the sheet's heading when the rule it was on is gone", async () => {
@@ -354,7 +355,7 @@ describe("while a write is in flight, and after it", () => {
     render(<Next />);
     fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "delete 261218 7150P delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "delete 261218 7150P Δ" }));
     fireEvent.click(within(sheet).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     await until(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
@@ -394,24 +395,24 @@ describe("while a write is in flight, and after it", () => {
     async (what) => {
       const p = pending();
       controls({ entry: DELTA }, what === "mute" ? { patch: p.write } : { remove: p.write });
-      const pressed = screen.getByRole("button", { name: `${what} 261218 7150P delta` });
+      const pressed = screen.getByRole("button", { name: `${what} 261218 7150P Δ` });
       pressed.focus();
       fireEvent.click(pressed);
       if (what === "delete") fireEvent.click(screen.getByRole("button", { name: "delete it" }));
       await landHeld(p, 30);
       await until(() => expect(document.activeElement)
-        .toBe(screen.getByRole("button", { name: "edit 261218 7150P delta" })));
+        .toBe(screen.getByRole("button", { name: "edit 261218 7150P Δ" })));
     });
 
   it("never leaves the focus on a disabled button or the body, however long the render is held", async () => {
     const p = pending();
     inSurface({ patch: p.write });
-    const mute = screen.getByRole("button", { name: "mute 261218 7150P delta" });
+    const mute = screen.getByRole("button", { name: "mute 261218 7150P Δ" });
     mute.focus();
     fireEvent.click(mute);
     // longer than any count of timer turns a settle could wait through
     await landHeld(p, 500);
-    const edit = screen.getByRole("button", { name: "edit 261218 7150P delta" });
+    const edit = screen.getByRole("button", { name: "edit 261218 7150P Δ" });
     const heading = screen.getByRole("heading", { name: "the inspector" });
     await until(() => expect([edit, heading]).toContain(document.activeElement));
     expect((document.activeElement as HTMLButtonElement).disabled ?? false).toBe(false);
@@ -420,7 +421,7 @@ describe("while a write is in flight, and after it", () => {
   it("takes no focus back when the surface the rule was in closed while its write was out", async () => {
     const p = pending();
     const { close } = inSurface({ patch: p.write });
-    const mute = screen.getByRole("button", { name: "mute 261218 7150P delta" });
+    const mute = screen.getByRole("button", { name: "mute 261218 7150P Δ" });
     mute.focus();
     fireEvent.click(mute);
     // the owner closes the inspector and goes on elsewhere before the write lands
@@ -436,7 +437,7 @@ describe("while a write is in flight, and after it", () => {
 describe("a rule the service switched off", () => {
   it("shows a quarantine's whole reason before switching it back on", async () => {
     const { sent } = controls({ monitor: monitor("q-unknown") });
-    const label = "261211 8000C delta";
+    const label = "261211 8000C Δ";
     fireEvent.click(screen.getByRole("button", { name: `switch ${label} back on` }));
     expect(sent).toEqual([]);
     const ask = screen.getByRole("group", { name: `switch ${label} back on?` });
@@ -456,15 +457,15 @@ describe("a rule the service switched off", () => {
       </MonitorActionsContext.Provider>
     );
     const { rerender } = render(ui(q));
-    fireEvent.click(screen.getByRole("button", { name: "switch 261211 8000C delta back on" }));
+    fireEvent.click(screen.getByRole("button", { name: "switch 261211 8000C Δ back on" }));
     rerender(ui({ ...q, enabled: true, disabled_reason: null }));
     expect(screen.queryByRole("group", { name: /back on\?$/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "mute 261211 8000C delta" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "mute 261211 8000C Δ" })).toBeTruthy();
   });
 
   it("can be edited to fix it, while off", async () => {
     const { sent } = controls({ monitor: monitor("q-unknown") });
-    const form = await openEditor("261211 8000C delta");
+    const form = await openEditor("261211 8000C Δ");
     choose(form, "threshold", "0.15");
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: "q-unknown", body: { threshold: 0.15 } }]));
@@ -519,8 +520,8 @@ describe("from both arrangements", () => {
     wrap(value, <DeskBook {...book()} />);
     fireEvent.click(screen.getByRole("button", { name: "1218_P7150" }));
     const inspector = screen.getByRole("complementary", { name: /^inspector/ });
-    expect(within(inspector).getByRole("button", { name: "edit 1218_P7150 spread value" })).toBeTruthy();
-    fireEvent.click(within(inspector).getByRole("button", { name: "mute 261218 7150P delta" }));
+    expect(within(inspector).getByRole("button", { name: "edit 1218_P7150 value" })).toBeTruthy();
+    fireEvent.click(within(inspector).getByRole("button", { name: "mute 261218 7150P Δ" }));
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: DELTA.id, body: { enabled: false } }]));
   });
 
@@ -531,7 +532,7 @@ describe("from both arrangements", () => {
     const inspector = screen.getByRole("complementary", { name: /^inspector/ });
     fireEvent.click(within(inspector).getByRole("button", { name: /^switch .* back on$/ }));
     fireEvent.click(within(inspector).getByRole("button", { name: "switch it on" }));
-    fireEvent.click(screen.getByRole("button", { name: "unmute 261218 8000C delta" }));
+    fireEvent.click(screen.getByRole("button", { name: "unmute 261218 8000C Δ" }));
     await waitFor(() => expect(sent.map((s) => [s.id, s.body])).toEqual([
       ["q-unknown", { enabled: true }], ["m-muted", { enabled: true }],
     ]));
@@ -542,8 +543,8 @@ describe("from both arrangements", () => {
     wrap(value, <div className="nx"><PhoneBook {...book()} /></div>);
     fireEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "mute 1218_P7150 spread value" }));
-    fireEvent.click(within(sheet).getByRole("button", { name: "mute 261218 7150P delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "mute 1218_P7150 value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "mute 261218 7150P Δ" }));
     await waitFor(() => expect(sent).toHaveLength(2));
     expect(sent.map((s) => s.id)).toEqual([SPREAD.id, DELTA.id]);
   });
@@ -565,16 +566,16 @@ describe("from both arrangements", () => {
     wrap(value, <div className="nx"><PhoneBook {...book()} /></div>);
     fireEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "edit 261218 7150P delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "edit 261218 7150P Δ" }));
     fireEvent.keyDown(within(sheet).getByLabelText("threshold"), { key: "Escape" });
     expect(within(sheet).queryByRole("form")).toBeNull();
-    fireEvent.click(within(sheet).getByRole("button", { name: "delete 261218 7150P delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "delete 261218 7150P Δ" }));
     fireEvent.keyDown(within(sheet).getByRole("button", { name: "keep it" }), { key: "Escape" });
     expect(within(sheet).queryByRole("group", { name: /^delete/ })).toBeNull();
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByRole("dialog")).not.toBeNull();
     // and an Escape nobody handled still closes it
-    fireEvent.keyDown(within(sheet).getByRole("button", { name: "edit 261218 7150P delta" }), { key: "Escape" });
+    fireEvent.keyDown(within(sheet).getByRole("button", { name: "edit 261218 7150P Δ" }), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
@@ -609,16 +610,16 @@ describe("the page after a save", () => {
     hold = true;
     fireEvent.click(screen.getByRole("button", { name: "refresh now", hidden: true }));
     hold = false;
-    fireEvent.click(within(sheet).getByRole("button", { name: "mute 261218 7150P delta" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "mute 261218 7150P Δ" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     // the save's reload has landed: the rule is off, listed with what is switched off
-    await screen.findByRole("button", { name: "unmute 261218 7150P delta", hidden: true });
+    await screen.findByRole("button", { name: "unmute 261218 7150P Δ", hidden: true });
 
     // the poll from before the save answers last, with the book as it was
     expect(held).toHaveLength(1);
     held[0]!();
     await new Promise((r) => setTimeout(r, 50));
-    expect(screen.queryByRole("button", { name: "mute 261218 7150P delta", hidden: true })).toBeNull();
-    expect(screen.getByRole("button", { name: "unmute 261218 7150P delta", hidden: true })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "mute 261218 7150P Δ", hidden: true })).toBeNull();
+    expect(screen.getByRole("button", { name: "unmute 261218 7150P Δ", hidden: true })).toBeTruthy();
   });
 });

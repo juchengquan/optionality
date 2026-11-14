@@ -139,7 +139,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ dec-fly: |val| fell ≤ 0.30 — −0.25  ▼ past 0.05"
+      "⚠️ dec-fly: |value| fell ≤ 0.30 — −0.25  ▼ past 0.05"
     ],
     "rows": {
       "monitors": {

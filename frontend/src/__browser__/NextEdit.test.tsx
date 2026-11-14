@@ -18,7 +18,7 @@ import { settle } from "./nextBook";
 beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-const DELTA = "261218 7150P delta";
+const DELTA = "261218 7150P Δ";
 
 async function openDesk(refuse?: Parameters<typeof serveEditing>[0]) {
   await page.viewport(1440, 900);
@@ -49,14 +49,14 @@ describe("editing a Monitor from the inspector", () => {
   it("saves a new threshold, and the sentence comes back with the service's distance", async () => {
     const writes = await openDesk();
     const panel = await inspectDelta();
-    expect(within(panel).getByText(/^\|delta\| ≥ 0\.2 — now -0\.170, 0\.030 away$/)).toBeTruthy();
+    expect(within(panel).getByText(/^\|Δ\| ≥ 0\.20 — now −0\.170, 0\.030 away$/)).toBeTruthy();
     await userEvent.click(within(panel).getByRole("button", { name: `edit ${DELTA}` }));
     const form = within(panel).getByRole("form", { name: `editing ${DELTA}` });
     await userEvent.fill(within(form).getByLabelText("threshold"), "0.3");
     // the draft follows the typing; the distance is still the saved rule's until the service says
     // drawn short (#388), and said in words
     expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|Δ| ≥ 0.3");
-    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|delta| ≥ 0.3");
+    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|Δ| ≥ 0.3");
     expect(within(form).getByTestId("served").querySelector(".nx-rule-short")!.textContent).toMatch(/↑0\.030$/);
     expect(within(form).getByTestId("served").querySelector(".sr-only")!.textContent).toMatch(/0\.030 away$/);
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
@@ -64,7 +64,7 @@ describe("editing a Monitor from the inspector", () => {
     await waitFor(() => expect(within(inspector()).queryByRole("form")).toBeNull());
     expect(writes).toEqual([{ what: `PATCH /monitors/w-dec18-delta`, body: { threshold: 0.3 } }]);
     // the service's figure, from the reload: 0.3 − |−0.17|
-    expect(within(inspector()).getByText(/^\|delta\| ≥ 0\.3 — now -0\.170, 0\.130 away$/)).toBeTruthy();
+    expect(within(inspector()).getByText(/^\|Δ\| ≥ 0\.30 — now −0\.170, 0\.130 away$/)).toBeTruthy();
     expect([...inspector().querySelectorAll(".nx-rule-short")].map((el) => el.textContent))
       .toContain("|Δ| ≥ 0.30   \u22120.170  ↑0.130");
   });
@@ -78,7 +78,7 @@ describe("editing a Monitor from the inspector", () => {
     await userEvent.selectOptions(within(form).getByLabelText("direction"), "below");
     await userEvent.selectOptions(within(form).getByLabelText("compare"), "signed");
     await userEvent.fill(within(form).getByLabelText("threshold"), "-0.5");
-    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("vega ≤ -0.5");
+    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("ν ≤ -0.5");
     expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("ν ≤ -0.5");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toHaveLength(1));
@@ -144,8 +144,8 @@ describe("mute, unmute and delete from the desk", () => {
     const writes = await openDesk();
     await userEvent.click(screen.getByRole("button", { name: "261211 8000C" }));
     const panel = inspector();
-    await userEvent.click(within(panel).getByRole("button", { name: "switch 261211 8000C delta back on" }));
-    const ask = within(panel).getByRole("group", { name: "switch 261211 8000C delta back on?" });
+    await userEvent.click(within(panel).getByRole("button", { name: "switch 261211 8000C Δ back on" }));
+    const ask = within(panel).getByRole("group", { name: "switch 261211 8000C Δ back on?" });
     expect(ask.textContent).toMatch(/the provider does not know its contract US\.SPXW261211C8300000/);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "switch it on" }));

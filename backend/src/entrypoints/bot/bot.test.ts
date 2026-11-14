@@ -20,6 +20,7 @@ import { settingsFor, type Settings } from "../../env.ts";
 import type { QuoteRecord } from "optionality/quotes";
 import { type FakeProvider, fakeFetcher } from "../../../testing/harness.ts";
 import { TelegramBot } from "./bot.ts";
+import { TABLE_WIDTH } from "./format.ts";
 
 /** Fixed, so a date-relative expectation cannot drift into a different market day overnight. */
 const NOW = new Date("2026-10-02T05:00:00Z");
@@ -29,9 +30,9 @@ const OPENED = "2026-09-17";
 const YYMMDD = "261101";
 const FAR = "2026-11-11";
 /** `/monitors` for the two rules of "says each rule in the short form", character for character */
-const MONITORS_TABLE = "<pre>contract      rule           last   state\n"
-  + "bear-cs       close ≥ 4.05   3.05   armed\n"
-  + "261101 C8100  |mid| ≥ 30.00  26.41  armed</pre>";
+const MONITORS_TABLE = "<pre>contract      rule             last   state\n"
+  + "bear-cs       close ≥ 4.05     3.05   armed\n"
+  + "261101 C8100  |value| ≥ 30.00  26.41  armed</pre>";
 
 let dir: string;
 let db: ReturnType<typeof createDatabase>;
@@ -196,7 +197,7 @@ describe("/watch", () => {
     expect(monitors()[0]!.field).toBe("mid_price");
 
     await b.handleUpdate(update("/monitors"));
-    expect(last()).toContain("|mid| ≤ 30.00"); // the rule cell carries the direction
+    expect(last()).toContain("|value| ≤ 30.00"); // the rule cell carries the direction
   });
 
   it("replies with usage for anything it cannot read", async () => {
@@ -405,7 +406,7 @@ describe("/monitors", () => {
     db.prepare("update monitors set last_value = -3.05 where legs is not null").run();
     await b.handleUpdate(update("/monitors"));
     expect(last()).toBe(MONITORS_TABLE);
-    for (const line of last().replace(/<\/?pre>/g, "").split("\n")) expect(line.length).toBeLessThanOrEqual(42);
+    for (const line of last().replace(/<\/?pre>/g, "").split("\n")) expect(line.length).toBeLessThanOrEqual(TABLE_WIDTH);
   });
 
   it("shows an em dash for a monitor that has never been swept", async () => {
@@ -583,7 +584,7 @@ describe("/threshold", () => {
     await b.handleUpdate(update(`/watchcombo sep-condor ${FUTURE} +C8100 -C8150 10 below`));
     await b.handleUpdate(update("/threshold sep-condor 25"));
     // said back as the combo's rule: a spread's value, not a contract's mid (#388)
-    expect(last()).toBe("sep-condor: alarm when |val| ≤ 25.00");
+    expect(last()).toBe("sep-condor: alarm when |value| ≤ 25.00");
     expect(monitors().find((m) => m.code === "sep-condor")!.threshold).toBe(25);
 
     await b.handleUpdate(update(`/watch ${FUTURE} CALL 6500 0.6`));

@@ -233,7 +233,7 @@ describe("its actions", () => {
     const { user } = await open();
     await run(user, "7150 delta");
     await run(user, "edit the selected");
-    const form = await screen.findByRole("form", { name: "editing 261218 7150P delta" });
+    const form = await screen.findByRole("form", { name: "editing 261218 7150P Δ" });
     expect(inspector()!.contains(form)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
   });
@@ -371,11 +371,11 @@ describe("after review (#329)", () => {
     const { user } = await open();
     await run(user, "7150 delta");
     await run(user, "edit the selected");
-    const form = await screen.findByRole("form", { name: "editing 261218 7150P delta" });
+    const form = await screen.findByRole("form", { name: "editing 261218 7150P Δ" });
     (document.activeElement as HTMLElement).blur();
     await run(user, "edit the selected");
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
-    expect(screen.getByRole("form", { name: "editing 261218 7150P delta" })).toBe(form);
+    expect(screen.getByRole("form", { name: "editing 261218 7150P Δ" })).toBe(form);
   });
 
   it("puts the focus in a close form that is already open", async () => {

@@ -88,11 +88,13 @@ describe("the table", () => {
   it("says each rule in its full sentence, never the screen's short form", () => {
     const view = plainView(input());
     expect(cell(view, "1218_C7300", "rule")).toBe("");
-    expect(cell(view, "261218 7150P", "rule")).toBe("|delta| ≥ 0.2 — now -0.170, 0.030 away");
-    expect(cell(view, "1204_P6900", "rule")).toBe("|spread value| ≥ 6 — now 6.20, past it by 0.20");
+    expect(cell(view, "261218 7150P", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
+    expect(cell(view, "1204_P6900", "rule")).toBe("|value| ≥ 6.00 — now 6.20, past it by 0.20");
     const rules = rowsOf(view, "Watchlist").map((r) => r[view.columns.indexOf("rule")]!).join(" ");
-    // #388's symbols are the screen's: no Δ for a delta, no `val`, no arrows
-    expect(rules).not.toMatch(/Δ|\bval\b|[↑↓▲▼]/);
+    // the short form's arrows are the screen's; the field's words are one vocabulary since #404 — Δ
+    // for a delta, `value` for a price, never `val` — and its minus is the real one
+    expect(rules).not.toMatch(/\bval\b|[↑↓▲▼]|-\d/);
+    expect(rules).toMatch(/Δ/);
   });
 
   it("says the pace gap in words, and the nearest short strike's distance compactly: whole points, σ, signed past it", () => {
@@ -187,7 +189,7 @@ describe("every state the status column carried is still named, in the header or
 
   it("a rule's own state at every hour: its sentence", () => {
     const view = plainView(input());
-    expect(cell(view, "1204_P6900", "rule")).toBe("|spread value| ≥ 6 — now 6.20, past it by 0.20");
+    expect(cell(view, "1204_P6900", "rule")).toBe("|value| ≥ 6.00 — now 6.20, past it by 0.20");
   });
 
   it("a rule muted by hand, expired, off with its holding, for no recorded reason or an unknown one: a heading per reason", () => {
@@ -206,7 +208,7 @@ describe("every state the status column carried is still named, in the header or
       ["sunset", ["261218 8007C"]],
     ]);
     // the rule in words, with no figure: nothing watches it
-    expect(muted.groups[0]!.rows[0]![view.columns.indexOf("rule")]).toBe("|delta| ≥ 0.1");
+    expect(muted.groups[0]!.rows[0]![view.columns.indexOf("rule")]).toBe("|Δ| ≥ 0.10");
   });
 });
 
@@ -278,9 +280,9 @@ describe("the picture and the text, one builder", () => {
     });
   }
 
-  it("escapes a pipe in a cell, which would otherwise end it: |delta| ≥ 0.2", () => {
+  it("escapes a pipe in a cell, which would otherwise end it: |Δ| ≥ 0.20", () => {
     const md = toMarkdown(plainView(input()));
-    expect(md).toContain("\\|delta\\| ≥ 0.2 — now -0.170, 0.030 away");
+    expect(md).toContain("\\|Δ\\| ≥ 0.20 — now −0.170, 0.030 away");
     const rows = readMarkdown(md).sections[1]!.rows;
     // every row as wide as the header: an unescaped pipe would add a cell
     for (const r of rows) expect(r).toHaveLength(rows[0]!.length);

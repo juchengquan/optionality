@@ -119,7 +119,7 @@ class TestANameTooLongForTheTable:
             [[self.LONG, "mid", "-1.0000", "≥4.0", "armed"], ["261218 C7300", "delta", "0.312", "≥0.3", "🔔"]],
         )
         assert max(self.width(line) for line in self.lines(out)) <= TABLE_WIDTH
-        assert re.match(r"^1218_\+P7…7800  mid", self.lines(out)[1])
+        assert re.match(r"^1218_\+P70…7800  mid", self.lines(out)[1])
 
     def test_keeps_a_bell_at_the_end_of_a_shortened_name(self):
         out = table(["contract", "mid", "bid/ask"], [[f"{self.LONG} 🔔", "1.5", "1.45/1.55"]])
@@ -222,7 +222,7 @@ class TestRuleText:
             rule_text("Watching US.X", rule("option_delta", False, 0.6, "above", "abs"))
             == "Watching US.X: alarm when |Δ| ≥ 0.60"
         )
-        assert rule_text("US.X", rule("mid_price", False, 30, "below", "abs")) == "US.X: alarm when |mid| ≤ 30.00"
+        assert rule_text("US.X", rule("mid_price", False, 30, "below", "abs")) == "US.X: alarm when |value| ≤ 30.00"
         # signed drops the bars, because the sign is the point
         assert (
             rule_text("bear-cs", rule("option_delta", False, -0.15, "below", "signed"))

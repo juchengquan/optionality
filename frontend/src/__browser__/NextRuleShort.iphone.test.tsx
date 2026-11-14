@@ -1,6 +1,6 @@
 /** The phone's rule line in its short form (#388), MEASURED under the iPhone profile at 390px: every
  *  rule line of the owner-shaped book fits on ONE line, in session and with a last reading out of it
- *  ("|val| ≥ 5.51   —  last 3.05 Fri 16:14") — the longest the short form gets. */
+ *  ("|value| ≥ 5.51   —  last 3.05 Fri 16:14") — the longest the short form gets. */
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

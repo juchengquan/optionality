@@ -283,7 +283,7 @@ const PACE_GAP: DeskColumn = {
 
 const ALARM: DeskColumn = {
   // the old page called its rule column "alarm", and so does the cookie. It draws the rule's SHORT
-  // form (#388) — "|val| ≥ 4.51   2.10  ↑2.41" — and says the sentence to a pointer and a reader,
+  // form (#388) — "|value| ≥ 4.51   2.10  ↑2.41" — and says the sentence to a pointer and a reader,
   // as the pace gap does (#379), so nothing is lost to a hover or a screen reader
   key: "alarm", label: "rule", align: "left",
   text: (r) => r.kind === "rule" ? shortSentence(r.entry) : r.kind === "quarantined" ? quarantineShort(r.monitor) : "",

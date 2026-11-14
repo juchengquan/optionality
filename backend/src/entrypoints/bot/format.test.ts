@@ -95,7 +95,7 @@ describe("a name too long for the table (#351)", () => {
       [LONG, "mid", "-1.0000", "≥4.0", "armed"], ["261218 C7300", "delta", "0.312", "≥0.3", "🔔"],
     ]);
     expect(Math.max(...lines(out).map((l) => l.length))).toBeLessThanOrEqual(TABLE_WIDTH);
-    expect(lines(out)[1]).toMatch(/^1218_\+P7…7800  mid/);
+    expect(lines(out)[1]).toMatch(/^1218_\+P70…7800  mid/);
   });
 
   it("keeps a bell at the end of a shortened name", () => {
@@ -207,7 +207,7 @@ describe("ruleText", () => {
     expect(ruleText("Watching US.X", rule("option_delta", false, 0.6, "above", "abs")))
       .toBe("Watching US.X: alarm when |Δ| ≥ 0.60");
     expect(ruleText("US.X", rule("mid_price", false, 30, "below", "abs")))
-      .toBe("US.X: alarm when |mid| ≤ 30.00");
+      .toBe("US.X: alarm when |value| ≤ 30.00");
     // signed drops the bars, because the sign is the point
     expect(ruleText("bear-cs", rule("option_delta", false, -0.15, "below", "signed")))
       .toBe("bear-cs: alarm when Δ ≤ \u22120.15");

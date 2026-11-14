@@ -1,4 +1,4 @@
-/** The rule's short form at the desk (#388), MEASURED: the RULE column draws "|val| ≥ 4.51   2.10
+/** The rule's short form at the desk (#388), MEASURED: the RULE column draws "|value| ≥ 4.51   2.10
  *  ↑2.41" where it drew the sentence, so it must come out narrower than the sentences would make it,
  *  at the widths the desk is used at — on the owner-shaped book the desk's table is held to.
  *
@@ -78,12 +78,15 @@ describe("the desk's RULE column, short (#388)", () => {
       // the column is the table's last, so it stretches to the edge: what it NEEDS is its widest line
       const need = (rows: HTMLElement[], pick: (v: HTMLElement) => string) => Math.max(...rows.map((v) => widthOf(pick(v), v)));
       const rules = drawn.filter((v) => v.closest(".nxd-row")!.getAttribute("data-kind") === "rule");
-      const short = need(drawn, (v) => v.textContent!), sentences = need(drawn, (v) => v.title);
-      const shortRules = need(rules, (v) => v.textContent!), sentenceRules = need(rules, (v) => v.title);
+      // a line whose sentence IS its short form (a quarantined rule's, since #404) carries no title
+      const said = (v: HTMLElement) => v.title || v.textContent!;
+      const short = need(drawn, (v) => v.textContent!), sentences = need(drawn, said);
+      const shortRules = need(rules, (v) => v.textContent!), sentenceRules = need(rules, said);
       console.log(`#388 at ${width}px: the column needs ${Math.round(short)}px where its sentences needed ${Math.round(sentences)}px `
         + `(a quarantined rule's reason is the widest); its rules alone ${Math.round(shortRules)}px where they needed ${Math.round(sentenceRules)}px`);
       for (const v of drawn) expect(v.scrollWidth, v.textContent!).toBeLessThanOrEqual(v.clientWidth + 1);
-      expect(short).toBeLessThan(sentences);
+      // the widest line is the quarantined rule's, whose sentence is its short form since #404
+      expect(short).toBeLessThanOrEqual(sentences);
       expect(shortRules).toBeLessThan(sentenceRules * 0.8);
     });
   }

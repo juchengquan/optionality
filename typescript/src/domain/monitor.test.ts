@@ -181,7 +181,7 @@ describe("the breach decision", () => {
   });
 });
 
-/** How far the watched figure still has to move, which a rule's sentence states: "spread value
+/** How far the watched figure still has to move, which a rule's sentence states: "value
  *  ≥ 6.01 — now 2.00, 4.01 away" (ADR 0023). It is the breach decision said as a number, so the
  *  one property that matters is that the two cannot disagree. */
 describe("how far the figure has still to go", () => {
