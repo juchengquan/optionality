@@ -5,7 +5,7 @@
  *  control, and 16px text in every box, below which iOS zooms the page when a box is focused.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { longBook, overflowsSideways, serveBook, settle } from "./nextBook";
@@ -72,9 +72,20 @@ describe("under the iPhone profile", () => {
     await show();
     const bar = screen.getByRole("navigation", { name: "views" });
     const tabs = within(bar).getAllByRole("button");
-    expect(tabs.map((t) => t.textContent)).toEqual(["Live", "Review", "Add", "Settings"]);
+    // three since #374: the book, whatever the hour, and no mode to pick
+    expect(tabs.map((t) => t.textContent)).toEqual(["Book", "Add", "Settings"]);
     const tops = new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top)));
     expect(tops.size).toBe(1);
+    // they share the bar between them, each a finger's width and height
+    const b = bar.getBoundingClientRect();
+    const widths = tabs.map((t) => t.getBoundingClientRect().width);
+    expect(widths.reduce((x, y) => x + y, 0)).toBeGreaterThan(b.width - 1);
+    for (const t of tabs) {
+      const r = t.getBoundingClientRect();
+      expect(r.width, `${t.textContent}'s width`).toBeGreaterThanOrEqual(44);
+      expect(r.height, `${t.textContent}'s height`).toBeGreaterThanOrEqual(44);
+      expect(Math.abs(r.width - b.width / tabs.length), `${t.textContent} takes its third`).toBeLessThan(1);
+    }
     const lastRight = tabs.at(-1)!.getBoundingClientRect().right;
     expect(lastRight).toBeLessThanOrEqual(document.documentElement.clientWidth + 0.5);
     const main = document.querySelector<HTMLElement>(".nx-main")!;
@@ -120,6 +131,63 @@ describe("the Live view", () => {
     await scrolled();
     const r = row.getBoundingClientRect();
     expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);
+  });
+});
+
+/** A holding's sheet with its history (#374): open from the start outside the session — the
+ *  burndown, the IV and SPX against the strikes — and shut in it. */
+describe("a holding's sheet on the Book tab", () => {
+  async function sheet(): Promise<HTMLElement> {
+    serveBook();
+    // the days with SPX on them, so where it was against the strikes is a chart to measure
+    const served = window.fetch;
+    window.fetch = (async (url: string, init?: RequestInit) => {
+      const answer = await served(url, init);
+      if (!/\/samples$/.test(String(url))) return answer;
+      const days = await answer.json() as { samples: object[] };
+      const spx = { ...days, samples: days.samples.map((d, i) => ({ ...d, spx: 7020 - 15 * i })) };
+      return { ok: true, status: 200, json: () => Promise.resolve(spx) };
+    }) as typeof fetch;
+    render(<Next />);
+    await settle();
+    const card = document.querySelector<HTMLElement>("article.nxp-holding")!;
+    fireEvent.click(within(card).getByRole("button", { name: /^details of / }));
+    const dialog = await screen.findByRole("dialog");
+    await animationsDone();
+    await settle();
+    return dialog;
+  }
+  const toggle = (d: HTMLElement) => within(d).getByRole("button", { name: "history" });
+
+  it("opens with its history open outside the session, every chart inside the screen", async () => {
+    vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
+    const d = await sheet();
+    expect(toggle(d).getAttribute("aria-expanded")).toBe("true");
+    const charts = [...d.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
+    // the burndown, the IV by leg, and SPX against the strikes
+    expect(["burndown", "IV by leg", "SPX against the strikes"]
+      .map((name) => within(d).queryByRole("group", { name }) !== null)).toEqual([true, true, true]);
+    expect(charts).toHaveLength(3);
+    const edge = document.documentElement.clientWidth;
+    for (const svg of charts) {
+      const r = svg.getBoundingClientRect();
+      expect(r.left, "inside the screen's left").toBeGreaterThanOrEqual(0);
+      expect(r.right, "inside the screen's right").toBeLessThanOrEqual(edge + 0.5);
+      // across the sheet, not a thumbnail of it
+      expect(r.width).toBeGreaterThan(300);
+    }
+    expect(d.scrollWidth).toBeLessThanOrEqual(d.clientWidth);
+    expect(overflowsSideways()).toBe(false);
+    expect(tooSmall()).toEqual([]);
+    expect(zooms()).toEqual([]);
+  });
+
+  it("opens with its history shut in session, and draws none of it", async () => {
+    const d = await sheet();
+    expect(toggle(d).getAttribute("aria-expanded")).toBe("false");
+    expect(d.querySelector(".nx-hist svg")).toBeNull();
+    expect(overflowsSideways()).toBe(false);
+    expect(tooSmall()).toEqual([]);
   });
 });
 

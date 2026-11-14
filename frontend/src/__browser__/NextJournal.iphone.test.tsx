@@ -96,7 +96,7 @@ describe("the closed trades on the phone", () => {
     const tabs = screen.getByRole("navigation", { name: "views" });
     await userEvent.click(within(tabs).getByRole("button", { name: "Settings" }));
     await settle();
-    await userEvent.click(within(tabs).getByRole("button", { name: "Live" }));
+    await userEvent.click(within(tabs).getByRole("button", { name: "Book" }));
     const journal = await screen.findByRole("region", { name: "closed trades" });
     expect(within(journal).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded")).toBe("true");
     await settle();

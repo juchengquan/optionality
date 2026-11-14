@@ -104,7 +104,7 @@ describe("a rule's figures in the sheet, at 390px", () => {
         serve(book(served));
         render(<Next />);
         await settle();
-        await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Live" }));
+        await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Book" }));
         await settle();
         expect(document.documentElement.clientWidth).toBe(390);
         await userEvent.click(within(card(id)).getByRole("button", { name: /details of/ }));

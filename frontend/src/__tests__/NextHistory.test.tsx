@@ -1,6 +1,6 @@
-/** The burndown and the IV chart in REVIEW (#295, ADR 0023): in the desk's inspector and as the main
- *  chart of the phone's one-holding page, drawn from `/positions/{id}/samples` — and in LIVE, on
- *  demand, in the inspector and the phone's holding sheet (#353). Behaviour only —
+/** The burndown and the IV chart in REVIEW (#295, ADR 0023): in the desk's inspector, drawn from
+ *  `/positions/{id}/samples` — and in LIVE, on demand, in the inspector and the phone's holding
+ *  sheet (#353), which opens it from the start outside the session (#374). Behaviour only —
  *  what is asked for and when, what is drawn from what was served, what an off-close point says
  *  and what privacy hides. That the charts FIT is measured by the browser suite. */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -643,25 +643,28 @@ describe("the IV chart", () => {
   });
 });
 
-describe("on the phone's one-holding REVIEW page", () => {
+describe("in the phone's holding sheet outside the session, open from the start (#374)", () => {
   const draw = (over: Partial<BookProps> = {}) =>
-    render(<div className="nx"><PhoneBook {...props(over)} /></div>);
-  const page = (ref: string) =>
-    [...document.querySelectorAll<HTMLElement>("[data-page][data-ref]")].find((el) => el.dataset.ref === ref)!;
+    render(<div className="nx"><PhoneBook {...props({ session: false, ...over })} /></div>);
+  async function sheetOf(name: string) {
+    fireEvent.click(screen.getByRole("button", { name: `details of ${name}` }));
+    return screen.getByRole("dialog");
+  }
 
-  it("is the page's main chart, read once per holding", async () => {
-    draw();
-    const chart = await burndownOf(page("h-calls"));
-    await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
-    expect(await ivOf(page("h-calls"))).toBeTruthy();
-    expect([...samplesAsked()].sort()).toEqual([
-      "GET /positions/h-calls/samples", "GET /positions/h-ic/samples", "GET /positions/h-puts/samples",
-    ]);
-  });
+  for (const mode of ["live", "review"] as const) {
+    it(`is the sheet's chart at once, read once for its holding and no other, with ${mode} held`, async () => {
+      draw({ mode });
+      const sheet = await sheetOf("1218_C7300");
+      const chart = await burndownOf(sheet);
+      await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
+      expect(await ivOf(sheet)).toBeTruthy();
+      expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
+    });
+  }
 
   it("says why a point is not a close when it is tapped", async () => {
     draw();
-    const chart = await burndownOf(page("h-calls"));
+    const chart = await burndownOf(await sheetOf("1218_C7300"));
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
     const svg = chart.querySelector(".nx-bd svg")!;
     const x = Number(dayOf(chart, "[data-timing='before-open']").querySelector("circle")!.getAttribute("cx"));
@@ -678,10 +681,16 @@ describe("on the phone's one-holding REVIEW page", () => {
 
   it("hides the $ axis under privacy", async () => {
     draw({ privacy: true });
-    const chart = await burndownOf(page("h-calls"));
+    const chart = await burndownOf(await sheetOf("1218_C7300"));
     await waitFor(() => expect(chart.querySelector("[data-costs]")).toBeTruthy());
     expect(chart.querySelector("[data-axis='y']")).toBeNull();
     expect(chart.textContent).not.toMatch(/\$\d/);
+  });
+
+  it("draws no holding's history until a sheet is opened: the cards read no samples", async () => {
+    draw();
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(samplesAsked()).toEqual([]);
   });
 });
 
@@ -788,7 +797,7 @@ describe("in LIVE, on demand (#353): the desk's inspector", () => {
 
 describe("in LIVE, on demand (#353): the phone's holding sheet", () => {
   const draw = (over: Partial<BookProps> = {}) =>
-    render(<div className="nx"><PhoneBook {...props({ mode: "live", ...over })} /></div>);
+    render(<div className="nx"><PhoneBook {...props({ mode: "live", session: true, ...over })} /></div>);
 
   it("is shut until opened, then reads the samples once, however often it is shut and opened", async () => {
     draw();
@@ -808,11 +817,13 @@ describe("in LIVE, on demand (#353): the phone's holding sheet", () => {
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
   });
 
-  it("is not offered in REVIEW's sheet, whose page already draws the history", async () => {
+  it("is shut in session whichever mode is held: the session decides, not the mode (#374)", async () => {
     draw({ mode: "review" });
-    fireEvent.click(screen.getAllByRole("button", { name: "detail and Monitors" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_C7300" }));
     const sheet = screen.getByRole("dialog");
-    expect(within(sheet).queryByRole("button", { name: "history" })).toBeNull();
+    expect(disclosure(sheet).expanded).toBe("false");
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(samplesAsked()).toEqual([]);
   });
 });
 

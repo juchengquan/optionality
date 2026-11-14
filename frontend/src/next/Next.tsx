@@ -90,6 +90,9 @@ export function Next() {
   const byClock = clockMode(now);
   const [chosen, setChosen] = useState<Mode | null>(null);
   useEffect(() => { setChosen(null); }, [byClock]);
+  // the phone has no way to pick a mode (#374), so a choice made on the desk does not follow it
+  // there, where nothing could undo it: the phone is the clock's
+  useEffect(() => { if (phone) setChosen(null); }, [phone]);
   const mode = chosen ?? byClock;
   const pickMode = useCallback((m: Mode) => setChosen(m === byClock ? null : m), [byClock]);
 
@@ -363,8 +366,8 @@ export function Next() {
       </main>
 
       {phone ? (
-        <TabBar mode={mode} settings={settingsOpen} adding={adding}
-                onMode={(m) => { setSettingsOpen(false); pickMode(m); }}
+        <TabBar settings={settingsOpen} adding={adding}
+                onBook={() => setSettingsOpen(false)}
                 onAdd={() => setAdding(true)}
                 onSettings={() => setSettingsOpen(true)} />
       ) : null}
@@ -419,19 +422,20 @@ function ModeSwitch({ mode, byClock, onPick }: {
   );
 }
 
-/** The phone's bottom bar: Live and Review are the mode, Settings a screen of its own, and Add
- *  opens the add form as a bottom sheet over whichever is showing (#293). */
-function TabBar({ mode, settings, adding, onMode, onAdd, onSettings }: {
-  mode: Mode; settings: boolean; adding: boolean; onMode: (m: Mode) => void; onAdd: () => void;
-  onSettings: () => void;
+/** The phone's bottom bar (#374; ADR 0023 amended 2026-11-13): the Book, Settings a screen of its
+ *  own, and Add, which opens the add form as a bottom sheet over whichever is showing (#293).
+ *
+ *  It picks no mode: the phone draws one book whatever the mode, and nothing on the phone can
+ *  change it — the header's switch is the desk's alone — so what the phone fetches follows the
+ *  session and nothing else. #375 removes the mode itself. */
+function TabBar({ settings, adding, onBook, onAdd, onSettings }: {
+  settings: boolean; adding: boolean; onBook: () => void; onAdd: () => void; onSettings: () => void;
 }) {
-  const current = adding ? "add" : settings ? "settings" : mode;
+  const current = adding ? "add" : settings ? "settings" : "book";
   return (
     <nav className="nx-tabs" aria-label="views">
-      <button type="button" aria-current={current === "live" ? "page" : undefined}
-              onClick={() => onMode("live")}>Live</button>
-      <button type="button" aria-current={current === "review" ? "page" : undefined}
-              onClick={() => onMode("review")}>Review</button>
+      <button type="button" aria-current={current === "book" ? "page" : undefined}
+              onClick={onBook}>Book</button>
       <button type="button" aria-current={current === "add" ? "page" : undefined}
               onClick={onAdd}>Add</button>
       <button type="button" aria-current={current === "settings" ? "page" : undefined}

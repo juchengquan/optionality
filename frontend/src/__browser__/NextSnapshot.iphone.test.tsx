@@ -4,7 +4,7 @@
  *  honoured. The fills and the attention chips are found in that tree, and their pixels in the
  *  delivered PNG must be painted: `Rasterize.test.tsx`'s proof, carried over to this page.
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -41,8 +41,8 @@ const health = {
   settings: { sweep_seconds: 600, expired_retention_days: 7, manage_by_dte: 21 },
 };
 
-/** Every route the page calls in either mode, answered by name, every request kept. REVIEW's
- *  pages ask for each holding's samples, so those are answered too — with nothing recorded. */
+/** Every route the page calls in and out of the session, answered by name, every request kept. A
+ *  holding's history reads its samples, so those are answered too — with nothing recorded. */
 function serve(): string[] {
   const asked: string[] = [];
   window.fetch = ((url: string, init?: RequestInit) => {
@@ -66,11 +66,11 @@ function serve(): string[] {
   return asked;
 }
 
-async function show(view: "Live" | "Review" = "Live"): Promise<string[]> {
+/** The Book tab, in session or on a Sunday outside it (#374: the same cards either way). */
+async function show(session = true): Promise<string[]> {
+  if (!session) vi.setSystemTime(new Date("2026-11-15T17:00:00Z"));
   const asked = serve();
   render(<Next />);
-  await settle();
-  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: view }));
   await settle();
   return asked;
 }
@@ -140,10 +140,10 @@ describe("saving the phone's cards as an image", () => {
     shared.release();
   });
 
-  for (const view of ["Live", "Review"] as const) {
-    it(`hides every $ amount and every contract count under privacy, in ${view.toUpperCase()}`, async () => {
+  for (const session of [true, false]) {
+    it(`hides every $ amount and every contract count under privacy, ${session ? "in" : "out of"} session`, async () => {
       document.cookie = "ui_privacy=on;path=/";
-      await show(view);
+      await show(session);
       const shared = catchShare();
       await userEvent.click(save());
       await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
@@ -154,13 +154,12 @@ describe("saving the phone's cards as an image", () => {
       expect(text).not.toMatch(/\$\s*[+-]?\d/);
       expect(text).not.toMatch(/[+-]\$\d/);
       expect(text).not.toMatch(/×\s*\d/);
-      if (view === "Review") expect(text, "REVIEW's count of contracts is not in the picture").toContain("×•••");
       shared.release();
     });
   }
 
   it("leaves the closed trades out of the picture, their fold open: a journal is not the book", async () => {
-    await show("Review");
+    await show(false);
     await userEvent.click(screen.getByRole("button", { name: "Closed trades" }));
     await expect.poll(() => document.querySelector(".nx-main")!.textContent, { timeout: 4000 })
       .toContain("1120_P6000");
@@ -173,7 +172,7 @@ describe("saving the phone's cards as an image", () => {
   });
 
   it("asks the service for nothing, and takes the tree down when it is done", async () => {
-    const asked = await show("Review");
+    const asked = await show(false);
     await settle();
     const before = asked.length;
     const shared = catchShare();
@@ -182,7 +181,7 @@ describe("saving the phone's cards as an image", () => {
     shared.release();
     await expect.poll(() => document.querySelector(".nx-still-stage"), { timeout: 4000 }).toBeNull();
     await settle();
-    // REVIEW's charts read samples: the picture draws none, so it asks for none
+    // a sheet's charts read samples: the picture draws none, so it asks for none
     expect(asked.slice(before), "the press asked the service for something").toEqual([]);
   });
 });

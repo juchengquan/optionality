@@ -1,11 +1,11 @@
-/** The phone's cards, detail sheet and REVIEW pages (#290), MEASURED under Playwright's iPhone
- *  profile — touch, `isMobile`, a 390px screen — on the owner-shaped book both arrangements are
- *  held to. Runs in the suite's `iphone` instance only.
+/** The phone's cards and detail sheet (#290), MEASURED under Playwright's iPhone profile — touch,
+ *  `isMobile`, a 390px screen — on the owner-shaped book both arrangements are held to. Runs in the
+ *  suite's `iphone` instance only.
  *
  *  What is measured, not read from the code: nothing pushes the page sideways, every target a
  *  finger hits is 44pt, a tap ANYWHERE on a card reaches it (its text lets taps through to the
- *  button laid over it), Back closes the sheet and leaves the page where it was, and REVIEW's
- *  pages are each one screen wide.
+ *  button laid over it), Back closes the sheet and leaves the page where it was, and a holding's
+ *  history fits the sheet, shut in session and open from the start outside it (#374).
  */
 import { userEvent } from "@vitest/browser/context";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
@@ -49,15 +49,16 @@ function serveOwnerBook(quotes: object[] = QUOTES, holdings: object[] = HOLDINGS
   }) as unknown as typeof fetch;
 }
 
-async function show(view: "Live" | "Review" = "Live", quotes: object[] = QUOTES, holdings: object[] = HOLDINGS) {
+/** The Book tab: in session unless the test pins another instant (session.setup.ts). */
+async function show(quotes: object[] = QUOTES, holdings: object[] = HOLDINGS) {
   serveOwnerBook(quotes, holdings);
   render(<Next />);
   await settle();
-  // the clock is pinned in session (session.setup.ts); the tab picks this test's mode
-  await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: view }));
-  await settle();
   window.scrollTo(0, 0);
 }
+
+/** A Sunday, outside the session: a holding's sheet opens with its history open (#374). */
+const outsideTheSession = () => vi.setSystemTime(new Date("2026-11-15T17:00:00Z"));
 
 const card = (ref: string) =>
   [...document.querySelectorAll<HTMLElement>(".nx [data-ref]")].find((el) => el.dataset.ref === ref)!;
@@ -84,12 +85,11 @@ function tooSmall(): string[] {
 function pastTheEdge(root: Element): string[] {
   const edge = document.documentElement.clientWidth;
   return [...root.querySelectorAll<HTMLElement>("*")]
-    .filter((el) => !el.closest(".nxp-track")) // the pager's track scrolls sideways by design
     .filter((el) => el.getBoundingClientRect().right > edge + 0.5)
     .map((el) => `${el.tagName.toLowerCase()}.${el.className} right=${Math.round(el.getBoundingClientRect().right)}`);
 }
 
-describe("the Live cards", () => {
+describe("the cards", () => {
   it("push nothing sideways", async () => {
     await show();
     expect(card("h-calls")).toBeTruthy();
@@ -225,17 +225,22 @@ describe("the detail sheet", () => {
   });
 });
 
-describe("a holding's history, on demand in its LIVE sheet (#353)", () => {
-  for (const [ref, days] of [["h-calls", 7], ["h-ic", 2]] as const) {
-    it(`draws ${ref}'s three charts inside the screen when opened, every target still 44pt`, async () => {
+describe("a holding's history in its sheet: on demand in session (#353), open outside it (#374)", () => {
+  for (const [ref, days, session] of [
+    ["h-calls", 7, true], ["h-ic", 2, true], ["h-calls", 7, false], ["h-ic", 2, false],
+  ] as const) {
+    it(`draws ${ref}'s three charts inside the screen ${session ? "when opened in session" : "at once outside the session"}, every target still 44pt`, async () => {
+      if (!session) outsideTheSession();
       await show();
       await userEvent.click(within(card(ref)).getByRole("button", { name: /details of/ }));
       const sheet = await screen.findByRole("dialog");
       await animationsDone();
       const toggle = within(sheet).getByRole("button", { name: "history" });
-      expect(toggle.getAttribute("aria-expanded")).toBe("false");
-      expect(sheet.querySelector(".nx-hist")).toBeNull();
-      await userEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe(session ? "false" : "true");
+      if (session) {
+        expect(sheet.querySelector(".nx-hist")).toBeNull();
+        await userEvent.click(toggle);
+      }
       await waitFor(() => expect(sheet.querySelectorAll(".nx-hist svg")).toHaveLength(3));
       await settle();
       expect(sheet.querySelectorAll("[data-sample]")).toHaveLength(days);
@@ -272,7 +277,7 @@ describe("the pace explained, in a holding's sheet (#333)", () => {
   // the put spread's is split whole
   for (const ref of ["h-calls", "h-puts"]) {
     it(`fits ${ref}'s inside the screen, scrolling nothing sideways`, async () => {
-      await show("Live", QUOTES, scheduled);
+      await show(QUOTES, scheduled);
       await userEvent.click(within(card(ref)).getByRole("button", { name: /details of/ }));
       const sheet = await screen.findByRole("dialog");
       await animationsDone();
@@ -291,44 +296,26 @@ describe("the pace explained, in a holding's sheet (#333)", () => {
   }
 });
 
-describe("REVIEW", () => {
-  const track = () => document.querySelector<HTMLElement>(".nxp-track")!;
-  const pages = () => [...document.querySelectorAll<HTMLElement>("[data-page]")];
-  const review = () => screen.getByRole("region", { name: "Review" });
-
-  it("is one holding per screen", async () => {
-    await show("Review");
-    expect(pages().map((p) => p.dataset.ref)).toEqual(["h-calls", "h-puts", "h-ic"]);
-    for (const p of pages()) expect(Math.round(p.getBoundingClientRect().width)).toBe(document.documentElement.clientWidth);
-    expect(Math.round(pages()[0]!.getBoundingClientRect().left)).toBe(0);
+describe("the book outside the session (#374)", () => {
+  it("is the same cards, no pager, nothing pushed sideways and every target 44pt", async () => {
+    outsideTheSession();
+    await show();
+    expect(document.querySelector("[data-page], .nxp-pager, .nxp-track")).toBeNull();
+    expect([...document.querySelectorAll<HTMLElement>("article.nxp-holding")].map((a) => a.dataset.ref))
+      .toEqual(["h-calls", "h-puts", "h-ic"]);
     expect(overflowsSideways()).toBe(false);
+    expect(pastTheEdge(document.querySelector(".nx")!)).toEqual([]);
+    expect(tooSmall()).toEqual([]);
   });
 
-  it("pages forward with the arrow, the next holding brought fully onto the screen", async () => {
-    await show("Review");
-    await userEvent.click(within(review()).getByRole("button", { name: "next holding" }));
-    await waitFor(() => expect(Math.round(pages()[1]!.getBoundingClientRect().left)).toBe(0), { timeout: 2000 });
-    expect(within(review()).getByText("2 of 3")).toBeTruthy();
-    expect(overflowsSideways()).toBe(false);
-  });
-
-  it("follows a swipe: the index is where the track came to rest", async () => {
-    await show("Review");
-    track().scrollTo({ left: 2 * track().clientWidth });
-    await waitFor(() => expect(within(review()).getByText("3 of 3")).toBeTruthy());
-    expect(within(review()).getByRole("button", { name: "next holding" }).hasAttribute("disabled")).toBe(true);
-  });
-
-  it("follows a banner to a rule two pages ahead: the page it is on, fully on the screen", async () => {
-    // the 4-leg condor's rule rings; its holding is the third page
+  it("follows a banner to a holding's rule: its card brought into view and marked", async () => {
+    // the 4-leg condor's rule rings, its own alarm said at every hour; its holding is the third card
     const ringing = QUOTES.map((q) => q.id === "r-ic" ? { ...q, triggered: true, watched: 6.4, distance: -0.4 } : q);
-    await show("Review", ringing);
-    expect(within(review()).getByText("1 of 3")).toBeTruthy();
+    outsideTheSession();
+    await show(ringing);
     const banners = screen.getByRole("status", { name: "needs you" });
     await userEvent.click(within(banners).getByRole("button", { name: /1231_IC ringing/ }));
     await new Promise((r) => setTimeout(r, 1200));
-    expect(within(review()).getByText("3 of 3")).toBeTruthy();
-    expect(Math.round(pages()[2]!.getBoundingClientRect().left)).toBe(0);
     const row = card("r-ic");
     const r = row.getBoundingClientRect();
     expect(row.hasAttribute("data-revealed")).toBe(true);
@@ -336,88 +323,53 @@ describe("REVIEW", () => {
     expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);
   });
 
-  it("draws each holding's burndown as its page's main chart, inside the screen (#295)", async () => {
-    await show("Review");
+  it("says why a day is not the close when it is tapped in the sheet, from anywhere near it", async () => {
+    outsideTheSession();
+    await show();
+    await userEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
+    const sheet = await screen.findByRole("dialog");
+    await animationsDone();
+    await waitFor(() => expect(sheet.querySelectorAll(".nx-bd [data-sample]").length).toBeGreaterThan(0));
+    const svg = sheet.querySelector<SVGSVGElement>(".nx-hist svg")!;
+    svg.scrollIntoView({ block: "center" });
     await settle();
-    const page1 = pages()[0]!;
-    // the burndown, the IV chart and where SPX was against the strikes (#298)
-    const charts = [...page1.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
-    expect(charts).toHaveLength(3);
-    const card = page1.querySelector(".nxp-card")!.getBoundingClientRect();
-    for (const svg of charts) {
-      const r = svg.getBoundingClientRect();
-      // the card's whole width, less its padding: a main chart, not a thumbnail
-      expect(r.width).toBeGreaterThan(card.width - 40);
-      expect(r.left).toBeGreaterThanOrEqual(card.left);
-      expect(r.right).toBeLessThanOrEqual(card.right);
-      const labels = [...svg.querySelectorAll("text")].filter((t) => t.textContent);
-      for (const t of labels) {
-        const q = t.getBoundingClientRect();
-        expect(q.left >= r.left - 0.5 && q.right <= r.right + 0.5, t.textContent ?? "").toBe(true);
-        // and on top of no other label
-        for (const u of labels) {
-          if (u === t) continue;
-          const p = u.getBoundingClientRect();
-          const over = q.left < p.right - 1 && p.left < q.right - 1 && q.top < p.bottom - 1 && p.top < q.bottom - 1;
-          expect(over, `${t.textContent} / ${u.textContent}`).toBe(false);
-        }
-      }
-    }
-    // the burndown leads the page: above its figures
-    const facts = page1.querySelector(".nxp-facts")!.getBoundingClientRect();
-    expect(charts[0]!.getBoundingClientRect().bottom).toBeLessThanOrEqual(facts.top);
-    expect(overflowsSideways()).toBe(false);
-  });
-
-  it("says why a day is not the close when it is tapped, from anywhere near it", async () => {
-    await show("Review");
-    await settle();
-    const page1 = pages()[0]!;
-    const svg = page1.querySelector<SVGSVGElement>(".nx-hist svg")!;
-    const said = page1.querySelector(".nx-hist-said")!;
+    const said = sheet.querySelector(".nx-hist-said")!;
     // the first day, h-calls' opening day, was recorded that evening: tapped beside it, not on it,
     // since a finger is wider than the days are apart
-    const first = page1.querySelector<SVGCircleElement>("[data-sample] [data-mark]")!.getBoundingClientRect();
+    const first = sheet.querySelector<SVGCircleElement>("[data-sample] [data-mark]")!.getBoundingClientRect();
     const box = svg.getBoundingClientRect();
     await userEvent.click(svg, { position: { x: first.left - box.left + 6, y: first.top - box.top + 14 } });
     expect(said.textContent).toMatch(/^3 Nov · 45 DTE .* not the close: observed 20:30 New York, after the 16:15 close/);
   });
-
-  it("gives every control a 44pt target", async () => {
-    await show("Review");
-    expect(tooSmall()).toEqual([]);
-  });
 });
 
-/** "market closed — valued at 01:00" and its refresh (#371), on either tab outside the session: not
+/** "market closed — valued at 01:00" and its refresh (#371), on the Book tab outside the session: not
  *  clipped, nothing pushed sideways, and the button a 44pt target. */
 describe("the market-closed line on the phone", () => {
   const stamped = HOLDINGS.map((h) => ({ ...h, fetched_at: "2026-11-16 01:00:12+08:00" }));
-  for (const view of ["Live", "Review"] as const) {
-    it(`fits on the ${view} tab, with its refresh a 44pt target`, async () => {
-      vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
-      await show(view, QUOTES, stamped);
-      const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
-      expect(line.textContent).toBe("market closed — valued at 01:00refresh");
-      const button = within(line).getByRole("button", { name: "refresh the valuation" });
-      const b = button.getBoundingClientRect();
-      expect(b.width, "the refresh's width").toBeGreaterThanOrEqual(44);
-      expect(b.height, "the refresh's height").toBeGreaterThanOrEqual(44);
-      const box = line.getBoundingClientRect();
-      for (const el of [line, ...line.querySelectorAll<HTMLElement>("*")]) {
-        const r = el.getBoundingClientRect();
-        expect(r.left >= box.left - 0.5 && r.right <= box.right + 0.5, `${el.tagName} inside the line`).toBe(true);
-      }
-      expect(line.scrollWidth).toBeLessThanOrEqual(line.clientWidth);
-      expect(pastTheEdge(line)).toEqual([]);
-      expect(tooSmall()).toEqual([]);
-      expect(overflowsSideways()).toBe(false);
-    });
-  }
+  it("fits on the Book tab, with its refresh a 44pt target", async () => {
+    outsideTheSession();
+    await show(QUOTES, stamped);
+    const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
+    expect(line.textContent).toBe("market closed — valued at 01:00refresh");
+    const button = within(line).getByRole("button", { name: "refresh the valuation" });
+    const b = button.getBoundingClientRect();
+    expect(b.width, "the refresh's width").toBeGreaterThanOrEqual(44);
+    expect(b.height, "the refresh's height").toBeGreaterThanOrEqual(44);
+    const box = line.getBoundingClientRect();
+    for (const el of [line, ...line.querySelectorAll<HTMLElement>("*")]) {
+      const r = el.getBoundingClientRect();
+      expect(r.left >= box.left - 0.5 && r.right <= box.right + 0.5, `${el.tagName} inside the line`).toBe(true);
+    }
+    expect(line.scrollWidth).toBeLessThanOrEqual(line.clientWidth);
+    expect(pastTheEdge(line)).toEqual([]);
+    expect(tooSmall()).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+  });
 });
 
 /** Outside the session the Level chips say when the holding was valued (#354, #371), and got longer
- *  for it: measured on the page, in the sheet and with the longest of the three Levels, at the
+ *  for it: measured on the cards, in the sheet and with the longest of the three Levels, at the
  *  iPhone's 390px. */
 describe("a Level's chip outside the session, with its valuation's time", () => {
   const levelled = HOLDINGS.map((h) => ({
@@ -425,21 +377,19 @@ describe("a Level's chip outside the session, with its valuation's time", () => 
     schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4, target_dte: 11,
       manage_by_dte: 21, reached: h.id === "h-ic" ? "target" : "stop", manage_by_due: false },
   }));
-  const pageOf = (ref: string) => document.querySelector<HTMLElement>(`[data-page][data-ref="${ref}"]`)!;
-
-  it("fits on each page and in the sheet, pushing nothing sideways", async () => {
-    vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
-    await show("Review", QUOTES, levelled);
+  it("fits on each card and in the sheet, pushing nothing sideways", async () => {
+    outsideTheSession();
+    await show(QUOTES, levelled);
     for (const ref of ["h-calls", "h-puts", "h-ic"]) {
-      const chip = pageOf(ref).querySelector<HTMLElement>(".nx-chip")!;
+      const chip = card(ref).querySelector<HTMLElement>(".nx-chip")!;
       expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 00:59$/);
-      const card = pageOf(ref).querySelector(".nxp-card")!.getBoundingClientRect();
+      const box = card(ref).getBoundingClientRect();
       const r = chip.getBoundingClientRect();
-      expect(r.left >= card.left && r.right <= card.right, `${ref}'s chip inside its card`).toBe(true);
+      expect(r.left >= box.left && r.right <= box.right, `${ref}'s chip inside its card`).toBe(true);
     }
     expect(overflowsSideways()).toBe(false);
 
-    await userEvent.click(within(pageOf("h-calls")).getByRole("button", { name: "detail and Monitors" }));
+    await userEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
     const sheet = await screen.findByRole("dialog");
     await animationsDone();
     expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 00:59");

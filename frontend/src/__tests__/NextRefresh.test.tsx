@@ -65,7 +65,7 @@ async function openSettings(arrangement: Arrangement): Promise<HTMLElement> {
 
 function closeSettings(arrangement: Arrangement) {
   if (arrangement === "desk") fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-  else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Live" }));
+  else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Book" }));
 }
 
 describe.each(arrangements)("on the %s, the refresh button", (arrangement) => {

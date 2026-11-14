@@ -1,5 +1,6 @@
 /** The phone's book, arrangement B (ADR 0023, #290): cards drawn from `placeBook`, a detail sheet
- *  that Back closes (ADR 0005: a history entry, not a route), and REVIEW one holding per screen.
+ *  that Back closes (ADR 0005: a history entry, not a route), and one book whatever the mode or
+ *  the session (#374).
  *
  *  Behaviour only. What a phone must MEASURE — nothing pushed sideways, 44pt targets, Back under
  *  the iPhone profile — is `__browser__/NextPhone.iphone.test.tsx`. */
@@ -10,6 +11,7 @@ import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../next/Book";
 import { placeBook } from "../next/placement";
 import { PhoneBook } from "../next/phone/PhoneBook";
+import { Still } from "../next/snapshot/Still";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
@@ -262,53 +264,89 @@ describe("the detail sheet, beyond opening and closing", () => {
   });
 });
 
-describe("REVIEW", () => {
-  it("pages through the holdings one per screen, in the book's order", () => {
-    draw({ mode: "review" });
-    const review = region("Review");
-    const pages = [...review.querySelectorAll<HTMLElement>("[data-page]")];
-    expect(pages.map((p) => p.dataset.ref)).toEqual(["h-calls", "h-puts", "h-ic"]);
-    expect(within(review).getByText("1 of 3")).toBeTruthy();
-    const prev = within(review).getByRole("button", { name: "previous holding" });
-    const next = within(review).getByRole("button", { name: "next holding" });
-    expect(prev.hasAttribute("disabled")).toBe(true);
-    fireEvent.click(next);
-    expect(within(review).getByText("2 of 3")).toBeTruthy();
-    fireEvent.click(next);
-    expect(within(review).getByText("3 of 3")).toBeTruthy();
-    expect(next.hasAttribute("disabled")).toBe(true);
+describe("one book, in session and out of it, whichever mode (#374)", () => {
+  const drawn = () => [...document.querySelectorAll<HTMLElement>(".nx [data-ref]")].map((el) => el.dataset.ref);
+
+  it("draws the same cards in every mode and session, and no pager", () => {
+    draw({ mode: "live", session: true });
+    const live = drawn();
+    expect(live.length).toBeGreaterThan(0);
+    for (const mode of ["live", "review"] as const) {
+      for (const session of [true, false]) {
+        cleanup();
+        draw({ mode, session });
+        expect(drawn(), `${mode}, ${session ? "in" : "out of"} session`).toEqual(live);
+        expect(document.querySelector("[data-page], .nxp-pager, .nxp-track")).toBeNull();
+        expect(screen.queryByRole("region", { name: "Review" })).toBeNull();
+        expect(screen.queryByRole("button", { name: /next holding|previous holding/ })).toBeNull();
+        expect(region("Holdings")).toBeTruthy();
+      }
+    }
   });
 
-  it("gives each page the holding's figures and says when they were valued", () => {
-    draw({ mode: "review", holdings: HOLDINGS.map((h) => ({ ...h, schedule: SCHEDULE }) as Holding) });
-    const page = region("Review").querySelector<HTMLElement>('[data-page][data-ref="h-calls"]')!;
-    expect(within(page).getByText("-$240")).toBeTruthy();
-    expect(within(page).getByText("captured")).toBeTruthy();
-    expect(within(page).getByText("pace gap")).toBeTruthy();
-    expect(within(region("Review")).getByText("market closed — valued at 23:14")).toBeTruthy();
-  });
-
-  it("says when they were valued by the session, whichever tab (#371)", () => {
+  it("says when they were valued by the session, whichever mode (#371)", () => {
     draw({ mode: "live", session: false });
-    expect(screen.getByText("market closed — valued at 23:14")).toBeTruthy();
+    expect(within(region("Holdings")).getByText("market closed — valued at 23:14")).toBeTruthy();
     cleanup();
     draw({ mode: "review", session: true });
     expect(document.querySelector(".nx-mkt-closed")).toBeNull();
   });
 
-  it("hides the contract count on its pages under privacy, and shows it otherwise", () => {
-    const big = HOLDINGS.map((h) => ({ ...h, contracts: 7 }) as Holding);
-    draw({ mode: "review", holdings: big });
-    expect(region("Review").textContent).toContain("×7");
-    cleanup();
-    draw({ mode: "review", holdings: big, privacy: true });
-    expect(region("Review").textContent).not.toContain("×7");
-    expect(region("Review").textContent).toContain("×•••");
+  it("gives each holding's card its pace gap, in words and in its outcome's colour", () => {
+    const paced = HOLDINGS.map((h) => ({ ...h, schedule: { ...SCHEDULE, pace_gap: h.id === "h-puts" ? -0.25 : 0.3 } }) as Holding);
+    draw({ holdings: [...paced, { ...HOLDINGS[0]!, id: "h-bare", name: "bare", schedule: null } as Holding] });
+    const gap = (ref: string) => {
+      const facts = [...card(ref).querySelectorAll(".nxp-facts > div")];
+      return facts.find((d) => d.querySelector("dt")?.textContent === "pace gap")?.querySelector("dd") ?? null;
+    };
+    expect(gap("h-calls")?.textContent).toBe("behind by 0.30");
+    expect(gap("h-calls")?.getAttribute("data-outcome")).toBe("loss");
+    expect(gap("h-puts")?.textContent).toBe("ahead by 0.25");
+    expect(gap("h-puts")?.getAttribute("data-outcome")).toBe("gain");
+    // no schedule, no gap: a dash rather than a figure nobody computed
+    expect(gap("h-bare")?.textContent).toBe("—");
   });
 
-  it("still draws the watchlist, so a banner about it has a card to lead to", () => {
-    draw({ mode: "review" });
+  it("still draws the watchlist outside the session, so a banner about it has a card to lead to", () => {
+    draw({ mode: "review", session: false });
     expect(refs(region("Watchlist"))).toContain("w-dec04");
+  });
+});
+
+describe("the phone's saved picture (#374)", () => {
+  /** what a holding is drawn as in the picture: its card's kind, and the holdings in condor groups */
+  function shape() {
+    const holdings = HOLDINGS.map((h) => h.id);
+    return {
+      heading: [...document.querySelectorAll(".nxp-book h2")].map((h) => h.textContent),
+      cards: holdings.map((id) => document.querySelector(`article.nxp-holding[data-ref="${id}"]`) !== null),
+      condors: document.querySelectorAll(".nxp-condor").length,
+      refs: [...document.querySelectorAll<HTMLElement>("[data-ref]")].map((el) => el.dataset.ref),
+    };
+  }
+  function picture(mode: "live" | "review", session: boolean) {
+    render(<Still arrangement="phone" quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
+                  holdingsAt="23:14:05" mode={mode} session={session} privacy={false} entryStyle="opportunity"
+                  needs={[]} health={null} polledAt={null} error={null} references={[]} />);
+  }
+
+  it("draws the book's cards in every mode and session, as the phone does, never a page per holding", () => {
+    draw();
+    const onScreen = refs(region("Holdings"));
+    cleanup();
+    picture("live", true);
+    const first = shape();
+    expect(first.heading[0]).toBe("Holdings");
+    expect(first.cards.every(Boolean)).toBe(true);
+    expect(first.condors).toBeGreaterThan(0);
+    expect(first.refs.slice(0, onScreen.length)).toEqual(onScreen);
+    for (const mode of ["live", "review"] as const) {
+      for (const session of [true, false]) {
+        cleanup();
+        picture(mode, session);
+        expect(shape(), `${mode}, ${session ? "in" : "out of"} session`).toEqual(first);
+      }
+    }
   });
 });
 
@@ -358,10 +396,10 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     expect(sheet.querySelector("[data-overlap]")!.textContent).toBe("contains 1231_7700's C7700");
   });
 
-  it("is on its holding's REVIEW page no more, and still in the watchlist there", () => {
-    overlap({ mode: "review" });
+  it("is placed the same outside the session", () => {
+    overlap({ mode: "review", session: false });
     expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700", "r-ratio"]);
-    expect(refs(region("Review"))).not.toContain("r-8100");
-    expect(refs(region("Review"))).toContain("r-ic-calls");
+    expect(refs(region("Holdings")))
+      .toEqual(["h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200"]);
   });
 });

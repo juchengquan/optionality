@@ -181,11 +181,9 @@ async function polls(n: number) {
   }
 }
 
-/** The owner's choice of mode, by hand: the desk's switch, or the phone's tab. */
+/** The owner's choice of mode, by hand: the desk's switch. The phone has none since #374. */
 function pick(mode: "Live" | "Review") {
-  const tabs = screen.queryByRole("navigation", { name: "views" });
-  fireEvent.click(tabs ? within(tabs).getByRole("button", { name: mode })
-    : within(screen.getByRole("group", { name: "mode" })).getByRole("button", { name: mode }));
+  fireEvent.click(within(screen.getByRole("group", { name: "mode" })).getByRole("button", { name: mode }));
 }
 
 /** The session clock read again now, as a phone woken or a window focused reads it. */
@@ -196,7 +194,8 @@ async function readClock(iso: string) {
 
 describe("what it asks for, by New York's session and not by the mode (#371)", () => {
   for (const where of ["desk", "phone"] as const) {
-    for (const mode of [null, "Review"] as const) {
+    // the phone picks no mode (#374): the desk's switch is the only way to one
+    for (const mode of where === "desk" ? [null, "Review"] as const : [null] as const) {
       it(`polls the line, the holdings and the References in session on the ${where}${mode ? ", with Review picked" : ""}`,
         async () => {
           document.cookie = `ui_arrangement=${where};path=/`;
@@ -320,6 +319,7 @@ describe("the market-closed line and its refresh (#371)", () => {
       await open();
       await quiet();
       expect(closedLine()).toBeNull();
+      if (where === "phone") return; // no mode to pick there (#374)
       pick("Review");
       await quiet();
       expect(closedLine()).toBeNull();
@@ -544,6 +544,62 @@ describe("the desk inspector's history, by the session (#372)", () => {
     expect(history().getAttribute("aria-expanded")).toBe("false");
     // read once, for the opening outside the session, and not again
     expect(samplesAsked(), said()).toBe(1);
+  });
+});
+
+describe("a holding's history in the phone's sheet, by the session (#374)", () => {
+  const samples = () => calls.filter((c) => c === "/positions/p1/samples").length;
+  const toggle = () => within(screen.getByRole("dialog")).getByRole("button", { name: "history" });
+  async function openSheet() {
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1231_7000P" }));
+    await screen.findByRole("dialog");
+    await quiet();
+  }
+
+  for (const [when, now] of [["an evening", EVENING], ["a Sunday", SUNDAY]] as const) {
+    it(`opens with it open outside the session, on ${when}, read once and never by the poll`, async () => {
+      document.cookie = "ui_arrangement=phone;path=/";
+      at(now);
+      await open();
+      await quiet();
+      calls = [];
+      await openSheet();
+      expect(toggle().getAttribute("aria-expanded")).toBe("true");
+      expect(samples(), `open, once\n${said()}`).toBe(1);
+      await polls(3);
+      expect(samples(), `never by the poll\n${said()}`).toBe(1);
+    });
+  }
+
+  it("opens with it shut in session, reading nothing", async () => {
+    document.cookie = "ui_arrangement=phone;path=/";
+    at(SESSION);
+    await open();
+    await quiet();
+    calls = [];
+    await openSheet();
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    await polls(3);
+    expect(samples(), `shut, nothing\n${said()}`).toBe(0);
+  });
+
+  it("neither folds nor unfolds an open sheet's history when the session changes; the next sheet takes it", async () => {
+    document.cookie = "ui_arrangement=phone;path=/";
+    at("2026-11-09T21:14:00Z"); // Monday 16:14 New York
+    await open();
+    await quiet();
+    calls = [];
+    await openSheet();
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    await readClock("2026-11-09T21:16:00Z"); // the close, with the sheet open
+    await quiet();
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(samples(), `still shut, nothing\n${said()}`).toBe(0);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    await until(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await openSheet();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(samples(), `the next sheet, open, once\n${said()}`).toBe(1);
   });
 });
 
@@ -775,13 +831,29 @@ describe("the mode", () => {
     expect(screen.getByText("by the clock")).toBeTruthy();
   });
 
-  it("is the phone's Live and Review tabs", async () => {
-    at(SESSION);
-    await open();
-    const tabs = screen.getByRole("navigation", { name: "views" });
-    fireEvent.click(within(tabs).getByRole("button", { name: "Review" }));
-    expect(document.querySelector(".nx")!.getAttribute("data-mode")).toBe("review");
-    expect(within(tabs).getByRole("button", { name: "Review" }).getAttribute("aria-current")).toBe("page");
+  it("is nothing the phone's tabs pick: they are Book, Add and Settings (#374)", async () => {
+    for (const now of [SESSION, SUNDAY]) {
+      at(now);
+      await open();
+      const root = document.querySelector(".nx")!;
+      const byClock = root.getAttribute("data-mode");
+      const tabs = screen.getByRole("navigation", { name: "views" });
+      const tab = (name: string) => within(tabs).getByRole("button", { name });
+      const current = () => within(tabs).getAllByRole("button")
+        .filter((b) => b.getAttribute("aria-current") === "page").map((b) => b.textContent);
+      expect(within(tabs).getAllByRole("button").map((b) => b.textContent)).toEqual(["Book", "Add", "Settings"]);
+      expect(current()).toEqual(["Book"]);
+      fireEvent.click(tab("Settings"));
+      expect(current()).toEqual(["Settings"]);
+      expect(screen.queryByRole("region", { name: "Holdings" })).toBeNull();
+      // Book from Settings: back to the book, and no mode picked on the way
+      fireEvent.click(tab("Book"));
+      expect(current()).toEqual(["Book"]);
+      expect(screen.getByRole("region", { name: "Holdings" })).toBeTruthy();
+      expect(root.getAttribute("data-mode")).toBe(byClock);
+      cleanup();
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -915,6 +987,25 @@ describe("every item that needs you carries its glyph", () => {
 });
 
 describe("settings", () => {
+  it("is the clock's on the phone, whatever was chosen on the desk before it turned into one (#374)", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at("2026-11-10T02:00:00Z"); // Monday 21:00 New York: REVIEW by the clock
+    await open();
+    const root = document.querySelector(".nx")!;
+    fireEvent.click(screen.getByRole("button", { name: "Live" }));
+    expect(root.getAttribute("data-mode")).toBe("live");
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "phone" } });
+    // nothing on the phone could undo the desk's choice, so the phone does not keep it
+    await waitFor(() => expect(root.getAttribute("data-arrangement")).toBe("phone"));
+    expect(root.getAttribute("data-mode")).toBe("review");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Settings" }));
+    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "desk" } });
+    await waitFor(() => expect(root.getAttribute("data-arrangement")).toBe("desk"));
+    expect(root.getAttribute("data-mode")).toBe("review");
+    expect(screen.getByText("by the clock")).toBeTruthy();
+  });
+
   it("gives its Back entry back when the desk turns into the phone with it open", async () => {
     // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
     const pushed = vi.spyOn(window.history, "pushState");

@@ -1,12 +1,13 @@
 /** The burndown on visx (#360) on the phone, under Playwright's iPhone profile — touch, `isMobile`,
- *  a 390px screen: on the phone's REVIEW page, where it is a holding's main chart, inside the screen
- *  with its tooltip inside the chart for every day; and touched with a real finger (Chrome's own
- *  touch events, through CDP), where a horizontal drag scrubs the days and a vertical swipe still
- *  scrolls the page. The desk's widths are `NextBurndown.test.tsx`'s. */
+ *  a 390px screen: in a holding's sheet, whose history is open from the start outside the session
+ *  (#374, where REVIEW's one-holding page drew it before), inside the screen with its tooltip inside
+ *  the chart for every day; and touched with a real finger (Chrome's own touch events, through CDP),
+ *  where a horizontal drag scrubs the days and a vertical swipe still scrolls the sheet. The desk's
+ *  widths are `NextBurndown.test.tsx`'s. */
 /// <reference types="@vitest/browser/providers/playwright" />
 import { cdp, userEvent } from "@vitest/browser/context";
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { overflowsSideways, settle } from "./nextBook";
@@ -49,19 +50,24 @@ function serveOwnerBook(correcting = false): void {
   }) as unknown as typeof fetch;
 }
 
-/** The phone's REVIEW page for the first holding, scrolled so its burndown is on the screen. */
+/** The first holding's sheet outside the session, its history open from the start, scrolled so
+ *  its burndown is on the screen. */
 async function review(correcting = false) {
+  vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
   serveOwnerBook(correcting);
   render(<Next />);
   await settle();
-  const views = screen.getByRole("navigation", { name: "views" });
-  await userEvent.click(within(views).getByRole("button", { name: "Review" }));
-  await settle();
-  const page1 = document.querySelector<HTMLElement>("[data-page][data-ref]")!;
-  const chart = page1.querySelector<HTMLElement>(".nx-bd")!;
+  await userEvent.click(screen.getByRole("button", { name: "details of 1218_C7300" }));
+  const sheet = await screen.findByRole("dialog");
+  await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
+  const chart = await waitFor(() => {
+    const found = sheet.querySelector<HTMLElement>(".nx-bd");
+    if (!found?.querySelector("[data-sample]")) throw new Error("no burndown yet");
+    return found;
+  });
   chart.scrollIntoView({ block: "center" });
   await settle();
-  return { page1, chart, svg: chart.querySelector("svg")! };
+  return { sheet, chart, svg: chart.querySelector("svg")! };
 }
 
 const centreOf = (el: Element) => {
@@ -98,7 +104,7 @@ async function tap(at: { x: number; y: number }) {
 
 const crossed = (chart: HTMLElement) => chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair");
 
-describe("the burndown on the phone's REVIEW page", () => {
+describe("the burndown in a holding's sheet on the phone", () => {
   it("draws a corrected quantity's rule and its faint days inside the screen, saying so for each (#359)", async () => {
     const { chart, svg } = await review(true);
     const box = svg.getBoundingClientRect();
@@ -118,13 +124,14 @@ describe("the burndown on the phone's REVIEW page", () => {
   });
 
   it("is inside the screen, and its tooltip inside the chart and off its point, for every day", async () => {
-    const { page1, chart, svg } = await review();
+    const { sheet, chart, svg } = await review();
     const box = svg.getBoundingClientRect();
     expect(box.left).toBeGreaterThanOrEqual(0);
     expect(box.right).toBeLessThanOrEqual(window.innerWidth);
-    expect(box.width).toBeGreaterThan(page1.querySelector(".nxp-card")!.getBoundingClientRect().width - 40);
+    // across the sheet, less its padding: its main chart, not a thumbnail
+    expect(box.width).toBeGreaterThan(sheet.getBoundingClientRect().width - 40);
     const faults: string[] = [];
-    for (const day of page1.querySelectorAll<SVGGElement>("[data-sample]")) {
+    for (const day of chart.querySelectorAll<SVGGElement>("[data-sample]")) {
       const p = centreOf(day.querySelector("circle")!);
       await userEvent.click(svg, { position: { x: p.x - box.left, y: 12 } });
       const tip = chart.querySelector("[data-tip]");
@@ -142,46 +149,48 @@ describe("the burndown on the phone's REVIEW page", () => {
   });
 
   it("scrubs the days under a finger dragged sideways, and keeps the last when it lifts", async () => {
-    const { chart, page1 } = await review();
-    const days = [...page1.querySelectorAll<SVGGElement>("[data-sample]")];
+    const { chart, sheet } = await review();
+    const days = [...chart.querySelectorAll<SVGGElement>("[data-sample]")];
     const first = centreOf(days[0]!.querySelector("circle")!);
     const last = centreOf(days.at(-1)!.querySelector("circle")!);
     const y = chart.getBoundingClientRect().top + 60;
     const before = window.scrollY;
-    const track = document.querySelector<HTMLElement>(".nxp-track")!;
-    const across = track.scrollLeft;
+    const down = sheet.scrollTop;
+    const across = sheet.scrollLeft;
     await drag({ x: first.x, y }, { x: last.x, y });
     expect(crossed(chart)).toBe(days.at(-1)!.dataset.sample);
-    expect(page1.querySelector(".nx-hist-said")!.textContent).toMatch(/^9 Nov · 39 DTE/);
-    // a sideways drag is the chart's: neither the page nor the pager of holdings moved under it
+    expect(sheet.querySelector(".nx-hist-said")!.textContent).toMatch(/^9 Nov · 39 DTE/);
+    // a sideways drag is the chart's: neither the page nor the sheet moved under it
     expect(window.scrollY).toBe(before);
-    expect(track.scrollLeft).toBe(across);
+    expect(sheet.scrollTop).toBe(down);
+    expect(sheet.scrollLeft).toBe(across);
     expect(overflowsSideways()).toBe(false);
   });
 
   it("chooses a day on a tap, and lets go of it on a tap outside the chart", async () => {
-    const { chart, page1 } = await review();
-    const day = page1.querySelector<SVGGElement>("[data-sample='2026-11-05']")!;
+    const { chart, sheet } = await review();
+    const day = chart.querySelector<SVGGElement>("[data-sample='2026-11-05']")!;
     await tap({ x: centreOf(day.querySelector("circle")!).x, y: chart.getBoundingClientRect().top + 40 });
     expect(crossed(chart)).toBe("2026-11-05");
     expect(chart.querySelector("[data-tip]")).toBeTruthy();
-    await tap(centreOf(page1.querySelector(".nx-hist-h")!));
+    await tap(centreOf(sheet.querySelector(".nx-hist-h")!));
     expect(crossed(chart)).toBeUndefined();
     expect(chart.querySelector("[data-tip]")).toBeNull();
   });
 
-  it("lets a finger swiped up the chart scroll the page", async () => {
-    const { chart, page1 } = await review();
+  it("lets a finger swiped up the chart scroll the sheet", async () => {
+    const { chart, sheet } = await review();
     // a day chosen first, by a tap, is let go of by the scroll rather than carried up the screen
-    const day = page1.querySelector<SVGGElement>("[data-sample='2026-11-05']")!;
+    const day = chart.querySelector<SVGGElement>("[data-sample='2026-11-05']")!;
     await tap({ x: centreOf(day.querySelector("circle")!).x, y: chart.getBoundingClientRect().top + 40 });
     expect(crossed(chart)).toBe("2026-11-05");
     const r = chart.getBoundingClientRect();
     const x = r.left + r.width / 2;
-    const before = window.scrollY;
+    // the sheet scrolls inside itself, and is what a swipe on it moves
+    const before = sheet.scrollTop;
     await drag({ x, y: r.bottom - 10 }, { x, y: r.bottom - 160 });
     await settle();
-    expect(window.scrollY).not.toBe(before);
+    expect(sheet.scrollTop).not.toBe(before);
     // and a scroll is never a choice of day: nothing is crossed, and no tooltip is left behind
     expect(crossed(chart)).toBeUndefined();
     expect(chart.querySelector("[data-tip]")).toBeNull();

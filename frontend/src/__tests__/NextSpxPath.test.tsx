@@ -1,6 +1,6 @@
 /** REVIEW's "where SPX was against my strikes" (#298, ADR 0023): for a holding, SPX's price on each
- *  Daily sample against its strikes, from the samples route's `spx` — in the desk's inspector and on
- *  the phone's one-holding page. Behaviour only: what is drawn from what was served, and above all
+ *  Daily sample against its strikes, from the samples route's `spx` — in the desk's inspector and in
+ *  the phone's holding sheet. Behaviour only: what is drawn from what was served, and above all
  *  that a day stored without SPX's price is a GAP and never a point at zero. That the chart fits is
  *  measured by the browser suites. */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -153,9 +153,10 @@ describe("a holding with two legs on one strike", () => {
   });
 });
 
-describe("on the phone, in REVIEW", () => {
-  it("draws it on the holding's page", async () => {
+describe("on the phone, outside the session", () => {
+  it("draws it in the holding's sheet, whose history opens with it (#374)", async () => {
     render(<PhoneBook {...props()} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /^details of / })[0]!);
     const charts = await screen.findAllByRole("group", { name: "SPX against the strikes" });
     expect(charts.length).toBeGreaterThan(0);
     expect(charts[0]!.querySelectorAll("[data-spx-day]").length).toBeGreaterThan(0);
