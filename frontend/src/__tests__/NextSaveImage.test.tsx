@@ -266,6 +266,17 @@ describe("one view from either arrangement, as a picture and as text", () => {
     expect(added.filter((t) => t.type === "success")).toEqual([]);
   });
 
+  it("says why, where the view could not be built, and writes nothing", async () => {
+    const { copyView } = await import("../snapshot/copyText");
+    const written: string[] = [];
+    const ok = await copyView({ quotes: null } as never, { writeText: (t) => { written.push(t); return Promise.resolve(); } });
+    expect(ok).toBe(false);
+    expect(written).toEqual([]);
+    expect(added).toHaveLength(1);
+    expect(added[0]!.type).toBe("error");
+    expect(added[0]!.title).toMatch(/^could not copy — the browser refused the clipboard/);
+  });
+
   it("says why, where the page has no clipboard at all", async () => {
     // outside a secure page the browser gives none
     clipboard(undefined);

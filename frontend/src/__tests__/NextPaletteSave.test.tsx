@@ -65,10 +65,18 @@ describe("saving the view from the palette", () => {
 
   it("copies the view as text, as the header's button does (#394)", async () => {
     const written: string[] = [];
+    /** whether the palette was still up when each text was written: Safari grants the clipboard only
+     *  inside the gesture, so the write must happen in the pick, before the close runs its course */
+    const paletteUp: boolean[] = [];
     const user = await open();
     // after user-event's setup, which puts a clipboard of its own on the navigator
     Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: (t: string) => { written.push(t); return Promise.resolve(); } }, configurable: true,
+      value: { writeText: (t: string) => {
+        written.push(t);
+        // Base UI marks the popup `data-open` until the close begins
+        paletteUp.push(document.querySelector(".nx-palette[data-open]") !== null);
+        return Promise.resolve();
+      } }, configurable: true,
     });
     try {
       await user.keyboard("{Control>}k{/Control}");
@@ -76,6 +84,8 @@ describe("saving the view from the palette", () => {
       await user.type(within(palette).getByRole("combobox"), "copy the view");
       await user.keyboard("{Enter}");
       await waitFor(() => expect(written).toHaveLength(1));
+      expect(paletteUp, "the text was written after the palette closed: outside the gesture").toEqual([true]);
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
       expect(written[0]).toContain("1231_IC");
       // and the header's button reaches the very same press
       await user.click(screen.getByRole("button", { name: "copy as text" }));

@@ -43,6 +43,9 @@ function cellsOf(line: string): string[] {
   return cells;
 }
 
+/** Markdown's backslash escapes undone: `\|` is `|`, `\*` is `*`. */
+const unescape = (s: string) => s.replace(/\\(.)/g, "$1");
+
 /** The copied Markdown, read as a reader of it would: "# title", "- label: words", "## section",
  *  a table's rows (its delimiter row skipped), and any other line a note of its section. */
 export function readMarkdown(md: string): ReadView {
@@ -54,12 +57,12 @@ export function readMarkdown(md: string): ReadView {
     else if (line.startsWith("# ")) out.title = line.slice(2);
     else if (line.startsWith("- ") && !section) {
       const at = line.indexOf(": ");
-      out.lines.push({ label: line.slice(2, at), text: line.slice(at + 2) });
+      out.lines.push({ label: line.slice(2, at), text: unescape(line.slice(at + 2)) });
     } else if (line.startsWith("|")) {
       const cells = cellsOf(line);
       if (cells.every((c) => /^-{3,}$/.test(c))) continue;
       section!.rows.push(cells);
-    } else section!.notes.push(line);
+    } else section!.notes.push(unescape(line));
   }
   return out;
 }

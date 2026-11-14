@@ -19,7 +19,7 @@ import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { readPicture } from "../testing/plainRead";
 import { settle } from "./nextBook";
 import { catchShare, CONTROLS, decode, forgetShare, still } from "./picture";
-import { bookTable, measurePlain, PLAIN_GROUND } from "../testing/plainPicture";
+import { bookTable, inkIn, measurePlain, PLAIN_GROUND } from "../testing/plainPicture";
 
 /** Every node handed to the rasterizer, with its text as it stood at that moment: the picture's
  *  text cannot be read off its pixels, so it is read off the node the pixels were made from. */
@@ -126,11 +126,16 @@ describe("saving the desk as an image", () => {
     await commands.colorScheme(scheme);
     await show();
     const { root, file, release } = await take();
-    expect(measurePlain(root)).toEqual({ grounds: [], inks: [], drawn: [], small: [], clipped: [] });
+    expect(measurePlain(root)).toEqual({ grounds: [], inks: [], drawn: [], hidden: [], small: [], clipped: [] });
     expect(readPicture(root).sections).toEqual(bookTable());
     // and the file is painted on that ground: its corner is white, and a cell's words are not
     const png = await decode(file);
     expect(png.at(2, 2)).toBe(PLAIN_GROUND);
+    // and words are painted on it: a holding's name, a status, the header block
+    const ringing = [...root.querySelectorAll("td")].find((td) => td.textContent === "ringing")!;
+    for (const el of [rowNamed(root, "1218_P6400").children[1]!, ringing, root.querySelector(".nx-still-lines dd")!]) {
+      expect(inkIn(png, root, el), `no words painted where "${el.textContent}" is`).toBe(true);
+    }
     expect(png.w / root.scrollWidth).toBeGreaterThan(1);
     release();
   });

@@ -204,11 +204,32 @@ export function plainView(input: PlainInput): PlainView {
     });
   }
 
-  return {
+  return tidy({
     title: TITLE,
     lines: headerLines(input),
     columns: ["what", ...columns.map((c) => LABELS[c.key] ?? c.label), "status"],
     sections,
+  });
+}
+
+/** Every word of the view on one line, one space between words and none at either end: a name or an
+ *  error the service sent with a line break in it would otherwise end a Markdown table row, or a
+ *  header line, partway — and the picture, which draws any run of white space as one space, and the
+ *  text would read apart. */
+const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+
+function tidy(view: PlainView): PlainView {
+  return {
+    title: oneLine(view.title),
+    lines: view.lines.map((l) => ({ label: oneLine(l.label), text: oneLine(l.text) })),
+    columns: view.columns.map(oneLine),
+    sections: view.sections.map((s) => ({
+      title: oneLine(s.title),
+      notes: s.notes.map(oneLine),
+      groups: s.groups.map((g) => ({
+        heading: g.heading === null ? null : oneLine(g.heading), rows: g.rows.map((r) => r.map(oneLine)),
+      })),
+    })),
   };
 }
 
@@ -276,17 +297,26 @@ function headerLines(input: PlainInput): PlainLine[] {
 
 /** A cell as Markdown writes it: a pipe would end the cell ("|delta| ≥ 0.20"), so it is escaped,
  *  and so is the backslash that escapes it. */
-const cellText = (s: string) => s.replaceAll("\\", "\\\\").replaceAll("|", "\\|");
+const cellText = (s: string) => inline(s).replaceAll("|", "\\|");
+
+/** Text as Markdown writes it inline: a backslash, a backtick and an asterisk escaped, so a name or an
+ *  error cannot open code or emphasis. An underscore is left alone — every holding's name has one,
+ *  and GitHub's Markdown never reads one inside a word as emphasis. */
+const inline = (s: string) => s.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("*", "\\*");
+
+/** A note on a line of its own: inline, and a first character that would make it a heading, a list
+ *  item, a quote or a table row escaped. */
+const noteText = (s: string) => inline(s).replace(/^([#>|+-])/, "\\$1");
 
 const tableRow = (cells: string[]) => `| ${cells.map(cellText).join(" | ")} |`;
 
 /** The view as Markdown: the header block as lines above a table per section, an expiry's heading
  *  as a row of its own with the heading in its first cell. */
 export function toMarkdown(view: PlainView): string {
-  const out = [`# ${view.title}`, "", ...view.lines.map((l) => `- ${l.label}: ${l.text}`)];
+  const out = [`# ${view.title}`, "", ...view.lines.map((l) => `- ${l.label}: ${inline(l.text)}`)];
   for (const s of view.sections) {
     out.push("", `## ${s.title}`);
-    for (const n of s.notes) out.push("", n);
+    for (const n of s.notes) out.push("", noteText(n));
     if (s.groups.length === 0) continue;
     out.push("", tableRow(view.columns), `|${view.columns.map(() => " --- |").join("")}`);
     for (const g of s.groups) {

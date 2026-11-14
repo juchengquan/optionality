@@ -13,7 +13,7 @@ import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { settle } from "./nextBook";
 import { readPicture } from "../testing/plainRead";
 import { catchShare, CONTROLS, decode, forgetShare, still } from "./picture";
-import { bookTable, measurePlain, PLAIN_GROUND } from "../testing/plainPicture";
+import { bookTable, inkIn, measurePlain, PLAIN_GROUND } from "../testing/plainPicture";
 
 /** Every node handed to the rasterizer, with its text as it stood then (NextSnapshot.test.tsx). */
 const captured = vi.hoisted(() => [] as { node: HTMLElement; text: string }[]);
@@ -104,7 +104,7 @@ describe("saving the phone's book as an image", () => {
     const root = still()!;
     expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(root);
     expect(root.querySelector(".nxp-card, .nxp-condor")).toBeNull();
-    expect(measurePlain(root)).toEqual({ grounds: [], inks: [], drawn: [], small: [], clipped: [] });
+    expect(measurePlain(root)).toEqual({ grounds: [], inks: [], drawn: [], hidden: [], small: [], clipped: [] });
     // the table the desk's suite holds its picture to, row for row and cell for cell
     expect(readPicture(root).sections).toEqual(bookTable());
     // wider than the phone, since it is as wide as its rows, and never cut to the screen
@@ -112,6 +112,13 @@ describe("saving the phone's book as an image", () => {
     expect([...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
     const png = await decode(shared.file()!);
     expect(png.at(2, 2)).toBe(PLAIN_GROUND);
+    // and words are painted on it: a holding's name, a status, the header block
+    const cells = [...root.querySelectorAll("td")];
+    const name = cells.find((td) => td.textContent === "1218_P6400")!;
+    const ringing = cells.find((td) => td.textContent === "ringing")!;
+    for (const el of [name, ringing, root.querySelector(".nx-still-lines dd")!]) {
+      expect(inkIn(png, root, el), `no words painted where "${el.textContent}" is`).toBe(true);
+    }
     shared.release();
   });
 

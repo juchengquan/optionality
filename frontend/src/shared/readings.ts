@@ -80,6 +80,8 @@ export function referenceWords(reference: Reference, at: string | null): string 
     ...(change ? [change] : []),
     ...(reference.field === "last_price" ? ["last"] : []),
     ...(at ? [`${reference.figure === null ? "tried" : "read"} at ${at}`] : []),
+    // a dash says why, as the strip's title does to a pointer: a picture has no pointer
+    ...(reference.figure === null && reference.error ? [`(${reference.error})`] : []),
   ].join(" ");
 }
 

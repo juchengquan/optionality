@@ -214,6 +214,12 @@ export function Next() {
   // reopen an inspector on a row picked before it went
   useEffect(() => { if (phone) setDesk(NOTHING_SELECTED); }, [phone, setDesk]);
   const chooseArrangement = useCallback((v: ArrangementChoice) => { setChoice(v); writeArrangement(v); }, []);
+  // the clipboard is granted only inside the gesture (Safari): copied in the pick, not after the close
+  const runNow = useCallback((c: Chosen) => {
+    if (!("action" in c) || c.action.key !== "copy-text") return false;
+    copyViewNow.current();
+    return true;
+  }, []);
   const runChosen = useCallback((c: Chosen) => {
     const land = (id: string, then: "inspect" | "edit" | "close") =>
       setDesk({ id, open: true, request: { n: ++requests.current, then } });
@@ -229,7 +235,6 @@ export function Next() {
     } else if (a.key === "edit-monitor" && desk.id !== null) land(desk.id, "edit");
     else if (a.key === "close-holding" && desk.id !== null) land(desk.id, "close");
     else if (a.key === "save-image") saveViewNow.current();
-    else if (a.key === "copy-text") copyViewNow.current();
     else if (a.key === "arrange-desk") chooseArrangement("desk");
     else if (a.key === "arrange-phone") {
       chooseArrangement("phone");
@@ -392,7 +397,7 @@ export function Next() {
       {/* the desk's alone: the phone registers no chord and no keys (ADR 0023, #299) */}
       {phone ? null : (
         <Palette open={paletteOpen} onOpenChange={setPaletteOpen} found={found} findWhy={hold === null ? null : HOLD_WHY} actions={actions}
-                 onChoose={runChosen} up={up} entryStyle={entryStyle} />
+                 onChoose={runChosen} onChooseNow={runNow} up={up} entryStyle={entryStyle} />
       )}
       <Toaster />
     </div>

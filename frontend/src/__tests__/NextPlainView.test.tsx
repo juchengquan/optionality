@@ -231,6 +231,14 @@ describe("the picture and the text, one builder", () => {
     ["with columns hidden", { hidden: new Set(["pnl", "alarm"]) }],
     ["with nothing valued", { holdings: null }],
     ["with nothing at all", { holdings: [], quotes: [], monitors: [], references: [], needs: [] }],
+    // what the service sends is not ours to trust: a line break, a pipe, a backtick or an asterisk
+    // in a name, an error or a note must neither end a row nor open code or emphasis
+    ["with a line break and a pipe in a name and an error", {
+      quotes: [...QUOTES, entry("w-odd", { code: "1231_A|B\nC `x` *y*", strike_date: "2026-12-31",
+        legs: [{ sign: -1, option_type: "PUT", strike: 6000 }, { sign: 1, option_type: "PUT", strike: 5950 }] as never,
+        error: " bad | row\r\nsecond `line` *here* " } as Partial<Entry> & { strike_date: string })],
+      holdingsError: "# refused\n- by | the service", holdings: null, error: "line one\nline | two",
+    }],
   ] as [string, Partial<PlainInput>][]) {
     it(`reads back to the same rows and cells, ${name}`, () => {
       const given = input(over);
@@ -255,6 +263,28 @@ describe("the picture and the text, one builder", () => {
     expect(md.split("\n").slice(0, 3)).toEqual(["# optionality", "", "- taken: Mon 16 Nov 2026 10:00 EST (New York) · Mon 16 Nov 2026 23:00 GMT+8 (Asia/Singapore)"]);
     expect(md).toContain("\n## Holdings\n\n| what | name | legs |");
     expect(md).toContain("\n| 261218 · 38 DTE |  |  |");
+  });
+});
+
+describe("text from the service", () => {
+  it("is put on one line, with no space at its ends, in the picture and the text alike", () => {
+    const view = plainView(input({ quotes: [...QUOTES, entry("w-odd", { code: "1231_A|B\nC", strike_date: "2026-12-31",
+      legs: [{ sign: -1, option_type: "PUT", strike: 6000 }, { sign: 1, option_type: "PUT", strike: 5950 }] as never,
+      error: " bad\r\nrow " } as Partial<Entry> & { strike_date: string })] }));
+    expect(cell(view, "1231_A|B C", "status")).toBe("fault: bad row");
+    const md = toMarkdown(view);
+    expect(md).toContain("| watched spread | 1231_A\\|B C |");
+    // neither a backtick nor an asterisk may open code or emphasis in the text
+    const marked = toMarkdown(plainView(input({ error: "see `x` and *y*" })));
+    expect(marked).toContain("- warning: see \\`x\\` and \\*y\\*");
+    // every table row still as wide as its header
+    for (const s of readMarkdown(md).sections) for (const r of s.rows) expect(r).toHaveLength(view.columns.length);
+  });
+
+  it("says why a Reference is a dash, as the strip's title does", () => {
+    const dashed = { ...SPX_REF, id: "r2", label: "VIX", figure: null, change: null, error: "not entitled" } as Reference;
+    const view = plainView(input({ references: [SPX_REF, dashed] }));
+    expect(view.lines.find((l) => l.label === "References")!.text).toBe("S&P 500 (moomoo) 7,612.25 +0.42% · VIX (moomoo) — (not entitled)");
   });
 });
 

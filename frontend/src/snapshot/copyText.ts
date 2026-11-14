@@ -23,8 +23,9 @@ type Clipboard = Pick<globalThis.Clipboard, "writeText">;
 export async function copyView(
   input: PlainInput, clipboard: Clipboard | undefined = navigator.clipboard,
 ): Promise<boolean> {
-  const text = toMarkdown(plainView(input));
   try {
+    // built inside, so a fault in the building is said too, rather than lost in a promise
+    const text = toMarkdown(plainView(input));
     if (!clipboard) throw new Error("there is no clipboard on this page");
     await clipboard.writeText(text);
   } catch (e: unknown) {

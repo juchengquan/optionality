@@ -454,8 +454,9 @@ lays each figure out in a place of its own while colour, bars and symbols carry 
 an image can miss. **This supersedes #300's "A's table from the desk, B's cards from the phone".**
 
 - **One plain table, from either arrangement.** The phone saves the desk's table, not cards. The
-  holdings first, then the watchlist, then the muted and expired rules, each grouped by expiry under
-  a heading row with its DTE; every column the viewer ticked (`ui_cols_combo`), under headers that
+  holdings first, then the watchlist, each grouped by expiry under a heading row with its DTE (the
+  watchlist's quarantined rules last, under a heading of their own), then the muted and expired
+  rules as one ungrouped list, as the desk's fold has them; every column the viewer ticked (`ui_cols_combo`), under headers that
   say their unit; a first column saying what each row is (a holding, "a condor with" its partner, a
   rule on a holding, a watched spread, a rule on a leg of one, a quarantined or muted rule), since
   the indent and the bracket are gone; and a **status column** in the page's own words for what the
@@ -474,14 +475,19 @@ an image can miss. **This supersedes #300's "A's table from the desk, B's cards 
 - **A header block says what the table is:** when it was taken, on New York's clock and on
   DISPLAY_TZ's (`/health`'s `display_tz`); the session, in the page's words ("in session", or the
   market-closed line's); how fresh the figures are (the Freshness line); any warning; the
-  References in the strip's words, with the time each was read outside the session; and the
+  References in the strip's words, with the time each was read outside the session and, after a
+  dash, why (the strip's title to a pointer); and the
   needs-you line with every item named, since a picture cannot be opened to read "+N more". As on
   the page, with nothing needing you the line is absent, which is not an all-clear.
 - **"Copy as text"** sits beside "Save as image" wherever that is offered — the header on the desk
   and the phone, and the ⌘K palette — and puts the same view on the clipboard as Markdown: the
   header block as lines above a Markdown table per section, an expiry's heading as a row with the
-  heading in its first cell, a pipe in a cell escaped. It says "copied as text", and where the
-  browser refuses the clipboard, or the page has none, says so with the browser's reason.
+  heading in its first cell. Everything the service sent is put on one line, one space between
+  words, in the picture and the text alike, and the text escapes a pipe in a cell and a backtick or
+  an asterisk anywhere, so a name or an error can neither end a row nor open code or emphasis. It says "copied as text", and where the
+  browser refuses the clipboard, or the page has none, or the text could not be built, says so with
+  the reason. Safari grants the clipboard only inside the owner's gesture, so the text is built and
+  written in the press itself — from the palette, in the pick, before the palette's close runs.
 - **One builder** (`snapshot/plain.ts`, pure) makes the rows and the words; the picture
   (`Still.tsx`) and the text (`toMarkdown`) each only write them out, and a test reads both back
   and requires the same rows and cells. Privacy goes in with the figures, so what the screen hides

@@ -43,6 +43,11 @@ export function measurePlain(root: HTMLElement) {
         .map((el) => `${describe(el)}: ${getComputedStyle(el).color}`),
     ],
     drawn: [...root.querySelectorAll(DRAWINGS)].map(describe),
+    // nothing made faint or invisible: a table of words nobody can see measures as well as any other
+    hidden: all.filter((el) => {
+      const cs = getComputedStyle(el);
+      return cs.opacity !== "1" || cs.visibility !== "visible" || cs.display === "none";
+    }).map(describe),
     small: all.filter(hasText).filter((el) => parseFloat(getComputedStyle(el).fontSize) < SMALLEST_PX)
       .map((el) => `${describe(el)}: ${getComputedStyle(el).fontSize}`),
     // nothing cut short in its box, and nothing past the picture's edge
@@ -51,6 +56,24 @@ export function measurePlain(root: HTMLElement) {
       return el.scrollWidth > el.clientWidth + 1 || r.right > box.right + 0.5 || r.left < box.left - 0.5;
     }).map(describe),
   };
+}
+
+/** A decoded image, as `__browser__/picture.ts`'s `decode` gives it: "r,g,b,a" at a pixel. */
+interface Pixels { w: number; h: number; at: (x: number, y: number) => string }
+
+/** Whether the image has ink inside an element's box: some pixel there that is dark — the words, as
+ *  painted. The tree's measurements say what was laid out; only the pixels say it reached the file. */
+export function inkIn(png: Pixels, root: HTMLElement, el: Element): boolean {
+  const ratio = png.w / root.scrollWidth;
+  const box = root.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  for (let y = r.top + 1; y < r.bottom - 1; y += 1) {
+    for (let x = r.left + 1; x < r.right - 1; x += 1) {
+      const [red, green, blue, alpha] = png.at((x - box.left) * ratio, (y - box.top) * ratio).split(",").map(Number);
+      if (alpha! > 200 && red! < 96 && green! < 96 && blue! < 96) return true;
+    }
+  }
+  return false;
 }
 
 /** The table the owner's book makes in session with every column ticked, read as `readPicture`
