@@ -28,7 +28,7 @@ export const COLUMNS = {
   position_samples: [
     "position_id", "observed_on", "dte", "cost_to_close",
     // appended, because ALTER TABLE adds at the end
-    "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx",
+    "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx", "contract_size",
   ],
   monitor_positions: ["monitor_id", "position_id"],
   reference_securities: ["id", "code", "label", "source", "created_at"],
@@ -53,7 +53,9 @@ export const NULLABLE = {
   positions: [
     "strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit", "qty_corrected_at",
   ],
-  position_samples: ["cost_to_close", "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"],
+  position_samples: [
+    "cost_to_close", "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx", "contract_size",
+  ],
   monitor_positions: [],
   reference_securities: ["label"],
   schema_migrations: [],
@@ -166,6 +168,11 @@ export interface PositionSampleRow {
   /** SPX's price as the writing sweep's batch implied it (`derivedSpx`, ADR 0024). Null where the
    *  batch could not give one, and on every row written before migration 0010. */
   spx: number | null;
+  /** The points-to-money multiplier the writing sweep's batch carried (`contractSize`), so a
+   *  holding valued from this row outside the session has a P&L with no Provider call (#380).
+   *  Null where the batch carried none, and on every row written before migration 0013, which
+   *  were not backfilled: nothing stored says a holding's size, and 100 would be an assumption. */
+  contract_size: number | null;
 }
 
 export interface MonitorPositionRow {

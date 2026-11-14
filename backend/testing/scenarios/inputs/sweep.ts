@@ -51,6 +51,9 @@ const noBook = (q: Row): Row => {
 };
 /** The whole condor out of hours. */
 const NO_BOOK: Record<string, Row> = Object.fromEntries(Object.entries(BOOK).map(([c, q]) => [c, noBook(q)]));
+/** 00:00:15 on Saturday 14 November in New York: out of session, moomoo quoting every option 0/0,
+ *  and the November condor 13 days out — inside its manage-by window. */
+const SATURDAY_MIDNIGHT = "2026-11-14T05:00:15.000Z";
 /** 20:30 on Monday 9 November in New York: after the close, and moomoo quoting every option 0/0. */
 const EVENING = "2026-11-10T01:30:00.000Z";
 
@@ -65,6 +68,8 @@ const todays = sample({
   legs_iv: { [C7300]: 14.5, [C7350]: 14.5, [P6400]: 19.25, [P6350]: 20 },
   legs_vega: { [C7300]: 4.25, [C7350]: 4.25, [P6400]: 4.25, [P6350]: 4.25 },
   legs_delta: { [C7300]: 0.21, [C7350]: 0.15, [P6400]: -0.18, [P6350]: -0.12 },
+  // the batch's contract size, recorded with the row since migration 0013 (#380)
+  contract_size: 100,
 });
 
 export const SWEEP: readonly SweepInput[] = [
@@ -592,10 +597,46 @@ export const SWEEP: readonly SweepInput[] = [
     world: world({ tables: { positions: [november] }, provider: { quotes: NOVEMBER_QUOTES } }),
   },
   {
-    // undelivered, so not stamped: owed to the next sweep rather than lost for ever
+    // undelivered, so not stamped: owed to the next sweep rather than lost for ever. Priced, so it
+    // is Telegram that holds it here and not the want of a cost (#380, below)
     name: "a manage-by notice Telegram did not take is owed rather than stamped",
     outcomes: ["manage-by-notice-undelivered-is-owed"],
-    world: world({ telegram: "down", tables: { positions: [november] } }),
+    world: world({ telegram: "down", tables: { positions: [november] }, provider: { quotes: NOVEMBER_QUOTES } }),
+  },
+  {
+    // #380: first inside the window out of hours, with every leg 0/0 and no close yet — the notice
+    // goes once, so it waits for a cost rather than going without one for good: not sent, not stamped
+    name: "a manage-by notice waits for a cost rather than going without one",
+    outcomes: ["manage-by-notice-held-without-a-cost", "sample-kept-with-an-empty-cost"],
+    world: world({
+      clock: SATURDAY_MIDNIGHT,
+      tables: { positions: [november] },
+      provider: { quotes: Object.fromEntries(Object.entries(NOVEMBER_QUOTES).map(([c, q]) => [c, noBook(q)])) },
+    }),
+  },
+  {
+    // ...and out of hours with a close stored, the notice says that close's cost, its day, and its
+    // pace at that close's own DTE
+    name: "out of hours a manage-by notice is valued from the latest close",
+    outcomes: ["manage-by-notice-from-the-close"],
+    world: world({
+      clock: SATURDAY_MIDNIGHT,
+      tables: {
+        positions: [november],
+        position_samples: [
+          sample({
+            position_id: "pos-nov", observed_on: "2026-11-13", dte: 14, cost_to_close: 2.25,
+            observed_at: "2026-11-13 21:14:59.000000", contract_size: 100,
+          }),
+          // Saturday's row is already filled, so this sweep writes nothing beside the notice
+          sample({
+            position_id: "pos-nov", observed_on: "2026-11-14", dte: 13, cost_to_close: null,
+            observed_at: "2026-11-14 05:00:05.000000",
+          }),
+        ],
+      },
+      provider: { quotes: Object.fromEntries(Object.entries(NOVEMBER_QUOTES).map(([c, q]) => [c, noBook(q)])) },
+    }),
   },
   {
     name: "an empty book is swept without asking the Provider anything",

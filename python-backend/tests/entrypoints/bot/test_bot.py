@@ -860,7 +860,11 @@ class TestWhatOnlyThePythonCanGetWrong:
         await chat.bot(quoting_all({"mid_price": 2.125, "option_contract_size": 100})).handle_update(
             update("/holdings")
         )
-        assert chat.last() == "<pre>holding  cost  P&amp;L  note\ntie      2.13  13       —</pre>"
+        # out of New York's session (the suite's clock), with no close stored: valued live, and said so
+        assert chat.last() == (
+            "<pre>holding  cost  P&amp;L  note\ntie      2.13  13       —</pre>"
+            "\nmarket closed — no close recorded yet; valued live"
+        )
 
     async def test_runs_until_stopped_answering_each_update_once_and_moving_past_it(self, chat):
         b: TelegramBot

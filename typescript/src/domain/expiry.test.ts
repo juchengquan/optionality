@@ -14,7 +14,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  daysToExpiry, inSampleHours, marketDate, sampleTiming, takesSample, type SampleReadings,
+  closeSample, daysToExpiry, inSampleHours, inSession, marketDate, sampleTiming, takesSample,
+  valuesFromClose, type SampleReadings,
 } from "./expiry.ts";
 
 describe("the market date", () => {
@@ -278,5 +279,100 @@ describe("sampleTiming — a stamp it cannot read", () => {
     expect(sampleTiming("2026-11-09 21:00:00")).toBe("close");
     expect(sampleTiming("2026-11-09 21:15:00.0009")).toBe("close");
     expect(sampleTiming("2026-11-09 21:15:00.001")).toBe("after-close");
+  });
+});
+
+describe("inSession — when the market is open to be priced (#380)", () => {
+  it("opens at 09:30:00 and closes after 16:15:00 New York, both ends included", () => {
+    // Monday 9 November 2026, EST
+    expect(inSession(at("2026-11-09T14:29:59.999Z"))).toBe(false);
+    expect(inSession(at("2026-11-09T14:30:00.000Z"))).toBe(true);
+    expect(inSession(at("2026-11-09T21:15:00.000Z"))).toBe(true);
+    expect(inSession(at("2026-11-09T21:15:00.001Z"))).toBe(false);
+  });
+
+  it("is shut all weekend, where the sample hours are not", () => {
+    // Saturday noon is in the sample hours (a weekend's row carries the close) and out of session
+    expect(inSampleHours(at("2026-11-07T17:00:00Z"))).toBe(true);
+    expect(inSession(at("2026-11-07T17:00:00Z"))).toBe(false);
+    expect(inSession(at("2026-11-08T17:00:00Z"))).toBe(false); // Sunday noon
+    // Friday 16:00 New York is open; Saturday's weekday is New York's, not UTC's
+    expect(inSession(at("2026-11-13T21:00:00Z"))).toBe(true);
+  });
+
+  it("reads the weekday where the market is: Monday 09:30 New York, still Monday in UTC", () => {
+    expect(inSession(at("2026-11-09T14:30:00Z"))).toBe(true);
+    // Friday 23:30 in New York is Saturday in UTC: out, by the hour as much as the day
+    expect(inSession(at("2026-11-14T04:30:00Z"))).toBe(false);
+  });
+
+  it("reads the hours across a change of the clocks", () => {
+    expect(inSession(at("2026-03-09T13:30:00Z"))).toBe(true); // 09:30 EDT
+    expect(inSession(at("2026-11-02T14:00:00Z"))).toBe(false); // 09:00 EST
+  });
+
+  it("detects no holiday, as the page detects none", () => {
+    expect(inSession(at("2026-11-26T17:00:00Z"))).toBe(true); // Thanksgiving noon
+  });
+});
+
+describe("closeSample — the row a holding is valued from outside the session (#380, F6)", () => {
+  const row = (observed_on: string, observed_at: string | null, cost_to_close: number | null) =>
+    ({ observed_on, observed_at, cost_to_close });
+  // Thursday's and Friday's closes, observed at 16:14 New York (21:14 UTC, EST)
+  const thu = row("2026-11-12", "2026-11-12 21:14:58.100000", 4.4);
+  const fri = row("2026-11-13", "2026-11-13 21:14:59.561000", 3.05);
+  // Saturday's row, filled just after New York's midnight with no price: vol only
+  const sat = row("2026-11-14", "2026-11-14 05:00:12.407000", null);
+
+  it("takes the latest close with a cost, past a costless weekend row", () => {
+    expect(closeSample([thu, fri, sat])).toBe(fri);
+  });
+
+  it("takes it whatever order the rows come in", () => {
+    expect(closeSample([sat, fri, thu])).toBe(fri);
+  });
+
+  it("prefers an earlier close to a later reading taken after the close", () => {
+    // Friday's row completed at 20:30 New York: a later day's evening reading, never a close
+    const evening = row("2026-11-14", "2026-11-15 01:30:00.000000", 3.4);
+    expect(closeSample([fri, evening])).toBe(fri);
+  });
+
+  it("falls back to the latest row with a cost of any timing, where no close has one", () => {
+    // a trade recorded in New York's evening: its first row is after the close
+    const opened = row("2026-11-13", "2026-11-14 01:30:00.000000", 3.2);
+    const before = row("2026-11-12", "2026-11-12 10:00:00.000000", 3.6); // 05:00, before the open
+    expect(closeSample([before, opened, sat])).toBe(opened);
+  });
+
+  it("takes a row with no stamp only as the fallback", () => {
+    const legacy = row("2026-11-14", null, 2.9);
+    expect(closeSample([fri, legacy])).toBe(fri);
+    expect(closeSample([legacy])).toBe(legacy);
+  });
+
+  it("is null where no row has a cost", () => {
+    expect(closeSample([sat])).toBeNull();
+    expect(closeSample([])).toBeNull();
+  });
+});
+
+describe("valuesFromClose — live in the session, the latest close outside it (#380)", () => {
+  const fri = { observed_on: "2026-11-13", observed_at: "2026-11-13 21:14:59.561000", cost_to_close: 3.05 };
+
+  it("values live in the session, whatever is stored", () => {
+    expect(valuesFromClose(at("2026-11-09T15:00:00Z"), [fri])).toBeNull();
+    expect(valuesFromClose(at("2026-11-13T21:15:00.000Z"), [fri])).toBeNull(); // 16:15:00
+  });
+
+  it("values from the close outside it", () => {
+    expect(valuesFromClose(at("2026-11-13T21:15:00.001Z"), [fri])).toBe(fri);
+    expect(valuesFromClose(at("2026-11-14T14:00:00Z"), [fri])).toBe(fri); // Saturday 09:00
+    expect(valuesFromClose(at("2026-11-14T17:00:00Z"), [fri])).toBe(fri); // Saturday noon
+  });
+
+  it("values live outside it where no row has a cost", () => {
+    expect(valuesFromClose(at("2026-11-14T17:00:00Z"), [{ ...fri, cost_to_close: null }])).toBeNull();
   });
 });

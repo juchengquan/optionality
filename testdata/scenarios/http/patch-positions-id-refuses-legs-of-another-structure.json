@@ -124,7 +124,8 @@
           "legs_vega": null,
           "legs_delta": null,
           "observed_at": null,
-          "spx": null
+          "spx": null,
+          "contract_size": null
         }
       ],
       "reference_securities": []

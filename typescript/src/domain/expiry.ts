@@ -52,6 +52,27 @@ export function inSampleHours(now: Date = new Date()): boolean {
   return t >= SAMPLE_FROM && t <= SAMPLE_UNTIL;
 }
 
+const WEEKDAY = new Intl.DateTimeFormat("en-US", { timeZone: MARKET_TZ, weekday: "short" });
+
+/** Whether New York's SESSION is open at `now`: 09:30:00 to 16:15:00 there, both ends included,
+ *  Monday to Friday. Holidays are not detected (#380, F7), as the page's own `inSession` does not
+ *  detect them: on one the service values the book live and finds no price, which is a dash.
+ *
+ *  The same edges as `inSampleHours`, and a different question: the daily sample is written on EVERY
+ *  calendar day, because the vol chain steps one day at a time (ADR 0011), while the session is when
+ *  the market is open to be priced. Outside it the service values a holding from its latest close
+ *  rather than from the Provider's out-of-hours quote (`valuesFromClose`, #380) — moomoo quotes every
+ *  option bid 0 / ask 0 then, which is no price at all.
+ *
+ *  The page asks the same question of its own clock (`frontend/src/session.ts`), which it cannot
+ *  import from here; the two are held to the same edges by their own tests.
+ */
+export function inSession(now: Date = new Date()): boolean {
+  const weekday = WEEKDAY.format(now);
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  return inSampleHours(now);
+}
+
 /** Milliseconds since midnight in New York at `now`. */
 function sinceNewYorkMidnight(now: Date): number {
   const part = Object.fromEntries(SAMPLE_CLOCK.formatToParts(now).map((p) => [p.type, p.value]));
@@ -180,6 +201,52 @@ export function sampleTiming(observedAt: string | null): SampleTiming {
   const t = sinceNewYorkMidnight(when);
   if (t < SAMPLE_FROM) return "before-open";
   return t <= SAMPLE_UNTIL ? "close" : "after-close";
+}
+
+/** A stored day's row as far as choosing the one to value a holding from reads it. */
+export interface CloseCandidate {
+  /** the New York market day it is that day's row for */
+  observed_on: string;
+  /** UTC as the database spells it, or null on a row from before migration 0009 */
+  observed_at: string | null;
+  /** null on a day kept for its vol readings with no price to give (#380) */
+  cost_to_close: number | null;
+}
+
+/** Which of a holding's stored rows it is valued from outside the session (#380, F6), or null where
+ *  none can value it.
+ *
+ *  The LATEST row with a Cost to close that was taken in the hours, 09:30–16:15 New York
+ *  (`sampleTiming` "close"): the day's close, which is what the sample is for (ADR 0011). Where no
+ *  row with a cost was taken in the hours — a holding recorded in New York's evening and not yet
+ *  through a session — the latest row with a cost of any timing, which the caller states
+ *  (`sampleTiming`), so an evening's reading is never passed off as a close. A row without a cost
+ *  values nothing: a weekend's row since #380 carries only the vol.
+ *
+ *  Latest by its market day, whatever order the rows come in.
+ */
+export function closeSample<T extends CloseCandidate>(samples: readonly T[]): T | null {
+  let close: T | null = null;
+  let any: T | null = null;
+  for (const s of samples) {
+    if (s.cost_to_close === null) continue;
+    if (any === null || s.observed_on > any.observed_on) any = s;
+    if (sampleTiming(s.observed_at) === "close" && (close === null || s.observed_on > close.observed_on)) {
+      close = s;
+    }
+  }
+  return close ?? any;
+}
+
+/** The row a holding is valued from at `now`, or null to value it LIVE (#380).
+ *
+ *  In the session, always live: the Provider's quote is the price. Outside it, the holding's latest
+ *  close (`closeSample`) — moomoo quotes every option bid 0 / ask 0 out of hours, which is no price,
+ *  and the close is what the owner reviews a trade against. A holding with no row that has a cost is
+ *  still valued live, which out of hours is a dash rather than a figure (`midPrice`).
+ */
+export function valuesFromClose<T extends CloseCandidate>(now: Date, samples: readonly T[]): T | null {
+  return inSession(now) ? null : closeSample(samples);
 }
 
 /** Calendar days from the current MARKET date to expiry.

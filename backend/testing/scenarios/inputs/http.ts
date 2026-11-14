@@ -80,6 +80,29 @@ const dayAt = (observed_on: string, dte: number, cost: number, ivs: number[], ve
 });
 const VEGAS = [5.5, 4.75, 4.25, 3.5];
 
+/** Out of New York's session (#380): Saturday 14 November 2026, noon there. moomoo quotes every
+ *  option bid 0 / ask 0 now, so a holding is valued from its latest close rather than live. */
+const SATURDAY = "2026-11-14T17:00:00.000Z";
+const condorCodes = [C7300, C7350, P6400, P6350];
+const legMap = (values: number[]) => Object.fromEntries(condorCodes.map((c, i) => [c, values[i]]));
+/** A day's row of the condor, observed at a UTC instant, with every figure a close carries. */
+const closeRow = (observed_on: string, dte: number, cost: number | null, observed_at: string, over = {}) =>
+  sample({
+    position_id: "pos-1", observed_on, dte, cost_to_close: cost, observed_at,
+    legs_iv: legMap([14.5, 14, 19.25, 20]), legs_vega: legMap([4.25, 4, 4.5, 3.75]),
+    legs_delta: legMap([0.2, 0.14, -0.17, -0.11]), spx: 6900.5, contract_size: 100, ...over,
+  });
+/** Thursday's and Friday's closes, at 16:14 New York, and Saturday's row: filled after New York's
+ *  midnight with each leg's vol and no price (#380). */
+const THU = closeRow("2026-11-12", 36, 3.75, "2026-11-12 21:14:58.000000");
+const FRI = closeRow("2026-11-13", 35, 3.25, "2026-11-13 21:14:59.000000");
+const SAT = closeRow("2026-11-14", 34, null, "2026-11-14 05:00:12.000000");
+/** moomoo's answer for the condor out of hours: no mid on any leg (`midPrice`), the rest as before. */
+const OUT_OF_HOURS = Object.fromEntries(Object.entries(BOOK).map(([code, q]) => {
+  const { mid_price: _mid, ...rest } = q;
+  return [code, { ...rest, bid_price: 0, ask_price: 0 }];
+}));
+
 const single = { strike_date: EXPIRY, option_type: "CALL", strike: 7300, threshold: 0.3 };
 const comboBody = {
   name: "dec-calls", strike_date: EXPIRY, threshold: 4,
@@ -794,6 +817,94 @@ export const HTTP: readonly HttpInput[] = [
       },
       provider: { quotes: BOOK },
     }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // #380: outside the session the holding is valued from Friday's close, past Saturday's costless
+    // row: its cost, P&L at the stored size, Levels and pace at the close's own 35 DTE, its greeks
+    // from the legs' stored delta and vega (no gamma, no theta), SPX as stored, and the close's
+    // observed time as its stamp — with the Provider DOWN, because nothing is asked of it
+    name: "GET /positions/values outside the session values a holding from its last close, asking the Provider nothing",
+    world: world({
+      clock: SATURDAY,
+      tables: { ...held, position_samples: [THU, FRI, SAT] },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // the holding with a close is valued from it; the one with none is valued live — and only its
+    // contracts are asked for, which out of hours come back with no book: a dash, never a 0
+    name: "GET /positions/values outside the session values live only a holding with no close",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-wing", strategy: "call spread", entry: 1.5, opened_at: "2026-11-13",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7350 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+        ],
+        position_samples: [FRI, SAT],
+      },
+      provider: { quotes: { ...OUT_OF_HOURS, [C7500]: { ...quote("SPXW 261218 7500C", 0.5, 0.06), mid_price: null, bid_price: 0, ask_price: 0 } } },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // F6's fallback: a trade recorded in New York's evening has no close yet, only its first row,
+    // taken after the close — valued from that, and said to be from after the close
+    name: "GET /positions/values outside the session values from a reading after the close where no close has a cost",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        positions: [position({ id: "pos-1", opened_at: "2026-11-13" })],
+        position_samples: [
+          closeRow("2026-11-13", 35, 3.5, "2026-11-14 01:30:00.000000"), // 20:30 New York
+          SAT,
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // ...and a close before a LATER reading that is not one: Friday's session was missed and its
+    // row filled that evening, so Thursday's close is what the holding is valued from (F6)
+    name: "GET /positions/values outside the session prefers the latest close to a later reading after the close",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        ...held,
+        position_samples: [THU, closeRow("2026-11-13", 35, 3.5, "2026-11-14 01:30:00.000000"), SAT],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // a close summed before a leg's quantity was corrected is another structure's cost (#359): it
+    // values nothing. Corrected on Friday evening, after both closes, so the holding has none left
+    // and is valued live — out of hours, a dash
+    name: "GET /positions/values outside the session skips a close summed before a quantity was corrected",
+    world: world({
+      clock: SATURDAY,
+      tables: {
+        positions: [position({ id: "pos-1", qty_corrected_at: "2026-11-14 01:00:00.000000" })],
+        position_samples: [THU, FRI, SAT],
+      },
+      provider: { quotes: OUT_OF_HOURS },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // in the session the Provider's quote is the price, whatever is stored: unchanged by #380
+    name: "GET /positions/values in the session values live though a close is stored",
+    world: world({ tables: { ...held, position_samples: [THU, FRI] }, provider: { quotes: BOOK } }),
     request: request("GET", "/positions/values"),
   },
   {

@@ -74,7 +74,7 @@ class TestOneBatch:
     async def test_asks_for_nothing_and_answers_nothing_with_nothing_held(self, db):
         asked = []
         valued = await holding_values(db, counting(asked), NOW, settings_for(), TZ)
-        assert (valued.by_code, valued.values, asked) == ({}, [], [])
+        assert (valued.values, asked) == ([], [])
 
     async def test_asks_once_for_every_contract_held_each_once_and_in_order(self, db):
         # two holdings sharing a strike — a roll in progress — are one code in the batch, not two
@@ -97,9 +97,10 @@ class TestOneBatch:
         # the route reads the contract size and the greeks from it, so it is the displayed records
         hold(db, "a", CONDOR[:1])
         valued = await holding_values(db, fake_fetcher(priced_fetcher), NOW, settings_for(), TZ)
-        assert list(valued.by_code) == ["US.SPXW261030C8050000"]
-        assert valued.by_code["US.SPXW261030C8050000"]["mid_price"] == 5.0
-        assert valued.by_code["US.SPXW261030C8050000"]["fetched_at"] == "2026-10-02 13:26:06+08:00"
+        records = valued.values[0].records
+        assert list(records) == ["US.SPXW261030C8050000"]
+        assert records["US.SPXW261030C8050000"]["mid_price"] == 5.0
+        assert records["US.SPXW261030C8050000"]["fetched_at"] == "2026-10-02 13:26:06+08:00"
 
 
 class TestEachHolding:

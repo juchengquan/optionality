@@ -168,7 +168,8 @@
               "US.SPXW261127P6350000": -0.08
             },
             "observed_at": "2026-11-09 15:00:00.000000",
-            "spx": null
+            "spx": null,
+            "contract_size": 100
           }
         ]
       }

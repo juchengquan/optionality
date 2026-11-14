@@ -71,7 +71,8 @@
           "legs_vega": null,
           "legs_delta": null,
           "observed_at": null,
-          "spx": null
+          "spx": null,
+          "contract_size": null
         },
         {
           "position_id": "pos-1",
@@ -91,7 +92,8 @@
             "US.SPXW261218P6400000": -0.18
           },
           "observed_at": "2026-11-06 21:00:00.000000",
-          "spx": 6812.5
+          "spx": 6812.5,
+          "contract_size": null
         },
         {
           "position_id": "pos-1",
@@ -102,7 +104,8 @@
           "legs_vega": null,
           "legs_delta": null,
           "observed_at": "2026-11-08 01:30:00.000000",
-          "spx": null
+          "spx": null,
+          "contract_size": null
         },
         {
           "position_id": "pos-1",
@@ -113,7 +116,8 @@
           "legs_vega": null,
           "legs_delta": null,
           "observed_at": "2026-11-08 05:05:00.000000",
-          "spx": null
+          "spx": null,
+          "contract_size": null
         }
       ],
       "reference_securities": []

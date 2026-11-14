@@ -932,6 +932,390 @@
         "2026-11-09 21:00:00"
       ],
       "expect": "close"
+    },
+    {
+      "fn": "inSession",
+      "name": "a millisecond before 09:30 on a Monday",
+      "args": [
+        {
+          "$date": "2026-11-09T14:29:59.999Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSession",
+      "name": "09:30 exactly on a Monday",
+      "args": [
+        {
+          "$date": "2026-11-09T14:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSession",
+      "name": "16:15 exactly on a Monday",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSession",
+      "name": "a millisecond after 16:15 on a Monday",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSession",
+      "name": "Friday 16:00, before the options' close",
+      "args": [
+        {
+          "$date": "2026-11-13T21:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSession",
+      "name": "Saturday noon, in the sample hours and out of session",
+      "args": [
+        {
+          "$date": "2026-11-07T17:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSession",
+      "name": "Sunday noon",
+      "args": [
+        {
+          "$date": "2026-11-08T17:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSession",
+      "name": "Friday 23:30 in New York, Saturday in UTC",
+      "args": [
+        {
+          "$date": "2026-11-14T04:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSession",
+      "name": "Sunday 19:30 in New York, Monday in UTC",
+      "args": [
+        {
+          "$date": "2026-11-09T00:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "inSession",
+      "name": "09:30 EDT, the Monday after the clocks went forward",
+      "args": [
+        {
+          "$date": "2026-03-09T13:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "inSession",
+      "name": "Thanksgiving noon, a holiday nothing detects",
+      "args": [
+        {
+          "$date": "2026-11-26T17:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "closeSample",
+      "name": "the latest close with a cost, past a costless weekend row",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "the latest by its day, whatever order the rows come in",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "an earlier close before a later reading after the close",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-15 01:30:00.000000",
+            "cost_to_close": 3.4
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "the latest with a cost of any timing, where no close has one",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 10:00:00.000000",
+            "cost_to_close": 3.6
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-14 01:30:00.000000",
+            "cost_to_close": 3.2
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-14 01:30:00.000000",
+        "cost_to_close": 3.2
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "a row with no stamp only where nothing in the hours has a cost",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": null,
+            "cost_to_close": 2.9
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "no row with a cost",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          }
+        ]
+      ],
+      "expect": null
+    },
+    {
+      "fn": "closeSample",
+      "name": "no rows",
+      "args": [
+        []
+      ],
+      "expect": null
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "in the session, live whatever is stored",
+      "args": [
+        {
+          "$date": "2026-11-13T21:15:00.000Z"
+        },
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          }
+        ]
+      ],
+      "expect": null
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "a millisecond after the close, the close",
+      "args": [
+        {
+          "$date": "2026-11-13T21:15:00.001Z"
+        },
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "Saturday noon, Friday's close past Saturday's costless row",
+      "args": [
+        {
+          "$date": "2026-11-14T17:00:00.000Z"
+        },
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "Monday before the open, Friday's close",
+      "args": [
+        {
+          "$date": "2026-11-16T14:00:00.000Z"
+        },
+        [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "out of session with no row that has a cost, live",
+      "args": [
+        {
+          "$date": "2026-11-14T17:00:00.000Z"
+        },
+        [
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          }
+        ]
+      ],
+      "expect": null
     }
   ]
 }

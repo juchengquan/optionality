@@ -138,7 +138,7 @@ export const link = (monitorId: string, positionId: string): Row =>
 
 export function sample(over: Row & { position_id: string; observed_on: string }): Row {
   return { dte: 39, cost_to_close: 3.1, legs_iv: null, legs_vega: null, legs_delta: null, observed_at: null,
-    spx: null, ...over };
+    spx: null, contract_size: null, ...over };
 }
 
 export function reference(over: Row & { id: string; code: string }): Row {

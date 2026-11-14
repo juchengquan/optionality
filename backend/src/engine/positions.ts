@@ -13,9 +13,9 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { daysToExpiry, marketDate, takesSample } from "optionality/domain/expiry";
+import { daysToExpiry, marketDate, sampleTiming, takesSample } from "optionality/domain/expiry";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
-import { costToClose, legReadings } from "optionality/domain/position";
+import { contractSize, costToClose, legReadings } from "optionality/domain/position";
 import { derivedSpx } from "optionality/domain/quote";
 import {
   findPositionSample, recordPositionSample, stampManageNotified,
@@ -27,6 +27,7 @@ import type { Settings } from "../env.ts";
 import type { Notifier } from "../notify.ts";
 import type { QuoteRecord } from "optionality/quotes";
 import { toPosition } from "../hydrate.ts";
+import { closeOf } from "../holdings.ts";
 
 /** What the sweep hands these: the database, the policy, and a way to send that reports whether it
  *  got through. `notify.ts`'s notifier swallows a failed send — it must, since the sweep's job is
@@ -47,6 +48,15 @@ export interface PositionSweepDeps {
  *  `opened_at` is the gate, and that is the whole reason it is: three of the five Positions in
  *  the live book were already inside 21 DTE when this shipped, so without it the first sweep
  *  after the deploy would have fired three retroactive notices and looked like a fault.
+ *
+ *  **Held until there is a Cost to close to say** (#380). The notice goes once, so one sent without
+ *  its "now" line is without it for good — and the manage-by DTE is first crossed just after New
+ *  York's midnight, when moomoo quotes every option bid 0 / ask 0 and the batch prices nothing. So
+ *  it is valued from the sweep's own batch where that prices it, and otherwise, outside the
+ *  session, from the holding's latest close as `/holdings` would value it (`closeOf`), with that
+ *  close's day said beside the figure and its pace at that close's own DTE. Where neither gives a
+ *  cost the notice is not sent and not stamped, and the next sweep asks again — in the session at
+ *  the latest, where the batch prices it.
  */
 export async function noticeManageBy(
   deps: PositionSweepDeps,
@@ -59,18 +69,21 @@ export async function noticeManageBy(
       const dte = daysToExpiry(row.strike_date, at);
       if (dte < 0 || dte > settings.exitManageByDte) continue;
 
-      const cost = costToClose(toPosition(row), byCode);
-      const pace = onPace(row.entry, dteAtOpen(row.strike_date, row.opened_at), dte);
+      // the batch's own cost when it has one; else, out of the session, the latest close's
+      const live = costToClose(toPosition(row), byCode);
+      const close = live === null ? closeOf(deps.db, row, at) : null;
+      const cost = close === null ? live : close.cost_to_close;
+      // no cost yet: HELD, unsent and unstamped, until a sweep has one to say
+      if (cost === null) continue;
+      const pace = onPace(row.entry, dteAtOpen(row.strike_date, row.opened_at), close?.dte ?? dte);
 
       let line = `⏰ ${row.name} is at ${dte} DTE — manage by ${settings.exitManageByDte}`;
       if (row.entry !== null) line += `\nentry ${row.entry}`;
-      if (cost !== null) line += ` · now ${cost.toFixed(2)}`;
+      line += close === null ? ` · now ${cost.toFixed(2)}` : ` · ${cost.toFixed(2)} ${closeWords(close)}`;
       if (pace !== null) {
-        const gap = cost === null ? null : cost - pace;
+        const gap = cost - pace;
         line += `\non-pace ${pace.toFixed(2)}`;
-        if (gap !== null) {
-          line += ` — ${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
-        }
+        line += ` — ${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
       }
       // stamped only once the notice has actually been delivered, so an undelivered one is
       // retried next sweep while a delivered one is never repeated. `notify` swallows a failed
@@ -81,6 +94,17 @@ export async function noticeManageBy(
     } catch (err) {
       console.error(`manage-by notice for ${row.name} failed:`, err);
     }
+  }
+}
+
+/** Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's
+ *  own timing where no close had a cost (`closeSample`'s fallback) — never passed off as a close. */
+function closeWords(close: { observed_on: string; observed_at: string | null }): string {
+  switch (sampleTiming(close.observed_at)) {
+    case "close": return `at the ${close.observed_on} close`;
+    case "after-close": return `on ${close.observed_on}, after the close`;
+    case "before-open": return `on ${close.observed_on}, before the open`;
+    default: return `on ${close.observed_on}`;
   }
 }
 
@@ -110,6 +134,9 @@ export function recordSamples(
   // same index. Never a Reference's figure (ADR 0018, 0024); null where the batch cannot give it,
   // which costs the sample nothing else.
   const spx = derivedSpx(Object.values(byCode)).price;
+  // ...and the batch's contract size, so a holding valued from this row outside the session has a
+  // P&L without asking the Provider (#380, migration 0013). Never assumed to be 100.
+  const size = contractSize(byCode);
   for (const row of rows) {
     try {
       const dte = daysToExpiry(row.strike_date, at);
@@ -159,12 +186,13 @@ export function recordSamples(
       // says when the figures were last seen to change, which is when they were observed.
       if (write === "if-changed" && stored && stored.dte === dte && stored.cost_to_close === cost
         && stored.legs_iv === legsIv && stored.legs_vega === legsVega
-        && stored.legs_delta === legsDelta && stored.spx === spx) continue;
+        && stored.legs_delta === legsDelta && stored.spx === spx
+        && stored.contract_size === size) continue;
 
       recordPositionSample(db, {
         position_id: row.id, observed_on: observedOn, dte, cost_to_close: cost,
         legs_iv: legsIv, legs_vega: legsVega, legs_delta: legsDelta, observed_at: toSqlDatetime(at),
-        spx,
+        spx, contract_size: size,
       });
     } catch (err) {
       console.error(`recording a sample for ${row.name} failed:`, err);

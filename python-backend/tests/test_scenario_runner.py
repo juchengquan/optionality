@@ -402,6 +402,8 @@ def test_the_seam_runs_a_tick_of_the_real_engine_on_the_world():
                 # the sweep's own instant, the world's clock as the database stores it
                 "observed_at": "2026-11-09 15:00:00.000000",
                 "spx": None,
+                # the batch's contract size (#380): this one's quote carries none
+                "contract_size": None,
             }
         ]
         assert w.sent == []

@@ -48,13 +48,12 @@ from optionality.position import (
     POSITION_GREEK_FIELDS,
     Leg,
     Position,
-    contract_size,
     leg_readings,
     position_greek,
     position_leg_codes,
     realized_points,
 )
-from optionality.quote import derived_spx, strike_distances
+from optionality.quote import strike_distances
 from optionality.timefmt import display_time
 from optionality.vol import PacedSample, pace_explained
 from pydantic import BaseModel, ConfigDict, Field
@@ -79,7 +78,7 @@ from ....db.queries import (
 from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored, to_sql_datetime
 from ....db.values import from_sqlite_json, new_id, to_sqlite_bool, to_sqlite_json
-from ....holdings import _exit_policy, holding_values
+from ....holdings import HoldingValue, _exit_policy, holding_values
 from ....hydrate import to_monitor, to_position
 from ....monitors import adopt_orphan_monitors
 from ....ports import verify_contracts
@@ -217,8 +216,18 @@ class PositionValues(PositionOut):
     #: strip draws. The strikes and deltas are there without an SPX; only the distances are None, and
     #: `spx_reason` says why.
     short_strikes: list[StrikeDistanceOut]
+    #: when the figures were read, in DISPLAY_TZ: this request's instant for a live valuation, and for a
+    #: close the instant that row was observed (None where it never recorded one) (#354, #380)
     fetched_at: str | None
-    #: days left where the option trades, the same reckoning the dashboard's column uses
+    #: where the figures are from (#380): "live", the Provider's batch — always, in the session — or
+    #: "close", the holding's latest stored row with a Cost to close, outside it
+    valued_from: Literal["live", "close"]
+    #: the New York market day of the row a close valuation is from; None when live
+    valued_on: str | None
+    #: what that row is (`sample_timing`); None when live
+    valued_timing: Literal["close", "before-open", "after-close", "unrecorded"] | None
+    #: days left where the option trades, the same reckoning the dashboard's column uses: TODAY's,
+    #: whatever the figures are from. Levels and the pace are at the close's own DTE (#380, F5).
     dte: float
     schedule: ScheduleOut | None
 
@@ -446,7 +455,9 @@ def position_routes(deps: Deps) -> APIRouter:
         return [out(r) for r in list_positions(db)]
 
     @router.get(
-        "/values", summary="Live value, P&L and exit schedule of every position", response_model=list[PositionValues]
+        "/values",
+        summary="Value, P&L and exit schedule of every position: live in the session, from its latest close outside it",
+        response_model=list[PositionValues],
     )
     async def values() -> list[dict[str, Any]]:
         """Live cost to close, exposure and P&L for every position.
@@ -456,28 +467,40 @@ def position_routes(deps: Deps) -> APIRouter:
         Provider invariant names it alongside the sweep, `/quotes` and the creation probes. It was a
         fifth exception in the code and a fourth in that sentence until 2026-10-17, when the list was
         corrected rather than the route; `/spx/quote` left the list in #199, which took the route with
-        it."""
+        it.
+
+        Outside New York's session a holding is valued from its latest close instead (#380, `holdings.py`),
+        and only the holdings with no close are asked for."""
         now = deps.now()
         try:
             valued = await holding_values(db, deps.provider.fetch_quotes, now, deps.settings, tz)
         except Exception as err:
             raise provider_failed(deps.provider.name, err) from err
-        by_code, held = valued.by_code, valued.values
+        held = valued.values
         if not held:
             return []
         fetched = display_time(now, tz)
-        spx = derived_spx(list(by_code.values()))
-        return [
-            {
+
+        def one(v: HoldingValue) -> dict[str, Any]:
+            # a close's stamp is when that row was observed: the clock the page's chips and its
+            # market-closed line read
+            timing = None if v.close is None else sample_timing(v.close["observed_at"])
+            if v.close is None:
+                stamp = fetched
+            elif timing == "unrecorded":
+                stamp = None
+            else:
+                stamp = display_stored(v.close["observed_at"], tz)
+            return {
                 **out(v.row),
                 "cost_to_close": v.cost,
                 "pnl": v.pnl,
                 "captured": v.captured,
-                "contract_size": contract_size(by_code),
-                "spx": spx.price,
-                "spx_reason": spx.reason,
-                "greeks": {f: position_greek(v.position, by_code, f) for f in POSITION_GREEK_FIELDS},
-                "legs_delta": leg_readings(v.position, by_code, "option_delta"),
+                "contract_size": v.contract_size,
+                "spx": v.spx.price,
+                "spx_reason": v.spx.reason,
+                "greeks": {f: position_greek(v.position, v.records, f) for f in POSITION_GREEK_FIELDS},
+                "legs_delta": leg_readings(v.position, v.records, "option_delta"),
                 "short_strikes": [
                     s.model_dump()
                     for s in strike_distances(
@@ -486,17 +509,20 @@ def position_routes(deps: Deps) -> APIRouter:
                             for leg in v.position.legs
                             if leg.side == "short"
                         ],
-                        by_code,
-                        spx.price,
-                        v.dte,
+                        v.records,
+                        v.spx.price,
+                        v.figures_dte,
                     )
                 ],
-                "fetched_at": fetched,
+                "fetched_at": stamp,
+                "valued_from": v.valued_from,
+                "valued_on": None if v.close is None else v.close["observed_on"],
+                "valued_timing": timing,
                 "dte": v.dte,
                 "schedule": v.schedule,
             }
-            for v in held
-        ]
+
+        return [one(v) for v in held]
 
     @router.get("/{id}/vol", summary="How much of the pace gap vol accounts for", response_model=VolOut)
     async def vol(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:

@@ -18,7 +18,60 @@
       "down": null,
       "rejects": {},
       "unknown": [],
-      "quotes": {}
+      "quotes": {
+        "US.SPXW261127C7300000": {
+          "name": "SPXW 261127 7300C",
+          "mid_price": 1.25,
+          "bid_price": 1.2,
+          "ask_price": 1.3,
+          "last_price": 1.25,
+          "option_delta": 0.12,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261127C7350000": {
+          "name": "SPXW 261127 7350C",
+          "mid_price": 0.75,
+          "bid_price": 0.7,
+          "ask_price": 0.8,
+          "last_price": 0.75,
+          "option_delta": 0.08,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261127P6350000": {
+          "name": "SPXW 261127 6350P",
+          "mid_price": 1.25,
+          "bid_price": 1.2,
+          "ask_price": 1.3,
+          "last_price": 1.25,
+          "option_delta": -0.08,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261127P6400000": {
+          "name": "SPXW 261127 6400P",
+          "mid_price": 2,
+          "bid_price": 1.95,
+          "ask_price": 2.05,
+          "last_price": 2,
+          "option_delta": -0.11,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        }
+      }
     },
     "sources": {},
     "telegram": "down",
@@ -70,7 +123,39 @@
   },
   "expect": {
     "messages": [],
-    "rows": {},
+    "rows": {
+      "position_samples": {
+        "added": [
+          {
+            "position_id": "pos-nov",
+            "observed_on": "2026-11-09",
+            "dte": 18,
+            "cost_to_close": 1.25,
+            "legs_iv": {
+              "US.SPXW261127C7300000": 14.5,
+              "US.SPXW261127C7350000": 14.5,
+              "US.SPXW261127P6400000": 14.5,
+              "US.SPXW261127P6350000": 14.5
+            },
+            "legs_vega": {
+              "US.SPXW261127C7300000": 4.25,
+              "US.SPXW261127C7350000": 4.25,
+              "US.SPXW261127P6400000": 4.25,
+              "US.SPXW261127P6350000": 4.25
+            },
+            "legs_delta": {
+              "US.SPXW261127C7300000": 0.12,
+              "US.SPXW261127C7350000": 0.08,
+              "US.SPXW261127P6400000": -0.11,
+              "US.SPXW261127P6350000": -0.08
+            },
+            "observed_at": "2026-11-09 15:00:00.000000",
+            "spx": null,
+            "contract_size": 100
+          }
+        ]
+      }
+    },
     "calls": {
       "moomoo": [
         [

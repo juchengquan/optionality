@@ -1,6 +1,6 @@
 import type { Holding } from "./shared/api";
 import { servedClock } from "./shared/format";
-import { servedWhen } from "./session";
+import { marketDayWords, newYorkWhen, servedWhen } from "./session";
 
 /** A holding's Levels as its chip says them, on every surface that draws one (#354, re-keyed to
  *  the session by #371).
@@ -46,7 +46,50 @@ export function valuedStamp(holdings: readonly Holding[]): string | null {
 export function levelWords(level: Level, holding: Holding, session: boolean, now: Date = new Date()): string {
   const words = LEVEL_WORDS[level];
   if (session) return words;
+  // valued from a stored close outside the session (#380): the market-closed line says which close
+  // and when, on New York's clock; the chip says only that it is that close, so the two state ONE
+  // clock between them (#354) and the chip stays short
+  if (holding.valued_from === "close") {
+    return `${words} · ${holding.valued_timing === "close" ? "as of the close" : "as of the last reading"}`;
+  }
   const at = servedWhen(holding.fetched_at, now);
   // a valuation with no time on it is still not live, and is said to be as last valued
   return `${words} · ${at ? `as valued at ${at}` : "as last valued"}`;
+}
+
+/** Which stored row a holding was valued from, in words: "as of the close, Fri 13 Nov 16:14", on New
+ *  York's clock — or, where no row with a cost was taken in the hours, that reading's own timing, so
+ *  it is never passed off as a close (#380). The bot's `/holdings` says the same words. */
+export function closeWords(h: Holding): string {
+  const when = newYorkWhen(h.fetched_at);
+  switch (h.valued_timing) {
+    case "close": return `as of the close, ${when ?? marketDayWords(h.valued_on ?? "") ?? "unknown"}`;
+    case "after-close": return `as of ${when}, after the close`;
+    case "before-open": return `as of ${when}, before the open`;
+    default: return `as of ${marketDayWords(h.valued_on ?? "") ?? "an earlier day"}, at a time not recorded`;
+  }
+}
+
+/** The market-closed line's words where any holding was valued from a stored close (#380):
+ *  "market closed — as of the close, Fri 13 Nov 16:14", then how many holdings were valued from
+ *  another row and how many had none and were valued live. Null where every holding was valued
+ *  live — the line then says when, as it did (`valuedStamp`). The bot's `closedLine`, word for word. */
+export function closeLineWords(holdings: readonly Holding[] | null): string | null {
+  const closes = (holdings ?? []).filter((h) => h.valued_from === "close");
+  if (closes.length === 0) return null;
+  const live = holdings!.length - closes.length;
+  // the instant each was observed, for "latest": a stamp the service wrote in one zone compares as
+  // text within it, and a missing one sorts first
+  const stamp = (h: Holding) => h.fetched_at ?? "";
+  const later = (a: Holding, b: Holding) =>
+    (b.valued_on ?? "") > (a.valued_on ?? "") || (b.valued_on === a.valued_on && stamp(b) > stamp(a));
+  const inHours = closes.filter((h) => h.valued_timing === "close");
+  const pool = inHours.length > 0 ? inHours : closes;
+  const latest = pool.reduce((a, b) => (later(a, b) ? b : a));
+  const key = (h: Holding) => `${h.valued_on} ${h.valued_timing}`;
+  const others = closes.filter((h) => key(h) !== key(latest)).length;
+  let line = `market closed — ${closeWords(latest)}`;
+  if (others > 0) line += `; ${others} as of another reading`;
+  if (live > 0) line += `; ${live} with no close, valued live`;
+  return line;
 }

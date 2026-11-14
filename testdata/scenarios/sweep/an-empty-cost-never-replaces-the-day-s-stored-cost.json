@@ -141,7 +141,8 @@
             "US.SPXW261218P6350000": -0.12
           },
           "observed_at": null,
-          "spx": null
+          "spx": null,
+          "contract_size": 100
         }
       ],
       "reference_securities": []

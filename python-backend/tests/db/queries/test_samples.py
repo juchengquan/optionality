@@ -56,6 +56,7 @@ def sample(observed_on, cost_to_close=1.5, position_id="p1", **over):
         "legs_delta": None,
         "observed_at": None,
         "spx": None,
+        "contract_size": None,
         **over,
     }
 

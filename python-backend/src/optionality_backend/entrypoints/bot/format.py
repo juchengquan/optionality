@@ -31,10 +31,14 @@ and a column that wraps is a table that cannot be read at all.
 import html
 import math
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
+from optionality.expiry import MARKET_TZ, sample_timing
 from optionality.js import js_string, to_fixed
 from optionality.monitor import threshold_fault
 
+from ...db.rows import PositionSampleRow
 from ...holdings import HoldingValue
 
 HELP_TEXT = """Commands:
@@ -223,6 +227,71 @@ def standing_note(v: HoldingValue) -> str:
     if s["pace_gap"] is None:
         return "—"
     return f"{'behind' if s['pace_gap'] > 0 else 'ahead'} {fixed(abs(s['pace_gap']), 2)}"
+
+
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _day_words(day: date) -> str:
+    """ "Fri 13 Nov": a market day, its names written out here rather than by a locale."""
+    return f"{_WEEKDAYS[day.weekday()]} {day.day} {_MONTHS[day.month - 1]}"
+
+
+def _new_york_when(observed_at: str | None) -> str | None:
+    """ "Fri 13 Nov 16:14": a stored UTC stamp on New York's clock, or None where it is unreadable."""
+    if observed_at is None or sample_timing(observed_at) == "unrecorded":
+        return None
+    when = datetime.fromisoformat(f"{observed_at[:10]}T{observed_at[11:23]}").replace(tzinfo=UTC)
+    ny = when.astimezone(ZoneInfo(MARKET_TZ))
+    return f"{_day_words(ny.date())} {ny.hour:02d}:{ny.minute:02d}"
+
+
+def close_words(close: PositionSampleRow) -> str:
+    """Which stored row a holding was valued from, in words: "as of the close, Fri 13 Nov 16:14" — or,
+    where no row with a cost was taken in the hours, that reading's own timing (#380)."""
+    when = _new_york_when(close["observed_at"])
+    timing = sample_timing(close["observed_at"])
+    if timing == "close":
+        return f"as of the close, {when}"
+    if timing == "after-close":
+        return f"as of {when}, after the close"
+    if timing == "before-open":
+        return f"as of {when}, before the open"
+    return f"as of {_day_words(date.fromisoformat(close['observed_on']))}, at a time not recorded"
+
+
+def closed_line(values: list[HoldingValue]) -> str:
+    """The one line `/holdings` adds under its table outside the session (#380): which close the figures
+    are from, how many holdings were valued from another row, and how many had none and were valued
+    live. Mirrors `format.ts`' `closedLine`."""
+    closes = [v.close for v in values if v.close is not None]
+    live = len(values) - len(closes)
+    if not closes:
+        return "market closed — no close recorded yet; valued live"
+
+    def later(a: PositionSampleRow, b: PositionSampleRow) -> bool:
+        return b["observed_on"] > a["observed_on"] or (
+            b["observed_on"] == a["observed_on"] and (b["observed_at"] or "") > (a["observed_at"] or "")
+        )
+
+    in_hours = [c for c in closes if sample_timing(c["observed_at"]) == "close"]
+    pool = in_hours or closes
+    latest = pool[0]
+    for c in pool[1:]:
+        if later(latest, c):
+            latest = c
+
+    def key(c: PositionSampleRow) -> tuple[str, str]:
+        return (c["observed_on"], sample_timing(c["observed_at"]))
+
+    others = sum(1 for c in closes if key(c) != key(latest))
+    line = f"market closed — {close_words(latest)}"
+    if others > 0:
+        line += f"; {others} as of another reading"
+    if live > 0:
+        line += f"; {live} with no close, valued live"
+    return line
 
 
 def has_format(field: str) -> bool:

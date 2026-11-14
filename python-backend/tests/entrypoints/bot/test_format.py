@@ -15,12 +15,17 @@ What only the Python can get wrong is at the end.
 
 import math
 import re
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, ClassVar
+
+from optionality.quote import DerivedSpx
 
 from optionality_backend.entrypoints.bot.format import (
     BOT_COMMANDS,
     HELP_TEXT,
     TABLE_WIDTH,
+    close_words,
+    closed_line,
     escape_html,
     fit_cell,
     fixed,
@@ -286,5 +291,62 @@ def standing(**schedule: Any) -> str:
         "reached": None,
         "manage_by_due": False,
     }
-    value = HoldingValue(row=None, position=None, cost=None, pnl=None, captured=None, schedule=full | schedule, dte=30)  # type: ignore[arg-type]
+    value = HoldingValue(  # type: ignore[arg-type]
+        row=None,
+        position=None,
+        cost=None,
+        pnl=None,
+        captured=None,
+        schedule=full | schedule,
+        dte=30,
+        valued_from="live",
+        close=None,
+        records={},
+        spx=DerivedSpx(price=None, reason="none"),
+        contract_size=None,
+        figures_dte=30,
+    )
     return standing_note(value)
+
+
+class TestClosedLine:
+    """Which close `/holdings` is valued from, out of session (#380)."""
+
+    @staticmethod
+    def row(observed_on: str, observed_at: str | None) -> Any:
+        return {"observed_on": observed_on, "observed_at": observed_at}
+
+    @staticmethod
+    def valued(close: Any) -> Any:
+        """only `close` is read"""
+        return SimpleNamespace(close=close)
+
+    FRI: ClassVar[dict[str, str]] = {"observed_on": "2026-11-13", "observed_at": "2026-11-13 21:14:59.000000"}
+
+    def test_names_the_close_on_new_york_s_clock(self):
+        assert close_words(self.FRI) == "as of the close, Fri 13 Nov 16:14"
+        assert close_words(self.row("2026-09-30", "2026-09-30 20:14:00.000000")) == "as of the close, Wed 30 Sep 16:14"
+
+    def test_never_passes_a_reading_off_as_a_close(self):
+        assert (
+            close_words(self.row("2026-11-13", "2026-11-14 01:30:00.000000"))
+            == "as of Fri 13 Nov 20:30, after the close"
+        )
+        assert (
+            close_words(self.row("2026-11-13", "2026-11-13 10:00:00.000000"))
+            == "as of Fri 13 Nov 05:00, before the open"
+        )
+        assert close_words(self.row("2026-11-13", None)) == "as of Fri 13 Nov, at a time not recorded"
+
+    def test_says_the_latest_close_and_how_many_holdings_were_valued_otherwise(self):
+        fri, v = self.FRI, self.valued
+        assert closed_line([v(fri), v(fri)]) == "market closed — as of the close, Fri 13 Nov 16:14"
+        assert (
+            closed_line([v(self.row("2026-11-13", "2026-11-13 21:10:00.000000")), v(fri)])
+            == "market closed — as of the close, Fri 13 Nov 16:14"
+        )
+        assert (
+            closed_line([v(fri), v(self.row("2026-11-13", "2026-11-14 01:30:00.000000")), v(None)])
+            == "market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading; 1 with no close, valued live"
+        )
+        assert closed_line([v(None)]) == "market closed — no close recorded yet; valued live"

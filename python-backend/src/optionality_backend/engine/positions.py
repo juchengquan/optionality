@@ -29,16 +29,17 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import days_to_expiry, market_date, takes_sample
+from optionality.expiry import days_to_expiry, market_date, sample_timing, takes_sample
 from optionality.js import js_string, to_fixed
-from optionality.position import cost_to_close, leg_readings
+from optionality.position import contract_size, cost_to_close, leg_readings
 from optionality.quote import ByCode, derived_spx
 
 from ..db.queries import find_position_sample, record_position_sample, stamp_manage_notified
-from ..db.rows import PositionRow
+from ..db.rows import PositionRow, PositionSampleRow
 from ..db.time import to_sql_datetime
 from ..db.values import to_sqlite_json
 from ..env import Settings
+from ..holdings import close_of
 from ..hydrate import to_position
 from ..notify import Notifier
 
@@ -75,6 +76,11 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
     `opened_at` is the gate, and that is the whole reason it is: three of the five Positions in the
     live book were already inside 21 DTE when this shipped, so without it the first sweep after the
     deploy would have fired three retroactive notices and looked like a fault.
+
+    **Held until there is a Cost to close to say** (#380): valued from the sweep's own batch where that
+    prices it, and otherwise, outside the session, from the holding's latest close (`close_of`), that
+    close's day said beside the figure and its pace at that close's own DTE — and where neither gives a
+    cost the notice is not sent and not stamped, and the next sweep asks again.
     """
     settings = deps.settings
     for row in rows:
@@ -85,19 +91,25 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
             if dte < 0 or dte > settings.exit_manage_by_dte:
                 continue
 
-            cost = cost_to_close(to_position(row), by_code)
-            pace = on_pace(row["entry"], dte_at_open(row["strike_date"], row["opened_at"]), dte)
+            # the batch's own cost when it has one; else, out of the session, the latest close's
+            live = cost_to_close(to_position(row), by_code)
+            close = close_of(deps.db, row, at) if live is None else None
+            cost = live if close is None else close["cost_to_close"]
+            # no cost yet: HELD, unsent and unstamped, until a sweep has one to say
+            if cost is None:
+                continue
+            pace = on_pace(
+                row["entry"], dte_at_open(row["strike_date"], row["opened_at"]), dte if close is None else close["dte"]
+            )
 
             line = f"⏰ {row['name']} is at {dte} DTE — manage by {settings.exit_manage_by_dte}"
             if row["entry"] is not None:
                 line += f"\nentry {js_string(row['entry'])}"
-            if cost is not None:
-                line += f" · now {_fixed(cost)}"
+            line += f" · now {_fixed(cost)}" if close is None else f" · {_fixed(cost)} {_close_words(close)}"
             if pace is not None:
-                gap = None if cost is None else cost - pace
+                gap = cost - pace
                 line += f"\non-pace {_fixed(pace)}"
-                if gap is not None:
-                    line += f" — {'behind' if gap > 0 else 'ahead'} by {_fixed(abs(gap))}"
+                line += f" — {'behind' if gap > 0 else 'ahead'} by {_fixed(abs(gap))}"
             # stamped only once the notice has actually been delivered, so an undelivered one is
             # retried next sweep while a delivered one is never repeated. `notify` swallows a failed
             # send and therefore cannot be relied on to raise — it reports instead.
@@ -105,6 +117,19 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
                 stamp_manage_notified(deps.db, row["id"], to_sql_datetime(at))
         except Exception:
             log.exception("manage-by notice for %s failed:", row["name"])
+
+
+def _close_words(close: PositionSampleRow) -> str:
+    """Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's
+    own timing where no close had a cost — never passed off as a close."""
+    timing = sample_timing(close["observed_at"])
+    if timing == "close":
+        return f"at the {close['observed_on']} close"
+    if timing == "after-close":
+        return f"on {close['observed_on']}, after the close"
+    if timing == "before-open":
+        return f"on {close['observed_on']}, before the open"
+    return f"on {close['observed_on']}"
 
 
 def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByCode, at: datetime) -> None:
@@ -132,6 +157,9 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
     # same index. Never a Reference's figure (ADR 0018, 0024); None where the batch cannot give it,
     # which costs the sample nothing else.
     spx = derived_spx(list(by_code.values())).price
+    # ...and the batch's contract size, so a holding valued from this row outside the session has a P&L
+    # without asking the Provider (#380, migration 0013). Never assumed to be 100.
+    size = contract_size(by_code)
     for row in rows:
         try:
             dte = days_to_expiry(row["strike_date"], at)
@@ -190,6 +218,7 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                 and stored["legs_vega"] == legs_vega
                 and stored["legs_delta"] == legs_delta
                 and stored["spx"] == spx
+                and stored["contract_size"] == size
             ):
                 continue
 
@@ -205,6 +234,7 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
                     "legs_delta": legs_delta,
                     "observed_at": to_sql_datetime(at),
                     "spx": spx,
+                    "contract_size": size,
                 },
             )
         except Exception:

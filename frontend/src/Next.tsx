@@ -36,6 +36,7 @@ import { holdToast } from "./edit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
 import { inSession, servedWhen, sessionEdge, useSessionClock } from "./session";
+import { withLastKnown } from "./lastknown";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
@@ -192,7 +193,10 @@ export function Next() {
   const [desk, setDesk] = deskSelection;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const requests = useRef(0);
-  const placed = useMemo(() => placeBook(book.quotes, holdings, book.monitors), [book.quotes, holdings, book.monitors]);
+  // out of the session a price rule has no figure; its last known one, read in the session, is said
+  // beside the dash (#380, lastknown.ts)
+  const quotes = useMemo(() => withLastKnown(book.quotes, book.monitors, session), [book.quotes, book.monitors, session]);
+  const placed = useMemo(() => placeBook(quotes, holdings, book.monitors), [quotes, holdings, book.monitors]);
   const found = useMemo(() => findables(placed), [placed]);
   const selectedRow = useMemo(
     () => (desk.id === null ? null : tableRows(placed).find((r) => rowId(r) === desk.id) ?? null), [placed, desk.id],
@@ -240,17 +244,17 @@ export function Next() {
   // chip says them, "as valued at", and the market-closed line says when. The book is still DRAWN
   // with them outside the session, so they still say which combos are drawn apart (#346)
   const items = useMemo(
-    () => needsYou(book.quotes, book.monitors, book.health, session ? holdings : null, holdings, session),
-    [book.quotes, book.monitors, book.health, holdings, session],
+    () => needsYou(quotes, book.monitors, book.health, session ? holdings : null, holdings, session),
+    [quotes, book.monitors, book.health, holdings, session],
   );
   const everything = useMemo(
-    () => needsYou(book.quotes, book.monitors, book.health, holdings),
-    [book.quotes, book.monitors, book.health, holdings],
+    () => needsYou(quotes, book.monitors, book.health, holdings),
+    [quotes, book.monitors, book.health, holdings],
   );
 
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
-    quotes: book.quotes, monitors: book.monitors, holdings,
+    quotes, monitors: book.monitors, holdings,
     holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, session, privacy, entryStyle, writes,
     onRevalue: () => void book.refreshNow(), revaluing: book.refreshing,
     journal: (

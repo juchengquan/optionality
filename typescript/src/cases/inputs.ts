@@ -173,6 +173,16 @@ const PROVISIONAL = { ...WHOLE, observed_at: "2026-11-09 05:05:00.000000" }; // 
 const IN_HOURS = { ...WHOLE, observed_at: "2026-11-09 16:00:00.000000" }; // 11:00
 const POST_CLOSE = { ...WHOLE, observed_at: "2026-11-10 01:30:00.000000" }; // 20:30
 const LEGACY = { ...WHOLE, observed_at: null }; // written before observed_at existed
+/** A holding's rows across a week's end (#380), as `closeSample` reads them: Thursday's and
+ *  Friday's closes, observed at 16:14 New York (EST), and Saturday's row filled after New York's
+ *  midnight with no price — moomoo's 0/0 — and its vol. */
+const THU_CLOSE = { observed_on: "2026-11-12", observed_at: "2026-11-12 21:14:58.100000", cost_to_close: 4.4 };
+const FRI_CLOSE = { observed_on: "2026-11-13", observed_at: "2026-11-13 21:14:59.561000", cost_to_close: 3.05 };
+const SAT_FILL = { observed_on: "2026-11-14", observed_at: "2026-11-14 05:00:12.407000", cost_to_close: null };
+/** a later day's reading taken after the close (20:30 New York), and a fill before the open */
+const SAT_EVENING = { observed_on: "2026-11-14", observed_at: "2026-11-15 01:30:00.000000", cost_to_close: 3.4 };
+const FRI_EVENING = { observed_on: "2026-11-13", observed_at: "2026-11-14 01:30:00.000000", cost_to_close: 3.2 };
+const THU_EARLY = { observed_on: "2026-11-12", observed_at: "2026-11-12 10:00:00.000000", cost_to_close: 3.6 };
 
 export const INPUTS: Record<string, CaseInput[]> = {
   contract: [
@@ -325,6 +335,42 @@ export const INPUTS: Record<string, CaseInput[]> = {
       args: ["2026-11-09 24:00:00.000000"] },
     { fn: "sampleTiming", name: "a two-digit year, which Date.UTC reads as the 1900s", args: ["0050-11-09 21:00:00"] },
     { fn: "sampleTiming", name: "no fraction", args: ["2026-11-09 21:00:00"] },
+    // New York's session (#380): the sample hours' edges, Monday to Friday only
+    { fn: "inSession", name: "a millisecond before 09:30 on a Monday", args: [at("2026-11-09T14:29:59.999Z")] },
+    { fn: "inSession", name: "09:30 exactly on a Monday", args: [at("2026-11-09T14:30:00.000Z")] },
+    { fn: "inSession", name: "16:15 exactly on a Monday", args: [at("2026-11-09T21:15:00.000Z")] },
+    { fn: "inSession", name: "a millisecond after 16:15 on a Monday", args: [at("2026-11-09T21:15:00.001Z")] },
+    { fn: "inSession", name: "Friday 16:00, before the options' close", args: [at("2026-11-13T21:00:00Z")] },
+    { fn: "inSession", name: "Saturday noon, in the sample hours and out of session",
+      args: [at("2026-11-07T17:00:00Z")] },
+    { fn: "inSession", name: "Sunday noon", args: [at("2026-11-08T17:00:00Z")] },
+    { fn: "inSession", name: "Friday 23:30 in New York, Saturday in UTC", args: [at("2026-11-14T04:30:00Z")] },
+    { fn: "inSession", name: "Sunday 19:30 in New York, Monday in UTC", args: [at("2026-11-09T00:30:00Z")] },
+    { fn: "inSession", name: "09:30 EDT, the Monday after the clocks went forward", args: [at("2026-03-09T13:30:00Z")] },
+    { fn: "inSession", name: "Thanksgiving noon, a holiday nothing detects", args: [at("2026-11-26T17:00:00Z")] },
+    // the row a holding is valued from outside the session (#380, F6)
+    { fn: "closeSample", name: "the latest close with a cost, past a costless weekend row",
+      args: [[THU_CLOSE, FRI_CLOSE, SAT_FILL]] },
+    { fn: "closeSample", name: "the latest by its day, whatever order the rows come in",
+      args: [[SAT_FILL, FRI_CLOSE, THU_CLOSE]] },
+    { fn: "closeSample", name: "an earlier close before a later reading after the close",
+      args: [[FRI_CLOSE, SAT_EVENING]] },
+    { fn: "closeSample", name: "the latest with a cost of any timing, where no close has one",
+      args: [[THU_EARLY, FRI_EVENING, SAT_FILL]] },
+    { fn: "closeSample", name: "a row with no stamp only where nothing in the hours has a cost",
+      args: [[FRI_CLOSE, { ...SAT_FILL, observed_at: null, cost_to_close: 2.9 }]] },
+    { fn: "closeSample", name: "no row with a cost", args: [[SAT_FILL]] },
+    { fn: "closeSample", name: "no rows", args: [[]] },
+    { fn: "valuesFromClose", name: "in the session, live whatever is stored",
+      args: [at("2026-11-13T21:15:00.000Z"), [THU_CLOSE, FRI_CLOSE]] },
+    { fn: "valuesFromClose", name: "a millisecond after the close, the close",
+      args: [at("2026-11-13T21:15:00.001Z"), [THU_CLOSE, FRI_CLOSE]] },
+    { fn: "valuesFromClose", name: "Saturday noon, Friday's close past Saturday's costless row",
+      args: [at("2026-11-14T17:00:00Z"), [THU_CLOSE, FRI_CLOSE, SAT_FILL]] },
+    { fn: "valuesFromClose", name: "Monday before the open, Friday's close",
+      args: [at("2026-11-16T14:00:00Z"), [FRI_CLOSE, SAT_FILL]] },
+    { fn: "valuesFromClose", name: "out of session with no row that has a cost, live",
+      args: [at("2026-11-14T17:00:00Z"), [SAT_FILL]] },
   ],
   timefmt: [
     { fn: "displayTime", name: "in Singapore", args: [at("2026-10-17T05:26:06Z"), "Asia/Singapore"] },
@@ -605,6 +651,13 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "positionPnl", name: "a long put's debit", args: [longPut, quotes] },
     { fn: "positionPnl", name: "no entry is no P&L", args: [noEntry, quotes] },
     { fn: "positionPnl", name: "a leg unpriced is no P&L", args: [condor, missingShortPut] },
+    // a given Cost to close at a given size: a holding valued from its latest close (#380)
+    { fn: "pnlAt", name: "a condor at a stored cost", args: [condor, 3.05, 100] },
+    { fn: "pnlAt", name: "a long put's debit at a stored cost", args: [longPut, -6.5, 100] },
+    { fn: "pnlAt", name: "no size is no P&L, never an assumed 100", args: [condor, 3.05, null] },
+    { fn: "pnlAt", name: "no cost is no P&L", args: [condor, null, 100] },
+    { fn: "pnlAt", name: "no entry is no P&L", args: [noEntry, 3.05, 100] },
+    { fn: "pnlAt", name: "an exact half-cent rounds to the even cent, as Python rounds", args: [longPut, -5.125, 1] },
     { fn: "realizedPoints", name: "a condor closed for less than it took in", args: [condor, 0.4] },
     { fn: "realizedPoints", name: "closed for more than it took in", args: [condor, 9.75] },
     { fn: "realizedPoints", name: "expired worth nothing", args: [condor, 0] },

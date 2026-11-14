@@ -40,7 +40,9 @@ type Infer<T extends (...args: never[]) => Promise<{ json: () => Promise<unknown
 type QuotesResponse = Exclude<Infer<typeof client.quotes.$get>, { detail: string }>;
 type MonitorsResponse = Exclude<Infer<typeof client.monitors.$get>, { detail: string }>;
 
-export type Entry = QuotesResponse[number];
+/** One row of `/quotes`, with what the PAGE adds beside it: out of the session, the rule's last known
+ *  figure from `/monitors`, where the row has none (`lastknown.ts`, #380). */
+export type Entry = QuotesResponse[number] & { last_reading?: { value: number; at: string } | null };
 export type Monitor = MonitorsResponse[number];
 export type Health = Exclude<Infer<typeof client.health.$get>, { detail: string }>;
 export type Leg = NonNullable<Entry["legs"]>[number];
