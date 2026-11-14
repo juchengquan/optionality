@@ -21,6 +21,7 @@ import {
 import { servedDelta } from "../legs";
 import { paceSigned, paceWords } from "../pace";
 import { LEVEL_WORDS, levelWords } from "../levels";
+import { outOfHoursValue, priceOf } from "../lastknown";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
 export type DeskRow =
@@ -201,14 +202,19 @@ const VALUE: DeskColumn = {
   // holding does not hold included (#346). The service serves that one no cost to close
   // (`costToCloseOf` is null unless every contract it names is held), except a ratio, whose repeated
   // contract it counts once: drawn as a watched spread, it shows its value. A single contract's mid
+  // — always a PRICE (#400): a delta rule's figure is the Δ column's and its sentence's, never this
+  // one's. Out of the session a watchlist row says its last in-session price and when, or a dash
   key: "value", label: "value",
   text: (r) => r.kind === "holding" ? points(r.holding.cost_to_close)
     : r.kind === "rule"
-      ? points(r.entry.legs
-        ? (r.overlap ? r.entry.combo_value : (r.entry.cost_to_close ?? r.entry.combo_value))
-        : quoted(r.entry, "mid_price"))
+      ? (onWatchlist(r) ? outOfHoursValue(r.entry) : undefined)
+        ?? points(r.entry.legs && !r.overlap ? (r.entry.cost_to_close ?? priceOf(r.entry)) : priceOf(r.entry))
       : "",
 };
+
+/** A row the watchlist draws: an entry signal, or a combo drawn apart from the holding it partly
+ *  overlaps (#346) — not a rule about something held, whose value is its cost to close. */
+export const onWatchlist = (r: Extract<DeskRow, { kind: "rule" }>) => isEntrySignal(r.entry) || Boolean(r.overlap);
 
 const PNL: DeskColumn = {
   key: "pnl", label: "P&L", text: holdingOnly((h, _, privacy) => moneyText(h.pnl, privacy)),

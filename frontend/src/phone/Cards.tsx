@@ -112,9 +112,11 @@ export function Progress({ entry }: { entry: Entry }) {
 
 /** A watched spread — or a single contract, or a rule on something held that no drawn holding
  *  owns — with its progress toward the threshold and the rules that sit under it, and, for a
- *  spread that only partly overlaps a holding, what it shares and with whom (#346). */
-export function RuleCard({ entry, under, overlap = null, onOpen }: {
-  entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
+ *  spread that only partly overlaps a holding, what it shares and with whom (#346). A watchlist
+ *  card out of the session says its last in-session price and when (#400), `value`; in the session
+ *  it says none, as before. */
+export function RuleCard({ entry, under, overlap = null, value, onOpen }: {
+  entry: Entry; under: Entry[]; overlap?: string | null; value?: string; onOpen: () => void;
 }) {
   const state = ruleState(entry);
   return (
@@ -126,6 +128,7 @@ export function RuleCard({ entry, under, overlap = null, onOpen }: {
         {state ? <Chip state={state} /> : null}
       </header>
       {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
+      {value !== undefined ? <p className="nxp-meta" data-value="">{`value ${value}`}</p> : null}
       <Progress entry={entry} />
       <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}

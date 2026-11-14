@@ -3,12 +3,14 @@
  *
  *  The owner's decision (2026-11-15): the picture is for analysis later, by a person or a model, so
  *  it is the old page's plain table rather than the screen — from the desk and the phone alike, the
- *  same table. Words and numbers only. Everything the screen says by colour, a chip, a bar, a
- *  bracket or a symbol is said here in words: the rule in its full sentence (`sentence`, never the
- *  short form of #388), the pace gap as "behind by 0.40", a row's attention in a STATUS column in
- *  the page's own words (`chipWords`'s, the quarantine reasons, the muted reasons), and what each
- *  row is — a holding, a rule on one, a watched spread — in a column of its own, since the indent
- *  and the condor's bracket are gone.
+ *  same table. Words and numbers only: the rule in its full sentence (`sentence`, never the short
+ *  form of #388), the pace gap as "behind by 0.40".
+ *
+ *  Fewer, shorter columns since #400 (the owner, 2026-11-15): no column saying what each row is and
+ *  no status column. A row's attention is said where the page says it — the needs-you line and the
+ *  rule's sentence — and what the needs line cannot say is said in the header and the headings
+ *  instead: out of the session, a "Levels" line with each holding's Level in its chip's words (the
+ *  page's line names none there, #354), and the muted rules grouped under their reasons.
  *
  *  Pure: no React, no DOM, no cookie and no clock of its own — the caller hands in the columns the
  *  viewer hid and the moment of the press. `Still.tsx` draws a `PlainView`; `toMarkdown` writes it.
@@ -21,12 +23,13 @@ import { DASH, freshnessWords, shortDate } from "../shared/format";
 import { GROUPS } from "../shared/groups";
 import { drawnReadings, referenceWords } from "../shared/readings";
 
-import { attentionOf, COLUMNS, PINNED, rowName, rowStrip, type DeskColumn, type DeskRow } from "../desk/columns";
+import { COLUMNS, PINNED, rowName, rowStrip, type DeskColumn, type DeskRow } from "../desk/columns";
 import { closedLineText, levelWords } from "../levels";
-import { monitorName, QUARANTINED, storedRuleWords, type Need } from "../needs";
+import { monitorName, storedRuleWords, type Need } from "../needs";
+import { mutedWords } from "../phone/figures";
 import { placeBook, type PlacedHolding } from "../placement";
 import { servedWhen } from "../session";
-import { distanceWords, nearest, strikeName } from "../strip";
+import { compactWords, nearest, strikeName } from "../strip";
 
 /** What the view is made from: the page's figures as they stood at the press. */
 export interface PlainInput {
@@ -51,8 +54,9 @@ export interface PlainInput {
   takenAt: Date;
 }
 
-/** A line of the header block: "session: market closed — as of the close, Fri 13 Nov 16:14". */
-export interface PlainLine { label: string; text: string }
+/** A line of the header block: "session: market closed — as of the close, Fri 13 Nov 16:14" — or a
+ *  list, one item a line under its label, as the References are (#400). */
+export interface PlainLine { label: string; text: string; items?: string[] }
 
 /** An expiry's rows under its heading ("261218 · 38 DTE"), or a section's rows with none. */
 export interface PlainGroup { heading: string | null; rows: string[][] }
@@ -76,21 +80,21 @@ export const TITLE = "optionality";
 
 // ---- the columns
 
-/** What a plain column is called, with its unit: the screen's labels are short, a symbol or none. */
+/** What a plain column is called: short (#400), a unit only where the figure's own form does not
+ *  say it. */
 const LABELS: Record<string, string> = {
-  name: "name", legs: "legs", value: "value (pts; a holding's cost to close)", pnl: "P&L ($)",
-  captured: "captured (%)", pace_gap: "pace gap (pts)", delta: "delta (a holding's short leg)",
-  strip: "SPX to the nearest short strike", dte: "DTE (days)", manage: "manage-by", alarm: "rule",
+  name: "name", legs: "legs", value: "value", pnl: "P&L ($)", captured: "captured (%)",
+  pace_gap: "pace gap (pts)", delta: "Δ", strip: "SPX→short", dte: "DTE", manage: "manage-by", alarm: "rule",
 };
 
-/** The nearest short strike, named, and how far SPX is from it in words: "P6400 500.50 pts · 1.25σ
- *  away" — the strip's words (`distanceWords`), where the screen draws a scale and the distance alone. */
+/** The nearest short strike, named, and how far SPX is from it: "C8050 488 · 1.64σ" (`compactWords`,
+ *  #400), where the screen draws a scale beside the distance. */
 function stripWords(row: DeskRow): string {
   const strip = rowStrip(row);
   if (!strip) return "";
   const k = nearest(strip);
   if (k === null) return strip.spx === null && strip.reason ? `${DASH} ${strip.reason}` : DASH;
-  return `${strikeName(k)} ${distanceWords(k)}`;
+  return `${strikeName(k)} ${compactWords(k)}`;
 }
 
 /** A column's cell in words: what it MEANS where the screen draws a compact form (`words`: the pace
@@ -105,39 +109,30 @@ function shownColumns(hidden: ReadonlySet<string>): DeskColumn[] {
   return COLUMNS.filter((c) => c.key === PINNED || !hidden.has(c.key));
 }
 
-// ---- what each row is, and its status
+// ---- the muted rules, by their reasons
 
-/** Muted, expired, or off with its holding, in the desk's fold's words, lower case. */
-const offWords = (m: Monitor) =>
-  (GROUPS.find(([r]) => r === (m.disabled_reason ?? null))?.[1] ?? "Reason not recorded").toLowerCase();
+/** Why a rule is off, as the muted rules' heading says it (#400): the phone's words for it. */
+const reasonWords = (reason: string | null) => reason === null ? "reason not recorded" : mutedWords(reason);
 
-/** A row's state in words: what the screen says by its chip and its tint. Blank for a calm row. */
-export function statusOf(row: DeskRow, session: boolean, now: Date): string {
-  const a = attentionOf(row);
-  if (a === null) return "";
-  if (row.kind === "quarantined") {
-    const why = (row.monitor.disabled_reason && QUARANTINED[row.monitor.disabled_reason]) ?? "switched off by the service";
-    return `quarantined: ${why}`;
-  }
-  if (row.kind === "holding") return levelWords(a as "stop" | "target" | "manage", row.holding, session, now);
-  if (a === "fault") return `fault: ${row.entry.error}`;
-  return a === "entry" ? "entry signal" : "ringing";
+/** The muted rules grouped by why they are off, in the desk's fold's order (`GROUPS`), and any reason
+ *  it does not know after them, so no rule is dropped. */
+function byReason(muted: readonly Monitor[]): [string | null, Monitor[]][] {
+  const known = GROUPS.map(([r]) => r);
+  const reasons = [...known, ...new Set(muted.map((m) => m.disabled_reason ?? null).filter((r) => !known.includes(r)))];
+  return reasons.map((r): [string | null, Monitor[]] => [r, muted.filter((m) => (m.disabled_reason ?? null) === r)])
+    .filter(([, ms]) => ms.length > 0);
 }
 
 // ---- the view
 
 export function plainView(input: PlainInput): PlainView {
-  const { privacy, session, takenAt: now } = input;
+  const { privacy } = input;
   const columns = shownColumns(input.hidden);
   const placed = placeBook(input.quotes, input.holdings, input.monitors);
 
-  const row = (what: string, r: DeskRow) => [
-    what,
-    ...columns.map((c) => c.key === PINNED ? nameOf(r) : cellOf(c, r, privacy)),
-    statusOf(r, session, now),
-  ];
-  /** a combo drawn in the watchlist because it only partly overlaps a holding says what it shares */
-  const nameOf = (r: DeskRow) => r.kind === "rule" && r.overlap ? `${rowName(r)} (${r.overlap})` : rowName(r);
+  // a name with no note beside it (#400): the page keeps its overlap note, the table does not
+  const row = (r: DeskRow) =>
+    columns.map((c) => c.key === PINNED ? rowName(r) : cellOf(c, r, privacy));
 
   // ---- Holdings
   const holdingNotes: string[] = [];
@@ -146,20 +141,17 @@ export function plainView(input: PlainInput): PlainView {
   else if (input.holdings.length === 0) holdingNotes.push("nothing held");
   const holdingGroups: PlainGroup[] = placed.holdings.map(({ expiry, rows }) => ({
     heading: `${shortDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`,
-    rows: rows.flatMap((bracket) => bracket.flatMap((p: PlacedHolding, i) => {
-      const partner = bracket.length === 2 ? bracket[1 - i]!.holding.name : null;
-      return [
-        row(partner ? `holding, a condor with ${partner}` : "holding", { kind: "holding", holding: p.holding, rules: p.rules }),
-        ...p.rules.map((e) => row(`rule on ${p.holding.name}`, { kind: "rule", entry: e, nested: true })),
-      ];
-    })),
+    rows: rows.flat().flatMap((p: PlacedHolding) => [
+      row({ kind: "holding", holding: p.holding, rules: p.rules }),
+      ...p.rules.map((e) => row({ kind: "rule", entry: e, nested: true })),
+    ]),
   }));
   if (placed.unplaced.length > 0) {
     holdingGroups.push({
       heading: `rules on held contracts — ${input.holdings === null
         ? "the holdings are not valued, so the rules about them are listed on their own"
         : "each watches a held contract that no single holding owns, as on a roll day"}`,
-      rows: placed.unplaced.map((e) => row("rule on a held contract", { kind: "rule", entry: e, nested: false })),
+      rows: placed.unplaced.map((e) => row({ kind: "rule", entry: e, nested: false })),
     });
   }
 
@@ -167,14 +159,14 @@ export function plainView(input: PlainInput): PlainView {
   const watchGroups: PlainGroup[] = placed.watchlist.map(({ expiry, items }) => ({
     heading: `${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`,
     rows: items.flatMap(({ entry, under, overlap }) => [
-      row(entry.legs ? "watched spread" : "watched contract", { kind: "rule", entry, nested: false, overlap }),
-      ...under.map((e) => row(`rule on a leg of ${entry.code}`, { kind: "rule", entry: e, nested: true })),
+      row({ kind: "rule", entry, nested: false, overlap }),
+      ...under.map((e) => row({ kind: "rule", entry: e, nested: true })),
     ]),
   }));
   if (placed.quarantined.length > 0) {
     watchGroups.push({
       heading: "quarantined — switched off by the service",
-      rows: placed.quarantined.map((m) => row("quarantined rule", { kind: "quarantined", monitor: m })),
+      rows: placed.quarantined.map((m) => row({ kind: "quarantined", monitor: m })),
     });
   }
 
@@ -188,26 +180,24 @@ export function plainView(input: PlainInput): PlainView {
   ];
 
   // ---- Muted and expired: off by hand, by the calendar, or with their holding — the desk's fold
+  // under a heading row per reason, as the expiries are (#400): with no status column, the heading
+  // is where why it is off is said
   if (placed.muted.length > 0) {
     sections.push({
       title: "Muted and expired",
       notes: [],
-      groups: [{
-        heading: null,
-        rows: placed.muted.map((m) => [
-          "muted rule",
-          ...columns.map((c) => c.key === PINNED ? monitorName(m)
-            : c.key === "alarm" ? storedRuleWords(m.field, Boolean(m.legs), m.compare, m.direction, m.threshold) : ""),
-          offWords(m),
-        ]),
-      }],
+      groups: byReason(placed.muted).map(([reason, ms]) => ({
+        heading: reasonWords(reason),
+        rows: ms.map((m) => columns.map((c) => c.key === PINNED ? monitorName(m)
+          : c.key === "alarm" ? storedRuleWords(m.field, Boolean(m.legs), m.compare, m.direction, m.threshold) : "")),
+      })),
     });
   }
 
   return tidy({
     title: TITLE,
     lines: headerLines(input),
-    columns: ["what", ...columns.map((c) => LABELS[c.key] ?? c.label), "status"],
+    columns: columns.map((c) => LABELS[c.key] ?? c.label),
     sections,
   });
 }
@@ -221,7 +211,9 @@ const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 function tidy(view: PlainView): PlainView {
   return {
     title: oneLine(view.title),
-    lines: view.lines.map((l) => ({ label: oneLine(l.label), text: oneLine(l.text) })),
+    lines: view.lines.map((l) => ({
+      label: oneLine(l.label), text: oneLine(l.text), ...(l.items ? { items: l.items.map(oneLine) } : {}),
+    })),
     columns: view.columns.map(oneLine),
     sections: view.sections.map((s) => ({
       title: oneLine(s.title),
@@ -284,13 +276,30 @@ function headerLines(input: PlainInput): PlainLine[] {
   ];
   if (input.error) lines.push({ label: "warning", text: input.error });
   // the strip's words: outside the session each with the time it was read (#371), in it none
+  // one a line (#400)
   const readings = drawnReadings(input.references, session ? undefined : (s) => servedWhen(s, takenAt));
   if (readings.length > 0) {
-    lines.push({ label: "References", text: readings.map(({ reference, at }) => referenceWords(reference, at)).join(" · ") });
+    lines.push({ label: "References", text: "", items: readings.map(({ reference, at }) => referenceWords(reference, at)) });
   }
+  // outside the session the needs-you line names no holding's Level (#354), and with no status
+  // column the table no longer does either: the chips' own words, here (#400)
+  const levels = session ? [] : levelLines(input.holdings ?? [], takenAt);
+  if (levels.length > 0) lines.push({ label: "Levels", text: levels.join("; ") });
   // as the page: said when something needs you, and nothing otherwise — which is not an all-clear
   if (input.needs.length > 0) lines.push({ label: "needs you", text: needsWords(input.needs) });
   return lines;
+}
+
+/** Each holding's Level reached, "1231_8100 at stop · as of the close", in its chip's words
+ *  (`levelWords`, outside the session): a Level reached and a manage-by due are both said. */
+function levelLines(holdings: readonly Holding[], now: Date): string[] {
+  return holdings.flatMap((h) => {
+    const s = h.schedule;
+    const out: string[] = [];
+    if (s?.reached === "stop" || s?.reached === "target") out.push(`${h.name} ${levelWords(s.reached, h, false, now)}`);
+    if (s?.manage_by_due) out.push(`${h.name} ${levelWords("manage", h, false, now)}`);
+    return out;
+  });
 }
 
 // ---- the text
@@ -313,7 +322,12 @@ const tableRow = (cells: string[]) => `| ${cells.map(cellText).join(" | ")} |`;
 /** The view as Markdown: the header block as lines above a table per section, an expiry's heading
  *  as a row of its own with the heading in its first cell. */
 export function toMarkdown(view: PlainView): string {
-  const out = [`# ${view.title}`, "", ...view.lines.map((l) => `- ${l.label}: ${inline(l.text)}`)];
+  const out = [`# ${view.title}`, ""];
+  for (const l of view.lines) {
+    // a list is a nested list, an item a line (#400)
+    if (l.items) out.push(`- ${l.label}:`, ...l.items.map((i) => `  - ${inline(i)}`));
+    else out.push(`- ${l.label}: ${inline(l.text)}`);
+  }
   for (const s of view.sections) {
     out.push("", `## ${s.title}`);
     for (const n of s.notes) out.push("", noteText(n));

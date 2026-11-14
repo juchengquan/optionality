@@ -10,7 +10,7 @@ import type { Entry, Health, Holding, Reference } from "../shared/api";
 import { Still } from "../snapshot/Still";
 import { plainView, takenWords, toMarkdown, type PlainInput } from "../snapshot/plain";
 import { needsYou, type Need } from "../needs";
-import { entry, holding, HOLDINGS, monitor, MONITORS, QUOTES, side } from "../testing/ownerBook";
+import { entry, holding, HOLDINGS, monitor, MONITORS, QUOTES, served, side } from "../testing/ownerBook";
 import { readMarkdown, readPicture } from "../testing/plainRead";
 
 afterEach(cleanup);
@@ -50,21 +50,21 @@ function rowsOf(view: ReturnType<typeof plainView>, title: string): string[][] {
 }
 /** A row's cell under a column, by the column's label. */
 function cell(view: ReturnType<typeof plainView>, name: string, column: string): string {
-  const row = view.sections.flatMap((s) => s.groups.flatMap((g) => g.rows)).find((r) => r[1] === name || r[1]!.startsWith(`${name} (`));
+  const row = view.sections.flatMap((s) => s.groups.flatMap((g) => g.rows)).find((r) => r[0] === name);
   expect(row, `no row for ${name}`).toBeTruthy();
   return row![view.columns.indexOf(column)]!;
 }
 
 describe("the table", () => {
-  it("carries every column the viewer ticked, labelled with its unit, between what the row is and its status", () => {
+  it("carries every column the viewer ticked, under short headers, and no \"what\" or \"status\" (#400)", () => {
     const view = plainView(input());
     expect(view.columns).toEqual([
-      "what", "name", "legs", "value (pts; a holding's cost to close)", "P&L ($)", "captured (%)", "pace gap (pts)",
-      "delta (a holding's short leg)", "SPX to the nearest short strike", "DTE (days)", "manage-by", "rule", "status",
+      "name", "legs", "value", "P&L ($)", "captured (%)", "pace gap (pts)", "Δ", "SPX→short", "DTE", "manage-by", "rule",
     ]);
+    for (const s of view.sections) for (const g of s.groups) for (const r of g.rows) expect(r).toHaveLength(view.columns.length);
     const without = plainView(input({ hidden: new Set(["captured", "strip"]) }));
     expect(without.columns).not.toContain("captured (%)");
-    expect(without.columns).not.toContain("SPX to the nearest short strike");
+    expect(without.columns).not.toContain("SPX→short");
     // the name is pinned, as on the desk: a cookie that hides it hides nothing
     expect(plainView(input({ hidden: new Set(["name"]) })).columns).toContain("name");
   });
@@ -76,15 +76,12 @@ describe("the table", () => {
     expect(view.sections[1]!.groups.map((g) => g.heading)).toEqual([
       "261204 · 38 DTE", "261218 · 38 DTE", "261231 · 38 DTE", "quarantined — switched off by the service",
     ]);
-    // what each row is, in words: the indent and the condor's bracket are gone
-    expect(rowsOf(view, "Holdings").map((r) => `${r[0]}: ${r[1]}`)).toEqual([
-      "holding, a condor with 1218_P6400: 1218_C7300", "rule on 1218_C7300: 1218_C7300",
-      "holding, a condor with 1218_C7300: 1218_P6400",
-      "holding: 1231_IC", "rule on 1231_IC: 1231_IC",
+    // each row by its name alone, in the book's order
+    expect(rowsOf(view, "Holdings").map((r) => r[0])).toEqual([
+      "1218_C7300", "1218_C7300", "1218_P6400", "1231_IC", "1231_IC",
     ]);
-    expect(rowsOf(view, "Watchlist").map((r) => `${r[0]}: ${r[1]}`)).toEqual([
-      "watched spread: 1204_P6900", "watched spread: 1218_P7150", "rule on a leg of 1218_P7150: 261218 7150P",
-      "watched spread: 1231_C7600", "watched contract: 261231 8000C", "quarantined rule: 261211 8000C",
+    expect(rowsOf(view, "Watchlist").map((r) => r[0])).toEqual([
+      "1204_P6900", "1218_P7150", "261218 7150P", "1231_C7600", "261231 8000C", "261211 8000C",
     ]);
   });
 
@@ -98,28 +95,35 @@ describe("the table", () => {
     expect(rules).not.toMatch(/Δ|\bval\b|[↑↓▲▼]/);
   });
 
-  it("says the pace gap in words, and the distance to the nearest short strike with its strike", () => {
+  it("says the pace gap in words, and the nearest short strike's distance compactly: whole points, σ, signed past it", () => {
     const behind = holding("h-b", { name: "1218_P6000", strike_date: "2026-12-18",
       legs: [side("short", "PUT", 6000), side("long", "PUT", 5950)],
       schedule: { on_pace: 1, pace_gap: 0.4, target: 1, stop: 4, target_dte: 10, manage_by_dte: 21, reached: null,
         manage_by_due: false, dte_at_open: 45 } as Holding["schedule"] });
-    const view = plainView(input({ holdings: [...HOLDINGS, behind] }));
+    // SPX at 6900.50 is 100.50 points PAST a short call at 6800
+    const past = holding("h-past", { name: "1218_C6800", strike_date: "2026-12-18",
+      legs: [side("short", "CALL", 6800), side("long", "CALL", 6850)],
+      short_strikes: [served("2026-12-18", "CALL", 6800, 0.62, 38)] });
+    const view = plainView(input({ holdings: [...HOLDINGS, behind, past] }));
     expect(cell(view, "1218_P6000", "pace gap (pts)")).toBe("behind by 0.40");
-    expect(cell(view, "1218_P6400", "SPX to the nearest short strike")).toBe("P6400 500.50 pts · 1.25σ away");
+    // 500.50 points away: whole points, no "pts" and no "away"
+    expect(cell(view, "1218_P6400", "SPX→short")).toBe("P6400 501 · 1.25σ");
+    expect(cell(view, "1218_C6800", "SPX→short")).toBe("C6800 −101 · −0.25σ");
     expect(cell(view, "1218_C7300", "legs")).toBe("-C7300 +C7350");
   });
 
-  it("names, for a combo drawn apart from the holding it partly overlaps, what it shares (#346)", () => {
+  it("names a combo drawn apart from the holding it partly overlaps by its name alone, no note (#400)", () => {
     const partly = entry("w-part", { code: "1218_C7300x", strike_date: "2026-12-18", held: true,
       legs: [{ sign: -1, option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7400 }] as never,
       positions: [{ id: "h-calls", name: "1218_C7300" }] });
     const view = plainView(input({ quotes: [...QUOTES, partly] }));
-    const row = rowsOf(view, "Watchlist").find((r) => r[1]!.startsWith("1218_C7300x"))!;
-    expect(row[1]).toBe("1218_C7300x (shares C7300 with 1218_C7300)");
+    const names = rowsOf(view, "Watchlist").map((r) => r[0]);
+    expect(names).toContain("1218_C7300x");
+    expect(names.join(" ")).not.toMatch(/[()]|shares/);
   });
 });
 
-describe("the status column says in words what the screen says by colour or chip", () => {
+describe("every state the status column carried is still named, in the header or the rule (#400)", () => {
   const sched = (over: Partial<NonNullable<Holding["schedule"]>>) => ({
     on_pace: 1, pace_gap: 0, target: 1, stop: 4, target_dte: 10, manage_by_dte: 21, reached: null,
     manage_by_due: false, dte_at_open: 45, ...over,
@@ -127,58 +131,79 @@ describe("the status column says in words what the screen says by colour or chip
   const legs = [side("short", "PUT", 6000), side("long", "PUT", 5950)];
   const held = (id: string, schedule: Holding["schedule"], over: Partial<Holding> = {}) =>
     holding(id, { name: id, strike_date: "2026-12-18", legs, schedule, fetched_at: "2026-11-15 23:04:15+08:00", ...over });
+  const holdings = [
+    held("at-stop", sched({ reached: "stop" })), held("at-target", sched({ reached: "target" })),
+    held("due", sched({ manage_by_due: true })), held("calm", sched({})),
+    held("closed-close", sched({ reached: "stop" }), { valued_from: "close", valued_timing: "close" } as Partial<Holding>),
+  ];
+  const line = (view: ReturnType<typeof plainView>, label: string) => view.lines.find((l) => l.label === label)?.text;
 
-  it("for a holding at stop, at target, at its manage-by — and outside the session, which valuation", () => {
-    const holdings = [
-      held("at-stop", sched({ reached: "stop" })), held("at-target", sched({ reached: "target" })),
-      held("due", sched({ manage_by_due: true })), held("calm", sched({})),
-      held("closed-close", sched({ reached: "stop" }), { valued_from: "close", valued_timing: "close" } as Partial<Holding>),
-    ];
-    const live = plainView(input({ holdings, quotes: [], monitors: [] }));
-    expect(["at-stop", "at-target", "due", "calm"].map((n) => cell(live, n, "status")))
-      .toEqual(["at stop", "at target", "manage-by", ""]);
-    const out = plainView(input({ holdings, quotes: [], monitors: [], session: false, takenAt: SUNDAY }));
-    expect(cell(out, "at-stop", "status")).toBe("at stop · as valued at Sun 23:04");
-    expect(cell(out, "closed-close", "status")).toBe("at stop · as of the close");
+  it("a holding at stop, at target, at its manage-by, in the session: the needs-you line", () => {
+    const view = plainView(input({ holdings, quotes: [], monitors: [] }));
+    const needs = line(view, "needs you")!;
+    for (const words of ["at-stop at stop", "at-target at target", "due at its manage-by", "closed-close at stop"]) {
+      expect(needs).toContain(words);
+    }
+    expect(needs).not.toContain("calm");
   });
 
-  it("for a rule ringing, an entry signal, and a fault with its words", () => {
-    const view = plainView(input({
-      quotes: [...QUOTES, entry("w-err", { code: "1231_P6000", strike_date: "2026-12-31",
-        legs: [{ sign: -1, option_type: "PUT", strike: 6000 }, { sign: 1, option_type: "PUT", strike: 5950 }] as never,
-        error: "no quote for US.SPXW261231P6000000" } as Partial<Entry> & { strike_date: string })],
-    }));
-    // the ringing rule is the one under the held call spread
-    const ringing = rowsOf(view, "Holdings").find((r) => r[0] === "rule on 1218_C7300")!;
-    expect(ringing.at(-1)).toBe("ringing");
-    expect(cell(view, "1204_P6900", "status")).toBe("entry signal");
-    expect(cell(view, "1231_P6000", "status")).toBe("fault: no quote for US.SPXW261231P6000000");
-    expect(cell(view, "1231_C7600", "status")).toBe("");
+  it("a holding's Level in the session is not said again in a Levels line", () => {
+    const view = plainView(input({ holdings, quotes: [], monitors: [] }));
+    expect(view.lines.map((l) => l.label)).not.toContain("Levels");
   });
 
-  it("for every quarantine, by its reason", () => {
+  it("outside the session, where the needs-you line names none (#354): a Levels line, in the chips' words", () => {
+    // the page's own line out of the session, which says no holding's Level
+    const needs = needsYou([], [], HEALTH, null, holdings, false);
+    const view = plainView(input({ holdings, quotes: [], monitors: [], needs, session: false, takenAt: SUNDAY }));
+    expect(line(view, "needs you")).toBeUndefined();
+    expect(line(view, "Levels")).toBe([
+      "at-stop at stop · as valued at Sun 23:04", "at-target at target · as valued at Sun 23:04",
+      "due manage-by · as valued at Sun 23:04", "closed-close at stop · as of the close",
+    ].join("; "));
+    // and the Markdown carries it
+    expect(toMarkdown(view)).toContain("- Levels: at-stop at stop · as valued at Sun 23:04; ");
+  });
+
+  it("a rule ringing, an entry signal, and a fault with its words: the needs-you line", () => {
+    const quotes = [...QUOTES, entry("w-err", { code: "1231_P6000", strike_date: "2026-12-31",
+      legs: [{ sign: -1, option_type: "PUT", strike: 6000 }, { sign: 1, option_type: "PUT", strike: 5950 }] as never,
+      error: "no quote for US.SPXW261231P6000000" } as Partial<Entry> & { strike_date: string })];
+    const needs = line(plainView(input({ quotes })), "needs you")!;
+    expect(needs).toContain("1218_C7300 ringing");
+    expect(needs).toContain("1204_P6900 entry signal");
+    expect(needs).toContain("1231_P6000 — no quote for US.SPXW261231P6000000");
+  });
+
+  it("every quarantine, by its reason: the needs-you line", () => {
     const off = (id: string, reason: string) =>
       monitor(id, { code: id, strike: 8000 + id.length, enabled: false, disabled_reason: reason });
-    const view = plainView(input({ quotes: [], monitors: [
-      off("q1", "unknown-contract"), off("q22", "no-figure"), off("q333", "unreadable"),
-    ] }));
-    expect(rowsOf(view, "Watchlist").map((r) => r.at(-1))).toEqual([
-      "quarantined: the provider does not know its contract", "quarantined: its figure never arrives",
-      "quarantined: its stored row cannot be read",
-    ]);
+    const monitors = [off("q1", "unknown-contract"), off("q22", "no-figure"), off("q333", "unreadable")];
+    const needs = line(plainView(input({ quotes: [], monitors })), "needs you")!;
+    for (const why of ["the provider does not know its contract", "its figure never arrives", "its stored row cannot be read"]) {
+      expect(needs).toContain(`quarantined — ${why}`);
+    }
   });
 
-  it("for a rule muted by hand, expired, off with its holding, or off for no recorded reason", () => {
+  it("a rule's own state at every hour: its sentence", () => {
+    const view = plainView(input());
+    expect(cell(view, "1204_P6900", "rule")).toBe("|spread value| ≥ 6 — now 6.20, past it by 0.20");
+  });
+
+  it("a rule muted by hand, expired, off with its holding, or for no recorded reason: a heading per reason", () => {
     const off = (id: string, reason: string | null) =>
       monitor(id, { code: id, strike: 8000 + id.length, enabled: false, disabled_reason: reason });
     const view = plainView(input({ quotes: [], monitors: [
-      off("m1", "manual"), off("m22", "expired"), off("m333", "holding-closed"), off("m4444", null),
+      off("m1", "manual"), off("m22", "expired"), off("m333", "holding-closed"), off("m4444", null), off("m55555", "manual"),
     ] }));
-    const muted = rowsOf(view, "Muted and expired");
-    expect(muted.map((r) => r[0])).toEqual(["muted rule", "muted rule", "muted rule", "muted rule"]);
-    expect(muted.map((r) => r.at(-1))).toEqual(["muted by you", "expired", "holding closed", "reason not recorded"]);
+    const muted = view.sections.find((s) => s.title === "Muted and expired")!;
+    // the desk's fold's order, in the phone's words
+    expect(muted.groups.map((g) => [g.heading, g.rows.map((r) => r[0])])).toEqual([
+      ["expired", ["261218 8003C"]], ["its holding closed", ["261218 8004C"]],
+      ["muted by hand", ["261218 8002C", "261218 8006C"]], ["reason not recorded", ["261218 8005C"]],
+    ]);
     // the rule in words, with no figure: nothing watches it
-    expect(muted[0]![view.columns.indexOf("rule")]).toBe("|delta| ≥ 0.1");
+    expect(muted.groups[0]!.rows[0]![view.columns.indexOf("rule")]).toBe("|delta| ≥ 0.1");
   });
 });
 
@@ -201,7 +226,7 @@ describe("the header block", () => {
       { label: "taken", text: "Mon 16 Nov 2026 10:00 EST (New York) · Mon 16 Nov 2026 23:00 GMT+8 (Asia/Singapore)" },
       { label: "session", text: "in session" },
       { label: "figures", text: "fetched at 2026-11-16 23:00:05+08:00 · 10:00:05 EST · screen updated 23:00:09 · service sweeps every 15s" },
-      { label: "References", text: "S&P 500 (moomoo) 7,612.25 +0.42%" },
+      { label: "References", text: "", items: ["S&P 500 (moomoo) 7,612.25 +0.42%"] },
     ]);
     // every item named, in the line's order: a picture cannot be opened to read "+N more"
     expect(needs.length, "too few needs to show none is dropped").toBeGreaterThan(3);
@@ -213,7 +238,7 @@ describe("the header block", () => {
   it("outside the session: the market-closed line's words, and each Reference with when it was read", () => {
     const view = plainView(input({ session: false, takenAt: SUNDAY, holdingsServed: "2026-11-15 23:00:05+08:00" }));
     expect(view.lines.find((l) => l.label === "session")!.text).toBe("market closed — valued at Sun 23:00");
-    expect(view.lines.find((l) => l.label === "References")!.text).toBe("S&P 500 (moomoo) 7,612.25 +0.42% read at 00:59");
+    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42% read at 00:59"]);
   });
 
   it("says nothing of needs when nothing needs you, as the page — and a warning when the figures may be stale", () => {
@@ -261,8 +286,11 @@ describe("the picture and the text, one builder", () => {
   it("writes the header block as lines above a Markdown table per section", () => {
     const md = toMarkdown(plainView(input()));
     expect(md.split("\n").slice(0, 3)).toEqual(["# optionality", "", "- taken: Mon 16 Nov 2026 10:00 EST (New York) · Mon 16 Nov 2026 23:00 GMT+8 (Asia/Singapore)"]);
-    expect(md).toContain("\n## Holdings\n\n| what | name | legs |");
+    expect(md).toContain("\n## Holdings\n\n| name | legs | value |");
     expect(md).toContain("\n| 261218 · 38 DTE |  |  |");
+    // the References a nested list, one a line (#400)
+    const twice = toMarkdown(plainView(input({ references: [SPX_REF, { ...SPX_REF, id: "r2", label: "VIX" } as Reference] })));
+    expect(twice).toContain("\n- References:\n  - S&P 500 (moomoo) 7,612.25 +0.42%\n  - VIX (moomoo) 7,612.25 +0.42%\n");
   });
 });
 
@@ -271,9 +299,9 @@ describe("text from the service", () => {
     const view = plainView(input({ quotes: [...QUOTES, entry("w-odd", { code: "1231_A|B\nC", strike_date: "2026-12-31",
       legs: [{ sign: -1, option_type: "PUT", strike: 6000 }, { sign: 1, option_type: "PUT", strike: 5950 }] as never,
       error: " bad\r\nrow " } as Partial<Entry> & { strike_date: string })] }));
-    expect(cell(view, "1231_A|B C", "status")).toBe("fault: bad row");
+    expect(cell(view, "1231_A|B C", "legs")).toBe("-P6000 +P5950");
     const md = toMarkdown(view);
-    expect(md).toContain("| watched spread | 1231_A\\|B C |");
+    expect(md).toContain("| 1231_A\\|B C |");
     // neither a backtick nor an asterisk may open code or emphasis in the text
     const marked = toMarkdown(plainView(input({ error: "see `x` and *y*" })));
     expect(marked).toContain("- warning: see \\`x\\` and \\*y\\*");
@@ -284,7 +312,7 @@ describe("text from the service", () => {
   it("says why a Reference is a dash, as the strip's title does", () => {
     const dashed = { ...SPX_REF, id: "r2", label: "VIX", figure: null, change: null, error: "not entitled" } as Reference;
     const view = plainView(input({ references: [SPX_REF, dashed] }));
-    expect(view.lines.find((l) => l.label === "References")!.text).toBe("S&P 500 (moomoo) 7,612.25 +0.42% · VIX (moomoo) — (not entitled)");
+    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42%", "VIX (moomoo) — (not entitled)"]);
   });
 });
 

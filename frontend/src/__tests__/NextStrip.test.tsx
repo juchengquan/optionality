@@ -13,7 +13,7 @@ import { DeskBook } from "../desk/DeskBook";
 import { COLUMNS, type DeskRow } from "../desk/columns";
 import { PhoneBook } from "../phone/PhoneBook";
 import { StrikeStrip } from "../StrikeStrip";
-import { cellWords, distanceWords, joinStrips, nearest, scaleOf, stripOfEntry, stripOfHolding } from "../strip";
+import { cellWords, compactWords, distanceWords, joinStrips, nearest, scaleOf, stripOfEntry, stripOfHolding } from "../strip";
 import { HOLDINGS, MONITORS, QUOTES, served } from "../testing/ownerBook";
 import { legMarks } from "../testing/legs";
 
@@ -74,6 +74,13 @@ describe("what a strip is made of", () => {
       shorts: [served("2026-12-31", "CALL", 7400, 0.12, 38), served("2026-12-31", "PUT", 6950, -0.6, 38)] };
     expect(nearest(past)!.strike).toBe(6950);
     expect(nearest(stripOfHolding(bare(holding("h-ic")))!)).toBeNull();
+  });
+
+  it("says a distance compactly for the saved table: whole points, σ, the sign where past it (#400)", () => {
+    expect(compactWords(served("2026-12-18", "PUT", 6400, -0.21, 38))).toBe("501 · 1.25σ");
+    expect(compactWords(served("2026-12-18", "PUT", 7150, -0.6, 38))).toBe("−250 · −0.62σ");
+    expect(compactWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), sigma: null })).toBe("501");
+    expect(compactWords({ ...served("2026-12-18", "PUT", 6400, -0.21, 38), points: null, sigma: null })).toBe("—");
   });
 
   it("says a distance in points and σ, away or past it, and a dash without one", () => {

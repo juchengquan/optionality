@@ -5,8 +5,8 @@
  *  arrangement the press came from — the desk's or the phone's — drawn from `plainView`, the same
  *  builder "Copy as text" writes its Markdown from, so the picture and the text cannot disagree.
  *  A header block says what the table is (when it was taken, the session, how fresh the figures
- *  are, the References, what needs you); under it, a table per section with every column the viewer
- *  ticked, whatever the room on screen, and a status column in words.
+ *  are, the References one a line, out of the session the holdings' Levels, what needs you); under
+ *  it, a table per section with every column the viewer ticked, whatever the room on screen.
  *
  *  Words and numbers only, dark on a light ground in a monospace face: no chip, no fill bar, no
  *  condor bracket, no colour for a leg's type (#391) or a figure's outcome, and no symbol shorthand
@@ -30,7 +30,11 @@ function StillView({ view }: { view: PlainView }) {
       <h1>{view.title}</h1>
       <dl className="nx-still-lines">
         {view.lines.map((l) => (
-          <div key={l.label}><dt>{`${l.label}:`}</dt><dd>{l.text}</dd></div>
+          <div key={l.label}>
+            <dt>{`${l.label}:`}</dt>
+            {/* a list, an item a line (#400): the References */}
+            {l.items ? <dd>{l.items.map((item, i) => <div key={i} data-item="">{item}</div>)}</dd> : <dd>{l.text}</dd>}
+          </div>
         ))}
       </dl>
       {view.sections.map((s) => (

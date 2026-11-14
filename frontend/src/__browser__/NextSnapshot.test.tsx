@@ -2,7 +2,7 @@
  *
  *  Since #394 the picture is ONE plain table, from the desk and the phone alike, for reading later:
  *  a SECOND tree, off screen, as wide as its widest row — every ticked column whatever the room on
- *  screen, a status column in words, without a control in it, privacy honoured — rasterized by
+ *  screen, under short headers (#400), without a control in it, privacy honoured — rasterized by
  *  html-to-image. What is measured here is what a plain table promises and no jsdom can see: one
  *  light ground and one ink in either colour scheme, no chip, bar, bracket or coloured leg, a
  *  legible face, nothing clipped, and the same tree from the desk and from a phone-width window.
@@ -96,7 +96,7 @@ const rowOnScreen = (id: string) =>
   [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
 /** A row of the picture, by the name in its second cell. */
 const rowNamed = (root: ParentNode, name: string) =>
-  [...root.querySelectorAll<HTMLTableRowElement>("tbody tr")].find((tr) => tr.children[1]?.textContent === name)!;
+  [...root.querySelectorAll<HTMLTableRowElement>("tbody tr")].find((tr) => tr.children[0]?.textContent === name)!;
 
 /** Take one picture and hold the sheet open: the tree it was taken of, and the file. */
 async function take(): Promise<{ root: HTMLElement; file: File; release: () => void }> {
@@ -131,9 +131,9 @@ describe("saving the desk as an image", () => {
     // and the file is painted on that ground: its corner is white, and a cell's words are not
     const png = await decode(file);
     expect(png.at(2, 2)).toBe(PLAIN_GROUND);
-    // and words are painted on it: a holding's name, a status, the header block
-    const ringing = [...root.querySelectorAll("td")].find((td) => td.textContent === "ringing")!;
-    for (const el of [rowNamed(root, "1218_P6400").children[1]!, ringing, root.querySelector(".nx-still-lines dd")!]) {
+    // and words are painted on it: a holding's name, a rule's sentence, the header block
+    const ringing = [...root.querySelectorAll("td")].find((td) => td.textContent!.startsWith("|spread value| ≥ 6 — now 6.20"))!;
+    for (const el of [rowNamed(root, "1218_P6400").children[0]!, ringing, root.querySelector(".nx-still-lines dd")!]) {
       expect(inkIn(png, root, el), `no words painted where "${el.textContent}" is`).toBe(true);
     }
     expect(png.w / root.scrollWidth).toBeGreaterThan(1);
@@ -171,8 +171,7 @@ describe("saving the desk as an image", () => {
     const { root, release } = await take();
     const head = [...root.querySelector("thead tr")!.children].map((c) => c.textContent);
     expect(head).toEqual([
-      "what", "name", "legs", "value (pts; a holding's cost to close)", "P&L ($)", "captured (%)", "pace gap (pts)",
-      "delta (a holding's short leg)", "SPX to the nearest short strike", "DTE (days)", "manage-by", "rule", "status",
+      "name", "legs", "value", "P&L ($)", "captured (%)", "pace gap (pts)", "Δ", "SPX→short", "DTE", "manage-by", "rule",
     ]);
     // nothing cut short: a still image cannot be widened to read the rest
     expect(measurePlain(root).clipped).toEqual([]);
@@ -235,7 +234,8 @@ describe("saving the desk as an image", () => {
     const { root, release } = await take();
     const rule = [...root.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
     expect(rowNamed(root, "261218 7150P").children[rule]!.textContent).toBe("|delta| ≥ 0.2 — now -0.170, 0.030 away");
-    expect(root.textContent).not.toMatch(/[↑↓▲▼Δ]/);
+    // the Δ column's header is the one Δ (#400): no rule is said in symbols
+    expect(root.querySelector("tbody")!.textContent).not.toMatch(/[↑↓▲▼Δ]/);
     release();
   });
 
@@ -244,7 +244,7 @@ describe("saving the desk as an image", () => {
     await show();
     const { root, release } = await take();
     const lines = readPicture(root).lines;
-    expect(lines.find((l) => l.label === "References")!.text).toBe("S&P 500 (moomoo) 7,612.25 +0.42%");
+    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42%"]);
     expect(lines.find((l) => l.label === "session")!.text).toBe("in session");
     // when it was taken, in New York and in the service's own zone
     expect(lines.find((l) => l.label === "taken")!.text).toMatch(/ \(New York\) · .* \(Asia\/Singapore\)$/);
@@ -256,7 +256,7 @@ describe("saving the desk as an image", () => {
     await show();
     const { root, release } = await take();
     const lines = readPicture(root).lines;
-    expect(lines.find((l) => l.label === "References")!.text).toBe("S&P 500 (moomoo) 7,612.25 +0.42% read at 00:59");
+    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42% read at 00:59"]);
     // the market-closed line's words (the owner's book here carries no stamp, so no time), once
     expect(lines.find((l) => l.label === "session")!.text).toBe("market closed");
     expect(captured[0]!.text.split("market closed")).toHaveLength(2);

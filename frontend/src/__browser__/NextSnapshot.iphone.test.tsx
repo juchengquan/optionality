@@ -112,10 +112,10 @@ describe("saving the phone's book as an image", () => {
     expect([...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
     const png = await decode(shared.file()!);
     expect(png.at(2, 2)).toBe(PLAIN_GROUND);
-    // and words are painted on it: a holding's name, a status, the header block
+    // and words are painted on it: a holding's name, a rule's sentence, the header block
     const cells = [...root.querySelectorAll("td")];
     const name = cells.find((td) => td.textContent === "1218_P6400")!;
-    const ringing = cells.find((td) => td.textContent === "ringing")!;
+    const ringing = cells.find((td) => td.textContent!.startsWith("|spread value| ≥ 6 — now 6.20"))!;
     for (const el of [name, ringing, root.querySelector(".nx-still-lines dd")!]) {
       expect(inkIn(png, root, el), `no words painted where "${el.textContent}" is`).toBe(true);
     }

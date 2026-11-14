@@ -42,7 +42,14 @@ type MonitorsResponse = Exclude<Infer<typeof client.monitors.$get>, { detail: st
 
 /** One row of `/quotes`, with what the PAGE adds beside it: out of the session, the rule's last known
  *  figure from `/monitors`, where the row has none (`lastknown.ts`, #380). */
-export type Entry = QuotesResponse[number] & { last_reading?: { value: number; at: string } | null };
+export type Entry = QuotesResponse[number] & {
+  last_reading?: { value: number; at: string } | null;
+  /** the price its value cell says, whatever the rule watches (#400): undefined where the page has
+   *  not looked (`lastknown.ts`: `priceOf`) */
+  price?: number | null;
+  /** out of the session only, the last price read in it, or null where none was (#400) */
+  last_price?: { value: number; at: string } | null;
+};
 export type Monitor = MonitorsResponse[number];
 export type Health = Exclude<Infer<typeof client.health.$get>, { detail: string }>;
 export type Leg = NonNullable<Entry["legs"]>[number];

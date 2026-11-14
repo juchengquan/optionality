@@ -82,6 +82,15 @@ export function cellWords(strip: Strip): string {
   return `${signed(k.points)} pts${k.sigma === null ? "" : ` · ${signed(k.sigma)}σ`}`;
 }
 
+/** "488 · 1.64σ", "−250 · −0.62σ": `cellWords`'s distance shorter, for the saved table (#400) —
+ *  whole points, σ to two places, and a strike SPX is past with its sign as the service served it;
+ *  a dash where there is no distance. */
+export function compactWords(k: ShortStrike): string {
+  if (k.points === null) return DASH;
+  const sign = (n: number) => n < 0 ? "−" : "";
+  return `${sign(k.points)}${Math.round(Math.abs(k.points))}${k.sigma === null ? "" : ` · ${sign(k.sigma)}${pts(k.sigma)}σ`}`;
+}
+
 /** "P6400": which short strike, as the legs column writes it. */
 export const strikeName = (k: { option_type: string; strike: number }) => `${k.option_type[0]}${k.strike}`;
 
