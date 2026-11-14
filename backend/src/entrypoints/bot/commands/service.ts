@@ -9,15 +9,21 @@ import { buildSpxCode } from "optionality/domain/contract";
 import { displayTimeShort } from "optionality/domain/timefmt";
 import { holdingValues } from "../../../holdings.ts";
 import type { QuoteRecord } from "optionality/quotes";
-import { HELP_TEXT, fmtValue, standingNote, table } from "../format.ts";
+import { inSession } from "optionality/domain/expiry";
+import { HELP_TEXT, closedLine, fmtValue, standingNote, table } from "../format.ts";
 
 /** Where each Position stands: what it costs to buy back, what that is worth, and the one thing
- *  worth saying about it. Four columns, inside forty characters, as every table reply here is. */
+ *  worth saying about it. Four columns, inside forty characters, as every table reply here is —
+ *  and outside New York's session, valued from each holding's latest close, one line under the
+ *  table saying which (#380). */
 export const holdings: Command = async (ctx) => {
+  // ONE instant for the figures and the line under them: read again after the Provider call, a reply
+  // begun at 16:14:59 would put a live table under "market closed" (#380 review)
+  const now = ctx.now();
   let valued;
   try {
     valued = await holdingValues(
-      ctx.db, ctx.fetchQuotes, ctx.now(), ctx.settings, ctx.settings.displayTz,
+      ctx.db, ctx.fetchQuotes, now, ctx.settings, ctx.settings.displayTz,
     );
   } catch (err) {
     return failed("Holdings", err);
@@ -25,12 +31,15 @@ export const holdings: Command = async (ctx) => {
   if (valued.values.length === 0) {
     return "No holdings recorded. Record one on the dashboard, beside the rule that watches it.";
   }
-  return table(["holding", "cost", "P&L", "note"], valued.values.map((v) => [
+  const reply = table(["holding", "cost", "P&L", "note"], valued.values.map((v) => [
     v.row.name,
     v.cost === null ? "—" : v.cost.toFixed(2),
     v.pnl === null ? "—" : String(Math.round(v.pnl)),
     standingNote(v),
   ]));
+  // outside the session the figures are a close's, and the table keeps its four columns: the one
+  // line under it says which close (#380)
+  return inSession(now) ? reply : `${reply}\n${closedLine(valued.values)}`;
 };
 
 /** One contract's live figures, for a strike nothing watches. The reason `/spx/quote` could be

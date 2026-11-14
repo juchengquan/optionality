@@ -81,7 +81,8 @@
           },
           "legs_delta": null,
           "observed_at": "2026-11-09 14:45:00.000000",
-          "spx": null
+          "spx": null,
+          "contract_size": null
         }
       ],
       "reference_securities": []

@@ -8,7 +8,9 @@ Accepted. Decided with the owner on 2026-10-12. Amended 2026-11-10: the daily sa
 close (or marked as not one), and records each leg's delta (last section). Amended 2026-11-11 by
 ADR 0024: the sample also records SPX's price, derived from the sweep's batch. Amended 2026-11-12:
 the vol split is of the gap at the last sample, served whole by the route. Amended 2026-11-14
-(#380): a day's row may have an empty Cost to close, and keeps its vol readings (last section).
+(#380): a day's row may have an empty Cost to close, and keeps its vol readings; and, the same day,
+outside the session a holding is valued from its latest close, which each row now carries the
+contract size for (last two sections).
 
 ## Context
 
@@ -292,5 +294,36 @@ What reads a costless row:
   close". Only where no day has a cost does the last day say so.
 - **The vol chain itself** never read the cost, so a costless day still links the days either side.
 
-Valuing a holding from its latest close outside the session is the second half of #380, and is not
-decided here.
+Valuing a holding from its latest close outside the session is the second half of #380, below.
+
+## Amended 2026-11-14: outside the session, a holding is valued from its latest close (#380)
+
+The owner's decision (ADR 0023, amended the same day): outside New York's session the service values
+a holding from its stored samples rather than the Provider's out-of-hours quote. What that asks of
+this file's rows:
+
+- **Which row** (`closeSample`, `domain/expiry.ts`, cased and ported): the latest with a Cost to
+  close taken IN the session, a weekday's 09:30–16:15 New York — the day's close, which is what the
+  hours rule above makes it. A weekend's or a holiday's row in those hours is not a close, though
+  `sampleTiming` names it one by the hour: at best it carries the last close forward.
+  Where no row with a cost was taken in the hours — a trade recorded in New York's evening and not
+  yet through a session — the latest with a cost of any timing, served with its `sampleTiming` so
+  an evening's reading is never called a close. A costless row (a weekend's since #380) values
+  nothing, and a row summed before a quantity correction (#359) is no candidate either.
+  `valuesFromClose` is that choice outside the session and nothing inside it.
+- **The contract size** is stored on each row (`contract_size`, migration 0013), from the writing
+  sweep's batch, because P&L is money and money needs a size only a Quote carries. It is written and
+  compared with the row's other figures, and is no part of `takesSample`'s completion rule. Rows
+  written before 0013 were NOT backfilled: nothing stored says a holding's size, and 100 is the
+  assumption `contractSize` exists to refuse. A holding valued from one has its cost, Levels and
+  pace, and a P&L of a dash, until a sweep in the session writes a row with a size.
+- **The pace is at the row's own DTE.** On-pace, the gap and the Levels are measured at the DTE the
+  row was observed at, so a Friday close is paced as Friday: Saturday's DTE would charge it a day of
+  decay it has not had. Whether manage-by is due stays today's, since it is a deadline.
+- **The manage-by notice** (above: "exactly one notice") is held until it has a cost to say — the
+  sweep's batch, else outside the session the latest close, named in the notice with its pace at
+  that row's DTE — because a notice that goes once without its "now" line goes without it for good.
+  The hold is bounded (`sessionClosedSince`): once a whole weekday session has closed since the
+  holding entered its window with still no cost, the notice goes without its "now" line, stamped,
+  rather than never.
+

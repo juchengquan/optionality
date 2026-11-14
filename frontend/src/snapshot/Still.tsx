@@ -291,7 +291,7 @@ function HoldingsStatus({ holdings, error, at, served, session, className }: {
 }) {
   return (
     <>
-      {!session ? <ClosedLine at={holdings !== null ? at : null} served={served} className={className} /> : null}
+      {!session ? <ClosedLine at={holdings !== null ? at : null} served={served} holdings={holdings} className={className} /> : null}
       {error !== null ? <p className={className}>{`the holdings could not be valued — ${error}`}</p>
         : holdings === null ? <p className={className}>valuing…</p>
           : holdings.length === 0 ? <p className={className}>nothing held</p> : null}

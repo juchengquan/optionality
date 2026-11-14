@@ -556,7 +556,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 ## Invariants — user-ratified in design sessions; do not "fix" without asking
 
 - Every call for **market data** is a single bounded one: the sweep, `/quotes`, `/references`,
-  `/positions/values` and the creation probes (`POST /monitors`, `/positions`, `/references` and
+  `/positions/values` (outside the session only for the holdings with no close, usually none —
+  see below) and the creation probes (`POST /monitors`, `/positions`, `/references` and
   `/spreads`, which probes every leg of every spread in ONE call — at most 32 legs in all, six
   to a spread, #334). Widened from "every call to the Provider" by ADR
   0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
@@ -658,6 +659,31 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   call it missed, and `/vol`'s split skips it: taken at the last day with a cost, vol part included. A sweep that read nothing at all (a leg not returned) writes no row.
   And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
   it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
+  And the batch's contract size (`contract_size`, migration 0013, #380), so a close values a P&L with no
+  Provider call; rows written before it were NOT backfilled (nothing stored says a size, and 100 is the
+  assumption `contractSize` refuses), so a holding valued from one has its P&L dashed.
+- Out of New York's SESSION — `inSession`: 09:30:00–16:15:00 New York, Monday to Friday, both ends
+  included, holidays not detected (the page's own edges) — a holding is valued from its LATEST CLOSE,
+  not from the Provider, in `/positions/values` and the bot's `/holdings` alike (`holdings.ts`, #380;
+  ADR 0023, amended 2026-11-14). moomoo quotes every option bid 0 / ask 0 out of hours, which is no
+  price. `valuesFromClose` decides per holding: in the session always live; outside it the latest row
+  with a Cost to close taken IN the session — a weekday's hours, so a weekend row is never "the
+  close" (`closeSample`) — else the latest with a cost of any timing,
+  stated as such (`valued_timing`); a row summed before a quantity correction is no candidate; and a
+  holding with no such row is valued live — a dash, never 0. Only the holdings valued live are asked
+  for, so a book wholly valued from its closes makes NO market-data call. A close's Levels, schedule
+  and pace are at ITS OWN DTE, while the holding's `dte` and `manage_by_due` are today's; its greeks
+  are its legs' stored delta and vega (no gamma or theta stored: dashes), its strike distances its
+  stored SPX and IVs. The answer says `valued_from`, `valued_on` and `valued_timing`, and its
+  `fetched_at` is the row's observed time, so the page's chips and market-closed line ("market
+  closed — as of the close, Fri 13 Nov 16:14", New York's clock) and the bot's one line under its
+  table say which close. The manage-by notice, sent once, is HELD until it has a cost to say: the
+  batch's, else out of the session the latest close's, named — but at most until a whole weekday
+  session has closed inside the window (`sessionClosedSince`), after which it goes without its "now"
+  line, stamped. The
+  watchlist has no close: out of the session the page says a price rule's last reading beside its
+  dash, its time on New York's clock as the close's is, and only one read IN the session (`frontend/src/lastknown.ts`), because a pre-#380 out-of-hours
+  reading may be a stored 0.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed. A leg may carry a QUANTITY (`qty`, a whole
   number 1–10, absent is 1, stored only where it is not 1; #351): it multiplies that leg's signed figure in

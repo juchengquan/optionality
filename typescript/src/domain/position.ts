@@ -198,14 +198,22 @@ export function contractSize(byCode: ByCode): number | null {
 
 /** Entry less cost to close, in money. Null unless every leg is priced and a size is known. */
 export function positionPnl(p: Position, byCode: ByCode): number | null {
-  const closing = costToClose(p, byCode);
-  const size = contractSize(byCode);
+  return pnlAt(p, costToClose(p, byCode), contractSize(byCode));
+}
+
+/** Entry less a GIVEN Cost to close, in money, at a given contract size: what `positionPnl` is once
+ *  the batch has priced the legs, and what a holding valued from its latest close is, where the
+ *  stored row holds the cost and the size and there are no legs to price (#380).
+ *
+ *  Null where the cost, the size or the Entry is unknown: an unknown P&L is never a fabricated one,
+ *  and a size is never assumed to be 100. */
+export function pnlAt(p: Position, cost: number | null, size: number | null): number | null {
   // entry is for the whole holding, so P&L is too; an unknown entry means an unknown P&L,
   // never a fabricated one
-  if (closing === null || size === null || p.entry === null) return null;
+  if (cost === null || size === null || p.entry === null) return null;
   // money, so 2dp is its own precision: float noise here reads as 160.99999999999986.
   // points and greeks stay exact and are rounded at display instead.
-  return roundMoney((p.entry - closing) * p.contracts * size);
+  return roundMoney((p.entry - cost) * p.contracts * size);
 }
 
 /** What a closed Position made: Entry less Exit, across the contracts held, in POINTS.

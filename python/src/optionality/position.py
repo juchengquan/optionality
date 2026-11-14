@@ -158,11 +158,16 @@ def contract_size(by_code: ByCode) -> float | None:
 
 def position_pnl(position: Position, by_code: ByCode) -> float | None:
     """Entry less Cost to close, in money. None unless every leg is priced and an entry is known."""
-    closing = cost_to_close(position, by_code)
-    size = contract_size(by_code)
-    if closing is None or size is None or position.entry is None:
+    return pnl_at(position, cost_to_close(position, by_code), contract_size(by_code))
+
+
+def pnl_at(position: Position, cost: float | None, size: float | None) -> float | None:
+    """Entry less a GIVEN Cost to close, in money, at a given contract size: `position_pnl` once the batch
+    has priced the legs, and a holding valued from its latest close, whose stored row holds the cost and
+    the size (#380). None where the cost, the size or the Entry is unknown; a size is never assumed."""
+    if cost is None or size is None or position.entry is None:
         return None
-    return round((position.entry - closing) * position.contracts * size, 2)
+    return round((position.entry - cost) * position.contracts * size, 2)
 
 
 def realized_points(position: Position, exit_: float | None) -> float | None:

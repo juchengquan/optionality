@@ -40,7 +40,7 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
     "position_samples": (
         "position_id", "observed_on", "dte", "cost_to_close",
         # appended, because ALTER TABLE adds at the end
-        "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx",
+        "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx", "contract_size",
     ),
     "monitor_positions": ("monitor_id", "position_id"),
     "reference_securities": ("id", "code", "label", "source", "created_at"),
@@ -57,7 +57,15 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
 NULLABLE: dict[TableName, tuple[str, ...]] = {
     "monitors": ("legs", "scope", "disabled_reason", "last_value", "last_checked_at", "last_alarm_at"),
     "positions": ("strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit", "qty_corrected_at"),
-    "position_samples": ("cost_to_close", "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"),
+    "position_samples": (
+        "cost_to_close",
+        "legs_iv",
+        "legs_vega",
+        "legs_delta",
+        "observed_at",
+        "spx",
+        "contract_size",
+    ),
     "monitor_positions": (),
     "reference_securities": ("label",),
     "schema_migrations": (),
@@ -172,6 +180,10 @@ class PositionSampleRow(TypedDict):
     #: SPX's price as the writing sweep's batch implied it (`derived_spx`, ADR 0024). None where the
     #: batch could not give one, and on every row written before migration 0010.
     spx: float | None
+    #: The points-to-money multiplier the writing sweep's batch carried (`contract_size`), so a holding
+    #: valued from this row outside the session has a P&L with no Provider call (#380). None where the
+    #: batch carried none, and on every row written before migration 0013, which were not backfilled.
+    contract_size: float | None
 
 
 class MonitorPositionRow(TypedDict):

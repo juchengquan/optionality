@@ -853,6 +853,25 @@ class TestWhatOnlyThePythonCanGetWrong:
         assert chat.last() == f"No monitor matches '{YYMMDD}\x1cC6500'."
         assert len(chat.monitors()) == 1
 
+    async def test_holdings_reads_its_clock_once_so_a_reply_begun_in_the_session_is_not_called_closed(self, chat):
+        # #380: 16:14:59 New York on Monday 9 November, and the clock reads 16:15:03 after the Provider
+        # call: the table is live, so no market-closed line goes under it
+        clock = [datetime(2026, 11, 9, 21, 14, 59, tzinfo=UTC), datetime(2026, 11, 9, 21, 15, 3, tzinfo=UTC)]
+        reads = iter([0, 1, 1, 1, 1])
+        hold(chat, "t" * 32, "spread", 2.0, [{"side": "short", "option_type": "CALL", "strike": 8100}])
+        b = TelegramBot(
+            BotDeps(
+                db=chat.db,
+                settings=settings_for(telegram_bot_token="t", telegram_chat_id="42"),
+                api=chat.telegram.api,
+                fetch_quotes=fake_fetcher(quoting_all({"mid_price": 1.5, "option_contract_size": 100})),
+                now=lambda: clock[next(reads)],
+            )
+        )
+        await b.handle_update(update("/holdings"))
+        assert "1.50" in chat.last()
+        assert "market closed" not in chat.last()
+
     async def test_writes_a_holding_s_cost_and_p_and_l_as_to_fixed_and_math_round_write_them(self, chat):
         # 2.125 and 12.5 are exact ties: `toFixed` and `Math.round` take them up, where Python's format
         # and `round` take them to even — "2.12" and 12 — and `str` of a float would say "12.0"
@@ -860,7 +879,11 @@ class TestWhatOnlyThePythonCanGetWrong:
         await chat.bot(quoting_all({"mid_price": 2.125, "option_contract_size": 100})).handle_update(
             update("/holdings")
         )
-        assert chat.last() == "<pre>holding  cost  P&amp;L  note\ntie      2.13  13       —</pre>"
+        # out of New York's session (the suite's clock), with no close stored: valued live, and said so
+        assert chat.last() == (
+            "<pre>holding  cost  P&amp;L  note\ntie      2.13  13       —</pre>"
+            "\nmarket closed — no close recorded yet; valued live"
+        )
 
     async def test_runs_until_stopped_answering_each_update_once_and_moving_past_it(self, chat):
         b: TelegramBot

@@ -1014,6 +1014,60 @@ class TestTheManageByNotice:
         assert len(self.notices(b)) == 0
         assert self.notified_at(b, id_)
 
+    # #380: the notice goes ONCE, so a sweep with no Cost to close to say holds it rather than sending
+    # it without its "now" line for good. A delta still arrives, and the day's row is kept for it with an
+    # empty cost — which values nothing.
+    def priceless(self, b: Book, dte: int) -> FakeProvider:
+        return quoting("option_delta", {self.leg(b, dte): 0.2})
+
+    @staticmethod
+    def close_row(b: Book, id_: str, observed_on: str, observed_at: str, cost: float | None, dte: int) -> None:
+        b.db.execute(
+            """insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at, contract_size)
+       values (?, ?, ?, ?, ?, 100)""",
+            (id_, observed_on, dte, cost, observed_at),
+        )
+
+    async def test_waits_for_a_cost_a_sweep_that_prices_nothing_sends_nothing_and_stamps_nothing(self, b: Book) -> None:
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        await b.sweeper(self.priceless(b, 21)).sweep()
+        assert self.notices(b) == [], "no cost to say, and no close to say it from"
+        assert self.notified_at(b, id_) is None, "so it is still owed"
+
+        await b.sweeper(quoting("mid_price", {self.leg(b, 21): 4.4})).sweep()
+        assert len(self.notices(b)) == 1
+        assert "now 4.40" in self.notices(b)[0]
+        assert self.notified_at(b, id_)
+
+    async def test_out_of_hours_with_no_price_says_the_latest_close_s_cost_and_day_paced_at_its_dte(
+        self, b: Book
+    ) -> None:
+        # 01:00 New York on Thursday 1 October: yesterday's close, observed at 16:14 (20:14 UTC, EDT)
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
+        await b.sweeper(self.priceless(b, 21)).sweep()
+        assert len(self.notices(b)) == 1
+        assert "entry 6.86 · 4.40 at the 2026-09-30 close" in self.notices(b)[0]
+        # on-pace at the close's own 22 DTE (opened at 45): 6.86 × √(22/45) = 4.80, and 4.40 is ahead
+        assert "on-pace 4.80 — ahead by 0.40" in self.notices(b)[0]
+        assert self.notified_at(b, id_)
+
+    async def test_holds_it_no_longer_than_a_whole_session_then_goes_without_its_now_line(self, b: Book) -> None:
+        # 01:00 New York on Thursday 1 October, at 19 DTE: the window opened on Tuesday the 29th at 21,
+        # and Tuesday's and Wednesday's sessions have closed since with no price and no close
+        id_ = self.held(b, "condor", b.days_from_now(-26), 19)
+        await b.sweeper(self.priceless(b, 19)).sweep()
+        assert self.notices(b) == ["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]
+        assert self.notified_at(b, id_)
+
+    async def test_in_the_session_with_no_price_holds_it_whatever_close_is_stored(self, b: Book) -> None:
+        b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # 11:00 New York, Thursday
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
+        await b.sweeper(self.priceless(b, 21)).sweep()
+        assert self.notices(b) == []
+        assert self.notified_at(b, id_) is None
+
     async def test_does_not_stop_the_sweep_nor_the_alarms_if_the_notice_fails(self, b: Book) -> None:
         self.held(b, "condor", b.days_from_now(-24), 21)
         b.monitor(threshold=0.05, strike_date=b.days_from_now(21))

@@ -11,9 +11,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BOT_COMMANDS, HELP_TEXT, TABLE_WIDTH, escapeHtml, fitCell, fmtValue, hasFormat, pyNumber, ruleText, table,
-  thresholdError,
+  BOT_COMMANDS, HELP_TEXT, TABLE_WIDTH, closeWords, closedLine, escapeHtml, fitCell, fmtValue, hasFormat,
+  pyNumber, ruleText, table, thresholdError,
 } from "./format.ts";
+import type { HoldingValue } from "../../holdings.ts";
 
 describe("escapeHtml", () => {
   it("escapes what Python's html.escape does, quotes included", () => {
@@ -224,5 +225,35 @@ describe("the help and the menu", () => {
   it("gives every menu entry a description, which Telegram requires", () => {
     expect(BOT_COMMANDS.every((c) => c.description.length > 0)).toBe(true);
     expect(BOT_COMMANDS.every((c) => /^[a-z]+$/.test(c.command))).toBe(true);
+  });
+});
+
+describe("closedLine — which close /holdings is valued from, out of session (#380)", () => {
+  const row = (observed_on: string, observed_at: string | null) => ({ observed_on, observed_at });
+  /** only `close` is read, so a value is that and nothing else */
+  const valued = (close: ReturnType<typeof row> | null) => ({ close }) as unknown as HoldingValue;
+  const FRI = row("2026-11-13", "2026-11-13 21:14:59.000000"); // 16:14 New York, EST
+
+  it("names the close on New York's clock", () => {
+    expect(closeWords(FRI)).toBe("as of the close, Fri 13 Nov 16:14");
+    // September is "Sep" in both languages, which a locale's "Sept" would not be
+    expect(closeWords(row("2026-09-30", "2026-09-30 20:14:00.000000"))).toBe("as of the close, Wed 30 Sep 16:14");
+  });
+
+  it("never passes a reading off as a close", () => {
+    expect(closeWords(row("2026-11-13", "2026-11-14 01:30:00.000000"))).toBe("as of Fri 13 Nov 20:30, after the close");
+    expect(closeWords(row("2026-11-13", "2026-11-13 10:00:00.000000"))).toBe("as of Fri 13 Nov 05:00, before the open");
+    expect(closeWords(row("2026-11-13", null))).toBe("as of Fri 13 Nov, at a time not recorded");
+  });
+
+  it("says the latest close, and how many holdings were valued otherwise", () => {
+    expect(closedLine([valued(FRI), valued(FRI)])).toBe("market closed — as of the close, Fri 13 Nov 16:14");
+    // a row rewritten at 16:10 and another at 16:14 are one close: the later is named
+    expect(closedLine([valued(row("2026-11-13", "2026-11-13 21:10:00.000000")), valued(FRI)]))
+      .toBe("market closed — as of the close, Fri 13 Nov 16:14");
+    // a close is named before a later reading after it
+    expect(closedLine([valued(FRI), valued(row("2026-11-13", "2026-11-14 01:30:00.000000")), valued(null)]))
+      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading; 1 with no close, valued live");
+    expect(closedLine([valued(null)])).toBe("market closed — no close recorded yet; valued live");
   });
 });

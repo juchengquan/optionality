@@ -10,7 +10,7 @@ import { z } from "zod";
 import { marketDate, sampleTiming } from "optionality/domain/expiry";
 import { dteAtOpen, exitLevels, exitPolicy, onPace } from "optionality/domain/exit";
 import {
-  POSITION_GREEK_FIELDS, contractSize, legReadings, positionGreek, positionLegCodes, realizedPoints,
+  POSITION_GREEK_FIELDS, legReadings, positionGreek, positionLegCodes, realizedPoints,
 } from "optionality/domain/position";
 import type { Deps } from "../deps.ts";
 import {
@@ -22,7 +22,7 @@ import {
 import { monitorLegCodes } from "optionality/domain/monitor";
 import { buildSpxCode } from "optionality/domain/contract";
 import { payoffAtExpiry } from "optionality/domain/payoff";
-import { derivedSpx, strikeDistances } from "optionality/domain/quote";
+import { strikeDistances } from "optionality/domain/quote";
 import { atomic } from "../../../db/open.ts";
 import { holdingValues } from "../../../holdings.ts";
 import type { MonitorRow, PositionRow } from "../../../db/rows.ts";
@@ -127,8 +127,22 @@ const PositionValues = PositionOut.extend({
    *  strike strip draws. The strikes and deltas are there without an SPX; only the distances
    *  are null, and `spx_reason` says why. */
   short_strikes: z.array(StrikeDistanceOut),
+  /** when the figures were read, in DISPLAY_TZ: this request's instant for a live valuation, and
+   *  for a close the instant that row was observed (null where it never recorded one) — the clock
+   *  the page's Level chips and its market-closed line state (#354, #380) */
   fetched_at: z.string().nullable(),
-  /** days left where the option trades, the same reckoning the dashboard's column uses */
+  /** where the figures are from (#380): "live", the Provider's batch for this request — always, in
+   *  New York's session — or "close", the holding's latest stored row with a Cost to close, outside
+   *  it. A holding with no such row is valued live, which out of hours is a dash, never a 0. */
+  valued_from: z.enum(["live", "close"]),
+  /** the New York market day of the row a close valuation is from; null when live */
+  valued_on: z.string().nullable(),
+  /** what that row is (`sampleTiming`): the day's "close", or — where no row with a cost was taken
+   *  in the hours — a reading from "after-close", "before-open", or one "unrecorded"; null when
+   *  live. Said beside the figures so an evening's reading is never passed off as a close. */
+  valued_timing: z.enum(["close", "before-open", "after-close", "unrecorded"]).nullable(),
+  /** days left where the option trades, the same reckoning the dashboard's column uses: TODAY's,
+   *  whatever the figures are from. Levels and the pace are at the close's own DTE (#380, F5). */
   dte: z.number(),
   schedule: ScheduleOut,
 });
@@ -233,7 +247,7 @@ const SamplesOut = z.object({
 });
 
 const list = documented("List positions", { 200: z.array(PositionOut) });
-const values = documented("Live value, P&L and exit schedule of every position", { 200: z.array(PositionValues) }, [502]);
+const values = documented("Value, P&L and exit schedule of every position: live in the session, from its latest close outside it", { 200: z.array(PositionValues) }, [502]);
 const vol = documented("How much of the pace gap vol accounts for", { 200: VolOut }, [404]);
 const samples = documented("A holding's daily samples, with its on-pace and its levels", { 200: SamplesOut }, [404]);
 const payoff = documented("A holding's payoff at expiry", { 200: PayoffOut }, [404, 422]);
@@ -336,7 +350,12 @@ export function positionRoutes(deps: Deps) {
      *  CLAUDE.md's Provider invariant names it alongside the sweep, `/quotes` and the creation
      *  probes. It was a fifth exception in the code and a fourth in that sentence until
      *  2026-10-17, when the list was corrected rather than the route; `/spx/quote` left the list
-     *  in #199, which took the route with it. */
+     *  in #199, which took the route with it.
+     *
+     *  Outside New York's session a holding is valued from its latest close instead (#380,
+     *  `holdings.ts`), and only the holdings with no close are asked for — none, usually, so the
+     *  route then makes no call at all. A close states its day and timing, and its observed time
+     *  is the stamp; its greeks are its legs' stored delta and vega (no gamma, no theta). */
     .get("/values", values, async (c) => {
       const now = deps.now();
       let valued;
@@ -346,30 +365,38 @@ export function positionRoutes(deps: Deps) {
         throw providerFailed(deps.provider.name, err);
       }
       // `values` is the route descriptor; the holdings are `held`
-      const { byCode, values: held } = valued;
+      const { values: held } = valued;
       if (held.length === 0) return values.reply(c, 200, []);
       const fetched = displayTime(now, tz);
-      const spx = derivedSpx(Object.values(byCode));
-      return values.reply(c, 200, held.map((v) => ({
-        ...out(v.row),
-        cost_to_close: v.cost,
-        pnl: v.pnl,
-        captured: v.captured,
-        contract_size: contractSize(byCode),
-        spx: spx.price,
-        spx_reason: spx.reason,
-        greeks: Object.fromEntries(
-          POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(v.position, byCode, f)]),
-        ),
-        legs_delta: legReadings(v.position, byCode, "option_delta"),
-        short_strikes: strikeDistances(
-          v.position.legs.filter((l) => l.side === "short")
-            .map((l) => buildSpxCode(v.position.strike_date, l.option_type, l.strike)),
-          byCode, spx.price, v.dte),
-        fetched_at: fetched,
-        dte: v.dte,
-        schedule: v.schedule,
-      })));
+      return values.reply(c, 200, held.map((v) => {
+        // a close's stamp is when that row was observed: the clock the page's chips and its
+        // market-closed line read, so neither calls a Friday close "valued at" Saturday's hour
+        const timing = v.close === null ? null : sampleTiming(v.close.observed_at);
+        return {
+          ...out(v.row),
+          cost_to_close: v.cost,
+          pnl: v.pnl,
+          captured: v.captured,
+          contract_size: v.contractSize,
+          spx: v.spx.price,
+          spx_reason: v.spx.reason,
+          greeks: Object.fromEntries(
+            POSITION_GREEK_FIELDS.map((f) => [f, positionGreek(v.position, v.records, f)]),
+          ),
+          legs_delta: legReadings(v.position, v.records, "option_delta"),
+          short_strikes: strikeDistances(
+            v.position.legs.filter((l) => l.side === "short")
+              .map((l) => buildSpxCode(v.position.strike_date, l.option_type, l.strike)),
+            v.records, v.spx.price, v.figuresDte),
+          fetched_at: v.close === null ? fetched
+            : timing === "unrecorded" ? null : displayStored(v.close.observed_at, tz),
+          valued_from: v.valuedFrom,
+          valued_on: v.close?.observed_on ?? null,
+          valued_timing: timing,
+          dte: v.dte,
+          schedule: v.schedule,
+        };
+      }));
     })
 
     /** What of this holding's pace gap vol accounts for (ADR 0011).

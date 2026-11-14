@@ -490,6 +490,23 @@ describe("the live tables", () => {
       .toBeLessThanOrEqual(40);
   });
 
+  it("/holdings reads its clock once: a reply begun in the session is not called closed (#380)", async () => {
+    // 16:14:59 New York on Monday 9 November, and the Provider call takes long enough that the
+    // clock reads 16:15:03 after it: the table is live, so no market-closed line goes under it
+    const clock = [new Date("2026-11-09T21:14:59Z"), new Date("2026-11-09T21:15:03Z")];
+    let reads = 0;
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
+                              opened_at, manage_notified_at)
+       values (?, 'spread', null, ?, 1, 2.0, ?, '2026-08-01 00:00:00.000000', ?, null)`,
+    ).run("p".repeat(32), FUTURE, toSqliteJson([{ side: "short", option_type: "CALL", strike: 8100 }]), OPENED);
+    const b = bot(quoting({ mid_price: 1.5, option_contract_size: 100 }), {},
+      { now: () => clock[Math.min(reads++, 1)]! });
+    await b.handleUpdate(update("/holdings"));
+    expect(last()).toContain("1.50");
+    expect(last()).not.toContain("market closed");
+  });
+
   it("/holdings says a pace gap in words, never as a bare sign", async () => {
     // CONTEXT.md's Pace gap entry: said in words wherever it is shown, "because 'behind' is bad
     // while a positive P&L is good and a bare sign beside one invites reading the other". A

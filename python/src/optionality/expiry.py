@@ -40,6 +40,19 @@ def in_sample_hours(now: datetime | None = None) -> bool:
     return _SAMPLE_FROM <= _since_new_york_midnight(now) <= _SAMPLE_UNTIL
 
 
+def in_session(now: datetime | None = None) -> bool:
+    """Whether New York's SESSION is open at `now`: 09:30:00 to 16:15:00 there, both ends included,
+    Monday to Friday. Holidays are not detected (#380, F7), as the page's own `inSession` does not.
+
+    The same edges as `in_sample_hours`, and a different question: the daily sample is written on EVERY
+    calendar day, while the session is when the market is open to be priced. Outside it a holding is
+    valued from its latest close (`values_from_close`). Mirrors `expiry.ts`.
+    """
+    if _aware(now).astimezone(ZoneInfo(MARKET_TZ)).weekday() >= 5:
+        return False
+    return in_sample_hours(now)
+
+
 def _since_new_york_midnight(now: datetime | None) -> int:
     """Milliseconds since midnight in New York at `now`."""
     ny = _aware(now).astimezone(ZoneInfo(MARKET_TZ))
@@ -147,6 +160,63 @@ def sample_timing(observed_at: str | None) -> SampleTiming:
     if t < _SAMPLE_FROM:
         return "before-open"
     return "close" if t <= _SAMPLE_UNTIL else "after-close"
+
+
+class CloseCandidate(TypedDict):
+    """A stored day's row as far as choosing the one to value a holding from reads it."""
+
+    observed_on: str
+    observed_at: str | None
+    cost_to_close: float | None
+
+
+def _taken_in_session(observed_at: str | None) -> bool:
+    """Whether a stored row was observed IN New York's session — a weekday's 09:30-16:15 — and so is
+    that day's close: `sample_timing` says "close" by the hour alone, which a weekend row in those hours
+    also is. Mirrors `expiry.ts`."""
+    if observed_at is None or sample_timing(observed_at) != "close":
+        return False
+    when = _stored_instant(observed_at)
+    return when is not None and in_session(when)
+
+
+def session_closed_since(day: str, now: datetime) -> bool:
+    """Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after the
+    market day `day`, by `now`: what bounds the manage-by notice's wait for a Cost to close (#380 review).
+    Holidays are not detected. Mirrors `expiry.ts`."""
+    today = date.fromisoformat(market_date(now))
+    d = date.fromisoformat(normalize_strike_date(day))
+    while d <= today:
+        if d.weekday() < 5 and (d < today or _since_new_york_midnight(now) > _SAMPLE_UNTIL):
+            return True
+        d = d.fromordinal(d.toordinal() + 1)
+    return False
+
+
+def close_sample[R: CloseCandidate](samples: list[R]) -> R | None:
+    """Which of a holding's stored rows it is valued from outside the session (#380, F6), or None.
+
+    The LATEST row with a Cost to close taken in the hours (`sample_timing` "close"); where none was,
+    the latest row with a cost of any timing, which the caller states. A row without a cost values
+    nothing. Latest by its market day, whatever order the rows come in. Mirrors `expiry.ts`.
+    """
+    close: R | None = None
+    any_: R | None = None
+    for s in samples:
+        if s["cost_to_close"] is None:
+            continue
+        if any_ is None or s["observed_on"] > any_["observed_on"]:
+            any_ = s
+        if _taken_in_session(s["observed_at"]) and (close is None or s["observed_on"] > close["observed_on"]):
+            close = s
+    return close if close is not None else any_
+
+
+def values_from_close[R: CloseCandidate](now: datetime, samples: list[R]) -> R | None:
+    """The row a holding is valued from at `now`, or None to value it LIVE (#380): always live in the
+    session, the latest close (`close_sample`) outside it, and live where no row has a cost. Mirrors
+    `expiry.ts`."""
+    return None if in_session(now) else close_sample(samples)
 
 
 def days_to_expiry(strike_date: str, now: datetime | None = None) -> int:

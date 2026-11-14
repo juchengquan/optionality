@@ -12,7 +12,9 @@ modes", REVIEW's own columns, the phone's Live and Review tabs and its one-holdi
 clock's-mode consequence; it partly reverses #338's "closed holdings in REVIEW only" and re-keys
 #354's rule from the mode to the session. The superseded text is kept below and marked; the
 amendment is what binds, and it is built (#371–#375, the last on 2026-11-14), with the
-corrections its build needed written into it and named there. Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+corrections its build needed written into it and named there. **Amended 2026-11-14 (#380):** outside
+the session the holdings are valued from their latest close, by the service, and the market-closed
+line names that close (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -324,3 +326,46 @@ state, not routes" survives with one fewer state.
 CLAUDE.md describes the page as built: one page, the session deciding the fetching (its polling
 invariant and the frontend's Layout entry), updated by each build issue as it landed and by #375
 last.
+
+## Amended 2026-11-14: outside the session, the latest close (#380)
+
+Decided by the owner on 2026-11-14 (#380), after the first evening of the one page: valued once
+outside the session, the book read **0.00** "at target" with 100% captured, because moomoo quotes
+every option bid 0 / ask 0 out of hours. The first part of #380 made such a quote no price at all,
+so the same valuation became dashes. This part says what the page shows instead.
+
+- **The service values it, not the page.** Outside New York's session (`inSession`, the domain's,
+  with the page's edges: 09:30:00–16:15:00, weekdays, no holidays) `/positions/values` and the bot's
+  `/holdings` value each holding from its **latest close**: the latest daily sample with a Cost to
+  close taken in 09:30–16:15 New York; where none was, the latest with a cost of any timing, its
+  timing stated (F6); and where none has a cost, live as before — a dash out of hours, never a 0.
+  Only the holdings valued live are asked for, so the usual evening valuation makes no market-data
+  call at all.
+- **What it carries.** The answer gains `valued_from` (`live` or `close`), `valued_on` (the
+  sample's market day) and `valued_timing` (its `sampleTiming`). Its `fetched_at`, the stamp every
+  Level chip and the market-closed line read (#354), is the sample's observed time. P&L uses the
+  contract size each sample now stores (F3, migration 0013; earlier rows have none, so their P&L
+  is a dash). Levels, the schedule and the pace use the sample's own DTE (F5); the holding's DTE and
+  manage-by are today's. Delta and vega are the legs' stored ones, strike distances use the stored
+  SPX and IVs, and gamma and theta, which no sample stores, are dashes.
+- **The words.** The market-closed line names the close on New York's clock, since the close is
+  New York's: "market closed — as of the close, Fri 13 Nov 16:14", a reading that is not a close as
+  "as of Fri 13 Nov 20:30, after the close", then how many holdings were valued from another row and
+  how many had none ("1 with no close, valued live"). A chip from a close says "at target · as of
+  the close" and no time, so the page still states one clock for a valuation. The bot keeps its
+  four columns and adds the same line under the table, outside the session only.
+- **The watchlist** has no samples to fall back on (F8). The service serves its dash; the page puts
+  the rule's last reading from `/monitors` beside it, with its time on New York's clock, as the
+  market-closed line says the close — "no figure out of session; last 3.05 at Fri 13 Nov 16:14" —
+  so the page states one clock for the close; and only a reading taken IN the session: one read outside it may be the
+  0 a 0/0 quote stored before #380, and nothing else tells the two apart.
+- **The manage-by notice**, sent once, waits for a cost rather than going without one: the sweep's
+  batch, else outside the session the latest close, named in it. The wait is bounded: once a whole
+  weekday session has closed since the holding entered its window with still no cost, it goes
+  without its "now" line, as before, and is stamped.
+- **A close is a weekday's.** A row counts as a close only if it was observed in the session — a
+  weekday's 09:30–16:15 — so a priced Saturday-noon row (possible where a Provider quotes at the
+  weekend) never beats Friday's close; it is at most the fallback, stated by its timing.
+
+The page's refresh still values the book once more; outside the session that now re-reads the
+latest close, which changes only after the next session.

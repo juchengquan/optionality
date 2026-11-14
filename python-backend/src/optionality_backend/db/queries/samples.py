@@ -51,8 +51,8 @@ def record_position_sample(db: sqlite3.Connection, value: PositionSampleRow) -> 
     db.execute(
         """insert or replace into position_samples
        (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega, legs_delta, observed_at,
-        spx)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        spx, contract_size)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             value["position_id"],
             value["observed_on"],
@@ -63,6 +63,7 @@ def record_position_sample(db: sqlite3.Connection, value: PositionSampleRow) -> 
             value["legs_delta"],
             value["observed_at"],
             value["spx"],
+            value["contract_size"],
         ),
     )
 

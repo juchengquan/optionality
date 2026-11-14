@@ -1,0 +1,15 @@
+-- The contract size on each sample: the points-to-money multiplier the writing sweep's batch
+-- carried (`contractSize`, never assumed to be 100), so a holding valued from its latest close
+-- outside the session has a P&L without asking the Provider anything (#380, F3).
+--
+-- Outside New York's session the service values a holding from its latest close sample rather than
+-- from moomoo's out-of-hours quote, which prices every option bid 0 / ask 0 — no price at all. The
+-- row holds that day's Cost to close; P&L is money, and money needs the size, which only a Quote
+-- carries. Recorded with the row's other figures, from the same batch.
+--
+-- Nullable with no default, so ADD COLUMN suffices, and every existing row reads as having none:
+-- NOT backfilled. Nothing stored says a holding's size — `positions` records legs, an Entry and a
+-- count — and filling in 100 would be the assumption `contractSize` exists to refuse. A holding
+-- valued from a row written before this migration therefore has its Cost to close, its Levels and
+-- its pace, and a P&L of a dash, until the first sweep in the session writes a row with a size.
+ALTER TABLE position_samples ADD COLUMN contract_size FLOAT;

@@ -81,7 +81,8 @@
           },
           "legs_delta": null,
           "observed_at": "2026-11-06 21:05:00.000000",
-          "spx": null
+          "spx": null,
+          "contract_size": null
         },
         {
           "position_id": "pos-1",
@@ -102,7 +103,8 @@
           },
           "legs_delta": null,
           "observed_at": "2026-11-08 21:05:00.000000",
-          "spx": null
+          "spx": null,
+          "contract_size": null
         }
       ],
       "reference_securities": []

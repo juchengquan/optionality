@@ -130,3 +130,38 @@ export function servedWhen(served: string | null | undefined, now: Date = new Da
     ? `${WEEKDAYS[date.getUTCDay()]} ${clock}`
     : `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${clock}`;
 }
+
+const NEW_YORK_WALL = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+
+/** "Fri 13 Nov": a market day (YYYY-MM-DD), its names written out here, as the bot writes them. */
+export function marketDayWords(day: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
+
+/** "Fri 13 Nov 16:14": a stamp the service served (`2026-11-14 05:14:59+08:00`, in DISPLAY_TZ)
+ *  on NEW YORK's clock, with its date always — what a close is named by, since the close is New
+ *  York's (#380), on the page as in the bot's `/holdings`. Null for a stamp with no zone or no time. */
+export function newYorkWhen(served: string | null | undefined): string | null {
+  const instant = servedInstant(served);
+  if (instant === null) return null;
+  const parts = Object.fromEntries(NEW_YORK_WALL.formatToParts(instant).map((p) => [p.type, p.value]));
+  return `${marketDayWords(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute}`;
+}
+
+/** The instant a stamp the service served names (`2026-11-14 05:14:59+08:00`), or null for one with
+ *  no zone, which names no instant, or no time. */
+export function servedInstant(served: string | null | undefined): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.exec(served ?? "");
+  if (!m) return null;
+  const zone = m[7]!;
+  const offset = zone === "Z" ? 0
+    : (zone[0] === "-" ? -1 : 1) * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(-2))) * 60_000;
+  const instant = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])) - offset;
+  return Number.isFinite(instant) ? new Date(instant) : null;
+}

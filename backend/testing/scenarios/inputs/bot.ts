@@ -6,7 +6,8 @@
  */
 import type { Update, World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, C7500, at, combo, except, link, message, monitor, position, world,
+  BOOK, C7300, C7350, C7500, P6350, P6400, at, combo, except, link, message, monitor, position, sample,
+  world,
 } from "./fixtures.ts";
 
 export interface BotInput {
@@ -33,10 +34,48 @@ const held = {
   monitor_positions: [link("mon-1", "pos-1"), link("mon-2", "pos-1")],
 };
 
+/** Saturday 14 November 2026, noon in New York: out of session (#380). */
+const SATURDAY = "2026-11-14T17:00:00.000Z";
+const legMap = (values: number[]) =>
+  Object.fromEntries([C7300, C7350, P6400, P6350].map((c, i) => [c, values[i]]));
+/** Friday's close of the condor, at 16:14 New York, and Saturday's costless fill. */
+const FRIDAY_CLOSE = sample({
+  position_id: "pos-1", observed_on: "2026-11-13", dte: 35, cost_to_close: 3.25,
+  observed_at: "2026-11-13 21:14:59.000000", legs_iv: legMap([14.5, 14, 19.25, 20]),
+  legs_vega: legMap([4.25, 4, 4.5, 3.75]), legs_delta: legMap([0.2, 0.14, -0.17, -0.11]),
+  spx: 6900.5, contract_size: 100,
+});
+const SATURDAY_FILL = { ...FRIDAY_CLOSE, observed_on: "2026-11-14", dte: 34, cost_to_close: null,
+  observed_at: "2026-11-14 05:00:12.000000" };
+
 export const BOT: readonly BotInput[] = [
   {
     name: "/holdings values each holding in a four-column table",
     world: world({ tables: held, provider: { quotes: BOOK } }),
+    update: message("/holdings"),
+  },
+  {
+    // #380: out of session the table is Friday's close, its four columns kept, and one line under
+    // it says which close — with the Provider down, since nothing is asked of it
+    name: "/holdings outside the session values each holding from its last close and says which",
+    world: world({
+      clock: SATURDAY,
+      tables: { ...held, position_samples: [FRIDAY_CLOSE, SATURDAY_FILL] },
+      provider: { down: DOWN },
+    }),
+    update: message("/holdings"),
+  },
+  {
+    // a holding with no close is valued live, which out of hours is a dash; the line says so
+    name: "/holdings outside the session says a holding with no close was valued live",
+    world: world({
+      clock: SATURDAY,
+      tables: held,
+      provider: { quotes: Object.fromEntries(Object.entries(BOOK).map(([code, q]) => {
+        const { mid_price: _mid, ...rest } = q;
+        return [code, { ...rest, bid_price: 0, ask_price: 0 }];
+      })) },
+    }),
     update: message("/holdings"),
   },
   {

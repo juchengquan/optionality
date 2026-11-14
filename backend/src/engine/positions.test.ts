@@ -968,6 +968,60 @@ describe("the manage-by notice", () => {
     expect(notifiedAt(id)).toBeTruthy();
   });
 
+  /** #380: the notice goes ONCE, so a sweep with no Cost to close to say holds it rather than
+   *  sending it without its "now" line for good. Out of hours moomoo prices nothing (0/0), so the
+   *  window is often first crossed with no price; a delta still arrives, and the day's row is kept
+   *  for it with an empty cost — which values nothing. */
+  const priceless = (dte: number) => quoting("option_delta", { [buildSpxCode(daysFromNow(dte), "CALL", 8050)]: 0.2 });
+  const closeRow = (id: string, observedOn: string, observedAt: string, cost: number | null, dte: number) =>
+    db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at, contract_size)
+       values (?, ?, ?, ?, ?, 100)`,
+    ).run(id, observedOn, dte, cost, observedAt);
+
+  it("waits for a cost: a sweep that prices nothing sends nothing and stamps nothing (#380)", async () => {
+    const id = held("condor", daysFromNow(-24), 21);
+    await sweeper(priceless(21)).sweep();
+    expect(notices(), "no cost to say, and no close to say it from").toEqual([]);
+    expect(notifiedAt(id), "so it is still owed").toBeNull();
+
+    // the next sweep that prices it says it, with its "now" line
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 })).sweep();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain("now 4.40");
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
+  it("out of hours with no price, says the latest close's cost and day, paced at its DTE (#380)", async () => {
+    // 01:00 New York on Thursday 1 October: yesterday's close, observed at 16:14 (20:14 UTC, EDT)
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
+    await sweeper(priceless(21)).sweep();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain("entry 6.86 · 4.40 at the 2026-09-30 close");
+    // on-pace at the close's own 22 DTE (opened at 45): 6.86 × √(22/45) = 4.80, and 4.40 is ahead
+    expect(notices()[0]).toContain("on-pace 4.80 — ahead by 0.40");
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
+  it("holds it no longer than a whole session: still no cost after one, it goes without its now line (#380)", async () => {
+    // 01:00 New York on Thursday 1 October, at 19 DTE: the window opened on Tuesday the 29th at 21,
+    // and Tuesday's and Wednesday's sessions have closed since with no price and no close
+    const id = held("condor", daysFromNow(-26), 19);
+    await sweeper(priceless(19)).sweep();
+    expect(notices()).toEqual(["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]);
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
+  it("in the session with no price, holds it whatever close is stored: the session's price is live (#380)", async () => {
+    now = new Date("2026-10-01T15:00:00Z"); // 11:00 New York, Thursday
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
+    await sweeper(priceless(21)).sweep();
+    expect(notices()).toEqual([]);
+    expect(notifiedAt(id)).toBeNull();
+  });
+
   it("does not stop the sweep, nor the alarms, if the notice fails", async () => {
     held("condor", daysFromNow(-24), 21);
     monitor({ threshold: 0.05, strike_date: daysFromNow(21) });

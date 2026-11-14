@@ -1846,7 +1846,7 @@
     "/positions/values": {
       "get": {
         "operationId": "getPositionsValues",
-        "summary": "Live value, P&L and exit schedule of every position",
+        "summary": "Value, P&L and exit schedule of every position: live in the session, from its latest close outside it",
         "responses": {
           "200": {
             "description": "ok",
@@ -2064,6 +2064,35 @@
                           "null"
                         ]
                       },
+                      "valued_from": {
+                        "type": "string",
+                        "enum": [
+                          "live",
+                          "close"
+                        ]
+                      },
+                      "valued_on": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "valued_timing": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "close",
+                              "before-open",
+                              "after-close",
+                              "unrecorded"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "dte": {
                         "type": "number"
                       },
@@ -2167,6 +2196,9 @@
                       "legs_delta",
                       "short_strikes",
                       "fetched_at",
+                      "valued_from",
+                      "valued_on",
+                      "valued_timing",
                       "dte",
                       "schedule"
                     ]

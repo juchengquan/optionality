@@ -9,6 +9,7 @@
  *  Every string here is asserted character for character in the tests, because they are read on a
  *  phone and a column that wraps is a table that cannot be read at all.
  */
+import { MARKET_TZ, sampleTiming } from "optionality/domain/expiry";
 import { thresholdFault } from "optionality/domain/monitor";
 import type { HoldingValue } from "../../holdings.ts";
 
@@ -150,6 +151,64 @@ export function standingNote(v: HoldingValue): string {
   if (s.manage_by_due) return "MANAGE";
   if (s.pace_gap === null) return "—";
   return `${s.pace_gap > 0 ? "behind" : "ahead"} ${Math.abs(s.pace_gap).toFixed(2)}`;
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const NEW_YORK = new Intl.DateTimeFormat("en-US", {
+  timeZone: MARKET_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+
+/** "Fri 13 Nov": a market day (YYYY-MM-DD), its names written out here rather than by a locale,
+ *  so both backends spell September alike. */
+function dayWords(isoDay: string): string {
+  const d = new Date(`${isoDay}T00:00:00Z`);
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
+
+/** "Fri 13 Nov 16:14": a stored UTC stamp on New York's clock — the close is New York's, so the
+ *  page and the bot both say it in New York's time (#380) — or null where the stamp is unreadable. */
+function newYorkWhen(observedAt: string | null): string | null {
+  if (sampleTiming(observedAt) === "unrecorded") return null;
+  const parts = Object.fromEntries(NEW_YORK.formatToParts(
+    new Date(`${observedAt!.slice(0, 10)}T${observedAt!.slice(11, 23)}Z`),
+  ).map((p) => [p.type, p.value]));
+  return `${dayWords(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute}`;
+}
+
+/** Which stored row a holding was valued from, in words: "as of the close, Fri 13 Nov 16:14" — or,
+ *  where no row with a cost was taken in the hours, that reading's own timing, so it is never
+ *  passed off as a close (`closeSample`'s fallback, #380). */
+export function closeWords(close: { observed_on: string; observed_at: string | null }): string {
+  const when = newYorkWhen(close.observed_at);
+  switch (sampleTiming(close.observed_at)) {
+    case "close": return `as of the close, ${when}`;
+    case "after-close": return `as of ${when}, after the close`;
+    case "before-open": return `as of ${when}, before the open`;
+    default: return `as of ${dayWords(close.observed_on)}, at a time not recorded`;
+  }
+}
+
+/** The one line `/holdings` adds under its table outside the session (#380): which close the figures
+ *  are from. The latest close if any holding was valued from one in the hours, else the latest row;
+ *  then how many holdings were valued from another row, and how many had none and were valued live
+ *  (a dash out of hours, never a 0). The page's market-closed line says the same thing. */
+export function closedLine(values: readonly HoldingValue[]): string {
+  const closes = values.flatMap((v) => (v.close === null ? [] : [v.close]));
+  const live = values.length - closes.length;
+  if (closes.length === 0) return "market closed — no close recorded yet; valued live";
+  const later = (a: (typeof closes)[number], b: (typeof closes)[number]) =>
+    b.observed_on > a.observed_on || (b.observed_on === a.observed_on && (b.observed_at ?? "") > (a.observed_at ?? ""));
+  const inHours = closes.filter((c) => sampleTiming(c.observed_at) === "close");
+  const pool = inHours.length > 0 ? inHours : closes;
+  const latest = pool.reduce((a, b) => (later(a, b) ? b : a));
+  const key = (c: (typeof closes)[number]) => `${c.observed_on} ${sampleTiming(c.observed_at)}`;
+  const others = closes.filter((c) => key(c) !== key(latest)).length;
+  let line = `market closed — ${closeWords(latest)}`;
+  if (others > 0) line += `; ${others} as of another reading`;
+  if (live > 0) line += `; ${live} with no close, valued live`;
+  return line;
 }
 
 /** Whether this field has a format of its own, which decides 3 places against 4. */

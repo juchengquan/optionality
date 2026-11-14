@@ -331,6 +331,29 @@ export const OUTCOMES: readonly Outcome[] = [
     shows: (s) => s.world.telegram === "down" && changes(s, "positions").length === 0 && quiet(s),
   },
   {
+    // #380: a holding inside its window with no Cost to close to say — out of hours, every leg 0/0,
+    // no close stored — is neither announced nor stamped, so the notice is not lost its "now" line
+    name: "manage-by-notice-held-without-a-cost",
+    decision: "noticeManageBy",
+    shows: (s) => s.world.telegram === "up" && !said(s, /^⏰ /) && changes(s, "positions").length === 0
+      && s.world.tables.positions.some((p: Row) => p.opened_at !== null && p.manage_notified_at === null),
+  },
+  {
+    // ...but the wait is bounded: a whole session closed inside the window with still no cost, so
+    // it goes without its "now" line, and is stamped
+    name: "manage-by-notice-without-a-cost-after-a-session",
+    decision: "sessionClosedSince",
+    shows: (s) => said(s, /^⏰ /) && !said(s, / · /)
+      && changes(s, "positions").some((c) => c.to.manage_notified_at !== undefined),
+  },
+  {
+    // ...and with a close stored, it is valued from that close, which it names
+    name: "manage-by-notice-from-the-close",
+    decision: "noticeManageBy",
+    shows: (s) => said(s, /^⏰ [^]* at the \d{4}-\d{2}-\d{2} close/)
+      && changes(s, "positions").some((c) => c.to.manage_notified_at !== undefined),
+  },
+  {
     // nothing configured counts as delivered: the rows move, nobody's phone does
     name: "telegram-not-configured",
     decision: null,
@@ -357,4 +380,7 @@ export const NOT_A_DECISION: Readonly<Record<string, string>> = {
   onPace: "arithmetic inside noticeManageBy",
   costToClose: "arithmetic inside recordSamples and noticeManageBy",
   legReadings: "arithmetic inside recordSamples",
+  contractSize: "the size recordSamples stores beside a row's cost (#380)",
+  sampleTiming: "the words noticeManageBy names a close's timing in (#380)",
+  normalizeStrikeDate: "reading the expiry noticeManageBy counts the manage-by window back from",
 };
