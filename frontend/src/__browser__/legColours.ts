@@ -6,6 +6,8 @@ import { within } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
 import { expect } from "vitest";
 
+import { contrastInSitu } from "./nextBook";
+
 /** A colour as the page resolves it inside `root`, computed through a probe — so it is compared in
  *  the form the browser serializes a computed colour, whatever that is. */
 export function resolved(root: Element, colour: string): string {
@@ -52,6 +54,8 @@ export function expectTyped(root: Element, b: HTMLElement, type: "CALL" | "PUT",
     expect(alpha(l.fill)).toBeCloseTo(0.12, 2);
   }
   expect(opaque(l.border)).toBe(hue);
+  // readable on the ground it is drawn on: its tint over the panel or the sheet, or its solid fill
+  expect(contrastInSitu(b), `${type}${chosen ? " chosen" : ""}: its words`).toBeGreaterThanOrEqual(4.5);
   expect([l.color, opaque(l.fill), opaque(l.border)]).not.toContain(other);
 }
 

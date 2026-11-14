@@ -21,7 +21,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { shortDate } from "../shared/format";
 import {
-  bandWords, domainOf, slotRows, spxWords, ticksOf, type MapSpread, type PriceMap,
+  bandParts, bandWords, domainOf, slotRows, spxWords, ticksOf, type MapSpread, type PriceMap,
 } from "../pricemap";
 import { distanceWords, nearest, strikeName } from "../strip";
 import { SvgLegSpan } from "../shared/Legs";
@@ -127,7 +127,7 @@ export function PriceMapPanel({ id, map, session, note, selected, onSelect }: {
                           height={height - 4} />
                   ) : null}
                   <text className="nxm-when" x={8} y={top + 18}>{when}</text>
-                  <text className="nxm-sigma" x={8} y={top + 34}>{band}</text>
+                  <text className="nxm-sigma" x={8} y={top + 34}><BandWords lane={lane} words={band} /></text>
                   {lane.spreads.map((s, j) => (
                     <Spread key={s.id} spread={s} x={x} top={top + PAD + rows[j]! * ROW}
                             selected={selected === s.id} onSelect={choose} />
@@ -191,4 +191,12 @@ function Spread({ spread: s, x, top, selected, onSelect }: {
       ))}
     </g>
   );
+}
+
+/** A lane's band label, `bandWords`' characters exactly, its strike drawn as a leg (#391): a leg
+ *  named beside its figure is coloured, as the strike strip's caption names one. */
+function BandWords({ lane, words }: { lane: PriceMap["lanes"][number]; words: string }) {
+  const { before, strike, after } = bandParts(lane);
+  if (!strike) return <>{words}</>;
+  return <>{before}<SvgLegSpan leg={{ short: true, option_type: strike.option_type, strike: strike.strike }} form="name" />{after}</>;
 }

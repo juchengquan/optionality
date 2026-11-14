@@ -286,3 +286,47 @@ export function serveContract(spreads?: { status: number; body: object }): { wha
   }) as unknown as typeof fetch;
   return writes;
 }
+
+/** A computed colour — `oklch(L C h / a)`, `rgb()`/`rgba()` or `color(srgb r g b / a)`, as Chromium
+ *  serializes one — as gamma-encoded sRGB and its alpha. */
+function srgbOf(computed: string): { rgb: [number, number, number]; alpha: number } {
+  const n = (x: string) => (x === "none" ? 0 : x.endsWith("%") ? Number(x.slice(0, -1)) / 100 : Number(x));
+  const ok = /^oklch\(\s*([\d.%]+|none)\s+([\d.%]+|none)\s+([\d.]+|none)\s*(?:\/\s*([\d.%]+))?\s*\)$/.exec(computed);
+  if (ok) {
+    const [L, C, h] = [n(ok[1]!), n(ok[2]!), n(ok[3]!)];
+    const encode = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055);
+    return { rgb: linear(`oklch(${L} ${C} ${h})`).map(encode) as [number, number, number], alpha: ok[4] ? n(ok[4]) : 1 };
+  }
+  const rgb = /^rgba?\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\s*\)$/.exec(computed);
+  if (rgb) return { rgb: [1, 2, 3].map((i) => Number(rgb[i]) / 255) as [number, number, number], alpha: rgb[4] ? Number(rgb[4]) : 1 };
+  const srgb = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.%]+))?\s*\)$/.exec(computed);
+  if (srgb) return { rgb: [1, 2, 3].map((i) => Number(srgb[i])) as [number, number, number], alpha: srgb[4] ? n(srgb[4]) : 1 };
+  throw new Error(`not a colour this reads: "${computed}"`);
+}
+
+/** The ground `el` is drawn on, as the browser composites it: every background from the page up
+ *  to `el` itself, each over the ones beneath it (gamma-encoded sRGB, as a translucent fill is). */
+function groundOf(el: Element): [number, number, number] {
+  const layers: { rgb: [number, number, number]; alpha: number }[] = [];
+  for (let e: Element | null = el; e; e = e.parentElement) {
+    const bg = getComputedStyle(e).backgroundColor;
+    const c = srgbOf(bg);
+    if (c.alpha > 0) layers.push(c);
+    if (c.alpha >= 1) break;
+  }
+  let ground: [number, number, number] = [1, 1, 1];
+  for (const { rgb, alpha } of layers.reverse()) ground = ground.map((g, i) => alpha * rgb[i]! + (1 - alpha) * g) as typeof ground;
+  return ground;
+}
+
+const decodedLuminance = (rgb: [number, number, number]) =>
+  toLuminance(rgb.map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)) as [number, number, number]);
+
+/** The contrast of `el`'s text against the ground it is actually drawn on (WCAG). */
+export function contrastInSitu(el: Element): number {
+  const text = srgbOf(getComputedStyle(el).color);
+  const ground = groundOf(el);
+  const ink = ground.map((g, i) => text.alpha * text.rgb[i]! + (1 - text.alpha) * g) as [number, number, number];
+  const [hi, lo] = [decodedLuminance(ink), decodedLuminance(ground)].sort((p, q) => q - p);
+  return (hi! + 0.05) / (lo! + 0.05);
+}

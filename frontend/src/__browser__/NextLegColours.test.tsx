@@ -4,19 +4,25 @@
  *  neutral; and the book's legs with each type letter in its colour and a short leg bold. That
  *  every place draws its legs through `shared/Legs.tsx` is the jsdom suite's (`legMarks`); the
  *  phone's half of this is `NextLegColours.iphone.test.tsx`. */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { commands, page, userEvent } from "@vitest/browser/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { Legs, SvgLeg } from "../shared/Legs";
 import { expectFormColours, resolved } from "./legColours";
-import { contrast, contrastOnTint, oklab, serveAdding, serveBook, settle, token } from "./nextBook";
+import { contrast, contrastInSitu, contrastOnTint, oklab, serveAdding, serveBook, settle, token } from "./nextBook";
+
+/** Every type letter inside `root` under 4.5:1 against the ground it is drawn on, said. */
+const weakLetters = (root: ParentNode) => [...root.querySelectorAll<HTMLElement>(".nx-leg-t")]
+  .map((t) => [t.closest(".nx-leg")!.textContent, contrastInSitu(t)] as const)
+  .filter(([, c]) => c < 4.5).map(([leg, c]) => `${leg}: ${c.toFixed(2)}:1`);
 
 const root = () => document.querySelector<HTMLElement>(".nx")!;
 
 afterEach(async () => {
   cleanup();
+  vi.restoreAllMocks();
   await commands.colorScheme("light");
   await page.viewport(1280, 900);
 });
@@ -40,6 +46,58 @@ for (const scheme of ["light", "dark"] as const) {
         if (tinted < 4.5) weak.push(`${name} on its tint: ${tinted.toFixed(2)}:1`);
       }
       expect(weak).toEqual([]);
+    });
+
+    it("keep every letter readable on the ground it is drawn on: a row, a selected row, the inspector", async () => {
+      await commands.colorScheme(scheme);
+      // wide enough that the legs column stays beside the open inspector
+      await page.viewport(2200, 900);
+      serveBook();
+      render(<Next />);
+      await settle();
+      // a row selected, so the inspector is open beside the table and one row carries the selection's tint
+      const legs = await waitFor(() => root().querySelector<HTMLElement>(".nxd-row[data-state='calm'] [data-col='legs'] .nx-leg")!);
+      await userEvent.click(legs.closest<HTMLElement>("[data-col='legs']")!);
+      await settle();
+      expect(root().querySelector(".nxd-row[data-selected] .nx-leg-t"), "a selected row's legs").not.toBeNull();
+      const inspector = screen.getByRole("complementary", { name: /^inspector:/ });
+      expect(inspector.querySelector(".nx-leg-t"), "the inspector's legs").not.toBeNull();
+      // and a row tinted for attention, where the book has one
+      expect(root().querySelector(".nxd-row:not([data-state='calm']) .nx-leg-t"), "a tinted row's legs").not.toBeNull();
+      expect(weakLetters(document)).toEqual([]);
+    });
+
+    it("keep every letter readable on the palette's selected option", async () => {
+      await commands.colorScheme(scheme);
+      vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+      serveBook();
+      render(<Next />);
+      await settle();
+      await userEvent.keyboard("{Meta>}k{/Meta}");
+      const dialog = await screen.findByRole("dialog", { name: "commands" });
+      // down to the first thing found that writes legs
+      for (let i = 0; i < 30 && !dialog.querySelector("[aria-selected='true'] .nx-leg-t"); i++) await userEvent.keyboard("{ArrowDown}");
+      const chosen = dialog.querySelector("[aria-selected='true']")!;
+      expect(chosen.querySelector(".nx-leg-t"), "a selected option with legs").not.toBeNull();
+      expect(weakLetters(chosen)).toEqual([]);
+      expect(weakLetters(dialog)).toEqual([]);
+    });
+
+    it("hold CALL and PUT apart from each other and from every colour that means something else", async () => {
+      await commands.colorScheme(scheme);
+      serveBook();
+      render(<Next />);
+      await settle();
+      // floors at the values chosen (ADR 0023, #391), so a type cannot drift into another family:
+      // entry's blue, direction's red and green (loss and gain in either setting), the warning's amber
+      const near: string[] = [];
+      for (const [a, b, floor] of [["--call", "--put", 0.23], ["--call", "--entry", 0.07], ["--call", "--green", 0.1],
+        ["--put", "--red", 0.085], ["--put", "--warn", 0.11]] as const) {
+        const [p, q] = [oklab(token(root(), a)), oklab(token(root(), b))];
+        const dE = Math.hypot(p.L - q.L, p.a - q.a, p.b - q.b);
+        if (dE < floor) near.push(`${a} vs ${b}: ΔE ${dE.toFixed(3)} < ${floor}`);
+      }
+      expect(near).toEqual([]);
     });
 
     it("keep CALL and PUT well apart, and apart from each other in either direction setting", async () => {

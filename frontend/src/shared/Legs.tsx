@@ -2,7 +2,13 @@
  *  a leg draws it here, so all of them colour it alike: its type letter (or word) in its type's
  *  colour — CALL teal, PUT orange — and a short leg in bold. The side is weight and sign, never a
  *  hue. The characters are exactly `legText`'s, so the letter and the sign stay and the colour is
- *  never the only signal; the colours are `next.css`'s `--call` and `--put`. */
+ *  never the only signal; the colours are `next.css`'s `--call` and `--put`.
+ *
+ *  THE RULE for what counts as a written leg: a leg named BESIDE ITS FIGURE is coloured — a legs
+ *  column, a card's legs, the strike strip's `P6300 Δ −0.250`, the price map's `P7150 Δ−.17` and
+ *  its band's `±1σ 401 pts · P7150's IV`. A leg named INSIDE A SENTENCE is not — the overlap notes
+ *  ("contains 1231_7700's C7700", `placement.ts`) and the readers' words stay plain text, since a
+ *  coloured word mid-sentence reads as a link or a warning rather than as what the leg is. */
 import { Fragment } from "react";
 
 import { legParts, type LegForm, type WrittenLeg } from "./format";

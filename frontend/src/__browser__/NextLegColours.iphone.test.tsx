@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
 import { expectFormColours, resolved } from "./legColours";
-import { serveAdding, serveBook, settle } from "./nextBook";
+import { contrastInSitu, serveAdding, serveBook, settle } from "./nextBook";
 
 afterEach(async () => {
   cleanup();
@@ -55,6 +55,8 @@ for (const scheme of ["light", "dark"] as const) {
         const weight = Number(getComputedStyle(leg).fontWeight);
         if (leg.dataset.side === "short") expect(weight, leg.textContent!).toBeGreaterThanOrEqual(700);
         else expect(weight, leg.textContent!).toBeLessThan(600);
+        // readable on the card it is drawn on, whatever state tints it
+        expect(contrastInSitu(t), leg.textContent!).toBeGreaterThanOrEqual(4.5);
       }
     });
   });

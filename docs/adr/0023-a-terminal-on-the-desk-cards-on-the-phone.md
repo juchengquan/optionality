@@ -405,10 +405,22 @@ looked odd.
   is not a direction: neither flips for a red-up viewer. The hues sit away from direction's red
   (27) and green (150) and from attention's magenta, violet and blue; PUT's orange lies between red
   and the warning's amber, and differs from the warning by shape, since a warning is a filled chip
-  with a glyph and a type is a letter or a tinted button. The prototype's light values were
-  darkened to pass the contrast the browser suite holds, as it holds the attention colours: each at
-  4.5:1 as text on the page, as text on its own 12% tint, and as the fill under the page's ground,
-  on both grounds.
+  with a glyph and a type is a letter or a tinted button. The values: light `oklch(0.49 0.1 195)`
+  and `oklch(0.52 0.15 50)`, dark `oklch(0.74 0.11 195)` and `oklch(0.76 0.14 55)` — the
+  prototype's light ones darkened, because at 0.52 and 0.58 a letter fell under 4.5:1 on the
+  palette's selected option and an unchosen type button's words on their own tint.
+  - **Readable where drawn.** The browser suite holds every type letter and every type button at
+    4.5:1 against the ground it is actually composited onto, in both schemes: a calm row, a
+    selected row and a row tinted for attention, the inspector, the palette's selected option, a
+    phone card in any state, and the add form's tints and solid fills over the panel or the sheet.
+    At these values the narrowest is the palette's selected option on the light ground, 4.69:1.
+  - **Apart from the other families**, held as the attention family's ≥ 0.15 is, by OKLab distance
+    in both schemes: CALL from PUT ≥ 0.23, CALL from entry's blue ≥ 0.07, CALL from green (gain,
+    in either direction setting) ≥ 0.10, PUT from red (loss) ≥ 0.085, PUT from the warning's amber
+    ≥ 0.11. The floors sit at the values chosen (light: 0.24, 0.075, 0.12, 0.088, 0.12; dark:
+    0.24, 0.23, 0.10, 0.10, 0.12), lower than the attention family's because a type is never a
+    chip: it is told from them by shape and place as well as hue, so a floor here stops a drift
+    rather than proving a glance.
 - **Side, by weight and a sign — never a hue.** A short leg is solid and bold with a "−", a long
   one outlined (dashed on the add form) with a "+". Variants E and F gave the side a hue as well;
   they were tried and not chosen. The wheel is already crowded by three families, every hue left
@@ -422,7 +434,11 @@ looked odd.
   type's colour, and a short leg bold. That is the desk's legs column and inspector, the phone's
   cards and sheet (and their short Δ, where a holding has more than one short leg to name), the
   palette, the saved picture, the closed trades, the strike strip's caption, the price map's
-  labels, and the leg names of the IV and SPX charts. The colour goes where the letter is drawn;
-  figures, P&L and the attention chips are untouched.
+  labels and band label, and the leg names of the IV and SPX charts. The colour goes where the
+  letter is drawn; figures, P&L and the attention chips are untouched.
+- **The rule for a written leg:** a leg named beside its figure is coloured (a legs column, a
+  card's legs, `P6300 Δ −0.250`, `±1σ 401 pts · P7150's IV`); a leg named inside a sentence is not
+  (the overlap notes, "contains 1231_7700's C7700"), since a coloured word mid-sentence reads as a
+  link or a warning rather than as what the leg is.
 - **Colour is never the only signal.** Every place keeps its letter and its sign, character for
   character, and privacy is unaffected.

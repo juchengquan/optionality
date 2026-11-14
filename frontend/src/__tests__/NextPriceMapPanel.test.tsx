@@ -94,7 +94,10 @@ describe("the panel", () => {
     expect(map.querySelectorAll("[data-spx-line]")).toHaveLength(1);
     expect(within(map).getByText("SPX 6900.50")).toBeTruthy();
     expect(map.querySelectorAll("[data-band]")).toHaveLength(3);
-    expect(within(map).getByText(/±1σ \d+ pts · P7150's IV/)).toBeTruthy();
+    const sigma = [...map.querySelectorAll(".nxm-sigma")];
+    expect(sigma.map((t) => t.textContent)).toContainEqual(expect.stringMatching(/^±1σ \d+ pts · P7150's IV$/));
+    // the strike named beside its figure is drawn as a leg, as the strike strip's caption is (#391)
+    expect(sigma.flatMap((t) => legMarks(t))).toContain("P7150 short PUT");
   });
 
   it("says why there is no SPX line rather than drawing one at zero, and draws no band", () => {
