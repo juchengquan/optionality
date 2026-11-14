@@ -159,6 +159,15 @@ class TestTheDailyCloseOfWhatIsWatched:
         await w.sweep()
         assert w.stored() == []
 
+    async def test_records_nothing_for_a_rule_switched_off_though_its_contracts_are_in_the_batch_for_others(
+        self, w: World
+    ) -> None:
+        w.spread_rule(enabled=0, disabled_reason="manual")
+        insert_monitor(w.db, strike_date=EXPIRY, code=SHORT, option_type="CALL", strike=8100)
+        insert_monitor(w.db, strike_date=EXPIRY, code=LONG, option_type="CALL", strike=8150)
+        await w.sweep()
+        assert [s["contracts"] for s in w.stored()] == sorted([SHORT, LONG])
+
     async def test_leaves_the_contracts_an_open_holding_holds_exactly_to_the_holdings_own_samples(
         self, w: World
     ) -> None:

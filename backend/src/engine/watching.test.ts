@@ -126,6 +126,14 @@ describe("the daily close of what is watched", () => {
     expect(stored()).toEqual([]);
   });
 
+  it("records nothing for a rule switched off, though its contracts are in the batch for others", async () => {
+    spreadRule({ enabled: 0, disabled_reason: "manual" });
+    insertMonitor(db, { strike_date: EXPIRY, code: SHORT, option_type: "CALL", strike: 8100 });
+    insertMonitor(db, { strike_date: EXPIRY, code: LONG, option_type: "CALL", strike: 8150 });
+    await sweep();
+    expect(stored().map((s) => s.contracts)).toEqual([SHORT, LONG].sort());
+  });
+
   it("leaves the contracts an open holding holds EXACTLY to the holding's own samples", async () => {
     hold([
       { side: "short", option_type: "CALL", strike: 8100 }, { side: "long", option_type: "CALL", strike: 8150 },
