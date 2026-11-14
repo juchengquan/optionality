@@ -194,9 +194,26 @@ function history(h: Holding, days: Day[]): Samples {
         observed_on: on, observed_at, timing, dte, cost_to_close: cost, on_pace: pace(dte),
         legs_iv: ivs === null ? null : Object.fromEntries(codes.map((c, i) => [c, ivs[i]!])),
         legs_vega: null, legs_delta: null, spx, before_correction: false,
+        // each short strike against the day's SPX at its leg's IV that day, as the service places
+        // it (`strikeDistances`, #395): no distance without SPX, no σ without the IV
+        short_strikes: h.legs.flatMap((l, i) => (l.side !== "short" ? [] : [
+          dayStrike(codes[i]!, l.option_type as "CALL" | "PUT", l.strike, spx, ivs?.[i] ?? null, dte),
+        ])),
       };
     }),
     qty_corrected_at: null,
+  };
+}
+
+/** One day's short strike as `strikeDistances` places it, from that day's SPX and the leg's IV. */
+function dayStrike(code: string, type: "CALL" | "PUT", strike: number, spx: number | null, iv: number | null,
+                   dte: number) {
+  const points = spx === null ? null : Number((type === "CALL" ? strike - spx : spx - strike).toFixed(2));
+  const width = spx === null || iv === null || dte <= 0 ? null : spx * (iv / 100) * Math.sqrt(dte / 365);
+  return {
+    code, option_type: type, strike, delta: null, points,
+    sigma: points === null || width === null ? null : Number((points / width).toFixed(2)),
+    one_sigma: width === null ? null : Number(width.toFixed(2)),
   };
 }
 

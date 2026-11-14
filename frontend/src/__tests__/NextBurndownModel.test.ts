@@ -107,13 +107,16 @@ describe("the value axis", () => {
     expect(axis.now).toEqual({ dte: 43, cost: 2.6 });
   });
 
-  it("takes a gutter as wide as its widest label, and none worth reading under privacy", () => {
+  it("takes a gutter as wide as its widest label, in points per contract under privacy", () => {
     const shown = valueAxis(served([2.1, 1.9]), held, money);
     expect(shown.labels).toContain("$0");
     expect(shown.L).toBeGreaterThan(Math.max(...shown.labels.map((l) => l.length)) * 6);
-    const none = valueAxis(served([2.1, 1.9]), held, hidden);
-    expect(none.labels).toEqual([]);
-    expect(none.L).toBe(8);
+    // the owner's call: privacy hides dollars and the count, never the per-contract points (#395)
+    const pts = valueAxis(served([2.1, 1.9]), held, hidden);
+    expect(pts.labels).toEqual(valueAxis(served([2.1, 1.9]), held, { ...points, contracts: 2 }).labels);
+    expect(pts.labels.join(" ")).not.toMatch(/\$/);
+    expect(pts.ticks).toEqual(shown.ticks);
+    expect(pts.L).toBeGreaterThan(Math.max(...pts.labels.map((l) => l.length)) * 6);
   });
 
   it("says points without money: a tick is the figure itself", () => {
@@ -171,11 +174,15 @@ describe("what a day says", () => {
     expect(lines.why).toBeNull();
   });
 
-  it("no money and no count under privacy, but the gap in points, which is no money", () => {
+  it("no money and nothing across the contracts under privacy: points per contract, and the gap", () => {
+    // 2.30 per contract, held twice over at a size of 100: never $460, and never 4.60
     const lines = tipLines(day(), hidden);
-    expect(lines.cost).toBe("to close: $•••");
-    expect(lines.pace).toBe("on pace $•••");
+    expect(lines.cost).toBe("to close, per contract: 2.30 pts");
+    expect(lines.pace).toBe("on pace 2.02 pts");
     expect(lines.gap?.words).toBe("behind by 0.28");
+    expect(sampleWords(day(), hidden))
+      .toBe("3 Nov · 45 DTE · to close, per contract: 2.30 pts · on pace 2.02 pts · behind by 0.28"
+        + " — in hours (observed 16:00 New York)");
   });
 
   it("no pace and no gap for a day with no plan", () => {
@@ -199,11 +206,11 @@ describe("what a day says", () => {
 });
 
 describe("what today's valuation says", () => {
-  it("its DTE and its cost to close, in the chart's money, or masked under privacy", () => {
+  it("its DTE and its cost to close, in the chart's money, or per contract in points under privacy", () => {
     const now = { dte: 38, cost: 4.4 };
     expect(nowLines(now, money)).toEqual({ day: "valued now · 38 DTE", cost: "to close, 2 contracts: $880" });
     expect(nowLines(now, points).cost).toBe("to close, per contract: 4.40 pts");
-    expect(nowLines(now, hidden)).toEqual({ day: "valued now · 38 DTE", cost: "to close: $•••" });
+    expect(nowLines(now, hidden)).toEqual({ day: "valued now · 38 DTE", cost: "to close, per contract: 4.40 pts" });
   });
 });
 

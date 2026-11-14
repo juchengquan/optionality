@@ -4,64 +4,54 @@
  *
  *  - **Every figure is the service's.** Each day's price is the sample's own `spx`, derived by the
  *    sweep that wrote it from its batch (ADR 0024); SPX now is the valuation's `spx`, from the book's
- *    latest batch. Nothing here is a Reference's figure.
+ *    latest batch. Nothing here is a Reference's figure. Each short strike's distance that day, in
+ *    points and σ, is the service's too (`short_strikes`, #395): the browser measures none.
  *  - **A day without SPX's price is a gap**, never a point at zero: rows stored before SPX was
  *    recorded (migration 0010) are null, and so is a day whose batch could not give it. The line
- *    breaks there, the range ignores it, and the count of such days is said beneath.
+ *    breaks there, the range ignores it, and the count of such days is said beneath. The crosshair
+ *    still stops on it, and the readout says it has no price.
+ *  - **The crosshair is the history's, shared** (`Crosshair.tsx`, #395): a day pointed at in any
+ *    panel is crossed here, and the readout says SPX that day and its distance to each short strike.
  *  - **Read from the burndown's answer**: it asks for nothing of its own.
  *  - **Privacy** has nothing to hide here: prices and strikes, no $ figure and no count.
  *
- *  Hand-written SVG at its measured width, as `History.tsx` and `Payoff.tsx` are.
+ *  On visx (`@visx/scale`, `@visx/shape`) at its measured width, as the burndown and the IV chart are.
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { scaleLinear } from "@visx/scale";
+import { LinePath } from "@visx/shape";
 
 import type { Holding, Samples } from "./shared/api";
 import { heldLeg, legText } from "./shared/format";
 import { spxRange, spxRuns, unrecorded } from "./spxdays";
-import { SvgLeg } from "./shared/Legs";
+import { Leg, SvgLeg } from "./shared/Legs";
+import { textWidth } from "./burndown";
+import { useWidth } from "./BurndownChart";
+import { CrossTip, dayScale, pointedStop, usePanel, type Cross, type Gutters } from "./Crosshair";
+import { dayWords, MARK, spxLines, spxWords } from "./historyDays";
 
 const H = 156, T = 10, B = 22;
 
-/** A label's width at the charts' 11px tabular figures, near enough to leave it room. */
-const textWidth = (text: string) => text.length * 6.6;
+/** What it reads of a holding: its legs, and — only while held and valued — SPX now and its short
+ *  strikes' distances from it. A closed holding (#296) has neither a valuation nor a "now". */
+type Charted = Pick<Holding, "legs" | "closed_on"> & Partial<Pick<Holding, "spx" | "dte" | "short_strikes">>;
 
-/** The box's width, measured, as the burndown measures its own: the text is the size it says. */
-function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
-  const box = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(320);
-  useLayoutEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const measure = () => { if (el.clientWidth > 0) setWidth(el.clientWidth); };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [box, width];
-}
-
-const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
-
-/** Each leg's name as the chart writes it in its left margin. */
-/** What it reads of a holding: its legs, and — only while held and valued — SPX now. A closed
- *  holding (#296) has neither a valuation nor a "now". */
-type Charted = Pick<Holding, "legs" | "closed_on"> & Partial<Pick<Holding, "spx" | "dte">>;
-
-const namesOf = (holding: Charted) => holding.legs.map((l) => legText(heldLeg(l), "name"));
+const namesOf = (holding: Pick<Holding, "legs">) => holding.legs.map((l) => legText(heldLeg(l), "name"));
 
 /** The left margin this chart's strike names need, for the margins all three charts share. */
-export const spxGutter = (holding: Charted) =>
+export const spxGutter = (holding: Pick<Holding, "legs">) =>
   Math.ceil(Math.max(...namesOf(holding).map(textWidth), 16)) + 10;
 
+/** A short strike as the readout names it. */
+const shortLeg = (k: { option_type: string; strike: number }) => ({ short: true, option_type: k.option_type, strike: k.strike });
+
 /** `span` is the burndown's DTE window and `gutters` the margins all three charts share, handed
- *  down so a day lands at the same x in each (#298). */
-export function SpxPath({ served, holding, span, gutters }: {
-  served: Samples; holding: Charted; span: number; gutters: { L: number; R: number };
+ *  down so a day lands at the same x in each (#298); `cross` the crosshair they share (#395). */
+export function SpxPath({ served, holding, span, gutters, cross }: {
+  served: Samples; holding: Charted; span: number; gutters: Gutters; cross: Cross;
 }) {
   const [box, W] = useWidth();
+  const x = dayScale(span, W, gutters);
+  const { svg: hands, onKeyDown } = usePanel(cross, box, cross.stops.map((s) => x(s.dte)), W);
   const runs = spxRuns(served.samples);
   const missing = unrecorded(served.samples);
   const gapWords = missing === 0 ? null
@@ -84,8 +74,7 @@ export function SpxPath({ served, holding, span, gutters }: {
 
   const [lo, hi] = spxRange(served.samples, strikes.map((k) => k.strike), now?.spx ?? null);
   const { L, R } = gutters;
-  const x = (dte: number) => L + ((span - dte) / span) * (W - L - R);
-  const y = (p: number) => T + ((hi - p) / (hi - lo)) * (H - T - B);
+  const y = scaleLinear<number>({ domain: [lo, hi], range: [H - B, T] });
   // each strike's name at its line in the gutter; two strikes close together would print over each
   // other, so each is pushed below the one above it, then the column back up if it ran off
   const labels = strikes.map((k) => ({ ...k, at: y(k.strike) })).sort((a, b) => a.at - b.at);
@@ -101,18 +90,25 @@ export function SpxPath({ served, holding, span, gutters }: {
     `SPX ${first.spx.toFixed(2)} on ${dayWords(first.on)}`,
     ...(last === first ? [] : [`${last.spx.toFixed(2)} on ${dayWords(last.on)}`]),
   ].join(" → ");
+  const timing = new Map(served.samples.map((s) => [s.observed_on, s.timing]));
+
+  const pointed = pointedStop(cross);
+  const read = pointed === null ? null : spxLines(pointed, holding);
+  const name = (k: { option_type: string; strike: number }) => legText(shortLeg(k), "name");
 
   return (
     <section className="nx-hist" role="group" aria-label="SPX against the strikes">
       <h4 className="nx-hist-h">SPX against the strikes</h4>
-      <div className="nx-hist-chart nx-spxp" ref={box}>
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img"
-             aria-label={`SPX's price by day against the strikes: ${said}${gapWords ? `; ${gapWords}` : ""}`}>
+      <div className="nx-hist-chart nx-cross nx-spxp" ref={box} role="group" tabIndex={0} onKeyDown={onKeyDown}
+           aria-label={`SPX's price by day against the strikes: ${said}${gapWords ? `; ${gapWords}` : ""}: `
+             + "arrow keys move from day to day"}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" {...hands}>
+          <rect data-plot="" x={L} y={T} width={Math.max(0, W - L - R)} height={H - T - B} fill="none" />
           {/* the side each short strike loses on, faintly: below a put's, above a call's */}
           {strikes.filter((k) => k.side === "short").map((k) => {
             const edge = Math.min(Math.max(y(k.strike), T), H - B);
             const [top, bottom] = k.type === "PUT" ? [edge, H - B] : [T, edge];
-            return <rect key={`loss${k.i}`} className="nx-spxp-loss" x={L} width={W - L - R}
+            return <rect key={`loss${k.i}`} className="nx-spxp-loss" x={L} width={Math.max(0, W - L - R)}
                          y={top} height={Math.max(0, bottom - top)} />;
           })}
           {strikes.map((k) => (
@@ -123,28 +119,52 @@ export function SpxPath({ served, holding, span, gutters }: {
             </g>
           ))}
           {runs.map((run) => (
-            <polyline key={run[0]!.on} data-spx-run="" className="nx-spxp-line"
-                      points={run.map((d) => `${x(d.dte).toFixed(1)},${y(d.spx).toFixed(1)}`).join(" ")} />
+            <LinePath key={run[0]!.on} data-spx-run="" className="nx-spxp-line" data={run}
+                      x={(d) => x(d.dte)} y={(d) => y(d.spx)} />
           ))}
           {runs.flat().map((d) => (
-            <circle key={d.on} data-spx-day={d.on} className="nx-spxp-day" cx={x(d.dte)} cy={y(d.spx)} r={2.5}>
-              <title>{`${dayWords(d.on)} · ${d.dte} DTE · SPX ${d.spx.toFixed(2)}`}</title>
-            </circle>
+            <circle key={d.on} data-spx-day={d.on} className="nx-spxp-day" data-mark={MARK[timing.get(d.on)!]}
+                    cx={x(d.dte)} cy={y(d.spx)} r={2.5} />
           ))}
           {now ? (
             <g data-spx-now="" className="nx-spxp-now">
-              <title>{`SPX now, ${now.dte} DTE: ${now.spx.toFixed(2)}`}</title>
               <rect x={x(now.dte) - 4} y={y(now.spx) - 4} width={8} height={8}
                     transform={`rotate(45 ${x(now.dte)} ${y(now.spx)})`} />
             </g>
           ) : null}
+          {pointed === null || read === null ? null : (
+            <g data-crosshair={pointed.on ?? "now"} className="nx-bd-cross" pointerEvents="none">
+              <line x1={x(pointed.dte)} x2={x(pointed.dte)} y1={T} y2={H - B} />
+              {read.value === null ? null : (
+                <>
+                  <line x1={L} x2={W - R} y1={y(read.value)} y2={y(read.value)} />
+                  <circle className="nx-bd-cross-day" data-mark={pointed.sample ? MARK[pointed.sample.timing] : "close"}
+                          cx={x(pointed.dte)} cy={y(read.value)} r={4.25} />
+                </>
+              )}
+            </g>
+          )}
           <text x={L} y={H - 6} textAnchor="start">{`${span} DTE`}</text>
           <text x={W - 4} y={H - 6} textAnchor="end">expiry</text>
         </svg>
+        {read === null || pointed === null ? null : (
+          <CrossTip x={x(pointed.dte)} ys={[read.value === null ? (T + H - B) / 2 : y(read.value)]} W={W} H={H}>
+            <div className="nx-bd-tip-h">{read.day}</div>
+            <div>{read.spx}</div>
+            {read.strikes.map(({ k, words }) => (
+              <div key={k.code} data-spx-strike=""><Leg leg={shortLeg(k)} form="name" />{` ${words}`}</div>
+            ))}
+            {read.why === null ? null : <div className="nx-bd-tip-why">{read.why}</div>}
+          </CrossTip>
+        )}
       </div>
-      <p className="nx-hist-said">
-        {`${said}${now ? ` · now ${now.spx.toFixed(2)}` : ""}`}
-        {gapWords ? <><br />{gapWords}</> : null}
+      <p className="nx-hist-said" role="status">
+        {pointed !== null ? spxWords(pointed, holding, name) : (
+          <>
+            {`${said}${now ? ` · now ${now.spx.toFixed(2)}` : ""}`}
+            {gapWords ? <><br />{gapWords}</> : null}
+          </>
+        )}
       </p>
     </section>
   );
