@@ -4,6 +4,7 @@ import "./phone.css";
 import type { BookProps } from "../Book";
 import { Money } from "../Book";
 import { ClosedLine } from "../ClosedLine";
+import { lastPriceWords } from "../lastknown";
 import { placeBook, type BookModel, type PlacedHolding } from "../placement";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
@@ -99,7 +100,8 @@ export function PhoneBook({
             <ul className="nxp-cards">
               {items.map(({ entry, under, overlap }) => (
                 <li key={entry.id}>
-                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} />
+                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)}
+                            value={session ? undefined : lastPriceWords(entry.last_price ?? null)} />
                 </li>
               ))}
             </ul>

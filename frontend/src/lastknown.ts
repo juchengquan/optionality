@@ -17,7 +17,8 @@
  *  a rule on a greek has one, since moomoo serves greeks out of hours, and needs nothing from here.
  */
 import type { Entry, Monitor } from "./shared/api";
-import { inSession, servedInstant } from "./session";
+import { DASH } from "./shared/format";
+import { inSession, newYorkWeekdayWhen, servedInstant } from "./session";
 
 export interface LastKnown {
   value: number;
@@ -36,8 +37,73 @@ export function lastKnown(entry: Entry, monitor: Monitor | undefined, session: b
   return { value, at: monitor.last_checked_at! };
 }
 
-/** The watchlist's rows with each one's last known figure beside it (`lastKnown`). */
+/** The watchlist's rows with each one's last known figure beside it (`lastKnown`), and the price
+ *  its value cell says (#400): `price`, at every hour, and out of the session `last_price`. */
 export function withLastKnown(quotes: readonly Entry[], monitors: readonly Monitor[], session: boolean): Entry[] {
   const byId = new Map(monitors.map((m) => [m.id, m]));
-  return quotes.map((e) => ({ ...e, last_reading: lastKnown(e, byId.get(e.id), session) }));
+  const read = quotes.map((e) => ({ ...e, last_reading: lastKnown(e, byId.get(e.id), session) }));
+  return read.map((e) => ({
+    ...e, price: priceIn(e, read), ...(session ? {} : { last_price: lastPriceIn(e, read) }),
+  }));
+}
+
+// ---- the value cell: always the price (#400)
+
+/** The contracts a rule names, as a key two rules on one contract or one spread share: a contract
+ *  by its code, a spread by its expiry and its legs, each with its sign and quantity — a price rule
+ *  entered under the other leg convention would be the same spread's price negated. */
+export function contractsKey(e: Pick<Entry, "code" | "strike_date" | "legs">): string {
+  if (!e.legs || e.legs.length === 0) return e.code;
+  const legs = e.legs.map((l) => `${l.sign}${l.option_type}${l.strike}x${(l as { qty?: number }).qty ?? 1}`).sort();
+  return `${e.strike_date} ${legs.join(" ")}`;
+}
+
+/** A row's own price, from nothing but itself: a contract's mid; a spread's served value where its
+ *  rule watches the value (`combo_value` is the rule's OWN field summed, so a delta rule's is its
+ *  delta, which is never a price); and null otherwise. */
+export function ownPrice(e: Entry): number | null {
+  if (!e.legs || e.legs.length === 0) {
+    const v = (e.quote as Record<string, unknown> | null)?.mid_price;
+    return typeof v === "number" ? v : null;
+  }
+  return e.field === "mid_price" ? e.combo_value ?? null : null;
+}
+
+/** A row's price in this poll: its own (`ownPrice`), or, for a rule on something else — a delta
+ *  rule on a spread — that of a price rule on the very same contracts in the same poll. Null where
+ *  nothing served one: never a sum taken here. */
+function priceIn(e: Entry, rows: readonly Entry[]): number | null {
+  const own = ownPrice(e);
+  if (own !== null || !e.legs || e.legs.length === 0) return own;
+  const key = contractsKey(e);
+  const twin = rows.find((r) => r.field === "mid_price" && contractsKey(r) === key && ownPrice(r) !== null);
+  return twin ? ownPrice(twin) : null;
+}
+
+/** Out of the session, the last price read IN it (#400): the price rule's on these contracts — the
+ *  row's own, or another rule's on the same contracts — as `lastKnown` keeps it, so a reading taken
+ *  out of the session is never one. Null where no price rule has one. */
+function lastPriceIn(e: Entry, rows: readonly Entry[]): LastKnown | null {
+  const key = contractsKey(e);
+  const own = e.field === "mid_price" ? e.last_reading ?? null : null;
+  if (own) return own;
+  return rows.find((r) => r.field === "mid_price" && contractsKey(r) === key && r.last_reading)?.last_reading ?? null;
+}
+
+/** "4.12 (Fri 16:14)": a last in-session price with its time on New York's clock, as the page states
+ *  times; a dash where there is none. */
+export function lastPriceWords(last: LastKnown | null): string {
+  if (last === null) return DASH;
+  const when = newYorkWeekdayWhen(last.at);
+  return `${last.value.toFixed(2)}${when ? ` (${when})` : ""}`;
+}
+
+/** The price a row's value cell says (#400), whatever the rule watches: the page's own `price`, or,
+ *  where the page has not looked (a row built in a test), the row's own. */
+export const priceOf = (e: Entry): number | null => e.price !== undefined ? e.price : ownPrice(e);
+
+/** What a WATCHLIST row's value cell says out of the session: its last in-session price and when,
+ *  or a dash; undefined in the session, where the cell says the live price as before. */
+export function outOfHoursValue(e: Entry): string | undefined {
+  return e.last_price === undefined ? undefined : lastPriceWords(e.last_price);
 }

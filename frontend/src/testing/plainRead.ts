@@ -5,7 +5,7 @@
 
 export interface ReadView {
   title: string;
-  lines: { label: string; text: string }[];
+  lines: { label: string; text: string; items?: string[] }[];
   sections: { title: string; notes: string[]; rows: string[][] }[];
 }
 
@@ -17,9 +17,11 @@ const text = (el: Element | null | undefined) => el?.textContent ?? "";
 export function readPicture(root: Element): ReadView {
   return {
     title: text(root.querySelector("h1")),
-    lines: [...root.querySelectorAll(".nx-still-lines > div")].map((d) => ({
-      label: text(d.querySelector("dt")).replace(/:$/, ""), text: text(d.querySelector("dd")),
-    })),
+    lines: [...root.querySelectorAll(".nx-still-lines > div")].map((d) => {
+      const label = text(d.querySelector("dt")).replace(/:$/, "");
+      const items = [...d.querySelectorAll("dd > [data-item]")].map(text);
+      return items.length > 0 ? { label, text: "", items } : { label, text: text(d.querySelector("dd")) };
+    }),
     sections: [...root.querySelectorAll("section")].map((s) => ({
       title: text(s.querySelector("h2")),
       notes: [...s.querySelectorAll(":scope > p")].map(text),
@@ -46,7 +48,8 @@ function cellsOf(line: string): string[] {
 /** Markdown's backslash escapes undone: `\|` is `|`, `\*` is `*`. */
 const unescape = (s: string) => s.replace(/\\(.)/g, "$1");
 
-/** The copied Markdown, read as a reader of it would: "# title", "- label: words", "## section",
+/** The copied Markdown, read as a reader of it would: "# title", "- label: words" (or "- label:"
+ *  with its items under it as "  - item"), "## section",
  *  a table's rows (its delimiter row skipped), and any other line a note of its section. */
 export function readMarkdown(md: string): ReadView {
   const out: ReadView = { title: "", lines: [], sections: [] };
@@ -55,8 +58,14 @@ export function readMarkdown(md: string): ReadView {
     if (line.trim() === "") continue;
     if (line.startsWith("## ")) out.sections.push({ title: line.slice(3), notes: [], rows: [] });
     else if (line.startsWith("# ")) out.title = line.slice(2);
-    else if (line.startsWith("- ") && !section) {
+    else if (line.startsWith("  - ") && !section) {
+      // an item of the line above, which is a list
+      const list = out.lines.at(-1)!;
+      list.items = [...list.items ?? [], unescape(line.slice(4))];
+    } else if (line.startsWith("- ") && !section) {
       const at = line.indexOf(": ");
+      // a label alone heads a list
+      if (at < 0) { out.lines.push({ label: line.slice(2).replace(/:$/, ""), text: "" }); continue; }
       out.lines.push({ label: line.slice(2, at), text: unescape(line.slice(at + 2)) });
     } else if (line.startsWith("|")) {
       const cells = cellsOf(line);

@@ -16,7 +16,8 @@ corrections its build needed written into it and named there. **Amended 2026-11-
 the session the holdings are valued from their latest close, by the service, and the market-closed
 line names that close. **Amended 2026-11-15 (#394):** the saved picture is one plain table, from
 the desk and the phone alike, and "Copy as text" puts the same table on the clipboard as Markdown
-(last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+(last section), with fewer, shorter columns and the watchlist's value as a price at every hour
+(#400, its last subsection). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -499,3 +500,43 @@ an image can miss. **This supersedes #300's "A's table from the desk, B's cards 
   and requires the same rows and cells. Privacy goes in with the figures, so what the screen hides
   ("$•••") both hide in the same words. Nothing interactive goes in, as before.
 
+### Amended 2026-11-15 again: fewer, shorter columns, and the value is a price (#400)
+
+Decided by the owner on 2026-11-15 (#400), looking at a real picture. **This supersedes the bullets
+above on the first column, the status column, the headers' units, the strip's words and the
+References' line.**
+
+- **No "what" column and no status column.** A row is its name alone — no bracket note: "1231_8100",
+  not "1231_8100 (shares C8100 with 1231_8050)"; the page keeps its overlap note. A row's attention
+  is said where the page says it, and each state the status column carried was checked to reach
+  one, a test per state: ringing, an entry signal, a fault and its error, each quarantine and its
+  reason, and a holding's Level in the session are in the needs-you line; a rule's own state is in
+  its sentence. Two would have been lost, and are said instead: **outside the session**, where the
+  needs-you line names no holding's Level (#354), a **"Levels" line** in the header in the chips'
+  own words (`levelWords`, "1231_8100 at stop · as of the close", every holding's joined by "; "),
+  absent in the session, where the line says them; and the **muted rules' reasons**, as heading
+  rows grouping the "Muted and expired" section in the desk's fold's order, in the phone's words
+  ("expired", "its holding closed", "muted by hand", "reason not recorded"). That a condor held as
+  two spreads is one condor is no longer said; it is not a state.
+- **Short headers:** "name", "legs", "value", "P&L ($)", "captured (%)", "pace gap (pts)", "Δ",
+  "SPX→short", "DTE", "manage-by", "rule" — those the viewer ticked.
+- **SPX→short, compact:** `C8050 488 · 1.64σ` — the nearest short strike, whole points, σ to two
+  places, no "pts" and no "away"; a strike SPX is past with its sign as served, `C6800 −101 · −0.25σ`,
+  and a distance that rounds to nothing `0 · 0.00σ`, never with a sign
+  (`strip.ts`: `compactWords`).
+- **The References a list,** one per item: a nested list in the Markdown, a line each in the picture.
+- **The value column is always the price** — a contract's mid, a spread's value — on the page (the
+  desk's table and inspector) and in the picture and its Markdown, at every hour. `/quotes`' `combo_value` is
+  the rule's OWN field summed, so a delta rule's is its delta: that figure is the Δ column's and the
+  rule sentence's, never the value's. A delta rule on a spread shows the price of a price rule on
+  the very same contracts in the same poll, and a dash where there is none; nothing is summed on
+  the page (`lastknown.ts`: `priceOf`).
+- **Out of the session, the watchlist's last in-session price.** moomoo quotes every leg bid 0 /
+  ask 0 out of hours, which is no price, and a watched spread has no close to fall back on, so a
+  WATCHLIST row's value says the price rule's last reading in the session (`last_reading`, #380)
+  with its time on New York's clock, `4.12 (Fri 16:14)` — its date too once it is older than six
+  days, `(Fri 6 Nov 16:14)`, as the rule's short line then says it — and a dash where there is none (a
+  contract watched only on its delta, or never read in the session). A reading taken out of the
+  session — the stored 0.0 of a Saturday night — is never shown. The same on the desk, the
+  phone (a watch card adds a "value" line out of the session only) and the picture; in the session
+  nothing changes. A rule on something held keeps its cost to close.

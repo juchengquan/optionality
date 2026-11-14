@@ -309,23 +309,22 @@ describe("the saved picture says which valuation, outside the session only", () 
                   session={session} privacy={false} needs={[]} health={null} polledAt={null} error={null}
                   references={[]} hidden={new Set()} takenAt={new Date()} />);
   }
-  /** a row's status, in words (#394): the chip's words, in the picture's status column */
-  const statusOf = (name: string) =>
-    [...document.querySelectorAll(".nx-still tr")].find((tr) => tr.children[1]?.textContent === name)!
-      .lastElementChild!.textContent;
+  /** the header's Levels line (#400): the chips' words, out of the session only */
+  const levelsLine = () => [...document.querySelectorAll(".nx-still-lines > div")]
+    .find((d) => d.querySelector("dt")!.textContent === "Levels:")?.querySelector("dd")!.textContent ?? null;
   const sessionLine = () => [...document.querySelectorAll(".nx-still-lines > div")]
     .find((d) => d.querySelector("dt")!.textContent === "session:")!.querySelector("dd")!.textContent;
 
   it("from either arrangement, which draw one picture", () => {
     picture(false);
-    expect(statusOf("1231_7000P")).toBe("at stop · as valued at 23:04");
-    expect(statusOf("1204_6900P")).toBe("manage-by · as valued at 23:04");
+    expect(levelsLine()).toBe("1231_7000P at stop · as valued at 23:04; 1204_6900P manage-by · as valued at 23:04");
     // the session line is the market-closed line's own words, said once
     expect(sessionLine()).toBe("market closed — valued at 23:04");
     expect(document.body.textContent!.split("market closed")).toHaveLength(2);
     cleanup();
     picture(true);
-    expect(statusOf("1231_7000P")).toBe("at stop");
+    // in the session the needs-you line says the Levels, and the header says them nowhere else
+    expect(levelsLine()).toBeNull();
     expect(sessionLine()).toBe("in session");
     expect(document.body.textContent).not.toContain("market closed");
   });

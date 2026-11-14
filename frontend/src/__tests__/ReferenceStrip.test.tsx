@@ -212,8 +212,10 @@ describe("outside the session, every reading says when it was read", () => {
              holdingsAt={null} session={session} privacy={false}
              needs={[]} health={null} polledAt={null} error={null} hidden={new Set()} takenAt={new Date()}
              references={[spx(), vix, spx({ id: "r3", label: "NDX", fetched_at: undefined as never })]} />);
-    const line = () => [...document.querySelectorAll(".nx-still-lines > div")]
-      .find((d) => d.querySelector("dt")!.textContent === "References:")!.querySelector("dd")!.textContent!.split(" · ");
+    // one a line (#400)
+    const line = () => [...[...document.querySelectorAll(".nx-still-lines > div")]
+      .find((d) => d.querySelector("dt")!.textContent === "References:")!.querySelectorAll("dd > [data-item]")]
+      .map((item) => item.textContent!);
     still(false);
     // the strip's own words, each with the time it was read; one with no time is not said at all
     expect(line()).toHaveLength(2);

@@ -187,8 +187,8 @@ describe("the legs, each type marked for its colour and a short leg for its weig
     render(<Still quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
                   holdingsAt="23:14:05" session privacy={false} needs={[]} health={null} polledAt={null}
                   error={null} references={[]} hidden={new Set()} takenAt={new Date("2026-11-16T15:00:00Z")} />);
-    const ic = [...document.querySelectorAll("tr")].find((tr) => tr.children[1]?.textContent === "1231_IC")!;
-    expect(ic.children[2]!.textContent).toBe("-C7400 +C7450 -P6300 +P6250");
+    const ic = [...document.querySelectorAll("tr")].find((tr) => tr.children[0]?.textContent === "1231_IC")!;
+    expect(ic.children[1]!.textContent).toBe("-C7400 +C7450 -P6300 +P6250");
     expect(document.querySelectorAll(".nx-still .nx-leg, .nx-still [data-type]")).toHaveLength(0);
   });
 });
