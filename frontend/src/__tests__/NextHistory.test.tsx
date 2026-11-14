@@ -292,6 +292,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
       samples: SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, cost_to_close: -s.cost_to_close!, on_pace: null })),
       qty_corrected_at: null,
       before_entry: [],
+      entry_close: null,
     });
     const { insp } = await inspect("h-calls", "1218_C7300", { holdings: debit });
     const chart = await burndownOf(insp);

@@ -43,7 +43,9 @@ import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross,
 import { ivLines, ivWords, MARK, nowDte, stopsOf, type IvLeg } from "./historyDays";
 import { legCode } from "./legs";
 import { SpxPath, spxGutter } from "./SpxPath";
-import { BEFORE_ENTRY_WORDS, beforeEntryDays, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry } from "./watchhistory";
+import {
+  BEFORE_ENTRY_WORDS, beforeEntryDays, entryCloseDay, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry,
+} from "./watchhistory";
 import "./history.css";
 
 interface Answer<T> {
@@ -187,7 +189,8 @@ function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCos
           : (
             <>
               <Burndown served={served} unit={unit} axis={axis!} span={dteWindow(served)} gutters={gutters!}
-                        closeDte={closeDte} cross={cross} before={before} threshold={threshold} />
+                        closeDte={closeDte} cross={cross} before={before} threshold={threshold}
+                        entryDay={entryCloseDay(served)} />
               {served.samples.some(hasCost) ? null
                 // every day kept only for its vol (#380): the IV chart below has them, the burndown none
                 : <p className="nx-meta">{noCost}</p>}

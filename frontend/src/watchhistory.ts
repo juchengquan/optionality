@@ -41,6 +41,7 @@ export function watchedSamples(served: WatchSamples): Samples {
     })),
     qty_corrected_at: null,
     before_entry: [],
+    entry_close: null,
   };
 }
 
@@ -75,9 +76,20 @@ export function watchedCharted(entry: Entry): WatchedCharted {
 export function withBeforeEntry(served: Samples): Samples {
   const own = new Set(served.samples.map((s) => s.observed_on));
   const before = (served.before_entry ?? []).filter((s) => !own.has(s.observed_on));
-  if (before.length === 0) return { ...served, before_entry: [] };
-  return { ...served, samples: [...before, ...served.samples], before_entry: before };
+  // the entry day's close as it was watched (#402, `entry_close`): drawn as that day's point where
+  // the holding's own row has no Cost to close — the day's figures otherwise its own row's
+  const entry = served.entry_close ?? null;
+  const samples = entry === null ? served.samples : served.samples.map((s) => (
+    s.observed_on === entry.observed_on && s.cost_to_close === null
+      ? { ...s, cost_to_close: entry.cost_to_close, timing: entry.timing, observed_at: entry.observed_at } : s));
+  return { ...served, samples: [...before, ...samples], before_entry: before };
 }
+
+/** The day whose point is the entry day's WATCHED close, or null (`withBeforeEntry`). */
+export const entryCloseDay = (served: Samples): string | null => served.entry_close?.observed_on ?? null;
+
+/** How that point is said, in the tooltip and the status line (owner's decision, 2026-11-15). */
+export const ENTRY_CLOSE_WORDS = "the close, watched before entry";
 
 /** The days of an answer that are before entry, by their market day. */
 export function beforeEntryDays(served: Samples): ReadonlySet<string> {

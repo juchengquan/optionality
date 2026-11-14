@@ -15,7 +15,7 @@ import { HistoryOnDemand } from "../HistoryOnDemand";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, volAnswer } from "../testing/ownerBook";
 import { until } from "../testing/until";
 import {
-  closeWords, payoffAt, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry,
+  closeWords, entryCloseDay, payoffAt, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry,
 } from "../watchhistory";
 
 const SHORT = "US.SPXW261218P7150000";
@@ -115,6 +115,36 @@ describe("a holding's days before entry (#402)", () => {
     const merged = withBeforeEntry({ ...own, before_entry: [own.samples[0]!] });
     expect(merged.samples).toEqual(own.samples);
     expect(merged.before_entry).toEqual([]);
+  });
+});
+
+describe("the entry day's watched close (#402)", () => {
+  const own = SAMPLES["h-calls"]!;
+  const first = own.samples[0]!;
+  const costless = { ...own, samples: own.samples.map((s, i) => (i === 0 ? { ...s, cost_to_close: null, timing: "after-close" as const } : s)) };
+  const entry = { ...first, cost_to_close: 1.95, timing: "close" as const, observed_at: `${first.observed_on} 05:14:00+08:00`, on_pace: null };
+
+  it("is drawn as the entry day's point where its own row that day has no Cost to close", () => {
+    const merged = withBeforeEntry({ ...costless, entry_close: entry });
+    expect(merged.samples[0]).toMatchObject({ observed_on: first.observed_on, cost_to_close: 1.95, timing: "close" });
+    // the day's other figures are its own row's
+    expect(merged.samples[0]!.legs_iv).toEqual(first.legs_iv);
+    expect(entryCloseDay(merged)).toBe(first.observed_on);
+  });
+
+  it("never replaces a cost the holding's own row has", () => {
+    const merged = withBeforeEntry({ ...own, entry_close: entry });
+    expect(merged.samples[0]!.cost_to_close).toBe(first.cost_to_close);
+  });
+
+  it("says whose close it is, in the burndown", async () => {
+    holdingSamples = { ...costless, entry_close: entry };
+    const h = HOLDINGS.find((x) => x.id === "h-calls")!;
+    render(<HistoryOnDemand holding={h} privacy={false} defaultOpen />);
+    const chart = await screen.findByRole("group", { name: "burndown" });
+    await waitFor(() => expect(chart.querySelector("[data-entry-close]")).toBeTruthy());
+    fireEvent.keyDown(chart.querySelector(".nx-bd")!, { key: "Home" });
+    await until(() => expect(within(chart).getByRole("status").textContent).toContain("the close, watched before entry"));
   });
 });
 

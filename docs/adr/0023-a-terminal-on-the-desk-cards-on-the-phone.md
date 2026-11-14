@@ -560,3 +560,9 @@ The owner's decisions of 2026-11-15, built on ADR 0011's watch samples:
   session where the rule watches no price; said "drawn at its close, Fri 16:14, 4.12, as the
   credit", or the reading's own timing where it was not a close. The out-of-hours value cell (#400)
   says the same last close where one is stored, and the sweep's last in-session reading otherwise.
+  The closes are read apart from `/quotes` (`GET /monitors/closes`), out of the session and whenever
+  `/quotes` fails, so a watched row keeps its last close through a Provider outage: while `/quotes`
+  is failing the value cell says the close, as out of the session (owner's decision, 2026-11-15).
+- **The entry day's watched close.** Where a holding recorded in New York's evening has no Cost to
+  close on the day it was entered, its burndown draws that day's watched close as the day's point,
+  saying "the close, watched before entry" (`entry_close`).

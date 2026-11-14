@@ -59,6 +59,8 @@ const unread = {
 /** what the fake service serves, and the stamps it writes on them in DISPLAY_TZ (+08:00) — never
  *  the zone this suite runs in (TZ=UTC), so a time drawn from the device's clock would differ */
 let references: object[] = [];
+/** what `/monitors/closes` answers: each rule's last close (#402) */
+let closes: object[] = [];
 let referenceStamp = "";
 let holdingStamp = "";
 /** the market-closed line, wherever the arrangement draws it */
@@ -92,6 +94,7 @@ function serve() {
   quotes = [spread, shortLeg];
   held = null;
   references = [reference, unread];
+  closes = [];
   referenceStamp = "2026-11-10 06:58:11+08:00";
   holdingStamp = "2026-11-10 07:00:12+08:00";
   window.fetch = ((url: string, init?: RequestInit) => {
@@ -120,7 +123,8 @@ function serve() {
               : path === "/positions" ? [holding]
                 // its days, an empty week: the shape the service answers, so the history drawn
                 // (#353) is drawn from samples rather than said to be unreadable
-                : path === "/positions/p1/samples" ? { levels: null, plan: [], samples: [] } : null;
+                : path === "/positions/p1/samples" ? { levels: null, plan: [], samples: [] }
+                  : path === "/monitors/closes" ? closes : null;
     return answered(reply(true, body));
   }) as unknown as typeof fetch;
 }
@@ -710,6 +714,34 @@ describe("when part of the service fails", () => {
     expect(line.textContent).toContain("moomoo down");
     expect(line.textContent).toContain("quarantined");
     expect(screen.getByRole("alert").textContent).toContain("/quotes → 502");
+  });
+
+  it("keeps a watched row's last close, read apart from /quotes, through a Provider outage (#402)", async () => {
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    await quiet();
+    const row = () => document.querySelector<HTMLElement>('[data-ref="w1"]')!;
+    expect(row().textContent).not.toContain("(Fri 16:14)");
+    // Friday's close, stored; then /quotes fails: the closes are read, and the row says the close
+    closes = [{ id: "w1", last_close: { price: -3.85, observed_on: "2026-11-06",
+      observed_at: "2026-11-07 05:14:00+08:00", timing: "close" } }];
+    refusing.add("/quotes");
+    calls = [];
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    await quiet();
+    expect(calls, said()).toContain("/monitors/closes");
+    await waitFor(() => expect(row().textContent).toContain("-3.85 (Fri 16:14)"));
+    expect(screen.getByRole("alert").textContent).toContain("/quotes → 502");
+  });
+
+  it("does not read the closes on a poll in the session while /quotes answers", async () => {
+    at(SESSION);
+    await open();
+    await quiet();
+    calls = [];
+    await polls(2);
+    expect(count("/monitors/closes"), said()).toBe(0);
   });
 
   it("keeps a holding's rules on the page when its valuation fails", async () => {

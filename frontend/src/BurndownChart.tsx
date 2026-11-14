@@ -43,7 +43,7 @@ import {
 } from "./burndown";
 import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross, type Gutters } from "./Crosshair";
 import { MARK } from "./historyDays";
-import { BEFORE_ENTRY_WORDS } from "./watchhistory";
+import { BEFORE_ENTRY_WORDS, ENTRY_CLOSE_WORDS } from "./watchhistory";
 
 const H = 196, T = 16, B = 22;
 const NONE: ReadonlySet<string> = new Set();
@@ -93,13 +93,15 @@ export function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
  *  panel of the holding shares (#298), so a day is at the same x here as in the IV chart and SPX's
  *  path beneath. `cross` is the crosshair the three share (#395), and `closeDte` a closed
  *  holding's last day (#296). */
-export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, before = NONE, threshold = null }: {
+export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, before = NONE, threshold = null, entryDay = null }: {
   served: Samples; unit: Unit; axis: ReturnType<typeof valueAxis>; span: number;
   gutters: Gutters; closeDte: number | null; cross: Cross;
   /** the days, by market day, that are before entry: watched, not yet held (#402) */
   before?: ReadonlySet<string>;
   /** a watched row's price rule's threshold, drawn across its value (#402) */
   threshold?: number | null;
+  /** the day whose point is the entry day's WATCHED close (#402, `entry_close`), or null */
+  entryDay?: string | null;
 }) {
   const [box, W] = useWidth();
   const { L, R } = gutters;
@@ -146,7 +148,10 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
   const atNow = onNow ? now : null;
   const tip = pointed === null ? null : (() => {
     const px = x(pointed.dte);
-    if (at) return { px, py: y(at.cost_to_close), lines: tipLines(at, unit), entry: before.has(at.observed_on) };
+    if (at) {
+      return { px, py: y(at.cost_to_close), lines: tipLines(at, unit), entry: before.has(at.observed_on),
+        entryClose: at.observed_on === entryDay };
+    }
     if (atNow) return { px, py: y(atNow.cost), lines: { ...nowLines(atNow, unit), pace: null, gap: null, why: null, corrected: null }, entry: false };
     const lines = bare ? noCostLines(bare) : { day: `valued now · ${pointed.dte} DTE`, cost: NO_COST_NOW, why: null };
     return { px, py: (T + H - B) / 2, lines: { ...lines, pace: null, gap: null, corrected: null },
@@ -154,7 +159,8 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
   })();
   const offClose = samples.some((s) => s.timing !== "close");
   const anyBefore = samples.some((s) => s.before_correction);
-  const entryWords = (s: Sample) => (before.has(s.observed_on) ? ` — ${BEFORE_ENTRY_WORDS}` : "");
+  const entryWords = (s: Sample) => (before.has(s.observed_on) ? ` — ${BEFORE_ENTRY_WORDS}`
+    : s.observed_on === entryDay ? ` — ${ENTRY_CLOSE_WORDS}` : "");
 
   return (
     <>
@@ -274,6 +280,7 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
             <g key={s.observed_on} data-sample={s.observed_on} data-timing={s.timing}
                data-before-correction={s.before_correction ? "" : undefined}
                data-before-entry={before.has(s.observed_on) ? "" : undefined}
+               data-entry-close={s.observed_on === entryDay ? "" : undefined}
                data-pointed={pointed?.on === s.observed_on ? "" : undefined} className="nx-hist-point">
               <circle data-mark={MARK[s.timing]} cx={x(s.dte)} cy={y(s.cost_to_close)} r={3.25} />
             </g>
@@ -335,6 +342,8 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
             {tip.lines.corrected !== null
               ? <div className="nx-bd-tip-why" data-corrected="">{tip.lines.corrected}</div> : null}
             {tip.entry ? <div className="nx-bd-tip-why" data-before-entry="">{BEFORE_ENTRY_WORDS}</div> : null}
+            {"entryClose" in tip && tip.entryClose
+              ? <div className="nx-bd-tip-why" data-entry-close="">{ENTRY_CLOSE_WORDS}</div> : null}
           </CrossTip>
         )}
       </div>

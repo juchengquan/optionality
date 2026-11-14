@@ -566,8 +566,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   is drawn — the desk's inspector or a phone sheet opened outside the session (#372, #374),
   where it starts open, or a history section opened by hand (#353) — and never
   polled, with a door scenario run with the Provider down; nor a watched rule's
-  (`GET /monitors/{id}/samples`, #402), and `/quotes`' `last_close` is a database read beside its one
-  call. `/references` makes one bounded call per
+  (`GET /monitors/{id}/samples`, #402), nor each rule's last close (`GET /monitors/closes`, #402): a
+  database read the page makes out of the session and whenever `/quotes` fails, with a door scenario
+  run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
   By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing

@@ -17,7 +17,7 @@
  *  have come from — is not presented at all. A real figure read out of hours is still on the row:
  *  a rule on a greek has one, since moomoo serves greeks out of hours, and needs nothing from here.
  */
-import type { Entry, Monitor } from "./shared/api";
+import type { Entry, LastClose, Monitor } from "./shared/api";
 import { DASH } from "./shared/format";
 import { inSession, newYorkWeekdayWhen, servedInstant } from "./session";
 
@@ -36,6 +36,13 @@ export function lastKnown(entry: Entry, monitor: Monitor | undefined, session: b
   const at = servedInstant(monitor.last_checked_at);
   if (at === null || !inSession(at)) return null;
   return { value, at: monitor.last_checked_at! };
+}
+
+/** The watchlist's rows with each one's last close joined (`/monitors/closes`, #402): null for a rule
+ *  the closes do not name, which has none. */
+export function withCloses(quotes: readonly Entry[], closes: readonly { id: string; last_close: LastClose | null }[]): Entry[] {
+  const byId = new Map(closes.map((c) => [c.id, c.last_close]));
+  return quotes.map((e) => ({ ...e, last_close: byId.get(e.id) ?? null }));
 }
 
 /** The watchlist's rows with each one's last known figure beside it (`lastKnown`), and the price

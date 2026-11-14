@@ -362,6 +362,13 @@ and the days it was watched before it was entered were lost to its burndown.
 - **The holding's own history is untouched.** The days before entry are served apart
   (`GET /positions/{id}/samples`' `before_entry`: every watch day before Opened, or before the day it
   was recorded where nobody said), so the vol chain, `/vol`'s split and the close a holding is valued
-  from never read a watch day. A watched rule's own days are `GET /monitors/{id}/samples`; each
-  `/quotes` row carries its latest close (`last_close`, `closeSample`'s choice), which the page draws
-  a watched spread's payoff at out of the session and says in its value cell.
+  from never read a watch day. One exception, the owner's (2026-11-15): where the holding's own row
+  for the day it was entered has no Cost to close — recorded in New York's evening, priced by
+  nothing — the same day's watched close is served beside it (`entry_close`), and the page draws it
+  as that day's point, saying it is "the close, watched before entry"; the holding's row is not
+  changed. A watched rule's own days are `GET /monitors/{id}/samples`.
+- **Each rule's last close** is `GET /monitors/closes` (`closeSample`'s choice under the rule's
+  signs): a database read that asks no Provider, one bounded query per set of contracts (the latest
+  14 priced days), so it answers through an outage. Never today's row while the session runs, which
+  is no close yet; and none for contracts an open holding holds exactly, whose rows stop at its
+  entry. The page reads it out of the session, at each edge of it, and whenever `/quotes` fails.
