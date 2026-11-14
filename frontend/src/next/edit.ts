@@ -151,7 +151,7 @@ export function deletesOn(strikeDate: string, retentionDays: number): string {
 }
 
 /** Which of the four a rule is in, for what may be done to it. */
-export type RuleState = "on" | "muted" | "quarantined" | "expired";
+type RuleState = "on" | "muted" | "quarantined" | "expired";
 
 /** @param today the sweep's day, the UTC date (`sweeper.ts`'s `utcDate`): a rule is past its
  *  expiry from the day after it, and the sweep deletes ANY rule past it once the retention window
@@ -201,7 +201,7 @@ export function totalOf(text: string): { entry: number } | { error: string } {
   return { entry: Number(t) };
 }
 
-export interface SplitRow {
+interface SplitRow {
   id: string;
   name: string;
   /** its Entry as the page last read it; undefined where the page has not read it */
@@ -326,7 +326,7 @@ const legCodes = (h: Pick<Holding, "strike_date" | "legs">) =>
 const ruleCodes = (m: Monitor) => m.legs
   ? m.legs.map((l) => contractCode(m.strike_date, l.option_type as OptionType, l.strike)) : [m.code];
 
-export interface HoldLinks {
+interface HoldLinks {
   /** the watch rules the save deletes and makes again as the holding's */
   replaced: Monitor[];
   /** every OTHER rule linked to no holding that the new holding takes, and as what: the whole of

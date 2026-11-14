@@ -26,8 +26,8 @@ export const CONTRACT_FIELDS = [
   "option_delta", "mid_price", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
 ] as const;
 
-export type Direction = "above" | "below";
-export type Compare = "abs" | "signed";
+type Direction = "above" | "below";
+type Compare = "abs" | "signed";
 
 export interface ContractDraft {
   held: boolean;

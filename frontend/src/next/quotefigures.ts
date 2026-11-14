@@ -18,7 +18,7 @@
 import type { Entry } from "../shared/api";
 import { DASH, shortStamp } from "../shared/format";
 
-export interface RuleFigure {
+interface RuleFigure {
   /** stable, for React and for a test that wants one figure */
   key: string;
   label: string;

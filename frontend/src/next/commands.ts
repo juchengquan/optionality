@@ -15,7 +15,7 @@ import { rowName, tableRows, type DeskRow } from "./desk/columns";
 import { fieldWords, monitorName } from "./needs";
 import type { BookModel } from "./placement";
 
-export type FindKind =
+type FindKind =
   | "holding" | "watched spread" | "Monitor" | "quarantined Monitor" | "muted Monitor" | "expired Monitor";
 
 export interface Findable {
@@ -122,7 +122,7 @@ export type Hold = "edit" | "close" | "other" | null;
 
 export const HOLD_WHY = "finish or cancel the open form first";
 
-export type ActionKey =
+type ActionKey =
   | "add" | "edit-monitor" | "close-holding" | "save-image" | "arrange-desk" | "arrange-phone" | "arrange-auto";
 
 export interface PaletteAction {

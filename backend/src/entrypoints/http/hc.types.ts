@@ -104,7 +104,7 @@ async function endpoints() {
     // the payoff at expiry (#291): a holding's, and draft legs' — the add form's preview and a
     // watched spread drawn at its current value
     payoff: await (await client.positions[":id"].payoff.$get({ param: id })).json(),
-    // the daily samples (#295): REVIEW's burndown and IV chart, read once when opened
+    // the daily samples (#295): a holding's history charts, read once when that history is drawn
     samples: await (await client.positions[":id"].samples.$get({ param: id })).json(),
     draftPayoff: await client.positions.payoff.$post({
       json: { legs: [{ side: "short", option_type: "PUT", strike: 7100 }], entry: 1.5 },

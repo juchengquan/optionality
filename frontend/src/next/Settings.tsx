@@ -10,7 +10,7 @@ import type { Need } from "./needs";
 /** The cadences offered, as the old page's Service panel offered them. */
 const REFRESH_PRESETS = [5, 10, 15, 30, 60, 120];
 
-export interface SettingsProps {
+interface SettingsProps {
   up: UpColour; onUp: (up: UpColour) => void;
   entryStyle: EntryStyle; onEntryStyle: (style: EntryStyle) => void;
   privacy: boolean; onPrivacy: (on: boolean) => void;

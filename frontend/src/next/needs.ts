@@ -126,7 +126,7 @@ export function needsYou(
 /** The line's tone is its worst item's. Bad: a fault, a stop, an alarm — and an entry signal
  *  when the viewer asked for entries to look like risk. A warning: a manage-by, which is a
  *  deadline rather than good news. Good: an entry signal or a Target reached. */
-export type Tone = "bad" | "warn" | "good";
+type Tone = "bad" | "warn" | "good";
 
 export function toneOf(items: Need[], entryLooksLikeRisk: boolean): Tone {
   const bad = items.some((n) => n.kind === "fault" || n.kind === "stop" || n.kind === "alarm"

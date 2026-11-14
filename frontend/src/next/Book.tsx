@@ -22,8 +22,11 @@ export interface BookProps {
   /** the same stamp whole, with its date (`valuedStamp`): the market-closed line dates a valuation
    *  from another day by it (#371's review). Absent, the line says `holdingsAt`'s time alone. */
   holdingsServed?: string | null;
-  /** whether New York's session is open (`session.ts`): what is fetched, what the needs-you line
-   *  says and whether a figure carries its time all follow this; what is DRAWN does not (#371–#375) */
+  /** whether New York's session is open (`session.ts`). It decides what is fetched, the
+   *  market-closed line, whether a figure carries its time, what the needs-you line states
+   *  (holdings' Levels only in session), whether a holding's history starts open (outside it), and
+   *  the saved picture's header. The columns, the tabs, the rows and the fold do not follow it
+   *  (#371–#375). */
   session: boolean;
   /** values the book once more, from the market-closed line: the header's refresh. Absent where
    *  nothing can be pressed, as in the saved picture. */

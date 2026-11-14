@@ -54,13 +54,13 @@ const MONEY = new Intl.NumberFormat("en-US", {
 });
 
 /** As `Money` in Book.tsx draws it: the same characters, so the measuring counts what is drawn. */
-export function moneyText(value: number | null, privacy: boolean): string {
+function moneyText(value: number | null, privacy: boolean): string {
   if (value === null) return DASH;
   return privacy ? "$•••" : MONEY.format(value);
 }
 
 /** `-C7300 +C7350`: a holding's legs as the watchlist writes a combo's, short as minus. */
-export function holdingLegs(holding: Holding): string {
+function holdingLegs(holding: Holding): string {
   return heldLegs(holding.legs);
 }
 
@@ -75,7 +75,7 @@ function contractOf(code: string): { type: "C" | "P"; strike: number } | null {
  *  null, never a figure derived on screen: the holding's `greeks` are a signed sum over its legs
  *  and are not the short leg's delta. Where two legs are short (a 4-leg condor) it is the larger
  *  in size: the wing closer to the money. */
-export function shortLegDelta(holding: Holding, rules: Entry[]): number | null {
+function shortLegDelta(holding: Holding, rules: Entry[]): number | null {
   let found: number | null = null;
   for (const leg of holding.legs.filter((l) => l.side === "short")) {
     const served = servedDelta(holding, leg);
@@ -104,7 +104,7 @@ function quoted(entry: Entry, name: string): number | null {
 }
 
 /** What a quarantined rule watches and why nothing watches it now. */
-export function quarantineSentence(m: Monitor): string {
+function quarantineSentence(m: Monitor): string {
   const sign = m.direction === "below" ? "≤" : "≥";
   const words = fieldWords(m.field, Boolean(m.legs));
   const why = (m.disabled_reason && QUARANTINED[m.disabled_reason]) ?? "switched off by the service";
@@ -143,7 +143,7 @@ export function rowName(row: DeskRow): string {
 
 /** The attention a row asks for, drawn as a chip in the name cell, which never drops: a breach
  *  can never be hidden by the room running out (ADR 0008's fallback chain, kept). */
-export type Attention = "fault" | "entry" | "alarm" | "stop" | "target" | "manage";
+type Attention = "fault" | "entry" | "alarm" | "stop" | "target" | "manage";
 
 export function attentionOf(row: DeskRow): Attention | null {
   if (row.kind === "quarantined") return "fault";
@@ -234,7 +234,7 @@ const STRIP: DeskColumn = {
 };
 
 /** The compact strip's width, in characters: what `charsOf` adds for the drawing beside the words. */
-export const STRIP_CH = 10;
+const STRIP_CH = 10;
 
 const DTE: DeskColumn = {
   key: "dte", label: "DTE",

@@ -57,8 +57,9 @@ export function Still(props: StillProps) {
       <header className="nx-still-head">
         <h1>optionality</h1>
         {/* which side of New York's session the picture was taken on (session.ts), where it once
-            said Live or Review: the one fact about the page's state a reader of it needs */}
-        <span className="nx-meta">{session ? "in session" : "market closed"}</span>
+            said Live or Review. Only "in session" here: outside it the market-closed line below
+            already says so, with when the book was valued, and saying it twice is noise (#381) */}
+        {session ? <span className="nx-meta">in session</span> : null}
       </header>
       {error ? <div className="nx-banner">{error}</div> : null}
       {/* the one thing that dates the picture; a screenshot with no time is worthless a week on */}

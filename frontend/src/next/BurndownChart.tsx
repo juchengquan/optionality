@@ -40,7 +40,7 @@ import {
   textWidth, tipLines, tipPlace, valueAxis, type Unit,
 } from "./burndown";
 
-export const H = 196, T = 16, B = 22;
+const H = 196, T = 16, B = 22;
 /** The tooltip's width, or the chart's where that is narrower. */
 const TIP_W = 192;
 /** How far a finger must move sideways, and more sideways than up or down, before it scrubs: until

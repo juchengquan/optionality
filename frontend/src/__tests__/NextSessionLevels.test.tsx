@@ -316,8 +316,10 @@ describe("the saved picture says which valuation, outside the session only", () 
       picture(arrangement, false);
       expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
       expect(document.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed — valued at 23:04");
-      // the header says the session, where it once said the mode (#375)
-      expect(head()).toBe("optionalitymarket closed");
+      // the header says the session, where it once said the mode (#375) — outside it, nothing:
+      // the market-closed line says it, and the picture says it once
+      expect(head()).toBe("optionality");
+      expect(document.body.textContent!.split("market closed")).toHaveLength(2);
       // nothing in a picture can be pressed
       expect(document.querySelector(".nx-mkt-closed button")).toBeNull();
       cleanup();

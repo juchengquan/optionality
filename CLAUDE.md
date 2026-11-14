@@ -339,8 +339,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `index.html` loads `src/next/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
   0023 as amended 2026-11-13, "one page, by the session"; #371–#375): the desk draws one column
   set and the phone three tabs (Book, Add, Settings), the closed trades fold at the bottom of the
-  book, and New York's session (`src/next/session.ts`) decides only what is FETCHED, the
-  market-closed line, and whether a figure says when it was read. It was built at `/opt/next` beside the old page, slice
+  book. New York's session (`src/next/session.ts`) decides only: what is FETCHED; the
+  market-closed line; whether a figure (a Level chip, a Reference) says when it was read; what the
+  needs-you line states (holdings' Levels only in session); whether a holding's history starts
+  open (outside the session) in the desk's inspector and the phone's sheet; and the saved
+  picture's header ("in session", or nothing beside its market-closed line). It was built at `/opt/next` beside the old page, slice
   by slice (#287 onward), and `next/index.html` is kept as a second build entry that only sends a
   bookmark of `/opt/next` on to `/opt/` — a meta refresh and a `location.replace` to `%BASE_URL%`,
   which Vite fills with `UI_BASE`. A page and not a Caddy redirect because tailscale strips the

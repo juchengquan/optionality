@@ -202,7 +202,7 @@ interface Valued {
 
 /** Today's valuation, from the book's latest one (polled in session, read once outside it): drawn
  *  apart from the closes, and only while held. */
-export function nowOf(holding: Valued) {
+function nowOf(holding: Valued) {
   return holding.closed_on === null && holding.cost_to_close != null && holding.dte !== undefined
     && holding.dte >= 0 ? { dte: holding.dte, cost: holding.cost_to_close } : null;
 }

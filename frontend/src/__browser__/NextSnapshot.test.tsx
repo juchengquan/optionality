@@ -268,7 +268,9 @@ describe("saving the desk as an image", () => {
     // book here carries no stamp, so the line says no time rather than the device's)
     expect(captured[0]!.node.querySelector(".nx-mkt-closed")!.textContent).toBe("market closed");
     expect(captured[0]!.node.querySelector(".nx-mkt-closed button")).toBeNull();
-    expect(captured[0]!.node.querySelector(".nx-still-head")!.textContent).toBe("optionalitymarket closed");
+    // the header leaves the session to the market-closed line: said once, not twice
+    expect(captured[0]!.node.querySelector(".nx-still-head")!.textContent).toBe("optionality");
+    expect(captured[0]!.text.split("market closed")).toHaveLength(2);
     shared.release();
   });
 

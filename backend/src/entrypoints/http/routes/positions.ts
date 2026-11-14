@@ -410,10 +410,12 @@ export function positionRoutes(deps: Deps) {
       });
     })
 
-    /** A holding's daily samples, open or closed (#295): what REVIEW's burndown and IV chart draw.
+    /** A holding's daily samples, open or closed (#295): what the dashboard's history charts draw
+     *  (the burndown, the IV chart and SPX against the strikes).
      *
      *  Stored history, so no Provider call — which is why this is not on CLAUDE.md's list of
-     *  market-data calls — and asked for once when REVIEW opens a holding, never polled, since a
+     *  market-data calls — and asked for once when a holding's history is drawn (open from the
+     *  start outside the session, opened by hand in it, #353/#372/#374), never polled, since a
      *  row changes at most once a market day. On-pace is `onPace` at each sample's DTE and at
      *  every DTE to expiry, the same figure `/positions/values` serves today: the plan is the
      *  service's, never redrawn in the browser. A backdated close hides the later rows

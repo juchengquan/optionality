@@ -15,7 +15,7 @@ import { servedWhen } from "./session";
  *
  *  ONE function for the words, so the desk's row, its inspector, the phone's page and sheet, the
  *  saved picture and the desk's fitting, which counts the chip's characters, say the same thing. */
-export type Level = "stop" | "target" | "manage";
+type Level = "stop" | "target" | "manage";
 
 export const LEVEL_WORDS: Record<Level, string> = {
   stop: "at stop", target: "at target", manage: "manage-by",

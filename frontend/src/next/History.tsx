@@ -146,7 +146,7 @@ const T = 10, B = 22, R = 10;
 /** The plot's margins, the SAME for every chart of one holding (#298): the burndown, the IV chart
  *  and where SPX was all put a DTE at the same x, so a day reads straight down the three. Each is
  *  as wide as the widest chart needs. */
-export interface Gutters {
+interface Gutters {
   L: number;
   R: number;
 }

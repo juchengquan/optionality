@@ -124,7 +124,7 @@ export const fetchDraftPayoff = (body: DraftPayoff) =>
  *  again rather than trusting an echo of it. A refusal throws the service's own words, which the
  *  form shows where the owner is looking. */
 export type Added = Exclude<Infer<typeof client.spreads.$post>, { detail: string }>;
-export type SpreadsRequest = InferRequestType<typeof client.spreads.$post>["json"];
+type SpreadsRequest = InferRequestType<typeof client.spreads.$post>["json"];
 export async function addSpreads(body: SpreadsRequest): Promise<Added> {
   const response = await client.spreads.$post({ json: body });
   const answer: unknown = await response.json().catch(() => null);

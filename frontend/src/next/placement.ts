@@ -28,13 +28,13 @@ export interface PlacedHolding {
 }
 
 /** One expiry's holdings. Each row is a bracket: one holding, or a condor's call and put spreads. */
-export interface HoldingGroup {
+interface HoldingGroup {
   expiry: string;
   rows: PlacedHolding[][];
 }
 
 /** A watched rule and the single-contract rules that sit under it (empty for most). */
-export interface PlacedRule {
+interface PlacedRule {
   entry: Entry;
   under: Entry[];
   /** for a combo that only partly overlaps a holding, what it shares and with whom
@@ -42,7 +42,7 @@ export interface PlacedRule {
   overlap: string | null;
 }
 
-export interface WatchGroup {
+interface WatchGroup {
   expiry: string;
   items: PlacedRule[];
 }
@@ -163,7 +163,7 @@ function words(items: string[]): string {
 }
 
 /** Rows grouped by expiry, the earliest first; each group keeps the order its rows arrived in. */
-export function byExpiry<T extends { strike_date: string }>(rows: T[]): [string, T[]][] {
+function byExpiry<T extends { strike_date: string }>(rows: T[]): [string, T[]][] {
   const groups = new Map<string, T[]>();
   for (const r of [...rows].sort((a, b) => a.strike_date.localeCompare(b.strike_date))) {
     groups.set(r.strike_date, [...(groups.get(r.strike_date) ?? []), r]);

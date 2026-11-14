@@ -31,7 +31,7 @@ export const STILL = "nx-still";
 
 /** What a capture that failed says, when what it threw is not an Error: html-to-image rejects
  *  with the DOM Event of an image that would not decode, which reads "[object Event]". */
-export const NOT_DRAWN = "the image could not be drawn";
+const NOT_DRAWN = "the image could not be drawn";
 
 export function useSaveImage<T>(): {
   /** the page's figures as they were at the press, while the picture's tree must be mounted;

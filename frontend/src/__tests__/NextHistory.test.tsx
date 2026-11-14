@@ -814,7 +814,6 @@ describe("in session, on demand (#353): the phone's holding sheet", () => {
     expect(disclosure(sheet).body.hidden).toBe(false);
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
   });
-
 });
 
 describe("HistoryOnDemand opened by default (#371, for #372 and #374)", () => {

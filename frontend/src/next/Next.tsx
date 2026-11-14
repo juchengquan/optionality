@@ -55,9 +55,11 @@ import { useSaveImage } from "./snapshot/useSaveImage";
  *
  *  ONE page at every hour, with no switch (ADR 0023, amended 2026-11-13: one page, by the
  *  session; #371–#375). What it draws is the same in session and out of it — the desk's one column
- *  set, the phone's three tabs, the closed trades folded at the bottom of the book. What it
- *  FETCHES, and what its needs-you line says, follow New York's session: `session` is computed
- *  here, once, and handed to everything that asks.
+ *  set, the phone's three tabs, the closed trades folded at the bottom of the book. New York's
+ *  session decides only: what it FETCHES; the market-closed line; whether a figure says when it
+ *  was read; what the needs-you line states (holdings' Levels only in session); whether a
+ *  holding's history starts open (outside it), in the inspector and the phone's sheet; and the
+ *  saved picture's header. `session` is computed here, once, and handed to everything that asks.
  */
 export function Next() {
   const [up, setUp] = useState(readUp);

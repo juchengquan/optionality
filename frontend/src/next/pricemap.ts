@@ -35,7 +35,7 @@ export interface MapSpread {
   spx: number | null;
 }
 
-export interface Band {
+interface Band {
   /** the short strike whose served one σ the band is */
   strike: ShortStrike;
   /** SPX's price in that strike's own batch, which the band is centred on */
@@ -44,7 +44,7 @@ export interface Band {
   hi: number;
 }
 
-export interface Lane {
+interface Lane {
   expiry: string;
   dte: number;
   spreads: MapSpread[];
@@ -54,7 +54,7 @@ export interface Lane {
 }
 
 /** SPX's price for the map's one line, and the batch it is from. */
-export interface SpxLine {
+interface SpxLine {
   spx: number | null;
   /** why `spx` is null, as the service said it */
   reason: string | null;
