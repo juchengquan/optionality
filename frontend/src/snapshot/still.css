@@ -1,34 +1,57 @@
-/* The saved image's tree (#300): mounted off screen while the picture is taken. Scoped under
-   .nx-still-stage and .nx-still, so nothing here reaches the page on screen. */
+/* The saved image's tree (#300, #394): mounted off screen while the picture is taken. Scoped under
+   .nx-still-stage and .nx-still, so nothing here reaches the page on screen.
+
+   One plain table, for reading later by a person or a model: dark ink on a light ground in either
+   colour scheme, a monospace face with tabular figures, and one ground for everything — no tint, no
+   chip, no bar. The colours are literal rather than the page's tokens on purpose: the tokens are
+   redefined for the dark scheme, and the picture is the same picture in both. */
 
 /* OFF SCREEN rather than `display: none` — a node with no layout paints as nothing — and fixed, so
    it cannot lengthen the page or move its scroll while the picture is taken */
 .nx-still-stage { position: fixed; top: 0; left: -10000px; pointer-events: none; }
 
-/* An explicit ground and ink, or the PNG is transparent wherever the page's own shows through —
-   which in a chat is whatever colour that app happens to use. */
+/* An explicit ground and ink, or the PNG is transparent wherever the page's own shows through.
+   `max-content`: the picture is as wide as its widest row, whatever the screen it was pressed on,
+   so the desk and the phone give one picture of one book and nothing is cut short */
 .nx-still {
-  padding: 16px 16px 8px;
-  background: var(--background);
-  color: var(--foreground);
-  display: flex; flex-direction: column; gap: 0.5rem;
+  width: max-content;
+  min-width: 640px;
+  box-sizing: border-box;
+  padding: 16px;
+  background: #ffffff;
+  color: #111111;
+  color-scheme: light;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
 }
-/* A's table at a FLOOR of 1000px, so two days' pictures are one size, and wider where the columns
-   need it: `max-content` is what lets the picture hold every ticked column at any screen width */
-.nx-still[data-arrangement="desk"] { width: max-content; min-width: 1000px; }
-/* B's cards at the picture's own width, not the device's: one book, one picture, from any phone */
-.nx-still[data-arrangement="phone"] { width: 420px; box-sizing: border-box; }
+.nx-still h1 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+.nx-still h2 { margin: 14px 0 4px; font-size: 14px; font-weight: 700; }
+.nx-still p { margin: 0 0 4px; }
 
-.nx-still-head { display: flex; align-items: baseline; gap: 0.75rem; }
-.nx-still-head h1 { font-size: 1.125rem; font-weight: 650; letter-spacing: -0.01em; }
-.nx-still .nx-needs { margin-bottom: 0; }
+/* the header block: "label: words", a line each */
+.nx-still-lines { margin: 0; }
+.nx-still-lines > div { display: flex; gap: 1ch; }
+.nx-still-lines dt { font-weight: 700; white-space: nowrap; }
+.nx-still-lines dd { margin: 0; }
 
-/* the table, as a picture: nothing to scroll, so nothing clipped and nothing sticky. Sticky would
-   resolve against the page, and the stage sits 10000px to the left of it */
-.nx-still .nxd { display: block; }
-.nx-still .nxd-table { overflow: visible; }
-.nx-still .nxd-head { position: static; }
-/* the header row in the table's own size, its labels smaller: the columns are in `ch`, and a `ch`
-   resolves in the row's font, so a smaller row would draw narrower columns than the rows under it */
-.nx-still .nxd-head { font-size: inherit; }
-.nx-still .nxd-head > [data-col] { font-size: 0.6875rem; }
+/* the table: ruled, every cell on one line — a still image cannot be widened to read what an
+   ellipsis took, so nothing is clipped and nothing wraps */
+.nx-still table { border-collapse: collapse; }
+.nx-still th, .nx-still td {
+  border: 1px solid #8a8a8a;
+  padding: 2px 6px;
+  white-space: nowrap;
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+  font-weight: 400;
+  /* the page's own table rules pin a first cell, with a ground and an edge of its own (app.css):
+     not here, where nothing scrolls */
+  position: static;
+  background: transparent;
+  box-shadow: none;
+}
+.nx-still thead th, .nx-still tr[data-group] > th { font-weight: 700; }

@@ -37,8 +37,11 @@ export function paletteShortcut(): { aria: string; shown: string } {
   return onMac() ? { aria: "Meta+K", shown: "⌘K" } : { aria: "Control+K", shown: "Ctrl K" };
 }
 
-export function Palette({ open, onOpenChange, found, findWhy, actions, onChoose, up, entryStyle }: {
+export function Palette({ open, onOpenChange, found, findWhy, actions, onChoose, onChooseNow, up, entryStyle }: {
   open: boolean;
+  /** what must run IN the pick rather than after the close: an action the browser grants only
+   *  while the owner's gesture is running — Safari's clipboard (#394). True where it ran. */
+  onChooseNow?: (c: Chosen) => boolean;
   onOpenChange: (open: boolean) => void;
   found: Findable[];
   /** why nothing found can be landed on now — a form open on the desk — or null when it can */
@@ -77,8 +80,9 @@ export function Palette({ open, onOpenChange, found, findWhy, actions, onChoose,
 
   // what was chosen waits for the close to finish
   const pending = useRef<Chosen | null>(null);
+  // — except what must run inside the gesture, which runs first, in the same tick, then closes
   const choose = (c: Chosen) => {
-    pending.current = c;
+    if (!onChooseNow?.(c)) pending.current = c;
     onOpenChange(false);
   };
 

@@ -98,7 +98,7 @@ describe("under the iPhone profile", () => {
  *  one row, inside the gutter. It never had the desk's switch; this holds it as it is. */
 describe("the header", () => {
   for (const outside of [false, true]) {
-    it(`is the title and two buttons on one row, inside the screen, ${outside ? "outside the session" : "in session"}`, async () => {
+    it(`is the title and three buttons on one row, inside the screen, ${outside ? "outside the session" : "in session"}`, async () => {
       if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // Sunday 12:00 New York
       await show();
       const head = document.querySelector<HTMLElement>(".nx-head")!;
@@ -106,7 +106,7 @@ describe("the header", () => {
       const [title, spacer, ...buttons] = kids;
       expect(title!.tagName).toBe("H1");
       expect(spacer!.classList.contains("nx-spacer")).toBe(true);
-      expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["save as image", "refresh now"]);
+      expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["save as image", "copy as text", "refresh now"]);
       expect(within(head).queryByRole("group")).toBeNull();
       expect(head.textContent).not.toMatch(/live|review|by the clock|your choice/i);
       const box = (el: Element) => el.getBoundingClientRect();

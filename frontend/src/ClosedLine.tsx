@@ -1,8 +1,7 @@
 import { RefreshCw } from "lucide-react";
 
-import { closeLineWords } from "./levels";
+import { closedLineText } from "./levels";
 import type { Holding } from "./shared/api";
-import { servedWhen } from "./session";
 
 /** "market closed — valued at 21:04", with a button that values the book once more (#371; ADR
  *  0023 amended 2026-11-13: one page, by the session).
@@ -16,7 +15,7 @@ import { servedWhen } from "./session";
  *
  *  The button is the header's refresh — one valuation and one read of the References, then the
  *  poll as it was. It starts no poll: outside the session only the line is polled. The saved
- *  picture draws the line with no button (`onRefresh` absent): nothing in it can be pressed.
+ *  picture says the line's words (`closedLineText`) in its header, with nothing to press.
  */
 export function ClosedLine({ at, served, holdings = null, onRefresh, refreshing = false, className }: {
   /** "21:04:37" or "21:04", or null for no time */
@@ -31,11 +30,9 @@ export function ClosedLine({ at, served, holdings = null, onRefresh, refreshing 
   refreshing?: boolean;
   className: string;
 }) {
-  const words = at === null ? null : served ? servedWhen(served) ?? at.slice(0, 5) : at.slice(0, 5);
-  const close = closeLineWords(holdings);
   return (
     <p className={`nx-mkt-closed ${className}`}>
-      <span>{close ?? (words ? `market closed — valued at ${words}` : "market closed")}</span>
+      <span>{closedLineText(at, served, holdings)}</span>
       {onRefresh ? (
         <button type="button" className="nx-mkt-closed-refresh" aria-label="refresh the valuation" disabled={refreshing}
                 onClick={onRefresh}>

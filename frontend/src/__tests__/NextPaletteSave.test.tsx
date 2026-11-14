@@ -1,6 +1,7 @@
-/** "Save the view as an image" from the desk's palette (#299 with #300): the same press as the
- *  header's button, and a picture with neither the palette nor the table's selection in it. The
- *  press itself is `NextSaveImage.test.tsx`'s; this holds only that the palette reaches it. */
+/** "Save the view as an image" and "Copy the view as text" from the desk's palette (#299 with #300
+ *  and #394): the same presses as the header's buttons, and a picture with neither the palette nor
+ *  the table's selection in it. The presses themselves are `NextSaveImage.test.tsx`'s; this holds
+ *  only that the palette reaches them. */
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -60,5 +61,38 @@ describe("saving the view from the palette", () => {
     // and the header's button reaches the very same press
     await user.click(screen.getByRole("button", { name: "save as image" }));
     await waitFor(() => expect(delivered).toHaveLength(2));
+  });
+
+  it("copies the view as text, as the header's button does (#394)", async () => {
+    const written: string[] = [];
+    /** whether the palette was still up when each text was written: Safari grants the clipboard only
+     *  inside the gesture, so the write must happen in the pick, before the close runs its course */
+    const paletteUp: boolean[] = [];
+    const user = await open();
+    // after user-event's setup, which puts a clipboard of its own on the navigator
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: (t: string) => {
+        written.push(t);
+        // Base UI marks the popup `data-open` until the close begins
+        paletteUp.push(document.querySelector(".nx-palette[data-open]") !== null);
+        return Promise.resolve();
+      } }, configurable: true,
+    });
+    try {
+      await user.keyboard("{Control>}k{/Control}");
+      const palette = screen.getByRole("dialog", { name: "commands" });
+      await user.type(within(palette).getByRole("combobox"), "copy the view");
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(written).toHaveLength(1));
+      expect(paletteUp, "the text was written after the palette closed: outside the gesture").toEqual([true]);
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
+      expect(written[0]).toContain("1231_IC");
+      // and the header's button reaches the very same press
+      await user.click(screen.getByRole("button", { name: "copy as text" }));
+      await waitFor(() => expect(written).toHaveLength(2));
+      expect(written[1]).toBe(written[0]);
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
   });
 });

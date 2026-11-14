@@ -343,12 +343,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   market-closed line; whether a figure (a Level chip, a Reference) says when it was read; what the
   needs-you line states (holdings' Levels only in session); whether a holding's history starts
   open (outside the session) in the desk's inspector and the phone's sheet; and the saved
-  picture's header ("in session", or nothing beside its market-closed line). It was built at `/opt/next` beside the old page, slice
+  picture's session line ("in session", or the market-closed line's words). The saved picture is
+  ONE plain table from either arrangement, and "Copy as text" the same view as Markdown, both from
+  `snapshot/plain.ts` (ADR 0023, amended 2026-11-15, #394). It was built at `/opt/next` beside the old page, slice
   by slice (#287 onward); the page that sent bookmarks of `/opt/next` on to `/opt/` after the swap
   was removed by #364, so `/opt/next` now falls through to the dashboard like any unknown path.
   `index.html` is the build's one entry, and `src/__tests__/Entries.test.ts` holds that. The page's source is
   `src/` itself (moved up from `src/next/`, the rollout's name, in #363): its modules at the top,
-  with `desk/`, `phone/` and `snapshot/` for what only one arrangement or the saved picture draws.
+  with `desk/`, `phone/` and `snapshot/` for what only one arrangement, or the saved picture and its text, draws.
   Beside them, `src/shared/` (`api.ts`, `format.ts`, `prefs.ts`, the References panel and strip,
   `Freshness`, the column picker, `groups.ts`, `app.css`, and `Legs.tsx`, which every place that writes a leg draws it through — its type in `--call`/`--put`, a short leg bold, #391), `src/components/` (shadcn's),
   `src/testing/` (the suites' services and books) and `vite-env.d.ts`, which `shared/api.ts` needs

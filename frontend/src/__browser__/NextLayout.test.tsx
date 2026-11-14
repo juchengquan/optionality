@@ -84,9 +84,9 @@ describe("the header, with no switch", () => {
       const kids = [...head.children] as HTMLElement[];
       const [title, spacer, ...buttons] = kids;
       expect(kids.map((k) => k.tagName.toLowerCase() + (k.className.includes("nx-spacer") ? ".spacer" : "")))
-        .toEqual(["h1", "span.spacer", "button", "button", "button", "button", "button"]);
+        .toEqual(["h1", "span.spacer", "button", "button", "button", "button", "button", "button"]);
       expect(buttons.map((b) => b.getAttribute("aria-label")!.replace(/ \(.*\)$/, "")))
-        .toEqual(["save as image", "refresh now", "find and act", "add", "settings"]);
+        .toEqual(["save as image", "copy as text", "refresh now", "find and act", "add", "settings"]);
       expect(within(head).queryByRole("group")).toBeNull();
       expect(head.textContent).not.toMatch(/live|review|by the clock|your choice/i);
       const gap = parseFloat(getComputedStyle(head).columnGap);

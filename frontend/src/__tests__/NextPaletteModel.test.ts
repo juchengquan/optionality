@@ -123,7 +123,7 @@ describe("its actions", () => {
   it("offers every one, in a stable order", () => {
     expect(paletteActions({ choice: "auto", selected: null }).map((a) => a.label)).toEqual([
       "Add a spread or contract", "Edit the selected Monitor", "Close the selected holding", "Save the view as an image",
-      "Arrangement: desk", "Arrangement: phone", "Arrangement: by the screen's width",
+      "Copy the view as text", "Arrangement: desk", "Arrangement: phone", "Arrangement: by the screen's width",
     ]);
     // one page, with no switch (#375): nothing offers a mode, at any choice or selection
     for (const choice of ["auto", "desk", "phone"] as const) {
@@ -135,6 +135,7 @@ describe("its actions", () => {
   it("closes the two that need a selection, and says why", () => {
     expect(why(null)).toMatchObject({
       add: null, "edit-monitor": "nothing is selected", "close-holding": "nothing is selected", "save-image": null,
+      "copy-text": null,
     });
     expect(why(row("h-calls"))).toMatchObject({
       "edit-monitor": "a holding is selected: select one of its Monitors", "close-holding": null,
@@ -152,7 +153,9 @@ describe("its actions", () => {
         .map((a) => [a.key, a.why]));
     const HOLD = "finish or cancel the open form first";
     // the selected rule's own editor is open: editing it again is landing on it, closing is not
-    expect(why(row("w-dec18"), "edit")).toMatchObject({ "edit-monitor": null, add: null, "save-image": null });
+    expect(why(row("w-dec18"), "edit")).toMatchObject({
+      "edit-monitor": null, add: null, "save-image": null, "copy-text": null,
+    });
     expect(why(row("h-calls"), "close")).toMatchObject({ "close-holding": null });
     // another form open: neither form action, and not the phone, which unmounts the desk
     expect(why(row("w-dec18"), "other")).toMatchObject({ "edit-monitor": HOLD, "arrange-phone": HOLD });

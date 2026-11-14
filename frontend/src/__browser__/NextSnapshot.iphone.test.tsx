@@ -1,8 +1,8 @@
-/** Saving the page as an image, from the phone (#300, ADR 0023), under Playwright's
- *  iPhone profile. The picture is B's cards, drawn again off screen at the picture's own width —
- *  so every phone gives the same picture of one book — without a control in it and with privacy
- *  honoured. The fills and the attention chips are found in that tree, and their pixels in the
- *  delivered PNG must be painted: `Rasterize.test.tsx`'s proof, carried over to this page.
+/** Saving the page as an image, from the phone (#300, #394; ADR 0023), under Playwright's
+ *  iPhone profile. Since #394 the picture is the desk's: ONE plain table, drawn off screen as wide
+ *  as its widest row whatever the phone, so it is measured here as `NextSnapshot.test.tsx`
+ *  measures it on the desk — one light ground and one ink, no chip, bar or coloured leg, a legible
+ *  face, nothing clipped — and its table must be the very table the desk's suite holds it to.
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
@@ -11,7 +11,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Next } from "../Next";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { settle } from "./nextBook";
-import { catchShare, CONTROLS, decode, forgetShare, placeIn, still } from "./picture";
+import { readPicture } from "../testing/plainRead";
+import { catchShare, CONTROLS, decode, forgetShare, still } from "./picture";
+import { bookTable, inkIn, measurePlain, PLAIN_GROUND } from "../testing/plainPicture";
 
 /** Every node handed to the rasterizer, with its text as it stood then (NextSnapshot.test.tsx). */
 const captured = vi.hoisted(() => [] as { node: HTMLElement; text: string }[]);
@@ -76,8 +78,6 @@ async function show(session = true): Promise<string[]> {
 }
 
 const save = () => screen.getByRole("button", { name: "save as image" });
-const cardIn = (root: ParentNode, id: string) =>
-  [...root.querySelectorAll<HTMLElement>(".nxp-card[data-ref]")].find((c) => c.dataset.ref === id)!;
 
 afterEach(() => {
   cleanup();
@@ -86,57 +86,39 @@ afterEach(() => {
   document.cookie = "ui_privacy=;path=/;max-age=0";
 });
 
-describe("saving the phone's cards as an image", () => {
-  it("is a target a finger can hit", async () => {
+describe("saving the phone's book as an image", () => {
+  it("is a target a finger can hit, and so is copying it as text", async () => {
     await show();
-    const r = save().getBoundingClientRect();
-    expect(r.width).toBeGreaterThanOrEqual(44);
-    expect(r.height).toBeGreaterThanOrEqual(44);
+    for (const button of [save(), screen.getByRole("button", { name: "copy as text" })]) {
+      const r = button.getBoundingClientRect();
+      expect(r.width).toBeGreaterThanOrEqual(44);
+      expect(r.height).toBeGreaterThanOrEqual(44);
+    }
   });
 
-  it("paints the progress bars and the attention chips, in their own colours", async () => {
+  it("is the desk's plain table, dark on a light ground, with no card, chip or bar and no control", async () => {
     await show();
     const shared = catchShare();
     await userEvent.click(save());
     await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
     const root = still()!;
     expect(captured[0]!.node, "the file was made from something other than the picture's tree").toBe(root);
-    const png = await decode(shared.file()!);
-    const ratio = png.w / root.scrollWidth;
-    const at = (el: Element, dx?: number) => png.at(...placeIn(root, el, ratio, dx));
-
-    // the fired entry signal's card, a calm watched spread's card, and the ringing risk rule
-    // inside its holding's card
-    const entry = cardIn(root, "w-dec04");
-    const calm = cardIn(root, "w-dec31");
-    const ringing = [...root.querySelectorAll<HTMLElement>(".nxp-rule[data-ref]")].find((r) => r.dataset.ref === "r-calls")!;
-    const bar = (card: HTMLElement) => at(card.querySelector(".nxp-progress > span")!);
-    const chip = (el: HTMLElement) => at(el.querySelector(".nx-chip")!, 3);
-    const ground = png.at(4, 4);
-
-    for (const [name, px] of [["entry bar", bar(entry)], ["calm bar", bar(calm)],
-      ["entry chip", chip(entry)], ["alarm chip", chip(ringing)]]) {
-      expect(px, `the ${name} came out transparent`).not.toMatch(/,0$/);
-      expect(px, `the ${name} is the page's own ground — it was not painted`).not.toBe(ground);
-    }
-    expect(chip(entry), "the entry chip and the alarm chip are one colour").not.toBe(chip(ringing));
-    expect(bar(entry), "a fired bar is painted as a calm one").not.toBe(bar(calm));
-    shared.release();
-  });
-
-  it("is the picture's own width, not the phone's, and carries no control", async () => {
-    await show();
-    const shared = catchShare();
-    await userEvent.click(save());
-    await expect.poll(() => shared.file(), { timeout: 8000 }).toBeTruthy();
-    const root = still()!;
-    expect(root.dataset.arrangement).toBe("phone");
-    expect(root.getBoundingClientRect().width).toBe(420);
+    expect(root.querySelector(".nxp-card, .nxp-condor")).toBeNull();
+    expect(measurePlain(root)).toEqual({ grounds: [], inks: [], drawn: [], hidden: [], small: [], clipped: [] });
+    // the table the desk's suite holds its picture to, row for row and cell for cell
+    expect(readPicture(root).sections).toEqual(bookTable());
+    // wider than the phone, since it is as wide as its rows, and never cut to the screen
+    expect(root.getBoundingClientRect().width).toBeGreaterThan(window.innerWidth);
     expect([...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
-    for (const id of ["h-puts", "h-calls", "h-ic", "w-dec04", "w-dec31", "w-lone"]) {
-      expect(cardIn(root, id), `${id} is not in the picture`).toBeTruthy();
+    const png = await decode(shared.file()!);
+    expect(png.at(2, 2)).toBe(PLAIN_GROUND);
+    // and words are painted on it: a holding's name, a status, the header block
+    const cells = [...root.querySelectorAll("td")];
+    const name = cells.find((td) => td.textContent === "1218_P6400")!;
+    const ringing = cells.find((td) => td.textContent === "ringing")!;
+    for (const el of [name, ringing, root.querySelector(".nx-still-lines dd")!]) {
+      expect(inkIn(png, root, el), `no words painted where "${el.textContent}" is`).toBe(true);
     }
-    expect(root.textContent, "the quarantined rule is left out").toContain("quarantined");
     shared.release();
   });
 
