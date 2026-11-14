@@ -2493,7 +2493,10 @@
                                   "type": "number"
                                 },
                                 "cost_to_close": {
-                                  "type": "number"
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
                                 },
                                 "on_pace": {
                                   "type": [

@@ -61,10 +61,13 @@ function sinceNewYorkMidnight(now: Date): number {
     + now.getUTCMilliseconds();
 }
 
-/** The two vol readings of a day's row, as stored: JSON text, or null where the feed withheld one. */
+/** What a day's row reads, as stored: the two vol readings as JSON text, or null where the feed
+ *  withheld one, and the Cost to close, or null where no leg had a two-sided quote to price it
+ *  (#380) — out of hours, when moomoo quotes every option 0/0 and the vol is still served. */
 export interface SampleReadings {
   legs_iv: string | null;
   legs_vega: string | null;
+  cost_to_close: number | null;
 }
 
 /** The day's row as stored, as far as `takesSample` reads it. */
@@ -106,19 +109,31 @@ export type SampleWrite = "no" | "if-changed" | "yes";
  *    A complete settled row is never changed: a close stays the close.
  *
  *  So some points are not closes, and every write stamps `observed_at` so a chart can say which.
+ *
+ *  **An empty Cost to close never replaces a stored one** (#380), whatever the hour. A sweep with no
+ *  two-sided quote for a leg has no cost — moomoo's 0/0 out of hours — but still reads the vol, so
+ *  a day with no row is filled with an empty cost and its readings (the chain needs the day), while
+ *  a row that has a cost keeps it. A row without one counts as incomplete and is given one by the
+ *  first whole reading after the close; a costless reading is never complete.
  */
 export function takesSample(
   now: Date, stored: StoredSample | null, observed: SampleReadings,
 ): SampleWrite {
   if (stored === null) return "yes";
+  // an empty cost never replaces a stored one, at any hour (#380): out of hours moomoo quotes every
+  // option 0/0, and the open quotes one leg before another, so a reading with no cost says nothing
+  // about the day's price — it would blank the close, or a fill the session priced
+  if (stored.cost_to_close !== null && observed.cost_to_close === null) return "no";
   const provisional = stored.observed_at !== null && sinceNewYorkMidnight(
     new Date(`${stored.observed_at.slice(0, 10)}T${stored.observed_at.slice(11, 23)}Z`),
   ) < SAMPLE_FROM;
   const t = sinceNewYorkMidnight(now);
   if (t < SAMPLE_FROM) return "no";
   if (t <= SAMPLE_UNTIL) return provisional ? "yes" : "if-changed";
-  const incomplete = stored.legs_iv === null || stored.legs_vega === null;
-  const complete = observed.legs_iv !== null && observed.legs_vega !== null;
+  // a row without a cost is incomplete as one without its IV or vega is, and only a reading with
+  // all three is complete: a costless reading must not rewrite a costless row on every sweep
+  const incomplete = stored.legs_iv === null || stored.legs_vega === null || stored.cost_to_close === null;
+  const complete = observed.legs_iv !== null && observed.legs_vega !== null && observed.cost_to_close !== null;
   if (provisional) return incomplete || complete ? "yes" : "no";
   return incomplete && complete ? "yes" : "no";
 }

@@ -6,20 +6,20 @@ import { describe, expect, it } from "vitest";
 
 import type { Sample, Samples } from "../shared/api";
 import {
-  correctionDte, costRuns, nearestDay, nowLines, sampleWords, stepDay, tipLines, tipPlace, valueAxis,
-  type Unit,
+  correctionDte, costRuns, hasCost, nearestDay, nowLines, sampleWords, stepDay, tipLines, tipPlace, valueAxis,
+  type PricedSample, type Unit,
 } from "../burndown";
 
 const money: Unit = { size: 100, contracts: 2, money: true, hidden: false };
 const points: Unit = { size: 1, contracts: 2, money: false, hidden: false };
 const hidden: Unit = { ...money, hidden: true };
 
-const day = (over: Partial<Sample> = {}): Sample => ({
+const day = (over: Partial<PricedSample> = {}): PricedSample => ({
   observed_on: "2026-11-03", dte: 45, cost_to_close: 2.3, on_pace: 2.02, timing: "close",
   observed_at: "2026-11-04 05:00:00+08:00", legs_iv: null, legs_vega: null, legs_delta: null, spx: null,
   before_correction: false,
   ...over,
-} as Sample);
+} as PricedSample);
 
 /** A credit of 2.00 sold at 45 DTE: the Target at half, the Stop at twice. */
 function served(costs: number[], stop: number | null = 4): Samples {
@@ -245,5 +245,15 @@ describe("a day summed before a leg's quantity was corrected (#359)", () => {
       { before: true, run: [gap[0]] }, { before: false, run: [gap[1]] },
     ]);
     expect(costRuns([{ dte: 2, before_correction: false }])).toEqual([{ before: false, run: [{ dte: 2, before_correction: false }] }]);
+  });
+});
+
+describe("a day with no Cost to close (#380)", () => {
+  // out of hours a leg has no two-sided quote, and the day is kept for its vol readings alone
+  const costless = { ...day({ observed_on: "2026-11-04", dte: 44 }), cost_to_close: null } as Sample;
+
+  it("is not a point", () => {
+    expect(hasCost(day())).toBe(true);
+    expect(hasCost(costless)).toBe(false);
   });
 });

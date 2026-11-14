@@ -131,9 +131,11 @@ describe("takesSample — whether this sweep writes the day's row, and how", () 
   const beforeOpen = at("2026-11-09T05:05:00Z"); // 00:05, just past New York's midnight
   const session = at("2026-11-09T16:00:00Z"); // 11:00
   const evening = at("2026-11-10T01:30:00Z"); // 20:30, overnight trading
-  const readings = { legs_iv: "{}", legs_vega: "{}" };
-  const noVega = { legs_iv: "{}", legs_vega: null };
-  const noIv = { legs_iv: null, legs_vega: "{}" };
+  const readings = { legs_iv: "{}", legs_vega: "{}", cost_to_close: 3.05 };
+  const noVega = { legs_iv: "{}", legs_vega: null, cost_to_close: 3.05 };
+  const noIv = { legs_iv: null, legs_vega: "{}", cost_to_close: 3.05 };
+  /** a sweep that priced no leg — moomoo's 0/0 out of hours — but still read the vol (#380) */
+  const noCost = { legs_iv: "{}", legs_vega: "{}", cost_to_close: null };
   /** the day's stored row, observed at a UTC instant as the database spells it */
   const row = (observedAt: string | null, maps: SampleReadings = readings) =>
     ({ ...maps, observed_at: observedAt });
@@ -188,6 +190,34 @@ describe("takesSample — whether this sweep writes the day's row, and how", () 
     expect(takesSample(evening, row(null, noIv), readings)).toBe("yes");
     // the row is written whole, so this would trade the stored IV for the missing vega
     expect(takesSample(evening, row("2026-11-09 16:00:00.000000", noVega), noIv)).toBe("no");
+  });
+
+  it("never replaces a stored Cost to close with an empty one, at any hour (#380)", () => {
+    // moomoo quotes every option 0/0 out of hours, and the open quotes one leg before another: a
+    // reading with no cost must not blank the close, nor a fill a session priced
+    expect(takesSample(session, inHours, noCost)).toBe("no");
+    expect(takesSample(session, provisional, noCost)).toBe("no");
+    expect(takesSample(evening, provisional, noCost)).toBe("no");
+    expect(takesSample(evening, row("2026-11-09 16:00:00.000000", noVega), noCost)).toBe("no");
+  });
+
+  it("fills a day with an empty cost, which keeps its vol readings for the chain (#380)", () => {
+    // a weekend, or a trade recorded in New York's evening: the vol chain needs the day's IV and
+    // vega, and the cost is what was not there to read
+    expect(takesSample(beforeOpen, null, noCost)).toBe("yes");
+    expect(takesSample(evening, null, noCost)).toBe("yes");
+    // the weekend's row in the hours is restamped as before, empty cost and all
+    const emptyFill = row("2026-11-09 05:05:00.000000", noCost);
+    expect(takesSample(session, emptyFill, noCost)).toBe("yes");
+  });
+
+  it("gives a row with an empty cost its cost when one is read, and not otherwise (#380)", () => {
+    const emptyInHours = row("2026-11-09 16:00:00.000000", noCost);
+    expect(takesSample(session, emptyInHours, readings)).toBe("if-changed");
+    // after the close a settled row without a cost is incomplete, completed by a whole reading...
+    expect(takesSample(evening, emptyInHours, readings)).toBe("yes");
+    // ...and by nothing less: another costless reading would rewrite it on every sweep till midnight
+    expect(takesSample(evening, emptyInHours, noCost)).toBe("no");
   });
 
   it("calls a row provisional by New York's clock, across a change of the clocks", () => {

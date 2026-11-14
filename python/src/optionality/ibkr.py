@@ -75,7 +75,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from optionality.contract import parse_spx_code
-from optionality.quote import Batch, Quote
+from optionality.quote import Batch, Quote, mid_price
 
 if TYPE_CHECKING:
     from ib_async.client import Client
@@ -162,17 +162,16 @@ def greek_fields(figures: Greeks) -> Quote:
 
 
 def with_mid(record: Quote) -> Quote:
-    """The mid, where BOTH sides arrived.
+    """The mid, where there is a two-sided quote.
 
-    Mutates the record it is given, as the TypeScript does, and only when both sides are numbers: a
-    mid from one side is a number with no meaning, and `reference.FIELDS` prefers the mid over the
-    last trade. Zero on both sides is an empty book and stays zero — whether 0 may be SHOWN is ADR
-    0018's positivity guard to decide, not this mapping's to suppress.
+    Mutates the record it is given, as the TypeScript does, by the one rule every vendor shares
+    (`quote.mid_price`): both sides, and an ask above zero. A mid from one side is a number with no
+    meaning, and so is the 0 of an empty book (#380), which `reference.FIELDS`, the sweep and the
+    holdings would all read as a price. The sides are kept as they came.
     """
-    bid = record.get("bid_price")
-    ask = record.get("ask_price")
-    if _is_number(bid) and _is_number(ask):
-        record["mid_price"] = (bid + ask) / 2
+    mid = mid_price(record.get("bid_price"), record.get("ask_price"))
+    if mid is not None:
+        record["mid_price"] = mid
     return record
 
 
@@ -185,12 +184,6 @@ def has_figures(record: Quote) -> bool:
     does not exist. Those are different answers and the service keeps them apart.
     """
     return any(key not in _NOT_A_FIGURE and value is not None for key, value in record.items())
-
-
-def _is_number(value: object) -> bool:
-    """`typeof value === "number"`, ported. A bool passes `isinstance(x, int)` in Python, and a
-    `bid_price` of True would otherwise average into a mid."""
-    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 # --- the naming: a service code as the contract IB Gateway wants (`contract.ts`) ---------------

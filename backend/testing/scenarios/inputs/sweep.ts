@@ -6,7 +6,7 @@
  *  sweeps, a figure silent for several — the earlier sweeps say so, and write nothing.
  */
 import { buildSpxCode } from "optionality/domain/contract";
-import type { World } from "../format.ts";
+import type { Row, World } from "../format.ts";
 import {
   BOOK, C7300, C7350, C7500, EXPIRED, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
   sample, stored, world,
@@ -42,6 +42,17 @@ const NOVEMBER_QUOTES = {
   [nov("PUT", 6400)]: quote("SPXW 261127 6400P", 2, -0.11),
   [nov("PUT", 6350)]: quote("SPXW 261127 6350P", 1.25, -0.08),
 };
+
+/** A contract as moomoo answers it out of hours (#380): bid 0 / ask 0, so its mapping derives NO
+ *  mid (`midPrice`); the greeks and the rest of the record as before. */
+const noBook = (q: Row): Row => {
+  const { mid_price: _mid, ...rest } = q;
+  return { ...rest, bid_price: 0, ask_price: 0 };
+};
+/** The whole condor out of hours. */
+const NO_BOOK: Record<string, Row> = Object.fromEntries(Object.entries(BOOK).map(([c, q]) => [c, noBook(q)]));
+/** 20:30 on Monday 9 November in New York: after the close, and moomoo quoting every option 0/0. */
+const EVENING = "2026-11-10T01:30:00.000Z";
 
 /** Earlier sweeps a cadence apart, the last of them `before` seconds ahead of the clock. */
 const earlier = (downs: (string | null)[], cadence = 15, before = cadence) =>
@@ -132,6 +143,55 @@ export const SWEEP: readonly SweepInput[] = [
     outcomes: ["combo-skipped-for-a-missing-leg", "silence-counted"],
     world: world({
       tables: { monitors: [combo({ id: "mon-2" })] }, provider: { quotes: except(BOOK, C7350) },
+    }),
+  },
+
+  // --- a price with no book (#380): held, neither evaluated nor counted -----------------------
+  {
+    // a 0 is never above anything: read as a price, the evening said "back below" and the bell
+    // went off until the open. Ringing at 4.5 and owed a reminder, it gets neither.
+    name: "a quote with no book neither clears a ringing above rule nor reminds it",
+    outcomes: ["price-rule-held-without-a-quote"],
+    world: world({
+      clock: EVENING,
+      tables: { monitors: [combo({
+        id: "mon-2", triggered: 1, last_value: -4.5,
+        last_checked_at: stored(at(-15, EVENING)), last_alarm_at: stored(at(-3600, EVENING)),
+      })] },
+      provider: { quotes: NO_BOOK },
+    }),
+  },
+  {
+    // a 0 is below everything: read as a price, a profit target rang every evening
+    name: "a quote with no book does not ring a below rule",
+    outcomes: ["price-rule-held-without-a-quote"],
+    world: world({
+      clock: EVENING,
+      tables: { monitors: [combo({ id: "mon-2", direction: "below", threshold: 0.5 })] },
+      provider: { quotes: NO_BOOK },
+    }),
+  },
+  {
+    // the market's answer, not a figure that failed to arrive: counted, every price rule would be
+    // quarantined minutes into every evening. With a limit of one, silence would quarantine it here.
+    name: "a quote with no book is not counted toward quarantine",
+    outcomes: ["price-rule-held-without-a-quote"],
+    world: world({
+      clock: EVENING,
+      settings: { QUARANTINE_AFTER_SILENT_SWEEPS: "1" },
+      tables: { monitors: [combo({ id: "mon-2" })] },
+      provider: { quotes: NO_BOOK },
+    }),
+  },
+  {
+    // the open quotes one leg before the other: the short call's 2.75 against a 0 read as a spread
+    // worth 2.75 and rang a rule at 2, where the spread is worth 1.00 (13 Nov's 09:25 and 09:30)
+    name: "a combo with one leg quoted and the other not is not evaluated",
+    outcomes: ["price-rule-held-without-a-quote"],
+    world: world({
+      clock: "2026-11-09T14:30:05.000Z", // 09:30:05 in New York, the first sweep of the session
+      tables: { monitors: [combo({ id: "mon-2", threshold: 2 })] },
+      provider: { quotes: { [C7300]: BOOK[C7300]!, [C7350]: noBook(BOOK[C7350]!) } },
     }),
   },
 
@@ -496,6 +556,27 @@ export const SWEEP: readonly SweepInput[] = [
         position_samples: [{ ...todays, legs_vega: null }],
       },
       provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // out of hours no leg has a book, so there is no Cost to close — but the vol is served, and the
+    // chain needs the day: kept with its readings and an EMPTY cost, never a 0.00 (#380)
+    name: "a day with no book is kept for its vol with an empty cost",
+    outcomes: ["sample-kept-with-an-empty-cost", "day-filled-after-hours", "sample-recorded"],
+    world: world({
+      clock: EVENING,
+      tables: { positions: [position({ id: "pos-1", opened_at: "2026-11-09" })] },
+      provider: { quotes: NO_BOOK },
+    }),
+  },
+  {
+    // in the hours a row is rewritten whenever its figures move, and the open quotes one leg before
+    // another: a costless reading must not blank the day's price (#380)
+    name: "an empty cost never replaces the day's stored cost",
+    outcomes: ["stored-cost-kept-from-an-empty-one"],
+    world: world({
+      tables: { positions: [position({ id: "pos-1" })], position_samples: [todays] },
+      provider: { quotes: { ...BOOK, [C7350]: noBook(BOOK[C7350]!) } },
     }),
   },
   {

@@ -53,7 +53,7 @@ export const NULLABLE = {
   positions: [
     "strategy", "entry", "opened_at", "manage_notified_at", "closed_on", "exit", "qty_corrected_at",
   ],
-  position_samples: ["legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"],
+  position_samples: ["cost_to_close", "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx"],
   monitor_positions: [],
   reference_securities: ["label"],
   schema_migrations: [],
@@ -144,7 +144,10 @@ export interface PositionSampleRow {
   position_id: string;
   observed_on: string;
   dte: number;
-  cost_to_close: number;
+  /** Null where a leg had no two-sided quote to price it — moomoo's 0/0 out of hours — on a row
+   *  written for its vol readings, which the chain needs for every day (#380, migration 0012). An
+   *  empty cost never replaces a stored one (`takesSample`). */
+  cost_to_close: number | null;
   /** JSON text: contract code -> implied volatility. Null where not every leg was priced — a
    *  partial map would invite a vol figure computed from half a structure (ADR 0011). */
   legs_iv: string | null;

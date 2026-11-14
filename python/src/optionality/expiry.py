@@ -49,10 +49,12 @@ def _since_new_york_midnight(now: datetime | None) -> int:
 
 
 class SampleReadings(TypedDict):
-    """The two vol readings of a day's row, as stored: JSON text, or None where the feed withheld one."""
+    """What a day's row reads, as stored: the two vol readings as JSON text, or None where the feed
+    withheld one, and the Cost to close, or None where no leg had a two-sided quote to price it (#380)."""
 
     legs_iv: str | None
     legs_vega: str | None
+    cost_to_close: float | None
 
 
 class StoredSample(SampleReadings):
@@ -76,10 +78,14 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
     hour. Before the open: only that fill. In the hours: written when the figures moved, and a
     provisional row regardless (a weekend's, restamped). After the close: a provisional row replaced (a
     missed session's evening) — a complete one only by complete readings — a settled row missing its IV or vega completed by a sweep with BOTH, a
-    complete settled row never changed. Mirrors `expiry.ts`.
+    complete settled row never changed. An empty Cost to close never replaces a stored one at any hour,
+    and a row without one is completed only by a reading with all three (#380). Mirrors `expiry.ts`.
     """
     if stored is None:
         return "yes"
+    # an empty cost never replaces a stored one, at any hour (#380)
+    if stored["cost_to_close"] is not None and observed["cost_to_close"] is None:
+        return "no"
     observed_at = stored["observed_at"]
     provisional = (
         observed_at is not None
@@ -90,8 +96,11 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
         return "no"
     if t <= _SAMPLE_UNTIL:
         return "yes" if provisional else "if-changed"
-    incomplete = stored["legs_iv"] is None or stored["legs_vega"] is None
-    complete = observed["legs_iv"] is not None and observed["legs_vega"] is not None
+    # a row without a cost is incomplete, and only a reading with all three is complete
+    incomplete = stored["legs_iv"] is None or stored["legs_vega"] is None or stored["cost_to_close"] is None
+    complete = (
+        observed["legs_iv"] is not None and observed["legs_vega"] is not None and observed["cost_to_close"] is not None
+    )
     if provisional:
         # a complete provisional row only by complete readings, or the day could lose its Vol for good
         return "yes" if incomplete or complete else "no"

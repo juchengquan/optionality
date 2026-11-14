@@ -218,7 +218,8 @@
         null,
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -233,7 +234,8 @@
         null,
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -248,7 +250,8 @@
         null,
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": null
+          "legs_vega": null,
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -263,11 +266,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 05:05:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "no"
@@ -282,11 +287,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": null
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "no"
@@ -301,11 +308,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 05:05:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -320,11 +329,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 16:00:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "if-changed"
@@ -339,11 +350,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": null
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "if-changed"
@@ -358,11 +371,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 05:05:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -377,11 +392,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 05:05:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": null
+          "legs_vega": null,
+          "cost_to_close": 3.05
         }
       ],
       "expect": "no"
@@ -396,11 +413,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": null,
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 05:05:00.000000"
         },
         {
           "legs_iv": null,
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -415,11 +434,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 16:00:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "no"
@@ -434,11 +455,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-10 01:30:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "no"
@@ -453,11 +476,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": null
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "no"
@@ -472,11 +497,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": null,
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 16:00:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -491,11 +518,13 @@
         {
           "legs_iv": null,
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": null
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -510,11 +539,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": null,
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 16:00:00.000000"
         },
         {
           "legs_iv": null,
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "no"
@@ -529,11 +560,197 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-11-09 16:00:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "no row, a sweep with no cost still fills the day for its vol",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        null,
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "an empty cost never replaces a settled cost in the hours",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "an empty cost never replaces a provisional cost in the hours",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "an empty cost never replaces a provisional cost after the close",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "an empty cost never completes a row that has a cost",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": null,
+          "cost_to_close": 3.05,
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null
+        }
+      ],
+      "expect": "no"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a costless fill in the hours is restamped, as a weekend's is",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null,
+          "observed_at": "2026-11-09 05:05:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a costless row is given its cost in the hours",
+      "args": [
+        {
+          "$date": "2026-11-09T16:00:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null,
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
+        }
+      ],
+      "expect": "if-changed"
+    },
+    {
+      "fn": "takesSample",
+      "name": "a costless settled row is completed after the close by a whole reading",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null,
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
+        }
+      ],
+      "expect": "yes"
+    },
+    {
+      "fn": "takesSample",
+      "name": "and is not rewritten by another costless one",
+      "args": [
+        {
+          "$date": "2026-11-10T01:30:00.000Z"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null,
+          "observed_at": "2026-11-09 16:00:00.000000"
+        },
+        {
+          "legs_iv": "{\"a\":14.5}",
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": null
         }
       ],
       "expect": "no"
@@ -548,11 +765,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-10-01 13:29:59.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "yes"
@@ -567,11 +786,13 @@
         {
           "legs_iv": "{\"a\":14.5}",
           "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05,
           "observed_at": "2026-10-01 13:30:00.000000"
         },
         {
           "legs_iv": "{\"a\":14.5}",
-          "legs_vega": "{\"a\":4.25}"
+          "legs_vega": "{\"a\":4.25}",
+          "cost_to_close": 3.05
         }
       ],
       "expect": "if-changed"

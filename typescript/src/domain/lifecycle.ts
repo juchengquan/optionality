@@ -15,6 +15,7 @@
  *  record by being the two functions the port does not have.
  */
 import { monitorLegCodes, type Monitor } from "./monitor.ts";
+import type { ByCode } from "./quote.ts";
 
 /** Why a figure did not arrive, in the words the notice uses. Sorted, so the sentence a rule
  *  produces does not depend on the order a provider happened to answer in. */
@@ -22,6 +23,33 @@ export function silenceReason(monitor: Monitor, priced: Set<string>): string {
   const unpriced = monitorLegCodes(monitor).filter((code) => !priced.has(code));
   if (unpriced.length > 0) return `no quote for ${unpriced.sort().join(", ")}`;
   return `no ${monitor.field} in the quote`;
+}
+
+/** The field a price rule reads: the mid, which a vendor derives only from a two-sided quote. */
+const PRICE_FIELD = "mid_price";
+
+/** Whether the sweep HOLDS this rule rather than count its silence (#380): it watches the price,
+ *  every leg came back in the batch, and at least one came back with no two-sided quote — so no mid.
+ *
+ *  That is the market's answer, not a figure that failed to arrive. Out of hours moomoo quotes every
+ *  option bid 0 / ask 0 and IB Gateway sends no sides at all, and a mid needs an offer above zero
+ *  (`quote.ts` `midPrice`). Counted, every price rule would be quarantined about 2.5 minutes into
+ *  every evening; read as 0, as it was, the 0 cleared an `above` rule and rang a `below` one, and a
+ *  combo with one leg quoted at the open and the other not read as one leg's whole price and rang.
+ *
+ *  So a held rule is not evaluated at all: its bell, its last figure and when it was last checked
+ *  stay as the last quoted sweep left them, nothing is said, and the run of silence is forgotten.
+ *  At any hour, by the batch and never the clock, so a holiday and the open's first seconds are
+ *  held the same way. The cost is that a price rule is no longer quarantined for silence, only for
+ *  a leg the Provider does not return or does not know. Any other field missing is silence still:
+ *  a greek that does not arrive is the account's entitlement speaking, and quarantine is how the
+ *  owner hears about it.
+ */
+export function holdsWithoutQuote(monitor: Monitor, byCode: ByCode): boolean {
+  if (monitor.field !== PRICE_FIELD) return false;
+  const records = monitorLegCodes(monitor).map((code) => byCode[code]);
+  if (records.some((r) => r === null || r === undefined)) return false;
+  return records.some((r) => r![PRICE_FIELD] === null || r![PRICE_FIELD] === undefined);
 }
 
 export interface SilenceVerdict {

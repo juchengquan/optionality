@@ -101,6 +101,11 @@ const single: Monitor = {
   threshold: 0.3, direction: "above", compare: "abs",
 };
 
+/** a contract as moomoo answers it out of hours (#380) — the sides at 0, so no mid — and in the
+ *  session; the greeks arrive either way */
+const NO_BOOK = { bid_price: 0, ask_price: 0, option_delta: 0.08 };
+const BOOK = { bid_price: 10.6, ask_price: 10.9, mid_price: 10.75, option_delta: 0.08 };
+
 const policy: ExitPolicy = { takeFraction: 0.5, stopMultiple: 2, manageByDte: 21 };
 
 /** The alarm decision's own fixtures (ADR 0017).
@@ -158,9 +163,11 @@ const cancelling = (s: PacedSample): PacedSample =>
 
 const at = (iso: string) => new Date(iso);
 /** A day's vol readings for `takesSample`: both maps, or one withheld. */
-const WHOLE = { legs_iv: '{"a":14.5}', legs_vega: '{"a":4.25}' };
-const NO_VEGA = { legs_iv: '{"a":14.5}', legs_vega: null };
-const NO_IV = { legs_iv: null, legs_vega: '{"a":4.25}' };
+const WHOLE = { legs_iv: '{"a":14.5}', legs_vega: '{"a":4.25}', cost_to_close: 3.05 };
+const NO_VEGA = { legs_iv: '{"a":14.5}', legs_vega: null, cost_to_close: 3.05 };
+const NO_IV = { legs_iv: null, legs_vega: '{"a":4.25}', cost_to_close: 3.05 };
+/** a sweep with no two-sided quote for a leg — moomoo's 0/0 out of hours — that still read the vol */
+const NO_COST = { legs_iv: '{"a":14.5}', legs_vega: '{"a":4.25}', cost_to_close: null };
 /** A stored day's row for 9 November 2026 (EST), by when it was observed. */
 const PROVISIONAL = { ...WHOLE, observed_at: "2026-11-09 05:05:00.000000" }; // 00:05, before the open
 const IN_HOURS = { ...WHOLE, observed_at: "2026-11-09 16:00:00.000000" }; // 11:00
@@ -271,6 +278,25 @@ export const INPUTS: Record<string, CaseInput[]> = {
       args: [at("2026-11-10T01:30:00Z"), { ...IN_HOURS, ...NO_VEGA }, NO_IV] },
     { fn: "takesSample", name: "a millisecond after 16:15, over a settled row",
       args: [at("2026-11-09T21:15:00.001Z"), IN_HOURS, WHOLE] },
+    // an empty Cost to close (#380): it fills a day, and never replaces a stored cost at any hour
+    { fn: "takesSample", name: "no row, a sweep with no cost still fills the day for its vol",
+      args: [at("2026-11-10T01:30:00Z"), null, NO_COST] },
+    { fn: "takesSample", name: "an empty cost never replaces a settled cost in the hours",
+      args: [at("2026-11-09T16:00:00Z"), IN_HOURS, NO_COST] },
+    { fn: "takesSample", name: "an empty cost never replaces a provisional cost in the hours",
+      args: [at("2026-11-09T16:00:00Z"), PROVISIONAL, NO_COST] },
+    { fn: "takesSample", name: "an empty cost never replaces a provisional cost after the close",
+      args: [at("2026-11-10T01:30:00Z"), PROVISIONAL, NO_COST] },
+    { fn: "takesSample", name: "an empty cost never completes a row that has a cost",
+      args: [at("2026-11-10T01:30:00Z"), { ...IN_HOURS, ...NO_VEGA }, NO_COST] },
+    { fn: "takesSample", name: "a costless fill in the hours is restamped, as a weekend's is",
+      args: [at("2026-11-09T16:00:00Z"), { ...PROVISIONAL, ...NO_COST }, NO_COST] },
+    { fn: "takesSample", name: "a costless row is given its cost in the hours",
+      args: [at("2026-11-09T16:00:00Z"), { ...IN_HOURS, ...NO_COST }, WHOLE] },
+    { fn: "takesSample", name: "a costless settled row is completed after the close by a whole reading",
+      args: [at("2026-11-10T01:30:00Z"), { ...IN_HOURS, ...NO_COST }, WHOLE] },
+    { fn: "takesSample", name: "and is not rewritten by another costless one",
+      args: [at("2026-11-10T01:30:00Z"), { ...IN_HOURS, ...NO_COST }, NO_COST] },
     // provisional is read on New York's clock: under EDT, 13:29:59Z is before the open, 13:30Z is it
     { fn: "takesSample", name: "observed at 09:29:59 EDT is provisional",
       args: [at("2026-10-01T15:00:00Z"), { ...WHOLE, observed_at: "2026-10-01 13:29:59.000000" }, WHOLE] },
@@ -371,6 +397,22 @@ export const INPUTS: Record<string, CaseInput[]> = {
       args: [["A", "B"], { records: [], unknown: ["B"] }] },
     { fn: "verifyVerdict", name: "nothing asked for is nothing wrong",
       args: [[], { records: [], unknown: [] }] },
+
+    // --- a quote's mid, the one rule every vendor derives it by, in both languages (#380) ---
+    { fn: "midPrice", name: "the midpoint of a two-sided quote", args: [3.5, 4.1] },
+    // a worthless wing is offered at 0.05, and that is a quote
+    { fn: "midPrice", name: "a bid of zero is a real bid", args: [0, 0.05] },
+    // moomoo out of hours: 0/0 is no book, not a price of 0 — the book read 0.00 every evening
+    { fn: "midPrice", name: "bid 0 / ask 0 is no price", args: [0, 0] },
+    { fn: "midPrice", name: "an ask of zero is no offer, whatever the bid", args: [4.4, 0] },
+    { fn: "midPrice", name: "an ask below zero is a sentinel", args: [0, -1] },
+    { fn: "midPrice", name: "a bid below zero is a sentinel", args: [-1, 4.1] },
+    { fn: "midPrice", name: "one side only", args: [null, 4.1] },
+    { fn: "midPrice", name: "a side that is a string", args: ["3.5", 4.1] },
+    // a bool is a number to Python's isinstance and not to typeof: the port must refuse it too
+    { fn: "midPrice", name: "a side that is a boolean", args: [3.5, true] },
+    { fn: "midPrice", name: "an infinite ask", args: [3.5, Infinity] },
+    { fn: "midPrice", name: "a bid that is not a number", args: [NaN, 4.1] },
 
     // --- SPX's price from the options' premiums (#288, ADR 0024): 2026-11-10's session figures ---
     { fn: "derivedSpx", name: "a call: (strike + last) / (1 + premium)",
@@ -866,6 +908,21 @@ export const INPUTS: Record<string, CaseInput[]> = {
       args: [single, new Set(), 99, 0] },
     { fn: "silenceVerdict", name: "the count is forgotten rather than held at the limit",
       args: [single, new Set(), 5, 3] },
+
+    // the hold (#380): a price rule whose legs came back with no two-sided quote is neither
+    // evaluated nor counted — moomoo quotes every option 0/0 out of hours, and IB Gateway no sides
+    { fn: "holdsWithoutQuote", name: "every leg back with no book",
+      args: [combo, Object.fromEntries([LP, SP, SC, LC].map((c) => [c, NO_BOOK]))] },
+    { fn: "holdsWithoutQuote", name: "one leg quoted and the rest not, as at the open",
+      args: [combo, { [LP]: BOOK, [SP]: NO_BOOK, [SC]: NO_BOOK, [LC]: NO_BOOK }] },
+    { fn: "holdsWithoutQuote", name: "a single contract with no book",
+      args: [{ ...single, field: "mid_price", threshold: 5 }, { [SC]: NO_BOOK }] },
+    { fn: "holdsWithoutQuote", name: "a leg that never came back is silence, not a hold",
+      args: [combo, { [LP]: NO_BOOK, [SP]: NO_BOOK, [SC]: NO_BOOK }] },
+    { fn: "holdsWithoutQuote", name: "a rule on another field is never held",
+      args: [single, { [SC]: NO_BOOK }] },
+    { fn: "holdsWithoutQuote", name: "a rule with its price is not held",
+      args: [combo, Object.fromEntries([LP, SP, SC, LC].map((c) => [c, BOOK]))] },
 
     // what becomes of a monitor whose expiry has passed
     { fn: "expiryVerdict", name: "not expired yet, so nothing happens",

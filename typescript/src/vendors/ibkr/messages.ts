@@ -175,9 +175,10 @@ function reading(fields: string[], at: number): number | null {
  *  outside that window on 2026-11-08, and live mode on a shut market says the same for bid and
  *  ask. Typing it as a number would put `-1.00` on the dashboard beside figures that are real.
  *
- *  Zero is kept. An empty book quotes 0, and whether 0 may be shown is ADR 0018's positivity
- *  guard to decide for a Reference, not this decoder's to pre-empt. But a zero the gateway SENT
- *  is "0"; an empty field is no price at all, and `reading` keeps the two apart.
+ *  Zero is kept. An empty book quotes 0, and whether a 0 makes a mid is the domain's `midPrice`
+ *  to decide (#380: an ask of zero is no offer, so it does not), not this decoder's to pre-empt —
+ *  the side itself is still what the gateway said. But a zero the gateway SENT is "0"; an empty
+ *  field is no price at all, and `reading` keeps the two apart.
  */
 function price(fields: string[], at: number): number | null {
   const value = reading(fields, at);

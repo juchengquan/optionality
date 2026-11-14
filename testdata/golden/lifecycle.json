@@ -362,6 +362,298 @@
       }
     },
     {
+      "fn": "holdsWithoutQuote",
+      "name": "every leg back with no book",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120P6500000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120C7100000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120C7150000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          }
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "holdsWithoutQuote",
+      "name": "one leg quoted and the rest not, as at the open",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "bid_price": 10.6,
+            "ask_price": 10.9,
+            "mid_price": 10.75,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120P6500000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120C7100000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120C7150000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          }
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "holdsWithoutQuote",
+      "name": "a single contract with no book",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "mid_price",
+          "threshold": 5,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "US.SPXW261120C7100000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          }
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "holdsWithoutQuote",
+      "name": "a leg that never came back is silence, not a hold",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120P6500000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120C7100000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          }
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "holdsWithoutQuote",
+      "name": "a rule on another field is never held",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "US.SPXW261120C7100000": {
+            "bid_price": 0,
+            "ask_price": 0,
+            "option_delta": 0.08
+          }
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "holdsWithoutQuote",
+      "name": "a rule with its price is not held",
+      "args": [
+        {
+          "code": "1120_IC",
+          "strike_date": "2026-11-20",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 2.5,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6450
+            },
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6500
+            },
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7100
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7150
+            }
+          ]
+        },
+        {
+          "US.SPXW261120P6450000": {
+            "bid_price": 10.6,
+            "ask_price": 10.9,
+            "mid_price": 10.75,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120P6500000": {
+            "bid_price": 10.6,
+            "ask_price": 10.9,
+            "mid_price": 10.75,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120C7100000": {
+            "bid_price": 10.6,
+            "ask_price": 10.9,
+            "mid_price": 10.75,
+            "option_delta": 0.08
+          },
+          "US.SPXW261120C7150000": {
+            "bid_price": 10.6,
+            "ask_price": 10.9,
+            "mid_price": 10.75,
+            "option_delta": 0.08
+          }
+        }
+      ],
+      "expect": false
+    },
+    {
       "fn": "expiryVerdict",
       "name": "not expired yet, so nothing happens",
       "args": [

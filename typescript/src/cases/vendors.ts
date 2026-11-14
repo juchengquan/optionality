@@ -105,9 +105,14 @@ export const VENDOR_INPUTS: Record<
     // a mid from one side is a number with no meaning
     { fn: "withMid", name: "absent where only the bid did", args: [{ bid_price: 3.5 }] },
     { fn: "withMid", name: "absent where only the ask did", args: [{ ask_price: 4.1 }] },
-    // 0/0 is an empty book, and whether 0 may be SHOWN is ADR 0018's guard to decide
-    { fn: "withMid", name: "zero for an empty book, left for the domain to judge",
+    // 0/0 is an empty book and no price (#380): it was a mid of 0, "left for the domain to judge",
+    // and valued the book at 0.00 out of hours. The sides are kept.
+    { fn: "withMid", name: "absent for an empty book, whose sides are kept",
       args: [{ bid_price: 0, ask_price: 0 }] },
+    { fn: "withMid", name: "absent where the ask is zero, whatever the bid",
+      args: [{ bid_price: 4.4, ask_price: 0 }] },
+    // a worthless wing offered at 0.05 is a quote
+    { fn: "withMid", name: "a bid of zero against a real offer", args: [{ bid_price: 0, ask_price: 0.05 }] },
 
     // "subscribed, nothing yet" — a figure that did not arrive, NOT a contract that does not exist
     { fn: "hasFigures", name: "false for a record carrying only its identity",

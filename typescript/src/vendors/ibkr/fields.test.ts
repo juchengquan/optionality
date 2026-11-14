@@ -76,10 +76,13 @@ describe("the mid, which is derived rather than sent", () => {
     expect(withMid({ ask_price: 4.1 }).mid_price).toBe(undefined);
   });
 
-  it("is zero for an empty book, and left for the domain to judge", () => {
-    // 0/0 is an empty book, and whether 0 may be SHOWN is ADR 0018's positivity guard to decide
-    // for a Reference — not this mapping's to suppress
-    expect(withMid({ bid_price: 0, ask_price: 0 }).mid_price).toBe(0);
+  it("is absent for an empty book, whose sides are kept (#380)", () => {
+    // This was a mid of 0, "left for the domain to judge" — and every domain path but a
+    // Reference's took the 0 as a price: moomoo's 0/0 out of hours valued the book at 0.00. No ask
+    // above zero is no price, by the one rule every vendor shares (`domain/quote.ts` `midPrice`).
+    const record = withMid({ bid_price: 0, ask_price: 0 });
+    expect(record.mid_price).toBe(undefined);
+    expect(record).toEqual({ bid_price: 0, ask_price: 0 });
   });
 });
 

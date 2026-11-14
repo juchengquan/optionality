@@ -17,7 +17,7 @@
  *  four wrong mappings the live comparison could not see.
  */
 import type { Long, Snapshot } from "./types.ts";
-import type { Quote } from "../../domain/quote.ts";
+import { midPrice, type Quote } from "../../domain/quote.ts";
 
 /** protobufjs decodes int64 to {low, high, unsigned}; the Python SDK gives a float. */
 function fromLong(value: Long | number | undefined): number | undefined {
@@ -94,13 +94,11 @@ export function toRecord(snapshot: Snapshot): Quote {
       ex.optionAreaType === undefined ? undefined : AREA_TYPE[ex.optionAreaType]);
   }
 
-  // the mid is derived, not reported — and only when BOTH sides are there. A mid from one side is
-  // a number that looks like a price and is not one.
-  const bid = record.bid_price;
-  const ask = record.ask_price;
-  if (typeof bid === "number" && typeof ask === "number") {
-    record.mid_price = (bid + ask) / 2;
-  }
+  // the mid is derived, not reported — and only where there is a two-sided quote: both sides, and
+  // an offer above zero. Out of hours moomoo quotes every option 0/0, and a mid of 0 is a number
+  // that looks like a price and is not one (#380). The rule is the domain's, shared by every vendor.
+  const mid = midPrice(record.bid_price, record.ask_price);
+  if (mid !== null) record.mid_price = mid;
   return record;
 }
 

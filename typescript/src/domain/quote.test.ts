@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { derivedSpx, oneSigma, sigmaDistance, strikeDistances } from "./quote.ts";
+import { derivedSpx, midPrice, oneSigma, sigmaDistance, strikeDistances } from "./quote.ts";
 
 /** 2026-11-10 09:30:01 New York; ^GSPC read 7513.09 at the same instant */
 const call = { code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 };
@@ -170,5 +170,36 @@ describe("strikeDistances", () => {
 
   it("leaves out a code that names no SPX option", () => {
     expect(strikeDistances(["US..SPX", P], byCode, 6900.5, 37).map((d) => d.code)).toEqual([P]);
+  });
+});
+
+describe("midPrice", () => {
+  it("is the midpoint of a two-sided quote", () => {
+    expect(midPrice(3.5, 4.1)).toBe(3.8);
+  });
+
+  it("keeps a bid of zero: a worthless wing offered at 0.05 is a quote", () => {
+    expect(midPrice(0, 0.05)).toBe(0.025);
+  });
+
+  it("is no price where the ask is zero: moomoo quotes 0/0 out of hours (#380)", () => {
+    // the book was valued at 0.00 every evening from exactly this, and a combo with one leg
+    // quoted and one not rang at the open
+    expect(midPrice(0, 0)).toBeNull();
+    expect(midPrice(4.4, 0)).toBeNull();
+  });
+
+  it("is no price where the ask is below zero, or a bid is", () => {
+    expect(midPrice(0, -1)).toBeNull();
+    expect(midPrice(-1, 4.1)).toBeNull();
+  });
+
+  it("is no price from one side, or from anything that is not a finite number", () => {
+    expect(midPrice(undefined, 4.1)).toBeNull();
+    expect(midPrice(3.5, null)).toBeNull();
+    expect(midPrice("3.5", 4.1)).toBeNull();
+    expect(midPrice(true, 4.1)).toBeNull();
+    expect(midPrice(3.5, Number.POSITIVE_INFINITY)).toBeNull();
+    expect(midPrice(Number.NaN, 4.1)).toBeNull();
   });
 });

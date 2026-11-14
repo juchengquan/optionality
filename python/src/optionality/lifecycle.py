@@ -18,6 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from optionality.monitor import Monitor, monitor_leg_codes
+from optionality.quote import ByCode
 
 
 def silence_reason(monitor: Monitor, priced: set[str]) -> str:
@@ -27,6 +28,28 @@ def silence_reason(monitor: Monitor, priced: set[str]) -> str:
     if unpriced:
         return f"no quote for {', '.join(sorted(unpriced))}"
     return f"no {monitor.field} in the quote"
+
+
+#: the field a price rule reads: the mid, which a vendor derives only from a two-sided quote
+_PRICE_FIELD = "mid_price"
+
+
+def holds_without_quote(monitor: Monitor, by_code: ByCode) -> bool:
+    """Whether the sweep HOLDS this rule rather than count its silence (#380): it watches the price,
+    every leg came back in the batch, and at least one came back with no two-sided quote — so no mid.
+
+    The market's answer, not a figure that failed to arrive: out of hours moomoo quotes every option
+    0/0 and IB Gateway sends no sides, and a mid needs an offer above zero (`quote.mid_price`). A held
+    rule is not evaluated, keeps its bell, last figure and last check, says nothing, and its run of
+    silence is forgotten — at any hour, by the batch and never the clock. Any other field missing is
+    silence still. Mirrors `lifecycle.ts`.
+    """
+    if monitor.field != _PRICE_FIELD:
+        return False
+    records = [by_code.get(code) for code in monitor_leg_codes(monitor)]
+    if any(r is None for r in records):
+        return False
+    return any(r.get(_PRICE_FIELD) is None for r in records if r is not None)
 
 
 class SilenceVerdict(BaseModel):

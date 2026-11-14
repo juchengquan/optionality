@@ -33,6 +33,33 @@ export function round4(value: number): number {
   return Number(value.toFixed(4));
 }
 
+/** The mid of a quote, or null where there is no two-sided quote to take one from (#380).
+ *
+ *  Every vendor's mapping derives `mid_price` through this one rule, in both languages: moomoo's
+ *  snapshot, IB Gateway's ticks, and the Python ports of both. It is DERIVED, never sent, and a
+ *  number only where it is a price:
+ *
+ *  - **both sides**, each a finite number. A mid from one side is a number that looks like a price
+ *    and is not one.
+ *  - **an ask above zero.** Out of hours moomoo quotes every option bid 0 / ask 0, and `(0 + 0) / 2`
+ *    is a mid of 0: the book was valued at 0.00 every evening ("at target", captured 100%), the
+ *    daily sample could store it, and a combo with one leg quoted and the other still 0/0 at the
+ *    open read as one leg's whole price and rang. Nobody offers an option for nothing, so an ask of
+ *    zero is no offer at all. This reverses the earlier reading of 0/0 as "a worthless contract,
+ *    a real zero": an SPXW wing worth nothing is bid 0 / ask 0.05 and keeps its mid of 0.025, and
+ *    where a 0/0 is genuine a dash is the cheaper mistake — ADR 0018's guard for a Reference.
+ *  - **a bid of zero or more.** Zero is a real bid (nobody wants it); below zero is a sentinel.
+ *
+ *  `typeof`, because a quote is a wire format with no published schema: a string or a boolean is
+ *  not a price, and the Python port refuses a bool for the same reason.
+ */
+export function midPrice(bid: unknown, ask: unknown): number | null {
+  if (typeof bid !== "number" || typeof ask !== "number") return null;
+  if (!Number.isFinite(bid) || !Number.isFinite(ask)) return null;
+  if (!(ask > 0) || bid < 0) return null;
+  return (bid + ask) / 2;
+}
+
 /** Index a batch's records by code, with display-tz timestamps stamped on.
  *
  *  Copies rather than mutates: the records are SHARED — the sweeper caches its last batch and

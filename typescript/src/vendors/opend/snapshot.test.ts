@@ -37,9 +37,18 @@ describe("the mid price", () => {
     expect(toRecord(snap()).mid_price).toBeUndefined();
   });
 
-  it("is a real zero when both sides are zero, not an absence", () => {
-    // a worthless contract is quoted 0/0, and the domain must see 0 rather than "unknown"
-    expect(toRecord(snap({ basic: basic({ bidPrice: 0, askPrice: 0 }) })).mid_price).toBe(0);
+  it("is absent when both sides are zero, and the sides themselves are kept (#380)", () => {
+    // This read 0/0 as "a worthless contract, a real zero". It is what moomoo quotes every option
+    // out of hours, and the mid of 0 valued the book at 0.00 every evening: no ask above zero is
+    // no price (`domain/quote.ts` `midPrice`). The raw sides stay, so /snapshot still shows them.
+    const record = toRecord(snap({ basic: basic({ bidPrice: 0, askPrice: 0 }) }));
+    expect(record.mid_price).toBeUndefined();
+    expect(record.bid_price).toBe(0);
+    expect(record.ask_price).toBe(0);
+  });
+
+  it("keeps a bid of zero against a real offer: a worthless wing is a quote", () => {
+    expect(toRecord(snap({ basic: basic({ bidPrice: 0, askPrice: 0.05 }) })).mid_price).toBe(0.025);
   });
 });
 

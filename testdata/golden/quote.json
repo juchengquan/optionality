@@ -225,6 +225,109 @@
       "expect": null
     },
     {
+      "fn": "midPrice",
+      "name": "the midpoint of a two-sided quote",
+      "args": [
+        3.5,
+        4.1
+      ],
+      "expect": 3.8
+    },
+    {
+      "fn": "midPrice",
+      "name": "a bid of zero is a real bid",
+      "args": [
+        0,
+        0.05
+      ],
+      "expect": 0.025
+    },
+    {
+      "fn": "midPrice",
+      "name": "bid 0 / ask 0 is no price",
+      "args": [
+        0,
+        0
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "an ask of zero is no offer, whatever the bid",
+      "args": [
+        4.4,
+        0
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "an ask below zero is a sentinel",
+      "args": [
+        0,
+        -1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "a bid below zero is a sentinel",
+      "args": [
+        -1,
+        4.1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "one side only",
+      "args": [
+        null,
+        4.1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "a side that is a string",
+      "args": [
+        "3.5",
+        4.1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "a side that is a boolean",
+      "args": [
+        3.5,
+        true
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "an infinite ask",
+      "args": [
+        3.5,
+        {
+          "$num": "Infinity"
+        }
+      ],
+      "expect": null
+    },
+    {
+      "fn": "midPrice",
+      "name": "a bid that is not a number",
+      "args": [
+        {
+          "$num": "NaN"
+        },
+        4.1
+      ],
+      "expect": null
+    },
+    {
       "fn": "derivedSpx",
       "name": "a call: (strike + last) / (1 + premium)",
       "args": [

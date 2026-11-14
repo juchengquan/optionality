@@ -258,7 +258,9 @@ class SampleOut(BaseModel):
     #: whether it is the day's close, and if not why (`sample_timing`): what the chart marks
     timing: Literal["close", "before-open", "after-close", "unrecorded"]
     dte: float
-    cost_to_close: float
+    #: None on a day kept for its vol readings with no price to give: a leg without a two-sided quote,
+    #: moomoo's 0/0 out of hours (#380). The burndown draws no point for it.
+    cost_to_close: float | None
     #: what Cost to close would be at this DTE if only time had passed (`on_pace`); None without a schedule
     on_pace: float | None
     #: each leg's reading, contract code -> figure: None where the sweep withheld the map, and where a stored

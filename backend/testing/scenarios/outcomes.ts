@@ -21,6 +21,7 @@
  *  a scenario cannot cover an outcome by saying so.
  */
 import { inSampleHours, marketDate } from "optionality/domain/expiry";
+import { monitorLegCodes, type Monitor } from "optionality/domain/monitor";
 import { settingsFromEnv } from "../../src/env.ts";
 import type { Change, Row, SweepScenario } from "./format.ts";
 
@@ -47,6 +48,22 @@ const priced = (s: SweepScenario) => asked(s) && Object.values(s.expect.calls)
 const NEW_YORK_CLOCK = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
+/** Whether a code the tick asked for came back with no mid: no two-sided quote (#380). */
+const bookless = (s: SweepScenario, code: string): boolean => {
+  const q = s.world.provider.quotes[code];
+  return q !== undefined && (q.mid_price === null || q.mid_price === undefined);
+};
+/** Whether the tick asked for a code that came back with no two-sided quote. */
+const askedBookless = (s: SweepScenario) => Object.values(s.expect.calls)
+  .some((batches) => batches.some((codes) => codes.some((c) => bookless(s, c))));
+/** The world's enabled price rules whose every leg came back, one or more with no book. */
+const heldRules = (s: SweepScenario): Row[] => s.world.tables.monitors.filter((m: Row) => {
+  if (!m.enabled || m.field !== "mid_price") return false;
+  const legs = typeof m.legs === "string" ? JSON.parse(m.legs) as unknown : m.legs;
+  const codes = monitorLegCodes({ ...(m as unknown as Monitor), legs: legs as Monitor["legs"] });
+  return codes.every((c) => c in s.world.provider.quotes) && codes.some((c) => bookless(s, c));
+});
+
 /** Whether a stored row was observed before its own day's 09:30 open: a fill from overnight marks. */
 const provisional = (r: Row | undefined): boolean => {
   if (r === undefined || r.observed_at === null) return false;
@@ -114,6 +131,15 @@ export const OUTCOMES: readonly Outcome[] = [
     name: "silence-counted",
     decision: "silenceVerdict",
     shows: (s) => s.world.provider.down === null && quiet(s) && asked(s) && untouched(s),
+  },
+  {
+    // every leg came back, one with no two-sided quote (#380): the market shut or not yet quoting.
+    // HELD — not evaluated, not counted toward quarantine, nothing written or said — where a 0
+    // used to clear an above rule, ring a below one, and a half-quoted combo rang at the open
+    name: "price-rule-held-without-a-quote",
+    decision: "holdsWithoutQuote",
+    shows: (s) => s.world.provider.down === null && heldRules(s).length > 0 && quiet(s) && asked(s)
+      && s.expect.rows.monitors === undefined,
   },
   {
     name: "quarantined-for-a-figure-that-never-arrives",
@@ -264,6 +290,25 @@ export const OUTCOMES: readonly Outcome[] = [
         && (day.legs_iv === null || day.legs_vega === null)
         && (s.expect.rows.position_samples?.changed ?? [])
           .some((c) => (c.to.legs_iv ?? day.legs_iv) !== null && (c.to.legs_vega ?? day.legs_vega) !== null);
+    },
+  },
+  {
+    // no leg with a book, so no Cost to close: the day is kept for its vol readings with the cost
+    // EMPTY, never stored as 0.00 (#380)
+    name: "sample-kept-with-an-empty-cost",
+    decision: "recordSamples",
+    shows: (s) => askedBookless(s) && (s.expect.rows.position_samples?.added ?? [])
+      .some((r) => r.cost_to_close === null && r.legs_iv !== null),
+  },
+  {
+    // in the hours, where a moved figure rewrites the day's row, a reading with no cost leaves the
+    // stored cost where it is (#380)
+    name: "stored-cost-kept-from-an-empty-one",
+    decision: "takesSample",
+    shows: (s) => {
+      const day = dayRow(s);
+      return inSampleHours(new Date(s.world.clock)) && askedBookless(s) && day !== undefined
+        && typeof day.cost_to_close === "number" && s.expect.rows.position_samples === undefined;
     },
   },
   {

@@ -28,6 +28,10 @@ are symmetrical in their answer and differ only in how long it takes to be sure.
 be a log line and a `continue`, which is the quietest failure this service had: an alarm that cannot
 fire reads exactly like one that is not breached (#167).
 
+One absence is NOT a fault: a price rule whose legs all came back but not all with a two-sided quote
+is HELD (`holds_without_quote`, #380) — not evaluated, not counted, nothing said. That is the market
+shut or not yet quoting, every evening and every open.
+
 **Where the Python differs, and why.**
 
 - **The alarm policy is read here.** The TypeScript takes `alarmPolicy` from the library's domain; the
@@ -59,6 +63,7 @@ from optionality.js import truthy as js_truthy
 from optionality.lifecycle import (
     ExpiringMonitor,
     expiry_verdict,
+    holds_without_quote,
     silence_verdict,
     unknown_contract_verdict,
     unreadable_notice,
@@ -433,6 +438,13 @@ class MonitorSweeper:
                 try:
                     monitor = to_monitor(row)
                     value = monitor_value(monitor, by_code)
+                    if value is None and holds_without_quote(monitor, by_code):
+                        # HELD (#380): every leg came back, one without a two-sided quote — moomoo's
+                        # 0/0 out of hours, IB Gateway's empty sides, the open quoting one leg first.
+                        # Neither evaluated nor counted: the bell, the figure and the last check stay
+                        # as the last quoted sweep left them, and nothing is said.
+                        self.silent_sweeps.pop(row["id"], None)
+                        continue
                     if value is None:
                         # the decision is `optionality.lifecycle.silence_verdict` (ADR 0017); this
                         # applies it

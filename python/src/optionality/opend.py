@@ -15,7 +15,7 @@ import re
 from collections.abc import Callable
 from typing import Any, Self
 
-from optionality.quote import Batch, Quote
+from optionality.quote import Batch, Quote, mid_price
 from optionality.quotes import verify_contracts
 
 #: moomoo rejects the WHOLE batch when any code is unknown, naming the culprit in its error text —
@@ -43,10 +43,12 @@ _sdk_connect: Callable[[str, int], Any] | None = _moomoo_connect
 
 
 def _with_mid(record: Quote) -> Quote:
-    # the mid is derived, not reported, and only when BOTH sides are there
-    bid, ask = record.get("bid_price"), record.get("ask_price")
-    if isinstance(bid, (int, float)) and isinstance(ask, (int, float)):
-        record["mid_price"] = (bid + ask) / 2
+    # the mid is derived, not reported, and only where there is a two-sided quote: both sides and an
+    # offer above zero. Out of hours moomoo quotes every option 0/0, and a mid of 0 valued the book
+    # at 0.00 (#380). The rule is the domain's, shared by every vendor in both languages.
+    mid = mid_price(record.get("bid_price"), record.get("ask_price"))
+    if mid is not None:
+        record["mid_price"] = mid
     return record
 
 
