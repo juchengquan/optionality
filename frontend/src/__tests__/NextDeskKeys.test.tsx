@@ -5,9 +5,9 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import type { HoldingWrites } from "../next/HoldingActions";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import type { HoldingWrites } from "../HoldingActions";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 const writes: HoldingWrites = { edited: () => {}, closed: () => {}, deleted: () => {} };

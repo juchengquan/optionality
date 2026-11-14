@@ -14,8 +14,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { commands, page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
-import { COLUMNS } from "../next/desk/columns";
+import { Next } from "../Next";
+import { COLUMNS } from "../desk/columns";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { settle } from "./nextBook";
 import { catchShare, CONTROLS, decode, forgetShare, placeIn, still } from "./picture";

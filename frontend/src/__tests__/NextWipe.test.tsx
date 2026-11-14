@@ -13,7 +13,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Monitor } from "../shared/api";
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage, type PageService } from "../testing/pageService";
 
 afterEach(() => {

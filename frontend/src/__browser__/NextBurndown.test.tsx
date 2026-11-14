@@ -8,9 +8,9 @@ import { cleanup, render } from "@testing-library/react";
 import { commands, page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
-import "../next/next.css";
+import "../next.css";
 import type { Holding, Samples } from "../shared/api";
-import { HoldingHistory } from "../next/History";
+import { HoldingHistory } from "../History";
 import { HOLDINGS, SAMPLES } from "../testing/ownerBook";
 import { overflowsSideways, settle, token } from "./nextBook";
 

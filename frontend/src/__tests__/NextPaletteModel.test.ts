@@ -3,9 +3,9 @@
  *  `NextPalette.test.tsx`, and every action reached with a real keyboard is the browser suite's. */
 import { describe, expect, it } from "vitest";
 
-import { tableRows, type DeskRow } from "../next/desk/columns";
-import { findables, isPaletteChord, matching, paletteActions, type Findable } from "../next/commands";
-import { placeBook } from "../next/placement";
+import { tableRows, type DeskRow } from "../desk/columns";
+import { findables, isPaletteChord, matching, paletteActions, type Findable } from "../commands";
+import { placeBook } from "../placement";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 

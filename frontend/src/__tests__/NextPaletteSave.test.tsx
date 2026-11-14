@@ -14,7 +14,7 @@ vi.mock("../shared/snapshot", async (orig) => ({
   deliver: (_blob: Blob, name: string) => { delivered.push(name); return Promise.resolve("downloaded"); },
 }));
 
-const { Next } = await import("../next/Next");
+const { Next } = await import("../Next");
 const { holdingService } = await import("../testing/holdingService");
 
 afterEach(() => {

@@ -10,10 +10,10 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Entry } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { PhoneBook } from "../next/phone/PhoneBook";
-import { ruleFigures, wholeMissing } from "../next/quotefigures";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { PhoneBook } from "../phone/PhoneBook";
+import { ruleFigures, wholeMissing } from "../quotefigures";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 afterEach(cleanup);

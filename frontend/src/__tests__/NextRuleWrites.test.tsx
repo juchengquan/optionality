@@ -6,13 +6,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { Added, Entry } from "../shared/api";
-import type { SpreadsBody } from "../next/add";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { ruleOfEntry } from "../next/edit";
-import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../next/MonitorEdit";
-import { Next } from "../next/Next";
-import { PhoneBook } from "../next/phone/PhoneBook";
+import type { SpreadsBody } from "../add";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { ruleOfEntry } from "../edit";
+import { MonitorActionsContext, MonitorControls, type MonitorActions } from "../MonitorEdit";
+import { Next } from "../Next";
+import { PhoneBook } from "../phone/PhoneBook";
 import { QUOTES } from "../testing/ownerBook";
 import { CONDOR, CS, serveRuleEdits, splitBook } from "../testing/ruleEdits";
 

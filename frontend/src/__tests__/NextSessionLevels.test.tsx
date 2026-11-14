@@ -12,11 +12,11 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Arrangement } from "../next/arrangement";
-import { charsOf, COLUMNS, type DeskRow } from "../next/desk/columns";
-import { levelWords, valuedClock } from "../next/levels";
-import { Next } from "../next/Next";
-import { Still } from "../next/snapshot/Still";
+import type { Arrangement } from "../arrangement";
+import { charsOf, COLUMNS, type DeskRow } from "../desk/columns";
+import { levelWords, valuedClock } from "../levels";
+import { Next } from "../Next";
+import { Still } from "../snapshot/Still";
 import type { Holding } from "../shared/api";
 import { payoffAnswer, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { until } from "../testing/until";

@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { holdingService } from "../testing/holdingService";
 
 const COOKIES = ["ui_arrangement", "ui_privacy", "ui_cols_combo", "ui_pricemap"];

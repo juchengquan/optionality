@@ -1,7 +1,7 @@
 /** The delta the service serves for each leg of a holding (#318), read by the desk and the phone. */
 import { describe, expect, it } from "vitest";
 
-import { legCode, servedDelta } from "../next/legs";
+import { legCode, servedDelta } from "../legs";
 import { HOLDINGS } from "../testing/ownerBook";
 
 describe("a leg's code", () => {

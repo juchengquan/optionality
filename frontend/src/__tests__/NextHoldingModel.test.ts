@@ -8,7 +8,7 @@ import { ClosePositionIn, PositionPatch } from "backend/schemas";
 import type { Holding, Monitor } from "../shared/api";
 import {
   aboutQuantities, closeBody, closeDay, correctedLegs, correctionBody, correctionWords, followersOf, editBody, editDraft, exitPrefill, fates, type Watching,
-} from "../next/holding";
+} from "../holding";
 
 const held = {
   id: "h1", name: "1218_P7150", strike_date: "2026-12-18", contracts: 2, entry: 1.5,

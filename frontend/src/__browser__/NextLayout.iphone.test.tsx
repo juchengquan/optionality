@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { longBook, overflowsSideways, serveBook, settle } from "./nextBook";
 
 async function show() {

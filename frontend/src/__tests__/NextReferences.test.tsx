@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SOURCES } from "backend/schemas";
 
 import type { Reference } from "../shared/api";
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage, SPX_REFERENCE as SPX, type PageService } from "../testing/pageService";
 
 afterEach(() => {

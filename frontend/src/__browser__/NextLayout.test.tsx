@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { commands, page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { contrast, oklab, overflowsSideways, serveBook, settle, token } from "./nextBook";
 
 const root = () => document.querySelector<HTMLElement>(".nx")!;

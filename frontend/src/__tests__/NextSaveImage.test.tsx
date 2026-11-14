@@ -26,8 +26,8 @@ vi.mock("../shared/snapshot", async (orig) => ({
   },
 }));
 
-const { useSaveImage } = await import("../next/snapshot/useSaveImage");
-const { Next } = await import("../next/Next");
+const { useSaveImage } = await import("../snapshot/useSaveImage");
+const { Next } = await import("../Next");
 
 /** A promise the test settles: the capture, held in flight. */
 function pending<T>() {

@@ -2,8 +2,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { servedWhen } from "../next/session";
-import { Still } from "../next/snapshot/Still";
+import { servedWhen } from "../session";
+import { Still } from "../snapshot/Still";
 import type { Reference } from "../shared/api";
 import { ReferenceStrip, referenceTitle } from "../shared/ReferenceStrip";
 

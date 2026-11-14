@@ -9,7 +9,7 @@ import { cdp, userEvent } from "@vitest/browser/context";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { overflowsSideways, settle } from "./nextBook";
 import type { Samples } from "../shared/api";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";

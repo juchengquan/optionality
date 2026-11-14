@@ -7,8 +7,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Holding, Monitor } from "../shared/api";
-import { HoldingActions } from "../next/HoldingActions";
-import { Next } from "../next/Next";
+import { HoldingActions } from "../HoldingActions";
+import { Next } from "../Next";
 import { holdingService, type HoldingService } from "../testing/holdingService";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 

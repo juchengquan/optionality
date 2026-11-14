@@ -8,7 +8,7 @@ import { SpreadsIn } from "backend/schemas";
 import {
   CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces,
   contractSaveWords, newContract, refusalSpot, thresholdFault, type ContractDraft,
-} from "../next/contract";
+} from "../contract";
 import type { Monitor } from "../shared/api";
 
 /** The New York trading day the form is opened on. */

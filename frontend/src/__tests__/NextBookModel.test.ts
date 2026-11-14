@@ -3,7 +3,7 @@
  *  THIS, so the phone cannot group the owner's book differently from the desk. */
 import { describe, expect, it } from "vitest";
 
-import { namesUnheldContract, overlapOf, placeBook } from "../next/placement";
+import { namesUnheldContract, overlapOf, placeBook } from "../placement";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 

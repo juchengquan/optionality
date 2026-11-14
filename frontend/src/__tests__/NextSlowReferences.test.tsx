@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Reference } from "../shared/api";
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { serveEditing } from "../testing/editBook";
 import { until } from "../testing/until";
 

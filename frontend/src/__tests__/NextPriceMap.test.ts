@@ -5,8 +5,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
-import { placeBook } from "../next/placement";
-import { bandWords, domainOf, priceMapOf, slotRows, spxOfBook, spxWords, ticksOf } from "../next/pricemap";
+import { placeBook } from "../placement";
+import { bandWords, domainOf, priceMapOf, slotRows, spxOfBook, spxWords, ticksOf } from "../pricemap";
 import { HOLDINGS, MONITORS, QUOTES, served } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 

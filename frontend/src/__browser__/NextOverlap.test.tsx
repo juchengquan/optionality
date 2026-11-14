@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 import { payoffAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";

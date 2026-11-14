@@ -10,8 +10,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { Next } from "../next/Next";
-import { beingOperated } from "../next/poll";
+import { Next } from "../Next";
+import { beingOperated } from "../poll";
 import { serveBook, settle } from "./nextBook";
 
 afterEach(() => { cleanup(); document.cookie = "ui_arrangement=;path=/;max-age=0"; });

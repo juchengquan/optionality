@@ -9,7 +9,7 @@ import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 

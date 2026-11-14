@@ -4,8 +4,8 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { Arrangement } from "../next/arrangement";
-import { Still } from "../next/snapshot/Still";
+import type { Arrangement } from "../arrangement";
+import { Still } from "../snapshot/Still";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 afterEach(cleanup);

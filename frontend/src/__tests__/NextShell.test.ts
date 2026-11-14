@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { arrangementFor, DESK_FROM } from "../next/arrangement";
-import { inSession, servedWhen, sessionEdge } from "../next/session";
+import { arrangementFor, DESK_FROM } from "../arrangement";
+import { inSession, servedWhen, sessionEdge } from "../session";
 
 describe("the measured width chooses the arrangement", () => {
   it("puts the cards on anything narrower than the desk and the terminal on the rest", () => {

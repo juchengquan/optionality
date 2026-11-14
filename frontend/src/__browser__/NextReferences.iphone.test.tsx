@@ -14,7 +14,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { overflowsSideways, settle } from "./nextBook";
 import { serveReferences, stripLines } from "./nextCarried";
 

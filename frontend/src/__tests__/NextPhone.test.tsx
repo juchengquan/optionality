@@ -8,10 +8,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { placeBook } from "../next/placement";
-import { PhoneBook } from "../next/phone/PhoneBook";
-import { Still } from "../next/snapshot/Still";
+import type { BookProps } from "../Book";
+import { placeBook } from "../placement";
+import { PhoneBook } from "../phone/PhoneBook";
+import { Still } from "../snapshot/Still";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 

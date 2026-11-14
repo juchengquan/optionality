@@ -8,7 +8,7 @@ import {
   addLeg, addSpread, contractCode, deltaEnabled, derivedName, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
   removeLeg, replaces, saveWords, setLeg, spreadsBody, stopWarning, valueDefault, valueEnabled, valueHint,
   type AddDraft, type SpreadDraft,
-} from "../next/add";
+} from "../add";
 import type { Monitor, Payoff } from "../shared/api";
 
 /** The condor the audit timed: two spreads on one expiry, each with its credit. */

@@ -10,14 +10,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { servePage } from "../testing/pageService";
 
 /** When set, the payoff chart of the watched spread `w-dec18` throws as it draws: a stand-in for
  *  any fault inside a detail, the boundary's subject. */
 const fault = vi.hoisted(() => ({ on: false }));
-vi.mock("../next/Payoff", async (orig) => {
-  const real = await orig<typeof import("../next/Payoff")>();
+vi.mock("../Payoff", async (orig) => {
+  const real = await orig<typeof import("../Payoff")>();
   return {
     ...real,
     WatchedPayoff: (props: Parameters<typeof real.WatchedPayoff>[0]) => {

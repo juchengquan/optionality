@@ -10,9 +10,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Holding, Vol } from "../shared/api";
-import type { BookProps } from "../next/Book";
-import { DeskBook } from "../next/desk/DeskBook";
-import { PhoneBook } from "../next/phone/PhoneBook";
+import type { BookProps } from "../Book";
+import { DeskBook } from "../desk/DeskBook";
+import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, VOLS } from "../testing/ownerBook";
 
 /** Every request the page made, as `METHOD path`. */

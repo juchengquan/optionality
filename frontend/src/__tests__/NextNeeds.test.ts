@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Entry, Health, Holding, Monitor } from "../shared/api";
-import { isEntrySignal, needsYou, sentence, toneOf } from "../next/needs";
+import { isEntrySignal, needsYou, sentence, toneOf } from "../needs";
 import { OVERLAP_HOLDINGS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const health = (over: Partial<{ ok: boolean; bad: boolean }> = {}) => ({

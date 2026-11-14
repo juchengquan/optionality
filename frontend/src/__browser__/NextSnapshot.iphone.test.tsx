@@ -8,7 +8,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Next } from "../next/Next";
+import { Next } from "../Next";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { settle } from "./nextBook";
 import { catchShare, CONTROLS, decode, forgetShare, placeIn, still } from "./picture";
