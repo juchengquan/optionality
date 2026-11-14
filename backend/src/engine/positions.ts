@@ -13,7 +13,10 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { daysToExpiry, marketDate, sampleTiming, takesSample } from "optionality/domain/expiry";
+import {
+  daysToExpiry, marketDate, sampleTiming, sessionClosedSince, takesSample,
+} from "optionality/domain/expiry";
+import { normalizeStrikeDate } from "optionality/domain/contract";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
 import { contractSize, costToClose, legReadings } from "optionality/domain/position";
 import { derivedSpx } from "optionality/domain/quote";
@@ -56,7 +59,9 @@ export interface PositionSweepDeps {
  *  session, from the holding's latest close as `/holdings` would value it (`closeOf`), with that
  *  close's day said beside the figure and its pace at that close's own DTE. Where neither gives a
  *  cost the notice is not sent and not stamped, and the next sweep asks again — in the session at
- *  the latest, where the batch prices it.
+ *  the latest, where the batch prices it. The wait is BOUNDED: once a whole session has closed since
+ *  the holding entered the window (`sessionClosedSince`) with still no cost, the notice goes without
+ *  its "now" line, stamped as usual, rather than never.
  */
 export async function noticeManageBy(
   deps: PositionSweepDeps,
@@ -73,17 +78,23 @@ export async function noticeManageBy(
       const live = costToClose(toPosition(row), byCode);
       const close = live === null ? closeOf(deps.db, row, at) : null;
       const cost = close === null ? live : close.cost_to_close;
-      // no cost yet: HELD, unsent and unstamped, until a sweep has one to say
-      if (cost === null) continue;
+      // no cost yet: HELD, unsent and unstamped, until a sweep has one to say — but not for ever: once
+      // a whole session has closed since the holding entered the window with still no price, a wait
+      // will not bring one, and it goes without its "now" line, as it did before #380
+      if (cost === null && !sessionClosedSince(windowEntered(row.strike_date, row.opened_at, settings.exitManageByDte), at)) continue;
       const pace = onPace(row.entry, dteAtOpen(row.strike_date, row.opened_at), close?.dte ?? dte);
 
       let line = `⏰ ${row.name} is at ${dte} DTE — manage by ${settings.exitManageByDte}`;
       if (row.entry !== null) line += `\nentry ${row.entry}`;
-      line += close === null ? ` · now ${cost.toFixed(2)}` : ` · ${cost.toFixed(2)} ${closeWords(close)}`;
+      if (cost !== null) {
+        line += close === null ? ` · now ${cost.toFixed(2)}` : ` · ${cost.toFixed(2)} ${closeWords(close)}`;
+      }
       if (pace !== null) {
-        const gap = cost - pace;
         line += `\non-pace ${pace.toFixed(2)}`;
-        line += ` — ${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
+        if (cost !== null) {
+          const gap = cost - pace;
+          line += ` — ${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
+        }
       }
       // stamped only once the notice has actually been delivered, so an undelivered one is
       // retried next sweep while a delivered one is never repeated. `notify` swallows a failed
@@ -95,6 +106,14 @@ export async function noticeManageBy(
       console.error(`manage-by notice for ${row.name} failed:`, err);
     }
   }
+}
+
+/** The New York market day a holding entered its manage-by window: the day its DTE reached the
+ *  manage-by DTE, or the day it was Opened where that was later (a trade put on inside the window). */
+function windowEntered(strikeDate: string, openedAt: string, manageByDte: number): string {
+  const reached = new Date(Date.parse(`${normalizeStrikeDate(strikeDate)}T00:00:00Z`) - manageByDte * 86_400_000)
+    .toISOString().slice(0, 10);
+  return openedAt > reached ? openedAt : reached;
 }
 
 /** Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's

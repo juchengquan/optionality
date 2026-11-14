@@ -339,6 +339,14 @@ export const OUTCOMES: readonly Outcome[] = [
       && s.world.tables.positions.some((p: Row) => p.opened_at !== null && p.manage_notified_at === null),
   },
   {
+    // ...but the wait is bounded: a whole session closed inside the window with still no cost, so
+    // it goes without its "now" line, and is stamped
+    name: "manage-by-notice-without-a-cost-after-a-session",
+    decision: "sessionClosedSince",
+    shows: (s) => said(s, /^⏰ /) && !said(s, / · /)
+      && changes(s, "positions").some((c) => c.to.manage_notified_at !== undefined),
+  },
+  {
     // ...and with a close stored, it is valued from that close, which it names
     name: "manage-by-notice-from-the-close",
     decision: "noticeManageBy",
@@ -374,4 +382,5 @@ export const NOT_A_DECISION: Readonly<Record<string, string>> = {
   legReadings: "arithmetic inside recordSamples",
   contractSize: "the size recordSamples stores beside a row's cost (#380)",
   sampleTiming: "the words noticeManageBy names a close's timing in (#380)",
+  normalizeStrikeDate: "reading the expiry noticeManageBy counts the manage-by window back from",
 };

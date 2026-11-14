@@ -26,10 +26,11 @@ import logging
 import math
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
+from optionality.contract import normalize_strike_date
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import days_to_expiry, market_date, sample_timing, takes_sample
+from optionality.expiry import days_to_expiry, market_date, sample_timing, session_closed_since, takes_sample
 from optionality.js import js_string, to_fixed
 from optionality.position import contract_size, cost_to_close, leg_readings
 from optionality.quote import ByCode, derived_spx
@@ -80,7 +81,9 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
     **Held until there is a Cost to close to say** (#380): valued from the sweep's own batch where that
     prices it, and otherwise, outside the session, from the holding's latest close (`close_of`), that
     close's day said beside the figure and its pace at that close's own DTE — and where neither gives a
-    cost the notice is not sent and not stamped, and the next sweep asks again.
+    cost the notice is not sent and not stamped, and the next sweep asks again. The wait is BOUNDED: once a
+    whole session has closed since the holding entered the window (`session_closed_since`) with still no
+    cost, the notice goes without its "now" line, stamped as usual, rather than never.
     """
     settings = deps.settings
     for row in rows:
@@ -96,7 +99,11 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
             close = close_of(deps.db, row, at) if live is None else None
             cost = live if close is None else close["cost_to_close"]
             # no cost yet: HELD, unsent and unstamped, until a sweep has one to say
-            if cost is None:
+            # — but not for ever: once a whole session has closed since the holding entered the window with
+            # still no price, it goes without its "now" line, as it did before #380
+            if cost is None and not session_closed_since(
+                _window_entered(row["strike_date"], row["opened_at"], settings.exit_manage_by_dte), at
+            ):
                 continue
             pace = on_pace(
                 row["entry"], dte_at_open(row["strike_date"], row["opened_at"]), dte if close is None else close["dte"]
@@ -105,11 +112,13 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
             line = f"⏰ {row['name']} is at {dte} DTE — manage by {settings.exit_manage_by_dte}"
             if row["entry"] is not None:
                 line += f"\nentry {js_string(row['entry'])}"
-            line += f" · now {_fixed(cost)}" if close is None else f" · {_fixed(cost)} {_close_words(close)}"
+            if cost is not None:
+                line += f" · now {_fixed(cost)}" if close is None else f" · {_fixed(cost)} {_close_words(close)}"
             if pace is not None:
-                gap = cost - pace
                 line += f"\non-pace {_fixed(pace)}"
-                line += f" — {'behind' if gap > 0 else 'ahead'} by {_fixed(abs(gap))}"
+                if cost is not None:
+                    gap = cost - pace
+                    line += f" — {'behind' if gap > 0 else 'ahead'} by {_fixed(abs(gap))}"
             # stamped only once the notice has actually been delivered, so an undelivered one is
             # retried next sweep while a delivered one is never repeated. `notify` swallows a failed
             # send and therefore cannot be relied on to raise — it reports instead.
@@ -117,6 +126,13 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
                 stamp_manage_notified(deps.db, row["id"], to_sql_datetime(at))
         except Exception:
             log.exception("manage-by notice for %s failed:", row["name"])
+
+
+def _window_entered(strike_date: str, opened_at: str, manage_by_dte: int) -> str:
+    """The New York market day a holding entered its manage-by window: the day its DTE reached the
+    manage-by DTE, or the day it was Opened where that was later."""
+    reached = (date.fromisoformat(normalize_strike_date(strike_date)) - timedelta(days=manage_by_dte)).isoformat()
+    return max(reached, opened_at)
 
 
 def _close_words(close: PositionSampleRow) -> str:

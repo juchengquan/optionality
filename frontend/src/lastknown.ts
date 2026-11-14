@@ -4,7 +4,8 @@
  *  serves a price rule no figure and the page draws a dash. A watched spread has no daily sample to
  *  fall back on as a holding has, so the page says instead what the sweep last read for the rule —
  *  `/monitors`' `last_value` — and when (`last_checked_at`), beside the dash and never in its place:
- *  "no figure out of session; last 3.05 at Fri 16:14". The bell and the fill bar are the service's
+ *  "no figure out of session; last 3.05 at Fri 13 Nov 16:14", on New York's clock as the
+ *  market-closed line names the close. The bell and the fill bar are the service's
  *  and are not drawn from it.
  *
  *  **Only a reading taken IN the session is shown.** Before #380's first part the sweep took a 0/0

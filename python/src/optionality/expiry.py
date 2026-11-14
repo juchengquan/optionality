@@ -170,6 +170,29 @@ class CloseCandidate(TypedDict):
     cost_to_close: float | None
 
 
+def _taken_in_session(observed_at: str | None) -> bool:
+    """Whether a stored row was observed IN New York's session — a weekday's 09:30-16:15 — and so is
+    that day's close: `sample_timing` says "close" by the hour alone, which a weekend row in those hours
+    also is. Mirrors `expiry.ts`."""
+    if observed_at is None or sample_timing(observed_at) != "close":
+        return False
+    when = _stored_instant(observed_at)
+    return when is not None and in_session(when)
+
+
+def session_closed_since(day: str, now: datetime) -> bool:
+    """Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after the
+    market day `day`, by `now`: what bounds the manage-by notice's wait for a Cost to close (#380 review).
+    Holidays are not detected. Mirrors `expiry.ts`."""
+    today = date.fromisoformat(market_date(now))
+    d = date.fromisoformat(normalize_strike_date(day))
+    while d <= today:
+        if d.weekday() < 5 and (d < today or _since_new_york_midnight(now) > _SAMPLE_UNTIL):
+            return True
+        d = d.fromordinal(d.toordinal() + 1)
+    return False
+
+
 def close_sample[R: CloseCandidate](samples: list[R]) -> R | None:
     """Which of a holding's stored rows it is valued from outside the session (#380, F6), or None.
 
@@ -184,7 +207,7 @@ def close_sample[R: CloseCandidate](samples: list[R]) -> R | None:
             continue
         if any_ is None or s["observed_on"] > any_["observed_on"]:
             any_ = s
-        if sample_timing(s["observed_at"]) == "close" and (close is None or s["observed_on"] > close["observed_on"]):
+        if _taken_in_session(s["observed_at"]) and (close is None or s["observed_on"] > close["observed_on"]):
             close = s
     return close if close is not None else any_
 

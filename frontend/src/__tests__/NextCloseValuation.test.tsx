@@ -85,7 +85,8 @@ describe("a watched rule out of hours (F8)", () => {
   it("says the sweep's last reading in the session, with its time, beside the dash", () => {
     const [e] = withLastKnown([rule], [stored(3.05, FRIDAY_CLOSE)], false);
     expect(e!.last_reading).toEqual({ value: 3.05, at: FRIDAY_CLOSE });
-    expect(sentence(e!)).toMatch(/^\|spread value\| ≥ 6\.01 — no figure out of session; last 3\.05 at (Sat 05:14|14 Nov 05:14)$/);
+    // on New York's clock, as the market-closed line names the same close: one clock on the page
+    expect(sentence(e!)).toBe("|spread value| ≥ 6.01 — no figure out of session; last 3.05 at Fri 13 Nov 16:14");
   });
 
   it("never presents a reading taken out of the session — the 0 a bid 0 / ask 0 once stored", () => {

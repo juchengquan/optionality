@@ -43,6 +43,20 @@ const NOVEMBER_QUOTES = {
   [nov("PUT", 6350)]: quote("SPXW 261127 6350P", 1.25, -0.08),
 };
 
+/** A condor on a Saturday expiry, 21 DTE on Saturday 14 November: its manage-by window opens that
+ *  day, so no session has closed inside it yet (#380). */
+const WEEKEND = "2026-12-05";
+const weekendLeg = (type: "CALL" | "PUT", strike: number) => buildSpxCode(WEEKEND, type, strike);
+const weekend = position({
+  id: "pos-wkd", name: "wkd-condor", strike_date: WEEKEND, opened_at: "2026-10-20",
+});
+const WEEKEND_QUOTES = {
+  [weekendLeg("CALL", 7300)]: quote("SPXW 261205 7300C", 1.75, 0.14),
+  [weekendLeg("CALL", 7350)]: quote("SPXW 261205 7350C", 1, 0.09),
+  [weekendLeg("PUT", 6400)]: quote("SPXW 261205 6400P", 2.5, -0.13),
+  [weekendLeg("PUT", 6350)]: quote("SPXW 261205 6350P", 1.5, -0.09),
+};
+
 /** A contract as moomoo answers it out of hours (#380): bid 0 / ask 0, so its mapping derives NO
  *  mid (`midPrice`); the greeks and the rest of the record as before. */
 const noBook = (q: Row): Row => {
@@ -604,10 +618,23 @@ export const SWEEP: readonly SweepInput[] = [
     world: world({ telegram: "down", tables: { positions: [november] }, provider: { quotes: NOVEMBER_QUOTES } }),
   },
   {
-    // #380: first inside the window out of hours, with every leg 0/0 and no close yet — the notice
-    // goes once, so it waits for a cost rather than going without one for good: not sent, not stamped
+    // #380: first inside the window out of hours — the window opened today, Saturday — with every leg
+    // 0/0 and no close yet: the notice goes once, so it waits for a cost rather than going without one
+    // for good. Not sent, not stamped
     name: "a manage-by notice waits for a cost rather than going without one",
     outcomes: ["manage-by-notice-held-without-a-cost", "sample-kept-with-an-empty-cost"],
+    world: world({
+      clock: SATURDAY_MIDNIGHT,
+      tables: { positions: [weekend] },
+      provider: { quotes: Object.fromEntries(Object.entries(WEEKEND_QUOTES).map(([c, q]) => [c, noBook(q)])) },
+    }),
+  },
+  {
+    // ...but not for ever: the November condor entered its window on Friday the 6th, and whole
+    // sessions have closed since with no price and no close. Waiting will not bring one, so it goes
+    // without its "now" line, as before #380, and is stamped
+    name: "a manage-by notice still without a cost after a whole session goes without one",
+    outcomes: ["manage-by-notice-without-a-cost-after-a-session", "sample-kept-with-an-empty-cost"],
     world: world({
       clock: SATURDAY_MIDNIGHT,
       tables: { positions: [november] },

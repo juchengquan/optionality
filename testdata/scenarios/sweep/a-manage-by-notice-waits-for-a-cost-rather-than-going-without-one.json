@@ -20,48 +20,48 @@
       "rejects": {},
       "unknown": [],
       "quotes": {
-        "US.SPXW261127C7300000": {
-          "name": "SPXW 261127 7300C",
+        "US.SPXW261205C7300000": {
+          "name": "SPXW 261205 7300C",
           "bid_price": 0,
           "ask_price": 0,
-          "last_price": 1.25,
-          "option_delta": 0.12,
+          "last_price": 1.75,
+          "option_delta": 0.14,
           "option_gamma": 0.00012,
           "option_theta": -0.85,
           "option_vega": 4.25,
           "option_implied_volatility": 14.5,
           "option_contract_size": 100
         },
-        "US.SPXW261127C7350000": {
-          "name": "SPXW 261127 7350C",
+        "US.SPXW261205C7350000": {
+          "name": "SPXW 261205 7350C",
           "bid_price": 0,
           "ask_price": 0,
-          "last_price": 0.75,
-          "option_delta": 0.08,
+          "last_price": 1,
+          "option_delta": 0.09,
           "option_gamma": 0.00012,
           "option_theta": -0.85,
           "option_vega": 4.25,
           "option_implied_volatility": 14.5,
           "option_contract_size": 100
         },
-        "US.SPXW261127P6350000": {
-          "name": "SPXW 261127 6350P",
+        "US.SPXW261205P6350000": {
+          "name": "SPXW 261205 6350P",
           "bid_price": 0,
           "ask_price": 0,
-          "last_price": 1.25,
-          "option_delta": -0.08,
+          "last_price": 1.5,
+          "option_delta": -0.09,
           "option_gamma": 0.00012,
           "option_theta": -0.85,
           "option_vega": 4.25,
           "option_implied_volatility": 14.5,
           "option_contract_size": 100
         },
-        "US.SPXW261127P6400000": {
-          "name": "SPXW 261127 6400P",
+        "US.SPXW261205P6400000": {
+          "name": "SPXW 261205 6400P",
           "bid_price": 0,
           "ask_price": 0,
-          "last_price": 2,
-          "option_delta": -0.11,
+          "last_price": 2.5,
+          "option_delta": -0.13,
           "option_gamma": 0.00012,
           "option_theta": -0.85,
           "option_vega": 4.25,
@@ -76,10 +76,10 @@
     "tables": {
       "positions": [
         {
-          "id": "pos-nov",
-          "name": "nov-condor",
+          "id": "pos-wkd",
+          "name": "wkd-condor",
           "strategy": "iron condor",
-          "strike_date": "2026-11-27",
+          "strike_date": "2026-12-05",
           "contracts": 1,
           "entry": 6.4,
           "legs": [
@@ -124,27 +124,27 @@
       "position_samples": {
         "added": [
           {
-            "position_id": "pos-nov",
+            "position_id": "pos-wkd",
             "observed_on": "2026-11-14",
-            "dte": 13,
+            "dte": 21,
             "cost_to_close": null,
             "legs_iv": {
-              "US.SPXW261127C7300000": 14.5,
-              "US.SPXW261127C7350000": 14.5,
-              "US.SPXW261127P6400000": 14.5,
-              "US.SPXW261127P6350000": 14.5
+              "US.SPXW261205C7300000": 14.5,
+              "US.SPXW261205C7350000": 14.5,
+              "US.SPXW261205P6400000": 14.5,
+              "US.SPXW261205P6350000": 14.5
             },
             "legs_vega": {
-              "US.SPXW261127C7300000": 4.25,
-              "US.SPXW261127C7350000": 4.25,
-              "US.SPXW261127P6400000": 4.25,
-              "US.SPXW261127P6350000": 4.25
+              "US.SPXW261205C7300000": 4.25,
+              "US.SPXW261205C7350000": 4.25,
+              "US.SPXW261205P6400000": 4.25,
+              "US.SPXW261205P6350000": 4.25
             },
             "legs_delta": {
-              "US.SPXW261127C7300000": 0.12,
-              "US.SPXW261127C7350000": 0.08,
-              "US.SPXW261127P6400000": -0.11,
-              "US.SPXW261127P6350000": -0.08
+              "US.SPXW261205C7300000": 0.14,
+              "US.SPXW261205C7350000": 0.09,
+              "US.SPXW261205P6400000": -0.13,
+              "US.SPXW261205P6350000": -0.09
             },
             "observed_at": "2026-11-14 05:00:15.000000",
             "spx": null,
@@ -156,10 +156,10 @@
     "calls": {
       "moomoo": [
         [
-          "US.SPXW261127C7300000",
-          "US.SPXW261127C7350000",
-          "US.SPXW261127P6350000",
-          "US.SPXW261127P6400000"
+          "US.SPXW261205C7300000",
+          "US.SPXW261205C7350000",
+          "US.SPXW261205P6350000",
+          "US.SPXW261205P6400000"
         ]
       ]
     }

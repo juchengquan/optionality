@@ -1004,6 +1004,15 @@ describe("the manage-by notice", () => {
     expect(notifiedAt(id)).toBeTruthy();
   });
 
+  it("holds it no longer than a whole session: still no cost after one, it goes without its now line (#380)", async () => {
+    // 01:00 New York on Thursday 1 October, at 19 DTE: the window opened on Tuesday the 29th at 21,
+    // and Tuesday's and Wednesday's sessions have closed since with no price and no close
+    const id = held("condor", daysFromNow(-26), 19);
+    await sweeper(priceless(19)).sweep();
+    expect(notices()).toEqual(["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]);
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
   it("in the session with no price, holds it whatever close is stored: the session's price is live (#380)", async () => {
     now = new Date("2026-10-01T15:00:00Z"); // 11:00 New York, Thursday
     const id = held("condor", daysFromNow(-24), 21);

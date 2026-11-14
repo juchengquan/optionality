@@ -231,11 +231,38 @@ export function closeSample<T extends CloseCandidate>(samples: readonly T[]): T 
   for (const s of samples) {
     if (s.cost_to_close === null) continue;
     if (any === null || s.observed_on > any.observed_on) any = s;
-    if (sampleTiming(s.observed_at) === "close" && (close === null || s.observed_on > close.observed_on)) {
-      close = s;
-    }
+    if (takenInSession(s.observed_at) && (close === null || s.observed_on > close.observed_on)) close = s;
   }
   return close ?? any;
+}
+
+/** Whether a stored row was observed IN New York's session — a weekday's 09:30–16:15 — and so is
+ *  that day's close. `sampleTiming` says "close" by the hour alone, which a weekend's or a holiday's
+ *  row in those hours also is: a Saturday noon reading carries Friday's close forward at best, and
+ *  must never beat Friday's own (#380 review). Holidays are not detected, as `inSession` does not. */
+function takenInSession(observedAt: string | null): boolean {
+  if (sampleTiming(observedAt) !== "close") return false;
+  return inSession(storedInstant(observedAt!)!);
+}
+
+/** Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after
+ *  the market day `day` (YYYY-MM-DD), by `now` (#380 review).
+ *
+ *  What bounds the manage-by notice's wait for a Cost to close: a holding inside its window with no
+ *  price at all through a session the market was open for is not going to get one by waiting, and
+ *  the notice is sent without its "now" line rather than never. A session still running, or a day
+ *  that is a weekend, has not closed. Holidays are not detected, as `inSession` does not detect them.
+ */
+export function sessionClosedSince(day: string, now: Date): boolean {
+  const today = marketDate(now);
+  const from = Date.parse(`${normalizeStrikeDate(day)}T00:00:00Z`);
+  const until = Date.parse(`${today}T00:00:00Z`);
+  for (let t = from; t <= until; t += 86_400_000) {
+    const weekday = new Date(t).getUTCDay();
+    if (weekday === 0 || weekday === 6) continue;
+    if (t < until || sinceNewYorkMidnight(now) > SAMPLE_UNTIL) return true;
+  }
+  return false;
 }
 
 /** The row a holding is valued from at `now`, or null to value it LIVE (#380).

@@ -17,10 +17,13 @@ import { HELP_TEXT, closedLine, fmtValue, standingNote, table } from "../format.
  *  and outside New York's session, valued from each holding's latest close, one line under the
  *  table saying which (#380). */
 export const holdings: Command = async (ctx) => {
+  // ONE instant for the figures and the line under them: read again after the Provider call, a reply
+  // begun at 16:14:59 would put a live table under "market closed" (#380 review)
+  const now = ctx.now();
   let valued;
   try {
     valued = await holdingValues(
-      ctx.db, ctx.fetchQuotes, ctx.now(), ctx.settings, ctx.settings.displayTz,
+      ctx.db, ctx.fetchQuotes, now, ctx.settings, ctx.settings.displayTz,
     );
   } catch (err) {
     return failed("Holdings", err);
@@ -36,7 +39,7 @@ export const holdings: Command = async (ctx) => {
   ]));
   // outside the session the figures are a close's, and the table keeps its four columns: the one
   // line under it says which close (#380)
-  return inSession(ctx.now()) ? reply : `${reply}\n${closedLine(valued.values)}`;
+  return inSession(now) ? reply : `${reply}\n${closedLine(valued.values)}`;
 };
 
 /** One contract's live figures, for a strike nothing watches. The reason `/spx/quote` could be

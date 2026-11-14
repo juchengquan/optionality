@@ -667,7 +667,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   not from the Provider, in `/positions/values` and the bot's `/holdings` alike (`holdings.ts`, #380;
   ADR 0023, amended 2026-11-14). moomoo quotes every option bid 0 / ask 0 out of hours, which is no
   price. `valuesFromClose` decides per holding: in the session always live; outside it the latest row
-  with a Cost to close taken in the hours (`closeSample`), else the latest with a cost of any timing,
+  with a Cost to close taken IN the session — a weekday's hours, so a weekend row is never "the
+  close" (`closeSample`) — else the latest with a cost of any timing,
   stated as such (`valued_timing`); a row summed before a quantity correction is no candidate; and a
   holding with no such row is valued live — a dash, never 0. Only the holdings valued live are asked
   for, so a book wholly valued from its closes makes NO market-data call. A close's Levels, schedule
@@ -677,9 +678,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `fetched_at` is the row's observed time, so the page's chips and market-closed line ("market
   closed — as of the close, Fri 13 Nov 16:14", New York's clock) and the bot's one line under its
   table say which close. The manage-by notice, sent once, is HELD until it has a cost to say: the
-  batch's, else out of the session the latest close's, named — never sent without one. The
+  batch's, else out of the session the latest close's, named — but at most until a whole weekday
+  session has closed inside the window (`sessionClosedSince`), after which it goes without its "now"
+  line, stamped. The
   watchlist has no close: out of the session the page says a price rule's last reading beside its
-  dash, and only one read IN the session (`frontend/src/lastknown.ts`), because a pre-#380 out-of-hours
+  dash, its time on New York's clock as the close's is, and only one read IN the session (`frontend/src/lastknown.ts`), because a pre-#380 out-of-hours
   reading may be a stored 0.
 - Combos: values are signed sums under the user's chosen leg signs; NO partial sums (any missing leg skips the
   combo); greeks are signed sums of the value; IV is never summed. A leg may carry a QUANTITY (`qty`, a whole

@@ -1,7 +1,7 @@
 import type { Entry, Health, Holding, Monitor } from "./shared/api";
 import { shortContract, shortDate } from "./shared/format";
 import { overlapOf } from "./placement";
-import { servedWhen } from "./session";
+import { newYorkWhen } from "./session";
 
 /** What needs you, for the page (ADR 0012, amended by ADR 0023).
  *
@@ -193,10 +193,11 @@ export function sentence(entry: Entry): string {
     : ruleWords(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
   const places = PLACES[entry.field] ?? 2;
   if (entry.watched === null) {
-    // out of the session, the sweep's last reading in it, with its time, beside the dash (#380)
+    // out of the session, the sweep's last reading in it, with its time, beside the dash (#380) — on
+    // New York's clock, as the market-closed line names the close, so the page states one clock
     const last = entry.last_reading;
     if (!last) return `${rule} — no figure`;
-    const when = servedWhen(last.at);
+    const when = newYorkWhen(last.at);
     return `${rule} — no figure out of session; last ${(cost ? -last.value : last.value).toFixed(places)}${when ? ` at ${when}` : ""}`;
   }
   const now = `now ${(cost ? -entry.watched : entry.watched).toFixed(places)}`;

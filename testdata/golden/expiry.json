@@ -1175,6 +1175,52 @@
     },
     {
       "fn": "closeSample",
+      "name": "a costed Saturday noon row is no close, and loses to Friday's",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 17:00:00.000000",
+            "cost_to_close": 3.1
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "a costed Saturday noon row alone is the fallback, not a close",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 10:00:00.000000",
+            "cost_to_close": 3.6
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 17:00:00.000000",
+            "cost_to_close": 3.1
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-14",
+        "observed_at": "2026-11-14 17:00:00.000000",
+        "cost_to_close": 3.1
+      }
+    },
+    {
+      "fn": "closeSample",
       "name": "no row with a cost",
       "args": [
         [
@@ -1194,6 +1240,72 @@
         []
       ],
       "expect": null
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "the same Monday, before its close",
+      "args": [
+        "2026-11-09",
+        {
+          "$date": "2026-11-09T21:15:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "the same Monday, a millisecond after its close",
+      "args": [
+        "2026-11-09",
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "since Saturday, by Monday noon",
+      "args": [
+        "2026-11-14",
+        {
+          "$date": "2026-11-16T17:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "since Saturday, by Monday after the close",
+      "args": [
+        "2026-11-14",
+        {
+          "$date": "2026-11-16T22:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "since Friday, by Saturday midnight",
+      "args": [
+        "2026-11-13",
+        {
+          "$date": "2026-11-14T05:00:15.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "a day still to come",
+      "args": [
+        "2026-11-20",
+        {
+          "$date": "2026-11-16T22:00:00.000Z"
+        }
+      ],
+      "expect": false
     },
     {
       "fn": "valuesFromClose",

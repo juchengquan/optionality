@@ -355,11 +355,17 @@ so the same valuation became dashes. This part says what the page shows instead.
   the close" and no time, so the page still states one clock for a valuation. The bot keeps its
   four columns and adds the same line under the table, outside the session only.
 - **The watchlist** has no samples to fall back on (F8). The service serves its dash; the page puts
-  the rule's last reading from `/monitors` beside it, with its time — "no figure out of session;
-  last 3.05 at Fri 05:14" — but only a reading taken IN the session: one read outside it may be the
+  the rule's last reading from `/monitors` beside it, with its time on New York's clock, as the
+  market-closed line says the close — "no figure out of session; last 3.05 at Fri 13 Nov 16:14" —
+  so the page states one clock for the close; and only a reading taken IN the session: one read outside it may be the
   0 a 0/0 quote stored before #380, and nothing else tells the two apart.
 - **The manage-by notice**, sent once, waits for a cost rather than going without one: the sweep's
-  batch, else outside the session the latest close, named in it.
+  batch, else outside the session the latest close, named in it. The wait is bounded: once a whole
+  weekday session has closed since the holding entered its window with still no cost, it goes
+  without its "now" line, as before, and is stamped.
+- **A close is a weekday's.** A row counts as a close only if it was observed in the session — a
+  weekday's 09:30–16:15 — so a priced Saturday-noon row (possible where a Provider quotes at the
+  weekend) never beats Friday's close; it is at most the fallback, stated by its timing.
 
 The page's refresh still values the book once more; outside the session that now re-reads the
 latest close, which changes only after the next session.

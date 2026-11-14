@@ -352,6 +352,13 @@ describe("closeSample — the row a holding is valued from outside the session (
     expect(closeSample([legacy])).toBe(legacy);
   });
 
+  it("calls no weekend row a close, though it was taken in the hours (#380 review)", () => {
+    // a Provider that prices at the weekend: Saturday noon's reading carries Friday forward at best
+    const saturdayNoon = row("2026-11-14", "2026-11-14 17:00:00.000000", 3.1);
+    expect(closeSample([fri, saturdayNoon])).toBe(fri);
+    expect(closeSample([saturdayNoon])).toBe(saturdayNoon); // the fallback, its timing stated
+  });
+
   it("is null where no row has a cost", () => {
     expect(closeSample([sat])).toBeNull();
     expect(closeSample([])).toBeNull();

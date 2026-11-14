@@ -1052,6 +1052,14 @@ class TestTheManageByNotice:
         assert "on-pace 4.80 — ahead by 0.40" in self.notices(b)[0]
         assert self.notified_at(b, id_)
 
+    async def test_holds_it_no_longer_than_a_whole_session_then_goes_without_its_now_line(self, b: Book) -> None:
+        # 01:00 New York on Thursday 1 October, at 19 DTE: the window opened on Tuesday the 29th at 21,
+        # and Tuesday's and Wednesday's sessions have closed since with no price and no close
+        id_ = self.held(b, "condor", b.days_from_now(-26), 19)
+        await b.sweeper(self.priceless(b, 19)).sweep()
+        assert self.notices(b) == ["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]
+        assert self.notified_at(b, id_)
+
     async def test_in_the_session_with_no_price_holds_it_whatever_close_is_stored(self, b: Book) -> None:
         b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # 11:00 New York, Thursday
         id_ = self.held(b, "condor", b.days_from_now(-24), 21)

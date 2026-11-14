@@ -39,8 +39,11 @@ async def holdings(ctx: BotContext, args: list[str]) -> str:
     worth saying about it. Four columns, inside forty characters, as every table reply here is — and
     outside New York's session, valued from each holding's latest close, one line under the table
     saying which (#380)."""
+    # ONE instant for the figures and the line under them: read again after the Provider call, a reply
+    # begun at 16:14:59 would put a live table under "market closed" (#380 review)
+    now = ctx.now()
     try:
-        valued = await holding_values(ctx.db, ctx.fetch_quotes, ctx.now(), ctx.settings, ctx.settings.display_tz)
+        valued = await holding_values(ctx.db, ctx.fetch_quotes, now, ctx.settings, ctx.settings.display_tz)
     except Exception as err:  # noqa: BLE001 — a Provider that is down is a sentence in the chat, never a silence
         return failed("Holdings", err)
     if not valued.values:
@@ -59,7 +62,7 @@ async def holdings(ctx: BotContext, args: list[str]) -> str:
     )
     # outside the session the figures are a close's, and the table keeps its four columns: the one line
     # under it says which close (#380)
-    return reply if in_session(ctx.now()) else f"{reply}\n{closed_line(valued.values)}"
+    return reply if in_session(now) else f"{reply}\n{closed_line(valued.values)}"
 
 
 async def snapshot(ctx: BotContext, args: list[str]) -> str:

@@ -303,7 +303,9 @@ a holding from its stored samples rather than the Provider's out-of-hours quote.
 this file's rows:
 
 - **Which row** (`closeSample`, `domain/expiry.ts`, cased and ported): the latest with a Cost to
-  close taken in 09:30–16:15 New York — the day's close, which is what the hours rule above makes it.
+  close taken IN the session, a weekday's 09:30–16:15 New York — the day's close, which is what the
+  hours rule above makes it. A weekend's or a holiday's row in those hours is not a close, though
+  `sampleTiming` names it one by the hour: at best it carries the last close forward.
   Where no row with a cost was taken in the hours — a trade recorded in New York's evening and not
   yet through a session — the latest with a cost of any timing, served with its `sampleTiming` so
   an evening's reading is never called a close. A costless row (a weekend's since #380) values
@@ -321,4 +323,7 @@ this file's rows:
 - **The manage-by notice** (above: "exactly one notice") is held until it has a cost to say — the
   sweep's batch, else outside the session the latest close, named in the notice with its pace at
   that row's DTE — because a notice that goes once without its "now" line goes without it for good.
+  The hold is bounded (`sessionClosedSince`): once a whole weekday session has closed since the
+  holding entered its window with still no cost, the notice goes without its "now" line, stamped,
+  rather than never.
 
