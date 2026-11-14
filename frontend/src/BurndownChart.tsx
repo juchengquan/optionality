@@ -37,7 +37,7 @@ import {
   CORRECTED_WORDS, correctionDte, costRuns, hasCost, NO_COST_NOW, noCostLines, noCostWords, nowLines, nowWords,
   sampleWords, say, textWidth, tipLines, valueAxis, type Unit,
 } from "./burndown";
-import { CrossTip, dayScale, pointedStop, usePanel, type Cross, type Gutters } from "./Crosshair";
+import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross, type Gutters } from "./Crosshair";
 import { MARK } from "./historyDays";
 
 const H = 196, T = 16, B = 22;
@@ -103,7 +103,7 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
   const x = dayScale(span, W, gutters);
   const y = scaleLinear<number>({ domain: [axis.lo, axis.hi], range: [H - B, T] });
   const xs = cross.stops.map((s) => x(s.dte));
-  const { svg: hands, onKeyDown } = usePanel(cross, box, xs, W);
+  const { svg: hands, onKeyDown, onFocus } = usePanel(cross, "burndown", box, xs, W);
 
   const level = (kind: "target" | "stop", v: number) => `${kind} ${say(v, unit)}`;
   const stop = axis.stop;
@@ -144,8 +144,8 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
     <>
       {/* ONE stop for the keyboard: the days are reached with the arrows and said by the status
           line, since inside an image they would be presentational and each a tab stop besides */}
-      <div className="nx-hist-chart nx-bd" ref={box} role="group" tabIndex={0} onKeyDown={onKeyDown}
-           aria-label={`cost to close by day, ${samples.length} days, against the plan: `
+      <div className="nx-hist-chart nx-bd" ref={box} role="group" tabIndex={0} onKeyDown={onKeyDown} onFocus={onFocus}
+           aria-label={`cost to close by day, ${stepped(cross)}, against the plan: `
              + "arrow keys move from day to day"}>
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" {...hands}>
           <defs>
@@ -301,7 +301,7 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
           </CrossTip>
         )}
       </div>
-      <p className="nx-hist-said" role="status">
+      <p className="nx-hist-said" role="status" aria-live={liveOf(cross, "burndown")}>
         {at ? sampleWords(at, unit) : atNow ? nowWords(atNow, unit) : bare ? noCostWords(bare)
           : onNow ? `valued now, ${pointed!.dte} DTE: ${NO_COST_NOW}`
           : (offClose ? "● in hours · ○ not the close · point at a day to see why"

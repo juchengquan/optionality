@@ -20,6 +20,10 @@ describe("the stops", () => {
     // SPX's price alone is a valuation to stop at: its panel has a figure
     expect(nowDte({ closed_on: null, dte: 38, cost_to_close: null, spx: 6900 })).toBe(38);
     expect(nowDte({ closed_on: null, dte: 38, cost_to_close: 4 })).toBe(38);
+    // out of the session the valuation IS the latest close (#380): that day is already a stop, and
+    // restated as "now" it was said twice (#399's review)
+    expect(nowDte({ closed_on: null, dte: 38, cost_to_close: 4, spx: 6900, valued_from: "close" })).toBeNull();
+    expect(nowDte({ closed_on: null, dte: 38, cost_to_close: 4, valued_from: "live" })).toBe(38);
   });
 });
 

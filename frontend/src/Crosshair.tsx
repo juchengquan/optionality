@@ -32,9 +32,20 @@ const SCRUB = 10;
 export interface Cross {
   stops: Stop[];
   pointed: number | null;
-  point: (at: number | null) => void;
+  /** the stop pointed at, and the panel that moved it */
+  point: (at: number | null, by: Panel) => void;
   plots: React.RefObject<Set<HTMLElement>>;
+  /** the panel being driven — focused, pointed into, or the last to move the crosshair. Its status
+   *  line alone is live: one key moves all three, and three polite regions said it three times
+   *  (#399's review) */
+  driver: Panel;
+  drive: (by: Panel) => void;
 }
+
+export type Panel = "burndown" | "iv" | "spx";
+
+/** A panel's status line's `aria-live`: polite for the panel being driven, off for the others. */
+export const liveOf = (cross: Cross, panel: Panel) => (cross.driver === panel ? "polite" : "off");
 
 /** The margins every panel of a holding shares (#298). */
 export interface Gutters {
@@ -47,14 +58,22 @@ export interface Gutters {
 export const dayScale = (span: number, W: number, { L, R }: Gutters) =>
   scaleLinear<number>({ domain: [span, 0], range: [L, W - R] });
 
+/** What the keys step through, for a panel's label: every recorded day, and the valuation after them. */
+export function stepped(cross: Cross): string {
+  const days = cross.stops.filter((s) => s.on !== null).length;
+  return `${days} day${days === 1 ? "" : "s"}${days < cross.stops.length ? " and today's valuation" : ""}`;
+}
+
 /** The stop pointed at, or null: an index left over from another set of stops is none. */
 export const pointedStop = (cross: Cross): Stop | null =>
   cross.pointed === null ? null : cross.stops[cross.pointed] ?? null;
 
 /** A panel's hands on the shared crosshair: the pointer's on its SVG and the keys' on its box, which
  *  it registers so a tap inside it is not "outside". */
-export function usePanel(cross: Cross, box: React.RefObject<HTMLDivElement | null>, xs: number[], W: number) {
-  const { pointed, point, plots } = cross;
+export function usePanel(cross: Cross, panel: Panel, box: React.RefObject<HTMLDivElement | null>, xs: number[],
+                         W: number) {
+  const { pointed, plots, drive } = cross;
+  const point = (at: number | null) => cross.point(at, panel);
   useLayoutEffect(() => {
     const el = box.current;
     const set = plots.current;
@@ -104,6 +123,8 @@ export function usePanel(cross: Cross, box: React.RefObject<HTMLDivElement | nul
     // the page took the touch — a scroll — so nothing the finger did chooses a day
     onPointerCancel: () => { touch.current = null; point(null); },
     onPointerLeave: (e: React.PointerEvent<SVGSVGElement>) => { if (e.pointerType === "mouse") point(null); },
+    // the panel a pointer is in is the one being driven, before it moves anything
+    onPointerEnter: () => drive(panel),
   };
   const onKeyDown = (e: React.KeyboardEvent) => {
     const next = stepDay(e.key, pointed, xs.length);
@@ -111,7 +132,9 @@ export function usePanel(cross: Cross, box: React.RefObject<HTMLDivElement | nul
     e.preventDefault();
     point(next === "clear" ? null : next);
   };
-  return { svg, onKeyDown };
+  // and so is the one focused, before a key moves anything: a region turned live in the same update
+  // as its text changes may not be announced
+  return { svg, onKeyDown, onFocus: () => drive(panel) };
 }
 
 /** A panel's readout: centred on its day, inside the panel, at the edge further from the points it

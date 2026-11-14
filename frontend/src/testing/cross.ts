@@ -2,4 +2,6 @@
  *  no stops, none pointed at. */
 import type { Cross } from "../Crosshair";
 
-export const stillCross = (): Cross => ({ stops: [], pointed: null, point: () => {}, plots: { current: new Set() } });
+export const stillCross = (): Cross => ({
+  stops: [], pointed: null, point: () => {}, plots: { current: new Set() }, driver: "burndown", drive: () => {},
+});

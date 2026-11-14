@@ -39,7 +39,7 @@ import { heldLeg, legText } from "./shared/format";
 import { Leg, SvgLeg } from "./shared/Legs";
 import { hasCost, scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
 import { Burndown, runsOf, useWidth } from "./BurndownChart";
-import { CrossTip, dayScale, pointedStop, usePanel, type Cross, type Gutters } from "./Crosshair";
+import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross, type Gutters, type Panel } from "./Crosshair";
 import { ivLines, ivWords, MARK, nowDte, stopsOf, type IvLeg } from "./historyDays";
 import { legCode } from "./legs";
 import { SpxPath, spxGutter } from "./SpxPath";
@@ -83,13 +83,14 @@ function isSamples(body: unknown): body is Samples {
  *  valued — today's figures. A closed holding (#296) is drawn from `GET /positions`, which carries
  *  none of them: no contract size, so its money is points per contract, and no "now". */
 export type Charted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">
-  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "spx" | "short_strikes">>;
+  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "spx" | "short_strikes" | "valued_from">>;
 
 /** The crosshair the three panels share (#395): the stop pointed at, kept under the holding it was
  *  pointed at in, so another holding drawn in the same place starts with none; and a tap outside
  *  every panel lets go of it. */
 function useCross(id: string, served: Samples | undefined, holding: Charted): Cross {
   const [at, setAt] = useState<{ id: string; i: number } | null>(null);
+  const [driver, drive] = useState<Panel>("burndown");
   const plots = useRef(new Set<HTMLElement>());
   const stops = stopsOf(served?.samples ?? [], nowDte(holding));
   const pointed = at !== null && at.id === id && at.i < stops.length ? at.i : null;
@@ -102,7 +103,10 @@ function useCross(id: string, served: Samples | undefined, holding: Charted): Cr
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
   }, [pointed]);
-  return { stops, pointed, point: (i) => setAt(i === null ? null : { id, i }), plots };
+  return {
+    stops, pointed, plots, driver, drive,
+    point: (i, by) => { drive(by); setAt(i === null ? null : { id, i }); },
+  };
 }
 
 export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy: boolean }) {
@@ -217,7 +221,7 @@ function IvChart({ served, holding, gutters, cross }: {
   const span = dteWindow(served);
   const scale = ivAxis(served, holding);
   const x = dayScale(span, W, gutters);
-  const { svg: hands, onKeyDown } = usePanel(cross, box, cross.stops.map((s) => x(s.dte)), W);
+  const { svg: hands, onKeyDown, onFocus } = usePanel(cross, "iv", box, cross.stops.map((s) => x(s.dte)), W);
   if (scale === null) return <p className="nx-meta">no IV recorded on any day</p>;
   const { legs, top, bottom, ticks, label } = scale;
   const { L, R } = gutters;
@@ -253,7 +257,8 @@ function IvChart({ served, holding, gutters, cross }: {
   return (
     <>
       <div className="nx-hist-chart nx-cross nx-iv" ref={box} role="group" tabIndex={0} onKeyDown={onKeyDown}
-           aria-label={`each leg's implied volatility by day, ${served.samples.length} days: arrow keys move from day to day`}>
+           onFocus={onFocus}
+           aria-label={`each leg's implied volatility by day, ${stepped(cross)}: arrow keys move from day to day`}>
         <svg width={W} height={IV_H} viewBox={`0 0 ${W} ${IV_H}`} aria-hidden="true" {...hands}>
           <rect data-plot="" x={L} y={T} width={Math.max(0, W - L - R)} height={IV_H - T - B} fill="none" />
           <g data-grid="">
@@ -296,7 +301,7 @@ function IvChart({ served, holding, gutters, cross }: {
           </CrossTip>
         )}
       </div>
-      <p className="nx-hist-said" role="status">
+      <p className="nx-hist-said" role="status" aria-live={liveOf(cross, "iv")}>
         {pointed === null ? "each leg's IV by day · point at a day for each leg's figure" : ivWords(pointed, ivLegs, name)}
       </p>
     </>

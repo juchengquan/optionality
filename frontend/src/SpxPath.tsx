@@ -26,14 +26,15 @@ import { spxRange, spxRuns, unrecorded } from "./spxdays";
 import { Leg, SvgLeg } from "./shared/Legs";
 import { textWidth } from "./burndown";
 import { useWidth } from "./BurndownChart";
-import { CrossTip, dayScale, pointedStop, usePanel, type Cross, type Gutters } from "./Crosshair";
-import { dayWords, MARK, spxLines, spxWords } from "./historyDays";
+import { CrossTip, dayScale, liveOf, pointedStop, usePanel, type Cross, type Gutters } from "./Crosshair";
+import { dayWords, MARK, nowDte, spxLines, spxWords } from "./historyDays";
 
 const H = 156, T = 10, B = 22;
 
 /** What it reads of a holding: its legs, and — only while held and valued — SPX now and its short
  *  strikes' distances from it. A closed holding (#296) has neither a valuation nor a "now". */
-type Charted = Pick<Holding, "legs" | "closed_on"> & Partial<Pick<Holding, "spx" | "dte" | "short_strikes">>;
+type Charted = Pick<Holding, "legs" | "closed_on">
+  & Partial<Pick<Holding, "spx" | "dte" | "short_strikes" | "valued_from">>;
 
 const namesOf = (holding: Pick<Holding, "legs">) => holding.legs.map((l) => legText(heldLeg(l), "name"));
 
@@ -51,15 +52,16 @@ export function SpxPath({ served, holding, span, gutters, cross }: {
 }) {
   const [box, W] = useWidth();
   const x = dayScale(span, W, gutters);
-  const { svg: hands, onKeyDown } = usePanel(cross, box, cross.stops.map((s) => x(s.dte)), W);
+  const { svg: hands, onKeyDown, onFocus } = usePanel(cross, "spx", box, cross.stops.map((s) => x(s.dte)), W);
   const runs = spxRuns(served.samples);
   const missing = unrecorded(served.samples);
   const gapWords = missing === 0 ? null
     : `${missing} day${missing === 1 ? "" : "s"} stored without SPX's price: a gap, never zero`;
   const strikes = holding.legs.map((l, i) => ({ i, strike: l.strike, side: l.side, type: l.option_type }));
-  const now = holding.closed_on === null && typeof holding.spx === "number" && holding.dte !== undefined
-    && holding.dte >= 0
-    ? { dte: holding.dte, spx: holding.spx } : null;
+  // SPX now, from a live valuation only: outside the session the valuation is the latest close
+  // restated (#380), whose day is drawn already (#399's review)
+  const now = nowDte(holding) !== null && typeof holding.spx === "number"
+    ? { dte: holding.dte!, spx: holding.spx } : null;
 
   if (runs.length === 0) {
     return (
@@ -100,6 +102,7 @@ export function SpxPath({ served, holding, span, gutters, cross }: {
     <section className="nx-hist" role="group" aria-label="SPX against the strikes">
       <h4 className="nx-hist-h">SPX against the strikes</h4>
       <div className="nx-hist-chart nx-cross nx-spxp" ref={box} role="group" tabIndex={0} onKeyDown={onKeyDown}
+           onFocus={onFocus}
            aria-label={`SPX's price by day against the strikes: ${said}${gapWords ? `; ${gapWords}` : ""}: `
              + "arrow keys move from day to day"}>
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true" {...hands}>
@@ -158,7 +161,7 @@ export function SpxPath({ served, holding, span, gutters, cross }: {
           </CrossTip>
         )}
       </div>
-      <p className="nx-hist-said" role="status">
+      <p className="nx-hist-said" role="status" aria-live={liveOf(cross, "spx")}>
         {pointed !== null ? spxWords(pointed, holding, name) : (
           <>
             {`${said}${now ? ` · now ${now.spx.toFixed(2)}` : ""}`}

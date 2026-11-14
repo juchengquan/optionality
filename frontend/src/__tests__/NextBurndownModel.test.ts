@@ -45,6 +45,11 @@ describe("which day a pointer means", () => {
   it("is no day when there are none", () => {
     expect(nearestDay([], 30)).toBeNull();
   });
+
+  it("is the LATER of two stops at one x: in session today's valuation shares today's sample's x (#399's review)", () => {
+    expect(nearestDay([0, 50, 100, 100], 99)).toBe(3);
+    expect(nearestDay([0, 50, 100, 100], 101)).toBe(3);
+  });
 });
 
 describe("which day a key moves to", () => {

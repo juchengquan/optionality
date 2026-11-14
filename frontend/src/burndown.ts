@@ -130,15 +130,17 @@ export function nowLines(now: { dte: number; cost: number }, unit: Unit) {
 /** What the burndown says of a day the shared crosshair stops on with no Cost to close (#380,
  *  #395): a row kept for its vol readings out of hours, which is a stop in every panel because the
  *  IV and SPX panels have its figures. */
-export const NO_COST_WORDS = "no Cost to close: recorded out of hours, with no two-sided quote to price it";
+export const NO_COST_WORDS = "no Cost to close: no two-sided quote to price it";
 
-/** Such a day, line by line, as `tipLines` says a priced one. */
+/** Such a day, line by line, as `tipLines` says a priced one — and no word about its timing: a
+ *  weekend row at 11:00 New York is "in hours" by the sweep's every-day rule (ADR 0011) while no leg
+ *  had a quote to price, and said together the two contradicted each other (#399's review). */
 export function noCostLines(s: Sample) {
-  return { day: `${dayWords(s.observed_on)} · ${s.dte} DTE`, cost: NO_COST_WORDS, why: whyShort(s) };
+  return { day: `${dayWords(s.observed_on)} · ${s.dte} DTE`, cost: NO_COST_WORDS, why: null };
 }
 
 /** Such a day said in full, by the status line. */
-export const noCostWords = (s: Sample) => `${dayWords(s.observed_on)} · ${s.dte} DTE · ${NO_COST_WORDS} — ${whyWords(s)}`;
+export const noCostWords = (s: Sample) => `${dayWords(s.observed_on)} · ${s.dte} DTE · ${NO_COST_WORDS}`;
 
 /** Today's valuation with no Cost to close — a stop for SPX's price alone. */
 export const NO_COST_NOW = "no Cost to close now";
@@ -190,11 +192,13 @@ export function costRuns<T extends { dte: number; before_correction: boolean }>(
 }
 
 /** The day whose x is nearest the pointer's: what a pointer anywhere on the chart means, since days
- *  a few pixels apart cannot each have a finger's width of their own. Null with no days. */
+ *  a few pixels apart cannot each have a finger's width of their own. Of two at one x the LATER:
+ *  in session today's valuation shares today's sample's x, and the earlier would hide it from every
+ *  pointer for good (the keys reach both). Null with no days. */
 export function nearestDay(xs: number[], at: number): number | null {
   if (xs.length === 0) return null;
   let best = 0;
-  xs.forEach((x, i) => { if (Math.abs(x - at) < Math.abs(xs[best]! - at)) best = i; });
+  xs.forEach((x, i) => { if (Math.abs(x - at) <= Math.abs(xs[best]! - at)) best = i; });
   return best;
 }
 
@@ -224,13 +228,15 @@ interface Valued {
   closed_on: string | null;
   cost_to_close?: number | null;
   dte?: number;
+  valued_from?: "live" | "close";
 }
 
-/** Today's valuation, from the book's latest one (polled in session, read once outside it): drawn
- *  apart from the closes, and only while held. */
+/** Today's valuation, from the book's latest one (polled in session): drawn apart from the closes,
+ *  and only while held. None outside the session, where the valuation IS the latest close (#380) —
+ *  already a day of the chart, and drawn again as "now" it was said twice (#399's review). */
 function nowOf(holding: Valued) {
-  return holding.closed_on === null && holding.cost_to_close != null && holding.dte !== undefined
-    && holding.dte >= 0 ? { dte: holding.dte, cost: holding.cost_to_close } : null;
+  return holding.closed_on === null && holding.valued_from !== "close" && holding.cost_to_close != null
+    && holding.dte !== undefined && holding.dte >= 0 ? { dte: holding.dte, cost: holding.cost_to_close } : null;
 }
 
 /** The burndown's value axis: fitted to the days, the plan, the Target and today — 0 always in it —

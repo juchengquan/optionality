@@ -1021,9 +1021,8 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
     hover(iv, xOf(iv, 43));
     expect(all.map(crossed)).toEqual(["2026-11-05", "2026-11-05", "2026-11-05"]);
     expect(burndown.querySelector("[data-crosshair]")!.hasAttribute("data-bare")).toBe(true);
-    expect(tipText(burndown)).toEqual(["5 Nov · 43 DTE",
-      "no Cost to close: recorded out of hours, with no two-sided quote to price it"]);
-    expect(said(burndown)).toMatch(/^5 Nov · 43 DTE · no Cost to close: recorded out of hours/);
+    expect(tipText(burndown)).toEqual(["5 Nov · 43 DTE", "no Cost to close: no two-sided quote to price it"]);
+    expect(said(burndown)).toBe("5 Nov · 43 DTE · no Cost to close: no two-sided quote to price it");
     expect(tipText(iv)[1]).toBe("−C7300 12.75%");
   });
 
@@ -1076,5 +1075,63 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
     const rule = (panel: HTMLElement) => Number(panel.querySelector("[data-crosshair] line")!.getAttribute("x1"));
     const day = Number(burndown.querySelector("[data-sample='2026-11-04'] circle")!.getAttribute("cx"));
     expect([rule(burndown), rule(iv), rule(spx)]).toEqual([day, day, day]);
+  });
+
+  it("keeps only the panel being driven live: one key, one announcement (#399's review)", async () => {
+    const { all } = await panelsOf();
+    const live = () => all.map((p) => within(p).getByRole("status").getAttribute("aria-live"));
+    for (const [i, panel] of all.entries()) {
+      fireEvent.keyDown(keysOf(panel), { key: "ArrowRight" });
+      expect(live()).toEqual(all.map((_, j) => (j === i ? "polite" : "off")));
+    }
+    // a pointer drives too
+    hover(all[1]!, Number(all[0]!.querySelector("[data-sample='2026-11-05'] circle")!.getAttribute("cx")));
+    expect(live()).toEqual(["off", "polite", "off"]);
+  });
+
+  it("says a costless day has no Cost to close and nothing about the hours that contradicts it", async () => {
+    // a Saturday's row at 11:00 New York (#380): the sweep's hours run every calendar day, but no
+    // leg has a two-sided quote on a weekend, so the day is kept for its vol with no price
+    const days = SAMPLES["h-calls"]!.samples.map((s) => (s.observed_on !== "2026-11-07" ? s
+      : { ...s, cost_to_close: null, timing: "close" as const, observed_at: "2026-11-08 00:00:00+08:00" }));
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
+    const { burndown, iv, all } = await panelsOf();
+    hover(iv, xOf(iv, 41));
+    expect(all.map(crossed)).toEqual(["2026-11-07", "2026-11-07", "2026-11-07"]);
+    expect(said(burndown)).toBe("7 Nov · 41 DTE · no Cost to close: no two-sided quote to price it");
+    expect(tipText(burndown)).toEqual(["7 Nov · 41 DTE", "no Cost to close: no two-sided quote to price it"]);
+    expect(burndown.textContent).not.toMatch(/hours/);
+  });
+
+  it("has no 'now' stop outside the session, where the valuation is the latest close restated", async () => {
+    const closed = HOLDINGS.map((h) => (h.id !== "h-calls" ? h
+      : { ...h, valued_from: "close", valued_on: "2026-11-09", valued_timing: "close" }) as Holding);
+    const { burndown, spx, all } = await panelsOf("h-calls", "1218_C7300", { holdings: closed });
+    fireEvent.keyDown(keysOf(spx), { key: "End" });
+    expect(all.map(crossed)).toEqual(["2026-11-09", "2026-11-09", "2026-11-09"]);
+    // neither the burndown's diamond nor SPX's: they would draw the 9th's close again at today's DTE
+    expect(burndown.querySelector("[data-now]")).toBeNull();
+    expect(spx.querySelector("[data-spx-now]")).toBeNull();
+    expect(said(spx)).not.toMatch(/now/);
+  });
+
+  it("names on its keys' group how many stops they step: every recorded day, and the valuation", async () => {
+    const days = SAMPLES["h-calls"]!.samples.map((s) => (s.observed_on === "2026-11-05" ? { ...s, cost_to_close: null } : s));
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
+    const { burndown } = await panelsOf();
+    expect(keysOf(burndown).getAttribute("aria-label")).toMatch(/^cost to close by day, 7 days and today's valuation/);
+  });
+
+  it("reaches today's valuation with a pointer where today's sample shares its x, in session", async () => {
+    // a sample written today at 38 DTE, and the live valuation at 38 DTE: one x, two stops
+    const days = [...SAMPLES["h-calls"]!.samples, { ...SAMPLES["h-calls"]!.samples.at(-1)!, observed_on: "2026-11-10", dte: 38 }];
+    serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
+    const { burndown, all } = await panelsOf();
+    const x = Number(burndown.querySelector("[data-sample='2026-11-10'] circle")!.getAttribute("cx"));
+    hover(burndown, x);
+    expect(all.map(crossed)).toEqual(["now", "now", "now"]);
+    // and the keys still reach the day before it
+    fireEvent.keyDown(keysOf(burndown), { key: "ArrowLeft" });
+    expect(all.map(crossed)).toEqual(["2026-11-10", "2026-11-10", "2026-11-10"]);
   });
 });

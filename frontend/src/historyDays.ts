@@ -34,12 +34,17 @@ export interface Stop {
 }
 
 /** What the panels read of a holding for today's valuation: only while it is held and valued. */
-export type Valued = Pick<Holding, "closed_on"> & Partial<Pick<Holding, "dte" | "cost_to_close" | "spx" | "short_strikes">>;
+export type Valued = Pick<Holding, "closed_on">
+  & Partial<Pick<Holding, "dte" | "cost_to_close" | "spx" | "short_strikes" | "valued_from">>;
 
-/** Today's valuation's DTE, while it is held and valued with a Cost to close or SPX's price; null
- *  for a closed trade, which has no "now". */
+/** Today's valuation's DTE, while it is held and valued live with a Cost to close or SPX's price.
+ *  Null for a closed trade, which has no "now"; and outside the session, where the valuation is the
+ *  latest close restated (`valued_from: "close"`, #380) — a day the stops already have, which as
+ *  "now" too was said twice (#399's review). */
 export function nowDte(holding: Valued): number | null {
-  if (holding.closed_on !== null || holding.dte === undefined || holding.dte < 0) return null;
+  if (holding.closed_on !== null || holding.valued_from === "close" || holding.dte === undefined || holding.dte < 0) {
+    return null;
+  }
   return holding.cost_to_close != null || typeof holding.spx === "number" ? holding.dte : null;
 }
 
