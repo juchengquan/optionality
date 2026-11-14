@@ -30,7 +30,7 @@ function serveOverlap(quotes: object[] = OVERLAP_QUOTES, holdings: object[] = OV
       return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({ detail: "refused" }) });
     }
     const path = String(url).replace(/^.*\/api/, "");
-    // REVIEW's samples (#295), a read: none recorded yet, rather than a list that is not one
+    // a holding's samples (#295), a read: none recorded yet, rather than a list that is not one
     if (/\/samples$/.test(path)) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(SAMPLES) });
     }
@@ -61,8 +61,6 @@ describe.each([900, 1280, 2560])("on a %ipx desk", (width) => {
     serveOverlap();
     render(<Next />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
-    await settle();
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("desk");
     const watchlist = screen.getByRole("region", { name: "Watchlist" });
     const table = document.querySelector<HTMLElement>(".nxd-table")!;
@@ -85,8 +83,6 @@ it("says the note in the inspector, which stays inside the page", async () => {
   serveOverlap();
   render(<Next />);
   await settle();
-  fireEvent.click(screen.getByRole("button", { name: "Live" }));
-  await settle();
   fireEvent.click(within(rowOf("r-8100")).getByRole("button", { name: "1231_8100" }));
   await settle();
   const insp = screen.getByRole("complementary", { name: "inspector: 1231_8100" });
@@ -105,8 +101,6 @@ it("wraps a note too long for the table rather than widening it or cutting it, i
   await page.viewport(900, 900);
   serveOverlap(quotes, holdings);
   render(<Next />);
-  await settle();
-  fireEvent.click(screen.getByRole("button", { name: "Live" }));
   await settle();
   fireEvent.click(within(rowOf("w-7700")).getByRole("button", { name: "1231_C7700" }));
   await settle();

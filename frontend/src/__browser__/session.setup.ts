@@ -1,10 +1,11 @@
 /** Every browser test starts IN New York's session, at a pinned instant (#371).
  *
- *  Since #371 what the page fetches and draws follows the session rather than the mode on screen:
- *  outside it the References strip carries a time on every reading, the market-closed line is
- *  drawn above the book, and a Level's chip says when it was valued. This suite used to read the
- *  machine's real clock and pick a mode by hand, which was enough while the mode decided; with the
- *  session deciding, the same test would measure a different page at 11:00 and at 21:00 New York.
+ *  Since #371 what the page fetches, and the few words that say when a figure was read, follow the
+ *  session: outside it the References strip carries a time on every reading, the market-closed
+ *  line is drawn above the book, and a Level's chip says when it was valued. This suite used to
+ *  read the machine's real clock and pick a view by hand, which was enough while that switch
+ *  decided; with the session deciding (and since #375 no switch at all), the same test would
+ *  measure a different page at 11:00 and at 21:00 New York.
  *  So the clock is pinned here, and a test that measures the page outside the session pins its own
  *  with `vi.setSystemTime`. Only `Date`: the suite's timers stay real. */
 import { afterEach, beforeEach, vi } from "vitest";

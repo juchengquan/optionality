@@ -35,7 +35,7 @@ afterEach(() => {
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
+    session: true, privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -103,14 +103,14 @@ describe("the panel", () => {
     expect(map.querySelectorAll("[data-spread]")).toHaveLength(6);
   });
 
-  it("says which batch its line is from, and in REVIEW that it is as last valued", () => {
+  it("says which batch its line is from, and outside the session that it is as last valued", () => {
     const at = "2026-11-10 23:14:35+08:00";
     const holdings = HOLDINGS.map((h) => ({ ...h, spx: 6911.25, fetched_at: at }));
     const view = render(<DeskBook {...props({ holdings })} />);
     let map = open();
     expect(within(map).getByText("SPX 6911.25 · from the holdings' batch, 23:14:35")).toBeTruthy();
     view.unmount();
-    render(<DeskBook {...props({ holdings, mode: "review" })} />);
+    render(<DeskBook {...props({ holdings, session: false })} />);
     map = panel()!;
     expect(within(map).getByText("SPX 6911.25 · as last valued, 23:14:35")).toBeTruthy();
   });

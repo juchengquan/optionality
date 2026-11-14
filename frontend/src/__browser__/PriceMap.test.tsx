@@ -43,7 +43,7 @@ function serve(): void {
     const path = String(url).replace(/^.*\/api/, "");
     const method = init?.method ?? "GET";
     const ok = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
-    // the payoff (POST for a draft, GET for a holding) and REVIEW's samples: reads, answered
+    // the payoff (POST for a draft, GET for a holding) and a holding's samples: reads, answered
     const read = payoffAnswer(path) ?? samplesAnswer(path) ?? volAnswer(path);
     if (read) return ok(read);
     if (method === "GET") {
@@ -60,12 +60,10 @@ function serve(): void {
   }) as unknown as typeof fetch;
 }
 
-async function show(width: number, mode: "Live" | "Review" = "Live") {
+async function show(width: number) {
   await page.viewport(width, 1000);
   serve();
   render(<Next />);
-  await settle();
-  fireEvent.click(screen.getByRole("button", { name: mode }));
   await settle();
 }
 
@@ -197,7 +195,7 @@ describe("the price map panel", () => {
     await page.viewport(2560, 1000);
     document.cookie = "ui_price_map=open;path=/";
     const book = { quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-      mode: "live" as const, session: true, privacy: false, entryStyle: "opportunity" as const };
+      session: true, privacy: false, entryStyle: "opportunity" as const };
     const view = render(<DeskBook {...book} quotes={[]} holdings={[]} />);
     await settle();
     view.rerender(<DeskBook {...book} />);
@@ -232,14 +230,14 @@ describe("the price map panel", () => {
 });
 
 /** A Sunday, 12:00 New York: outside the session, where the inspector's history starts open
- *  whichever mode is on screen (#372). In session it starts shut. */
+ *  (#372). In session it starts shut. */
 const OUTSIDE_THE_SESSION = new Date("2026-11-15T17:00:00Z");
 
 describe("where SPX was against the strikes, in the inspector outside the session", () => {
   beforeEach(() => { vi.setSystemTime(OUTSIDE_THE_SESSION); });
   for (const width of [900, 1280, 2560]) {
     it(`at ${width}px, keeps its labels inside it and apart, for a spread and a 4-leg condor`, async () => {
-      await show(width, "Review");
+      await show(width);
       for (const id of ["h-puts", "h-ic"]) {
         fireEvent.click(within(rowOf(id)).getByRole("button", { name: /./ }));
         await settle();
@@ -263,7 +261,7 @@ describe("the history's three charts share their plot", () => {
     it(`at ${width}px${privacy ? ", privacy on" : ""}, put a day at the same x in each`, async () => {
       if (privacy) document.cookie = "ui_privacy=on;path=/";
       try {
-        await show(width, "Review");
+        await show(width);
         fireEvent.click(within(rowOf("h-puts")).getByRole("button", { name: /./ }));
         await settle();
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;

@@ -1,12 +1,13 @@
-/** The redesigned page's decisions that are not drawing: which arrangement, which mode (ADR 0023).
+/** The redesigned page's decisions that are not drawing: which arrangement, and whether New York's
+ *  session is open (ADR 0023, amended 2026-11-13: one page, by the session).
  *
- *  Both are state, not routes (ADR 0005), and both have a default that can be overridden — so
- *  each is a pure function of what was measured and what was chosen, tested here without a page.
+ *  The arrangement is state, not a route (ADR 0005), with a default that can be overridden; the
+ *  session is the clock's alone. Each is a pure function of what was measured or chosen, tested
+ *  here without a page.
  */
 import { describe, expect, it } from "vitest";
 
 import { arrangementFor, DESK_FROM } from "../next/arrangement";
-import { clockMode } from "../next/mode";
 import { inSession, servedWhen, sessionEdge } from "../next/session";
 
 describe("the measured width chooses the arrangement", () => {
@@ -29,7 +30,7 @@ describe("the measured width chooses the arrangement", () => {
 
 /** The session as the options trade it: 09:30 to 16:15 New York, Monday to Friday. Instants are
  *  written in UTC, so each test states the conversion rather than leaning on the machine's zone. */
-describe("the clock chooses the mode", () => {
+describe("the clock says whether the session is open", () => {
   const at = (iso: string) => new Date(iso);
 
   it("is in session from the 09:30 open to the 16:15 options close, in winter", () => {
@@ -64,12 +65,6 @@ describe("the clock chooses the mode", () => {
   it("reads New York's day, not UTC's: Monday evening in New York is Tuesday in UTC", () => {
     // 2026-11-10T01:00Z is Monday 20:00 EST — after the close, though UTC already says Tuesday
     expect(inSession(at("2026-11-10T01:00:00Z"))).toBe(false);
-  });
-
-  it("is LIVE in the session and REVIEW outside it", () => {
-    expect(clockMode(at("2026-11-09T15:00:00Z"))).toBe("live");
-    // 21:00 in Singapore, before the open: the ADR's own example of when the override is needed
-    expect(clockMode(at("2026-11-09T13:00:00Z"))).toBe("review");
   });
 });
 

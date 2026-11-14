@@ -273,8 +273,8 @@ const ALARM: DeskColumn = {
 };
 
 /** The columns, in the order they are DRAWN: one set at every hour (ADR 0023, amended 2026-11-13:
- *  one page, by the session; #372). What was LIVE's, with the pace gap beside P&L and captured,
- *  where a reader compares it. */
+ *  one page, by the session; #372): the set the desk drew in session before then, with the pace
+ *  gap moved beside P&L and captured, where a reader compares it. */
 export const COLUMNS: readonly DeskColumn[] = [
   NAME, LEGS, VALUE, PNL, CAPTURED, PACE_GAP, DELTA, STRIP, DTE, MANAGE, ALARM,
 ];
@@ -283,7 +283,8 @@ export const COLUMNS: readonly DeskColumn[] = [
  *  pace" beside the pace gap, which no longer has a column of its own. */
 export const FIGURES: readonly DeskColumn[] = COLUMNS.flatMap((c) => c === PACE_GAP ? [ON_PACE, c] : [c]);
 
-/** Keys the desk once drew and no longer does (#372): REVIEW's "on pace" and "DTE → manage-by".
+/** Keys the desk once drew outside the session and no longer does (#372): "on pace" and "DTE →
+ *  manage-by".
  *  A viewer who hid one keeps it in the column cookie, where it hides nothing; the picker's reset
  *  clears them with the desk's own. */
 export const RETIRED_KEYS: readonly string[] = ["on_pace", "to_manage"];
@@ -294,7 +295,8 @@ export const PINNED = "name";
  *  (ADR 0008): fitting stops at the first column that does not fit, so a wide column early on
  *  would starve every column behind it. The rule's sentence is the widest, and when it drops the
  *  fill bar moves into the name cell and the inspector still says it whole. The pace gap survives
- *  DTE: it is the figure REVIEW was opened for, and DTE is in each expiry's heading anyway. */
+ *  DTE: it is the figure a holding is looked at after the close for, and DTE is in each expiry's
+ *  heading anyway. */
 export const PRIORITY: readonly string[] = [
   "value", "pnl", "delta", "pace_gap", "dte", "manage", "strip", "captured", "legs", "alarm",
 ];

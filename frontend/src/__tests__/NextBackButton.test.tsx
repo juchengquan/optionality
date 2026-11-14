@@ -7,7 +7,7 @@
  *
  *  Every sheet the page opens over itself: the phone's detail and Add sheets, and the desk's
  *  Settings. (The desk's add panel and inspector are not sheets: they sit in the page, and Back is
- *  not theirs.) The journal's trade sheet in REVIEW is `NextJournal`'s.
+ *  not theirs.) The journal's trade sheet is `NextJournal`'s.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -54,7 +54,7 @@ const SHEETS = [
 
 async function show(arrangement: "phone" | "desk") {
   servePage();
-  // 10:00 New York on a Tuesday: LIVE, where the phone draws its cards
+  // 10:00 New York on a Tuesday: in session
   vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") });
   if (arrangement === "desk") document.cookie = "ui_arrangement=desk;path=/";
   render(<Next />);

@@ -63,7 +63,7 @@ const scheduled: Holding[] = HOLDINGS.map((h) =>
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: scheduled, holdingsError: null, holdingsAt: null,
-    mode: "review", session: (over.mode ?? "review") === "live", privacy: false, entryStyle: "opportunity", ...over,
+    session: false, privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -235,14 +235,14 @@ describe("the pace explained, in the desk's inspector", () => {
     expect(pace.textContent).toContain("opened at 45 DTE");
   });
 
-  it.each(["live", "review"] as const)("reads it once and never polls it, in %s", async (mode) => {
+  it.each([true, false])("reads it once and never polls it, in session: %s", async (session) => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const view = render(<DeskBook {...props({ mode })} />);
+    const view = render(<DeskBook {...props({ session })} />);
     await splitOf(inspect("h-puts", "1218_P6400"));
     // the figures move as polls and refreshes deliver them, and time passes: nothing more is asked
     for (const pnl of [90, 80, 70]) {
       const moved = scheduled.map((h) => ({ ...h, pnl }));
-      view.rerender(<DeskBook {...props({ mode, holdings: moved })} />);
+      view.rerender(<DeskBook {...props({ session, holdings: moved })} />);
       await act(async () => { vi.advanceTimersByTime(60_000); });
     }
     expect(volAsked()).toEqual(["GET /positions/h-puts/vol"]);
@@ -298,7 +298,7 @@ describe("the pace explained, in the desk's inspector", () => {
 // ---- the phone
 
 function drawPhone(over: Partial<BookProps> = {}) {
-  return render(<div className="nx"><PhoneBook {...props({ mode: "live", ...over })} /></div>);
+  return render(<div className="nx"><PhoneBook {...props({ session: true, ...over })} /></div>);
 }
 const card = (ref: string) =>
   [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === ref)!;
@@ -326,7 +326,7 @@ describe("the pace explained, in the phone's holding detail", () => {
   it("reads it once per holding opened, and never under the next one", async () => {
     holdBack = /\/vol$/;
     // outside the session, the sheet's history open from the start (#374) beside it
-    drawPhone({ mode: "review", session: false });
+    drawPhone({ session: false });
     fireEvent.click(within(card("h-calls")).getByRole("button", { name: /details of 1218_C7300/ }));
     await screen.findByRole("dialog");
     act(() => { window.history.back(); });
@@ -343,7 +343,7 @@ describe("the pace explained, in the phone's holding detail", () => {
 
   for (const session of [true, false]) {
     it(`says the gap in words on each holding's card, ${session ? "in" : "out of"} session (#374)`, () => {
-      drawPhone({ mode: session ? "live" : "review", session });
+      drawPhone({ session });
       for (const [id, words, outcome] of [["h-puts", "ahead by 0.50", "gain"], ["h-calls", "behind by 0.47", "loss"]]) {
         const gap = within(card(id!)).getByText("pace gap").nextElementSibling as HTMLElement;
         expect(gap.textContent).toBe(words);

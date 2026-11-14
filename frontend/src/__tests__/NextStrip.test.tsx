@@ -133,7 +133,7 @@ describe("the strip as drawn", () => {
 function deskProps(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
+    session: true, privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -143,7 +143,7 @@ const deskRow = (id: string) =>
 describe("on the desk (arrangement A)", () => {
   const strip = COLUMNS.find((c) => c.key === "strip")!;
 
-  it("gives every held spread and every watched spread a strip in its row, in Live", () => {
+  it("gives every held spread and every watched spread a strip in its row, in session", () => {
     render(<DeskBook {...deskProps()} />);
     for (const id of ["h-puts", "h-calls", "h-ic", "w-dec04", "w-dec18", "w-dec31"]) {
       expect(deskRow(id).querySelector("[data-col=strip] .nxs"), id).toBeTruthy();

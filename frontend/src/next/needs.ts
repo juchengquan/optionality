@@ -57,17 +57,18 @@ export function monitorName(monitor: Monitor): string {
   return `${shortDate(monitor.strike_date)} ${monitor.strike}${monitor.option_type[0]}`;
 }
 
-/** @param holdings the holdings whose Levels the line says, or null where it says none: in LIVE
- *  they are polled with the watchlist, so their Levels are already paid for; in REVIEW nothing is.
+/** @param holdings the holdings whose Levels the line says, or null where it says none: in
+ *  session they are polled with the watchlist, so their Levels are already paid for; outside it
+ *  nothing is.
  *  @param placedBy the holdings the book is DRAWN with, which decide which combos are drawn apart
- *  from their holding (#346) — in REVIEW, the ones valued once on entering it, whose Levels the
- *  line still does not say. The same as `holdings` unless given.
- *  @param levels whether the line says any holding's Levels at all. False in REVIEW (#354, the
- *  owner's decision (b)): not from the holdings, and not from a rule linked to one either, whose
- *  `schedule` is the holding's, served on the `/quotes` that REVIEW still polls. The holding's own
- *  chip says them there, as of the valuation it was drawn from; a line saying them from the poll
- *  would contradict it, or say a Level the row does not show. A rule's own alarm and every fault
- *  are said in either mode. */
+ *  from their holding (#346) — outside the session, the ones valued once, whose Levels the line
+ *  still does not say. The same as `holdings` unless given.
+ *  @param levels whether the line says any holding's Levels at all. False outside the session
+ *  (#354, the owner's decision (b), re-keyed to the session by #371): not from the holdings, and
+ *  not from a rule linked to one either, whose `schedule` is the holding's, served on the
+ *  `/quotes` that is still polled there. The holding's own chip says them, as of the valuation it
+ *  was drawn from; a line saying them from the poll would contradict it, or say a Level the row
+ *  does not show. A rule's own alarm and every fault are said at every hour. */
 export function needsYou(
   quotes: Entry[], monitors: Monitor[], health: Health | null, holdings: Holding[] | null,
   placedBy: Holding[] | null = holdings, levels = true,

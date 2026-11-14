@@ -11,7 +11,8 @@ what is fetched follows New York's session instead of a mode. That supersedes "L
 modes", REVIEW's own columns, the phone's Live and Review tabs and its one-holding pager, and the
 clock's-mode consequence; it partly reverses #338's "closed holdings in REVIEW only" and re-keys
 #354's rule from the mode to the session. The superseded text is kept below and marked; the
-amendment, not yet built, is what binds. Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+amendment is what binds, and it is built (#371–#375, the last on 2026-11-14), with the
+corrections its build needed written into it and named there. Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -77,7 +78,9 @@ The research found three things nobody does, all of which this service can:
     the inspector's history section — see the amendment)*
   - the **price map** (prototype C) is a desk panel: every spread on one shared SPX axis, a lane per
     expiry, spot as a line through them all, and a ±1σ band per lane. REVIEW keeps C's "where SPX
-    was against my strikes" chart for a holding.
+    was against my strikes" chart for a holding. *(superseded 2026-11-13: that chart is the third of
+    a holding's history charts, in the inspector's and the phone sheet's history section, at every
+    hour — see the amendment)*
 - **On the phone, "B", cards:**
   - "needs you" as banners at the top;
   - one card per held spread, with a strike strip and a large P&L;
@@ -169,7 +172,7 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   strips the prefix and rewrites no `Location`, so only the build, which knows `UI_BASE`, can name
   `/opt/`. The source stays in `frontend/src/next/` for now; moving it up into `src/` is a rename
   of its own. ADR 0005's "no client-side router" holds: modes and arrangements are state, not
-  routes.
+  routes. *(Since 2026-11-13 there are no modes: arrangements are the only such state.)*
 - **The prototype is rewritten, not promoted.** It was written without tests and against a static
   book.
 
@@ -228,7 +231,8 @@ From the backend map; each slice says which it needs.
 - **Double polling during the rollout.** While both pages existed, the old and the new dashboards
   each polled when open; two open tabs were two batches per poll (ADR 0010). The swap ended the
   two-page double polling, with two qualifications. Each LIVE tab now costs one market-data call
-  more per poll than the old page did: `/quotes`, `/references` and `/positions/values`, where the
+  more per poll than the old page did *(since 2026-11-13: each tab in session, and outside it one
+  call per poll, `/quotes`)*: `/quotes`, `/references` and `/positions/values`, where the
   old page polled the valuation only while its Holdings panel was open. And a tab of the old page
   left open across the deploy keeps polling as before until it is reloaded.
 - **The owner has to accept or override the clock's mode.** A desk opened at 21:00 Singapore time
@@ -271,11 +275,20 @@ holidays not detected: the same edges `inSession` and the daily sample use, ADR 
   says so: "market closed — valued at HH:MM", with a refresh button
   that values them once more. The refresh is what the mode override was for, e.g. a desk opened
   just before the open.
+  - *Corrected in the build (#371):* "once, when the page opens" is once per ASK, never by the
+    poll. The page values the holdings and reads the References outside the session on opening,
+    at each edge of the session (one slept through by a phone included: which session the page
+    is in or after is tracked, not only whether), on either refresh button (the header's, and the
+    one on the market-closed line), on opening Settings, and after every write the page makes. A
+    valuation from before the session's last edge is dated ("valued at Sat 05:15"), so a time
+    alone never reads as this morning's.
 - **`/quotes` keeps polling in both,** so a rule's alarm and every fault always reach the page, as
   they did in REVIEW (ADR 0012). The bounded-call invariant is unchanged: in session this is the
   three calls per poll LIVE made; outside it, one per poll plus one asked-for valuation.
 - **The Reference strip stays on screen outside the session, read once with the rest and labelled
-  with its time** (the owner's choice of 2026-11-13), e.g. "SPX 7,592.40 · last at 16:15", from
+  with its time** (the owner's choice of 2026-11-13), e.g. "SPX 7,592.40 · last at 16:15"
+  *(built as "read at 16:15", dated when it is another day's, and "tried at" for a reading that
+  came back empty; a reading with no stamp is not drawn outside the session at all, #371)*, from
   the service's own stamp on each reading; the same refresh button reads it again. REVIEW hid it
   because a figure frozen at entry would be read as current (ADR 0018). The time is what answers
   that here: outside the session no reading is drawn without one. After the close, the last
@@ -296,6 +309,10 @@ figures.
 **No switch.** The Live/Review toggle, Settings' mode override and the palette's "switch mode"
 action all go. Outside the session the refresh button covers what the override did; in session
 there is nothing to switch to, because the page already shows everything.
+- *As built (#375):* Settings drew no mode control by the time it was built — the override was
+  the header's switch and the phone's Live and Review tabs — so what went from Settings was its
+  mode wording. The saved picture's header, which said "live" or "review", says the session
+  instead: "in session" or "market closed", by the same `inSession` the page fetches by.
 
 **What this supersedes** (marked where it stands above, not deleted): "Live and Review are modes"
 whole, with its #353 amendment folded into this one; REVIEW's column swap; the phone's Live and
@@ -304,5 +321,6 @@ override the clock's mode. **What it re-keys:** #354's rule, from REVIEW to "out
 session". **What it partly reverses:** #338's placement of closed holdings. ADR 0005's "modes are
 state, not routes" survives with one fewer state.
 
-CLAUDE.md still describes the page as built ("LIVE" and "REVIEW" in the polling invariant): it
-says what exists, and the build issues update it as they land.
+CLAUDE.md describes the page as built: one page, the session deciding the fetching (its polling
+invariant and the frontend's Layout entry), updated by each build issue as it landed and by #375
+last.

@@ -4,7 +4,7 @@
  *  testing-library's `waitFor` re-checks its condition on a timer it starts with `setInterval`, and
  *  on every change to the DOM. Fake `setInterval` and that timer is faked too, so `waitFor` then
  *  re-checks ONLY when the DOM changes: a condition on a request is seen only if something is drawn
- *  after the request was made. In NextPage's REVIEW test the holding's samples were the last thing
+ *  after the request was made. In a NextPage test outside the session the holding's samples were the last thing
  *  asked for and their answer drew nothing, so under load — when they were asked after the page's
  *  last change rather than before it — the wait sat out its whole timeout with its condition true
  *  (#347, captured under load: all three reads in `calls`, the samples asked 3 ms after the last

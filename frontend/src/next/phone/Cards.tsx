@@ -81,7 +81,8 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
       <dl className="nxp-facts">
         <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
         <div><dt>short Δ</dt><dd>{shortDeltaWords(shortDeltas(holding, quotes, monitors))}</dd></div>
-        {/* the one figure REVIEW's page had that the card did not: one book now, at every hour (#374) */}
+        {/* the pace gap, which the phone once drew only on a page per holding after the close: one book
+            now, at every hour (#374) */}
         <div><dt>pace gap</dt><dd data-outcome={paceOutcome(holding.schedule?.pace_gap)}>
           {paceWords(holding.schedule?.pace_gap)}
         </dd></div>

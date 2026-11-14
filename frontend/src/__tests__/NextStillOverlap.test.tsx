@@ -12,7 +12,7 @@ afterEach(cleanup);
 
 function picture(arrangement: Arrangement, privacy = false) {
   render(<Still arrangement={arrangement} quotes={OVERLAP_QUOTES} monitors={OVERLAP_MONITORS}
-                holdings={OVERLAP_HOLDINGS} holdingsError={null} holdingsAt={null} mode="live" session
+                holdings={OVERLAP_HOLDINGS} holdingsError={null} holdingsAt={null} session
                 privacy={privacy} entryStyle="opportunity" needs={[]} health={null} polledAt={null}
                 error={null} references={[]} />);
 }

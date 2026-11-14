@@ -1,6 +1,6 @@
 /** The phone's book, arrangement B (ADR 0023, #290): cards drawn from `placeBook`, a detail sheet
- *  that Back closes (ADR 0005: a history entry, not a route), and one book whatever the mode or
- *  the session (#374).
+ *  that Back closes (ADR 0005: a history entry, not a route), and one book in session and out
+ *  of it (#374).
  *
  *  Behaviour only. What a phone must MEASURE — nothing pushed sideways, 44pt targets, Back under
  *  the iPhone profile — is `__browser__/NextPhone.iphone.test.tsx`. */
@@ -20,7 +20,7 @@ afterEach(cleanup);
 function draw(over: Partial<BookProps> = {}) {
   const props: BookProps = {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null,
-    holdingsAt: "23:14:05", mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
+    holdingsAt: "23:14:05", session: true, privacy: false, entryStyle: "opportunity", ...over,
   };
   return render(<div className="nx"><PhoneBook {...props} /></div>);
 }
@@ -34,7 +34,7 @@ const region = (name: string) => screen.getByRole("region", { name });
 const card = (ref: string) =>
   [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === ref)!;
 
-describe("the Live cards, on the owner's book", () => {
+describe("the cards, on the owner's book", () => {
   const book = placeBook(QUOTES, HOLDINGS, MONITORS);
 
   it("draw the holdings placeBook places, in its order, each with the rules about it", () => {
@@ -192,7 +192,7 @@ describe("the detail sheet", () => {
     expect(within(sheet).getByText("-$240")).toBeTruthy();
     const moved = HOLDINGS.map((h) => h.id === "h-calls" ? { ...h, pnl: -300 } : h);
     rerender(<div className="nx"><PhoneBook quotes={QUOTES} monitors={MONITORS} holdings={moved}
-      holdingsError={null} holdingsAt={null} mode="live" session privacy={false} entryStyle="opportunity" /></div>);
+      holdingsError={null} holdingsAt={null} session privacy={false} entryStyle="opportunity" /></div>);
     expect(within(screen.getByRole("dialog")).getByText("-$300")).toBeTruthy();
   });
 });
@@ -200,7 +200,7 @@ describe("the detail sheet", () => {
 describe("the detail sheet, beyond opening and closing", () => {
   const props = (over: Partial<BookProps> = {}): BookProps => ({
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null,
-    holdingsAt: null, mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
+    holdingsAt: null, session: true, privacy: false, entryStyle: "opportunity", ...over,
   });
 
   it("hides its $ amount under privacy", async () => {
@@ -264,31 +264,28 @@ describe("the detail sheet, beyond opening and closing", () => {
   });
 });
 
-describe("one book, in session and out of it, whichever mode (#374)", () => {
+describe("one book, in session and out of it (#374)", () => {
   const drawn = () => [...document.querySelectorAll<HTMLElement>(".nx [data-ref]")].map((el) => el.dataset.ref);
 
-  it("draws the same cards in every mode and session, and no pager", () => {
-    draw({ mode: "live", session: true });
-    const live = drawn();
-    expect(live.length).toBeGreaterThan(0);
-    for (const mode of ["live", "review"] as const) {
-      for (const session of [true, false]) {
-        cleanup();
-        draw({ mode, session });
-        expect(drawn(), `${mode}, ${session ? "in" : "out of"} session`).toEqual(live);
-        expect(document.querySelector("[data-page], .nxp-pager, .nxp-track")).toBeNull();
-        expect(screen.queryByRole("region", { name: "Review" })).toBeNull();
-        expect(screen.queryByRole("button", { name: /next holding|previous holding/ })).toBeNull();
-        expect(region("Holdings")).toBeTruthy();
-      }
+  it("draws the same cards in session and out of it, and no pager", () => {
+    draw({ session: true });
+    const inSession = drawn();
+    expect(inSession.length).toBeGreaterThan(0);
+    for (const session of [true, false]) {
+      cleanup();
+      draw({ session });
+      expect(drawn(), `${session ? "in" : "out of"} session`).toEqual(inSession);
+      expect(document.querySelector("[data-page], .nxp-pager, .nxp-track")).toBeNull();
+      expect(screen.queryByRole("button", { name: /next holding|previous holding/ })).toBeNull();
+      expect(region("Holdings")).toBeTruthy();
     }
   });
 
-  it("says when they were valued by the session, whichever mode (#371)", () => {
-    draw({ mode: "live", session: false });
+  it("says when they were valued outside the session, and not in it (#371)", () => {
+    draw({ session: false });
     expect(within(region("Holdings")).getByText("market closed — valued at 23:14")).toBeTruthy();
     cleanup();
-    draw({ mode: "review", session: true });
+    draw({ session: true });
     expect(document.querySelector(".nx-mkt-closed")).toBeNull();
   });
 
@@ -308,7 +305,7 @@ describe("one book, in session and out of it, whichever mode (#374)", () => {
   });
 
   it("still draws the watchlist outside the session, so a banner about it has a card to lead to", () => {
-    draw({ mode: "review", session: false });
+    draw({ session: false });
     expect(refs(region("Watchlist"))).toContain("w-dec04");
   });
 });
@@ -324,28 +321,26 @@ describe("the phone's saved picture (#374)", () => {
       refs: [...document.querySelectorAll<HTMLElement>("[data-ref]")].map((el) => el.dataset.ref),
     };
   }
-  function picture(mode: "live" | "review", session: boolean) {
+  function picture(session: boolean) {
     render(<Still arrangement="phone" quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
-                  holdingsAt="23:14:05" mode={mode} session={session} privacy={false} entryStyle="opportunity"
+                  holdingsAt="23:14:05" session={session} privacy={false} entryStyle="opportunity"
                   needs={[]} health={null} polledAt={null} error={null} references={[]} />);
   }
 
-  it("draws the book's cards in every mode and session, as the phone does, never a page per holding", () => {
+  it("draws the book's cards in session and out of it, as the phone does, never a page per holding", () => {
     draw();
     const onScreen = refs(region("Holdings"));
     cleanup();
-    picture("live", true);
+    picture(true);
     const first = shape();
     expect(first.heading[0]).toBe("Holdings");
     expect(first.cards.every(Boolean)).toBe(true);
     expect(first.condors).toBeGreaterThan(0);
     expect(first.refs.slice(0, onScreen.length)).toEqual(onScreen);
-    for (const mode of ["live", "review"] as const) {
-      for (const session of [true, false]) {
-        cleanup();
-        picture(mode, session);
-        expect(shape(), `${mode}, ${session ? "in" : "out of"} session`).toEqual(first);
-      }
+    for (const session of [true, false]) {
+      cleanup();
+      picture(session);
+      expect(shape(), `${session ? "in" : "out of"} session`).toEqual(first);
     }
   });
 });
@@ -397,7 +392,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   });
 
   it("is placed the same outside the session", () => {
-    overlap({ mode: "review", session: false });
+    overlap({ session: false });
     expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700", "r-ratio"]);
     expect(refs(region("Holdings")))
       .toEqual(["h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200"]);

@@ -15,7 +15,7 @@ const writes: HoldingWrites = { edited: () => {}, closed: () => {}, deleted: () 
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", writes, ...over,
+    session: true, privacy: false, entryStyle: "opportunity", writes, ...over,
   };
 }
 

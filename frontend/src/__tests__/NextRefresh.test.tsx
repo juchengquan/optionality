@@ -26,7 +26,7 @@ afterEach(() => {
 const arrangements = ["phone", "desk"] as const;
 type Arrangement = (typeof arrangements)[number];
 
-/** 10:00 New York on a Tuesday: LIVE, the mode that polls. */
+/** 10:00 New York on a Tuesday: in session, where the page polls everything. */
 const SESSION = new Date("2026-11-10T15:00:00Z");
 
 async function open(arrangement: Arrangement): Promise<PageService> {

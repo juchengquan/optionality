@@ -182,7 +182,7 @@ describe("a combo's figures", () => {
 function props(quotes: Entry[], over: Partial<BookProps> = {}): BookProps {
   return {
     quotes, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "live", session: over.mode !== "review", privacy: false, entryStyle: "opportunity", ...over,
+    session: true, privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 

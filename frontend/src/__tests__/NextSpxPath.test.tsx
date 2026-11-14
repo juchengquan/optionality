@@ -1,4 +1,4 @@
-/** REVIEW's "where SPX was against my strikes" (#298, ADR 0023): for a holding, SPX's price on each
+/** "Where SPX was against my strikes" (#298, ADR 0023): for a holding, SPX's price on each
  *  Daily sample against its strikes, from the samples route's `spx` — in the desk's inspector and in
  *  the phone's holding sheet. Behaviour only: what is drawn from what was served, and above all
  *  that a day stored without SPX's price is a GAP and never a point at zero. That the chart fits is
@@ -39,7 +39,7 @@ afterEach(() => {
 function props(over: Partial<BookProps> = {}): BookProps {
   return {
     quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
-    mode: "review", session: (over.mode ?? "review") === "live", privacy: false, entryStyle: "opportunity", ...over,
+    session: false, privacy: false, entryStyle: "opportunity", ...over,
   };
 }
 
@@ -83,7 +83,7 @@ describe("the days, as runs", () => {
   });
 });
 
-describe("in the desk's inspector, in REVIEW", () => {
+describe("in the desk's inspector, outside the session", () => {
   it("draws each day's SPX against the holding's strikes, a gap where a day has none", async () => {
     const insp = inspect("h-puts", "1218_P6400");
     const chart = await chartOf(insp);
@@ -128,8 +128,8 @@ describe("in the desk's inspector, in REVIEW", () => {
     expect(asked.filter((a) => a.endsWith("/samples"))).toEqual(["GET /positions/h-puts/samples"]);
   });
 
-  it("is not drawn in LIVE", () => {
-    const insp = inspect("h-puts", "1218_P6400", { mode: "live" });
+  it("is not drawn in session, where the history is shut until opened", () => {
+    const insp = inspect("h-puts", "1218_P6400", { session: true });
     expect(within(insp).queryByRole("group", { name: "SPX against the strikes" })).toBeNull();
   });
 });

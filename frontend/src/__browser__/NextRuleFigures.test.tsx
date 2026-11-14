@@ -3,7 +3,7 @@
  *  inspector's edge, the inspector scrolling nothing sideways — with every figure served and with
  *  every one a dash and its reason. The behaviour is `__tests__/NextRuleFigures.test.tsx`'s.
  */
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -92,8 +92,6 @@ describe("a rule's figures fit the inspector, from a 900px desk to a 2560px one"
           await page.viewport(width, 900);
           serve(book(served));
           render(<Next />);
-          await settle();
-          fireEvent.click(screen.getByRole("button", { name: "Live" }));
           await settle();
           expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("desk");
           fireEvent.click(within(rowOf(id)).getAllByRole("button")[0]!);

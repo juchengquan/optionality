@@ -23,7 +23,7 @@ afterEach(() => {
   for (const n of ["ui_arrangement", "ui_privacy", "ui_pricemap"]) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
-/** Noon in New York, in the session, so the page opens in LIVE whatever the machine's clock says. */
+/** Noon in New York, in the session, whatever the machine's clock says. */
 const IN_SESSION = new Date("2026-11-12T17:00:00Z");
 
 /** The page on a Mac unless told otherwise: the platform is STUBBED, so the suite exercises the
@@ -87,13 +87,16 @@ describe("every action, from the keyboard", () => {
     await waitFor(() => expect(form.contains(document.activeElement)).toBe(true));
   });
 
-  it("switches the mode", async () => {
+  it("lists no switch of mode: one page at every hour (#375)", async () => {
     await openDesk();
-    const nx = document.querySelector<HTMLElement>(".nx")!;
-    await run("switch to review");
-    await waitFor(() => expect(nx.dataset.mode).toBe("review"));
-    await run("switch to live");
-    await waitFor(() => expect(nx.dataset.mode).toBe("live"));
+    await chord();
+    await waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("combobox"));
+    // every action it offers, typed for by nothing: none of them a mode
+    const listed = within(palette()).queryAllByRole("option").map((o) => o.textContent ?? "");
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed.join(" | ")).not.toMatch(/switch|\blive\b|review|mode/i);
+    await userEvent.keyboard("{Escape}");
+    await gone();
   });
 
   it("forces the phone, which has no palette", async () => {

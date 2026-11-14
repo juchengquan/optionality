@@ -66,10 +66,10 @@ export function MonitorControls({ rule, served }: { rule: Rule; served: Entry | 
   return actions ? <Controls actions={actions} rule={rule} served={served} /> : null;
 }
 
-type Mode = "idle" | "editing" | "deleting" | "enabling" | "splitting" | "holding";
+type Doing = "idle" | "editing" | "deleting" | "enabling" | "splitting" | "holding";
 
 function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Rule; served: Entry | null }) {
-  const [mode, setMode] = useState<Mode>("idle");
+  const [doing, setDoing] = useState<Doing>("idle");
   const [draft, setDraft] = useState<Draft>(() => draftOf(rule));
   // the rule as it was when the editor opened: the draft is a change to THAT, so a poll serving a
   // rename made elsewhere meanwhile is not sent back as the old name (#336)
@@ -88,7 +88,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
   const splits = Boolean(actions.totalEntry && book) && splitOffered(rule);
   const holds = Boolean(actions.hold && book) && holdOffered(rule);
 
-  const to = (next: Mode) => { setError(null); setSaidSplit(false); setMode(next); };
+  const to = (next: Doing) => { setError(null); setSaidSplit(false); setDoing(next); };
   const close = () => { to("idle"); editButton.current?.focus(); };
   /** back to the button that opened the form */
   const back = (button: React.RefObject<HTMLButtonElement | null>) => { to("idle"); button.current?.focus(); };
@@ -98,7 +98,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
    *  question while the delete went through. */
   const run = async (
     write: () => Promise<void>, after: () => void, refocus = false,
-    spot: (text: string) => Spot = (text) => (mode === "editing" ? spotOf(text) : "form"),
+    spot: (text: string) => Spot = (text) => (doing === "editing" ? spotOf(text) : "form"),
   ) => {
     setBusy(true);
     setError(null);
@@ -167,12 +167,12 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
             ? "after its retention window" : `on ${deletesOn(rule.strike_date, actions.retentionDays)}`}`}
         </p>
       ) : null}
-      {why !== null && mode !== "enabling" ? <p className="nx-mon-note">{`Switched off by the service: ${why}.`}</p> : null}
+      {why !== null && doing !== "enabling" ? <p className="nx-mon-note">{`Switched off by the service: ${why}.`}</p> : null}
 
       <div className="nx-mon-actions">
         <button ref={editButton} type="button" className="nx-mon-button" aria-label={`edit ${label}`}
-                disabled={busy} aria-expanded={mode === "editing"}
-                onClick={() => { if (mode === "editing") { close(); return; } setOpened(rule); setDraft(draftOf(rule)); to("editing"); }}>
+                disabled={busy} aria-expanded={doing === "editing"}
+                onClick={() => { if (doing === "editing") { close(); return; } setOpened(rule); setDraft(draftOf(rule)); to("editing"); }}>
           edit
         </button>
         {toggle ? (
@@ -184,40 +184,40 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         {splits ? (
           <button ref={splitButton} type="button" className="nx-mon-button"
                   aria-label={`split a total entry across ${label}`} disabled={busy}
-                  aria-expanded={mode === "splitting"}
-                  onClick={() => (mode === "splitting" ? back(splitButton) : to("splitting"))}>
+                  aria-expanded={doing === "splitting"}
+                  onClick={() => (doing === "splitting" ? back(splitButton) : to("splitting"))}>
             split entry
           </button>
         ) : null}
         {holds ? (
           <button ref={holdButton} type="button" className="nx-mon-button" aria-label={`I hold ${label}`}
-                  disabled={busy} aria-expanded={mode === "holding"}
-                  onClick={() => (mode === "holding" ? back(holdButton) : to("holding"))}>
+                  disabled={busy} aria-expanded={doing === "holding"}
+                  onClick={() => (doing === "holding" ? back(holdButton) : to("holding"))}>
             I hold this
           </button>
         ) : null}
         {state === "quarantined" ? (
           <button type="button" className="nx-mon-button" aria-label={`switch ${label} back on`}
-                  disabled={busy} aria-expanded={mode === "enabling"} onClick={() => to("enabling")}>
+                  disabled={busy} aria-expanded={doing === "enabling"} onClick={() => to("enabling")}>
             switch back on
           </button>
         ) : null}
         <button type="button" className="nx-mon-button" data-destructive="" aria-label={`delete ${label}`}
-                disabled={busy} aria-expanded={mode === "deleting"} onClick={() => to("deleting")}>
+                disabled={busy} aria-expanded={doing === "deleting"} onClick={() => to("deleting")}>
           delete
         </button>
       </div>
-      {error && !["editing", "splitting", "holding"].includes(mode) ? <Refusal text={error.text} /> : null}
+      {error && !["editing", "splitting", "holding"].includes(doing) ? <Refusal text={error.text} /> : null}
       {/* mounted empty and filled, so a screen reader announces it; only where a split is offered */}
       {splits ? <p className="nx-meta" role="status">{saidSplit ? "total entry saved" : ""}</p> : null}
 
-      {mode === "deleting" ? (
+      {doing === "deleting" ? (
         <Ask label={`delete ${label}?`} yes="delete it" no="keep it" busy={busy} destructive
              onYes={() => void run(() => actions.remove(rule.id), () => to("idle"), true)} onNo={close}>
           Delete this Monitor for good? The service forgets it; a holding it watched is kept.
         </Ask>
       ) : null}
-      {mode === "enabling" && why !== null ? (
+      {doing === "enabling" && why !== null ? (
         <Ask label={`switch ${label} back on?`} yes="switch it on" no="keep it off" busy={busy}
              onYes={() => void run(() => actions.patch(rule.id, { enabled: true }), () => to("idle"), true)}
              onNo={close}>
@@ -225,18 +225,18 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
             + "checks it again, and switches it off again if nothing has changed."}
         </Ask>
       ) : null}
-      {mode === "editing" ? (
+      {doing === "editing" ? (
         <EditForm rule={rule} served={served} label={label} draft={draft} busy={busy} error={error}
                   onDraft={(d) => { setDraft(d); setError(null); }} onSave={save} onCancel={close} />
       ) : null}
-      {mode === "splitting" && book && actions.totalEntry ? (
+      {doing === "splitting" && book && actions.totalEntry ? (
         <SplitForm rule={rule} label={label} book={book} busy={busy} error={error}
                    onError={(text) => setError(text === null ? null : { text, at: "threshold" })}
                    onCancel={() => back(splitButton)}
                    onSave={(entry) => run(() => actions.totalEntry!(rule.id, entry),
                      () => { back(splitButton); setSaidSplit(true); }, false, () => "threshold")} />
       ) : null}
-      {mode === "holding" && book && actions.hold ? (
+      {doing === "holding" && book && actions.hold ? (
         <HoldForm rule={rule} label={label} book={book} today={marketDay(now)} busy={busy}
                   holdingNames={actions.holdingNames}
                   onCancel={() => back(holdButton)}

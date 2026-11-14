@@ -163,11 +163,11 @@ describe("a combo drawn in the watchlist because it only partly overlaps a holdi
     expect(items).toEqual([{ kind: "stop", text: "1231_7700 at stop", ref: "h-7700" }]);
   });
 
-  it("is placed by the valued holdings even where their Levels are not the line's to say (REVIEW)", () => {
+  it("is placed by the valued holdings even where their Levels are not the line's to say (outside the session)", () => {
     const due = { ...spread, schedule: { reached: null, manage_by_due: true, position_id: "h-7700" } } as Entry;
-    // REVIEW: no Levels from the holdings, but the page has valued them and drawn the rule apart
+    // outside the session: no Levels from the holdings, but the page has valued them and drawn the rule apart
     expect(needsYou([due], [], health(), null, holdings)).toEqual([]);
-    // LIVE: the holding says its own
+    // in session: the holding says its own
     const dueHolding = holdings.map((h) => (h.id === "h-7700"
       ? { ...h, schedule: { reached: null, manage_by_due: true } } : h)) as Holding[];
     expect(needsYou([due], [], health(), dueHolding).map((n) => n.text)).toEqual(["1231_7700 at its manage-by"]);

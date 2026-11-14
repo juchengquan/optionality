@@ -1,5 +1,5 @@
-/** The redesigned page as a whole (ADR 0023, #287): what it asks the service for in each mode, and
- *  the settings that change what it draws. Layout is the browser suite's (`NextLayout`); this is
+/** The redesigned page as a whole (ADR 0023, #287): what it asks the service for in session and out
+ *  of it, that it draws the same page at every hour, and the settings that change what it draws. Layout is the browser suite's (`NextLayout`); this is
  *  behaviour, which jsdom can answer.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -119,14 +119,14 @@ function serve() {
               // every holding on record, as stored: the closed trades' fold reads it (#296, #373)
               : path === "/positions" ? [holding]
                 // its days, an empty week: the shape the service answers, so the history drawn
-                // in LIVE (#353) is drawn from samples rather than said to be unreadable
+                // (#353) is drawn from samples rather than said to be unreadable
                 : path === "/positions/p1/samples" ? { levels: null, plan: [], samples: [] } : null;
     return answered(reply(true, body));
   }) as unknown as typeof fetch;
 }
 
-/** A Monday in the session (10:00 EST) or a Sunday, so the clock picks the mode. Only the clock
- *  and the poll's interval are faked: the fetches resolve on real microtasks. */
+/** A Monday in the session (10:00 EST) or a Sunday, so the clock decides the session. Only the
+ *  clock and the poll's interval are faked: the fetches resolve on real microtasks. */
 function at(iso: string) {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: new Date(iso) });
 }
@@ -139,7 +139,7 @@ const SLOW = 10_000;
 /** Until the page has stopped asking: every request answered, and none new for QUIET turns of
  *  the event loop, each drawn through `act` — so a read that an answer sets off (a holding drawn,
  *  then its samples asked for) has been asked by the next turn. What the page reads is whatever it
- *  asks for, not a list kept here: a read added to REVIEW is waited for without this test knowing
+ *  asks for, not a list kept here: a read added outside the session is waited for without this test knowing
  *  its name. Turns, not milliseconds — every request here is answered on microtasks — so load
  *  cannot make it stop early. */
 const QUIET = 3;
@@ -181,51 +181,37 @@ async function polls(n: number) {
   }
 }
 
-/** The owner's choice of mode, by hand: the desk's switch. The phone has none since #374. */
-function pick(mode: "Live" | "Review") {
-  fireEvent.click(within(screen.getByRole("group", { name: "mode" })).getByRole("button", { name: mode }));
-}
-
 /** The session clock read again now, as a phone woken or a window focused reads it. */
 async function readClock(iso: string) {
   vi.setSystemTime(new Date(iso));
   await act(async () => { window.dispatchEvent(new Event("focus")); });
 }
 
-describe("what it asks for, by New York's session and not by the mode (#371)", () => {
+describe("what it asks for, by New York's session (#371)", () => {
   for (const where of ["desk", "phone"] as const) {
-    // the phone picks no mode (#374): the desk's switch is the only way to one
-    for (const mode of where === "desk" ? [null, "Review"] as const : [null] as const) {
-      it(`polls the line, the holdings and the References in session on the ${where}${mode ? ", with Review picked" : ""}`,
-        async () => {
-          document.cookie = `ui_arrangement=${where};path=/`;
-          at(SESSION);
-          await open();
-          if (mode) pick(mode);
-          await quiet();
-          calls = [];
-          await polls(3);
-          for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}, each poll\n${said()}`).toBe(3);
-        });
-    }
+    it(`polls the line, the holdings and the References in session on the ${where}`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(SESSION);
+      await open();
+      await quiet();
+      calls = [];
+      await polls(3);
+      for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}, each poll\n${said()}`).toBe(3);
+    });
   }
 
   for (const [when, now] of [["an evening", EVENING], ["a Sunday", SUNDAY]] as const) {
-    for (const mode of [null, "Live"] as const) {
-      it(`outside the session on ${when}${mode ? ", with Live picked" : ""}: values once on opening, then polls only the line`,
-        async () => {
-          document.cookie = "ui_arrangement=desk;path=/";
-          at(now);
-          await open();
-          if (mode) pick(mode);
-          await quiet();
-          for (const path of VALUED) expect(count(path), `${path}, once on opening\n${said()}`).toBe(1);
-          calls = [];
-          await polls(3);
-          for (const path of LINE) expect(count(path), `${path}, each poll\n${said()}`).toBe(3);
-          for (const path of VALUED) expect(count(path), `${path}, never by the poll\n${said()}`).toBe(0);
-        });
-    }
+    it(`outside the session on ${when}: values once on opening, then polls only the line`, async () => {
+      document.cookie = "ui_arrangement=desk;path=/";
+      at(now);
+      await open();
+      await quiet();
+      for (const path of VALUED) expect(count(path), `${path}, once on opening\n${said()}`).toBe(1);
+      calls = [];
+      await polls(3);
+      for (const path of LINE) expect(count(path), `${path}, each poll\n${said()}`).toBe(3);
+      for (const path of VALUED) expect(count(path), `${path}, never by the poll\n${said()}`).toBe(0);
+    });
   }
 
   it("at the open, asks everything at once and polls it from then on", async () => {
@@ -313,14 +299,10 @@ describe("the market-closed line and its refresh (#371)", () => {
       await until(() => expect(closedLine()?.textContent).toContain("market closed — valued at 07:00"));
     });
 
-    it(`is not drawn in session on the ${where}, whichever mode`, async () => {
+    it(`is not drawn in session on the ${where}`, async () => {
       document.cookie = `ui_arrangement=${where};path=/`;
       at(SESSION);
       await open();
-      await quiet();
-      expect(closedLine()).toBeNull();
-      if (where === "phone") return; // no mode to pick there (#374)
-      pick("Review");
       await quiet();
       expect(closedLine()).toBeNull();
     });
@@ -426,9 +408,6 @@ describe("the References strip outside the session (#371)", () => {
     await open();
     await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(2));
     expect(document.querySelector(".references")!.textContent).not.toContain("read at");
-    // and Review picked by hand keeps it: the mode no longer hides it
-    pick("Review");
-    expect(document.querySelectorAll(".references .reference")).toHaveLength(2);
   });
 
   it("is read again by the refresh, with its new time", async () => {
@@ -442,7 +421,7 @@ describe("the References strip outside the session (#371)", () => {
   });
 });
 
-describe("a holding's history in LIVE (#353)", () => {
+describe("a holding's history in session (#353)", () => {
   for (const where of ["desk", "phone"] as const) {
     it(`is read once when opened on the ${where}, and never by the poll`, async () => {
       document.cookie = `ui_arrangement=${where};path=/`;
@@ -604,17 +583,6 @@ describe("a holding's history in the phone's sheet, by the session (#374)", () =
 });
 
 describe("asking again", () => {
-  it("asks for nothing more on switching mode: the mode decides no fetching", async () => {
-    document.cookie = "ui_arrangement=desk;path=/";
-    at(SESSION);
-    await open();
-    await quiet();
-    calls = [];
-    pick("Review");
-    await quiet();
-    for (const path of VALUED) expect(count(path), `${path}\n${said()}`).toBe(0);
-  });
-
   it("values the holdings and reads the References afresh when Settings opens outside the session", async () => {
     at(SUNDAY);
     await open();
@@ -628,11 +596,10 @@ describe("asking again", () => {
     expect(screen.getByText(/holdings valued at/)).toBeTruthy();
   });
 
-  it("values them afresh when Settings opens outside the session with Live picked", async () => {
+  it("values them afresh when the desk's Settings panel opens outside the session", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(SUNDAY);
     await open();
-    pick("Live");
     await quiet();
     calls = [];
     fireEvent.click(screen.getByRole("button", { name: "settings" }));
@@ -660,7 +627,6 @@ describe("what is read again, and when", () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at(SESSION);
     await open();
-    pick("Review");
     await quiet();
     calls = [];
     fireEvent.click(screen.getByRole("button", { name: "settings" }));
@@ -767,31 +733,68 @@ describe("when part of the service fails", () => {
   });
 });
 
-describe("the mode", () => {
-  it("ends a choice when the clock's own mode next changes", async () => {
-    document.cookie = "ui_arrangement=desk;path=/";
-    at("2026-11-09T13:00:00Z"); // Monday 08:00 New York, before the open
-    await open();
-    const root = document.querySelector(".nx")!;
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
-    expect(screen.getByText("your choice")).toBeTruthy();
+/** One page at every hour, with no switch (#375; ADR 0023 amended 2026-11-13: one page, by the
+ *  session). What is drawn is the same at 10:00 and at 21:00 New York; only the market-closed line
+ *  says which side of the session it is, and only what is fetched differs (above). */
+describe("one page at every hour (#375)", () => {
+  const MORNING = SESSION; // Monday 10:00 New York
+  const NIGHT = "2026-11-10T02:00:00Z"; // Monday 21:00 New York
+  const labelOf = (el: Element) => el.getAttribute("aria-label") ?? el.textContent ?? "";
+  /** what the page draws, as far as the hour could change it: never a figure */
+  function drawn(where: "desk" | "phone") {
+    const book = document.querySelector(".nx-book")!;
+    const fold = screen.getByRole("region", { name: "closed trades" });
+    return {
+      header: [...document.querySelectorAll(".nx-head > *")].map((el) => `${el.tagName}:${labelOf(el)}`),
+      columns: where === "desk"
+        ? [...document.querySelectorAll(".nxd-head [data-col]")].map((h) => h.getAttribute("data-col")) : null,
+      tabs: where === "phone"
+        ? within(screen.getByRole("navigation", { name: "views" })).getAllByRole("button").map((b) => b.textContent)
+        : null,
+      rows: [...book.querySelectorAll<HTMLElement>("[data-ref]")].map((el) => el.dataset.ref),
+      // the fold: in the book, after every row of it, shut
+      foldLast: book.contains(fold) && [...book.querySelectorAll("[data-ref]")].every((el) =>
+        fold.contains(el) || !(fold.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      foldOpen: within(fold).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded"),
+      attributes: [...document.querySelector(".nx")!.attributes].map((a) => a.name).sort(),
+    };
+  }
 
-    vi.setSystemTime(new Date("2026-11-09T14:31:00Z")); // 09:31: the clock agrees now
-    await act(async () => { vi.advanceTimersByTime(15_000); });
-    expect(screen.getByText("by the clock")).toBeTruthy();
-    expect(root.getAttribute("data-mode")).toBe("live");
-
-    vi.setSystemTime(new Date("2026-11-09T21:16:00Z")); // 16:16: the session is over
-    await act(async () => { vi.advanceTimersByTime(15_000); });
-    expect(root.getAttribute("data-mode")).toBe("review");
-  });
+  for (const where of ["desk", "phone"] as const) {
+    it(`draws the same ${where} at 10:00 and at 21:00 New York: only the session line differs`, async () => {
+      const seen: Record<string, ReturnType<typeof drawn>> = {};
+      for (const [name, now] of [["10:00", MORNING], ["21:00", NIGHT]] as const) {
+        document.cookie = `ui_arrangement=${where};path=/`;
+        at(now);
+        await open();
+        await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy(), { timeout: SLOW });
+        await quiet();
+        seen[name] = drawn(where);
+        // the session line, and nothing else, says which side of the session it is
+        if (name === "10:00") expect(closedLine(), "in session, no market-closed line").toBeNull();
+        else expect(closedLine()?.textContent).toContain("market closed");
+        // no switch, at either hour: no mode group, no Live or Review, no "by the clock"
+        expect(screen.queryByRole("group", { name: "mode" })).toBeNull();
+        expect(screen.queryByRole("button", { name: /^(live|review)$/i })).toBeNull();
+        expect(screen.queryByText(/by the clock|your choice/)).toBeNull();
+        expect(document.querySelector("[data-mode]")).toBeNull();
+        cleanup();
+        vi.useRealTimers();
+      }
+      expect(seen["10:00"]!.rows.length).toBeGreaterThan(1);
+      expect(seen["10:00"]!.foldLast).toBe(true);
+      expect(seen["10:00"]!.foldOpen).toBe("false");
+      if (where === "desk") expect(seen["10:00"]!.columns!.length).toBeGreaterThan(1);
+      else expect(seen["10:00"]!.tabs).toEqual(["Book", "Add", "Settings"]);
+      expect(seen["21:00"]).toEqual(seen["10:00"]);
+    });
+  }
 
   it("reads the clock again when the page comes back into view, without waiting for its timer", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at("2026-11-09T14:29:00Z"); // 09:29 New York
     await open();
-    const root = document.querySelector(".nx")!;
-    expect(root.getAttribute("data-mode")).toBe("review");
+    await until(() => expect(closedLine()).toBeTruthy());
     vi.setSystemTime(new Date("2026-11-09T14:31:00Z")); // a phone woken at 09:31
     const visible = Object.getOwnPropertyDescriptor(Document.prototype, "visibilityState");
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
@@ -801,42 +804,23 @@ describe("the mode", () => {
       delete (document as unknown as { visibilityState?: unknown }).visibilityState;
       if (visible) Object.defineProperty(Document.prototype, "visibilityState", visible);
     }
-    expect(root.getAttribute("data-mode")).toBe("live");
+    expect(closedLine()).toBeNull();
   });
 
   it("reads the clock again when the window takes focus", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at("2026-11-09T14:29:00Z");
     await open();
+    await until(() => expect(closedLine()).toBeTruthy());
     vi.setSystemTime(new Date("2026-11-09T14:31:00Z"));
     await act(async () => { window.dispatchEvent(new Event("focus")); });
-    expect(document.querySelector(".nx")!.getAttribute("data-mode")).toBe("live");
+    expect(closedLine()).toBeNull();
   });
 
-  it("follows the clock until the owner picks one, and goes back to it", async () => {
-    document.cookie = "ui_arrangement=desk;path=/";
-    at(SESSION);
-    await open();
-    const root = document.querySelector(".nx")!;
-    expect(root.getAttribute("data-mode")).toBe("live");
-    expect(screen.getByText("by the clock")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    expect(root.getAttribute("data-mode")).toBe("review");
-    expect(screen.getByText("your choice")).toBeTruthy();
-
-    // picking what the clock says hands the page back to the clock
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
-    expect(root.getAttribute("data-mode")).toBe("live");
-    expect(screen.getByText("by the clock")).toBeTruthy();
-  });
-
-  it("is nothing the phone's tabs pick: they are Book, Add and Settings (#374)", async () => {
+  it("gives the phone three tabs, Book, Add and Settings, at every hour (#374)", async () => {
     for (const now of [SESSION, SUNDAY]) {
       at(now);
       await open();
-      const root = document.querySelector(".nx")!;
-      const byClock = root.getAttribute("data-mode");
       const tabs = screen.getByRole("navigation", { name: "views" });
       const tab = (name: string) => within(tabs).getByRole("button", { name });
       const current = () => within(tabs).getAllByRole("button")
@@ -846,11 +830,9 @@ describe("the mode", () => {
       fireEvent.click(tab("Settings"));
       expect(current()).toEqual(["Settings"]);
       expect(screen.queryByRole("region", { name: "Holdings" })).toBeNull();
-      // Book from Settings: back to the book, and no mode picked on the way
       fireEvent.click(tab("Book"));
       expect(current()).toEqual(["Book"]);
       expect(screen.getByRole("region", { name: "Holdings" })).toBeTruthy();
-      expect(root.getAttribute("data-mode")).toBe(byClock);
       cleanup();
       vi.useRealTimers();
     }
@@ -858,8 +840,8 @@ describe("the mode", () => {
 });
 
 describe("the needs-you line", () => {
-  for (const [mode, now] of [["LIVE", SESSION], ["REVIEW", SUNDAY]] as const) {
-    it(`names a quarantined rule as a fault in ${mode}`, async () => {
+  for (const [when, now] of [["in session", SESSION], ["outside the session", SUNDAY]] as const) {
+    it(`names a quarantined rule as a fault ${when}`, async () => {
       document.cookie = "ui_arrangement=desk;path=/";
       at(now);
       await open();
@@ -891,8 +873,8 @@ describe("a combo drawn in the Watchlist because it names a contract its holding
     schedule: { reached: null, manage_by_due: true, position_id: "p1" },
   };
 
-  for (const [mode, now] of [["LIVE", SESSION], ["REVIEW", SUNDAY]] as const) {
-    it(`does not say its holding's manage-by under its own name in ${mode}`, async () => {
+  for (const [when, now] of [["in session", SESSION], ["outside the session", SUNDAY]] as const) {
+    it(`does not say its holding's manage-by under its own name ${when}`, async () => {
       document.cookie = "ui_arrangement=desk;path=/";
       at(now);
       serve();
@@ -987,25 +969,6 @@ describe("every item that needs you carries its glyph", () => {
 });
 
 describe("settings", () => {
-  it("is the clock's on the phone, whatever was chosen on the desk before it turned into one (#374)", async () => {
-    document.cookie = "ui_arrangement=desk;path=/";
-    at("2026-11-10T02:00:00Z"); // Monday 21:00 New York: REVIEW by the clock
-    await open();
-    const root = document.querySelector(".nx")!;
-    fireEvent.click(screen.getByRole("button", { name: "Live" }));
-    expect(root.getAttribute("data-mode")).toBe("live");
-    fireEvent.click(screen.getByRole("button", { name: "settings" }));
-    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "phone" } });
-    // nothing on the phone could undo the desk's choice, so the phone does not keep it
-    await waitFor(() => expect(root.getAttribute("data-arrangement")).toBe("phone"));
-    expect(root.getAttribute("data-mode")).toBe("review");
-    fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Settings" }));
-    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "desk" } });
-    await waitFor(() => expect(root.getAttribute("data-arrangement")).toBe("desk"));
-    expect(root.getAttribute("data-mode")).toBe("review");
-    expect(screen.getByText("by the clock")).toBeTruthy();
-  });
-
   it("gives its Back entry back when the desk turns into the phone with it open", async () => {
     // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
     const pushed = vi.spyOn(window.history, "pushState");
@@ -1035,8 +998,8 @@ describe("settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "desk" } });
     expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk");
-    // still open, now as the desk's panel over the page — whose mode switch is behind it
+    // still open, now as the desk's panel over the page — whose "add" is behind it
     expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
-    expect(screen.getByRole("group", { name: "mode", hidden: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "add", hidden: true })).toBeTruthy();
   });
 });

@@ -1,9 +1,9 @@
 /** The Reference strip on `/opt/next`, and the Settings panel that keeps one (ADR 0018) — carried
  *  from `References.test.tsx` (#337), which holds them against today's `App` and goes with it in
- *  #301. A slow source is `NextSlowReferences.test.tsx`'s; the strip only in LIVE, `NextPage`'s.
+ *  #301. A slow source is `NextSlowReferences.test.tsx`'s; the strip outside the session, `NextPage`'s.
  *
  *  Both arrangements: Settings is the desk's side panel and the phone's tab, and the strip sits on
- *  both. 10:00 New York on a Tuesday, so the page is LIVE, the mode that draws the strip.
+ *  both. 10:00 New York on a Tuesday, in session, where the strip is polled.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

@@ -51,12 +51,14 @@ export interface StillProps extends BookProps {
 }
 
 export function Still(props: StillProps) {
-  const { arrangement, needs, health, polledAt, error, mode, session, entryStyle, references } = props;
+  const { arrangement, needs, health, polledAt, error, session, entryStyle, references } = props;
   return (
     <div className={STILL} data-arrangement={arrangement}>
       <header className="nx-still-head">
         <h1>optionality</h1>
-        <span className="nx-meta">{mode === "live" ? "live" : "review"}</span>
+        {/* which side of New York's session the picture was taken on (session.ts), where it once
+            said Live or Review: the one fact about the page's state a reader of it needs */}
+        <span className="nx-meta">{session ? "in session" : "market closed"}</span>
       </header>
       {error ? <div className="nx-banner">{error}</div> : null}
       {/* the one thing that dates the picture; a screenshot with no time is worthless a week on */}
@@ -64,7 +66,7 @@ export function Still(props: StillProps) {
                  sweepSeconds={health?.settings.sweep_seconds ?? null} />
       {/* the desk's one-line form in both: the phone's banners are buttons */}
       <NeedsLine items={needs} arrangement="desk" entryStyle={entryStyle} />
-      {/* as the page draws it, whichever mode: the one place the picture states the market's level.
+      {/* as the page draws it, at every hour: the one place the picture states the market's level.
           Outside the session each reading carries the time it was read, as on screen (#371): a
           picture is looked at long after, and a figure with no time would be taken for current.
           the old page's picture had none. */}

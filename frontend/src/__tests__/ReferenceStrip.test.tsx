@@ -206,22 +206,20 @@ describe("outside the session, every reading says when it was read", () => {
   });
 
   for (const arrangement of ["desk", "phone"] as const) {
-    for (const mode of ["live", "review"] as const) {
-      it(`goes into the saved picture from the ${arrangement} in ${mode} with its time outside the session, and without it in`,
-        () => {
-          const still = (session: boolean) => render(
-            <Still arrangement={arrangement} quotes={[]} monitors={[]} holdings={[]} holdingsError={null}
-                   holdingsAt={null} mode={mode} session={session} privacy={false} entryStyle="opportunity"
-                   needs={[]} health={null} polledAt={null} error={null}
-                   references={[spx(), vix, spx({ id: "r3", label: "NDX", fetched_at: undefined as never })]} />);
-          still(false);
-          expect(readings()).toHaveLength(2);
-          for (const r of readings()) expect(r, "a reading drawn without its time").toMatch(/read at 21:04$/);
-          cleanup();
-          still(true);
-          expect(readings()).toHaveLength(3);
-          expect(readings().every((r) => !r.includes("read at"))).toBe(true);
-        });
-    }
+    it(`goes into the saved picture from the ${arrangement} with its time outside the session, and without it in`,
+      () => {
+        const still = (session: boolean) => render(
+          <Still arrangement={arrangement} quotes={[]} monitors={[]} holdings={[]} holdingsError={null}
+                 holdingsAt={null} session={session} privacy={false} entryStyle="opportunity"
+                 needs={[]} health={null} polledAt={null} error={null}
+                 references={[spx(), vix, spx({ id: "r3", label: "NDX", fetched_at: undefined as never })]} />);
+        still(false);
+        expect(readings()).toHaveLength(2);
+        for (const r of readings()) expect(r, "a reading drawn without its time").toMatch(/read at 21:04$/);
+        cleanup();
+        still(true);
+        expect(readings()).toHaveLength(3);
+        expect(readings().every((r) => !r.includes("read at"))).toBe(true);
+      });
   }
 });

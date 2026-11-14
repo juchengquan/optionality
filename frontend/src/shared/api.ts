@@ -93,7 +93,7 @@ export const fetchMonitors = () => read<Monitor[]>(client.monitors.$get(), "/mon
 
 /** A holding's Daily samples (#295): each day's Cost to close, On-pace, legs' IV, vega and delta,
  *  and whether it was the close; with the Levels and the planned decay, both the service's. Stored
- *  history and no Provider call: REVIEW asks once when it opens a holding and never polls it. */
+ *  history and no Provider call: asked once when a holding's history is drawn, and never polled. */
 export type Samples = Exclude<Infer<typeof client.positions[":id"]["samples"]["$get"]>, { detail: string }>;
 export type Sample = Samples["samples"][number];
 export const fetchSamples = (id: string) =>
@@ -195,9 +195,6 @@ export const patchMonitor = (id: string, body: Record<string, unknown>) =>
 export const deleteMonitor = (id: string) =>
   sent(client.monitors[":id"].$delete({ param: { id } }), `/monitors/${id}`);
 
-export const patchPosition = (id: string, body: Record<string, unknown>) =>
-  sent(client.positions[":id"].$patch({ param: { id }, json: body }), `/positions/${id}`);
-
 /** Remove a holding. The route clears its monitor links and its samples in the same transaction,
  *  because both reference the row — so this also discards the daily cost to close, per-leg IV and
  *  per-leg vega, which no later sweep can reconstruct (ADR 0011). The rules themselves survive
@@ -206,7 +203,7 @@ export const deletePosition = (id: string) =>
   sent(client.positions[":id"].$delete({ param: { id } }), `/positions/${id}`);
 
 /** Every holding on record, held or CLOSED (ADR 0022), as stored — no live figures, no market
- *  call. Asked for only when the closed list is shown — the journal, on entering REVIEW and after a
+ *  call. Asked for only when the closed list is shown — the journal, on first opening its fold and after a
  *  write that changes it (#296), never polled: nothing else on the page needs it, and the held ones' figures are `/positions/values`' to give. */
 export type Recorded = Awaited<ReturnType<typeof fetchPositions>>[number];
 export const fetchPositions = () =>

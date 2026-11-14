@@ -1,8 +1,8 @@
 /** The redesigned page at the desk, measured in a real layout engine (ADR 0008, ADR 0023).
  *  The phone is measured in `NextLayout.iphone.test.tsx`, under an iPhone profile. */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { commands, page } from "@vitest/browser/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../next/Next";
 import { contrast, oklab, overflowsSideways, serveBook, settle, token } from "./nextBook";
@@ -68,6 +68,47 @@ describe("the arrangement is chosen by the measured width", () => {
     await show();
     expect(overflowsSideways()).toBe(false);
   });
+});
+
+/** The desk's header with no switch in it (#375): "optionality", the spacer, and the buttons on one
+ *  row at the right — no gap where the Live/Review switch stood, in session and out of it. */
+describe("the header, with no switch", () => {
+  const SUNDAY = new Date("2026-11-15T17:00:00Z"); // 12:00 New York, outside the session
+  for (const width of [900, 1280, 2560]) for (const outside of [false, true]) {
+    it(`at ${width}px ${outside ? "outside the session" : "in session"}: the title, then the buttons on one row`, async () => {
+      if (outside) vi.setSystemTime(SUNDAY);
+      await page.viewport(width, 900);
+      await show();
+      expect(root().dataset.arrangement).toBe("desk");
+      const head = document.querySelector<HTMLElement>(".nx-head")!;
+      const kids = [...head.children] as HTMLElement[];
+      const [title, spacer, ...buttons] = kids;
+      expect(kids.map((k) => k.tagName.toLowerCase() + (k.className.includes("nx-spacer") ? ".spacer" : "")))
+        .toEqual(["h1", "span.spacer", "button", "button", "button", "button", "button"]);
+      expect(buttons.map((b) => b.getAttribute("aria-label")!.replace(/ \(.*\)$/, "")))
+        .toEqual(["save as image", "refresh now", "find and act", "add", "settings"]);
+      expect(within(head).queryByRole("group")).toBeNull();
+      expect(head.textContent).not.toMatch(/live|review|by the clock|your choice/i);
+      const gap = parseFloat(getComputedStyle(head).columnGap);
+      const box = (el: Element) => el.getBoundingClientRect();
+      // no gap left where the switch stood: the spacer starts one flex gap after the title
+      expect(box(spacer!).left - box(title!).right).toBeCloseTo(gap, 0);
+      // the buttons on one row, one flex gap apart, the last at the header's own right edge
+      const tops = new Set(buttons.map((b) => Math.round(box(b).top)));
+      expect(tops.size, "the buttons wrapped").toBe(1);
+      for (let i = 1; i < buttons.length; i++) {
+        expect(box(buttons[i]!).left - box(buttons[i - 1]!).right, `before ${buttons[i]!.getAttribute("aria-label")}`)
+          .toBeCloseTo(gap, 0);
+      }
+      const inner = box(head).right - parseFloat(getComputedStyle(head).paddingRight);
+      expect(box(buttons.at(-1)!).right).toBeCloseTo(inner, 0);
+      // and the title on that row too: one row, as tall as its tallest child and its padding
+      const row = box(head).height - parseFloat(getComputedStyle(head).paddingTop)
+        - parseFloat(getComputedStyle(head).paddingBottom) - 1; // its bottom border
+      expect(row).toBeLessThanOrEqual(Math.max(...kids.map((k) => box(k).height)) + 0.5);
+      expect(overflowsSideways()).toBe(false);
+    });
+  }
 });
 
 /** The rule the three colour families exist for: flipping which way is up moves direction and
