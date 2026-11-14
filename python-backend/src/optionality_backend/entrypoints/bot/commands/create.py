@@ -18,6 +18,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from optionality.alarm import RuleShape
 from optionality.contract import build_spx_code, normalize_strike_date
 from optionality.js import number
 
@@ -99,7 +100,10 @@ async def watch(ctx: BotContext, args: list[str]) -> str:
     )
     if is_fault(made):
         return _say(made)
-    return rule_text(f"Watching {code}", m.field, threshold, m.direction, m.compare)
+    return rule_text(
+        f"Watching {code}",
+        RuleShape(field=m.field, combo=False, compare=m.compare, direction=m.direction, threshold=threshold),
+    )
 
 
 async def watchcombo(ctx: BotContext, args: list[str]) -> str:
@@ -142,4 +146,7 @@ async def watchcombo(ctx: BotContext, args: list[str]) -> str:
     )
     if is_fault(made):
         return _say(made)
-    return rule_text(f"Watching combo {name} ({len(legs)} legs)", m.field, threshold, m.direction, m.compare)
+    return rule_text(
+        f"Watching combo {name} ({len(legs)} legs)",
+        RuleShape(field=m.field, combo=True, compare=m.compare, direction=m.direction, threshold=threshold),
+    )

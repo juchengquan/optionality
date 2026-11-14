@@ -135,6 +135,16 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   - The form shows a live payoff at expiry, which catches a wrong leg sign before anything is saved.
 - **Editing alerts:** every field of an alert is editable in place, beside a sentence that says it:
   "spread value ≥ 6.01 — now 2.00, 4.01 away".
+  *(Amended 2026-11-14, #388: the page DRAWS every rule in a short form with symbols —
+  "|val| ≥ 6.01   2.00  ↑4.01", "|Δ| ≥ 0.20   −0.250  ▲ past 0.050", "close ≥ 9.44   3.05  ↑6.39",
+  "|val| ≥ 5.51   —  last 3.05 Fri 16:14" — on the desk's rule column, the phone's cards and sheet,
+  the inspector and the editor, whose draft is the short rule as typed. The sentence above stays,
+  as each one's hover title and what a screen reader hears. Fields are `val` (a spread's price),
+  `mid` (a contract's), `Δ Γ Θ ν` and `IV`; vega is `ν`, not `V`, which beside `val` reads as a
+  value. The arrow points the way the figure — its size, under `abs` — must move to reach the
+  threshold; `▲`/`▼` mark it at or past. The words are the domain's (`alarm.ts`'s `ruleShort`,
+  `figureShort`, `distanceShort`), which Telegram's messages use too, and the page's copy is held to
+  their golden cases.)*
 - **Fired alerts:**
   - A fired ENTRY alert is good news and has its own "opportunity" style, never alarm red. A
     viewer setting can make it look the same as risk instead.

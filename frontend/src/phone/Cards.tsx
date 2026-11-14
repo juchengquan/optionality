@@ -10,7 +10,8 @@ import { Chip, Money } from "../Book";
 import { levelWords } from "../levels";
 import { paceOutcome, paceWords } from "../pace";
 import { Glyph } from "../NeedsLine";
-import { entryName, fieldWords, monitorName, QUARANTINED, sentence } from "../needs";
+import { entryName, fieldWords, monitorName, QUARANTINED } from "../needs";
+import { RuleWords } from "../RuleWords";
 import type { PlacedHolding } from "../placement";
 import { holdingLegs, mutedWords, percent, points, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
@@ -49,7 +50,7 @@ export function RuleLine({ entry, marked = true, children }: {
   return (
     <li className="nxp-rule" data-ref={marked ? entry.id : undefined} data-state={state ?? "calm"}>
       <span className="nxp-rule-name">{entryName(entry)}</span>
-      <span className="nxp-sentence">{sentence(entry)}</span>
+      <span className="nxp-sentence"><RuleWords entry={entry} /></span>
       {state ? <Chip state={state} /> : null}
       {entry.error ? <span className="nxp-error">{entry.error}</span> : null}
       {children}
@@ -125,7 +126,7 @@ export function RuleCard({ entry, under, overlap = null, onOpen }: {
       </header>
       {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
       <Progress entry={entry} />
-      <p className="nxp-sentence">{sentence(entry)}</p>
+      <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
       {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}

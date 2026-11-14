@@ -8,7 +8,7 @@
 import type { Added, Entry, Holding, Monitor } from "./shared/api";
 import { contractCode, type OptionType, type Side, type SpreadsBody } from "./add";
 import { contractBody, contractName, type ContractSpot } from "./contract";
-import { entryName, fieldWords, monitorName, ruleWords } from "./needs";
+import { entryName, fieldWords, monitorName, ruleWords, shortRule } from "./needs";
 import { namesUnheldContract } from "./placement";
 
 /** A rule as the editor needs it, from either door: a row of `/quotes` (on, with figures) or of
@@ -137,8 +137,14 @@ export function spotOf(message: string, sent?: PatchBody, r?: Rule): Spot {
   return "form";
 }
 
-/** The draft in words, as the sentence beside a rule words it (`needs.ts`'s `ruleWords`). */
+/** The draft in the short form, as the line beside a rule draws it (`needs.ts`'s `shortRule`, #388),
+ *  the threshold as typed: "|Δ| ≥ 0.2". */
 export const draftWords = (r: Rule, d: Draft) =>
+  shortRule({ field: d.field, combo: r.combo, compare: d.compare, direction: d.direction, threshold: d.threshold.trim() || "…" });
+
+/** The draft in words, as the sentence beside a rule words it (`needs.ts`'s `ruleWords`): the
+ *  short draft's title, and what a reader hears. */
+export const draftSentence = (r: Rule, d: Draft) =>
   ruleWords(d.field, r.combo, d.compare, d.direction, d.threshold.trim() || "…");
 
 /** The day the sweep deletes an expired rule: it removes one whose expiry is before today less the

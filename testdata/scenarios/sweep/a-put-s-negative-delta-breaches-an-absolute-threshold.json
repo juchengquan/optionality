@@ -68,7 +68,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ SPXW 261218 6400P: option_delta -0.220 fell ≤ -0.2"
+      "⚠️ SPXW 261218 6400P: |Δ| crossed ≥ 0.20 — −0.220  ▲ past 0.020"
     ],
     "rows": {
       "monitors": {

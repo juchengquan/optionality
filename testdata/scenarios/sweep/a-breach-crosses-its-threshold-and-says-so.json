@@ -68,7 +68,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ SPXW 261218 7300C: option_delta 0.340 crossed ≥ 0.3"
+      "⚠️ SPXW 261218 7300C: |Δ| crossed ≥ 0.30 — 0.340  ▲ past 0.040"
     ],
     "rows": {
       "monitors": {

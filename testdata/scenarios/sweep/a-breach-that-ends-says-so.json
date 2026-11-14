@@ -68,7 +68,7 @@
   },
   "expect": {
     "messages": [
-      "✅ SPXW 261218 7300C: option_delta 0.270 back below 0.3"
+      "✅ SPXW 261218 7300C: |Δ| back below 0.30 — 0.270  ↑0.030"
     ],
     "rows": {
       "monitors": {

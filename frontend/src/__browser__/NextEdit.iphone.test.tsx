@@ -65,12 +65,15 @@ describe("editing a Monitor from the sheet", () => {
     const sheet = await openSheet();
     const form = await openEditor(sheet, SPREAD);
     await userEvent.fill(within(form).getByLabelText("threshold"), "3");
-    expect(within(form).getByTestId("draft").textContent).toBe("|spread value| ≥ 3");
+    expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|val| ≥ 3");
+    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|spread value| ≥ 3");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18", body: { threshold: 3 } }]));
     await waitFor(() => expect(within(sheet).queryByRole("form")).toBeNull());
     // the service's: 3 − |−2.4|, as it now serves the row
     expect(within(sheet).getByText(/^\|spread value\| ≥ 3 — now 2\.40, 0\.60 away$/)).toBeTruthy();
+    expect([...sheet.querySelectorAll(".nx-rule-short")].map((el) => el.textContent))
+      .toContain("|val| ≥ 3.00   2.40  ↑0.60");
   });
 
   it("says a signed threshold of 0 in the sheet beside the threshold, on screen and on top", async () => {

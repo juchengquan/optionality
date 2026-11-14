@@ -17,6 +17,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from optionality.alarm import RuleShape, rule_shape, rule_short
 from optionality.monitor import Monitor, monitor_leg_codes
 from optionality.quote import ByCode
 
@@ -62,6 +63,12 @@ class SilenceVerdict(BaseModel):
     notice: str | None
 
 
+def _named(monitor: Monitor) -> str:
+    """A rule by its code AND its rule in short (#388): a notice is read alone, and one contract may
+    carry a delta rule and a price rule — by its code alone the two notices were one sentence."""
+    return f"{monitor.code} {rule_short(rule_shape(monitor))}"
+
+
 def silence_verdict(monitor: Monitor, priced: set[str], sweeps_so_far: int, limit: int) -> SilenceVerdict:
     """A sweep in which this rule's figure did not arrive.
 
@@ -74,7 +81,7 @@ def silence_verdict(monitor: Monitor, priced: set[str], sweeps_so_far: int, limi
         return SilenceVerdict(
             count=None,
             quarantine=True,
-            notice=f"⚠️ monitor {monitor.code} disabled: {why} for {count} consecutive sweeps",
+            notice=f"⚠️ monitor {_named(monitor)} disabled: {why} for {count} consecutive sweeps",
         )
     return SilenceVerdict(count=count, quarantine=False, notice=None)
 
@@ -112,7 +119,9 @@ def unknown_contract_verdict(monitor: Monitor, unknown: set[str]) -> UnknownCont
     return UnknownContractVerdict(
         hits=hits,
         quarantine=True,
-        notice=(f"⚠️ monitor {monitor.code} disabled: unknown contract {', '.join(hits)} (delisted or never existed)"),
+        notice=(
+            f"⚠️ monitor {_named(monitor)} disabled: unknown contract {', '.join(hits)} (delisted or never existed)"
+        ),
     )
 
 
@@ -126,13 +135,15 @@ class ExpiryVerdict(BaseModel):
 
 
 class ExpiringMonitor(BaseModel):
-    """The three fields the decision reads. A whole Monitor would do, but the service hands this
-    straight out of a database row and the notebook has no reason to build more than it needs."""
+    """The fields the decision reads. A whole Monitor would do, but the service hands this
+    straight out of a database row and the notebook has no reason to build more than it needs.
+    `rule` is the row's, so two rules on one expiring contract are two notices that say which (#388)."""
 
     model_config = ConfigDict(frozen=True)
     code: str
     strike_date: str
     enabled: bool
+    rule: RuleShape
 
 
 def expiry_verdict(monitor: ExpiringMonitor, today: str, retention_days: int) -> ExpiryVerdict:
@@ -145,15 +156,16 @@ def expiry_verdict(monitor: ExpiringMonitor, today: str, retention_days: int) ->
     """
     cutoff = add_days(today, -retention_days)
     expiry = monitor.strike_date
+    code = f"{monitor.code} {rule_short(monitor.rule)}"
     if expiry < cutoff:
-        notice = f"ℹ️ monitor {monitor.code} expired ({expiry}) — removed" if monitor.enabled else None
+        notice = f"ℹ️ monitor {code} expired ({expiry}) — removed" if monitor.enabled else None
         return ExpiryVerdict(action="remove", notice=notice)
     if expiry < today:
         if not monitor.enabled:
             return ExpiryVerdict(action="keep", notice=None)
         return ExpiryVerdict(
             action="mute",
-            notice=(f"ℹ️ monitor {monitor.code} expired ({expiry}) — muted; auto-removes in {retention_days} days"),
+            notice=(f"ℹ️ monitor {code} expired ({expiry}) — muted; auto-removes in {retention_days} days"),
         )
     return ExpiryVerdict(action="keep", notice=None)
 

@@ -14,6 +14,7 @@
  *  package takes its knobs directly, the same decision `exit.exitPolicy` and `alarm.alarmPolicy`
  *  record by being the two functions the port does not have.
  */
+import { ruleShape, ruleShort, type RuleShape } from "./alarm.ts";
 import { monitorLegCodes, type Monitor } from "./monitor.ts";
 import type { ByCode } from "./quote.ts";
 
@@ -67,6 +68,13 @@ export interface SilenceVerdict {
  *  `limit` of 0 only logs, by the invariant: quarantine is OBSERVED, never declared, and what a
  *  provider serves depends on the account rather than on its code (CLAUDE.md).
  */
+/** A rule by its code AND its rule in short (#388): "1120_7100 |Δ| ≥ 0.30". A notice is read alone,
+ *  and one contract may carry a delta rule and a price rule — by its code alone the two notices
+ *  were one sentence, and said nothing of which rule had stopped. */
+function named(monitor: Monitor): string {
+  return `${monitor.code} ${ruleShort(ruleShape(monitor))}`;
+}
+
 export function silenceVerdict(
   monitor: Monitor, priced: Set<string>, sweepsSoFar: number, limit: number,
 ): SilenceVerdict {
@@ -76,7 +84,7 @@ export function silenceVerdict(
     return {
       count: null,
       quarantine: true,
-      notice: `⚠️ monitor ${monitor.code} disabled: ${why} for ${count} consecutive sweeps`,
+      notice: `⚠️ monitor ${named(monitor)} disabled: ${why} for ${count} consecutive sweeps`,
     };
   }
   return { count, quarantine: false, notice: null };
@@ -122,7 +130,7 @@ export function unknownContractVerdict(
   return {
     hits,
     quarantine: true,
-    notice: `⚠️ monitor ${monitor.code} disabled: unknown contract ${hits.join(", ")} `
+    notice: `⚠️ monitor ${named(monitor)} disabled: unknown contract ${hits.join(", ")} `
       + "(delisted or never existed)",
   };
 }
@@ -139,14 +147,16 @@ export interface ExpiryVerdict {
  *  Expired monitors are muted with a notice and auto-deleted after the retention window; nothing
  *  else is ever auto-deleted (CLAUDE.md). `enabled` is here because the notices are about a CHANGE:
  *  a rule already muted says nothing when it is finally removed, except on the retention=0 path
- *  where it never got the muted notice in the first place.
+ *  where it never got the muted notice in the first place. `rule` is the row's, short, so two rules
+ *  on one expiring contract are two notices that say which is which (#388).
  */
 export function expiryVerdict(
-  monitor: { code: string; strike_date: string; enabled: boolean },
+  monitor: { code: string; strike_date: string; enabled: boolean; rule: RuleShape },
   today: string, retentionDays: number,
 ): ExpiryVerdict {
   const cutoff = addDays(today, -retentionDays);
-  const { code, strike_date: expiry } = monitor;
+  const { strike_date: expiry } = monitor;
+  const code = `${monitor.code} ${ruleShort(monitor.rule)}`;
   if (expiry < cutoff) {
     return {
       action: "remove",

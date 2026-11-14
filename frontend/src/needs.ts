@@ -1,7 +1,7 @@
 import type { Entry, Health, Holding, Monitor } from "./shared/api";
 import { shortContract, shortDate } from "./shared/format";
 import { overlapOf } from "./placement";
-import { newYorkWhen } from "./session";
+import { newYorkWeekdayWhen, newYorkWhen } from "./session";
 
 /** What needs you, for the page (ADR 0012, amended by ADR 0023).
  *
@@ -174,6 +174,17 @@ export function ruleWords(
   return `${compare === "abs" ? `|${words}|` : words} ${sign} ${threshold}`;
 }
 
+/** A stored rule in words, as `sentence` begins it: a held credit's signed stop said as the cost to
+ *  close it watches (`isCostToClose`), anything else as `ruleWords` says it. What the page says to a
+ *  pointer and a reader wherever it DRAWS the rule short, so the two never word a stop apart: the
+ *  short form draws "close ≥ 4.05", and this says "cost to close ≥ 4.05", never "spread value ≤ -4.05". */
+export function storedRuleWords(
+  field: string, combo: boolean, compare: string, direction: string, threshold: number,
+): string {
+  return isCostToClose(field, combo, compare, direction, threshold) ? `cost to close ≥ ${-threshold}`
+    : ruleWords(field, combo, compare, direction, threshold);
+}
+
 /** "|spread value| ≥ 6.01 — now -2.00, 4.01 away"; "cost to close ≥ 11 — now 2.00, 9.00 away" for a
  *  held credit's signed stop (`isCostToClose`).
  *
@@ -189,8 +200,7 @@ export function sentence(entry: Entry): string {
   // a signed stop is said as the cost to close it watches, and its figure as that cost: the
   // distance is the same either way round
   const cost = isCostToClose(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
-  const rule = cost ? `cost to close ≥ ${-entry.threshold}`
-    : ruleWords(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
+  const rule = storedRuleWords(entry.field, Boolean(entry.legs), entry.compare, entry.direction, entry.threshold);
   const places = PLACES[entry.field] ?? 2;
   if (entry.watched === null) {
     // out of the session, the sweep's last reading in it, with its time, beside the dash (#380) — on
@@ -206,4 +216,109 @@ export function sentence(entry: Entry): string {
   const where = d > 0 ? `${d.toFixed(places)} away`
     : d === 0 ? "at the threshold" : `past it by ${(-d).toFixed(places)}`;
   return `${rule} — ${now}, ${where}`;
+}
+
+/** A rule as its short form needs it (#388) — the domain's `RuleShape` (`typescript/src/domain/
+ *  alarm.ts`), which the page cannot import: the frontend reaches only the backend. The words below
+ *  are the domain's, held to its golden cases (`testdata/golden/alarm.json`) case for case by
+ *  `NextRuleShort.test.ts`, so the dashboard and Telegram cannot word a rule apart. */
+export interface RuleShape {
+  field: string;
+  combo: boolean;
+  compare: string;
+  direction: string;
+  threshold: number;
+}
+
+/** A served rule's shape: a combo is one that carries legs, as the rest of the page reads it. */
+export function shapeOf(r: { field: string; legs?: unknown[] | null; compare: string; direction: string; threshold: number }): RuleShape {
+  return {
+    field: r.field, combo: Boolean(r.legs), compare: r.compare, direction: r.direction, threshold: r.threshold,
+  };
+}
+
+/** What a rule watches, as a symbol: `val` a spread's price, `mid` a contract's, and the Greeks'
+ *  letters. Vega is `ν`, not `V`, which beside `val` would read as a value. */
+export function fieldSymbol(field: string, combo: boolean): string {
+  switch (field) {
+    case "mid_price": return combo ? "val" : "mid";
+    case "option_delta": return "Δ";
+    case "option_gamma": return "Γ";
+    case "option_theta": return "Θ";
+    case "option_vega": return "ν";
+    case "option_implied_volatility": return "IV";
+    default: return field;
+  }
+}
+
+const shapeIsCost = (r: RuleShape) => isCostToClose(r.field, r.combo, r.compare, r.direction, r.threshold);
+/** whether the rule as SAID is at-or-above, which the arrows follow: a cost to close is said `≥` */
+const saysAbove = (r: RuleShape) => shapeIsCost(r) || r.direction !== "below";
+/** the real minus, U+2212, as the pace gap writes it */
+const minus = (text: string) => (text.startsWith("-") ? `\u2212${text.slice(1)}` : text);
+
+/** "|Δ| ≥ 0.20", "close ≥ 9.44": a rule in symbols (#388). A threshold given as a number is written
+ *  to two places at least and to every place it carries; one given as TEXT — a draft being typed —
+ *  is written as typed, so the editor's draft is this with the owner's own keystrokes. */
+export function shortRule(r: Omit<RuleShape, "threshold"> & { threshold: number | string }): string {
+  const typed = typeof r.threshold === "string";
+  const cost = !typed && shapeIsCost(r as RuleShape);
+  const symbol = fieldSymbol(r.field, r.combo);
+  const subject = cost ? "close" : r.compare === "abs" ? `|${symbol}|` : symbol;
+  const sign = cost || r.direction !== "below" ? "≥" : "≤";
+  if (typeof r.threshold === "string") return `${subject} ${sign} ${r.threshold}`;
+  const t = cost ? -r.threshold : r.threshold;
+  return `${subject} ${sign} ${minus(t.toFixed(typedPlaces(t)))}`;
+}
+
+/** The places a threshold was typed with: two at least, and as many more as it carries. */
+function typedPlaces(threshold: number): number {
+  let places = 2;
+  while (places < 10 && Number(threshold.toFixed(places)) !== threshold) places++;
+  return places;
+}
+
+/** A figure's and its distance's places: the field's, or the threshold's where it was typed finer. */
+const shownPlaces = (r: RuleShape) => Math.max(PLACES[r.field] ?? 2, typedPlaces(r.threshold));
+
+/** A distance never written as zero when it is not: "<0.001" where it rounds away at these places. */
+const sizeText = (size: number, places: number) =>
+  Number(size.toFixed(places)) === 0 ? `<${(10 ** -places).toFixed(places)}` : size.toFixed(places);
+
+/** The figure as served, to its field's places, with a real minus; for a cost to close, that cost. */
+export function shortFigure(r: RuleShape, value: number): string {
+  return minus((shapeIsCost(r) ? -value : value).toFixed(shownPlaces(r)));
+}
+
+/** "↑0.113", "▲ at", "▲ past 0.050" (`↓`/`▼` for a rule said `≤`): the service's distance
+ *  (`thresholdDistance`, ADR 0005), said with an arrow the way the figure — its size, under abs —
+ *  must move to reach the threshold. */
+export function shortDistance(r: RuleShape, distance: number): string {
+  const up = saysAbove(r);
+  const places = shownPlaces(r);
+  if (distance > 0) return `${up ? "↑" : "↓"}${sizeText(distance, places)}`;
+  if (distance === 0) return `${up ? "▲" : "▼"} at`;
+  return `${up ? "▲" : "▼"} past ${sizeText(-distance, places)}`;
+}
+
+/** The rule's line in the short form (#388), what the page DRAWS — `sentence` stays its title and
+ *  its accessible name:
+ *
+ *    |val| ≥ 4.51   2.10  ↑2.41
+ *    |Δ| ≥ 0.20   −0.087  ▲ past 0.050
+ *    |val| ≥ 5.51   —  last 3.05 Fri 16:14
+ *
+ *  Three spaces after the rule and two before the distance, drawn as they are (`white-space:
+ *  pre-wrap` on the line). Every figure is the service's, as in `sentence`. */
+export function shortSentence(entry: Entry): string {
+  const r = shapeOf(entry);
+  const rule = shortRule(r);
+  if (entry.watched === null) {
+    const last = entry.last_reading;
+    if (!last) return `${rule}   —`;
+    const when = newYorkWeekdayWhen(last.at);
+    return `${rule}   —  last ${shortFigure(r, last.value)}${when ? ` ${when}` : ""}`;
+  }
+  const now = shortFigure(r, entry.watched);
+  return entry.distance === null ? `${rule}   ${now}` : `${rule}   ${now}  ${shortDistance(r, entry.distance)}`;
 }

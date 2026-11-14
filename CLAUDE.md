@@ -696,6 +696,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   Contract is one leg with a quantity, never repeated, so "held twice" stays a fact about two holdings.
 - Telegram tables: ~40 monospace chars per row, four columns max — a new question gets a new command
   (`/quotes`, `/greeks`, `/vol`), never a fifth column. `<pre>` + `parse_mode: HTML` only for table replies.
+  A rule is written in its SHORT form everywhere (#388) — `|Δ| ≥ 0.20`, `close ≥ 9.44`, the figure
+  as served with a real minus, `↑0.113` / `▲ past 0.050` — by the domain's `ruleShort`,
+  `figureShort` and `distanceShort` (`alarm.ts`), in every alarm, reminder, clear, quarantine and
+  expiry message and in `/monitors` (contract, rule, last, state), and drawn so on the dashboard,
+  whose copy (`needs.ts`) is held to their golden cases.
 - Timestamps: storage is UTC; display converts via `DISPLAY_TZ`. moomoo `update_time` arrives naive US-Eastern
   and means LAST TRADE, not freshness — `fetched_at` is freshness.
 - Config: behavior knobs live in `.env` (which mirrors `.env.example`'s structure — active lines are overrides,

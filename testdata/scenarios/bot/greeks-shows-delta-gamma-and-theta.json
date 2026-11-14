@@ -191,7 +191,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>contract      delta  gamma    theta\n261218 C7300  0.210  0.00012  -0.85</pre>",
+      "text": "<pre>contract      delta  gamma    theta\n261218 C7300  0.210  0.00012  −0.85</pre>",
       "parse_mode": "HTML"
     },
     "rows": {},

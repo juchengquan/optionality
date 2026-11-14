@@ -10,7 +10,7 @@
  *  disagree, and the TypeScript itself rounds three ways (`Math.round` in exit and expiry, Python's
  *  half-to-even in thresholdFill, `toFixed` in round4).
  */
-import type { AlarmPolicy, AlarmState } from "../domain/alarm.ts";
+import type { AlarmPolicy, AlarmState, RuleShape } from "../domain/alarm.ts";
 import { buildSpxCode } from "../domain/contract.ts";
 import type { ExitPolicy } from "../domain/exit.ts";
 import type { Monitor } from "../domain/monitor.ts";
@@ -139,6 +139,13 @@ const alarms: AlarmPolicy = { cooldownSeconds: 900, repeatSeconds: 3600 };
 const noRepeat: AlarmPolicy = { cooldownSeconds: 900, repeatSeconds: 0 };
 /** `direction: "below"` — the wording changes on every branch, which is the point of casing it */
 const falling: Monitor = { ...single, direction: "below", threshold: 0.3 };
+/** The short form's fixtures (#388): one rule shape, varied a fact at a time. */
+const shape = (over: Partial<RuleShape> = {}): RuleShape =>
+  ({ field: "option_delta", combo: false, compare: "abs", direction: "above", threshold: 0.2, ...over });
+/** a held credit's stop, as the add form posts it: the spread's signed mid at or below minus its cost */
+const costStop = shape({ field: "mid_price", combo: true, compare: "signed", direction: "below", threshold: -9.44 });
+/** the expiring rule the expiry notices name */
+const expiring = shape({ threshold: 0.3 });
 
 const sample = (observed_on: string, dte: number, iv: number[], vega: number[]): VolSample => ({
   observed_on, dte,
@@ -833,12 +840,11 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "alarmTransition", name: "never alarmed counts as long ago",
       args: [single, 0.42, "1120_7100", state(true, null), alarms, NOW] },
 
-    // the figure is three decimals, which is the one place toFixed is exercised by a case
-    { fn: "alarmTransition", name: "the figure is three decimals, rounded as JavaScript rounds",
+    // the figure is to its field's places — a delta's three — rounded as toFixed rounds
+    { fn: "alarmTransition", name: "the figure is to its field's places, rounded as JavaScript rounds",
       args: [single, 0.3125, "1120_7100", state(false, null), alarms, NOW] },
     // 0.0625 is an EXACT binary half at the third decimal, so the two languages part company
-    // inside the sentence: toFixed gives 0.063 and Python's round gives 0.062. The only case in
-    // this file where the notice itself carries a rounding divergence.
+    // inside the sentence: toFixed gives 0.063 and Python's round gives 0.062.
     { fn: "alarmTransition", name: "an exact binary half in the figure rounds away from zero",
       args: [falling, 0.0625, "1120_7100", state(false, null), alarms, NOW] },
 
@@ -846,39 +852,96 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "alarmTransition", name: "exactly at the threshold is a breach",
       args: [single, 0.3, "1120_7100", state(false, null), alarms, NOW] },
 
-    // A NEGATIVE reading under `compare: "abs"`, which every case above missed — the ordinary
-    // shape of a short put's delta. The comparison is mirrored so the sentence is true of the
-    // figure it prints; printing the magnitude instead would have broken the older requirement
-    // that the number match the dashboard (review 2026-11-01).
-    { fn: "alarmTransition", name: "a negative reading breaches below the negated threshold",
+    // A NEGATIVE reading under `compare: "abs"` — the ordinary shape of a short put's delta. The
+    // rule is written as the size it compares, `|Δ|`, so the relation is true of a negative figure
+    // as it stands and the figure is printed as served, matching the dashboard (#388). Until then
+    // the comparison was MIRRORED to stay true beside a raw field (review 2026-11-01).
+    { fn: "alarmTransition", name: "a negative reading crosses as its size",
       args: [single, -0.42, "1120_P6500", state(false, null), alarms, NOW] },
     { fn: "alarmTransition", name: "and reminds in the same words",
       args: [single, -0.42, "1120_P6500", state(true, ago(3601)), alarms, NOW] },
-    { fn: "alarmTransition", name: "and recovers back ABOVE the negated threshold",
+    { fn: "alarmTransition", name: "and its size comes back below",
       args: [single, -0.12, "1120_P6500", state(true, ago(3601)), alarms, NOW] },
-    // the mirror runs the other way for a below-rule: "alarm when the magnitude has decayed"
+    // a below-rule: "alarm when the magnitude has decayed"
     { fn: "alarmTransition", name: "a decayed magnitude reads true under a below-rule",
       args: [{ ...single, threshold: 0.05, direction: "below" }, -0.03, "1120_P6500",
              state(false, null), alarms, NOW] },
-    // exactly zero is NOT mirrored. Both wordings are arithmetically true there — 0 ≤ 0.05 and
-    // 0 ≥ -0.05 — so nothing but a case can say which one is printed, and the unmirrored reading is
-    // the one that reads naturally. `-0 < 0` is false, so a negative zero lands here too.
-    { fn: "alarmTransition", name: "a reading of exactly zero is not mirrored",
+    { fn: "alarmTransition", name: "a reading of exactly zero",
       args: [{ ...single, threshold: 0.05, direction: "below" }, 0, "1120_P6500",
              state(false, null), alarms, NOW] },
-    // an INTEGER threshold, which `mid_price >= 5` is: JavaScript writes 5 and Python's float
-    // writes 5.0, a divergence in the one string ADR 0017 exists to compare exactly. Every case
-    // above used 0.3 (review 2026-11-01).
-    { fn: "alarmTransition", name: "an integer threshold is written without a trailing zero",
+    // an INTEGER threshold, which `mid_price >= 5` is: written to the field's places either way, so
+    // JavaScript's 5 and Python's 5.0 cannot part company here (review 2026-11-01)
+    { fn: "alarmTransition", name: "an integer threshold is written to its places",
       args: [{ ...single, field: "mid_price", threshold: 5 }, 6.5, "1120_IC",
              state(false, null), alarms, NOW] },
-    { fn: "alarmTransition", name: "and a negated integer threshold likewise",
+    { fn: "alarmTransition", name: "and beside a negative figure likewise",
       args: [{ ...single, field: "mid_price", threshold: 5 }, -6.5, "1120_IC",
              state(false, null), alarms, NOW] },
-    // signed is untouched: a negative threshold is legal there and the sign is the point
-    { fn: "alarmTransition", name: "a signed rule is left exactly as it was",
+    // signed: no bars, and a negative threshold is legal and keeps its sign
+    { fn: "alarmTransition", name: "a signed rule keeps its signs",
       args: [{ ...single, threshold: -0.1, direction: "below", compare: "signed" }, -0.42,
              "1120_P6500", state(false, null), alarms, NOW] },
+    // a held credit's stop is said as the cost to close crossing up, and recovering down (#388)
+    { fn: "alarmTransition", name: "a held credit's stop is the cost to close crossing up",
+      args: [{ ...combo, compare: "signed", direction: "below", threshold: -9.44 }, -9.6, "1120_IC",
+             state(false, null), alarms, NOW] },
+    { fn: "alarmTransition", name: "and back below its cost",
+      args: [{ ...combo, compare: "signed", direction: "below", threshold: -9.44 }, -3.05, "1120_IC",
+             state(true, ago(4000)), alarms, NOW] },
+
+    // the short form (#388), which the dashboard writes too and is held to through this file
+    { fn: "ruleShape", name: "a single contract", args: [single] },
+    { fn: "ruleShape", name: "a combo, by its legs", args: [combo] },
+    { fn: "ruleShape", name: "empty legs are a single contract", args: [{ ...single, legs: [] }] },
+    { fn: "ruleShort", name: "a magnitude in bars", args: [shape()] },
+    { fn: "ruleShort", name: "a signed figure without", args: [shape({ compare: "signed" })] },
+    { fn: "ruleShort", name: "a below rule", args: [shape({ direction: "below" })] },
+    { fn: "ruleShort", name: "a spread's price is val", args: [shape({ field: "mid_price", combo: true, threshold: 4.51 })] },
+    { fn: "ruleShort", name: "a contract's price is mid", args: [shape({ field: "mid_price", threshold: 30 })] },
+    { fn: "ruleShort", name: "gamma, to the places it was typed", args: [shape({ field: "option_gamma", threshold: 0.0012 })] },
+    { fn: "ruleShort", name: "theta", args: [shape({ field: "option_theta", compare: "signed", direction: "below", threshold: -1.5 })] },
+    { fn: "ruleShort", name: "vega is nu", args: [shape({ field: "option_vega", combo: true, threshold: 3 })] },
+    { fn: "ruleShort", name: "IV", args: [shape({ field: "option_implied_volatility", threshold: 25 })] },
+    { fn: "ruleShort", name: "an unknown field as it is stored", args: [shape({ field: "bid_price", threshold: 1 })] },
+    { fn: "ruleShort", name: "a threshold typed to three places keeps them", args: [shape({ threshold: 0.125 })] },
+    { fn: "ruleShort", name: "a held credit's stop is the cost to close", args: [costStop] },
+    { fn: "ruleShort", name: "a below rule on a positive spread value is no cost",
+      args: [{ ...costStop, threshold: 1.5 }] },
+    { fn: "ruleShort", name: "a negative signed threshold has the real minus",
+      args: [shape({ compare: "signed", direction: "below", threshold: -0.1 })] },
+    { fn: "figureShort", name: "a negative delta as served, real minus", args: [shape(), -0.087] },
+    { fn: "figureShort", name: "a price to the cent", args: [shape({ field: "mid_price", combo: true }), 2.1] },
+    { fn: "figureShort", name: "a gamma to four places", args: [shape({ field: "option_gamma" }), 0.00123] },
+    { fn: "figureShort", name: "an exact binary half rounds as JavaScript rounds", args: [shape(), 0.0625] },
+    { fn: "figureShort", name: "a cost to close is the cost", args: [costStop, -3.05] },
+    { fn: "figureShort", name: "a negative that rounds to zero keeps its sign", args: [shape(), -0.0004] },
+    { fn: "distanceShort", name: "an above rule points up", args: [shape(), 0.113] },
+    { fn: "distanceShort", name: "a below rule points down", args: [shape({ direction: "below" }), 0.113] },
+    { fn: "distanceShort", name: "at the threshold", args: [shape(), 0] },
+    { fn: "distanceShort", name: "at the threshold, below", args: [shape({ direction: "below" }), 0] },
+    { fn: "distanceShort", name: "past an above rule", args: [shape(), -0.05] },
+    { fn: "distanceShort", name: "past a below rule", args: [shape({ direction: "below" }), -0.05] },
+    { fn: "distanceShort", name: "a cost to close rises to its stop", args: [costStop, 6.39] },
+    { fn: "distanceShort", name: "a price to the cent", args: [shape({ field: "mid_price", combo: true }), 2.41] },
+    // a threshold typed finer than its field's places sets the figure's and the distance's, and a
+    // distance that rounds away is never written as zero (review of #388)
+    { fn: "figureShort", name: "a mid to the places its threshold was typed with",
+      args: [shape({ field: "mid_price", threshold: 4.505 }), 4.506] },
+    { fn: "distanceShort", name: "past a threshold typed to the tenth of a cent",
+      args: [shape({ field: "mid_price", threshold: 4.505 }), -0.001] },
+    { fn: "figureShort", name: "a gamma to its threshold's five places",
+      args: [shape({ field: "option_gamma", threshold: 0.00015 }), 0.0001] },
+    { fn: "distanceShort", name: "a gamma's distance to its threshold's five places",
+      args: [shape({ field: "option_gamma", threshold: 0.00015 }), 0.00005] },
+    { fn: "distanceShort", name: "a distance that rounds to zero is under the last place, not zero",
+      args: [shape({ threshold: 0.3 }), 0.0000001] },
+    { fn: "distanceShort", name: "and past it likewise", args: [shape({ threshold: 0.3 }), -0.0004] },
+    { fn: "alarmTransition", name: "a breach past a finely typed threshold says by how much",
+      args: [{ ...single, field: "mid_price", threshold: 4.505 }, 4.506, "1120_7100", state(false, null), alarms, NOW] },
+    { fn: "alarmTransition", name: "a gamma back below a five-place threshold",
+      args: [{ ...single, field: "option_gamma", threshold: 0.00015 }, 0.0001, "1120_7100", state(true, ago(4000)), alarms, NOW] },
+    { fn: "alarmTransition", name: "a hair below its threshold is not at it",
+      args: [single, 0.2999999, "1120_7100", state(true, ago(4000)), alarms, NOW] },
   ],
   /** JavaScript's own rules, which the Python reimplements by hand (ADR 0017).
    *
@@ -1003,20 +1066,20 @@ export const INPUTS: Record<string, CaseInput[]> = {
 
     // what becomes of a monitor whose expiry has passed
     { fn: "expiryVerdict", name: "not expired yet, so nothing happens",
-      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-19", 7] },
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true, rule: expiring }, "2026-11-19", 7] },
     { fn: "expiryVerdict", name: "expiry day itself is not past",
-      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-20", 7] },
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true, rule: expiring }, "2026-11-20", 7] },
     { fn: "expiryVerdict", name: "the day after expiry mutes with a notice",
-      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-21", 7] },
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true, rule: expiring }, "2026-11-21", 7] },
     { fn: "expiryVerdict", name: "already muted, so the mute is not announced twice",
-      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false }, "2026-11-21", 7] },
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false, rule: expiring }, "2026-11-21", 7] },
     { fn: "expiryVerdict", name: "past the retention window it is removed, quietly if already muted",
-      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false }, "2026-11-28", 7] },
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false, rule: expiring }, "2026-11-28", 7] },
     // retention 0: it never got the muted notice, so the removal is what says anything at all
     { fn: "expiryVerdict", name: "zero retention removes the day after, and says so",
-      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true }, "2026-11-21", 0] },
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: true, rule: expiring }, "2026-11-21", 0] },
     { fn: "expiryVerdict", name: "the retention boundary itself is not past",
-      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false }, "2026-11-27", 7] },
+      args: [{ code: "1120_7100", strike_date: "2026-11-20", enabled: false, rule: expiring }, "2026-11-27", 7] },
 
     // the other two faults a sweep quarantines for. `silenceVerdict` above counts sweeps because a
     // figure may yet arrive; these two are facts already stated, so one sweep settles them.

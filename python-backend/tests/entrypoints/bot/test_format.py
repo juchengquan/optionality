@@ -18,6 +18,7 @@ import re
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
+from optionality.alarm import RuleShape
 from optionality.quote import DerivedSpx
 
 from optionality_backend.entrypoints.bot.format import (
@@ -30,8 +31,8 @@ from optionality_backend.entrypoints.bot.format import (
     fit_cell,
     fixed,
     fmt_value,
-    has_format,
     js_text,
+    minus_sign,
     py_number,
     rule_text,
     standing_note,
@@ -128,7 +129,7 @@ class TestANameTooLongForTheTable:
     def test_leaves_every_table_that_already_fits_exactly_as_it_was(self):
         rows = [["dec-calls", "mid", "-1.0000", "≥4.0", "armed"]]
         assert self.lines(table(["contract", "field", "last", "thr", "state"], rows))[1] == (
-            "dec-calls  mid    -1.0000  ≥4.0  armed"
+            "dec-calls  mid    \u22121.0000  ≥4.0  armed"
         )
         assert fit_cell("short", 10) == "short"
 
@@ -142,11 +143,8 @@ class TestFmtValue:
         assert fmt_value("option_delta", 0.512345) == "0.512"
         assert fmt_value("option_delta", 0.5) == "0.500"
         assert fmt_value("option_implied_volatility", 21.45678) == "21.457"
-        assert has_format("option_delta") is True
-        assert has_format("option_implied_volatility") is True
 
     def test_gives_everything_else_python_s_str(self):
-        assert has_format("mid_price") is False
         assert fmt_value("mid_price", 4.5) == "4.5"
         assert fmt_value("mid_price", 5) == "5.0"
         assert fmt_value("bid_price", 1) == "1.0"
@@ -204,15 +202,37 @@ class TestThresholdError:
         assert threshold_error("signed", 0.01) is None
 
 
+class TestOneMinusInEveryTable388:
+    def test_writes_a_negative_figure_with_the_real_minus_and_leaves_a_name_alone(self):
+        assert minus_sign("-0.85") == "\u22120.85"
+        assert minus_sign("-.5") == "\u2212.5"
+        assert minus_sign("bear-cs") == "bear-cs"
+        assert minus_sign("-") == "-"
+        assert table(["c", "delta"], [["x", "-0.850"]]) == "<pre>c  delta\nx  \u22120.850</pre>"
+
+
 class TestRuleText:
-    def test_says_the_rule_back_in_full_so_a_mistyped_direction_is_visible_at_once(self):
+    @staticmethod
+    def rule(field: str, combo: bool, threshold: float, direction: str, compare: str) -> RuleShape:
+        return RuleShape(field=field, combo=combo, threshold=threshold, direction=direction, compare=compare)
+
+    def test_says_the_rule_back_in_the_short_form_so_a_mistyped_direction_is_visible_at_once_388(self):
+        rule = self.rule
         assert (
-            rule_text("Watching US.X", "option_delta", 0.6, "above", "abs")
-            == "Watching US.X: alarm when abs(option_delta) ≥ 0.6"
+            rule_text("Watching US.X", rule("option_delta", False, 0.6, "above", "abs"))
+            == "Watching US.X: alarm when |Δ| ≥ 0.60"
         )
-        assert rule_text("US.X", "mid_price", 30, "below", "abs") == "US.X: alarm when abs(mid_price) ≤ 30"
-        # signed drops the abs(), because the sign is the point
-        assert rule_text("bear-cs", "mid_price", -4.05, "below", "signed") == "bear-cs: alarm when mid_price ≤ -4.05"
+        assert rule_text("US.X", rule("mid_price", False, 30, "below", "abs")) == "US.X: alarm when |mid| ≤ 30.00"
+        # signed drops the bars, because the sign is the point
+        assert (
+            rule_text("bear-cs", rule("option_delta", False, -0.15, "below", "signed"))
+            == "bear-cs: alarm when Δ ≤ \u22120.15"
+        )
+        # and a spread's signed value at or below a negative figure is its cost to close
+        assert (
+            rule_text("bear-cs", rule("mid_price", True, -4.05, "below", "signed"))
+            == "bear-cs: alarm when close ≥ 4.05"
+        )
 
 
 class TestTheHelpAndTheMenu:

@@ -18,6 +18,7 @@ question gets a new command, never a fifth column (CLAUDE.md).
 
 from collections.abc import Callable
 
+from optionality.alarm import RuleShape, figure_short, rule_short
 from optionality.contract import short_spx_code
 from optionality.exit import ExitPolicy
 from optionality.js import number
@@ -29,7 +30,7 @@ from ....db.values import from_sqlite_bool
 from ....env import Settings
 from ....hydrate import to_monitor
 from ....monitors import watchlist_quotes
-from ..format import FIELD_SHORT, fixed, fmt_value, has_format, js_text, py_number, table
+from ..format import FIELD_SHORT, fixed, fmt_value, js_text, py_number, table
 from .context import EMPTY_WATCHLIST, BotContext, failed
 
 
@@ -48,6 +49,9 @@ def _cell(value: object, render: Callable[[float], str]) -> str:
 
 
 def monitors(ctx: BotContext, args: list[str]) -> str:
+    """The stored rules, each in the short form the alarms use (#388): its rule, its last figure and
+    its state — four columns, where the field and the threshold were two of five. A held credit's
+    stop reads `close ≥ 9.44` beside its last cost to close, as the dashboard says it."""
     rows = list_monitors(ctx.db)
     if not rows:
         return EMPTY_WATCHLIST
@@ -56,18 +60,16 @@ def monitors(ctx: BotContext, args: list[str]) -> str:
         state = "🔔" if from_sqlite_bool(m["triggered"]) else "armed"
         if not from_sqlite_bool(m["enabled"]):
             state = "off"
-        # three places for a field with a format of its own, four for everything else — a mid of
-        # 26.4000 reads as spurious precision, and a delta of 0.0456 loses the figure that matters
-        last_value = m["last_value"]
-        if last_value is None:
-            last = "—"
-        elif has_format(m["field"]):
-            last = fmt_value(m["field"], last_value)
-        else:
-            last = fixed(last_value, 4)
-        thr = f"{'≤' if m['direction'] == 'below' else '≥'}{py_number(m['threshold'])}"
-        lines.append([short_spx_code(m["code"]), FIELD_SHORT.get(m["field"], m["field"]), last, thr, state])
-    return table(["contract", "field", "last", "thr", "state"], lines)
+        rule = RuleShape(
+            field=m["field"],
+            combo=m["legs"] is not None,
+            compare=m["compare"],
+            direction=m["direction"],
+            threshold=m["threshold"],
+        )
+        last = "—" if m["last_value"] is None else figure_short(rule, m["last_value"])
+        lines.append([short_spx_code(m["code"]), rule_short(rule), last, state])
+    return table(["contract", "rule", "last", "state"], lines)
 
 
 async def _quote_table(ctx: BotContext, label: str, headers: list[str], cells: Callable[[Quote], list[str]]) -> str:
@@ -150,7 +152,8 @@ async def combo(ctx: BotContext, args: list[str]) -> str:
         record = by_code.get(code)
         value = None if record is None else record.get(monitor.field)
         # a quantity beside its sign, `-2`, as the dashboard writes one (#351); one says nothing more
-        sign = ("+" if leg.sign > 0 else "-") + ("" if leg.qty == 1 else str(leg.qty))
+        # the real minus, as /help writes a short leg and every table writes a figure (#388)
+        sign = ("+" if leg.sign > 0 else "\u2212") + ("" if leg.qty == 1 else str(leg.qty))
         if value is None:
             rows.append([sign, short_spx_code(code), "—"])
             complete = False

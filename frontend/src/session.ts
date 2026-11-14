@@ -144,6 +144,16 @@ export function marketDayWords(day: string): string | null {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
 
+/** "Fri 16:14": `newYorkWhen` without the date, for the short form of a rule's last reading (#388),
+ *  where the weekday is enough — the reading is the last session's, within the week. */
+export function newYorkWeekdayWhen(served: string | null | undefined): string | null {
+  const instant = servedInstant(served);
+  if (instant === null) return null;
+  const parts = Object.fromEntries(NEW_YORK_WALL.formatToParts(instant).map((p) => [p.type, p.value]));
+  const day = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+  return `${WEEKDAYS[day.getUTCDay()]} ${parts.hour}:${parts.minute}`;
+}
+
 /** "Fri 13 Nov 16:14": a stamp the service served (`2026-11-14 05:14:59+08:00`, in DISPLAY_TZ)
  *  on NEW YORK's clock, with its date always — what a close is named by, since the close is New
  *  York's (#380), on the page as in the bot's `/holdings`. Null for a stamp with no zone or no time. */

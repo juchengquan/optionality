@@ -72,7 +72,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>contract          field  last  thr   state\n1218_+P635…C7350  mid    —     ≥4.0  armed</pre>",
+      "text": "<pre>contract         rule          last  state\n1218_+P635…7350  |val| ≥ 4.00  —     armed</pre>",
       "parse_mode": "HTML"
     },
     "rows": {},

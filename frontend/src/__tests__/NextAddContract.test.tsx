@@ -181,7 +181,11 @@ describe("a watched contract", () => {
   it("says the rule in words as it is typed", () => {
     open();
     enterPut();
-    expect(screen.getByTestId("contract-draft").textContent).toBe("7150 put |delta| ≥ 0.15");
+    // drawn short (#388), said and titled in words
+    const draft = screen.getByTestId("contract-draft");
+    expect(draft.querySelector(".nx-rule-short")!.textContent).toBe("7150 put |Δ| ≥ 0.15");
+    expect(draft.querySelector<HTMLElement>(".nx-rule-short")!.title).toBe("7150 put |delta| ≥ 0.15");
+    expect(draft.querySelector(".sr-only")!.textContent).toBe("7150 put |delta| ≥ 0.15");
   });
 
   it("says a signed threshold of 0 beside the box as it is typed, and sends nothing", () => {

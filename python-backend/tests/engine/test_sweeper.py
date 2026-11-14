@@ -205,7 +205,9 @@ class TestABreach:
         values[b] = 30.7
         await s.sweep()  # -4.3 <= -4.05
         assert len(t.sent) == 1
-        assert "-4.300" in t.sent[0]
+        # a combo's signed value at or below a negative figure is its cost to close at or above it,
+        # and is said so, as the dashboard says it (#388)
+        assert t.sent[0] == "⚠️ sep-condor: close crossed ≥ 4.05 — 4.30  ▲ past 0.25"
 
         values[b] = 30.35
         await s.sweep()  # -3.95 back above
@@ -372,7 +374,7 @@ class TestAValueItCannotRead:
         assert calls[0] == sorted([a, b])
         assert len(t.sent) == 1  # 26.4 - 19.25 = 7.15 <= 10
         assert "sep-condor" in t.sent[0]
-        assert "7.150" in t.sent[0]
+        assert t.sent[0] == "⚠️ sep-condor: |val| fell ≤ 10.00 — 7.15  ▼ past 2.85"
         m = t.row(id_)
         assert m["triggered"] == 1
         # vitest's toBeCloseTo(7.15, 10): within half of 1e-10
@@ -496,6 +498,15 @@ class TestAPriceWithNoBook:
 
 
 class TestTheExpiryLifecycle:
+    async def test_names_an_expiring_combo_by_its_own_rule_read_off_the_row_unhydrated_388(self, t: Sweeps) -> None:
+        t.combo(strike_date=t.past())
+        await t.sweeper(lambda codes: []).sweep()
+        assert len(t.sent) == 1
+        assert re.fullmatch(
+            rf"ℹ️ monitor sep-condor \|val\| ≤ 10\.00 expired \({t.past()}\) — muted; auto-removes in \d+ days",
+            t.sent[0],
+        )
+
     async def test_mutes_an_expired_monitor_with_a_notice_and_stops_fetching_it(self, t: Sweeps) -> None:
         id_ = t.monitor(strike_date=t.past())
         calls: list[list[str]] = []
@@ -1259,7 +1270,7 @@ class TestWhatOnlyThePythonCanGetWrong:
         # the record's `name` is whatever the Provider sent; a number is interpolated as `String` does
         t.monitor(threshold=0.6)
         await t.sweeper(lambda codes: [{"code": CODE, "name": 8050.0, "option_delta": 0.7}]).sweep()
-        assert t.sent == ["⚠️ 8050: option_delta 0.700 crossed ≥ 0.6"]
+        assert t.sent == ["⚠️ 8050: |Δ| crossed ≥ 0.60 — 0.700  ▲ past 0.100"]
 
     async def test_takes_back_a_refused_rows_messages_and_logs_it_with_its_stack(
         self, t: Sweeps, caplog: pytest.LogCaptureFixture

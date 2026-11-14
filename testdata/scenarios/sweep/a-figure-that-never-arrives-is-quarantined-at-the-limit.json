@@ -69,7 +69,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ monitor US.SPXW261218C7300000 disabled: no option_delta in the quote for 3 consecutive sweeps"
+      "⚠️ monitor US.SPXW261218C7300000 |Δ| ≥ 0.30 disabled: no option_delta in the quote for 3 consecutive sweeps"
     ],
     "rows": {
       "monitors": {

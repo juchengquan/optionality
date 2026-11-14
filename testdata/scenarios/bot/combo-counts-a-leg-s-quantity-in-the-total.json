@@ -126,7 +126,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>    leg           mid\n+   261218 C7300  2.75\n-2  261218 C7350  1.75\n    total         -0.75</pre>",
+      "text": "<pre>    leg           mid\n+   261218 C7300  2.75\n−2  261218 C7350  1.75\n    total         −0.75</pre>",
       "parse_mode": "HTML"
     },
     "rows": {},

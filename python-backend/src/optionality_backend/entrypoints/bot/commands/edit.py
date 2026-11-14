@@ -11,6 +11,7 @@ Exception`, the TypeScript's bare `catch`.
 
 import sqlite3
 
+from optionality.alarm import RuleShape
 from optionality.contract import expand_spx_short
 
 from ....db.open import atomic
@@ -54,7 +55,16 @@ def threshold(ctx: BotContext, args: list[str]) -> str:
     if bad:
         return bad
     update_monitor_fields(ctx.db, monitor["id"], {"threshold": value})
-    return rule_text(monitor["code"], monitor["field"], value, monitor["direction"], monitor["compare"])
+    return rule_text(
+        monitor["code"],
+        RuleShape(
+            field=monitor["field"],
+            combo=monitor["legs"] is not None,
+            compare=monitor["compare"],
+            direction=monitor["direction"],
+            threshold=value,
+        ),
+    )
 
 
 def rename(ctx: BotContext, args: list[str]) -> str:

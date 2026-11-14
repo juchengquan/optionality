@@ -163,3 +163,7 @@ html[data-nx-arrangement="phone"] :is(select, input, textarea) { font-size: 16px
 }
 .nx-tabs button { min-height: 52px; font-size: 0.9375rem; color: var(--muted-foreground); }
 .nx-tabs button[aria-current="page"] { color: var(--foreground); font-weight: 650; }
+
+/* A rule's short form (#388): its spaces separate the rule, the figure and the distance, so they are
+   kept; it may still wrap at one on a narrow screen. */
+.nx-rule-short { white-space: pre-wrap; }

@@ -15,7 +15,9 @@
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { DASH, heldLegs, legSummary } from "../shared/format";
 import type { BookModel } from "../placement";
-import { entryName, fieldWords, isEntrySignal, monitorName, QUARANTINED, sentence } from "../needs";
+import {
+  entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortRule, shortSentence, storedRuleWords,
+} from "../needs";
 import { servedDelta } from "../legs";
 import { paceSigned, paceWords } from "../pace";
 import { LEVEL_WORDS, levelWords } from "../levels";
@@ -103,13 +105,18 @@ function quoted(entry: Entry, name: string): number | null {
   return typeof v === "number" ? v : null;
 }
 
-/** What a quarantined rule watches and why nothing watches it now. */
+/** Why nothing watches a quarantined rule now. */
+const quarantineWhy = (m: Monitor) =>
+  (m.disabled_reason && QUARANTINED[m.disabled_reason]) ?? "switched off by the service";
+
+/** What a quarantined rule watches and why nothing watches it now, in words: its title and what a
+ *  reader hears. */
 function quarantineSentence(m: Monitor): string {
-  const sign = m.direction === "below" ? "≤" : "≥";
-  const words = fieldWords(m.field, Boolean(m.legs));
-  const why = (m.disabled_reason && QUARANTINED[m.disabled_reason]) ?? "switched off by the service";
-  return `${m.compare === "abs" ? `|${words}|` : words} ${sign} ${m.threshold} — ${why}`;
+  return `${storedRuleWords(m.field, Boolean(m.legs), m.compare, m.direction, m.threshold)} — ${quarantineWhy(m)}`;
 }
+
+/** The same in the short form the column draws (#388): "|Δ| ≥ 0.20 — its figure never arrives". */
+const quarantineShort = (m: Monitor) => `${shortRule(shapeOf(m))} — ${quarantineWhy(m)}`;
 
 /** Every row the table can draw, in the order it draws them: the fitting measures exactly these,
  *  and the inspector finds its row among them. */
@@ -267,9 +274,12 @@ const PACE_GAP: DeskColumn = {
 };
 
 const ALARM: DeskColumn = {
-  // the old page called its rule column "alarm", and so does the cookie
+  // the old page called its rule column "alarm", and so does the cookie. It draws the rule's SHORT
+  // form (#388) — "|val| ≥ 4.51   2.10  ↑2.41" — and says the sentence to a pointer and a reader,
+  // as the pace gap does (#379), so nothing is lost to a hover or a screen reader
   key: "alarm", label: "rule", align: "left",
-  text: (r) => r.kind === "rule" ? sentence(r.entry) : r.kind === "quarantined" ? quarantineSentence(r.monitor) : "",
+  text: (r) => r.kind === "rule" ? shortSentence(r.entry) : r.kind === "quarantined" ? quarantineShort(r.monitor) : "",
+  words: (r) => r.kind === "rule" ? sentence(r.entry) : r.kind === "quarantined" ? quarantineSentence(r.monitor) : "",
 };
 
 /** The columns, in the order they are DRAWN: one set at every hour (ADR 0023, amended 2026-11-13:

@@ -280,7 +280,7 @@
       "expect": {
         "count": null,
         "quarantine": true,
-        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: no quote for US.SPXW261120C7100000 for 3 consecutive sweeps"
+        "notice": "⚠️ monitor US.SPXW261120C7100000 |Δ| ≥ 0.30 disabled: no quote for US.SPXW261120C7100000 for 3 consecutive sweeps"
       }
     },
     {
@@ -306,7 +306,7 @@
       "expect": {
         "count": null,
         "quarantine": true,
-        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: no quote for US.SPXW261120C7100000 for 1 consecutive sweeps"
+        "notice": "⚠️ monitor US.SPXW261120C7100000 |Δ| ≥ 0.30 disabled: no quote for US.SPXW261120C7100000 for 1 consecutive sweeps"
       }
     },
     {
@@ -358,7 +358,7 @@
       "expect": {
         "count": null,
         "quarantine": true,
-        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: no quote for US.SPXW261120C7100000 for 6 consecutive sweeps"
+        "notice": "⚠️ monitor US.SPXW261120C7100000 |Δ| ≥ 0.30 disabled: no quote for US.SPXW261120C7100000 for 6 consecutive sweeps"
       }
     },
     {
@@ -660,7 +660,14 @@
         {
           "code": "1120_7100",
           "strike_date": "2026-11-20",
-          "enabled": true
+          "enabled": true,
+          "rule": {
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.3
+          }
         },
         "2026-11-19",
         7
@@ -677,7 +684,14 @@
         {
           "code": "1120_7100",
           "strike_date": "2026-11-20",
-          "enabled": true
+          "enabled": true,
+          "rule": {
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.3
+          }
         },
         "2026-11-20",
         7
@@ -694,14 +708,21 @@
         {
           "code": "1120_7100",
           "strike_date": "2026-11-20",
-          "enabled": true
+          "enabled": true,
+          "rule": {
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.3
+          }
         },
         "2026-11-21",
         7
       ],
       "expect": {
         "action": "mute",
-        "notice": "ℹ️ monitor 1120_7100 expired (2026-11-20) — muted; auto-removes in 7 days"
+        "notice": "ℹ️ monitor 1120_7100 |Δ| ≥ 0.30 expired (2026-11-20) — muted; auto-removes in 7 days"
       }
     },
     {
@@ -711,7 +732,14 @@
         {
           "code": "1120_7100",
           "strike_date": "2026-11-20",
-          "enabled": false
+          "enabled": false,
+          "rule": {
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.3
+          }
         },
         "2026-11-21",
         7
@@ -728,7 +756,14 @@
         {
           "code": "1120_7100",
           "strike_date": "2026-11-20",
-          "enabled": false
+          "enabled": false,
+          "rule": {
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.3
+          }
         },
         "2026-11-28",
         7
@@ -745,14 +780,21 @@
         {
           "code": "1120_7100",
           "strike_date": "2026-11-20",
-          "enabled": true
+          "enabled": true,
+          "rule": {
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.3
+          }
         },
         "2026-11-21",
         0
       ],
       "expect": {
         "action": "remove",
-        "notice": "ℹ️ monitor 1120_7100 expired (2026-11-20) — removed"
+        "notice": "ℹ️ monitor 1120_7100 |Δ| ≥ 0.30 expired (2026-11-20) — removed"
       }
     },
     {
@@ -762,7 +804,14 @@
         {
           "code": "1120_7100",
           "strike_date": "2026-11-20",
-          "enabled": false
+          "enabled": false,
+          "rule": {
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.3
+          }
         },
         "2026-11-27",
         7
@@ -805,7 +854,7 @@
           "US.SPXW261120C7100000"
         ],
         "quarantine": true,
-        "notice": "⚠️ monitor US.SPXW261120C7100000 disabled: unknown contract US.SPXW261120C7100000 (delisted or never existed)"
+        "notice": "⚠️ monitor US.SPXW261120C7100000 |Δ| ≥ 0.30 disabled: unknown contract US.SPXW261120C7100000 (delisted or never existed)"
       }
     },
     {
@@ -881,7 +930,7 @@
           "US.SPXW261120P6500000"
         ],
         "quarantine": true,
-        "notice": "⚠️ monitor 1120_IC disabled: unknown contract US.SPXW261120P6500000 (delisted or never existed)"
+        "notice": "⚠️ monitor 1120_IC |val| ≥ 2.50 disabled: unknown contract US.SPXW261120P6500000 (delisted or never existed)"
       }
     },
     {
@@ -933,7 +982,7 @@
           "US.SPXW261120P6500000"
         ],
         "quarantine": true,
-        "notice": "⚠️ monitor 1120_IC disabled: unknown contract US.SPXW261120C7150000, US.SPXW261120P6500000 (delisted or never existed)"
+        "notice": "⚠️ monitor 1120_IC |val| ≥ 2.50 disabled: unknown contract US.SPXW261120C7150000, US.SPXW261120P6500000 (delisted or never existed)"
       }
     },
     {
@@ -989,7 +1038,7 @@
           "US.SPXW261120P6500000"
         ],
         "quarantine": true,
-        "notice": "⚠️ monitor 1120_IC disabled: unknown contract US.SPXW261120C7100000, US.SPXW261120C7150000, US.SPXW261120P6450000, US.SPXW261120P6500000 (delisted or never existed)"
+        "notice": "⚠️ monitor 1120_IC |val| ≥ 2.50 disabled: unknown contract US.SPXW261120C7100000, US.SPXW261120C7150000, US.SPXW261120P6450000, US.SPXW261120P6500000 (delisted or never existed)"
       }
     },
     {

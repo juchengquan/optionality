@@ -68,7 +68,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ SPXW 261218 7300C: option_delta 0.360 still ≥ 0.3 (reminder)"
+      "⚠️ SPXW 261218 7300C: |Δ| still ≥ 0.30 — 0.360  ▲ past 0.060 (reminder)"
     ],
     "rows": {
       "monitors": {
