@@ -108,6 +108,8 @@ async function endpoints() {
     samples: await (await client.positions[":id"].samples.$get({ param: id })).json(),
     // a watched rule's daily closes (#402): its history charts, read once when that history is drawn
     watchSamples: await (await client.monitors[":id"].samples.$get({ param: id })).json(),
+    // each rule's last close, read out of the session and while /quotes fails (#402)
+    closes: await (await client.monitors.closes.$get()).json(),
     draftPayoff: await client.positions.payoff.$post({
       json: { legs: [{ side: "short", option_type: "PUT", strike: 7100 }], entry: 1.5 },
     }),
@@ -258,8 +260,8 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["watchSamples"]>["samples"][number]["price"], number | null>>,
   Checked<Exactly<Ok<E["watchSamples"]>["price_rule"],
     { id: string; threshold: number; direction: string; compare: string } | null>>,
-  // what a watched row's value and payoff fall back on out of the session (#402)
-  Checked<Exactly<NonNullable<Ok<E["quotes"]>[number]["last_close"]>["price"], number>>,
+  // what a watched row's value and payoff fall back on out of the session and through an outage (#402)
+  Checked<Exactly<NonNullable<Ok<E["closes"]>[number]["last_close"]>["price"], number>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.

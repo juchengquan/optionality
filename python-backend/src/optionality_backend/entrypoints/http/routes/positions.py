@@ -91,7 +91,7 @@ from ....schemas.position import (
     PositionPatch,
     stored_qty,
 )
-from ....watch_history import before_entry
+from ....watch_history import before_entry, entry_close
 from ..deps import Deps
 from ..errors import http_error, not_found, provider_failed, provider_failed_words
 from ..validate import valid
@@ -333,6 +333,10 @@ class SamplesOut(BaseModel):
     #: valued as this holding values itself, Cost to close by side, with no On-pace and never before a
     #: correction. Kept apart from `samples`, so nothing that reads a holding's own history sees one.
     before_entry: list[SampleOut]
+    #: the entry day's close as it was WATCHED (#402): only where the holding's own row for the day it was
+    #: entered has no Cost to close, the watch history's priced row for these contracts that day, valued
+    #: as its Cost to close by side, no On-pace. None otherwise; its own row stays as it is.
+    entry_close: SampleOut | None
     #: when a held leg's quantity was last corrected, in DISPLAY_TZ, or None if never (#359)
     qty_corrected_at: str | None
 
@@ -619,6 +623,7 @@ def position_routes(deps: Deps) -> APIRouter:
             }
             return [d.model_dump() for d in strike_distances(shorts, by_code, s["spx"], s["dte"])]
 
+        own = list_position_samples(db, id_)
         plan = []
         for dte in range(opened_dte if opened_dte is not None else -1, -1, -1):
             pace = on_pace(row["entry"], opened_dte, dte)
@@ -652,7 +657,7 @@ def position_routes(deps: Deps) -> APIRouter:
                     "short_strikes": short_strikes(s),
                     "before_correction": before_correction(s["observed_at"], row["qty_corrected_at"]),
                 }
-                for s in list_position_samples(db, id_)
+                for s in own
                 for timing in [sample_timing(s["observed_at"])]
             ],
             "qty_corrected_at": display_stored(row["qty_corrected_at"], tz),
@@ -665,6 +670,14 @@ def position_routes(deps: Deps) -> APIRouter:
                 }
                 for day in before_entry(db, row, to_position(row), tz)
             ],
+            "entry_close": None
+            if (entry := entry_close(db, row, to_position(row), own, tz)) is None
+            else {
+                **{k: v for k, v in entry.items() if k != "value"},
+                "cost_to_close": entry["value"],
+                "on_pace": None,
+                "before_correction": False,
+            },
         }
 
     @router.get("/{id}/payoff", summary="A holding's payoff at expiry", response_model=PayoffOut)

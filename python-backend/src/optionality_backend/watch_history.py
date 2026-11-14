@@ -17,15 +17,25 @@ import json
 import math
 import sqlite3
 from collections.abc import Callable, Iterable
+from datetime import datetime
 from typing import Any, TypedDict
 
 from optionality.contract import build_spx_code
-from optionality.expiry import SampleTiming, ValuedTiming, close_sample, market_date, sample_timing, valued_timing
+from optionality.expiry import (
+    SampleTiming,
+    ValuedTiming,
+    close_sample,
+    in_session,
+    market_date,
+    sample_timing,
+    valued_timing,
+)
+from optionality.js import js_string
 from optionality.monitor import Monitor, monitor_leg_codes, monitor_value
 from optionality.position import Position, cost_to_close, position_leg_codes
 from optionality.quote import ByCode, strike_distances
 
-from .db.queries import list_watch_samples
+from .db.queries import find_watch_sample, list_watch_samples, recent_priced_watch_samples
 from .db.rows import PositionRow, WatchSampleRow
 from .db.time import display_stored, from_sql_datetime
 
@@ -147,22 +157,65 @@ class LastClose(TypedDict):
     timing: ValuedTiming
 
 
-def rule_last_close(db: sqlite3.Connection, monitor: Monitor, tz: str) -> LastClose | None:
-    price = _rule_price(monitor)
-    rows = [
-        {**s, "cost_to_close": price(_day_records(s))}
-        for s in list_watch_samples(db, contract_set_key(monitor_leg_codes(monitor)))
-    ]
-    close = close_sample(rows)  # type: ignore[type-var]
-    if close is None or close["cost_to_close"] is None:
-        return None
-    timing = valued_timing(close["observed_at"])
-    return {
-        "price": close["cost_to_close"],
-        "observed_on": close["observed_on"],
-        "observed_at": None if timing == "unrecorded" else display_stored(close["observed_at"], tz),
-        "timing": timing,
-    }
+#: How many priced days back a last close is looked for: two weeks of them, which no weekend, holiday or
+#: missed session outlasts, so `close_sample` over these chooses what it would over all of them.
+LAST_CLOSE_DAYS = 14
+
+
+def last_closes(
+    db: sqlite3.Connection,
+    rules: list[tuple[str, Monitor | None]],
+    holdings: list[Position],
+    tz: str,
+    now: datetime,
+) -> dict[str, LastClose | None]:
+    """Each rule's last close, by id (#402): one bounded query per set of contracts, not per rule, of the
+    latest priced days only (`LAST_CLOSE_DAYS`). Not today's row while the session runs, which is the
+    session so far and no close; none for contracts an open holding holds exactly, which the sweep
+    records as the holding's from its entry, so a watch day would only go stale; none for a rule that
+    cannot be read (`None` in `rules`)."""
+    held = {contract_set_key(position_leg_codes(p)) for p in holdings}
+    today = market_date(now) if in_session(now) else None
+    by_key: dict[str, list[WatchSampleRow]] = {}
+    out: dict[str, LastClose | None] = {}
+    for id_, monitor in rules:
+        if monitor is None:
+            out[id_] = None
+            continue
+        key = contract_set_key(monitor_leg_codes(monitor))
+        if key in held:
+            out[id_] = None
+            continue
+        if key not in by_key:
+            by_key[key] = [
+                s for s in recent_priced_watch_samples(db, key, LAST_CLOSE_DAYS) if s["observed_on"] != today
+            ]
+        price = _rule_price(monitor)
+        candidates = [{**s, "cost_to_close": price(_day_records(s))} for s in by_key[key]]
+        close = close_sample(candidates)  # type: ignore[type-var]
+        if close is None or close["cost_to_close"] is None:
+            out[id_] = None
+            continue
+        timing = valued_timing(close["observed_at"])
+        out[id_] = {
+            "price": close["cost_to_close"],
+            "observed_on": close["observed_on"],
+            "observed_at": None if timing == "unrecorded" else display_stored(close["observed_at"], tz),
+            "timing": timing,
+        }
+    return out
+
+
+def structure_key(monitor: Monitor) -> str:
+    """The key the page matches two rules on the same spread by (`contractsKey` in the dashboard's
+    `lastknown.ts`): a contract by its code, a spread by its expiry and its legs, each with its sign and
+    quantity. What a watched rule's price rule is found by."""
+    if not monitor.legs:
+        return monitor.code
+    legs = sorted(
+        f"{js_string(leg.sign)}{leg.option_type}{js_string(leg.strike)}x{js_string(leg.qty)}" for leg in monitor.legs
+    )
+    return f"{monitor.strike_date} {' '.join(legs)}"
 
 
 def _entered_on(row: PositionRow) -> str:
@@ -185,3 +238,27 @@ def before_entry(db: sqlite3.Connection, row: PositionRow, position: Position, t
         if leg.side == "short"
     ]
     return _days(rows, lambda records: cost_to_close(position, records), shorts, tz)
+
+
+def entry_close(
+    db: sqlite3.Connection, row: PositionRow, position: Position, own: list[Any], tz: str
+) -> WatchDay | None:
+    """The entry day's close as it was WATCHED (#402, owner's decision of 2026-11-15): where the holding's
+    own row for the day it was entered has no Cost to close — recorded in New York's evening, priced by
+    nothing (#380) — the watch history's row for the same contracts that day, valued as the holding's
+    Cost to close, by side. None wherever its own row has a cost, it has no row that day, or the watch
+    history has no priced row for it. Served apart, so `position_samples` and its readers are untouched."""
+    on = _entered_on(row)
+    mine = next((s for s in own if s["observed_on"] == on), None)
+    if mine is None or mine["cost_to_close"] is not None:
+        return None
+    watched = find_watch_sample(db, contract_set_key(position_leg_codes(position)), on)
+    if watched is None:
+        return None
+    shorts = [
+        build_spx_code(position.strike_date, leg.option_type, leg.strike)
+        for leg in position.legs
+        if leg.side == "short"
+    ]
+    (day,) = _days([watched], lambda records: cost_to_close(position, records), shorts, tz)
+    return None if day["value"] is None else day

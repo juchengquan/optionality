@@ -254,8 +254,7 @@
               "sigma": null,
               "one_sigma": null
             }
-          ],
-          "last_close": null
+          ]
         },
         {
           "id": "mon-ratio",
@@ -328,8 +327,7 @@
               "sigma": null,
               "one_sigma": null
             }
-          ],
-          "last_close": null
+          ]
         }
       ]
     },

@@ -64,8 +64,11 @@ function watchedSets(
   for (const row of holdings) {
     try {
       held.add(contractSetKey(positionLegCodes(toPosition(row))));
-    } catch {
-      // a holding that cannot be read holds nothing here; the sweep already said so
+    } catch (err) {
+      // a holding that cannot be read holds nothing here; the sweep already said so. A row read is
+      // refused with an `Error` (`hydrate.ts`, `buildSpxCode`), as the Python's with a `ValueError`:
+      // that and nothing else is caught, the same in both
+      if (!(err instanceof Error)) throw err;
     }
   }
   const sets = new Map<string, { codes: string[]; strikeDate: string }>();
@@ -76,8 +79,9 @@ function watchedSets(
       const key = contractSetKey(monitorLegCodes(monitor));
       if (held.has(key) || sets.has(key)) continue;
       sets.set(key, { codes: key.split(","), strikeDate: monitor.strike_date });
-    } catch {
+    } catch (err) {
       // a rule that cannot be read is quarantined by the sweep, and records nothing
+      if (!(err instanceof Error)) throw err;
     }
   }
   return sets;

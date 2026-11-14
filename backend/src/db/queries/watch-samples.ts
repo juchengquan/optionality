@@ -17,6 +17,20 @@ export function listWatchSamples(db: DatabaseSync, contracts: string): WatchSamp
   );
 }
 
+/** The latest `limit` days stored for one set of contracts WITH a price — every contract's mid —
+ *  newest first: what a last close is chosen from (`lastCloses`), without reading and parsing every
+ *  day a history has ever had on every poll. */
+export function recentPricedWatchSamples(
+  db: DatabaseSync, contracts: string, limit: number,
+): WatchSampleRow[] {
+  return rows<WatchSampleRow>(
+    db,
+    `select * from watch_samples where contracts = ? and legs_mid is not null
+     order by observed_on desc limit ?`,
+    contracts, limit,
+  );
+}
+
 /** The day already stored for this set of contracts, if any: what `takesSample` decides against. */
 export function findWatchSample(
   db: DatabaseSync, contracts: string, observedOn: string,

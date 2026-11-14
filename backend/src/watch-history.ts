@@ -15,13 +15,13 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import {
-  closeSample, marketDate, sampleTiming, valuedTiming, type SampleTiming, type ValuedTiming,
+  closeSample, inSession, marketDate, sampleTiming, valuedTiming, type SampleTiming, type ValuedTiming,
 } from "optionality/domain/expiry";
 import { buildSpxCode } from "optionality/domain/contract";
 import { monitorLegCodes, monitorValue, type Monitor } from "optionality/domain/monitor";
 import { costToClose, positionLegCodes, type ByCode, type Position } from "optionality/domain/position";
 import { strikeDistances, type StrikeDistance } from "optionality/domain/quote";
-import { listWatchSamples } from "./db/queries/index.ts";
+import { findWatchSample, listWatchSamples, recentPricedWatchSamples } from "./db/queries/index.ts";
 import type { PositionRow, WatchSampleRow } from "./db/rows.ts";
 import { displayStored, fromSqlDatetime } from "./db/time.ts";
 
@@ -134,19 +134,65 @@ export interface LastClose {
   timing: ValuedTiming;
 }
 
-export function ruleLastClose(db: DatabaseSync, monitor: Monitor, tz: string): LastClose | null {
-  const price = rulePrice(monitor);
-  const rows = listWatchSamples(db, contractSetKey(monitorLegCodes(monitor)))
-    .map((s) => ({ ...s, cost_to_close: price(dayRecords(s)) }));
-  const close = closeSample(rows);
-  if (close === null || close.cost_to_close === null) return null;
-  const timing = valuedTiming(close.observed_at);
-  return {
-    price: close.cost_to_close,
-    observed_on: close.observed_on,
-    observed_at: timing === "unrecorded" ? null : displayStored(close.observed_at, tz),
-    timing,
-  };
+/** How many priced days back a last close is looked for: two weeks of them, which no weekend, holiday
+ *  or missed session outlasts, so `closeSample` over these chooses what it would over all of them. */
+export const LAST_CLOSE_DAYS = 14;
+
+/** A rule as `lastCloses` reads it: its id and, where its row could be read, the rule itself. */
+export interface ReadRule {
+  id: string;
+  monitor: Monitor | null;
+}
+
+/** Each rule's last close, by id (#402), for `/quotes`: one bounded query per set of contracts, not
+ *  per rule, of the latest priced days only (`LAST_CLOSE_DAYS`).
+ *
+ *  - **Not today's, in the session.** While New York's session runs, today's row is the session so
+ *    far, written freely until 16:15, not a close: it is left out, so "drawn at its close" is never
+ *    said of 11:02 this morning.
+ *  - **None for contracts an open holding holds exactly.** The sweep stops recording a set of
+ *    contracts once a holding holds exactly them (the holding's own samples take over), so such a
+ *    rule's last watch day goes stale with every session: it is the holding's, valued from its own
+ *    close (`/positions/values`).
+ *  - **None for a rule that cannot be read**, which has no contracts to look up. */
+export function lastCloses(
+  db: DatabaseSync, rules: ReadRule[], holdings: Position[], tz: string, now: Date,
+): Map<string, LastClose | null> {
+  const held = new Set(holdings.map((p) => contractSetKey(positionLegCodes(p))));
+  const today = inSession(now) ? marketDate(now) : null;
+  const byKey = new Map<string, WatchSampleRow[]>();
+  const out = new Map<string, LastClose | null>();
+  for (const { id, monitor } of rules) {
+    if (monitor === null) { out.set(id, null); continue; }
+    const key = contractSetKey(monitorLegCodes(monitor));
+    if (held.has(key)) { out.set(id, null); continue; }
+    let stored = byKey.get(key);
+    if (stored === undefined) {
+      stored = recentPricedWatchSamples(db, key, LAST_CLOSE_DAYS).filter((s) => s.observed_on !== today);
+      byKey.set(key, stored);
+    }
+    const price = rulePrice(monitor);
+    const close = closeSample(stored.map((s) => ({ ...s, cost_to_close: price(dayRecords(s)) })));
+    if (close === null || close.cost_to_close === null) { out.set(id, null); continue; }
+    const timing = valuedTiming(close.observed_at);
+    out.set(id, {
+      price: close.cost_to_close,
+      observed_on: close.observed_on,
+      observed_at: timing === "unrecorded" ? null : displayStored(close.observed_at, tz),
+      timing,
+    });
+  }
+  return out;
+}
+
+/** The key the page matches two rules on the same spread by (`contractsKey` in the dashboard's
+ *  `lastknown.ts`): a contract by its code, a spread by its expiry and its legs, each with its sign
+ *  and quantity. What a watched rule's price rule is found by: a rule on the same contracts the same
+ *  way round, whatever it is named. */
+export function structureKey(monitor: Monitor): string {
+  if (!monitor.legs || monitor.legs.length === 0) return monitor.code;
+  const legs = monitor.legs.map((l) => `${l.sign}${l.option_type}${l.strike}x${l.qty ?? 1}`).sort();
+  return `${monitor.strike_date} ${legs.join(" ")}`;
 }
 
 /** The first day a holding is its own: Opened, or where nobody said, the New York day it was
@@ -168,4 +214,26 @@ export function beforeEntry(
   const shorts = position.legs.filter((l) => l.side === "short")
     .map((l) => buildSpxCode(position.strike_date, l.option_type, l.strike));
   return days(rows, (records) => costToClose(position, records), shorts, tz);
+}
+
+/** The entry day's close as it was WATCHED (#402, owner's decision of 2026-11-15): where the
+ *  holding's own row for the day it was entered has no Cost to close — recorded in New York's
+ *  evening, when moomoo quotes 0/0, so the sweep kept that day for its vol alone (#380) — the watch
+ *  history's row for the same contracts that day, valued as the holding's Cost to close, by side.
+ *  Null wherever the holding's own row has a cost, has no row that day, or the watch history has no
+ *  priced row for it. Served apart (`entry_close`), so `position_samples` and its readers are
+ *  untouched and the page can say which close it is. */
+export function entryClose(
+  db: DatabaseSync, row: PositionRow, position: Position, own: readonly { observed_on: string; cost_to_close: number | null }[],
+  tz: string,
+): WatchDay | null {
+  const on = enteredOn(row);
+  const mine = own.find((s) => s.observed_on === on);
+  if (mine === undefined || mine.cost_to_close !== null) return null;
+  const watched = findWatchSample(db, contractSetKey(positionLegCodes(position)), on);
+  if (watched === undefined) return null;
+  const shorts = position.legs.filter((l) => l.side === "short")
+    .map((l) => buildSpxCode(position.strike_date, l.option_type, l.strike));
+  const [day] = days([watched], (records) => costToClose(position, records), shorts, tz);
+  return day!.value === null ? null : day!;
 }

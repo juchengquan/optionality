@@ -224,8 +224,7 @@
               "sigma": 1.22,
               "one_sigma": 327.07
             }
-          ],
-          "last_close": null
+          ]
         },
         {
           "id": "mon-1",
@@ -269,8 +268,7 @@
           "distance": 0.09,
           "spx": 6900.5,
           "spx_reason": null,
-          "short_strikes": [],
-          "last_close": null
+          "short_strikes": []
         },
         {
           "id": "mon-2",
@@ -312,8 +310,7 @@
           "distance": 0.12,
           "spx": 6900.5,
           "spx_reason": null,
-          "short_strikes": [],
-          "last_close": null
+          "short_strikes": []
         }
       ]
     },

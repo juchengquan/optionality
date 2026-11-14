@@ -399,6 +399,44 @@ describe("a holding's daily samples, served for the burndown and the IV chart (#
       expect(data.before_entry.map((s: { observed_on: string }) => s.observed_on)).toEqual(["2026-10-01"]);
     });
 
+    it("ends them at New York's day it was recorded, not UTC's: recorded at 22:00 New York", async () => {
+      const id = await made({ entry: 3 });
+      // 02:00 UTC on the 3rd is 22:00 New York on the 2nd: the 2nd is its first day, the 1st is before
+      h.db.prepare("update positions set created_at = '2026-10-03 02:00:00.000000' where id = ?").run(id);
+      watched(legCodes(), "2026-10-01", 78, [2, 1, 1.5, 0.5], "2026-10-01 20:14:00.000000");
+      watched(legCodes(), "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000");
+      const data = await body(await h.call(`/positions/${id}/samples`));
+      expect(data.before_entry.map((s: { observed_on: string }) => s.observed_on)).toEqual(["2026-10-01"]);
+    });
+
+    it("serves the entry day's WATCHED close where its own row that day has no Cost to close", async () => {
+      // recorded in New York's evening: the sweep's first row for it had no two-sided quote (#380),
+      // and the watch history had the day's close at 16:14
+      const id = await made({ opened_at: "2026-10-06", entry: 3 });
+      h.db.prepare(
+        `insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at)
+         values (?, '2026-10-06', 73, null, '2026-10-07 01:00:00.000000')`,
+      ).run(id);
+      watched(legCodes(), "2026-10-06", 73, [2, 1, 1.5, 0.5], "2026-10-06 20:14:00.000000", { spx: 6600 });
+      const data = await body(await h.call(`/positions/${id}/samples`));
+      expect(data.entry_close).toMatchObject({
+        observed_on: "2026-10-06", timing: "close", dte: 73, cost_to_close: 2, on_pace: null, spx: 6600,
+      });
+      // its own row stays as it was, and the watched day is not a day before entry
+      expect(data.samples).toMatchObject([{ observed_on: "2026-10-06", cost_to_close: null }]);
+      expect(data.before_entry).toEqual([]);
+    });
+
+    it("serves no entry-day close where its own row that day has a cost, or the watch day none", async () => {
+      const id = await made({ opened_at: "2026-10-06", entry: 3 });
+      watched(legCodes(), "2026-10-06", 73, [2, 1, 1.5, 0.5], "2026-10-06 20:14:00.000000");
+      sample(id, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000");
+      expect((await body(await h.call(`/positions/${id}/samples`))).entry_close).toBeNull();
+      h.db.prepare("update position_samples set cost_to_close = null where position_id = ?").run(id);
+      h.db.prepare("update watch_samples set legs_mid = null").run();
+      expect((await body(await h.call(`/positions/${id}/samples`))).entry_close).toBeNull();
+    });
+
     it("leaves the holding's own samples, and the pace read from them, as they were", async () => {
       const id = await made({ opened_at: "2026-10-06", entry: 3 });
       watched(legCodes(), "2026-10-02", 77, [2, 1, 1.5, 0.5], "2026-10-02 20:14:00.000000");

@@ -7,6 +7,7 @@ from the sweep's own batch, and a unit test handing the sampler a batch it built
 that no call was added for them.
 """
 
+import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ from sweep import SWEEP_SETTINGS, insert_combo, insert_monitor
 from optionality_backend.db.open import create_database
 from optionality_backend.db.values import to_sqlite_json
 from optionality_backend.engine import MonitorSweeper, SweeperDeps
+from optionality_backend.engine.watching import record_watch_samples
 from optionality_backend.env import settings_for
 
 EXPIRY = "2026-10-31"
@@ -272,8 +274,43 @@ class TestUnderExactlyTheHoldingsSamplingRules:
             [{"legs_mid": to_sqlite_json({SHORT: 5, LONG: 2.5}), "observed_at": "2026-10-01 15:05:00.000000"}],
         )
 
+    async def test_writes_when_only_spx_moves(self, w: World) -> None:
+        w.spread_rule()
+        w.book = {c: {**q, "last_price": 1, "option_premium": 15} for c, q in w.book.items()}
+        await w.sweep()
+        before = w.stored()[0]["spx"]
+        assert before is not None
+        w.book = {c: {**q, "option_premium": 14} for c, q in w.book.items()}
+        w.now = datetime(2026, 10, 1, 15, 5, tzinfo=UTC)
+        await w.sweep()
+        assert w.stored()[0]["spx"] != before
+        assert w.stored()[0]["observed_at"] == "2026-10-01 15:05:00.000000"
+
+    async def test_writes_when_only_a_delta_moves(self, w: World) -> None:
+        w.spread_rule()
+        await w.sweep()
+        w.book[SHORT] = {**w.book[SHORT], "option_delta": 0.3}
+        w.now = datetime(2026, 10, 1, 15, 5, tzinfo=UTC)
+        await w.sweep()
+        assert json.loads(w.stored()[0]["legs_delta"])[SHORT] == 0.3
+
     async def test_records_nothing_for_contracts_the_provider_returned_nothing_for(self, w: World) -> None:
         w.spread_rule()
         w.book = {}
         await w.sweep()
+        assert w.stored() == []
+
+
+class TestTheSamplerAlone:
+    def test_records_nothing_for_contracts_past_their_expiry_whoever_still_names_them(self, w: World) -> None:
+        # the sweep mutes an expired rule before this runs; called with one still enabled, it is the
+        # expiry, not the rule's state, that stops it
+        expired = build_spx_code("2026-09-30", "CALL", 8100)
+        rule = {
+            "id": "m-old", "code": expired, "strike_date": "2026-09-30", "option_type": "CALL", "strike": 8100,
+            "field": "option_delta", "threshold": 0.3, "direction": "above", "compare": "abs", "legs": None,
+            "scope": None, "enabled": 1, "disabled_reason": None, "triggered": 0, "last_value": None,
+            "last_checked_at": None, "last_alarm_at": None, "created_at": "2026-09-01 00:00:00.000000",
+        }  # fmt: skip
+        record_watch_samples(w.db, [rule], [], {expired: {"code": expired, **quote(5)}}, w.now)  # type: ignore[list-item]
         assert w.stored() == []

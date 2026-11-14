@@ -502,26 +502,52 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/monitors/mon-9/samples"),
   },
   {
-    // a spread watched on its delta has no price on the row; its last close is what its payoff is
-    // drawn at (#402) — the latest close taken in a session, not the evening reading after it
-    name: "GET /quotes carries each rule's last close from the stored history",
+    // the Provider DOWN, as through an outage: each rule's last close from the stored history, a
+    // database read that asks no Provider (#402). The delta-watched spread's is its price's latest
+    // close taken in a session, not the evening's reading after it; the call spread held exactly by a
+    // holding has none (its days are the holding's); the short call's own mid
+    name: "GET /monitors/closes serves each rule's last close with the Provider down",
     world: world({
       tables: {
-        monitors: [combo({ id: "mon-2", field: "option_delta", threshold: 0.1 })],
-        watch_samples: [
-          watchDay([C7300, C7350], {
-            observed_on: "2026-11-06", dte: 42, observed_at: "2026-11-06 21:14:00.000000",
-            legs_mid: { [C7300]: 3, [C7350]: 2 },
+        positions: [position({
+          id: "pos-calls", name: "dec-call-spread", entry: 2.5,
+          legs: [{ side: "short", option_type: "CALL", strike: 7300 }, { side: "long", option_type: "CALL", strike: 7350 }],
+        })],
+        monitors: [
+          monitor({ id: "mon-1" }),
+          combo({ id: "mon-2", scope: "all" }),
+          combo({
+            id: "mon-3", code: "dec-puts", field: "option_delta", threshold: 0.1,
+            legs: [{ sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350, qty: 2 }],
           }),
-          watchDay([C7300, C7350], {
+        ],
+        monitor_positions: [link("mon-2", "pos-calls")],
+        watch_samples: [
+          watchDay([C7300], { observed_on: "2026-11-06", dte: 42, legs_mid: { [C7300]: 3 } }),
+          watchDay([C7300, C7350], { observed_on: "2026-11-06", dte: 42, legs_mid: { [C7300]: 3, [C7350]: 2 } }),
+          watchDay([P6400, P6350], {
+            observed_on: "2026-11-06", dte: 42, observed_at: "2026-11-06 21:14:00.000000",
+            legs_mid: { [P6400]: 4.5, [P6350]: 2 },
+          }),
+          watchDay([P6400, P6350], {
             observed_on: "2026-11-07", dte: 41, observed_at: "2026-11-08 01:00:00.000000",
-            legs_mid: { [C7300]: 3.25, [C7350]: 2 },
+            legs_mid: { [P6400]: 4.75, [P6350]: 2 },
           }),
         ],
       },
-      provider: { quotes: BOOK },
+      provider: { down: DOWN },
     }),
-    request: request("GET", "/quotes"),
+    request: request("GET", "/monitors/closes"),
+  },
+  {
+    // a rule whose stored legs the engine cannot read: refused in words, in the shape every refusal
+    // has, rather than a 500
+    name: "GET /monitors/{id}/samples refuses a rule that cannot be read",
+    world: world({
+      tables: { monitors: [combo({ id: "mon-2", legs: [{ sign: 2, option_type: "CALL", strike: 7300 }] })] },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/monitors/mon-2/samples"),
   },
   {
     name: "GET /monitors without the token is refused",
@@ -1275,6 +1301,25 @@ export const HTTP: readonly HttpInput[] = [
             legs_mid: { [C7300]: 2.75, [C7350]: 1.75, [P6400]: 4.5, [P6350]: 2.25 },
           }),
         ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    // recorded in New York's evening: its own row for the day it was entered has no Cost to close
+    // (moomoo's 0/0, #380), and the watch history has that day's close — served apart as
+    // `entry_close`, its own row left as it is (owner's decision, 2026-11-15)
+    name: "GET /positions/{id}/samples serves the entry day's watched close where its own has no cost",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [sample({ position_id: "pos-1", observed_on: "2026-11-06", dte: 42,
+          cost_to_close: null, observed_at: "2026-11-07 01:30:00.000000" })],
+        watch_samples: [watchDay([C7300, C7350, P6400, P6350], {
+          observed_on: "2026-11-06", dte: 42, observed_at: "2026-11-06 21:14:00.000000",
+          legs_mid: { [C7300]: 2.75, [C7350]: 1.75, [P6400]: 4.5, [P6350]: 2.25 },
+        })],
       },
       provider: { down: DOWN },
     }),

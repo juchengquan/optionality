@@ -25,7 +25,7 @@ import { payoffAtExpiry } from "optionality/domain/payoff";
 import { strikeDistances } from "optionality/domain/quote";
 import { atomic } from "../../../db/open.ts";
 import { holdingValues } from "../../../holdings.ts";
-import { beforeEntry } from "../../../watch-history.ts";
+import { beforeEntry, entryClose } from "../../../watch-history.ts";
 import type { MonitorRow, PositionRow } from "../../../db/rows.ts";
 import { newId, toSqliteBool, toSqliteJson } from "../../../db/values.ts";
 import { toSqlDatetime } from "../../../db/time.ts";
@@ -259,6 +259,12 @@ const SamplesOut = z.object({
    *  On-pace (there was no schedule yet) and never before a correction. Oldest first. Kept apart from
    *  `samples`, so nothing that reads a holding's own history (the pace, `/vol`, its close) sees one. */
   before_entry: z.array(SampleOut),
+  /** the entry day's close as it was WATCHED (#402): only where the holding's own row for the day it
+   *  was entered has no Cost to close — recorded in New York's evening, priced by nothing — the watch
+   *  history's priced row for these contracts that day, valued as its Cost to close by side, no
+   *  On-pace. What the burndown draws as the entry day's point, saying whose close it is; null
+   *  otherwise. Never stored as the holding's: its own row stays as it is. */
+  entry_close: SampleOut.nullable(),
   /** when a held leg's quantity was last corrected, in DISPLAY_TZ, or null if never (#359) */
   qty_corrected_at: z.string().nullable(),
 });
@@ -487,13 +493,14 @@ export function positionRoutes(deps: Deps) {
         const pace = onPace(row.entry, openedDte, dte);
         if (pace !== null) plan.push({ dte, on_pace: pace });
       }
+      const own = listPositionSamples(db, id);
       return samples.reply(c, 200, {
         levels: levels === null || openedDte === null ? null : {
           dte_at_open: openedDte, target: levels.target, stop: levels.stop,
           target_dte: levels.target_dte, manage_by_dte: levels.manage_by_dte,
         },
         plan,
-        samples: listPositionSamples(db, id).map((s) => {
+        samples: own.map((s) => {
           const timing = sampleTiming(s.observed_at);
           const [iv, delta] = [legMap(s.legs_iv), legMap(s.legs_delta)];
           return {
@@ -520,6 +527,12 @@ export function positionRoutes(deps: Deps) {
         before_entry: beforeEntry(db, row, toPosition(row), tz).map(({ value, ...day }) => ({
           ...day, cost_to_close: value, on_pace: null, before_correction: false,
         })),
+        entry_close: (() => {
+          const day = entryClose(db, row, toPosition(row), own, tz);
+          return day === null ? null : (({ value, ...rest }) => ({
+            ...rest, cost_to_close: value, on_pace: null, before_correction: false,
+          }))(day);
+        })(),
       });
     })
 

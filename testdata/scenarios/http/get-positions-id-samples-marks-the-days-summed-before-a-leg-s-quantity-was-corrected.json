@@ -458,6 +458,7 @@
           }
         ],
         "before_entry": [],
+        "entry_close": null,
         "qty_corrected_at": "2026-11-08 23:00:00+08:00"
       }
     },

@@ -7,6 +7,7 @@ does. What only the Python can get wrong is at the end.
 import json
 import math
 import re
+from datetime import UTC, datetime
 
 import pytest
 from harness import days_from_now, json_body, poisonable, quoting
@@ -834,32 +835,128 @@ class TestAWatchedRulesDailyCloses:
         h, _ = self.start_closed(start)
         assert (await h.call("/monitors/nope/samples")).status_code == 404
 
-    async def test_on_quotes_is_the_latest_close_in_a_session_with_when_and_what_it_was(self, start):
-        h, _ = self.start_closed(start)
+    @staticmethod
+    async def closes_of(h):
+        resp = await h.call("/monitors/closes")
+        assert resp.status_code == 200
+        return {r["id"]: r["last_close"] for r in resp.json()}
+
+    async def test_closes_is_the_latest_close_in_a_session_with_when_and_what_it_was_the_provider_down(self, start):
+        h, state = self.start_closed(start)
         id_ = (await post(h, combo(field="option_delta", threshold=0.3, direction="above"))).json()["id"]
+        state["open"] = False
         # a Thursday's close, then that evening's reading: the close is what the price is drawn at
         self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000")
         self.watched(h, self.spread_codes(), "2026-10-02", 30, [6, 2], "2026-10-03 01:00:00.000000")
-        (row,) = (await h.call("/quotes")).json()
-        assert row["id"] == id_
-        assert row["last_close"] == {
+        assert (await self.closes_of(h))[id_] == {
             "price": 3, "observed_on": "2026-10-01", "observed_at": "2026-10-02 04:14:00+08:00", "timing": "close",
         }  # fmt: skip
 
-    async def test_on_quotes_is_the_latest_reading_with_a_price_where_no_close_has_one(self, start):
+    async def test_closes_is_the_latest_reading_with_a_price_where_no_close_has_one(self, start):
         h, _ = self.start_closed(start)
-        await post(h, combo(field="mid_price"))
+        id_ = (await post(h, combo(field="mid_price"))).json()["id"]
         self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-02 01:00:00.000000")
-        (row,) = (await h.call("/quotes")).json()
-        assert row["last_close"]["price"] == 3
-        assert row["last_close"]["timing"] == "after-close"
+        found = (await self.closes_of(h))[id_]
+        assert found["price"] == 3
+        assert found["timing"] == "after-close"
 
-    async def test_on_quotes_is_null_for_a_rule_with_no_day_priced(self, start):
+    async def test_closes_is_null_for_a_rule_with_no_day_priced(self, start):
         h, _ = self.start_closed(start)
-        await post(h, combo(field="mid_price"))
+        id_ = (await post(h, combo(field="mid_price"))).json()["id"]
         self.watched(h, self.spread_codes(), "2026-10-01", 31, None, "2026-10-01 20:14:00.000000")
-        (row,) = (await h.call("/quotes")).json()
-        assert row["last_close"] is None
+        assert (await self.closes_of(h))[id_] is None
+
+    async def test_closes_in_the_session_is_never_todays_row_fridays_close_at_monday_11_02(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, combo(field="mid_price"))).json()["id"]
+        self.watched(h, self.spread_codes(), "2026-11-13", 18, [5, 2], "2026-11-13 21:14:00.000000")
+        self.watched(h, self.spread_codes(), "2026-11-16", 15, [6, 2], "2026-11-16 15:55:00.000000")
+        h.now = datetime(2026, 11, 16, 16, 2, tzinfo=UTC)  # Monday 11:02 in New York
+        found = (await self.closes_of(h))[id_]
+        assert (found["observed_on"], found["price"], found["timing"]) == ("2026-11-13", 3, "close")
+        # after the close, today's row is the close
+        h.now = datetime(2026, 11, 16, 22, 0, tzinfo=UTC)
+        found = (await self.closes_of(h))[id_]
+        assert (found["observed_on"], found["price"]) == ("2026-11-16", 4)
+
+    async def test_closes_prices_the_rule_under_its_own_quantities(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, combo(field="mid_price"))).json()["id"]
+        # a ratio is recorded through POST /spreads; its rule's legs as stored
+        h.db.execute(
+            "update monitors set legs = ? where id = ?",
+            (
+                json.dumps(
+                    [
+                        {"sign": 1, "option_type": "CALL", "strike": 8100},
+                        {"sign": -1, "option_type": "CALL", "strike": 8150, "qty": 2},
+                    ]
+                ),
+                id_,
+            ),
+        )
+        self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000")
+        # 5.00 − 2 × 2.00
+        assert (await self.closes_of(h))[id_]["price"] == 1
+        assert (await h.call(f"/monitors/{id_}/samples")).json()["samples"][0]["price"] == 1
+
+    async def test_closes_is_null_for_a_rule_on_contracts_an_open_holding_holds_exactly(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, combo(field="mid_price"))).json()["id"]
+        self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000")
+        h.db.execute(
+            """insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+               values ('p1', 'held', null, ?, 1, 3.0, ?, '2026-09-01 00:00:00.000000')""",
+            (
+                future(),
+                json.dumps(
+                    [
+                        {"side": "long", "option_type": "CALL", "strike": 8100},
+                        {"side": "short", "option_type": "CALL", "strike": 8150},
+                    ]
+                ),
+            ),
+        )
+        assert (await self.closes_of(h))[id_] is None
+
+    async def test_closes_is_null_for_a_rule_that_cannot_be_read_and_answers_for_the_rest(self, start):
+        h, _ = self.start_closed(start)
+        id_ = (await post(h, combo(field="mid_price"))).json()["id"]
+        bad = (await post(h, single())).json()["id"]
+        h.db.execute("""update monitors set legs = '[{"sign": 2}]' where id = ?""", (bad,))
+        self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-01 20:14:00.000000")
+        found = await self.closes_of(h)
+        assert found[bad] is None
+        assert found[id_]["price"] == 3
+
+    async def test_answers_422_in_words_for_a_rule_that_cannot_be_read_rather_than_a_500(self, start):
+        h, _ = self.start_closed(start)
+        bad = (await post(h, single())).json()["id"]
+        h.db.execute("""update monitors set legs = '[{"sign": 2}]' where id = ?""", (bad,))
+        resp = await h.call(f"/monitors/{bad}/samples")
+        assert resp.status_code == 422
+        assert "cannot be read" in resp.json()["detail"]
+
+    async def test_finds_the_price_rule_by_its_contracts_and_signs_whatever_it_is_named(self, start):
+        h, _ = self.start_closed(start)
+        delta = (await post(h, combo(field="option_delta", threshold=0.3, direction="above"))).json()["id"]
+        price = (await post(h, combo(name="other-name", field="mid_price", threshold=2, direction="above"))).json()[
+            "id"
+        ]
+        await post(
+            h,
+            combo(
+                name="flipped",
+                field="mid_price",
+                legs=[
+                    {"sign": -1, "option_type": "CALL", "strike": 8100},
+                    {"sign": 1, "option_type": "CALL", "strike": 8150},
+                ],
+            ),
+        )
+        assert (await h.call(f"/monitors/{delta}/samples")).json()["price_rule"] == {
+            "id": price, "threshold": 2, "direction": "above", "compare": "abs",
+        }  # fmt: skip
 
 
 class TestTotalEntry:

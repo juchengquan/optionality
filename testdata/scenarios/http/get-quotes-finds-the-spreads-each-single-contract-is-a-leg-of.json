@@ -325,8 +325,7 @@
               "sigma": null,
               "one_sigma": null
             }
-          ],
-          "last_close": null
+          ]
         },
         {
           "id": "mon-condor",
@@ -401,8 +400,7 @@
               "sigma": null,
               "one_sigma": null
             }
-          ],
-          "last_close": null
+          ]
         },
         {
           "id": "mon-short-call",
@@ -446,8 +444,7 @@
           "distance": 0.09,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": [],
-          "last_close": null
+          "short_strikes": []
         },
         {
           "id": "mon-far-call",
@@ -488,8 +485,7 @@
           "distance": 0.24,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": [],
-          "last_close": null
+          "short_strikes": []
         },
         {
           "id": "mon-short-put",
@@ -532,8 +528,7 @@
           "distance": 0.12,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": [],
-          "last_close": null
+          "short_strikes": []
         }
       ]
     },

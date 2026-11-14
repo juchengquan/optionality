@@ -162,8 +162,7 @@
           "distance": 0.09,
           "spx": null,
           "spx_reason": "the Provider gives no option premium to derive it from",
-          "short_strikes": [],
-          "last_close": null
+          "short_strikes": []
         }
       ]
     },

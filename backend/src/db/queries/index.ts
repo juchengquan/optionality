@@ -33,7 +33,9 @@ export {
 export {
   clearPositionSamples, findPositionSample, listPositionSamples, recordPositionSample,
 } from "./samples.ts";
-export { findWatchSample, listWatchSamples, recordWatchSample } from "./watch-samples.ts";
+export {
+  findWatchSample, listWatchSamples, recentPricedWatchSamples, recordWatchSample,
+} from "./watch-samples.ts";
 export {
   deleteReferenceRow, findReference, findReferenceByCode, insertReference, listReferences,
 } from "./references.ts";

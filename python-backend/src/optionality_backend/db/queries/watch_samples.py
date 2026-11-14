@@ -22,6 +22,22 @@ def list_watch_samples(db: sqlite3.Connection, contracts: str) -> list[WatchSamp
     )
 
 
+def recent_priced_watch_samples(db: sqlite3.Connection, contracts: str, limit: int) -> list[WatchSampleRow]:
+    """The latest `limit` days stored for one set of contracts WITH a price — every contract's mid —
+    newest first: what a last close is chosen from (`last_closes`), without reading and parsing every
+    day a history has ever had on every poll."""
+    return cast(
+        list[WatchSampleRow],
+        rows(
+            db,
+            """select * from watch_samples where contracts = ? and legs_mid is not null
+               order by observed_on desc limit ?""",
+            contracts,
+            limit,
+        ),
+    )
+
+
 def find_watch_sample(db: sqlite3.Connection, contracts: str, observed_on: str) -> WatchSampleRow | None:
     """The day already stored for this set of contracts, if any: what `takes_sample` decides against."""
     return cast(

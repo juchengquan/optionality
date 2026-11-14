@@ -18,6 +18,8 @@ import type { QuoteRecord } from "optionality/quotes";
 import { type FakeProvider, fakeFetcher } from "../../testing/harness.ts";
 import { SWEEP_SETTINGS, insertCombo, insertMonitor } from "../../testing/sweep.ts";
 import { MonitorSweeper } from "./index.ts";
+import { recordWatchSamples } from "./watching.ts";
+import type { MonitorRow } from "../db/rows.ts";
 
 let dir: string;
 let db: ReturnType<typeof createDatabase>;
@@ -218,10 +220,48 @@ describe("under exactly the holdings' sampling rules (ADR 0011)", () => {
       observed_at: "2026-10-01 15:05:00.000000" }]);
   });
 
+  it("writes when only SPX moves, so the day's row keeps the index of its close", async () => {
+    spreadRule();
+    book = Object.fromEntries(Object.entries(book).map(([c, q]) => [c, { ...q, last_price: 1, option_premium: 15 }]));
+    await sweep();
+    const before = stored()[0]!.spx;
+    expect(before).not.toBeNull();
+    book = Object.fromEntries(Object.entries(book).map(([c, q]) => [c, { ...q, option_premium: 14 }]));
+    now = new Date("2026-10-01T15:05:00Z");
+    await sweep();
+    expect(stored()[0]!.spx).not.toBe(before);
+    expect(stored()[0]!.observed_at).toBe("2026-10-01 15:05:00.000000");
+  });
+
+  it("writes when only a delta moves, which the mids, the IV and the vega can all hide", async () => {
+    spreadRule();
+    await sweep();
+    book[SHORT] = { ...book[SHORT]!, option_delta: 0.3 };
+    now = new Date("2026-10-01T15:05:00Z");
+    await sweep();
+    expect(JSON.parse(stored()[0]!.legs_delta!)[SHORT]).toBe(0.3);
+  });
+
   it("records nothing for contracts the Provider returned nothing for", async () => {
     spreadRule();
     book = {};
     await sweep();
+    expect(stored()).toEqual([]);
+  });
+});
+
+describe("the sampler alone", () => {
+  it("records nothing for contracts past their expiry, whoever still names them", () => {
+    // the sweep mutes an expired rule before this runs; called with one still enabled, it is the
+    // expiry, not the rule's state, that stops it
+    const expired = buildSpxCode("2026-09-30", "CALL", 8100);
+    const rule = {
+      id: "m-old", code: expired, strike_date: "2026-09-30", option_type: "CALL", strike: 8100,
+      field: "option_delta", threshold: 0.3, direction: "above", compare: "abs", legs: null, scope: null,
+      enabled: 1, disabled_reason: null, triggered: 0, last_value: null, last_checked_at: null,
+      last_alarm_at: null, created_at: "2026-09-01 00:00:00.000000",
+    } as MonitorRow;
+    recordWatchSamples(db, [rule], [], { [expired]: { code: expired, ...quote(5) } }, now);
     expect(stored()).toEqual([]);
   });
 });
