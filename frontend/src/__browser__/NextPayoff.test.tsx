@@ -9,10 +9,12 @@ import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
+import { DraftPreview } from "../Payoff";
+import type { DraftPayoff } from "../shared/api";
 import type { Payoff } from "../shared/api";
 import { holding, HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, side, volAnswer } from "../testing/ownerBook";
 import { serveAdding, settle } from "./nextBook";
-import { chartFaults, payoffIn, pointAt, said, tipFaults } from "./payoffMeasure";
+import { chartFaults, payoffIn, pointAt, said, servedPayoff, shown, tipFaults } from "./payoffMeasure";
 
 afterEach(() => {
   cleanup();
@@ -33,15 +35,9 @@ const health = {
 const SIX = holding("h-six", { name: "1231_SIX", strike_date: "2026-12-31", entry: 3,
   legs: [side("long", "PUT", 6950), side("long", "PUT", 7000), side("long", "PUT", 7050),
          side("long", "PUT", 7100), side("short", "PUT", 7150), side("short", "CALL", 7700)] });
-function sixPayoff(): Payoff {
-  const pnl = (s: number) => SIX.legs.reduce((sum, l) => {
-    const worth = l.option_type === "CALL" ? Math.max(0, s - l.strike) : Math.max(0, l.strike - s);
-    return sum + (l.side === "long" ? worth : -worth);
-  }, 3);
-  const ks = SIX.legs.map((l) => l.strike).sort((a, b) => a - b);
-  return { at_strikes: ks.map((k) => ({ spx: k, pnl: pnl(k) })), slope_below: -3, slope_above: -1,
-    breakevens: [], max_profit: null, max_loss: null };
-}
+/** What the service would serve for it: no ceiling's opposite — a profit bounded by SPX's floor of
+ *  zero far below, and no floor as SPX rises past the short call. */
+const sixPayoff = (): Payoff => servedPayoff(SIX.legs, 3);
 
 function serveOwnerBook(): void {
   window.fetch = ((url: string, init?: RequestInit) => {
@@ -79,10 +75,10 @@ describe("in the desk's inspector", () => {
         const payoff = await payoffIn(insp);
         const svg = payoff.querySelector<SVGSVGElement>("svg")!;
         expect(svg.getBoundingClientRect().width).toBeGreaterThan(200);
-        expect(chartFaults(payoff)).toEqual([]);
+        expect(chartFaults(payoff).join(" | ")).toBe("");
         // a real mouse over the breakeven's dot lands on the breakeven: nothing made, nothing lost
         await pointAt(payoff, payoff.querySelector(`[data-breakeven='${be}'] circle`)!);
-        expect(said(payoff)).toMatch(new RegExp(`^at expiry with SPX at ${be.replace(".", "\\.")}0?, .*: 0\\.00 pts`));
+        expect(shown(payoff)).toMatch(new RegExp(`^SPX ${be.replace(".", "\\.")}0? \\| .* \\| 0\\.00 pts`));
         expect(tipFaults(payoff, insp)).toEqual([]);
         // at either end of the drawing the tooltip still stays inside it
         for (const k of [...payoff.querySelectorAll<SVGLineElement>("[data-strike]")]) {
@@ -101,7 +97,7 @@ describe("in the desk's inspector", () => {
     expect(names.map((t) => t.textContent).join(" ").split(" ").sort())
       .toEqual(["+P6950", "+P7000", "+P7050", "+P7100", "−C7700", "−P7150"]);
     expect(new Set(names.map((t) => t.getAttribute("y"))).size).toBeGreaterThan(1);
-    expect(chartFaults(payoff)).toEqual([]);
+    expect(chartFaults(payoff).join(" | ")).toBe("");
   });
 
   it("steps along SPX with the keys, from SPX's price", async () => {
@@ -121,9 +117,9 @@ describe("in the desk's inspector", () => {
     const insp = await inspector(900, "h-ic");
     const payoff = await payoffIn(insp);
     await pointAt(payoff, payoff.querySelector("[data-strike='7400']")!);
-    expect(said(payoff)).toBe("at expiry with SPX at 7400, 499.50 above SPX now: +5.00 pts per contract · $•••");
+    expect(shown(payoff)).toBe("SPX 7400 | 499.50 above SPX now | +5.00 pts per contract · $•••");
     expect(payoff.textContent).not.toMatch(/\$\d/);
-    expect(chartFaults(payoff)).toEqual([]);
+    expect(chartFaults(payoff).join(" | ")).toBe("");
   });
 });
 
@@ -142,13 +138,41 @@ describe("in the add form's preview", () => {
       const payoff = await payoffIn(spread);
       const strikes = () => [...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ");
       await expect.poll(strikes).toBe("+P7100 −P7150");
-      expect(chartFaults(payoff)).toEqual([]);
+      expect(chartFaults(payoff).join(" | ")).toBe("");
       await pointAt(payoff, payoff.querySelector("[data-strike='7100']")!);
-      expect(said(payoff)).toBe("at expiry with SPX at 7100: -48.50 pts");
+      expect(shown(payoff)).toBe("SPX 7100 | -48.50 pts");
       expect(tipFaults(payoff, spread)).toEqual([]);
       await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7050");
       await expect.poll(strikes).toBe("+P7050 −P7150");
-      expect(chartFaults(payoff)).toEqual([]);
+      expect(chartFaults(payoff).join(" | ")).toBe("");
     });
+  }
+});
+
+/** A maximum the window does not reach is marked at the drawing's edge, with an arrow — inside the
+ *  plot, so it lands on neither the legs named under it nor SPX's label over it. Drawn alone at the
+ *  inspector's narrowest (272px) and the phone sheet's (358px), with the service's own figures. */
+describe("a maximum outside the window", () => {
+  const shapes: [string, DraftPayoff, number, "loss" | "profit"][] = [
+    ["a short put with SPX below its strike", { legs: [{ side: "short", option_type: "PUT", strike: 6500 }], entry: 30, contracts: 1 }, 6450, "loss"],
+    ["a long put with SPX above its strike", { legs: [{ side: "long", option_type: "PUT", strike: 6500 }], entry: -30, contracts: 1 }, 6550, "profit"],
+  ];
+  for (const width of [272, 358]) {
+    for (const [what, draft, spx, kind] of shapes) {
+      it(`${what}, at ${width}px: its max ${kind} marked with an arrow, on no other label`, async () => {
+        await page.viewport(1280, 900);
+        window.fetch = ((url: string, init?: RequestInit) => {
+          const body = JSON.parse(String(init?.body)) as DraftPayoff;
+          expect(String(url)).toMatch(/\/positions\/payoff$/);
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(servedPayoff(body.legs, body.entry, body.contracts)) });
+        }) as unknown as typeof fetch;
+        render(<div className="nx" style={{ width }}><DraftPreview subject="x" draft={draft} blank="" spx={spx} spxReason={null} /></div>);
+        const payoff = await payoffIn(document.querySelector<HTMLElement>(".nx")!);
+        const label = payoff.querySelector(`[data-max='${kind}']`)!;
+        expect(label.textContent).toMatch(kind === "loss" ? /^▼ max loss -6470\.00 pts$/ : /^▲ max profit \+6470\.00 pts$/);
+        expect(payoff.querySelector("[data-marker='spx']")).toBeTruthy();
+        expect(chartFaults(payoff).join(" | ")).toBe("");
+      });
+    }
   }
 });

@@ -28,8 +28,9 @@
  *  scrolls the page (`touch-action: pan-y`). The arrow keys step along SPX through every step and
  *  every marked price, starting from SPX's; Home and End go to the window's ends; Escape lets go,
  *  and with nothing chosen is left to the page, whose inspector it closes. ONE tab stop. The
- *  tooltip is for the eye and hidden from a screen reader; the line beneath says the same in full,
- *  and is what is announced (a polite live region).
+ *  tooltip is for the eye and hidden from a screen reader; the line beneath says the same in full
+ *  once a key or a finger has CHOSEN a price, and is what is announced (a polite live region) —
+ *  never as a mouse merely passes over.
  *
  *  visx for the scale and the shapes only (`@visx/scale`, `shape`, `threshold`, already in the
  *  bundle for the burndown); the labels and the tooltip are placed here, for the reasons
@@ -260,6 +261,9 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
   }, []);
   const id = useId().replace(/[^\w-]/g, "");
   const [pointed, setPointed] = useState<number | null>(null);
+  // whether the price was CHOSEN — by a key or a finger — rather than passed over by a mouse: only
+  // a choice is announced, or a mouse crossing the chart would speak a sentence at every step
+  const [chosen, setChosen] = useState(false);
   const tipBox = useRef<HTMLDivElement>(null);
   const [tipH, setTipH] = useState(0);
   useLayoutEffect(() => {
@@ -300,33 +304,37 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
     const px = (e.clientX - r.left) * (r.width > 0 ? W / r.width : 1);
     return snapPrice(x.invert(px), marks, win, (REACH * (d1 - d0)) / Math.max(1, W - L - R));
   };
-  const pick = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => setPointed(priceAt(e));
+  const pick = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>, choice: boolean) => {
+    setPointed(priceAt(e));
+    setChosen(choice);
+  };
   // A mouse points by moving. A finger chooses only by a TAP, or by a drag gone sideways: never on
   // touching down, which a vertical scroll that starts on the chart does too
   const kind = useRef("mouse");
   const touch = useRef<{ x0: number; y0: number; scrubbing: boolean } | null>(null);
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     kind.current = e.pointerType;
-    if (e.pointerType === "mouse") pick(e);
+    if (e.pointerType === "mouse") pick(e, false);
     else touch.current = { x0: e.clientX, y0: e.clientY, scrubbing: false };
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.pointerType === "mouse") { pick(e); return; }
+    if (e.pointerType === "mouse") { pick(e, false); return; }
     const t = touch.current;
     if (!t) return;
     const [dx, dy] = [Math.abs(e.clientX - t.x0), Math.abs(e.clientY - t.y0)];
     if (!t.scrubbing && (dx < SCRUB || dx <= dy)) return;
     t.scrubbing = true;
-    pick(e);
+    pick(e, true);
   };
   const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const t = touch.current;
     touch.current = null;
-    if (kind.current === "mouse") { pick(e); return; }
+    if (kind.current === "mouse") { pick(e, false); return; }
     // a scrub ends on the price it reached; a tap chooses one, or lets go of the one chosen
     if (t?.scrubbing) return;
     const price = priceAt(e);
     setPointed(price === at ? null : price);
+    setChosen(true);
   };
   // the page took the touch — a scroll — so nothing the finger did chooses a price
   const onPointerCancel = () => { touch.current = null; setPointed(null); };
@@ -343,6 +351,7 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
     if (next === undefined) return;
     e.preventDefault();
     setPointed(next === "clear" ? null : next);
+    setChosen(true);
   };
 
   const said = at === null ? null : readout(at, payoff, unit, spx);
@@ -352,14 +361,18 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
     return { tipW, ...tipPlace({ x: x(at!), y: y(pnl), W, H, tipW, tipH }) };
   })();
 
-  // the maximums, where finite: on their rule inside the window's figures, else at its edge
+  // the maximums, where finite: on their rule inside the window's figures, its label above a
+  // profit's and below a loss's; else at the plot's edge with an arrow, and the label INSIDE the plot
+  // (under a ▲, over a ▼), so it lands on neither SPX's label in the margin over the plot nor the
+  // legs named in the margin under it
   const maxima = ([["profit", payoff.max_profit], ["loss", payoff.max_loss]] as const)
     .filter((m): m is readonly ["profit" | "loss", number] => m[1] !== null)
     .filter(([kind, v]) => kind === "profit" || v !== payoff.max_profit)
     .map(([kind, v]) => {
       const off = v > top + 1e-9 ? "above" : v < bottom - 1e-9 ? "below" : null;
       const at = off === "above" ? T : off === "below" ? H - B : y(v);
-      return { kind, v, off, at, words: `${off === "above" ? "▲ " : off === "below" ? "▼ " : ""}max ${kind} ${shortWords(v, unit)}` };
+      const labelY = off === "above" ? at + 12 : off === "below" ? at - 4 : kind === "profit" ? at - 4 : at + 12;
+      return { kind, v, off, at, labelY, words: `${off === "above" ? "▲ " : off === "below" ? "▼ " : ""}max ${kind} ${shortWords(v, unit)}` };
     });
   const spxX = spx === null ? null : x(spx);
 
@@ -381,7 +394,7 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
           {maxima.map((m) => (
             <g key={m.kind} className="nx-payoff-max" data-kind={m.kind} data-off={m.off ?? undefined}>
               <line x1={L} x2={W - R} y1={m.at} y2={m.at} />
-              <text data-max={m.kind} x={W - R} y={m.kind === "profit" ? m.at - 4 : m.at + 12} textAnchor="end">{m.words}</text>
+              <text data-max={m.kind} x={W - R} y={m.labelY} textAnchor="end">{m.words}</text>
             </g>
           ))}
           <LinePath data-curve="" className="nx-payoff-curve" data={corners} x={(c) => x(c.s)} y={(c) => y(c.v)} />
@@ -427,10 +440,12 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
           </div>
         )}
       </div>
-      {/* announced politely as it changes; not a `status` ROLE, which the holding's actions beside
-          it already are, and a page with two is ambiguous about which one speaks for the holding */}
+      {/* a polite live region, announced when a key or a finger chooses a price and never as a mouse
+          passes over (its figures are the tooltip's). A live region rather than `role="status"`: the
+          inspector's `status` lines are the holding's actions' and the burndown's, and the tests and
+          tools that find "the status" of a holding's actions by role would find two */}
       <p className="nx-payoff-said" aria-live="polite" aria-atomic="true" data-said="">
-        {said?.words ?? "point at a price, or use the arrow keys, for the P&L at expiry there"}
+        {chosen && said ? said.words : "point at a price, or use the arrow keys, for the P&L at expiry there"}
       </p>
     </>
   );

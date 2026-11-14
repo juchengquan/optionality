@@ -71,3 +71,45 @@ export async function pointAt(payoff: HTMLElement, mark: Element): Promise<void>
   const x = Math.min(Math.max(1, m.left + m.width / 2 - s.left), s.width - 1);
   await userEvent.hover(svg, { position: { x, y: s.height / 2 } } as never);
 }
+
+/** A payoff as the service serves it (`payoffAtExpiry`, typescript/src/domain/payoff.ts, which the
+ *  page cannot import): the corners at the strikes, the slopes beyond, the breakevens and the
+ *  maximums, SPX's floor of zero included — so a fixture's maximums are the domain's, not a guess. */
+export function servedPayoff(legs: { side: string; option_type: string; strike: number; qty?: number }[],
+  entry: number, contracts = 1) {
+  const pnl = (s: number) => contracts * legs.reduce((sum, l) => {
+    const worth = (l.option_type === "CALL" ? Math.max(0, s - l.strike) : Math.max(0, l.strike - s)) * (l.qty ?? 1);
+    return sum + (l.side === "long" ? worth : -worth);
+  }, entry);
+  const strikes = [...new Set(legs.map((l) => l.strike))].sort((a, b) => a - b);
+  const xs = strikes[0]! <= 0 ? strikes : [0, ...strikes];
+  const vs = xs.map(pnl);
+  let [below, above] = [0, 0];
+  for (const l of legs) {
+    if (l.option_type === "PUT") below += (l.side === "short" ? 1 : -1) * (l.qty ?? 1);
+    else above += (l.side === "short" ? -1 : 1) * (l.qty ?? 1);
+  }
+  const [slopeBelow, slopeAbove] = [below * contracts, above * contracts];
+  const breakevens: number[] = [];
+  xs.forEach((x, i) => {
+    const v = vs[i]!;
+    if (v === 0) breakevens.push(x);
+    if (i + 1 < xs.length) {
+      const [nx, nv] = [xs[i + 1]!, vs[i + 1]!];
+      if ((v < 0 && nv > 0) || (v > 0 && nv < 0)) breakevens.push(x + ((nx - x) * -v) / (nv - v));
+    }
+  });
+  const last = vs[vs.length - 1]!;
+  if ((last < 0 && slopeAbove > 0) || (last > 0 && slopeAbove < 0)) breakevens.push(xs[xs.length - 1]! - last / slopeAbove);
+  return {
+    at_strikes: strikes.map((spx) => ({ spx, pnl: vs[xs.indexOf(spx)]! })),
+    slope_below: slopeBelow, slope_above: slopeAbove, breakevens,
+    max_profit: slopeAbove > 0 ? null : Math.max(...vs),
+    max_loss: slopeAbove < 0 ? null : Math.min(...vs),
+  };
+}
+
+/** What the tooltip shows, its lines joined by " | ": what a pointer passing over is shown, which
+ *  is never announced (only a key's or a finger's choice is). */
+export const shown = (payoff: HTMLElement) =>
+  [...payoff.querySelector("[data-tip]")?.children ?? []].map((d) => d.textContent).join(" | ");

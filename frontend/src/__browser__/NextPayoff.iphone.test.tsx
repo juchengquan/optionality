@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Next } from "../Next";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { overflowsSideways, serveAdding, settle } from "./nextBook";
-import { chartFaults, payoffIn, said, tipFaults } from "./payoffMeasure";
+import { chartFaults, payoffIn, shown, tipFaults } from "./payoffMeasure";
 
 afterEach(cleanup);
 
@@ -67,14 +67,14 @@ describe("in the detail sheet", () => {
       await animationsDone();
       const payoff = await payoffIn(sheet);
       expect(payoff.querySelector("svg")!.getBoundingClientRect().width).toBeGreaterThan(300);
-      expect(chartFaults(payoff)).toEqual([]);
+      expect(chartFaults(payoff).join(" | ")).toBe("");
       await tapAt(payoff, payoff.querySelector(`[data-breakeven='${be}'] circle`)!);
-      expect(said(payoff)).toMatch(new RegExp(`^at expiry with SPX at ${be.replace(".", "\\.")}0?, .*: 0\\.00 pts`));
+      expect(shown(payoff)).toMatch(new RegExp(`^SPX ${be.replace(".", "\\.")}0? \\| .* \\| 0\\.00 pts`));
       expect(tipFaults(payoff, sheet)).toEqual([]);
       expect(tipFaults(payoff, screenBox())).toEqual([]);
       for (const k of [...payoff.querySelectorAll<SVGLineElement>("[data-strike]")]) {
         await tapAt(payoff, k);
-        expect(said(payoff), `at the strike ${k.dataset.strike}`).toMatch(new RegExp(`SPX at ${k.dataset.strike},`));
+        expect(shown(payoff), `at the strike ${k.dataset.strike}`).toMatch(new RegExp(`^SPX ${k.dataset.strike} \\|`));
         expect(tipFaults(payoff, sheet), `at the strike ${k.dataset.strike}`).toEqual([]);
       }
       expect(overflowsSideways()).toBe(false);
@@ -101,13 +101,13 @@ describe("in the Add sheet's preview", () => {
     const strikes = () => [...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ");
     await expect.poll(strikes).toBe("+P6950 +P7000 +P7050 +P7100 −P7150 +P7700");
     expect(payoff.querySelector("svg")!.getBoundingClientRect().width).toBeGreaterThan(300);
-    expect(chartFaults(payoff)).toEqual([]);
+    expect(chartFaults(payoff).join(" | ")).toBe("");
     await tapAt(payoff, payoff.querySelector("[data-strike='7150']")!);
-    expect(said(payoff)).toMatch(/^at expiry with SPX at 7150: /);
+    expect(shown(payoff)).toMatch(/^SPX 7150 \| /);
     expect(tipFaults(payoff, spread)).toEqual([]);
     await userEvent.fill(screen.getByLabelText("spread 1, leg 6 strike"), "7750");
     await expect.poll(strikes).toBe("+P6950 +P7000 +P7050 +P7100 −P7150 +P7750");
-    expect(chartFaults(payoff)).toEqual([]);
+    expect(chartFaults(payoff).join(" | ")).toBe("");
     expect(overflowsSideways()).toBe(false);
   });
 });

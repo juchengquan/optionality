@@ -303,6 +303,7 @@ describe("the crosshair readout (#396)", () => {
     expect(line.getAttribute("aria-live")).toBe("polite");
     return line.textContent;
   };
+  const HINT = "point at a price, or use the arrow keys, for the P&L at expiry there";
   const tip = (payoff: HTMLElement) => payoff.querySelector("[data-tip]")?.textContent ?? null;
   /** The x of the curve's zero crossing nearest `near`, from the path drawn: where the curve itself
    *  meets the zero line, whatever the labels say. */
@@ -322,9 +323,9 @@ describe("the crosshair readout (#396)", () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     const be = payoff.querySelector<SVGCircleElement>("[data-breakeven='6295'] circle")!;
     fireEvent.pointerMove(svg(payoff), { clientX: Number(be.getAttribute("cx")), clientY: 60, pointerType: "mouse" });
-    expect(said(payoff)).toBe("at expiry with SPX at 6295, 605.50 below SPX now: 0.00 pts per contract · $0");
-    expect(tip(payoff)).toContain("SPX 6295");
-    expect(tip(payoff)).toContain("605.50 below SPX now");
+    expect(tip(payoff)).toBe("SPX 6295605.50 below SPX now0.00 pts per contract · $0");
+    // a mouse passing over is shown, never announced: the live line speaks for a choice only
+    expect(said(payoff)).toBe(HINT);
     expect(payoff.querySelector("[data-crosshair]")).toBeTruthy();
     fireEvent.pointerLeave(svg(payoff), { pointerType: "mouse" });
     expect(payoff.querySelector("[data-crosshair]")).toBeNull();
@@ -335,7 +336,13 @@ describe("the crosshair readout (#396)", () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     const k = payoff.querySelector<SVGLineElement>("[data-strike='7400']")!;
     fireEvent.pointerMove(svg(payoff), { clientX: Number(k.getAttribute("x1")), clientY: 60, pointerType: "mouse" });
-    expect(said(payoff)).toBe("at expiry with SPX at 7400, 499.50 above SPX now: +5.00 pts per contract · +$1,000");
+    expect(tip(payoff)).toBe("SPX 7400499.50 above SPX now+5.00 pts per contract · +$1,000");
+    expect(said(payoff)).toBe(HINT);
+    // a key chooses, and then it is announced; a mouse passing again goes back to the hint
+    fireEvent.keyDown(chart(payoff), { key: "ArrowRight" });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7405, /);
+    fireEvent.pointerMove(svg(payoff), { clientX: Number(k.getAttribute("x1")), clientY: 60, pointerType: "mouse" });
+    expect(said(payoff)).toBe(HINT);
   });
 
   it("steps along SPX with the keys, from SPX's own price, and lets go on Escape", async () => {
@@ -380,6 +387,42 @@ describe("the crosshair readout (#396)", () => {
     fireEvent.pointerDown(svg(payoff), { clientX: k, clientY: 60, pointerType: "touch" });
     fireEvent.click(svg(payoff), { clientX: k, clientY: 60 });
     expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+  });
+
+  it("leaves an Escape with nothing chosen to the page, which closes the inspector", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const keys = chart(payoff);
+    fireEvent.keyDown(keys, { key: "ArrowRight" });
+    // the first Escape lets go of the price, and is the chart's
+    fireEvent.keyDown(keys, { key: "Escape" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    expect(screen.getByRole("complementary", { name: "inspector: 1231_IC" })).toBeTruthy();
+    // the next one, with nothing chosen, goes on to the page
+    fireEvent.keyDown(keys, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull());
+  });
+
+  it("scrubs with a finger dragged sideways, and chooses nothing with one dragged up or down", async () => {
+    const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
+    const xOf = (k: string) => Number(payoff.querySelector(`[data-strike='${k}']`)!.getAttribute("x1"));
+    const [k0, k1] = [xOf("6300"), xOf("7400")];
+    // a vertical drag is the page's scroll: nothing chosen
+    fireEvent.pointerDown(svg(payoff), { clientX: k0, clientY: 40, pointerType: "touch" });
+    fireEvent.pointerMove(svg(payoff), { clientX: k0 + 4, clientY: 120, pointerType: "touch" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    fireEvent.pointerCancel(svg(payoff), { pointerType: "touch" });
+    // a sideways one scrubs: the crosshair follows the finger, and says where it is
+    fireEvent.pointerDown(svg(payoff), { clientX: k0, clientY: 60, pointerType: "touch" });
+    fireEvent.pointerMove(svg(payoff), { clientX: k0 + 4, clientY: 60, pointerType: "touch" });
+    expect(payoff.querySelector("[data-crosshair]")).toBeNull();
+    fireEvent.pointerMove(svg(payoff), { clientX: (k0 + k1) / 2, clientY: 62, pointerType: "touch" });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at \d+, .*: \+5\.00 pts per contract · \+\$1,000$/);
+    fireEvent.pointerMove(svg(payoff), { clientX: k1, clientY: 62, pointerType: "touch" });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400, /);
+    // lifting the finger keeps the price it reached
+    fireEvent.pointerUp(svg(payoff), { pointerType: "touch" });
+    fireEvent.click(svg(payoff), { clientX: k1, clientY: 62 });
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400, /);
   });
 
   it("labels each breakeven with the domain's figure, drawn where the curve crosses zero", async () => {
