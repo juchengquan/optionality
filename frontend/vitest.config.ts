@@ -10,16 +10,18 @@ export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   // __browser__ is the other suite: it needs a real layout engine (ADR 0008)
   //
-  // No `setupFiles`, deliberately. Phase 0 planned one stubbing ResizeObserver, matchMedia and
-  // friends, on the grounds that jsdom lacks them. jsdom does lack them — but Base UI guards their
-  // absence itself, verified by running the components with the stubs removed, so the stubs were
-  // dropped rather than shipped dead. If a later change crashes inside a positioning engine, that
-  // is what this note is for. (`Setup.test.tsx` carried it, around a smoke test of a `Select` the
-  // dashboard does not use; `NextDesk.test.tsx` opens the column picker's real `Popover` and finds
-  // its content through the portal with `screen.findByRole`, which is the same claim about live code.)
+  // One `setupFiles`, and only one: `testing/keys.setup.ts`, which fails a test whose page drew two
+  // children with one key (#368) — React only logs it. Nothing else is set up, deliberately. Phase 0
+  // planned stubs for ResizeObserver, matchMedia and friends, on the grounds that jsdom lacks them.
+  // jsdom does lack them — but Base UI guards their absence itself, verified by running the
+  // components with the stubs removed, so the stubs were dropped rather than shipped dead. If a
+  // later change crashes inside a positioning engine, that is what this note is for.
+  // (`NextDesk.test.tsx` opens the column picker's real `Popover` and finds its content through the
+  // portal with `screen.findByRole`.)
   test: {
     environment: "jsdom",
     globals: true,
+    setupFiles: ["src/testing/keys.setup.ts"],
     exclude: ["**/node_modules/**", "src/__browser__/**"],
     // TZ=UTC, as backend/vitest.config.ts has always had it — and for a sharper reason here.
     // `clockTime` and `snapshotName` deliberately read the DEVICE's zone, which is what "when this

@@ -27,10 +27,13 @@ export const CONDOR: Entry = {
   combo_value: 6.4,
 } as Entry;
 
-/** `/monitors` saying what `/quotes` says about every rule that is on — its figure, its legs, its
- *  links — which `ownerBook`'s rows, carrying defaults, do not. */
+/** `/monitors`' rows for rules that are on, saying what `/quotes` says about each — its figure, its
+ *  legs, its links — which `ownerBook`'s rows, carrying defaults, do not. The rules that are off are
+ *  NOT here: `splitBook` adds them once, because a caller adding rules later (`extra`, a holding's
+ *  new rule) would otherwise serve them again, and two rows with one id is a `/monitors` no service
+ *  can answer (#368). */
 function monitorsOf(quotes: Entry[]): Monitor[] {
-  const on = quotes.map((q) => {
+  return quotes.map((q) => {
     const leg = /([CP])(\d+)000$/.exec(q.code);
     return {
       ...MONITORS.find((m) => m.id === q.id) ?? MONITORS[0]!,
@@ -40,13 +43,13 @@ function monitorsOf(quotes: Entry[]): Monitor[] {
       disabled_reason: null,
     } as Monitor;
   });
-  return [...on, ...MONITORS.filter((m) => !m.enabled)];
 }
 
 /** The book the split is worked against, as plain data. */
 export function splitBook(): { quotes: Entry[]; monitors: Monitor[]; holdings: Holding[] } {
   const quotes = [...structuredClone(QUOTES), structuredClone(CONDOR)];
-  return { quotes, monitors: monitorsOf(quotes), holdings: structuredClone(HOLDINGS) };
+  const off = structuredClone(MONITORS.filter((m) => !m.enabled));
+  return { quotes, monitors: [...monitorsOf(quotes), ...off], holdings: structuredClone(HOLDINGS) };
 }
 
 export interface Write { what: string; body: unknown }
