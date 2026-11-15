@@ -703,7 +703,10 @@ The owner asked for three layout changes. Decided:
   the page shares (#408's `useDismissOnBack`), so one Back closes one sheet. The book stays drawn
   under it, where it was. A close's account (#294) stays drawn under it too, where the Settings
   screen used to replace it. **The desk keeps its Settings side sheet.** Switching arrangement with
-  Settings open closes the one sheet and opens the other, each giving its Back entry up as before.
+  Settings open — which Settings itself offers — closes the one sheet and opens the other under ONE
+  Back entry, held by the page for as long as Settings is open. An entry per sheet raced: the
+  browser's back() for the sheet going ran after the push for the sheet coming, went one entry too
+  far, and the next close left the dashboard (found while building; held by a test each way).
 - *Swipe-down:* the issue asked for Settings to close "by Back, swipe-down and Cancel like Add". The
   Add sheet has no swipe-down (it is a Base UI Dialog, not a Drawer) and no Cancel of the sheet's own
   — Cancel is the add form's button. Settings, built as the same component, closes exactly as Add

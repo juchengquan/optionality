@@ -117,6 +117,11 @@ export function Next() {
   const { holdings, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.reload, rereadJournal);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  // Settings' Back entry is the PAGE's, held for as long as Settings is open, whichever sheet draws
+  // it (#410): the arrangement is switched from inside it, and with an entry per sheet the desk's
+  // side sheet took one as the phone's bottom sheet gave its own up — the browser's back() runs
+  // later, went one entry further than meant, and the next close then left the dashboard
+  useDismissOnBack(settingsOpen, closeSettings);
   // adding a spread or a contract (#293, #331; named for both since #301): a panel above the desk's
   // table, a bottom sheet on the phone — opened from the header's "add" on both since #410
   const [adding, setAddingNow] = useState(false);
@@ -430,12 +435,11 @@ export function Next() {
         {phone ? addForm : null}
       </PhoneSheet>
       <PhoneSheet open={settingsOpen && phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
-                  title="Settings" description={SETTINGS_SAYS}>
+                  title="Settings" description={SETTINGS_SAYS} ownBack={false}>
         {phone ? settings : null}
       </PhoneSheet>
-      {/* Mounted in both arrangements and only OPEN on the desk: switching to the phone with it
-          open then closes it, and closing is what takes its history entry back off the stack.
-          Unmounted instead, the entry stayed and the next Back press did nothing. */}
+      {/* Mounted in both arrangements and only OPEN on the desk; its Back entry is the page's, kept
+          across a switch of arrangement (above) */}
       <DeskSettings open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}>
         {phone ? null : settings}
       </DeskSettings>
@@ -496,12 +500,13 @@ function useHeaderHeight() {
 /** A bottom sheet over the phone's book, closed by Back (ADR 0023): the Add form's since #293, and
  *  Settings' since #410, where Settings had been a screen in the book's place. One component, so the
  *  two open, close and give their Back entry up alike (`useDismissOnBack`, one list for every sheet
- *  the page opens, #408). */
-function PhoneSheet({ open, onClose, up, entryStyle, title, description, children }: {
+ *  the page opens, #408). `ownBack={false}` where the page holds the entry instead: Settings', which
+ *  outlives a switch between this sheet and the desk's. */
+function PhoneSheet({ open, onClose, up, entryStyle, title, description, ownBack = true, children }: {
   open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle;
-  title: string; description: string; children: React.ReactNode;
+  title: string; description: string; ownBack?: boolean; children: React.ReactNode;
 }) {
-  useDismissOnBack(open, onClose);
+  useDismissOnBack(ownBack && open, onClose);
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}>
@@ -518,7 +523,7 @@ function PhoneSheet({ open, onClose, up, entryStyle, title, description, childre
 function DeskSettings({ open, onClose, up, entryStyle, children }: {
   open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle; children: React.ReactNode;
 }) {
-  useDismissOnBack(open, onClose);
+  // its Back entry is held by the page (Next), across a switch of arrangement
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:

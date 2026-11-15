@@ -6,7 +6,7 @@
  *  `iphone` instance only; the behaviour is `__tests__/NextJournal.test.tsx`.
  */
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
-import { userEvent } from "@vitest/browser/context";
+import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
@@ -14,7 +14,11 @@ import { closedBookService } from "../testing/closedBook";
 import type { HoldingService } from "../testing/holdingService";
 import { headerBottom, overflowsSideways, settle } from "./nextBook";
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  // the iPhone 13's screen, for a test that widened it
+  await page.viewport(390, 664);
+});
 
 /** The page in session (session.setup.ts), its fold as loaded: shut. */
 async function load(): Promise<{ s: HoldingService; journal: HTMLElement }> {
@@ -89,18 +93,24 @@ describe("the closed trades on the phone", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
-  it("does not scroll when Settings opens over it and closes again (#410: a sheet now)", async () => {
+  it("does not scroll when it is drawn again already open: the screen turned wide enough for the desk", async () => {
+    // a switch of arrangement draws the book afresh, the fold with it, open (#373); only a PRESS may
+    // scroll to it (JournalFold's `pressed`). Settings no longer redraws the book since it became a
+    // sheet over it (#410), so the width is what remounts it here — a phone turned on its side, a
+    // window widened — with no sheet open whose scroll lock would put the page back anyway
     await review();
     window.scrollTo(0, 0);
-    await userEvent.click(screen.getByRole("button", { name: "settings" }));
-    await screen.findByRole("dialog", { name: "Settings" });
     await settle();
-    window.history.back();
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+    await page.viewport(1000, 664);
+    await waitFor(() => expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk"));
     const journal = await screen.findByRole("region", { name: "closed trades" });
+    expect(journal.closest(".nxd"), "drawn again, by the desk's book").not.toBeNull();
     expect(within(journal).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded")).toBe("true");
+    await waitFor(() => expect(journal.querySelectorAll("[data-closed]").length).toBeGreaterThan(0));
     await settle();
-    expect(window.scrollY).toBe(0);
+    expect(window.scrollY, "scrolled to the fold it only drew again").toBe(0);
+    // and the test was worth something: the fold is below the screen, so a scroll to it would show
+    expect(journal.getBoundingClientRect().top).toBeGreaterThan(window.innerHeight);
   });
 
   it("opens on a tap into view: its first trade on the screen, below the sticky header", async () => {

@@ -1033,18 +1033,32 @@ describe("settings' claim of a whole list", () => {
 });
 
 describe("settings", () => {
-  it("gives its Back entry back when the desk turns into the phone with it open", async () => {
-    // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
-    const pushed = vi.spyOn(window.history, "pushState");
-    const back = vi.spyOn(window.history, "back");
-    document.cookie = "ui_arrangement=desk;path=/";
-    at(SESSION);
-    await open();
-    fireEvent.click(screen.getByRole("button", { name: "settings" }));
-    expect(pushed).toHaveBeenCalledTimes(1);
-    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "phone" } });
-    expect(back).toHaveBeenCalledTimes(1);
-  });
+  // Settings is a sheet on both arrangements since #410, and the arrangement can be switched from
+  // inside it: ONE history entry for as long as it is open, whichever sheet draws it. Each sheet
+  // giving its entry up and taking another as the switch landed raced — the browser's asynchronous
+  // back() ran after the new push and went one entry further — so the next close left the page.
+  for (const [from, to] of [["desk", "phone"], ["phone", "desk"]] as const) {
+    it(`keeps one Back entry when the ${from} turns into the ${to} with it open, and gives it back on closing`, async () => {
+      // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
+      const pushed = vi.spyOn(window.history, "pushState");
+      const back = vi.spyOn(window.history, "back");
+      document.cookie = `ui_arrangement=${from};path=/`;
+      at(SESSION);
+      await open();
+      fireEvent.click(screen.getByRole("button", { name: "settings" }));
+      expect(pushed).toHaveBeenCalledTimes(1);
+      fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: to } });
+      expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe(to);
+      await waitFor(() => expect(screen.getAllByRole("dialog", { name: "Settings" })).toHaveLength(1));
+      expect(pushed, "a second entry for the same Settings").toHaveBeenCalledTimes(1);
+      expect(back, "its entry given up while it stays open").toHaveBeenCalledTimes(0);
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+      expect(back).toHaveBeenCalledTimes(1);
+      pushed.mockRestore();
+      back.mockRestore();
+    });
+  }
 
   it("turns the page red-up and remembers it", async () => {
     at(SESSION);

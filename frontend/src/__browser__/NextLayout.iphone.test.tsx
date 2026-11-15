@@ -316,7 +316,8 @@ describe("the Settings sheet", () => {
   it("closes by its Close button, as the Add sheet does", async () => {
     const sheet = await settings();
     fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+    // gone once its exit has played out, which a loaded suite can stretch past waitFor's 1s
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull(), { timeout: 3000 });
   });
 
   it("pushes nothing sideways", async () => {
