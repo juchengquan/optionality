@@ -233,7 +233,7 @@ const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
 
 // ---- the sections
 
-function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed, session, onRevalue, revaluing, ctx, picker }: BookProps & {
+function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed, session, ctx, picker }: BookProps & {
   placed: BookModel; ctx: Ctx; picker: React.ReactNode;
 }) {
   return (
@@ -246,10 +246,10 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed,
         ? <p className="nx-meta nxd-note">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
       {holdings === null && holdingsError === null ? <p className="nx-meta nxd-note">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nx-meta nxd-note">nothing held</p> : null}
-      {/* outside the session (#371): when the service valued what is drawn, and the
-          refresh that values it again */}
-      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings} onRefresh={onRevalue}
-                              refreshing={revaluing} className="nx-meta nxd-note" /> : null}
+      {/* outside the session (#371): when the service valued what is drawn; the header's refresh
+          values it again (#410) */}
+      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
+                              className="nx-meta nxd-note" /> : null}
       {placed.holdings.map(({ expiry, rows }) => (
         <div key={expiry} className="nxd-expiry">
           <h3 className="nxd-group">{`${shortDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`}</h3>

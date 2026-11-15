@@ -5,11 +5,11 @@
  *  its history entry back too, or the next press of Back does nothing at all and looks like the page
  *  ignoring you. jsdom's `history.length` never shrinks, so the pushes and the backs are counted.
  *
- *  Every sheet the page opens over itself: the phone's detail and Add sheets, and the desk's
- *  Settings. (The desk's add panel and inspector are not sheets: they sit in the page, and Back is
+ *  Every sheet the page opens over itself: the phone's detail, Add and Settings sheets, and the
+ *  desk's Settings. (The desk's add panel and inspector are not sheets: they sit in the page, and Back is
  *  not theirs.) The journal's trade sheet is `NextJournal`'s.
  */
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -30,8 +30,6 @@ afterEach(() => {
   document.cookie = "ui_arrangement=;path=/;max-age=0";
 });
 
-const tab = (name: string) =>
-  within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name });
 
 /** Each sheet: the arrangement it is on, how it is opened, and how it is found once open. */
 const SHEETS = [
@@ -42,8 +40,14 @@ const SHEETS = [
   },
   {
     name: "the phone's Add sheet", arrangement: "phone",
-    open: () => fireEvent.click(tab("Add")),
+    open: () => fireEvent.click(screen.getByRole("button", { name: "add" })),
     find: () => screen.queryByRole("dialog", { name: "Add a spread or contract" }),
+  },
+  {
+    // a sheet like Add's since #410, where it was a screen in the book's place
+    name: "the phone's Settings sheet", arrangement: "phone",
+    open: () => fireEvent.click(screen.getByRole("button", { name: "settings" })),
+    find: () => screen.queryByRole("dialog", { name: "Settings" }),
   },
   {
     name: "the desk's Settings", arrangement: "desk",

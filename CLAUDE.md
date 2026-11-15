@@ -338,7 +338,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   **One page, the redesign (ADR 0023)**, since the swap of 2026-11-13 (#301) deleted the old one:
   `index.html` loads `src/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
   0023 as amended 2026-11-13, "one page, by the session"; #371–#375): the desk draws one column
-  set and the phone three tabs (Book, Add, Settings), the closed trades fold at the bottom of the
+  set and the phone its cards, with Add and Settings as buttons in a header held at the top of the
+  screen on both arrangements and each a bottom sheet on the phone (#410, which retired the phone's
+  tab bar and the market-closed line's own refresh), the closed trades fold at the bottom of the
   book. New York's session (`src/session.ts`) decides only: what is FETCHED; the
   market-closed line; whether a figure (a Level chip, a Reference) says when it was read; what the
   needs-you line states (holdings' Levels only in session); whether a holding's history starts
@@ -575,7 +577,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   else — the page has no mode (#371, #375): in session it polls `/positions/values` and `/references` with it — three calls
   per poll per open tab, where the old page made two; outside the session it reads those two once
   each time it is asked — on opening, at each edge of the session (one slept through included), on
-  the refresh button, on opening Settings, and after every write the page makes — and polls neither.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
+  the header's refresh button, on opening Settings, and after every write the page makes — and polls neither.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
   moomoo rejects a whole batch for one bad code and the containment loop drops only a code it
   NAMES, so a class refusal (`US..SPX`, which is the first thing a reasonable person types) would
   blank every row the owner acts on. It is also the one route that cannot fail: a Provider that is

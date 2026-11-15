@@ -203,9 +203,9 @@ describe("the market-closed line fits", () => {
     it(`at ${width}px, with the inspector shut and open`, async () => {
       await show(width);
       const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
-      expect(line.textContent).toBe("market closed — valued at 01:00refresh");
-      const button = within(line).getByRole("button", { name: "refresh the valuation" });
-      expect(button.getBoundingClientRect().width).toBeGreaterThan(0);
+      // the words alone since #410: the header's refresh is the one there is
+      expect(line.textContent).toBe("market closed — valued at 01:00");
+      expect(within(line).queryByRole("button")).toBeNull();
       expect(clipped(line)).toEqual([]);
       expect(overflowsSideways()).toBe(false);
 
@@ -526,7 +526,7 @@ describe("columns are dropped as measured (ADR 0008)", () => {
 });
 
 describe("the header row", () => {
-  it("stays at the top of the page while a long book scrolls under it", async () => {
+  it("stays at the top of the page while a long book scrolls under it, under the page's own header (#410)", async () => {
     const more = Array.from({ length: 40 }, (_, i) => ({
       ...QUOTES.find((q) => q.id === "w-dec31")!, id: `more-${i}`, code: `0115_C${7000 + i * 10}`,
       strike_date: "2027-01-15",
@@ -536,7 +536,9 @@ describe("the header row", () => {
     expect(document.documentElement.scrollHeight).toBeGreaterThan(1400);
     window.scrollTo(0, 600);
     await settle();
-    expect(Math.abs(head.getBoundingClientRect().top)).toBeLessThan(1);
+    const page = document.querySelector<HTMLElement>(".nx-head")!.getBoundingClientRect().bottom;
+    expect(page, "the page's header is drawn").toBeGreaterThan(30);
+    expect(Math.abs(head.getBoundingClientRect().top - page)).toBeLessThan(1);
     window.scrollTo(0, 0);
   });
 });

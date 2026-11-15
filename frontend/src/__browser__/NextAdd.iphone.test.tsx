@@ -42,7 +42,7 @@ async function openPhone(spreads = { status: 201, body: ADDED as object }) {
   return sent;
 }
 
-const addTab = () => within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Add" });
+const addTab = () => screen.getByRole("button", { name: "add" });
 
 async function openSheet() {
   await userEvent.click(addTab());

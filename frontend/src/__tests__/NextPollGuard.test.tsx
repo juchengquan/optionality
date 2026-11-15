@@ -86,8 +86,7 @@ describe.each(arrangements)("on the %s, the poll", (arrangement) => {
 
   it("waits while a Reference's removal is being confirmed", async () => {
     const svc = await open(arrangement);
-    if (arrangement === "desk") fireEvent.click(screen.getByRole("button", { name: "settings" }));
-    else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
     const refs = await screen.findByTestId("references");
     // pressed as a finger or a mouse presses it, which is what moves the focus into what it opens
     await userEvent.click(await within(refs).findByRole("button", { name: "remove" }));
@@ -100,8 +99,7 @@ describe.each(arrangements)("on the %s, the poll", (arrangement) => {
 
   it("waits while the add form is being filled in", async () => {
     const svc = await open(arrangement);
-    if (arrangement === "desk") fireEvent.click(screen.getByRole("button", { name: "add" }));
-    else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "add" }));
     const form = await screen.findByRole("form", { name: "add a spread" });
     // the desk's panel focuses its first box; the phone's sheet waits for a finger, so it is put there
     if (arrangement === "phone") within(form).getByLabelText("expiry").focus();

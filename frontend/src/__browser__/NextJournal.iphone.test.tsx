@@ -6,15 +6,19 @@
  *  `iphone` instance only; the behaviour is `__tests__/NextJournal.test.tsx`.
  */
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
-import { userEvent } from "@vitest/browser/context";
+import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
 import { closedBookService } from "../testing/closedBook";
 import type { HoldingService } from "../testing/holdingService";
-import { overflowsSideways, settle } from "./nextBook";
+import { headerBottom, overflowsSideways, settle } from "./nextBook";
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  // the iPhone 13's screen, for a test that widened it
+  await page.viewport(390, 664);
+});
 
 /** The page in session (session.setup.ts), its fold as loaded: shut. */
 async function load(): Promise<{ s: HoldingService; journal: HTMLElement }> {
@@ -34,11 +38,10 @@ async function review(): Promise<{ s: HoldingService; journal: HTMLElement }> {
   return { s, journal };
 }
 
-/** The part of `el` the screen shows, above the tab bar: some of it, at least. */
+/** The part of `el` the screen shows, below the sticky header (#410): some of it, at least. */
 function inView(el: Element): boolean {
   const r = el.getBoundingClientRect();
-  const bar = document.querySelector('nav[aria-label="views"]')?.getBoundingClientRect().top ?? window.innerHeight;
-  return r.bottom > 0 && r.top < bar;
+  return r.bottom > headerBottom() && r.top < window.innerHeight;
 }
 
 /** A sheet slides in, and a box measured mid-animation is not where it will be. */
@@ -90,26 +93,35 @@ describe("the closed trades on the phone", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
-  it("does not scroll when it is drawn again already open: Settings and back", async () => {
+  it("does not scroll when it is drawn again already open: the screen turned wide enough for the desk", async () => {
+    // a switch of arrangement draws the book afresh, the fold with it, open (#373); only a PRESS may
+    // scroll to it (JournalFold's `pressed`). Settings no longer redraws the book since it became a
+    // sheet over it (#410), so the width is what remounts it here — a phone turned on its side, a
+    // window widened — with no sheet open whose scroll lock would put the page back anyway
     await review();
     window.scrollTo(0, 0);
-    const tabs = screen.getByRole("navigation", { name: "views" });
-    await userEvent.click(within(tabs).getByRole("button", { name: "Settings" }));
     await settle();
-    await userEvent.click(within(tabs).getByRole("button", { name: "Book" }));
+    await page.viewport(1000, 664);
+    await waitFor(() => expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk"));
     const journal = await screen.findByRole("region", { name: "closed trades" });
+    expect(journal.closest(".nxd"), "drawn again, by the desk's book").not.toBeNull();
     expect(within(journal).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded")).toBe("true");
+    await waitFor(() => expect(journal.querySelectorAll("[data-closed]").length).toBeGreaterThan(0));
     await settle();
-    expect(window.scrollY).toBe(0);
+    expect(window.scrollY, "scrolled to the fold it only drew again").toBe(0);
+    // and the test was worth something: the fold is below the screen, so a scroll to it would show
+    expect(journal.getBoundingClientRect().top).toBeGreaterThan(window.innerHeight);
   });
 
-  it("opens on a tap into view: its first trade on the screen, above the tab bar", async () => {
+  it("opens on a tap into view: its first trade on the screen, below the sticky header", async () => {
     const { journal } = await review();
     expect(inView(journal.querySelector("[data-closed]")!)).toBe(true);
     // brought up to the top of the screen, under its margin, or as far as the page scrolls
     const root = document.documentElement;
     const top = journal.getBoundingClientRect().top;
-    const margin = parseFloat(getComputedStyle(journal).scrollMarginTop);
+    // its own margin, below the header the page keeps clear (#410: html's scroll-padding-top)
+    const margin = parseFloat(getComputedStyle(journal).scrollMarginTop)
+      + parseFloat(getComputedStyle(root).scrollPaddingTop);
     const atEnd = window.scrollY + window.innerHeight >= root.scrollHeight - 1;
     expect(Math.abs(top - margin) < 2 || atEnd, `top ${top}, scrolled ${window.scrollY} of ${root.scrollHeight}`).toBe(true);
     expect(window.scrollY).toBeGreaterThan(0);

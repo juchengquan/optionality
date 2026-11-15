@@ -36,10 +36,9 @@ async function open(arrangement: Arrangement, references: Reference[]): Promise<
 const strip = () => document.querySelector(".nx .references");
 const drain = () => new Promise((r) => setTimeout(r, 50));
 
-/** The References panel in Settings: the desk's side panel, or the phone's tab. */
-async function panel(arrangement: Arrangement): Promise<HTMLElement> {
-  if (arrangement === "desk") fireEvent.click(screen.getByRole("button", { name: "settings" }));
-  else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Settings" }));
+/** The References panel in Settings: the desk's side panel, or the phone's sheet (#410). */
+async function panel(_arrangement: Arrangement): Promise<HTMLElement> {
+  fireEvent.click(screen.getByRole("button", { name: "settings" }));
   return screen.findByTestId("references");
 }
 

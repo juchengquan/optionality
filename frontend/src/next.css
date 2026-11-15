@@ -110,24 +110,29 @@ svg .nx-leg[data-side="short"] { font-weight: 600; }
 }
 
 /* ---- regions ---- */
+/* The header is held at the top while the page scrolls, on both arrangements (#410): opaque, over
+   everything the page draws (the desk's column heads and inspector stick UNDER it, at
+   --nx-head-h), and below the sheets and dialogs, which are portals at z-50. Its top padding clears
+   the notch and the status bar where viewport-fit=cover puts the page beneath them. */
 .nx-head {
+  position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 0.75rem;
   padding: 0.75rem var(--nx-gutter);
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  background: var(--background);
   border-bottom: 1px solid var(--border);
 }
 .nx-head h1 { font-size: 1.125rem; font-weight: 650; letter-spacing: -0.01em; }
+/* A row brought into view — by a banner, the palette, j and k, a sheet's closing — lands below the
+   header, not under it. `--nx-head-h` is the header's measured height (Next.tsx), on the document
+   because the document is what scrolls; the desk adds its sticky column heads (desk.css). */
+html { scroll-padding-top: calc(var(--nx-head-h, 0px) + 0.5rem); }
+html[data-nx-arrangement="desk"] { scroll-padding-top: calc(var(--nx-head-h, 0px) + 1.75rem + 0.5rem); }
 .nx-spacer { flex: 1; }
 .nx-main { padding: 0.75rem var(--nx-gutter) 1.5rem; }
 .nx-meta { color: var(--muted-foreground); font-size: 0.875rem; }
-/* "market closed — valued at 21:04" and its refresh (#371): the words may wrap, the button not */
+/* "market closed — valued at 21:04" (#371): words only since #410, the header's refresh the one there is */
 .nx-mkt-closed { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; }
-.nx-mkt-closed-refresh {
-  display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;
-  padding: 0.125rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-md);
-  color: var(--foreground); font-size: 0.8125rem;
-}
-.nx-mkt-closed-refresh svg { width: 0.875rem; height: 0.875rem; }
-.nx-mkt-closed-refresh:disabled { opacity: 0.6; }
 .nx-banner {
   margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
   border: 1px solid var(--fault);
@@ -170,24 +175,18 @@ svg .nx-leg[data-side="short"] { font-weight: 600; }
   padding-left: max(var(--nx-gutter), env(safe-area-inset-left));
   padding-right: max(var(--nx-gutter), env(safe-area-inset-right));
 }
-.nx[data-arrangement="phone"] .nx-main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+/* the header's five 44pt buttons and the title on one row at 390px, and at 320px with the title
+   cut short rather than the row pushed past the screen (#410) */
+.nx[data-arrangement="phone"] .nx-head { gap: 0.25rem; }
+.nx[data-arrangement="phone"] .nx-head h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* no bar along the bottom since #410: the end of the page clears the home indicator only */
+.nx[data-arrangement="phone"] .nx-main { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
 /* 44pt targets and 16px text in every box, or iOS zooms the page on focus (ADR 0023). On the
    DOCUMENT, not on .nx: a confirmation dialog and a toast are drawn in portals outside the page,
    and their buttons are targets too. Unlayered, so it wins over the components' own sizes, which
    are Tailwind utilities in a layer. */
 html[data-nx-arrangement="phone"] :is(button, select, input, a) { min-height: 44px; min-width: 44px; }
 html[data-nx-arrangement="phone"] :is(select, input, textarea) { font-size: 16px; }
-.nx-tabs {
-  position: fixed; inset: auto 0 0 0; z-index: 10;
-  /* one column per tab, however many there are: a fixed count wrapped Settings to a second row
-     when Add became the fourth (#293) */
-  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
-  padding-bottom: env(safe-area-inset-bottom);
-  background: var(--background); border-top: 1px solid var(--border);
-}
-.nx-tabs button { min-height: 52px; font-size: 0.9375rem; color: var(--muted-foreground); }
-.nx-tabs button[aria-current="page"] { color: var(--foreground); font-weight: 650; }
-
 /* A rule's short form (#388): its spaces separate the rule, the figure and the distance, so they are
    kept; it may still wrap at one on a narrow screen. */
 .nx-rule-short { white-space: pre-wrap; }

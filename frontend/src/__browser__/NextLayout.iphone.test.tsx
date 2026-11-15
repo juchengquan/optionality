@@ -4,11 +4,11 @@
  *  What a phone needs that a desk does not: nothing pushed sideways, a 44pt target for every
  *  control, and 16px text in every box, below which iOS zooms the page when a box is focused.
  */
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
-import { longBook, overflowsSideways, serveBook, settle } from "./nextBook";
+import { declared, headerBottom, longBook, overflowsSideways, serveBook, settle } from "./nextBook";
 
 async function show() {
   serveBook();
@@ -60,45 +60,33 @@ describe("under the iPhone profile", () => {
     expect(document.documentElement.clientWidth).toBe(390);
   });
 
-  it("chooses the cards", async () => {
+  it("chooses the cards, with no bar of tabs under them (#410)", async () => {
     await show();
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("phone");
-    expect(screen.getByRole("navigation", { name: "views" })).toBeTruthy();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(document.querySelector(".nx-tabs")).toBeNull();
+    // and nothing fixed to the bottom of the screen in its place
+    const fixed = [...document.querySelectorAll<HTMLElement>(".nx *")]
+      .filter((el) => getComputedStyle(el).position === "fixed");
+    expect(fixed.map((el) => el.className)).toEqual([]);
   });
 
-  it("lays every tab of the bottom bar on one row, and keeps the page's end clear of it", async () => {
-    // With a fourth tab (#293) on a three-column grid, Settings wrapped to a second row: the bar
-    // grew to two rows and covered the end of the page, which leaves room for one.
+  it("leaves the end of the page the home indicator's room and no bar's", async () => {
     await show();
-    const bar = screen.getByRole("navigation", { name: "views" });
-    const tabs = within(bar).getAllByRole("button");
-    // three since #374: the book, whatever the hour
-    expect(tabs.map((t) => t.textContent)).toEqual(["Book", "Add", "Settings"]);
-    const tops = new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top)));
-    expect(tops.size).toBe(1);
-    // they share the bar between them, each a finger's width and height
-    const b = bar.getBoundingClientRect();
-    const widths = tabs.map((t) => t.getBoundingClientRect().width);
-    expect(widths.reduce((x, y) => x + y, 0)).toBeGreaterThan(b.width - 1);
-    for (const t of tabs) {
-      const r = t.getBoundingClientRect();
-      expect(r.width, `${t.textContent}'s width`).toBeGreaterThanOrEqual(44);
-      expect(r.height, `${t.textContent}'s height`).toBeGreaterThanOrEqual(44);
-      expect(Math.abs(r.width - b.width / tabs.length), `${t.textContent} takes its third`).toBeLessThan(1);
-    }
-    const lastRight = tabs.at(-1)!.getBoundingClientRect().right;
-    expect(lastRight).toBeLessThanOrEqual(document.documentElement.clientWidth + 0.5);
     const main = document.querySelector<HTMLElement>(".nx-main")!;
-    expect(parseFloat(getComputedStyle(main).paddingBottom))
-      .toBeGreaterThanOrEqual(bar.getBoundingClientRect().height);
+    // 1.5rem, as the desk ends; the 5rem a bar needed is gone
+    expect(parseFloat(getComputedStyle(main).paddingBottom)).toBeLessThan(40);
+    expect(declared(".nx-main", "padding-bottom").some((v) => v.includes("safe-area-inset-bottom"))).toBe(true);
   });
 });
 
-/** The phone's header (#374, unchanged by #375): "optionality" and the two buttons it carries,
- *  one row, inside the gutter. It never had the desk's switch; this holds it as it is. */
+/** The phone's header (#374; #410): "optionality" and its buttons — the picture, the text, the
+ *  refresh, and since #410 Add and Settings, which were tabs of a bar along the bottom — one row,
+ *  inside the gutter, held at the top of the screen while the page scrolls. It never had the
+ *  desk's switch; this holds it as it is. */
 describe("the header", () => {
   for (const outside of [false, true]) {
-    it(`is the title and three buttons on one row, inside the screen, ${outside ? "outside the session" : "in session"}`, async () => {
+    it(`is the title and five buttons on one row, inside the screen, ${outside ? "outside the session" : "in session"}`, async () => {
       if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // Sunday 12:00 New York
       await show();
       const head = document.querySelector<HTMLElement>(".nx-head")!;
@@ -106,7 +94,8 @@ describe("the header", () => {
       const [title, spacer, ...buttons] = kids;
       expect(title!.tagName).toBe("H1");
       expect(spacer!.classList.contains("nx-spacer")).toBe(true);
-      expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["save as image", "copy as text", "refresh now"]);
+      expect(buttons.map((b) => b.getAttribute("aria-label")))
+        .toEqual(["save as image", "copy as text", "refresh now", "add", "settings"]);
       expect(within(head).queryByRole("group")).toBeNull();
       expect(head.textContent).not.toMatch(/live|review|by the clock|your choice/i);
       const box = (el: Element) => el.getBoundingClientRect();
@@ -118,11 +107,40 @@ describe("the header", () => {
       expect(inner).toBeLessThanOrEqual(document.documentElement.clientWidth - 16 + 0.5);
       for (const b of buttons) expect(Math.min(box(b).width, box(b).height)).toBeGreaterThanOrEqual(44);
       expect(overflowsSideways()).toBe(false);
+      expect(head.scrollWidth).toBeLessThanOrEqual(head.clientWidth);
     });
   }
+
+  it("stays at the top of the screen while the page scrolls under it", async () => {
+    serveBook(longBook(24));
+    render(<Next />);
+    await settle();
+    const head = document.querySelector<HTMLElement>(".nx-head")!;
+    expect(getComputedStyle(head).position).toBe("sticky");
+    window.scrollTo(0, 900);
+    await settle();
+    // the precondition: the page did scroll, past the header's own height many times
+    expect(window.scrollY).toBeGreaterThan(800);
+    expect(head.getBoundingClientRect().top).toBeCloseTo(0, 0);
+    // opaque, and over the cards: what scrolls under it is hidden by it, never drawn through it
+    expect(getComputedStyle(head).backgroundColor).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+    const { left, bottom } = head.getBoundingClientRect();
+    const under = document.elementFromPoint(left + 4, bottom - 2)!;
+    expect(head.contains(under), `drawn over the header: ${under.outerHTML.slice(0, 80)}`).toBe(true);
+    // and still its buttons, each a finger's target
+    expect(screen.getByRole("button", { name: "settings" }).getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps clear of the notch and the status bar: the safe area's top, and its sides", () => {
+    // env() computes to 0px off a notched screen, so the rule is read instead of the box
+    expect(declared(".nx-head", "padding-top").some((v) => v.includes("safe-area-inset-top")),
+      `.nx-head padding-top: ${declared(".nx-head", "padding-top").join(" | ")}`).toBe(true);
+    expect(declared(".nx-head", "padding-left").some((v) => v.includes("safe-area-inset-left"))).toBe(true);
+    expect(declared(".nx-head", "padding-right").some((v) => v.includes("safe-area-inset-right"))).toBe(true);
+  });
 });
 
-describe("the Book tab", () => {
+describe("the book", () => {
   it("pushes nothing sideways", async () => {
     await show();
     expect(overflowsSideways()).toBe(false);
@@ -158,13 +176,50 @@ describe("the Book tab", () => {
     // lengthened: wait for it to come to rest rather than for a fixed time
     await scrolled();
     const r = row.getBoundingClientRect();
-    expect(r.top >= 0 && r.bottom <= window.innerHeight).toBe(true);
+    // on the screen, and below the sticky header rather than under it (#410)
+    expect(r.top, `the row's top ${r.top}, the header's bottom ${headerBottom()}`).toBeGreaterThanOrEqual(headerBottom());
+    expect(r.bottom).toBeLessThanOrEqual(window.innerHeight);
+  });
+
+  it("lands a row clear of the header when it is brought into view from below, at its start (#410)", async () => {
+    // a row near the page's top, reached from far down, as a sheet's closing or a centred scroll near
+    // the page's top brings one: without the document's scroll-padding it lands under the header
+    serveBook(longBook(24));
+    render(<Next />);
+    await settle();
+    const first = document.querySelector<HTMLElement>("article[data-ref]")!;
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    await settle();
+    expect(first.getBoundingClientRect().bottom).toBeLessThan(0);
+    first.scrollIntoView({ block: "start" });
+    await settle();
+    expect(first.getBoundingClientRect().top).toBeGreaterThanOrEqual(headerBottom());
+  });
+
+  it("brings a card back clear of the header after its sheet closes on Back (#410)", async () => {
+    serveBook(longBook(24));
+    render(<Next />);
+    await settle();
+    const card = [...document.querySelectorAll<HTMLElement>("article[data-ref]")][6]!;
+    // the card half under the header, where a thumb can still reach its lower half
+    window.scrollTo(0, window.scrollY + card.getBoundingClientRect().top - headerBottom() + 30);
+    await settle();
+    expect(card.getBoundingClientRect().top).toBeLessThan(headerBottom());
+    const opener = within(card).getByRole("button", { name: /^details of / });
+    fireEvent.click(opener);
+    await screen.findByRole("dialog");
+    await animationsDone();
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await animationsDone();
+    await scrolled();
+    expect(card.getBoundingClientRect().top, "under the header after Back").toBeGreaterThanOrEqual(headerBottom());
   });
 });
 
 /** A holding's sheet with its history (#374): open from the start outside the session — the
  *  burndown, the IV and SPX against the strikes — and shut in it. */
-describe("a holding's sheet on the Book tab", () => {
+describe("a holding's sheet on the book", () => {
   async function sheet(): Promise<HTMLElement> {
     serveBook();
     // the days with SPX on them, so where it was against the strikes is a chart to measure
@@ -219,22 +274,61 @@ describe("a holding's sheet on the Book tab", () => {
   });
 });
 
-describe("the Settings tab", () => {
+/** Settings on the phone (#410): a bottom sheet over the book, as the Add sheet is — the same
+ *  component — where it was a screen in the book's place. */
+describe("the Settings sheet", () => {
   async function settings() {
     await show();
-    fireEvent.click(within(screen.getByRole("navigation", { name: "views" }))
-      .getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    const sheet = await screen.findByRole("dialog", { name: "Settings" });
+    await animationsDone();
     await settle();
+    return sheet;
   }
 
+  it("rises from the bottom over the book, which stays where it was under it", async () => {
+    serveBook(longBook(24));
+    render(<Next />);
+    await settle();
+    window.scrollTo(0, 600);
+    await settle();
+    const at = window.scrollY;
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
+    const sheet = await screen.findByRole("dialog", { name: "Settings" });
+    await animationsDone();
+    await settle();
+    expect(sheet.dataset.side).toBe("bottom");
+    expect(sheet.classList.contains("nxp-sheet"), "the Add sheet's own look").toBe(true);
+    const r = sheet.getBoundingClientRect();
+    expect(r.bottom).toBeCloseTo(window.innerHeight, 0);
+    expect(r.left).toBeCloseTo(0, 0);
+    expect(r.width).toBeCloseTo(document.documentElement.clientWidth, 0);
+    // never the whole screen: the book shows above it
+    expect(r.top).toBeGreaterThan(window.innerHeight * 0.1);
+    expect(sheet.scrollHeight > sheet.clientHeight || r.height < window.innerHeight * 0.86).toBe(true);
+    expect(document.querySelector('[data-ref="late"]'), "the book is still drawn under it").toBeTruthy();
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+    await animationsDone();
+    expect(window.scrollY).toBe(at);
+  });
+
+  it("closes by its Close button, as the Add sheet does", async () => {
+    const sheet = await settings();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+    // gone once its exit has played out, which a loaded suite can stretch past waitFor's 1s
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull(), { timeout: 3000 });
+  });
+
   it("pushes nothing sideways", async () => {
-    await settings();
+    const sheet = await settings();
     expect(overflowsSideways()).toBe(false);
+    expect(sheet.scrollWidth).toBeLessThanOrEqual(sheet.clientWidth);
   });
 
   it("gives every control a 44pt target, the References form's included", async () => {
-    await settings();
-    expect(document.querySelectorAll(".nx select").length).toBeGreaterThanOrEqual(5);
+    const sheet = await settings();
+    expect(sheet.querySelectorAll("select").length).toBeGreaterThanOrEqual(5);
     expect(tooSmall()).toEqual([]);
   });
 

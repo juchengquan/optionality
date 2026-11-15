@@ -343,15 +343,31 @@ describe("the market-closed line and its refresh (#371)", () => {
     expect(closedLine()?.firstElementChild?.textContent).toBe("market closed");
   });
 
+  // ONE refresh button since #410: the header's. The line says when, and has nothing to press
   for (const where of ["desk", "phone"] as const) {
-    it(`re-values once on the ${where}, and starts no poll of it`, async () => {
+    it(`has no button of its own on the ${where} (#410)`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      at(SUNDAY);
+      await open();
+      await quiet();
+      expect(closedLine()).toBeTruthy();
+      expect(within(closedLine()!).queryByRole("button")).toBeNull();
+      expect(screen.getAllByRole("button", { name: /refresh/ }).map((b) => b.getAttribute("aria-label")))
+        .toEqual(["refresh now"]);
+    });
+
+    it(`is valued once more by the header's refresh on the ${where}: holdings, References, closes and the line, and no poll of it`, async () => {
       document.cookie = `ui_arrangement=${where};path=/`;
       at(SUNDAY);
       await open();
       await quiet();
       calls = [];
-      fireEvent.click(within(closedLine()!).getByRole("button", { name: "refresh the valuation" }));
+      fireEvent.click(screen.getByRole("button", { name: "refresh now" }));
       await quiet();
+      // everything the line's own button asked for, which was this same press (#371), and the closes
+      for (const path of [...VALUED, ...LINE, "/monitors/closes"]) {
+        expect(count(path), `${path}, once by the press\n${said()}`).toBeGreaterThanOrEqual(1);
+      }
       for (const path of VALUED) expect(count(path), `${path}, once by the press\n${said()}`).toBe(1);
       calls = [];
       await polls(3);
@@ -365,7 +381,7 @@ describe("the market-closed line and its refresh (#371)", () => {
     await open();
     await quiet();
     held = [];
-    const button = within(closedLine()!).getByRole("button", { name: "refresh the valuation" });
+    const button = screen.getByRole("button", { name: "refresh now" });
     fireEvent.click(button);
     await until(() => expect(held!.length).toBe(1));
     expect(button.hasAttribute("disabled")).toBe(true);
@@ -420,7 +436,7 @@ describe("the References strip outside the session (#371)", () => {
     await open();
     await until(() => expect(document.querySelector(".references")!.textContent).toContain("read at 06:58"));
     referenceStamp = "2026-11-10 07:09:30+08:00";
-    fireEvent.click(within(closedLine()!).getByRole("button", { name: "refresh the valuation" }));
+    fireEvent.click(screen.getByRole("button", { name: "refresh now" }));
     await until(() => expect(document.querySelector(".references")!.textContent).toContain("read at 07:09"));
   });
 });
@@ -592,7 +608,7 @@ describe("asking again", () => {
     await open();
     await quiet();
     calls = [];
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
     await quiet();
     expect(calls, said()).toContain("/positions/values");
     // nothing polls either outside the session, and Settings is where References are kept or dropped
@@ -616,7 +632,7 @@ describe("what is read again, and when", () => {
   it("reads the References again after one is kept from Settings, outside the session too", async () => {
     at(SUNDAY);
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
     await quiet();
     expect(calls, said()).toContain("/references");
     calls = [];
@@ -691,7 +707,7 @@ describe("what is read again, and when", () => {
     at(SUNDAY);
     await open();
     refusing.add("/positions/values");
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
     await waitFor(() => expect(screen.getByText(/not valued/)).toBeTruthy());
     expect(screen.queryByText(/holdings valued at/)).toBeNull();
   });
@@ -780,9 +796,8 @@ describe("one page at every hour (#375)", () => {
       header: [...document.querySelectorAll(".nx-head > *")].map((el) => `${el.tagName}:${labelOf(el)}`),
       columns: where === "desk"
         ? [...document.querySelectorAll(".nxd-head [data-col]")].map((h) => h.getAttribute("data-col")) : null,
-      tabs: where === "phone"
-        ? within(screen.getByRole("navigation", { name: "views" })).getAllByRole("button").map((b) => b.textContent)
-        : null,
+      // no bar of views, on either arrangement (#410)
+      tabs: screen.queryAllByRole("navigation").length,
       rows: [...book.querySelectorAll<HTMLElement>("[data-ref]")].map((el) => el.dataset.ref),
       // the fold: in the book, after every row of it, shut
       foldLast: book.contains(fold) && [...book.querySelectorAll("[data-ref]")].every((el) =>
@@ -817,7 +832,8 @@ describe("one page at every hour (#375)", () => {
       expect(seen["10:00"]!.foldLast).toBe(true);
       expect(seen["10:00"]!.foldOpen).toBe("false");
       if (where === "desk") expect(seen["10:00"]!.columns!.length).toBeGreaterThan(1);
-      else expect(seen["10:00"]!.tabs).toEqual(["Book", "Add", "Settings"]);
+      expect(seen["10:00"]!.tabs).toBe(0);
+      expect(seen["10:00"]!.header.slice(-2)).toEqual(["BUTTON:add", "BUTTON:settings"]);
       expect(seen["21:00"]).toEqual(seen["10:00"]);
     });
   }
@@ -849,22 +865,27 @@ describe("one page at every hour (#375)", () => {
     expect(closedLine()).toBeNull();
   });
 
-  it("gives the phone three tabs, Book, Add and Settings, at every hour (#374)", async () => {
+  it("puts Add and Settings in the phone's header at every hour, with no tab bar (#410)", async () => {
     for (const now of [SESSION, SUNDAY]) {
       at(now);
       await open();
-      const tabs = screen.getByRole("navigation", { name: "views" });
-      const tab = (name: string) => within(tabs).getByRole("button", { name });
-      const current = () => within(tabs).getAllByRole("button")
-        .filter((b) => b.getAttribute("aria-current") === "page").map((b) => b.textContent);
-      expect(within(tabs).getAllByRole("button").map((b) => b.textContent)).toEqual(["Book", "Add", "Settings"]);
-      expect(current()).toEqual(["Book"]);
-      fireEvent.click(tab("Settings"));
-      expect(current()).toEqual(["Settings"]);
-      expect(screen.queryByRole("region", { name: "Holdings" })).toBeNull();
-      fireEvent.click(tab("Book"));
-      expect(current()).toEqual(["Book"]);
-      expect(screen.getByRole("region", { name: "Holdings" })).toBeTruthy();
+      expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("phone");
+      expect(screen.queryByRole("navigation")).toBeNull();
+      const head = document.querySelector<HTMLElement>(".nx-head")!;
+      expect(within(head).getAllByRole("button").map((b) => b.getAttribute("aria-label")))
+        .toEqual(["save as image", "copy as text", "refresh now", "add", "settings"]);
+      // Settings is a sheet OVER the book, which stays drawn under it
+      fireEvent.click(within(head).getByRole("button", { name: "settings" }));
+      const sheet = await screen.findByRole("dialog", { name: "Settings" });
+      expect(sheet.getAttribute("data-side")).toBe("bottom");
+      expect(within(sheet).getByLabelText("up is")).toBeTruthy();
+      expect(screen.getByRole("region", { name: "Holdings", hidden: true })).toBeTruthy();
+      fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+      // and Add the sheet it was from the tab bar
+      fireEvent.click(within(head).getByRole("button", { name: "add" }));
+      expect((await screen.findByRole("dialog", { name: "Add a spread or contract" })).getAttribute("data-side"))
+        .toBe("bottom");
       cleanup();
       vi.useRealTimers();
     }
@@ -962,19 +983,6 @@ describe("a banner leads to its row", () => {
     await waitFor(() =>
       expect(document.querySelector('[data-ref="w2"]')!.hasAttribute("data-revealed")).toBe(true));
   });
-
-  it("leaves the Settings tab for the book, where the row is", async () => {
-    at(SESSION);
-    quotes = [spread, { ...shortLeg, triggered: true }];
-    await open();
-    const tabs = screen.getByRole("navigation", { name: "views" });
-    fireEvent.click(within(tabs).getByRole("button", { name: "Settings" }));
-    expect(document.querySelector('[data-ref="w2"]')).toBeNull();
-    const banners = screen.getByRole("status", { name: "needs you" });
-    fireEvent.click(within(banners).getByRole("button", { name: /261218 7150P entry signal/ }));
-    await waitFor(() =>
-      expect(document.querySelector('[data-ref="w2"]')?.hasAttribute("data-revealed")).toBe(true));
-  });
 });
 
 describe("every item that needs you carries its glyph", () => {
@@ -993,7 +1001,7 @@ describe("every item that needs you carries its glyph", () => {
     }
     at(SESSION);
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
     const full = [...screen.getByTestId("needs").querySelectorAll("li")];
     expect(full.length).toBeGreaterThan(0);
     for (const item of full) expect(item.querySelector("svg.nx-glyph")).toBeTruthy();
@@ -1025,23 +1033,37 @@ describe("settings' claim of a whole list", () => {
 });
 
 describe("settings", () => {
-  it("gives its Back entry back when the desk turns into the phone with it open", async () => {
-    // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
-    const pushed = vi.spyOn(window.history, "pushState");
-    const back = vi.spyOn(window.history, "back");
-    document.cookie = "ui_arrangement=desk;path=/";
-    at(SESSION);
-    await open();
-    fireEvent.click(screen.getByRole("button", { name: "settings" }));
-    expect(pushed).toHaveBeenCalledTimes(1);
-    fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "phone" } });
-    expect(back).toHaveBeenCalledTimes(1);
-  });
+  // Settings is a sheet on both arrangements since #410, and the arrangement can be switched from
+  // inside it: ONE history entry for as long as it is open, whichever sheet draws it. Each sheet
+  // giving its entry up and taking another as the switch landed raced — the browser's asynchronous
+  // back() ran after the new push and went one entry further — so the next close left the page.
+  for (const [from, to] of [["desk", "phone"], ["phone", "desk"]] as const) {
+    it(`keeps one Back entry when the ${from} turns into the ${to} with it open, and gives it back on closing`, async () => {
+      // jsdom's traversal is not to be relied on (BackButton.test.tsx), so watch the calls
+      const pushed = vi.spyOn(window.history, "pushState");
+      const back = vi.spyOn(window.history, "back");
+      document.cookie = `ui_arrangement=${from};path=/`;
+      at(SESSION);
+      await open();
+      fireEvent.click(screen.getByRole("button", { name: "settings" }));
+      expect(pushed).toHaveBeenCalledTimes(1);
+      fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: to } });
+      expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe(to);
+      await waitFor(() => expect(screen.getAllByRole("dialog", { name: "Settings" })).toHaveLength(1));
+      expect(pushed, "a second entry for the same Settings").toHaveBeenCalledTimes(1);
+      expect(back, "its entry given up while it stays open").toHaveBeenCalledTimes(0);
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
+      expect(back).toHaveBeenCalledTimes(1);
+      pushed.mockRestore();
+      back.mockRestore();
+    });
+  }
 
   it("turns the page red-up and remembers it", async () => {
     at(SESSION);
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
     fireEvent.change(screen.getByLabelText("up is"), { target: { value: "red" } });
     expect(document.querySelector(".nx")!.getAttribute("data-up")).toBe("red");
     expect(document.cookie).toContain("ui_up=red");
@@ -1051,7 +1073,7 @@ describe("settings", () => {
     at(SESSION);
     await open();
     expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("phone");
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "settings" }));
     fireEvent.change(screen.getByLabelText("arrangement"), { target: { value: "desk" } });
     expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk");
     // still open, now as the desk's panel over the page — whose "add" is behind it
