@@ -142,9 +142,9 @@ export function toneOf(items: Need[], entryLooksLikeRisk: boolean): Tone {
  *  held to the domain's golden cases (`alarm.ts`'s `ruleShort`) by `NextRuleShort.test.ts`. Vega is
  *  `ν`, not `V`, which would read as a value. An unknown field is written as it is stored.
  *
- *  `_combo` changes nothing since #404. Every caller here passes the field alone; the argument is
- *  kept only for `Payoff.tsx`, left untouched while #403 rewrites it — drop the argument there and
- *  here once #403 has landed. */
+ *  `_combo` changes nothing since #404. Every caller on this branch but one passes the field alone:
+ *  the argument is kept for callers on open branches — `Payoff.tsx`, left untouched while #403
+ *  rewrites it, and #406's `AddSpread.tsx` — and is to be dropped there and here once both land. */
 export function fieldWords(field: string, _combo?: boolean): string {
   switch (field) {
     case "mid_price": return "value";
