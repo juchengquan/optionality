@@ -75,7 +75,8 @@ describe("editing a Monitor from the inspector", () => {
     await userEvent.click(within(panel).getByRole("button", { name: `edit ${DELTA}` }));
     const form = within(panel).getByRole("form", { name: `editing ${DELTA}` });
     await userEvent.selectOptions(within(form).getByLabelText("what it watches"), "option_vega");
-    await userEvent.selectOptions(within(form).getByLabelText("direction"), "below");
+    await userEvent.click(within(within(form).getByRole("group", { name: "direction" }))
+      .getByRole("button", { name: "≤ at or below" }));
     await userEvent.selectOptions(within(form).getByLabelText("compare"), "signed");
     await userEvent.fill(within(form).getByLabelText("threshold"), "-0.5");
     expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("ν ≤ -0.5");

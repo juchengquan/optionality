@@ -99,7 +99,9 @@ describe("editing a Monitor from the sheet", () => {
     const sheet = await openSheet();
     const form = await openEditor(sheet, DELTA);
     const boxes = [...form.querySelectorAll("input, select")];
-    expect(boxes).toHaveLength(4);
+    // what it watches, compare and threshold: the direction is a pair of buttons (#405), measured below
+    expect(boxes).toHaveLength(3);
+    expect(within(within(form).getByRole("group", { name: "direction" })).getAllByRole("button")).toHaveLength(2);
     const small = boxes.filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16)
       .map((el) => `${el.id} ${getComputedStyle(el).fontSize}`);
     expect(small).toEqual([]);

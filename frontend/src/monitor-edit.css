@@ -20,7 +20,7 @@
 .nx-mon-draft { font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .nx-mon-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.5rem 0.75rem; }
 .nx-mon-field { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; }
-.nx-mon-field > label { color: var(--muted-foreground); font-size: 0.75rem; }
+.nx-mon-field > :is(label, span) { color: var(--muted-foreground); font-size: 0.75rem; }
 .nx-mon-field :is(select, input) {
   min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 0.25rem 0.5rem; background: var(--background); color: var(--foreground);

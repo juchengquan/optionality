@@ -57,6 +57,12 @@ export interface SpreadDraft {
   deltaOn: boolean | null;
   /** null follows the default: 0.30 when held, nothing when watched */
   deltaAt: string | null;
+  /** null follows the default (`valueDirectionShown`): at or below for a held DEBIT spread, whose
+   *  stop is a fall in value, and at or above otherwise, as #293 set it (#405). A held credit's stop
+   *  takes no choice (`valueChoosable`), and this is not read for it */
+  valueDirection: "above" | "below" | null;
+  /** each short leg's |Δ|: at or above unless ≤ is chosen (#405) */
+  deltaDirection: "above" | "below";
 }
 
 export interface AddDraft {
@@ -125,7 +131,7 @@ const LEGS: Record<Preset, () => LegDraft[]> = {
 function spread(preset: Preset): SpreadDraft {
   return {
     key: nextKey(), legs: LEGS[preset](), name: "", entry: "", contracts: "1",
-    valueOn: null, valueAt: null, deltaOn: null, deltaAt: null,
+    valueOn: null, valueAt: null, deltaOn: null, deltaAt: null, valueDirection: null, deltaDirection: "above",
   };
 }
 
@@ -250,6 +256,22 @@ const isDebit = (held: boolean, s: SpreadDraft) => held && (typed(s.entry) ?? 0)
  *  figure, posted signed — rather than a watched spread's value, or a debit's set by hand. */
 export const isCreditStop = (held: boolean, s: SpreadDraft) => held && !isDebit(held, s);
 
+/** Whether the value Monitor's direction is the owner's to choose (#405): everywhere but a held
+ *  credit's stop, which is the cost to close at or above its figure — posted signed and below, and
+ *  read back as a stop by `isCostToClose` — and stays that whatever is pressed. */
+export const valueChoosable = (held: boolean, s: SpreadDraft) => !isCreditStop(held, s);
+
+/** The value Monitor's direction: as pressed, or by default at or below for a held DEBIT spread —
+ *  its stop is a fall in its value, so ≤ is the rule it wants (owner's decision on #405) — and at or
+ *  above for anything else. ≥ stays pressable for a debit. */
+export function valueDirectionShown(held: boolean, s: SpreadDraft): "above" | "below" {
+  return s.valueDirection ?? (isDebit(held, s) ? "below" : "above");
+}
+
+/** `direction` as posted: only where it is below, at or above being the route's default — so a rule
+ *  at or above posts exactly what it did before #405. */
+const directed = (d: "above" | "below") => (d === "below" ? { direction: "below" as const } : {});
+
 /** The value Monitor's default: 2x a credit's Entry when held — the stop — and none when watched,
  *  where the threshold is the owner's entry signal. None for a debit either: its value FALLS as it
  *  loses, and "value ≥ 2x" would ring on a gain. */
@@ -260,7 +282,8 @@ export function valueDefault(held: boolean, s: SpreadDraft): string {
 
 /** Whether the value Monitor is on: as switched, or by default on — except for a held debit
  *  spread, where it starts OFF rather than as a rule that rings on a gain (review of #322). The
- *  stop of a debit is a fall in value, and this form does not invent a "below" rule for it. */
+ *  stop of a debit is a fall in value: switched on, it starts at or below (`valueDirectionShown`,
+ *  #405), with no figure — this form does not invent one. */
 export function valueEnabled(held: boolean, s: SpreadDraft): boolean {
   return s.valueOn ?? !isDebit(held, s);
 }
@@ -268,7 +291,7 @@ export function valueEnabled(held: boolean, s: SpreadDraft): boolean {
 /** The words beside the value Monitor. */
 export function valueHint(held: boolean, s: SpreadDraft): string {
   if (!held) return "an entry signal";
-  return isDebit(held, s) ? "a debit spread's stop is a fall in its value: set one by hand" : "2× the Entry: the stop";
+  return isDebit(held, s) ? "a debit spread's stop is a fall in its value: at or below" : "2× the Entry: the stop";
 }
 
 /** What closing the legs would cost at expiry with SPX at `x`: the short legs' worth less the
@@ -364,16 +387,19 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
           : `${which}: type the value its Monitor watches for` };
       }
       // a held credit's stop is its cost to close at `at` or more: the signed value at or below
-      // minus `at`. A watched spread's is the size typed, and a debit's, set by hand, as typed
+      // minus `at`, whatever the pair says. A watched spread's is the size typed, and a debit's,
+      // set by hand, as typed — each at or above, or at or below, as chosen (#405)
       monitors.push(isCreditStop(d.held, s)
-        ? { threshold: -at, direction: "below", compare: "signed" } : { threshold: at });
+        ? { threshold: -at, direction: "below", compare: "signed" } : { threshold: at, ...directed(valueDirectionShown(d.held, s)) });
     }
     if (deltaEnabled(s)) {
       const shorts = legs.filter((l) => l.side === "short");
       if (shorts.length === 0) return { error: `${which} has no short leg to watch the delta of: switch that Monitor off` };
       const at = typed(deltaShown(d.held, s));
       if (at === null || at <= 0) return { error: `${which}: type the delta its Monitor watches for` };
-      for (const l of shorts) monitors.push({ option_type: l.option_type, strike: l.strike, threshold: at });
+      for (const l of shorts) {
+        monitors.push({ option_type: l.option_type, strike: l.strike, threshold: at, ...directed(s.deltaDirection) });
+      }
     }
     if (!d.held && monitors.length === 0) {
       return { error: `${which} is watched and has no Monitor: switch one on` };

@@ -178,6 +178,33 @@ describe("the panel's fit", () => {
     });
   }
 
+  it("fits a watched spread's two ≥ / ≤ pairs at 900px, and posts their ≤ below (#405)", async () => {
+    const sent = await openDesk(900);
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it" }));
+    await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
+    await userEvent.fill(screen.getByLabelText("spread 1, leg 1 strike"), "7150");
+    await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7100");
+    await userEvent.fill(screen.getByLabelText("spread 1 value threshold"), "0.40");
+    await userEvent.fill(screen.getByLabelText("spread 1 delta threshold"), "0.05");
+    for (const which of ["value", "delta"]) {
+      const pair = within(panel()).getByRole("group", { name: `spread 1 ${which} direction` });
+      await userEvent.click(within(pair).getByRole("button", { name: "≤ at or below" }));
+    }
+    await settle();
+    expect(overflowsSideways()).toBe(false);
+    const box = panel().getBoundingClientRect();
+    for (const el of panel().querySelectorAll(".nx-dir button")) {
+      expect(el.getBoundingClientRect().right).toBeLessThanOrEqual(box.right + 0.5);
+    }
+    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 2 Monitors" }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect((sent[0] as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
+      { threshold: 0.4, direction: "below" },
+      { option_type: "PUT", strike: 7150, threshold: 0.05, direction: "below" },
+    ]);
+  });
+
   it("sets each spread's payoff beside its fields when there is room", async () => {
     await openDesk(1440);
     await userEvent.click(screen.getByRole("button", { name: "add" }));

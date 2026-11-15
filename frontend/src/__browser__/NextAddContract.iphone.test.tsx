@@ -9,14 +9,15 @@ import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
+import { fieldWords } from "../needs";
 import { overflowsSideways, serveContract, settle } from "./nextBook";
 
 afterEach(cleanup);
 
-const FIELDS = [
-  ["option_delta", "Δ"], ["mid_price", "value"], ["option_implied_volatility", "IV"],
-  ["option_theta", "Θ"], ["option_vega", "ν"], ["option_gamma", "Γ"],
-] as const;
+/** In the order the box offers them, its value first (#405), in the words it uses. */
+const FIELDS: [field: string, words: string][] = [
+  "mid_price", "option_delta", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
+].map((f) => [f, fieldWords(f)]);
 
 /** A dialog slides in, and a box measured mid-animation is not where it will be. */
 async function animationsDone(): Promise<void> {
@@ -91,6 +92,27 @@ describe("a single-contract Monitor on the phone", () => {
     expect(writes.map((w) => w.what)).toEqual(FIELDS.map(() => "POST /spreads"));
     // six sheets opened, filled, saved and closed, each with its toast: longer than one test's default
   }, 45_000);
+});
+
+describe("its direction on the phone (#405)", () => {
+  it("is a ≥ / ≤ pair of 44pt targets, the value listed first, posted at or below", async () => {
+    const writes = await openPhone();
+    await startContract("0.50");
+    const box = screen.getByLabelText("what it watches") as HTMLSelectElement;
+    expect(box.options[0]!.value).toBe("mid_price");
+    await userEvent.selectOptions(box, fieldWords("mid_price"));
+    const pair = within(sheet()).getByRole("group", { name: "direction" });
+    expect(tooSmall(pair)).toEqual([]);
+    expect(within(pair).getAllByRole("button")).toHaveLength(2);
+    await userEvent.click(within(pair).getByRole("button", { name: "≤ at or below" }));
+    expect(pastTheEdge(sheet())).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+    await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect((writes[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
+      { option_type: "PUT", strike: 7150, field: "mid_price", threshold: 0.5, direction: "below", compare: "abs" },
+    ]);
+  });
 });
 
 describe("a lone contract held, on the phone", () => {

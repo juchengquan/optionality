@@ -70,7 +70,9 @@ describe("renaming a combo from the sheet", () => {
     const sheet = await openSheet("1218_P7150");
     await userEvent.click(within(sheet).getByRole("button", { name: "edit 1218_P7150 value" }));
     let form = within(sheet).getByRole("form", { name: "editing 1218_P7150 value" });
-    expect(form.querySelectorAll("input, select")).toHaveLength(5);
+    // name, what it watches, compare and threshold, and the direction's ≥ / ≤ pair (#405)
+    expect(form.querySelectorAll("input, select")).toHaveLength(4);
+    expect(within(within(form).getByRole("group", { name: "direction" })).getAllByRole("button")).toHaveLength(2);
     measured(sheet, form);
     await userEvent.click(within(form).getByLabelText("name"));
     await userEvent.keyboard("{Escape}");
