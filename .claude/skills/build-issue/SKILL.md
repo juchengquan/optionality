@@ -41,7 +41,7 @@ it). Each build gets a worktree BESIDE the repository:
 ```sh
 git fetch -q origin
 git worktree add -q -b <type>/<slug> ../optionality-<short> origin/main
-cd ../optionality-<short> && bun install --frozen-lockfile --silent && uv sync --all-packages --locked -q
+cd ../optionality-<short> && bun install --frozen-lockfile && uv sync --all-packages --locked -q
 ```
 
 `<type>` is `feat`, `fix`, `refactor` or `docs`. Scratch files go in the job's tmp directory or inside

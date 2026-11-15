@@ -84,7 +84,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   workspace (`node_modules/optionality -> ../typescript`), never from the public registry, which
   has a package of the same name (1.2.1 when measured on 2026-11-09) — and since that held only
   because the installer behaved, **`make check-workspace-links`** (in `make check`, and in `make
-  deploy` before any restart) refuses any workspace package that is not a link to its own directory.
+  deploy` before any restart) refuses any workspace name that resolves to anything but a link to
+  its own directory — from the root AND from inside each workspace, where a nested copy would
+  shadow the root link — and any `bun.lock` entry, at any depth, that resolves one to the registry.
+  `bunfig.toml` pins bun's `hoisted` linker (npm's layout) rather than leaving it to a default.
 - **bun installs, Node runs (#412).** bun (1.3.10, `/opt/homebrew/bin/bun`) is the PACKAGE MANAGER
   only: `bun install --frozen-lockfile` from the committed `bun.lock` (there is no
   `package-lock.json`), `bun run` for a package's scripts and `bunx` for a bin — and every one of
@@ -103,7 +106,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   --frozen-lockfile` and `uv sync --all-packages --locked`, whichever is live), back up the DB, restart BOTH agents (the
   API applies pending migrations at boot). Which backend the API agent runs is READ from its
   installed plist, never assumed, and a Python this tree cannot back stops the deploy before the
-  restart. launchd does not watch the repo and the agents
+  restart. The pull and the rest are two `make` runs (`deploy` pulls, then runs `deploy-after-pull`
+  from the file it just pulled), because make reads the Makefile once: a single recipe would run
+  the steps as they were BEFORE the pull, and #412's own first deploy would have run `npm install`
+  with no lock. launchd does not watch the repo and the agents
   run this working tree, so a merge that skips this leaves stale code running. Doing the steps by hand
   is how the dashboard and the API drift apart.
 - `make use BACKEND=ts|python` — **switch the live backend** (ADR 0021, Decision 3): the guard, the

@@ -1,6 +1,6 @@
 .PHONY: check lint check-boundaries check-test-support check-seams check-module-map check-make-targets cases check-cases scenarios check-scenarios format test test-ui test-ui-fast test-ui-layout test-lib test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
-	serve build-ui check-ui check-served-root resolve-ui deploy deploy-backup use \
+	serve build-ui check-ui check-served-root resolve-ui deploy deploy-after-pull deploy-backup use \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
 	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
@@ -34,7 +34,8 @@ UI_BASE ?= /opt/
 # a worktree costs megabytes where npm copied ~360 MB into every one. `--frozen-lockfile` because
 # bun.lock is committed: an install that would have to rewrite it means the change carried a stale
 # one, and on the live tree a rewritten lock is a dirty tree that breaks the next `git pull`.
-JS_INSTALL = bun install --frozen-lockfile --silent
+# Not `--silent`: with it a lock that does not match prints NOTHING and the step just fails.
+JS_INSTALL = bun install --frozen-lockfile
 
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
@@ -221,10 +222,21 @@ resolve-ui:
 # Which backend the API agent runs is READ from its installed plist, never assumed — and a Python
 # this tree cannot back (the guard in tools/use-backend.mjs) stops the deploy before the restart.
 #
+# The pull and the rest are TWO make invocations on purpose. make reads this file once, before the
+# first line runs, so a single recipe that pulls goes on to run the recipe it read BEFORE the pull:
+# the deploy that lands a change to these steps would run the old ones. #412 was such a change —
+# the old recipe's `npm install`, against a tree whose package-lock.json the pull had just deleted,
+# would have re-resolved packages with no lock and restarted the live API on them. A second make
+# reads the file the pull brought, so what runs is always what was merged.
+#
 # The schema step is the backend's own: whichever runs applies what is pending in
 # schema/migrations/ at boot and fails fatally if one does not (ADR 0011).
 deploy:
 	git pull --ff-only
+	$(MAKE) deploy-after-pull
+
+# `make deploy` past the pull; not for running alone.
+deploy-after-pull:
 	$(JS_INSTALL)
 	node tools/check-workspace-links.mjs
 	uv sync --all-packages --locked

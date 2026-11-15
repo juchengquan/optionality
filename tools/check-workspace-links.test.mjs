@@ -79,6 +79,68 @@ describe("each workspace package is installed as a link to its own directory", (
     expect(linkFaults(repo)).toEqual([expect.stringContaining("node_modules/optionality")]);
   });
 
+  it("refuses a copy nested inside a workspace, which shadows the root link for that workspace", () => {
+    // a workspace that depends on the public `optionality@^1.2.1` gets its own copy beside its
+    // source, and Node finds that one first from every file of the backend: the root link is fine
+    // and is not what the backend imports
+    workspaces();
+    linked();
+    write("backend/node_modules/optionality/package.json", pkg("optionality", { version: "1.2.1" }));
+    expect(linkFaults(repo)).toEqual([expect.stringMatching(/backend\/node_modules\/optionality.*not a link/)]);
+  });
+
+  it("allows a nested LINK to the workspace, which is the same code", () => {
+    workspaces();
+    linked();
+    mkdirSync(join(repo, "frontend/node_modules"));
+    symlinkSync("../../typescript", join(repo, "frontend/node_modules/optionality"));
+    expect(linkFaults(repo)).toEqual([]);
+  });
+
+  it("reports a fault at the root once, not once per workspace that sees it", () => {
+    workspaces();
+    link("backend", "../backend");
+    link("frontend", "../frontend");
+    write("node_modules/optionality/package.json", pkg("optionality", { version: "1.2.1" }));
+    expect(linkFaults(repo)).toHaveLength(1);
+  });
+});
+
+describe("the lockfile resolves each workspace name to the workspace", () => {
+  const lock = (packages) => write("bun.lock", `{
+  "lockfileVersion": 1,
+  "packages": {
+${Object.entries(packages).map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)},`).join("\n")}
+  }
+}
+`);
+
+  it("passes bun's own entries, `@workspace:` for each", () => {
+    workspaces();
+    linked();
+    lock({
+      backend: ["backend@workspace:backend"],
+      frontend: ["frontend@workspace:frontend"],
+      optionality: ["optionality@workspace:typescript"],
+      zod: ["zod@4.6.5", "", {}, "sha512-x"],
+    });
+    expect(linkFaults(repo)).toEqual([]);
+  });
+
+  it("refuses a registry package named like a workspace anywhere in the lock, even nested", () => {
+    // what a dependency asking for the public `optionality` would put there, at any depth —
+    // before any install has laid it down where the walk above could see it
+    workspaces();
+    linked();
+    lock({
+      optionality: ["optionality@workspace:typescript"],
+      "some-dep/optionality": ["optionality@1.2.1", "", {}, "sha512-x"],
+    });
+    expect(linkFaults(repo)).toEqual([expect.stringMatching(/bun\.lock.*some-dep\/optionality.*optionality@1\.2\.1/)]);
+  });
+});
+
+describe("what it refuses to pass on", () => {
   it("refuses a workspace list it cannot read rather than passing on nothing", () => {
     write("package.json", pkg("optionality-workspace"));
     expect(linkFaults(repo)).toEqual([expect.stringContaining("no workspaces")]);
