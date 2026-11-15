@@ -188,8 +188,8 @@ describe("when they do nothing", () => {
     expect(cursor()).toBe("r-ic");
   });
 
-  it("does nothing while the add panel is open", () => {
-    render(<><DeskBook {...props()} /><section className="nx-add-panel" aria-label="add a spread or contract" /></>);
+  it("does nothing while the add sheet is open", () => {
+    render(<><DeskBook {...props()} /><div role="dialog" aria-label="Add a spread or contract" /></>);
     expect(press("j", document.body)).toBe(true);
     expect(cursor()).toBeNull();
   });

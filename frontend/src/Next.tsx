@@ -122,27 +122,29 @@ export function Next() {
   // side sheet took one as the phone's bottom sheet gave its own up — the browser's back() runs
   // later, went one entry further than meant, and the next close then left the dashboard
   useDismissOnBack(settingsOpen, closeSettings);
-  // adding a spread or a contract (#293, #331; named for both since #301): a panel above the desk's
-  // table, a bottom sheet on the phone — opened from the header's "add" on both since #410
+  // adding a spread or a contract (#293, #331; named for both since #301): a side sheet on the desk,
+  // as Settings is, and a bottom sheet on the phone — opened from the header's "add" on both since #410
   const [adding, setAddingNow] = useState(false);
   // what the form opens with: a fresh draft, or one prefilled by "Record as held" (#408) — numbered,
   // so a second prefill while the form is open draws a new form rather than keeping the last one's
   const [prefill, setPrefill] = useState<{ n: number; initial: AddInitial } | null>(null);
-  const setAdding = useCallback((open: boolean | ((was: boolean) => boolean)) => {
+  // the button that opened the sheet: a rule's "Record as held" (#408), or null for "+"
+  const opener = useRef<HTMLElement | null>(null);
+  const setAdding = useCallback((open: boolean) => {
+    if (open) opener.current = null;
     setAddingNow(open);
     setPrefill(null);
   }, []);
   const panelId = useId();
   const plusButton = useRef<HTMLButtonElement>(null);
   const closeAdding = useCallback(() => setAdding(false), [setAdding]);
-  // the button that opened the panel: "+", or a rule's "Record as held" (#408)
-  const opener = useRef<HTMLElement | null>(null);
-  // the desk's panel hands the focus back to what opened it when it goes, by Escape or Cancel
-  const closePanel = useCallback(() => {
-    setAdding(false);
-    (opener.current?.isConnected ? opener.current : plusButton.current)?.focus();
-    opener.current = null;
-  }, [setAdding]);
+  // the Add sheet's Back entry is the page's too, as Settings' is: the desk's side sheet and the
+  // phone's bottom sheet are one Add, kept across a switch of arrangement
+  useDismissOnBack(adding, closeAdding);
+  // the desk's sheet hands the focus back to what opened it when it goes, by Escape, Cancel or Save
+  const addReturn = useCallback(
+    () => (opener.current?.isConnected ? opener.current : plusButton.current), [],
+  );
   const { reload } = book;
   const saved = useCallback((added: Added) => {
     setAdding(false);
@@ -219,7 +221,7 @@ export function Next() {
   const addForm = (
     <AddSpread key={prefill?.n ?? 0} initial={prefill?.initial} privacy={privacy} monitors={book.monitors}
                holdings={holdings} spx={spx}
-               spxReason={spxReason} onSaved={saved} onCancel={phone ? closeAdding : closePanel} autoFocus={!phone} />
+               spxReason={spxReason} onSaved={saved} onCancel={closeAdding} autoFocus={!phone} />
   );
 
   // Settings is the one surface that may say "nothing needs you" (ADR 0012), and where References
@@ -390,9 +392,8 @@ export function Next() {
         )}
         {/* Add and Settings on the phone too since #410, where they were tabs of a bar along the
             bottom: each opens its bottom sheet there, and the desk's panel and side sheet here */}
-        <Button ref={plusButton} variant="ghost" size="sm" aria-label="add" aria-expanded={adding}
-                aria-controls={adding && !phone ? panelId : undefined} aria-haspopup={phone ? "dialog" : undefined}
-                onClick={() => setAdding((a) => !a)}>
+        <Button ref={plusButton} variant="ghost" size="sm" aria-label="add" aria-haspopup="dialog"
+                onClick={() => setAdding(true)}>
           <Plus />
         </Button>
         <Button variant="ghost" size="sm" aria-label="settings" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
@@ -417,32 +418,29 @@ export function Next() {
                         onCorrected={() => { rereadJournal(); void book.reload(); }}
                         served={journal.trades?.find((t) => t.id === o.closed.id) ?? null} />
         ))}
-        {adding && !phone ? (
-          <section id={panelId} className="nx-add-panel" aria-label="add a spread or contract"
-                   onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(); } }}>
-            <h2>Add a spread or contract</h2>
-            {addForm}
-          </section>
-        ) : null}
         {phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} selection={deskSelection} />}
       </main>
 
       {/* the phone's two sheets over the book, one component (#410): mounted in both arrangements
-          and open only on the phone, for the reason DeskSettings below is */}
+          and open only on the phone, for the reason the desk's below are */}
       <PhoneSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}
-                  title="Add a spread or contract"
-                  description="A spread or one contract, and the Monitors it starts with, saved together.">
+                  title="Add a spread or contract" description={ADD_SAYS} ownBack={false}>
         {phone ? addForm : null}
       </PhoneSheet>
       <PhoneSheet open={settingsOpen && phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
                   title="Settings" description={SETTINGS_SAYS} ownBack={false}>
         {phone ? settings : null}
       </PhoneSheet>
-      {/* Mounted in both arrangements and only OPEN on the desk; its Back entry is the page's, kept
-          across a switch of arrangement (above) */}
-      <DeskSettings open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}>
+      {/* Mounted in both arrangements and only OPEN on the desk; their Back entries are the page's,
+          kept across a switch of arrangement (above) */}
+      <DeskSheet id={panelId} open={adding && !phone} onClose={closeAdding} finalFocus={addReturn}
+                 up={up} entryStyle={entryStyle} title="Add a spread or contract" description={ADD_SAYS} className="data-[side=right]:sm:max-w-3xl">
+        {phone ? null : addForm}
+      </DeskSheet>
+      <DeskSheet open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
+                 title="Settings" description={SETTINGS_SAYS}>
         {phone ? null : settings}
-      </DeskSettings>
+      </DeskSheet>
       {pictured ? (
         <div ref={stageRef} className="nx-still-stage" aria-hidden="true">
           <Still {...pictured} />
@@ -473,6 +471,8 @@ function landOnMuted(id: string) {
 
 /** What Settings says it is, on the desk's side sheet and the phone's bottom sheet alike. */
 const SETTINGS_SAYS = "This screen's preferences, and where the service stands in full.";
+/** And what Add says it is, on either. */
+const ADD_SAYS = "A spread or one contract, and the Monitors it starts with, saved together.";
 
 /** The header's height, kept on the document as `--nx-head-h` while the page is drawn (#410): the
  *  header is sticky, so a row scrolled into view has to land below it (`scroll-padding-top` on the
@@ -520,18 +520,22 @@ function PhoneSheet({ open, onClose, up, entryStyle, title, description, ownBack
   );
 }
 
-function DeskSettings({ open, onClose, up, entryStyle, children }: {
-  open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle; children: React.ReactNode;
+/** A side sheet over the desk's book: Settings', and the Add form's, which was a panel above the
+ *  table until it became one like Settings'. */
+function DeskSheet({ id, open, onClose, finalFocus, up, entryStyle, title, description, className, children }: {
+  id?: string; open: boolean; onClose: () => void; finalFocus?: () => HTMLElement | null;
+  up: UpColour; entryStyle: EntryStyle;
+  title: string; description: string; className?: string; children: React.ReactNode;
 }) {
   // its Back entry is held by the page (Next), across a switch of arrangement
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:
           .nx-tokens) and the two settings they depend on — without them every glyph was grey */}
-      <SheetContent className="overflow-y-auto nx-tokens" data-up={up} data-entry={entryStyle}>
+      <SheetContent id={id} finalFocus={finalFocus} className={`overflow-y-auto nx-tokens ${className ?? ""}`} data-up={up} data-entry={entryStyle}>
         <SheetHeader>
-          <SheetTitle>Settings</SheetTitle>
-          <SheetDescription>{SETTINGS_SAYS}</SheetDescription>
+          <SheetTitle>{title}</SheetTitle>
+          <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
         <div className="px-4 pb-4">{children}</div>
       </SheetContent>

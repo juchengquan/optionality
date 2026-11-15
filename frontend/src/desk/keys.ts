@@ -54,7 +54,7 @@ function holding(desk: Element | null, selector: string): Element[] {
 
 /** Whether something else owns the keyboard now: a dialog, or a form open on the desk. */
 function keysAreElsewhere(desk: Element | null): boolean {
-  if (document.querySelector('[role="dialog"], [role="alertdialog"], .nx-add-panel')) return true;
+  if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return true;
   return holding(desk, 'form, [data-poll="hold"]').length > 0;
 }
 
