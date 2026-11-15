@@ -41,7 +41,7 @@ it). Each build gets a worktree BESIDE the repository:
 ```sh
 git fetch -q origin
 git worktree add -q -b <type>/<slug> ../optionality-<short> origin/main
-cd ../optionality-<short> && npm install --silent && uv sync --all-packages --locked -q
+cd ../optionality-<short> && bun install --frozen-lockfile --silent && uv sync --all-packages --locked -q
 ```
 
 `<type>` is `feat`, `fix`, `refactor` or `docs`. Scratch files go in the job's tmp directory or inside
@@ -62,7 +62,7 @@ at CLAUDE.md and the ADRs that bear on it, and give it:
 **Practice the brief requires:** TDD; generated files only through `make cases` / `make scenarios`
 / `make build-ui` (never by hand); both backends in lockstep where the change reaches them; a
 mutation check for every guard or rule the change adds (undo it, show which tests fail, restore);
-`make check` on exactly the committed tree; `npm test --workspace frontend` three times in a row
+`make check` on exactly the committed tree; `bun run --cwd frontend test` three times in a row
 (the jsdom suite has had load flakes); a DRAFT PR whose body says what each decision built, the
 mutation results, and `Closes #N` (or `Part of #N`).
 

@@ -43,7 +43,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   frontend's vitest configs, the Python suite, and the case generator), because the frontend's was
   not and the gate was green only at +08. The browser
   suite is checked zone-independent instead — `env` would not reach its Chromium. Targets, in the
-  order they run: lint, typecheck, `check-api`, `check-cases`, `check-scenarios`, the Python suites
+  order they run: lint, `check-workspace-links`, typecheck, `check-api`, `check-cases`, `check-scenarios`, the Python suites
   (the library's, then the Python backend's), `test-tools` (the repo-wide `tools/`, which no
   workspace's suite covers), the library suite (`test-lib`), the API suite, both UI suites,
   `check-ui` and `check-opend`. This list went stale twice without a gate noticing, and it is
@@ -80,11 +80,27 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   one line**, comments as hand-wrapped prose. `.editorconfig` holds the mechanical part. Workspace
   package names are their directory names (`backend`, `frontend`), with ONE exception: the library's
   directory is `typescript/` and its package is `optionality` — the Python library's name too —
-  because `typescript` is the compiler's own npm name (ADR 0021). `npm install` links it from the
+  because `typescript` is the compiler's own npm name (ADR 0021). The install links it from the
   workspace (`node_modules/optionality -> ../typescript`), never from the public registry, which
-  has a package of the same name (1.2.1 when measured on 2026-11-09).
-- `make deploy` — **the only correct way to land a merge**: pull, install BOTH backends (`npm install`
-  and `uv sync --all-packages --locked`, whichever is live), back up the DB, restart BOTH agents (the
+  has a package of the same name (1.2.1 when measured on 2026-11-09) — and since that held only
+  because the installer behaved, **`make check-workspace-links`** (in `make check`, and in `make
+  deploy` before any restart) refuses any workspace package that is not a link to its own directory.
+- **bun installs, Node runs (#412).** bun (1.3.10, `/opt/homebrew/bin/bun`) is the PACKAGE MANAGER
+  only: `bun install --frozen-lockfile` from the committed `bun.lock` (there is no
+  `package-lock.json`), `bun run` for a package's scripts and `bunx` for a bin — and every one of
+  those still runs under `node`, because a bin's `#!/usr/bin/env node` is honoured. bun is not the
+  runtime and cannot be: it has no `node:sqlite`. It links every package from one shared cache, so
+  a worktree's install costs megabytes where npm copied ~360 MB into each. bun runs no dependency's
+  postinstall script unless trusted, and none is declared on purpose: the one it blocks,
+  `protobufjs`' (via `moomoo-api`), only makes an empty directory for the `pbjs` CLI and warns
+  about version schemes, and `opend/sdk.test.ts` runs the real SDK's protobuf encode and decode to
+  say so. esbuild's (Vite's) is on bun's built-in trusted list and runs, but only checks the
+  platform binary and swaps its bin shim for it: Vite calls esbuild's JS API, which finds
+  `@esbuild/<platform>` itself, and `make build-ui` from an install with EVERY script skipped was
+  byte-identical (#412). A `trustedDependencies` list REPLACES bun's built-in list rather than adding
+  to it (measured: naming `protobufjs` blocked esbuild's) — read what a script does before adding one.
+- `make deploy` — **the only correct way to land a merge**: pull, install BOTH backends (`bun install
+  --frozen-lockfile` and `uv sync --all-packages --locked`, whichever is live), back up the DB, restart BOTH agents (the
   API applies pending migrations at boot). Which backend the API agent runs is READ from its
   installed plist, never assumed, and a Python this tree cannot back stops the deploy before the
   restart. launchd does not watch the repo and the agents

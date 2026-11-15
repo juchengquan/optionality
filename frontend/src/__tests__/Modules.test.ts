@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, posix, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-/** `npm test --workspace frontend` runs from `frontend/`; running the suite from the repo root
+/** `bun run --cwd frontend test` runs from `frontend/`; running the suite from the repo root
  *  runs from there. Both reach the same directory, and a wrong guess must FAIL rather than
  *  silently find nothing to complain about. */
 const SRC = ["src", "frontend/src"].map((d) => resolve(process.cwd(), d))

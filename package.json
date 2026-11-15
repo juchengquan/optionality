@@ -9,10 +9,10 @@
     "frontend"
   ],
   "scripts": {
-    "test": "npm run test --workspaces --if-present",
-    "test:browser": "npm run test:browser --workspace frontend",
-    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tools/tsconfig.json",
-    "build": "npm run build --workspace frontend"
+    "test": "bun run --workspaces --if-present test",
+    "test:browser": "bun run --cwd frontend test:browser",
+    "typecheck": "bun run --workspaces --if-present typecheck && tsc --noEmit -p tools/tsconfig.json",
+    "build": "bun run --cwd frontend build"
   },
   "devDependencies": {
     "@vitest/browser": "^3.2.7",

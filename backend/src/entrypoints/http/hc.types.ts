@@ -5,7 +5,7 @@
  *  (ADR 0006). With `hc`, a route whose shape changed is a compile error in the frontend instead of a
  *  blank cell at the end of a sweep.
  *
- *  It is a .ts file rather than a .test.ts because its assertions are for the compiler: `npm run
+ *  It is a .ts file rather than a .test.ts because its assertions are for the compiler: `make
  *  typecheck` is what runs them, and nothing here executes.
  *
  *  "EVERY endpoint" is now CHECKED rather than claimed — `hc.types.test.ts` takes the endpoint list
