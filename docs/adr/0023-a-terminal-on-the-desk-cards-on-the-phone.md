@@ -20,7 +20,9 @@ the desk and the phone alike, and "Copy as text" puts the same table on the clip
 (#400, its last subsection). **Amended 2026-11-15 (#402):** a watched row has a history, and a
 holding's burndown carries the days it was watched (last section). **Amended 2026-11-15 (#405):** the add
 form's rules, and the Monitor editor's, choose their direction with a ≥ / ≤ pair, and a held debit
-spread's value rule starts at ≤ (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+spread's value rule starts at ≤ (last section). **Amended 2026-11-15 (#408):** the add form keeps
+what is typed between Watch and Hold, says on each choice what it does, and "Record as held" opens it
+prefilled from a watch rule, replacing #336's "I hold this" (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -601,3 +603,67 @@ among the Greeks it watches. Decided:
 - **A held spread's |Δ| at ≤ is called a close-cheap signal**, and at ≥ a risk, as before.
 - **One contract** chooses its direction with the same pair, and lists its value first in what it
   watches; it still starts on Δ. **The Monitor editor** chooses direction with the same pair.
+
+## Amended 2026-11-15: from Watch to Hold (#408)
+
+The owner asked whether "I hold it" and "Watch it" could be one choice. They cannot: they differ in
+what the rules mean (a stop and risk, against entry signals), in what saving does (holding a spread
+replaces a watch rule on it, #293/#336) and in where the result lives. So the two stay, and moving
+between them is made light. Decided:
+
+- **Switching loses nothing typed.** Watch ↔ Hold, any number of times, keeps the expiry, the legs,
+  their sides, types, quantities and strikes, the names, the |Δ| figure and its ≥ / ≤; the fields
+  only one side has (Opened, the Entry, the count, a contract's side) are set aside and come back.
+  **A spread's VALUE figure is kept per choice** (owner, 2026-11-15): typed while watching it is an
+  entry signal, not a stop, so on "I hold it" it gives way to the holding's default — 2× the Entry
+  for a credit, an empty ≤ for a debit, on, for the stop to be typed — and switching back to Watch
+  shows what was typed, with its ≥ / ≤. The held figure, once typed, is likewise kept for Hold. A
+  rule switched off by hand stays off either way. (Checking switching first found a value rule typed
+  while watching DROPPED from the save on switching to Hold with a debit's Entry, its box still
+  showing the figure; the rule now stays on, at the default above.)
+- **Each choice says what it does, on itself**, under its words: "I hold it — records a holding; its
+  rules become a stop and risk", "Watch it — rules only, as entry signals". The buttons' names stay
+  their words, the line their description; two equal columns, wrapping on the phone.
+- **"Record as held"** is offered in the desk's inspector and the phone's sheet of a WATCH rule — on,
+  linked to no holding, on nothing an open holding holds — of a spread or one contract. It opens the
+  add form as "I hold it": on the desk the panel above the table, the Entry focused; on the phone the
+  Add sheet OVER the rule's sheet, Back or Cancel closing only the Add sheet (the page's sheets now
+  share one history list, so one Back closes one sheet). The owner types Opened (today's New York
+  trading day until changed), the Entry and the count; the save is `POST /spreads`. Where `/monitors`
+  has not been read, the spread's legs are the row's own from `/quotes`.
+  - **A watched spread** is prefilled with its expiry, its legs — each sign a side (minus is short,
+    ADR 0013), each quantity kept (#351) — and its name, the watch rule's code, so the held spread's
+    value rule is made under it and replaces it. Where a holding on record, closed ones included,
+    already has that name, the form says so before saving — the save would be refused — and that
+    renaming it means the watch rule is KEPT, linked to the new holding, rather than replaced. Its
+    rules are a holding's defaults, not the watch
+    thresholds, which were entry signals (owner, 2026-11-15): held for a credit, the stop at cost to
+    close ≥ 2× the Entry and the short legs' |Δ| ≥ 0.30, both watch rules replaced; held for a DEBIT,
+    the value rule starts ON at ≤ with an empty threshold, refused in words until the stop is typed,
+    so the old entry-signal rule is replaced rather than adopted with its threshold. That applies to
+    the prefill only: a debit typed fresh keeps #405's "off, ≤ when switched on".
+  - **A watched contract** is prefilled with its expiry, type, strike, its derived name (apart from
+    every holding on record, closed ones too) and the watch rule as saved — its field, direction,
+    compare and threshold — so the route replaces it and keeps its alarm (#336); the side starts
+    short. This is the ONE way to record a watched contract as held: #336's "I hold this", a form of
+    its own inside the rule's controls, is retired with its preview of the other rules the holding
+    would adopt — which comes back for both forms, below.
+  - **On the desk**, Escape or Cancel hands the focus back to the "Record as held" that opened the
+    panel.
+- **What a held save does to the rules already there, said before it is made, and read back after**
+  (owner, 2026-11-15), for a spread or a contract, from "Record as held" or a fresh add:
+  - **"Replaces the watch rules: …"** — a rule linked to no holding on a (code, field) the save
+    makes: a spread's value under its name, a short leg's Δ, a contract's rule. Deleted and made
+    again as the holding's own.
+  - **"Also links to this holding: … — kept as they are; edit or delete them after."** — every other
+    rule the service then ADOPTS (`adoptOrphanMonitors`), worked out as it works it
+    (`positionsHolding` against every open holding, the new ones included): a watched spread's Θ, Γ,
+    ν or Δ, which "Record as held" does NOT replace; a long leg's Δ; a watched spread holding the
+    contract; on or off. Nothing is taken over in silence. Linked to nothing where a contract is held
+    twice (a roll day); as the whole of a holding where it watches exactly what is held, and as one
+    leg of it otherwise. Held to every door scenario that saves, among them one made for this:
+    `POST /spreads takes over a watched spread's theta and its long leg's delta`. Where the holdings
+    are not read, the form says it cannot tell yet.
+  - **The toast reads both back** from `/monitors` after the save: "added 1 holding and 2 Monitors,
+    replacing 2 watch rules; also linked to it: 1218_P7150 |Θ| ≥ 0.50".
+

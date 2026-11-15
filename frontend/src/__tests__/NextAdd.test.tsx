@@ -45,7 +45,7 @@ const SGT_MORNING = new Date("2026-11-11T01:30:00Z");
 function open(over: { privacy?: boolean; monitors?: Monitor[] } = {}) {
   const onSaved = vi.fn();
   render(<AddSpread privacy={over.privacy ?? false} spx={null} spxReason="no batch yet" onSaved={onSaved}
-                    monitors={over.monitors ?? []} onCancel={() => undefined} now={SGT_MORNING} />);
+                    monitors={over.monitors ?? []} holdings={[]} onCancel={() => undefined} now={SGT_MORNING} />);
   return { form: screen.getByRole("form", { name: "add a spread" }), onSaved };
 }
 
@@ -542,4 +542,155 @@ describe("a spread's rules at or above, or at or below (#405)", () => {
     fireEvent.click(screen.getByRole("switch", { name: "spread 1 delta Monitor" }));
     for (const b of within(pair("delta")).getAllByRole("button")) expect((b as HTMLButtonElement).disabled).toBe(true);
   });
+});
+
+describe("what each choice does, said on it (#408)", () => {
+  it("describes 'I hold it' and 'Watch it' by their consequence, in both forms, their names unchanged", () => {
+    open();
+    const said = () => ["I hold it", "Watch it"].map((name) => {
+      const b = screen.getByRole("button", { name });
+      return document.getElementById(b.getAttribute("aria-describedby")!)!.textContent;
+    });
+    const expected = ["records a holding; its rules become a stop and risk", "rules only, as entry signals"];
+    expect(said()).toEqual(expected);
+    fireEvent.click(screen.getByRole("button", { name: "one contract" }));
+    expect(said()).toEqual(expected);
+  });
+});
+
+describe("what a held save takes over (#408)", () => {
+  it("says it cannot say yet while the holdings are not read, in both forms, and nothing for a watched one", () => {
+    render(<AddSpread privacy={false} spx={null} spxReason={null} onSaved={vi.fn()} monitors={[]} holdings={null}
+                      onCancel={() => undefined} now={SGT_MORNING} />);
+    const words = "The holdings are not read yet, so which other rules this holding takes over is the service's to say once it is saved.";
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    expect(screen.getByText(words)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    expect(screen.queryByText(words)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "one contract" }));
+    fireEvent.click(screen.getByRole("button", { name: "I hold it" }));
+    type("expiry", "2026-12-18");
+    type("strike", "7150");
+    expect(screen.getByText(words)).toBeTruthy();
+  });
+});
+
+describe("switching Watch and Hold (#408)", () => {
+  const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value;
+  const pressedIn = (group: string) =>
+    within(screen.getByRole("group", { name: group })).getAllByRole("button")
+      .filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.textContent);
+  const toWatch = () => fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+  const toHold = () => fireEvent.click(screen.getByRole("button", { name: "I hold it" }));
+
+  it("loses nothing typed, either way, any number of times — each value figure kept for its own choice — and posts all of it", async () => {
+    const { onSaved } = open();
+    toWatch();
+    type("expiry", "2026-12-18");
+    fireEvent.click(screen.getByRole("button", { name: "spread 1: add a leg" }));
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1, leg 3 strike", "7200");
+    type("spread 1, leg 3 quantity", "2");
+    fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 3 type: PUT — change" }));
+    fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 3 side: long — flip" }));
+    type("spread 1 name", "my ratio");
+    type("spread 1 value threshold", "0.40");
+    type("spread 1 delta threshold", "0.12");
+    fireEvent.click(within(screen.getByRole("group", { name: "spread 1 delta direction" })).getByRole("button", { name: "≤ at or below" }));
+    fireEvent.click(screen.getByRole("button", { name: "call spread" }));
+    type("spread 2, leg 1 strike", "7700");
+    type("spread 2, leg 2 strike", "7750");
+    type("spread 2 value threshold", "1.10");
+    fireEvent.click(within(screen.getByRole("group", { name: "spread 2 value direction" })).getByRole("button", { name: "≤ at or below" }));
+    fireEvent.click(screen.getByRole("switch", { name: "spread 2 delta Monitor" }));
+
+    toHold();
+    type("opened", "2026-11-09");
+    type("spread 1 entry", "-0.80");
+    type("spread 1 contracts", "3");
+    type("spread 2 entry", "1.25");
+    type("spread 2 contracts", "2");
+    // the watched figures, entry signals, give way to the holding's defaults (owner, #408): a
+    // debit's stop on, at or below, empty for the stop; a credit's at 2× its Entry
+    expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("true");
+    expect(pressedIn("spread 1 value direction")).toEqual(["≤"]);
+    expect([value("spread 1 value threshold"), value("spread 2 value threshold")]).toEqual(["", "2.50"]);
+    type("spread 1 value threshold", "0.30");
+
+    for (let i = 0; i < 3; i += 1) {
+      toWatch();
+      // what Watch has, as typed
+      expect(value("expiry")).toBe("2026-12-18");
+      expect([1, 2, 3].map((j) => value(`spread 1, leg ${j} strike`))).toEqual(["7150", "7100", "7200"]);
+      expect(value("spread 1, leg 3 quantity")).toBe("2");
+      expect(screen.getByRole("button", { name: "spread 1, leg 3 type: CALL — change" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "spread 1, leg 3 side: short — flip" })).toBeTruthy();
+      expect(value("spread 1 name")).toBe("my ratio");
+      expect([value("spread 1 value threshold"), value("spread 2 value threshold")]).toEqual(["0.40", "1.10"]);
+      expect([pressedIn("spread 1 value direction"), pressedIn("spread 2 value direction")]).toEqual([["≥"], ["≤"]]);
+      expect(value("spread 1 delta threshold")).toBe("0.12");
+      expect(pressedIn("spread 1 delta direction")).toEqual(["≤"]);
+      expect(screen.getByRole("switch", { name: "spread 2 delta Monitor" }).getAttribute("aria-checked")).toBe("false");
+      expect(screen.queryByLabelText("opened")).toBeNull();
+      expect(screen.queryByLabelText("spread 1 entry")).toBeNull();
+      toHold();
+      // what only Hold has, set aside and back
+      expect(value("opened")).toBe("2026-11-09");
+      expect([value("spread 1 entry"), value("spread 1 contracts")]).toEqual(["-0.80", "3"]);
+      expect([value("spread 2 entry"), value("spread 2 contracts")]).toEqual(["1.25", "2"]);
+      // the held figures, the one typed and the default, and the |Δ| as typed
+      expect([value("spread 1 value threshold"), value("spread 2 value threshold")]).toEqual(["0.30", "2.50"]);
+      expect(pressedIn("spread 1 value direction")).toEqual(["≤"]);
+      expect(value("spread 1 delta threshold")).toBe("0.12");
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: /^Record 2 holdings/ }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = posted()[0]!.body as { strike_date: string; spreads: unknown[] };
+    expect(SpreadsIn.safeParse(body).success).toBe(true);
+    expect(body.strike_date).toBe("2026-12-18");
+    expect(body.spreads).toEqual([
+      {
+        name: "my ratio", held: true, entry: -0.8, contracts: 3, opened_at: "2026-11-09",
+        legs: [
+          { side: "short", option_type: "PUT", strike: 7150 },
+          { side: "long", option_type: "PUT", strike: 7100 },
+          { side: "short", option_type: "CALL", strike: 7200, qty: 2 },
+        ],
+        monitors: [
+          { threshold: 0.3, direction: "below" },
+          { option_type: "PUT", strike: 7150, threshold: 0.12, direction: "below" },
+          { option_type: "CALL", strike: 7200, threshold: 0.12, direction: "below" },
+        ],
+      },
+      {
+        name: "1218_C7700_C7750", held: true, entry: 1.25, contracts: 2, opened_at: "2026-11-09",
+        legs: [{ side: "short", option_type: "CALL", strike: 7700 }, { side: "long", option_type: "CALL", strike: 7750 }],
+        monitors: [{ threshold: -2.5, direction: "below", compare: "signed" }],
+      },
+    ]);
+  });
+
+  it("watches again at the figures typed for Watch, after a while held", async () => {
+    const { onSaved } = open();
+    toWatch();
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 value threshold", "0.40");
+    type("spread 1 delta threshold", "0.15");
+    toHold();
+    type("spread 1 entry", "1.50");
+    expect(value("spread 1 value threshold")).toBe("3.00");
+    type("spread 1 value threshold", "2.80");
+    toWatch();
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 Monitors" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors)
+      .toEqual([{ threshold: 0.4 }, { option_type: "PUT", strike: 7150, threshold: 0.15 }]);
+  });
+
 });

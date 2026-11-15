@@ -6,11 +6,12 @@ import { describe, expect, it } from "vitest";
 import { SpreadsIn } from "backend/schemas";
 import {
   addLeg, addSpread, contractCode, deltaEnabled, derivedName, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
-  isCreditStop, removeLeg, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, valueChoosable, valueDefault, valueDirectionShown,
-  valueEnabled, valueHint,
+  contractCode as codeOf, isCreditStop, removeLeg, replacedBy, replaces, saveWords, takesOver, setLeg, setSpread, spreadsBody, stopWarning, valueChoosable, valueDefault, valueDirectionShown,
+  valueEnabled, valueHint, valueShown,
   type AddDraft, type SpreadDraft,
 } from "../add";
 import type { Monitor, Payoff } from "../shared/api";
+import { bookOf, scenario, scenarioNames } from "../testing/scenarioBook";
 
 /** The condor the audit timed: two spreads on one expiry, each with its credit. */
 function condor(held = true): AddDraft {
@@ -107,7 +108,7 @@ describe("the body a save posts", () => {
 
   it("watches a spread at the thresholds typed, and carries no holding's figures", () => {
     const d = condor(false);
-    const typed = { ...d, spreads: d.spreads.map((s) => ({ ...s, entry: "", valueAt: "1.8", deltaAt: "0.15" })) };
+    const typed = { ...d, spreads: d.spreads.map((s) => ({ ...s, entry: "", watchAt: "1.8", deltaAt: "0.15" })) };
     const body = bodyOf(typed);
     expect(SpreadsIn.safeParse(body).success).toBe(true);
     expect(body.spreads[0]).toEqual({
@@ -145,7 +146,7 @@ describe("the body a save posts", () => {
   });
 
   it("keeps a watched spread's value rule as the size typed, and a debit's typed by hand, at or below (#405)", () => {
-    expect(bodyOf({ ...condor(false), spreads: [{ ...condor(false).spreads[0]!, valueAt: "1.8", deltaOn: false }] })
+    expect(bodyOf({ ...condor(false), spreads: [{ ...condor(false).spreads[0]!, watchAt: "1.8", deltaOn: false }] })
       .spreads[0]!.monitors).toEqual([{ threshold: 1.8 }]);
     const d = condor();
     const debit = { ...d, spreads: [{ ...d.spreads[0]!, entry: "-1.50", valueOn: true, valueAt: "0.5", deltaOn: false }] };
@@ -220,7 +221,7 @@ describe("the preview", () => {
 
   it("draws a watched spread at the value it watches for", () => {
     const d = condor(false);
-    const s = { ...d.spreads[0]!, valueAt: "1.8" };
+    const s = { ...d.spreads[0]!, watchAt: "1.8" };
     expect(previewOf(d, s)!.entry).toBe(1.8);
   });
 
@@ -250,6 +251,23 @@ describe("a debit spread's stop", () => {
     const on = { ...d, spreads: [{ ...d.spreads[0]!, valueOn: true }] };
     expect(valueEnabled(true, on.spreads[0]!)).toBe(true);
     expect(spreadsBody(on)).toEqual({ error: "spread 1: type the value its Monitor watches for" });
+  });
+
+  it("gives a watched figure way to the holding's default when held — an empty ≤, on — and keeps it for Watch (owner, #408)", () => {
+    const d = debit();
+    const watched = { ...d.spreads[0]!, watchAt: "0.40", watchDirection: "above" as const };
+    // held: the entry signal is no stop — the rule stays on, at or below, for the stop to be typed
+    expect([valueEnabled(true, watched), valueDirectionShown(true, watched), valueShown(true, watched)]).toEqual([true, "below", ""]);
+    expect(spreadsBody({ ...d, spreads: [watched] })).toEqual({ error: "spread 1: type the value its Monitor watches for" });
+    // and back on Watch, what was typed
+    expect([valueEnabled(false, watched), valueDirectionShown(false, watched), valueShown(false, watched)]).toEqual([true, "above", "0.40"]);
+    // the stop typed held is the held one's, and a box emptied to retype stays on
+    const stop = { ...watched, valueAt: "0.75" };
+    expect(bodyOf({ ...d, spreads: [stop] }).spreads[0]!.monitors[0]).toEqual({ threshold: 0.75, direction: "below" });
+    expect(valueShown(false, stop)).toBe("0.40");
+    expect(valueEnabled(true, { ...stop, valueAt: "" })).toBe(true);
+    // switched off by hand, it is off, figure or none
+    expect(valueEnabled(true, { ...stop, valueOn: false })).toBe(false);
   });
 
   it("keeps a credit spread's on, saying it is the stop", () => {
@@ -303,7 +321,7 @@ describe("a stop that can never fire", () => {
   it("is not warned of for a watched spread, a debit, a stop switched off, or no floor", () => {
     const d = condor();
     const w = condor(false);
-    expect(at(w, { ...w.spreads[0]!, valueAt: "60" }, -10)).toBeNull();
+    expect(at(w, { ...w.spreads[0]!, watchAt: "60" }, -10)).toBeNull();
     expect(at(d, { ...d.spreads[0]!, entry: "25", valueOn: false }, -25)).toBeNull();
     expect(at(d, { ...d.spreads[0]!, entry: "-25" }, -25)).toBeNull();
     expect(at(d, { ...d.spreads[1]!, entry: "25", legs: [d.spreads[1]!.legs[0]!] }, null)).toBeNull();
@@ -416,13 +434,13 @@ describe("a structure with no short leg", () => {
 describe("a watched spread's preview, signed by its structure", () => {
   it("draws a credit spread at the value watched for, as a credit", () => {
     const d = condor(false);
-    expect(previewOf(d, { ...d.spreads[0]!, valueAt: "1.8" })!.entry).toBe(1.8);
+    expect(previewOf(d, { ...d.spreads[0]!, watchAt: "1.8" })!.entry).toBe(1.8);
   });
 
   it("draws a debit spread at the value watched for, as a debit", () => {
     const d = condor(false);
     const s = flipSide(flipSide(d, d.spreads[0]!.key, 0), d.spreads[0]!.key, 1).spreads[0]!;
-    expect(previewOf(d, { ...s, valueAt: "1.8" })!.entry).toBe(-1.8);
+    expect(previewOf(d, { ...s, watchAt: "1.8" })!.entry).toBe(-1.8);
   });
 });
 
@@ -498,7 +516,7 @@ describe("a quantity per leg (#351)", () => {
     // long P7150 / short 2×P7100: as a 1×1 it could only pay, a debit; sold twice over it can cost
     // without limit below 7050, and is taken as the credit it is entered for
     const d = ratio(false);
-    expect(previewOf(d, { ...d.spreads[0]!, valueAt: "1.00" })!.entry).toBe(1);
+    expect(previewOf(d, { ...d.spreads[0]!, watchAt: "1.00" })!.entry).toBe(1);
   });
 
   it("draws the preview with the quantities", () => {
@@ -577,7 +595,7 @@ describe("the direction of a spread's two rules (#405)", () => {
   /** The put spread of `condor`, alone, watched or held. */
   const one = (held: boolean, change: Partial<SpreadDraft> = {}): AddDraft => {
     const d = condor(held);
-    const s = { ...d.spreads[0]!, valueAt: "1.80", deltaAt: "0.15", ...change };
+    const s = { ...d.spreads[0]!, valueAt: "1.80", watchAt: "1.80", deltaAt: "0.15", ...change };
     return { ...d, spreads: [s] };
   };
 
@@ -592,7 +610,7 @@ describe("the direction of a spread's two rules (#405)", () => {
   });
 
   it("posts a watched spread's |value| ≤ and |Δ| ≤ as below", () => {
-    const body = bodyOf(one(false, { valueDirection: "below", deltaDirection: "below" }));
+    const body = bodyOf(one(false, { watchDirection: "below", deltaDirection: "below" }));
     expect(SpreadsIn.safeParse(body).success).toBe(true);
     expect(body.spreads[0]!.monitors).toEqual([
       { threshold: 1.8, direction: "below" },
@@ -638,5 +656,62 @@ describe("the direction of a spread's two rules (#405)", () => {
 
   it("offers a watched spread's value the choice, and its delta's in every case", () => {
     expect(valueChoosable(false, one(false).spreads[0]!)).toBe(true);
+  });
+});
+
+describe("what a held save takes over, as the service takes it (#408)", () => {
+  type Sent = {
+    strike_date: string;
+    spreads: { name: string; held: boolean; legs: { side: string; option_type: "PUT" | "CALL"; strike: number; qty?: number }[];
+      monitors: { option_type?: "PUT" | "CALL"; strike?: number; field?: string }[] }[];
+  };
+  const names = scenarioNames("post-spreads-").filter((n) => scenario(n).expect.response?.status === 201);
+
+  it("is held to every door scenario that saved", () => {
+    expect(names.length).toBeGreaterThan(10);
+  });
+
+  for (const name of names) {
+    it(`agrees with the backend on ${name}`, () => {
+      const s = scenario(name);
+      const book = bookOf(s);
+      const sent = s.request.body as Sent;
+      const keys = sent.spreads.filter((sp) => sp.held).flatMap((sp) => sp.monitors.map((m) => {
+        const leg = m.option_type !== undefined ? { option_type: m.option_type, strike: m.strike! }
+          : sp.legs.length === 1 ? sp.legs[0]! : null;
+        return {
+          code: leg ? codeOf(sent.strike_date, leg.option_type, leg.strike) : sp.name,
+          field: m.field ?? (leg ? "option_delta" : "mid_price"),
+        };
+      }));
+      const replaced = replacedBy(keys, book.monitors);
+      const rows = s.expect.rows;
+      expect(replaced.map((m) => m.id).sort()).toEqual((rows.monitors?.removed ?? []).map((r) => r.id as string).sort());
+      const out = takesOver(sent.strike_date, sent.spreads.map((sp) => (sp.held ? sp.legs : null)), replaced, book.monitors,
+        book.holdings)!;
+      const made = new Set((rows.monitors?.added ?? []).map((m) => m.id as string));
+      const scopes = new Map((rows.monitors?.changed ?? []).map((c) => [c.key.id as string, c.to.scope]));
+      sent.spreads.forEach((sp, i) => {
+        const position = (rows.positions?.added ?? []).find((p) => p.name === sp.name);
+        const expected = position === undefined ? [] : (rows.monitor_positions?.added ?? [])
+          .filter((l) => l.position_id === position.id && !made.has(l.monitor_id as string)).map((l) => l.monitor_id as string);
+        expect(out[i]!.map((t) => t.monitor.id).sort(), `spread ${i + 1}`).toEqual(expected.sort());
+        for (const t of out[i]!) expect(t.scope, t.monitor.id).toBe(scopes.get(t.monitor.id));
+      });
+    });
+  }
+
+  it("takes nothing a contract held twice names: the service calls that ambiguous, a roll day", () => {
+    const book = bookOf(scenario("post-spreads-records-one-contract-held-and-a-watched-spread-holding-it-is-linked-to-it"));
+    const other = { id: "h-other", strike_date: "2026-12-18",
+      legs: [{ option_type: "CALL", strike: 7300 }, { option_type: "CALL", strike: 7400 }] };
+    const news = [[{ option_type: "CALL", strike: 7300 }]];
+    const replaced = book.monitors.filter((m) => m.id === "mon-c7300");
+    expect(takesOver("2026-12-18", news, replaced, book.monitors, book.holdings)![0]!.map((t) => t.monitor.id)).toEqual(["mon-cs"]);
+    expect(takesOver("2026-12-18", news, replaced, book.monitors, [...book.holdings, other])).toEqual([[]]);
+  });
+
+  it("takes nothing it cannot say while the holdings are not read", () => {
+    expect(takesOver("2026-12-18", [[{ option_type: "PUT", strike: 7150 }]], [], [], null)).toBeNull();
   });
 });

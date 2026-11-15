@@ -17,7 +17,8 @@
  */
 import type { DraftPayoff, Monitor } from "./shared/api";
 import {
-  contractCode, derivedName, ruleWords as replacedWords, type OptionType, type Side, type SpreadsBody,
+  contractCode, derivedName, replacedBy, ruleWords as replacedWords, takesOver, type HeldLegs, type OptionType, type Side,
+  type SpreadsBody,
 } from "./add";
 
 /** What `POST /monitors` lets one Contract watch, as the old page's form offered it. IV is offered here and
@@ -73,6 +74,42 @@ export function newContract(today: string): ContractDraft {
  *  parses to, so "+7150", "7150.0" and "07150" all name the one contract they mean. */
 export const contractName = (expiry: string, type: OptionType, strike: number) =>
   derivedName(expiry, [{ option_type: type, strike: String(strike) }]);
+
+/** The Contract a single-leg rule watches, read back from its code as the service builds it
+ *  (`contractCode`), or null for a combo's name. */
+export function contractOfCode(code: string): { option_type: OptionType; strike: number } | null {
+  const m = /^US\.SPXW\d{6}([CP])(\d+)000$/.exec(code);
+  return m ? { option_type: m[1] === "C" ? "CALL" : "PUT", strike: Number(m[2]) } : null;
+}
+
+/** `name`, or the first of `name-2`, `name-3`… that no holding on record has: a holding's name is
+ *  unique across closed ones too, so a closed `1231_C8000` makes the next one `1231_C8000-2`. */
+export function uniqueName(name: string, taken: string[]): string {
+  const names = new Set(taken);
+  if (!names.has(name)) return name;
+  let n = 2;
+  while (names.has(`${name}-${n}`)) n += 1;
+  return `${name}-${n}`;
+}
+
+/** "Record as held" from a watched contract (#408, retiring #336's form in the rule's controls): the
+ *  one-contract form as "I hold it", with the contract, its derived name — apart from every holding's
+ *  on record, `taken` — and the watch rule AS SAVED, its field, direction, compare and threshold, so
+ *  the route replaces that rule with the holding's own (#322) and keeps its alarm (#336). Short until
+ *  changed; the owner types Opened (today's New York trading day until changed), the Entry and the
+ *  count. Null for a code that names no contract. */
+export function contractFromWatch(
+  r: { code: string; strike_date: string; field: string; direction: string; compare: string; threshold: number },
+  today: string, taken: string[],
+): ContractDraft | null {
+  const c = contractOfCode(r.code);
+  if (c === null) return null;
+  return {
+    ...newContract(today), held: true, expiry: r.strike_date, option_type: c.option_type, strike: String(c.strike),
+    field: r.field, direction: r.direction === "below" ? "below" : "above", compare: r.compare === "signed" ? "signed" : "abs",
+    threshold: String(r.threshold), name: uniqueName(contractName(r.strike_date, c.option_type, c.strike), taken),
+  };
+}
 
 /** A plain decimal only, as the Monitor editor reads one (`edit.ts`): Number() also reads "0x10" as
  *  16 and "1e-2" as 0.01, none of which is a figure anybody typed on purpose. */
@@ -162,10 +199,23 @@ export function refusalSpot(text: string): ContractSpot {
  *  the (contract, field) a HELD contract's rule makes, owned by no holding (#322). A watched
  *  contract, or a holding with no rule, replaces nothing. Read from the `/monitors` the page has. */
 export function contractReplaces(d: ContractDraft, monitors: Monitor[]): string[] {
+  return replacedRules(d, monitors).map(replacedWords);
+}
+
+function replacedRules(d: ContractDraft, monitors: Monitor[]): Monitor[] {
   const strike = typed(d.strike);
   if (!d.held || !d.rule || strike === null || strike <= 0 || d.expiry.length < 10) return [];
-  const code = contractCode(d.expiry, d.option_type, strike);
-  return monitors.filter((m) => m.code === code && m.field === d.field && m.positions.length === 0).map(replacedWords);
+  return replacedBy([{ code: contractCode(d.expiry, d.option_type, strike), field: d.field }], monitors);
+}
+
+/** The rules a HELD contract's holding takes over besides its own (#408, `add.ts`'s `takesOver`): a
+ *  watched spread holding the contract, another rule on it, all as the service adopts them. Null
+ *  where the holdings are not read; none for a watched contract, or before the strike is typed. */
+export function contractTakesOver(d: ContractDraft, monitors: Monitor[], holdings: HeldLegs[] | null): Monitor[] | null {
+  const strike = typed(d.strike);
+  if (!d.held || strike === null || strike <= 0 || d.expiry.length < 10) return [];
+  const out = takesOver(d.expiry, [[{ option_type: d.option_type, strike }]], replacedRules(d, monitors), monitors, holdings);
+  return out === null ? null : out[0]!.map((r) => r.monitor);
 }
 
 /** What moved, signed as a Position's Entry: received positive, paid negative; never -0. */

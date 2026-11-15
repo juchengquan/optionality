@@ -6,8 +6,9 @@
  *  the old page used for it (#301) or the one #340 settled on:
  *  - a rule over several holdings takes a TOTAL entry, split by `POST /monitors/{id}/total-entry`,
  *    what each holding gets shown before it is saved (`edit.ts`'s `splitPreview`);
- *  - a watched single contract can be recorded as HELD, through `POST /spreads` as a spread of one
- *    leg carrying this rule, which replaces the watch rule with the holding's own in one request.
+ *  - a WATCH rule, on a spread or one contract, can be recorded as HELD (#408): "Record as held"
+ *    opens the add form as "I hold it", prefilled from the rule, and its save through `POST /spreads`
+ *    replaces the watch rule. It replaced #336's "I hold this", a form of its own in these controls.
  *
  *  - The draft is said in words as it is typed; the figure and its distance beside it stay the
  *    SERVED row's, said as "as saved", because only the service measures a distance (ADR 0005).
@@ -24,16 +25,13 @@
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
-import type { Added, Entry, Holding, Monitor } from "./shared/api";
+import type { Entry, Holding, Monitor } from "./shared/api";
 import { Button } from "@/components/ui/button";
-import { DASH, marketDay } from "./shared/format";
-import { ruleWords as replacedWords, type SpreadsBody } from "./add";
-import { refusalSpot, type ContractSpot } from "./contract";
+import { DASH } from "./shared/format";
 import {
-  deletesOn, draftOf, draftSentence, draftWords, fieldsFor, holdBody, holdDraft, holdLinks, holdOffered, patchOf,
-  QUARANTINE_WHY, renameNote, ruleLabel, ruleOfMonitor, splitCounts, splitOffered, splitPreview, spotOf, stateOf,
-  totalOf, uniqueName,
-  type Draft, type HoldDraft, type PatchBody, type Rule, type Spot,
+  deletesOn, draftOf, draftSentence, draftWords, fieldsFor, patchOf, QUARANTINE_WHY, recordOffered, renameNote,
+  ruleLabel, splitCounts, splitOffered, splitPreview, spotOf, stateOf, totalOf,
+  type Draft, type PatchBody, type Rule, type Spot,
 } from "./edit";
 import { fieldWords } from "./needs";
 import { RuleWords, ShortWords } from "./RuleWords";
@@ -46,12 +44,9 @@ export interface MonitorActions {
   remove: (id: string) => Promise<void>;
   /** a total entry split across a rule's holdings (#336); throws the service's refusal */
   totalEntry?: (id: string, entry: number) => Promise<void>;
-  /** a holding recorded through `POST /spreads` (#336): what was made; throws the refusal */
-  hold?: (body: SpreadsBody) => Promise<Added>;
-  /** every holding's name on record, closed ones too (`GET /positions`, no market data): a new
-   *  holding's name must be none of them */
-  holdingNames?: () => Promise<string[]>;
-  /** what those two read: every rule as `/monitors` gave them, the valued holdings (null where the
+  /** "Record as held" (#408): the add form opened as "I hold it", prefilled from this watch rule */
+  recordAsHeld?: (rule: Rule, served: Entry | null, from: HTMLElement | null) => void;
+  /** what the split reads: every rule as `/monitors` gave them, the valued holdings (null where the
    *  page has none), and whether the owner's privacy is on */
   book?: { monitors: Monitor[]; holdings: Holding[] | null; privacy: boolean };
   /** `/health`'s `expired_retention_days`, or null until it has answered */
@@ -68,7 +63,7 @@ export function MonitorControls({ rule, served }: { rule: Rule; served: Entry | 
   return actions ? <Controls actions={actions} rule={rule} served={served} /> : null;
 }
 
-type Doing = "idle" | "editing" | "deleting" | "enabling" | "splitting" | "holding";
+type Doing = "idle" | "editing" | "deleting" | "enabling" | "splitting";
 
 function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Rule; served: Entry | null }) {
   const [doing, setDoing] = useState<Doing>("idle");
@@ -81,14 +76,13 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
   const [saidSplit, setSaidSplit] = useState(false);
   const editButton = useRef<HTMLButtonElement>(null);
   const splitButton = useRef<HTMLButtonElement>(null);
-  const holdButton = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const label = ruleLabel(rule);
   const now = actions.now?.() ?? new Date();
   const state = stateOf(rule, now.toISOString().slice(0, 10));
   const book = actions.book;
   const splits = Boolean(actions.totalEntry && book) && splitOffered(rule);
-  const holds = Boolean(actions.hold && book) && holdOffered(rule);
+  const records = Boolean(actions.recordAsHeld) && recordOffered(rule);
 
   const to = (next: Doing) => { setError(null); setSaidSplit(false); setDoing(next); };
   const close = () => { to("idle"); editButton.current?.focus(); };
@@ -124,23 +118,6 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     } finally {
       setBusy(false);
     }
-  };
-
-  /** A holding recorded: the rule is replaced by the holding's own, so it leaves this place, and the
-   *  focus goes where `settleFocus` sends it. A refusal is thrown back to the form, which files it. */
-  const holdIt = async (body: SpreadsBody) => {
-    setBusy(true);
-    const home = homeOf(root.current);
-    try {
-      await actions.hold!(body);
-    } catch (e) {
-      setBusy(false);
-      throw e;
-    }
-    // committed NOW, not batched: the focus below goes to the edit button, which is disabled until
-    // `busy` is drawn false, and a batch landing after the timer left the focus on the body
-    flushSync(() => { setBusy(false); to("idle"); });
-    setTimeout(() => settleFocus(root.current, editButton.current, home), 0);
   };
 
   const save = (e: React.FormEvent) => {
@@ -191,11 +168,10 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
             split entry
           </button>
         ) : null}
-        {holds ? (
-          <button ref={holdButton} type="button" className="nx-mon-button" aria-label={`I hold ${label}`}
-                  disabled={busy} aria-expanded={doing === "holding"}
-                  onClick={() => (doing === "holding" ? back(holdButton) : to("holding"))}>
-            I hold this
+        {records ? (
+          <button type="button" className="nx-mon-button" aria-label={`record ${label} as held`} disabled={busy}
+                  onClick={(e) => actions.recordAsHeld!(rule, served, e.currentTarget)}>
+            Record as held
           </button>
         ) : null}
         {state === "quarantined" ? (
@@ -209,7 +185,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
           delete
         </button>
       </div>
-      {error && !["editing", "splitting", "holding"].includes(doing) ? <Refusal text={error.text} /> : null}
+      {error && !["editing", "splitting"].includes(doing) ? <Refusal text={error.text} /> : null}
       {/* mounted empty and filled, so a screen reader announces it; only where a split is offered */}
       {splits ? <p className="nx-meta" role="status">{saidSplit ? "total entry saved" : ""}</p> : null}
 
@@ -237,12 +213,6 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
                    onCancel={() => back(splitButton)}
                    onSave={(entry) => run(() => actions.totalEntry!(rule.id, entry),
                      () => { back(splitButton); setSaidSplit(true); }, false, () => "threshold")} />
-      ) : null}
-      {doing === "holding" && book && actions.hold ? (
-        <HoldForm rule={rule} label={label} book={book} today={marketDay(now)} busy={busy}
-                  holdingNames={actions.holdingNames}
-                  onCancel={() => back(holdButton)}
-                  onSave={holdIt} />
       ) : null}
     </div>
   );
@@ -459,136 +429,3 @@ function SplitForm({ rule, label, book, busy, error, onError, onSave, onCancel }
   );
 }
 
-/** Where a holding's refusal is said: beside the four boxes this form has, or by its button. */
-const holdSpot = (at: ContractSpot): "entry" | "contracts" | "opened" | "name" | "form" =>
-  at === "entry" || at === "contracts" || at === "opened" || at === "name" ? at : "form";
-
-/** Recording a holding of a watched contract (#336): what the add form's one-contract draft would
- *  post held, with THIS rule as it is saved, so the route replaces the watch rule with the
- *  holding's own in the same request (`edit.ts`'s `holdBody`). */
-function HoldForm({ rule, label, book, today, busy, holdingNames, onSave, onCancel }: {
-  rule: Rule; label: string; book: NonNullable<MonitorActions["book"]>; today: string; busy: boolean;
-  holdingNames?: () => Promise<string[]>;
-  /** throws the service's refusal, which this form files beside the box it is about */
-  onSave: (body: SpreadsBody) => Promise<void>; onCancel: () => void;
-}) {
-  const id = useId();
-  // named apart from every holding open now, and once they are read, from every one on record
-  const [draft, setDraft] = useState<HoldDraft>(() => {
-    const d = holdDraft(rule, today);
-    return { ...d, name: uniqueName(d.name, (book.holdings ?? []).map((h) => h.name)) };
-  });
-  const named = useRef(false);
-  useEffect(() => {
-    let live = true;
-    holdingNames?.().then((names) => {
-      if (!live || named.current) return;
-      setDraft((d) => ({ ...d, name: uniqueName(holdDraft(rule, today).name, names) }));
-    }).catch(() => undefined);
-    return () => { live = false; };
-    // asked once, when the form opens
-  }, []);
-  const [error, setError] = useState<{ text: string; at: ReturnType<typeof holdSpot> } | null>(null);
-  // a REF as well as `busy`: two presses in one tick both read `busy` from before either set it
-  const sending = useRef(false);
-  const first = useRef<HTMLSelectElement>(null);
-  useEffect(() => { first.current?.focus(); }, []);
-  const set = (change: Partial<HoldDraft>) => { setDraft((d) => ({ ...d, ...change })); setError(null); };
-  const links = holdLinks(rule, book.monitors, book.holdings);
-  const replaced = links.replaced.map(replacedWords);
-  const tie = (spot: string) => error?.at === spot
-    ? { "aria-invalid": true, "aria-describedby": `${id}-${spot}-error` } : {};
-  const said = (spot: string) => error?.at === spot ? <Refusal id={`${id}-${spot}-error`} text={error.text} /> : null;
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (sending.current) return;
-    const out = holdBody(rule, draft, today);
-    if ("error" in out) { setError({ text: out.error, at: holdSpot(out.at) }); return; }
-    sending.current = true;
-    try {
-      await onSave(out.body);
-    } catch (err: unknown) {
-      const text = err instanceof Error ? err.message : String(err);
-      // a holding's name taken beside the name (`refusalSpot`); anything else — an unknown
-      // contract, a rule another holding owns, a service down — by the button
-      setError({ text, at: refusalSpot(text) === "name" ? "name" : "form" });
-    } finally {
-      sending.current = false;
-    }
-  };
-
-  return (
-    <form className="nx-mon-form" aria-label={`record a holding of ${label}`} data-poll="hold" noValidate
-          onSubmit={(e) => void save(e)} onKeyDown={escapeCancels(onCancel, busy)}>
-      {/* the same field, direction and compare, on a rule that is on: the route keeps its alarm
-          (`editedMonitor`'s rule, #292) */}
-      <p className="nx-mon-note" data-testid="hold-replaces">
-        {`Replaces the watch rule ${replaced.length > 0 ? replaced.join(", ") : "on it"} with the holding's own, `
-          + "the same rule, linked to it: its alarm carries over, so a ringing rule does not say it crossed again."}
-      </p>
-      <p className="nx-mon-note" data-testid="hold-links">
-        {!links.known
-          ? "The holdings have not been read, so which other Monitors it takes is the service's to say once it is saved."
-          : links.linked.length === 0 ? "No other Monitor is linked to it."
-            : "Also linked to it, by the service, as it links every rule no holding owns: "
-              // a combo naming a contract the new holding does not hold is drawn in the Watchlist,
-              // where the book will draw it (placement.ts, #346); the page shows no rule row's
-              // Entry or P&L, so nothing here claims one
-              + links.linked.map(({ monitor, scope, watchlist }) => `${ruleLabel(ruleOfMonitor(monitor))} — `
-                + (watchlist ? "drawn in the Watchlist, with a note of the contracts it shares with it"
-                  : scope === "all" ? "as covering the whole of it" : "as one leg of it"))
-                .join("; ") + "."}
-      </p>
-      <div className="nx-mon-fields">
-        <div className="nx-mon-field">
-          <label htmlFor={`${id}-side`}>side</label>
-          <select ref={first} id={`${id}-side`} value={draft.side}
-                  onChange={(e) => set({ side: e.target.value as HoldDraft["side"] })}>
-            <option value="short">short — sold</option>
-            <option value="long">long — bought</option>
-          </select>
-        </div>
-        <div className="nx-mon-field">
-          <label htmlFor={`${id}-entry`}>entry, per contract</label>
-          <input id={`${id}-entry`} inputMode="decimal" autoComplete="off" value={draft.entry} placeholder="unknown"
-                 onChange={(e) => set({ entry: e.target.value })} {...tie("entry")} />
-          {said("entry")}
-          <small className="nx-meta">
-            {`${draft.side === "short" ? "received" : "paid"}, per contract — the side signs it`}
-          </small>
-        </div>
-        <div className="nx-mon-field">
-          <label htmlFor={`${id}-contracts`}>contracts</label>
-          {/* the count is hidden under privacy, as the dollars it multiplies are (ADR 0023) */}
-          <input id={`${id}-contracts`} inputMode="numeric" autoComplete="off" value={draft.contracts}
-                 className={book.privacy ? "nx-private" : undefined} data-private={book.privacy ? "" : undefined}
-                 onChange={(e) => set({ contracts: e.target.value })} {...tie("contracts")} />
-          {said("contracts")}
-        </div>
-        <div className="nx-mon-field">
-          <label htmlFor={`${id}-opened`}>opened</label>
-          <input id={`${id}-opened`} type="date" value={draft.opened} onChange={(e) => set({ opened: e.target.value })}
-                 {...tie("opened")} />
-          {said("opened")}
-          <small className="nx-meta">the New York trading day</small>
-        </div>
-        <div className="nx-mon-field">
-          <label htmlFor={`${id}-name`}>name</label>
-          <input id={`${id}-name`} autoComplete="off" value={draft.name}
-                 onChange={(e) => { named.current = true; set({ name: e.target.value }); }} {...tie("name")} />
-          {said("name")}
-        </div>
-      </div>
-      <p className="nx-meta">
-        One request, all of it or none, through the add form&apos;s route: the holding of this one contract,
-        and this rule made again as its own.
-      </p>
-      {said("form")}
-      <div className="nx-mon-actions">
-        <Button type="submit" size="sm" disabled={busy}>{busy ? "recording…" : "Record holding"}</Button>
-        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>cancel</Button>
-      </div>
-    </form>
-  );
-}

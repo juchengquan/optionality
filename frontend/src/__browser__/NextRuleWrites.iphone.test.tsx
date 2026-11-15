@@ -1,5 +1,5 @@
-/** Renaming a combo, splitting a total entry and recording a holding of a watched contract on the
- *  phone (#336), MEASURED under Playwright's iPhone profile against a service that writes
+/** Renaming a combo and splitting a total entry on the phone (#336), and "Record as held" from a
+ *  watch rule's sheet (#408), MEASURED under Playwright's iPhone profile against a service that writes
  *  (`testing/ruleEdits.ts`): each from the detail sheet, through its route; a refusal said in the
  *  sheet, on screen and on top; every box 16px so iOS does not zoom, every control 44pt, nothing
  *  pushed sideways at 390px; and the count hidden under privacy. Runs in the `iphone` instance only.
@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { serveRuleEdits, type Refusals } from "../testing/ruleEdits";
+import { QUOTES } from "../testing/ownerBook";
+import type { Entry } from "../shared/api";
 import { overflowsSideways, settle } from "./nextBook";
 
 beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
@@ -136,51 +138,67 @@ describe("splitting a total entry from a holding's sheet", () => {
   });
 });
 
-describe("recording a holding of a watched contract from its sheet", () => {
-  it("records it through POST /spreads, every box 16px and 44pt, and the holding reaches the book", async () => {
-    const writes = await show();
-    const sheet = await openSheet("261231 8000C");
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
-    const form = within(sheet).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
-    expect(form.querySelectorAll("input, select")).toHaveLength(5);
-    measured(sheet, form);
-    await userEvent.click(within(form).getByLabelText("entry, per contract"));
-    await userEvent.keyboard("{Escape}");
-    expect(within(sheet).queryByRole("form")).toBeNull();
+describe("Record as held from a watch rule's sheet (#408)", () => {
+  /** Every control a finger has to hit inside `root`, under 44pt. */
+  const tooSmall = (root: Element) => [...root.querySelectorAll<HTMLElement>("button, select, input, a")]
+    .filter((el) => el.getClientRects().length > 0)
+    .filter((el) => { const r = el.getBoundingClientRect(); return r.width < 44 || r.height < 44; })
+    .map((el) => el.getAttribute("aria-label") ?? el.textContent);
+  const pastTheEdge = (root: Element) => [...root.querySelectorAll<HTMLElement>("*")]
+    .filter((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth + 0.5)
+    .map((el) => el.className || el.tagName);
+
+  for (const [card, label, kind] of [
+    ["1218_P7150", "1218_P7150 value", "add a spread"], ["261231 8000C", "261231 8000C Δ", "add one contract"],
+  ] as const) {
+    it(`opens the add sheet over ${card}'s, prefilled, 44pt and inside the screen, and records it`, async () => {
+      const writes = await show();
+      const detail = await openSheet(card);
+      const button = within(detail).getByRole("button", { name: `record ${label} as held` });
+      expect(tooSmall(button.parentElement!)).toEqual([]);
+      expect(visible(button)).toBe(true);
+      await userEvent.click(button);
+      const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+      await animationsDone();
+      const form = within(sheet).getByRole("form", { name: kind });
+      expect(within(form).getByRole("button", { name: "I hold it" }).getAttribute("aria-pressed")).toBe("true");
+      const replaces = within(form).getByText(/^Replaces the watch rules:/);
+      expect(visible(replaces)).toBe(true);
+      expect(tooSmall(sheet)).toEqual([]);
+      expect(pastTheEdge(sheet)).toEqual([]);
+      expect([...form.querySelectorAll("input, select")].filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16))
+        .toEqual([]);
+      expect(overflowsSideways()).toBe(false);
+      const entry = within(form).getByLabelText(kind === "add a spread" ? "spread 1 entry" : "entry");
+      await userEvent.fill(entry, "0.8");
+      await userEvent.click(within(form).getByRole("button", { name: /^Record holding/ }));
+      await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
+      // both sheets gone, each taking its own entry back off the history, and the holding in the book
+      await waitFor(() => expect(sheet.isConnected).toBe(false));
+      await waitFor(() => expect(detail.isConnected).toBe(false));
+      await waitFor(() => expect(history.state?.panel).toBeFalsy());
+      await screen.findByText(/replacing \d watch rules?$/);
+    });
+  }
+
+  it("says what it replaces, what it takes over and a name already on record, all inside the screen", async () => {
+    const THETA = { ...QUOTES.find((q) => q.id === "w-dec18")!, id: "w-theta", field: "option_theta", threshold: 0.5 } as Entry;
+    serveRuleEdits({}, [THETA], { names: ["1218_P7150"] });
+    render(<Next />);
+    await settle();
+    await userEvent.click((await screen.findAllByRole("button", { name: "details of 1218_P7150" }))[0]!);
+    const detail = await screen.findByRole("dialog");
     await animationsDone();
-    expect(screen.queryByRole("dialog")).not.toBeNull();
-
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
-    await userEvent.fill(within(sheet).getByLabelText("entry, per contract"), "0.8");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Record holding" }));
-    await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
-    // the rule the sheet was about is replaced, so the sheet closes with it, taking its own entry
-    // back off the history; the holding is in the book
-    await waitFor(() => expect(sheet.isConnected).toBe(false));
-    expect(history.state?.panel).toBeFalsy();
-    // and said in a toast, which is not drawn over the sheet that has gone
-    await screen.findByText("recorded 1231_C8000, replacing 1 watch rule");
-    await screen.findByRole("button", { name: "details of 1231_C8000" });
-  });
-
-  it("says a refusal in the sheet, on screen and on top", async () => {
-    const refusal = "the provider does not know US.SPXW261231C8000000";
-    await show({ spreads: () => [422, refusal] });
-    const sheet = await openSheet("261231 8000C");
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
-    const form = within(sheet).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
-    await userEvent.click(within(form).getByRole("button", { name: "Record holding" }));
-    const alert = await within(form).findByRole("alert");
-    expect(alert.textContent).toBe(refusal);
-    expect(visible(alert)).toBe(true);
-  });
-
-  it("hides the count under privacy, drawn as dots", async () => {
-    document.cookie = "ui_privacy=on; path=/";
-    await show();
-    const sheet = await openSheet("261231 8000C");
-    await userEvent.click(within(sheet).getByRole("button", { name: "I hold 261231 8000C Δ" }));
-    const box = within(sheet).getByLabelText("contracts");
-    expect(getComputedStyle(box).getPropertyValue("-webkit-text-security")).toBe("disc");
+    await userEvent.click(within(detail).getByRole("button", { name: "record 1218_P7150 value as held" }));
+    const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    await animationsDone();
+    const form = within(sheet).getByRole("form", { name: "add a spread" });
+    for (const said of [
+      within(form).getByText(/^Replaces the watch rules:/), within(form).getByText(/^Also links to this holding:/),
+      within(form).getByRole("status", { name: "spread 1's name" }),
+    ]) expect(visible(said)).toBe(true);
+    expect(tooSmall(sheet)).toEqual([]);
+    expect(pastTheEdge(sheet)).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
   });
 });

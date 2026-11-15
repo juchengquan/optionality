@@ -8,6 +8,10 @@
  *
  *  The same place adds ONE contract (#331): a choice above the form, and `AddContract.tsx` in the
  *  spread form's stead. Each draft is kept here, so switching back and forth loses neither.
+ *
+ *  "Record as held" (#408) opens it with a draft already made from a watch rule (`initial`): the
+ *  spread or the contract as "I hold it", where the owner types Opened, the Entry and the count —
+ *  so the focus goes to the Entry rather than the expiry, which is already there.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
@@ -18,11 +22,20 @@ import { marketDay } from "./shared/format";
 import { SideSign } from "./shared/Legs";
 import {
   addLeg, addSpread, deltaEnabled, isCreditStop, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
-  removeLeg, removeSpread, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, valueEnabled,
-  valueChoosable, valueDirectionShown, valueHint, valueShown, type AddDraft, type Preset, type SpreadDraft,
+  removeLeg, removeSpread, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, takenOver, valueChange,
+  valueChoosable, valueDirectionChange, valueDirectionShown, valueEnabled, valueHint, valueShown,
+  type AddDraft, type HeldLegs, type Preset, type SpreadDraft,
 } from "./add";
+import { TakeOver } from "./TakeOver";
 import { AddContract } from "./AddContract";
+import { HoldOrWatch } from "./HoldOrWatch";
 import { newContract, type ContractDraft } from "./contract";
+
+/** A draft the form opens with instead of a fresh one: "Record as held" from a watch rule (#408). */
+export type AddInitial =
+  /** `taken`: every holding's name on record, closed ones too, which this spread's may not be */
+  | { kind: "spread"; draft: AddDraft; taken: string[] }
+  | { kind: "contract"; draft: ContractDraft };
 import { DraftPreview } from "./Payoff";
 import { DirectionPair, type Direction } from "./DirectionPair";
 import { fieldWords } from "./needs";
@@ -32,6 +45,9 @@ type Props = {
   privacy: boolean;
   /** every rule, as `/monitors` gave them: what a held spread will replace is read from these */
   monitors: Monitor[];
+  /** the open holdings, as valued, or null where they are not: what a held save takes over besides
+   *  what it replaces is read against them (#408) */
+  holdings: HeldLegs[] | null;
   /** SPX's derived price from the book's last batch, for the preview's marker, or null */
   spx: number | null;
   spxReason: string | null;
@@ -41,16 +57,21 @@ type Props = {
   autoFocus?: boolean;
   /** injected only by tests: Opened starts as the New York trading day on this clock */
   now?: Date;
+  /** a draft to open with, prefilled from a watch rule (#408) */
+  initial?: AddInitial;
 };
 
 /** What to add — a spread, or one contract — and the form for it. */
 export function AddSpread(props: Props) {
-  const [kind, setKind] = useState<"spread" | "contract">("spread");
+  const [kind, setKind] = useState<"spread" | "contract">(props.initial?.kind ?? "spread");
   // the focus goes into the form when it opens, and stays on the choice when the choice is changed
   const [chosen, setChosen] = useState(false);
   const choose = (k: "spread" | "contract") => { setKind(k); setChosen(true); };
-  const [spread, setSpreadDraft] = useState<AddDraft>(() => newDraft(marketDay(props.now)));
-  const [contract, setContract] = useState<ContractDraft>(() => newContract(marketDay(props.now)));
+  const [spread, setSpreadDraft] = useState<AddDraft>(
+    () => (props.initial?.kind === "spread" ? props.initial.draft : newDraft(marketDay(props.now))));
+  const [contract, setContract] = useState<ContractDraft>(
+    () => (props.initial?.kind === "contract" ? props.initial.draft : newContract(marketDay(props.now))));
+  const prefilled = props.initial !== undefined;
   // one save in flight for the whole place, not per form: switching form mid-save would otherwise
   // mount a fresh save button that sends the same thing again (review of #340)
   const [saving, setSaving] = useState(false);
@@ -62,25 +83,37 @@ export function AddSpread(props: Props) {
       </div>
       {kind === "spread"
         ? <SpreadForm {...props} autoFocus={props.autoFocus && !chosen} draft={spread} setDraft={setSpreadDraft}
-                      saving={saving} setSaving={setSaving} />
-        : <AddContract privacy={props.privacy} monitors={props.monitors} spx={props.spx} spxReason={props.spxReason}
+                      saving={saving} setSaving={setSaving} prefilled={prefilled} />
+        : <AddContract privacy={props.privacy} monitors={props.monitors} holdings={props.holdings} spx={props.spx} spxReason={props.spxReason}
                        onSaved={props.onSaved} onCancel={props.onCancel} today={marketDay(props.now)}
+                       autoFocus={props.autoFocus && !chosen} prefilled={prefilled}
                        draft={contract} setDraft={setContract} saving={saving} setSaving={setSaving} />}
     </div>
   );
 }
 
 function SpreadForm({
-  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, draft, setDraft, saving, setSaving,
+  privacy, monitors, holdings, spx, spxReason, onSaved, onCancel, autoFocus, draft, setDraft, saving, setSaving, prefilled,
+  initial,
 }: Props & {
   draft: AddDraft; setDraft: (d: AddDraft) => void; saving: boolean; setSaving: (s: boolean) => void;
+  /** opened from a watch rule: the focus goes to the Entry, the expiry being there already */
+  prefilled: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const id = useId();
   const change = (next: AddDraft) => { setDraft(next); setError(null); };
   const expiry = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (autoFocus) expiry.current?.focus(); }, [autoFocus]);
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!autoFocus) return;
+    if (prefilled) form.current?.querySelector<HTMLInputElement>('input[aria-label="spread 1 entry"]')?.focus();
+    else expiry.current?.focus();
+    // on opening only
+  }, [autoFocus]);
   const replacing = replaces(draft, monitors);
+  const taking = takenOver(draft, monitors, holdings);
+  const taken = initial?.kind === "spread" ? initial.taken : [];
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,12 +132,9 @@ function SpreadForm({
 
   const held = draft.held;
   return (
-    <form className="nx-add" aria-label="add a spread" onSubmit={(e) => void save(e)} data-poll="hold" noValidate>
+    <form ref={form} className="nx-add" aria-label="add a spread" onSubmit={(e) => void save(e)} data-poll="hold" noValidate>
       <div className="nx-add-row">
-        <div className="nx-seg" role="group" aria-label="add as">
-          <button type="button" aria-pressed={held} onClick={() => change({ ...draft, held: true })}>I hold it</button>
-          <button type="button" aria-pressed={!held} onClick={() => change({ ...draft, held: false })}>Watch it</button>
-        </div>
+        <HoldOrWatch held={held} onHeld={(h) => change({ ...draft, held: h })} />
       </div>
       <div className="nx-add-row">
         <label className="nx-add-field">
@@ -124,7 +154,7 @@ function SpreadForm({
 
       {draft.spreads.map((s, i) => (
         <SpreadFields key={s.key} index={i} spread={s} draft={draft} privacy={privacy} id={id}
-                      replacing={replacing[i] ?? []}
+                      replacing={replacing[i] ?? []} taking={taking === null ? null : taking[i] ?? []} taken={taken}
                       spx={spx} spxReason={spxReason} onChange={change}
                       onRemove={draft.spreads.length > 1 ? () => change(removeSpread(draft, s.key)) : null} />
       ))}
@@ -151,15 +181,20 @@ const PRESET_WORDS: Record<Preset, string> = {
   put: "put spread", call: "call spread", condor: "condor as one holding",
 };
 
-function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, spxReason, onChange, onRemove }: {
+function SpreadFields({ index, spread: s, draft, privacy, id, replacing, taking, taken, spx, spxReason, onChange, onRemove }: {
   index: number; spread: SpreadDraft; draft: AddDraft; privacy: boolean; id: string;
   /** the watch rules saving this spread will replace, in words */
   replacing: string[];
+  /** the rules its holding will take over besides, or null where the holdings are not read (#408) */
+  taking: Monitor[] | null;
+  /** the holdings' names on record, closed ones too, where the page read them for this draft */
+  taken: string[];
   spx: number | null; spxReason: string | null;
   onChange: (d: AddDraft) => void; onRemove: (() => void) | null;
 }) {
   const n = index + 1;
   const held = draft.held;
+  const name = s.name.trim() || derivedName(draft.expiry, s.legs);
   const set = (change: Partial<SpreadDraft>) => onChange(setSpread(draft, s.key, change));
   const preview = previewOf(draft, s);
   const credit = preview?.entry ?? 0;
@@ -244,10 +279,10 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
             <MonitorLine on={valueOn} onToggle={() => set({ valueOn: !valueOn })} label={`spread ${n} value Monitor`}
                          words={isCreditStop(held, s) ? "cost to close ≥" : `|${fieldWords("mid_price")}|`}
                          direction={valueChoosable(held, s)
-                           ? { value: valueDirectionShown(held, s), onChange: (d) => set({ valueDirection: d }), label: `spread ${n} value direction` }
+                           ? { value: valueDirectionShown(held, s), onChange: (d) => set(valueDirectionChange(held, d)), label: `spread ${n} value direction` }
                            : null}
                          hint={valueHint(held, s)}
-                         value={valueShown(held, s)} onValue={(v) => set({ valueAt: v })}
+                         value={valueShown(held, s)} onValue={(v) => set(valueChange(held, v))}
                          inputLabel={`spread ${n} value threshold`} />
             <MonitorLine on={deltaOn} onToggle={() => set({ deltaOn: !deltaOn })} label={`spread ${n} delta Monitor`}
                          words={`short leg${shorts === 1 ? "'s" : "s'"} |Δ|`}
@@ -259,9 +294,15 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
                          inputLabel={`spread ${n} delta threshold`} />
           </div>
           {warning ? <p className="nx-add-warn" role="status" aria-label={`spread ${n}'s stop`}>{warning}</p> : null}
-          {replacing.length > 0
-            ? <p className="nx-meta nx-add-replaces">{`Replaces the watch rules: ${replacing.join(", ")}`}</p>
-            : null}
+          {held && taken.includes(name) ? (
+            <p className="nx-add-warn" role="status" aria-label={`spread ${n}'s name`}>
+              {`A holding named ${name} is already on record, closed ones included, so saving under this name is refused. `
+                + "Rename it in the name box"
+                + (replacing.some((w) => w.startsWith(`${name} `))
+                  ? `: the watch rule ${name} is then kept, linked to the new holding, rather than replaced.` : ".")}
+            </p>
+          ) : null}
+          <TakeOver held={held} replacing={replacing} taking={taking} />
           {onRemove ? (
             <button type="button" className="nx-add-ghost" aria-label={`remove spread ${n}`} onClick={onRemove}>
               <X aria-hidden="true" />remove

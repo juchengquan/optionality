@@ -14,18 +14,23 @@ import { addSpreads, type Added, type Monitor } from "./shared/api";
 import { SideSign } from "./shared/Legs";
 import { Button } from "@/components/ui/button";
 import {
-  CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces,
+  CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces, contractTakesOver,
   contractSaveWords, refusalSpot, thresholdFault, type ContractDraft, type ContractSpot,
 } from "./contract";
 import { fieldWords, ruleWords, shortRule } from "./needs";
 import { ShortWords } from "./RuleWords";
 import { DraftPreview } from "./Payoff";
 import { DirectionPair } from "./DirectionPair";
+import { HoldOrWatch } from "./HoldOrWatch";
+import { TakeOver } from "./TakeOver";
+import type { HeldLegs } from "./add";
 
 export function AddContract({
-  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving,
+  privacy, monitors, holdings, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving, prefilled,
 }: {
   privacy: boolean;
+  /** the open holdings, or null where they are not valued: what a held save takes over (#408) */
+  holdings: HeldLegs[] | null;
   /** every rule, as `/monitors` gave them: what a held contract will replace is read from these */
   monitors: Monitor[];
   spx: number | null;
@@ -33,6 +38,8 @@ export function AddContract({
   onSaved: (added: Added) => void;
   onCancel: () => void;
   autoFocus?: boolean;
+  /** opened from a watch rule (#408): the focus goes to the Entry, the contract being there already */
+  prefilled?: boolean;
   /** the New York trading day: an expiry before it has passed, and Opened may not be after it */
   today: string;
   /** kept by the caller, so switching to a spread and back loses nothing typed */
@@ -45,7 +52,11 @@ export function AddContract({
   const [error, setError] = useState<{ text: string; at: ContractSpot } | null>(null);
   const id = useId();
   const expiry = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (autoFocus) expiry.current?.focus(); }, [autoFocus]);
+  const entry = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) (prefilled && draft.held ? entry : expiry).current?.focus();
+    // on opening only
+  }, [autoFocus]);
   const set = (change: Partial<ContractDraft>) => { setDraft({ ...draft, ...change }); setError(null); };
 
   const save = async (e: React.FormEvent) => {
@@ -91,10 +102,7 @@ export function AddContract({
     <form className="nx-add nx-add-contract" aria-label="add one contract" onSubmit={(e) => void save(e)}
           data-poll="hold" noValidate>
       <div className="nx-add-row">
-        <div className="nx-seg" role="group" aria-label="add as">
-          <button type="button" aria-pressed={held} onClick={() => set({ held: true })}>I hold it</button>
-          <button type="button" aria-pressed={!held} onClick={() => set({ held: false })}>Watch it</button>
-        </div>
+        <HoldOrWatch held={held} onHeld={(h) => set({ held: h })} />
       </div>
       <div className="nx-add-row">
         <label className="nx-add-field">
@@ -143,7 +151,7 @@ export function AddContract({
                   </div>
                   <label className="nx-add-field nx-add-entry">
                     <span>{`entry ${draft.side === "short" ? "received" : "paid"}, per contract`}</span>
-                    <input aria-label="entry" inputMode="decimal" value={draft.entry} autoComplete="off"
+                    <input ref={entry} aria-label="entry" inputMode="decimal" value={draft.entry} autoComplete="off"
                            placeholder={draft.side === "short" ? "received" : "paid"} {...tie("entry")}
                            onChange={(e) => set({ entry: e.target.value })} />
                   </label>
@@ -209,9 +217,7 @@ export function AddContract({
               {said("field")}
               {error?.at === "threshold" ? said("threshold")
                 : fault && ruleOn ? <p id={`${id}-fault`} className="nx-add-warn" role="status">{fault}</p> : null}
-              {replacing.length > 0
-                ? <p className="nx-meta nx-add-replaces">{`Replaces the watch rules: ${replacing.join(", ")}`}</p>
-                : null}
+              <TakeOver held={held} replacing={replacing} taking={contractTakesOver(draft, monitors, holdings)} />
             </div>
           </div>
           {held ? (

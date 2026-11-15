@@ -25,6 +25,12 @@
   font-size: 0.875rem;
 }
 .nx-seg button[aria-pressed="true"] { background: var(--foreground); color: var(--background); }
+/* "I hold it" / "Watch it", each with what choosing it does under its words (#408): two equal
+   columns that wrap their line rather than widen the form, at the phone's width as at the desk's */
+.nx-add-as { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(100%, 30rem); }
+.nx-add-as button { display: flex; flex-direction: column; align-items: flex-start; gap: 0.125rem; text-align: left; }
+.nx-add-as-words { font-weight: 600; }
+.nx-add-as small { font-size: 0.75rem; line-height: 1.25; opacity: 0.8; }
 
 .nx-add-spread {
   border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 0.5rem 0.75rem 0.75rem;
