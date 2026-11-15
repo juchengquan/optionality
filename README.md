@@ -12,14 +12,15 @@ the TypeScript (ADR 0014).
 - [Moomoo OpenD](https://www.moomoo.com/download/OpenAPI) running on the same machine, with its
   websocket port enabled.
 - Access to [Moomoo Options Real-Time Quotes](https://qtcard.moomoo.com/intro/api-usoption-realtime?type=16&is_support_buy=1&lang=en-us).
-- Node 25 (it runs the TypeScript directly), [Caddy](https://caddyserver.com) for the dashboard,
+- Node 25 (it runs the TypeScript directly), [bun](https://bun.sh) to install the JavaScript
+  packages (only that — Node is the runtime), [Caddy](https://caddyserver.com) for the dashboard,
   [uv](https://docs.astral.sh/uv/) for the Python tooling, and Tailscale for access.
 
 ## Running it
 
 ```bash
 cp .env.example .env          # fill in the Telegram pair and the OpenD websocket key
-npm install
+bun install --frozen-lockfile
 make launchd-api-install      # the API on 127.0.0.1:31415
 make launchd-ui-install       # Caddy serving frontend/dist
 make deploy                   # after every merge: pull, back up the DB, restart both

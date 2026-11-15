@@ -1,10 +1,10 @@
 .PHONY: check lint check-boundaries check-test-support check-seams check-module-map check-make-targets cases check-cases scenarios check-scenarios format test test-ui test-ui-fast test-ui-layout test-lib test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
-	serve build-ui check-ui check-served-root resolve-ui deploy deploy-backup use \
+	serve build-ui check-ui check-served-root resolve-ui deploy deploy-after-pull deploy-backup use \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
 	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
-	test-tools py-cut py-tag ibkr-fake-gateway check-py-backend
+	test-tools py-cut py-tag ibkr-fake-gateway check-py-backend check-workspace-links
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
@@ -28,6 +28,14 @@ BACKUP_DIR ?= $(HOME)/Library/Mobile Documents/com~apple~CloudDocs/optionality-b
 # where the dashboard is mounted on the tailnet. Baked into the bundle at build time,
 # because `tailscale serve` strips the prefix and the page cannot discover it (ADR 0006).
 UI_BASE ?= /opt/
+
+# the JavaScript install (#412): bun as the PACKAGE MANAGER only — Node runs everything, the service,
+# the suites and every tool. bun links each package from one shared cache (~/.bun/install/cache), so
+# a worktree costs megabytes where npm copied ~360 MB into every one. `--frozen-lockfile` because
+# bun.lock is committed: an install that would have to rewrite it means the change carried a stale
+# one, and on the live tree a rewritten lock is a dirty tree that breaks the next `git pull`.
+# Not `--silent`: with it a lock that does not match prints NOTHING and the step just fails.
+JS_INSTALL = bun install --frozen-lockfile
 
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
@@ -82,6 +90,12 @@ check-served-root:
 check-make-targets:
 	node tools/check-make-targets.mjs
 
+# Each workspace package is installed as a LINK to its own directory: `node_modules/optionality` is
+# `../typescript`, never the public registry's unrelated `optionality`. Installs first, because it
+# reads what the install made. See tools/check-workspace-links.mjs.
+check-workspace-links:
+	$(JS_INSTALL) && node tools/check-workspace-links.mjs
+
 # the Python only: the TypeScript has no formatter, by decision (CLAUDE.md says why)
 format:
 	uv run --directory python ruff format .
@@ -97,7 +111,7 @@ test:
 # EVERYTHING a commit must pass, fastest first. Each target below guards one thing, and running a
 # subset is how a commit could pass while the canonical TypeScript broke — `make test` alone is only
 # the Python. check-ui comes last because it rebuilds the bundle.
-check: lint typecheck check-api check-cases check-scenarios test test-tools test-lib test-api test-ui check-ui check-opend
+check: lint check-workspace-links typecheck check-api check-cases check-scenarios test test-tools test-lib test-api test-ui check-ui check-opend
 	@echo "all checks passed"
 
 # The TypeScript API, which is what "the API" has meant since phase 9 (ADR 0009) — this ran uvicorn,
@@ -133,19 +147,19 @@ serve:
 test-ui: test-ui-fast test-ui-layout
 
 test-ui-fast:
-	npm install --silent && npm test --workspace frontend
+	$(JS_INSTALL) && bun run --cwd frontend test
 
 # NOTE: the first run downloads a headless Chromium (~95MB) into ~/Library/Caches.
 # Nothing here touches the deploy path — ADR 0006 keeps node off that entirely.
 test-ui-layout:
-	npm install --silent && npx playwright install --with-deps chromium >/dev/null 2>&1 || true
-	npm run test:browser --workspace frontend
+	$(JS_INSTALL) && bunx playwright install --with-deps chromium >/dev/null 2>&1 || true
+	bun run --cwd frontend test:browser
 
 # the bundle is COMMITTED, so node is needed only to change the frontend, never to run
 # the service — a failed build must not become a failed deploy, and now that Caddy serves
 # the files directly it would leave nothing to serve at all
 build-ui:
-	npm install --silent && cd frontend && VITE_BASE=$(UI_BASE) npm run build
+	$(JS_INSTALL) && cd frontend && VITE_BASE=$(UI_BASE) bun run build
 
 # A committed bundle can drift from its source; this is what catches it.
 #
@@ -167,9 +181,9 @@ build-ui:
 # git diff reported that as "stale" until they were staged, which made `make build-ui && make
 # check` fail for a reason that had nothing to do with the bundle being right.
 check-ui:
-	@npm install --silent
+	@$(JS_INSTALL)
 	@out=$$(mktemp -d); \
-	if ! (cd frontend && VITE_BASE=$(UI_BASE) npx vite build --outDir $$out --emptyOutDir >/dev/null 2>&1); then \
+	if ! (cd frontend && VITE_BASE=$(UI_BASE) bunx vite build --outDir $$out --emptyOutDir >/dev/null 2>&1); then \
 		rm -rf $$out; echo "the frontend build failed"; exit 1; \
 	fi; \
 	if diff -r $$out frontend/dist >/dev/null; then \
@@ -201,18 +215,30 @@ resolve-ui:
 # The one path that keeps both services in step. Skew is the price of running them
 # separately (ADR 0006); this is what stops it happening by simple forgetfulness.
 #
-# BOTH backends are installed, whichever is live (ADR 0021): npm for the TypeScript, uv for the
+# BOTH backends are installed, whichever is live (ADR 0021): bun for the TypeScript (#412), uv for the
 # Python, so a switch never waits on an install and a merge that changes either lands in both.
-# `--locked` because this is the live checkout: a lock that would have to be rewritten here means
+# `--frozen-lockfile` and `--locked` because this is the live checkout: a lock that would have to be rewritten here means
 # the merge carried a stale one, and a deploy that dirties the tree breaks the next `git pull`.
 # Which backend the API agent runs is READ from its installed plist, never assumed — and a Python
 # this tree cannot back (the guard in tools/use-backend.mjs) stops the deploy before the restart.
+#
+# The pull and the rest are TWO make invocations on purpose. make reads this file once, before the
+# first line runs, so a single recipe that pulls goes on to run the recipe it read BEFORE the pull:
+# the deploy that lands a change to these steps would run the old ones. #412 was such a change —
+# the old recipe's `npm install`, against a tree whose package-lock.json the pull had just deleted,
+# would have re-resolved packages with no lock and restarted the live API on them. A second make
+# reads the file the pull brought, so what runs is always what was merged.
 #
 # The schema step is the backend's own: whichever runs applies what is pending in
 # schema/migrations/ at boot and fails fatally if one does not (ADR 0011).
 deploy:
 	git pull --ff-only
-	npm install --silent
+	$(MAKE) deploy-after-pull
+
+# `make deploy` past the pull; not for running alone.
+deploy-after-pull:
+	$(JS_INSTALL)
+	node tools/check-workspace-links.mjs
 	uv sync --all-packages --locked
 	@backend=$$(node tools/use-backend.mjs installed) && echo "restarting $(API_LABEL), which runs the $$backend backend"
 	$(MAKE) deploy-backup
@@ -292,7 +318,7 @@ check-scenarios:
 # where a version scheme goes wrong silently. Its own invocation because tools/ is not a package:
 # it is what reads and writes ACROSS the packages, so neither workspace's suite covers it.
 test-tools:
-	npx vitest run --root tools
+	bunx vitest run --root tools
 
 # Cutting a release of the Python package (ADR 0016). Two steps, because CLAUDE.md forbids pushing
 # to main: the version bump is a commit and goes through a PR like anything else, so only the tag
@@ -309,17 +335,17 @@ py-tag:
 
 # the TypeScript library (ADR 0021): the domain, the vendor clients, and the golden cases' own
 # guards — `cases.test.ts` is what fails when the corpus is stale or a domain export has no case.
-# Named by its npm name, `optionality`; its directory is `typescript/` (the compiler owns that name).
+# Named by its package name, `optionality`; its directory is `typescript/` (the compiler owns that name).
 test-lib:
-	npm install --silent && npm test --workspace optionality
+	$(JS_INSTALL) && bun run --cwd typescript test
 
 # the TypeScript backend (ADR 0009). No build target: Node runs the source directly, so there
 # is nothing to compile and nothing to commit — the frontend's dist has no backend equivalent.
 test-api:
-	npm install --silent && npm test --workspace backend
+	$(JS_INSTALL) && bun run --cwd backend test
 
 typecheck:
-	npm install --silent && npm run typecheck
+	$(JS_INSTALL) && bun run typecheck
 
 # tsc is not enough. Node runs the TypeScript by ERASING types, so syntax that would have to EMIT
 # code is rejected at load time — and tsc accepts it while vitest transforms it, so neither

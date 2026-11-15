@@ -241,7 +241,7 @@ type _SchemaMigrations = Checked<
  *
  *  Exported so that `noUnusedLocals` keeps it alive: an unreferenced type alias is elided, and a
  *  check the compiler throws away is no check at all. Add a column to one place and not the other
- *  and `npm run typecheck` names the column that is missing and from which side.
+ *  and `make typecheck` names the column that is missing and from which side.
  */
 type _MonitorsNull = Checked<Exact<NullableKeys<MonitorRow> & string, (typeof NULLABLE.monitors)[number]>>;
 type _PositionsNull = Checked<Exact<NullableKeys<PositionRow> & string, (typeof NULLABLE.positions)[number]>>;
@@ -266,7 +266,7 @@ type _SchemaMigrationsNull = Checked<
  *
  *  Exported so that `noUnusedLocals` keeps it alive: an unreferenced type alias is elided, and a
  *  check the compiler throws away is no check at all. Add a column to one place and not the other
- *  and `npm run typecheck` names the column that is missing and from which side.
+ *  and `make typecheck` names the column that is missing and from which side.
  */
 export type SchemaChecks = [
   _Monitors, _Positions, _MonitorPositions, _PositionSamples, _WatchSamples, _References,

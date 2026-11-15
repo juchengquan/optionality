@@ -1,0 +1,8 @@
+# bun is the package manager only; Node runs everything (#412).
+#
+# `hoisted` is npm's layout: one node_modules at the root, nested copies only where versions
+# conflict. Named rather than left to bun's default, which is not fixed: bun 1.3 picks it from
+# bun.lock's `configVersion` (0 here, from migrating npm's lock, means hoisted; a lock made fresh
+# gets the isolated linker), and the layout decides which copy of a package every import finds.
+[install]
+linker = "hoisted"
