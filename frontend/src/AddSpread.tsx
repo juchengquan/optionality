@@ -22,6 +22,7 @@ import {
   valueChoosable, valueDirectionShown, valueHint, valueShown, type AddDraft, type Preset, type SpreadDraft,
 } from "./add";
 import { AddContract } from "./AddContract";
+import { HoldOrWatch } from "./HoldOrWatch";
 import { newContract, type ContractDraft } from "./contract";
 import { DraftPreview } from "./Payoff";
 import { DirectionPair, type Direction } from "./DirectionPair";
@@ -101,10 +102,7 @@ function SpreadForm({
   return (
     <form className="nx-add" aria-label="add a spread" onSubmit={(e) => void save(e)} data-poll="hold" noValidate>
       <div className="nx-add-row">
-        <div className="nx-seg" role="group" aria-label="add as">
-          <button type="button" aria-pressed={held} onClick={() => change({ ...draft, held: true })}>I hold it</button>
-          <button type="button" aria-pressed={!held} onClick={() => change({ ...draft, held: false })}>Watch it</button>
-        </div>
+        <HoldOrWatch held={held} onHeld={(h) => change({ ...draft, held: h })} />
       </div>
       <div className="nx-add-row">
         <label className="nx-add-field">

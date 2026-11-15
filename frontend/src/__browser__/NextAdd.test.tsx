@@ -235,3 +235,37 @@ describe("privacy", () => {
     expect(getComputedStyle(screen.getByLabelText("spread 1 contracts")).getPropertyValue("-webkit-text-security")).toBe("none");
   });
 });
+
+describe("what each choice does, said on it (#408)", () => {
+  /** Each of the pair's buttons: its box, and whether its words are all drawn inside it. */
+  const pairOf = () => ["I hold it", "Watch it"].map((name) => {
+    const b = within(panel()).getByRole("button", { name });
+    const r = b.getBoundingClientRect();
+    const small = b.querySelector("small")!;
+    return { r, clipped: b.scrollWidth > b.clientWidth + 0.5 || b.scrollHeight > b.clientHeight + 0.5, small };
+  });
+
+  for (const width of [900, 1440]) {
+    it(`draws both consequences in full, side by side and inside the panel, at ${width}px — in both forms`, async () => {
+      await openDesk(width);
+      await userEvent.click(screen.getByRole("button", { name: "add" }));
+      for (const form of ["a spread", "one contract"]) {
+        await userEvent.click(within(panel()).getByRole("button", { name: form }));
+        await settle();
+        const [hold, watch] = pairOf();
+        const box = panel().getBoundingClientRect();
+        for (const b of [hold!, watch!]) {
+          expect(b.clipped).toBe(false);
+          expect(b.r.right).toBeLessThanOrEqual(box.right + 0.5);
+          expect(b.small.getBoundingClientRect().height).toBeGreaterThan(0);
+        }
+        expect(hold!.small.textContent).toBe("records a holding; its rules become a stop and risk");
+        expect(watch!.small.textContent).toBe("rules only, as entry signals");
+        // one row, the same width each
+        expect(Math.abs(hold!.r.top - watch!.r.top)).toBeLessThan(1);
+        expect(Math.abs(hold!.r.width - watch!.r.width)).toBeLessThan(1);
+        expect(overflowsSideways()).toBe(false);
+      }
+    });
+  }
+});

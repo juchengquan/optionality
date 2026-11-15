@@ -283,9 +283,14 @@ export function valueDefault(held: boolean, s: SpreadDraft): string {
 /** Whether the value Monitor is on: as switched, or by default on — except for a held debit
  *  spread, where it starts OFF rather than as a rule that rings on a gain (review of #322). The
  *  stop of a debit is a fall in value: switched on, it starts at or below (`valueDirectionShown`,
- *  #405), with no figure — this form does not invent one. */
+ *  #405), with no figure — this form does not invent one.
+ *
+ *  A figure the owner TYPED keeps it on: typed while watching, then switched to "I hold it" with a
+ *  debit's Entry, the rule was silently dropped from the save while its box still showed the figure
+ *  (#408). Its box is disabled while it is off, so a figure is only ever typed into a rule that was on;
+ *  and a box emptied to be typed again stays on, rather than switching off under the owner's finger. */
 export function valueEnabled(held: boolean, s: SpreadDraft): boolean {
-  return s.valueOn ?? !isDebit(held, s);
+  return s.valueOn ?? (!isDebit(held, s) || s.valueAt !== null);
 }
 
 /** The words beside the value Monitor. */

@@ -252,6 +252,16 @@ describe("a debit spread's stop", () => {
     expect(spreadsBody(on)).toEqual({ error: "spread 1: type the value its Monitor watches for" });
   });
 
+  it("stays on where its figure was typed — while watched, say — and on through a box emptied to retype (#408)", () => {
+    const d = debit();
+    const typed = { ...d, spreads: [{ ...d.spreads[0]!, valueAt: "0.40", valueDirection: "below" as const }] };
+    expect(valueEnabled(true, typed.spreads[0]!)).toBe(true);
+    expect(bodyOf(typed).spreads[0]!.monitors[0]).toEqual({ threshold: 0.4, direction: "below" });
+    expect(valueEnabled(true, { ...typed.spreads[0]!, valueAt: "" })).toBe(true);
+    // switched off by hand, it is off, figure or none
+    expect(valueEnabled(true, { ...typed.spreads[0]!, valueOn: false })).toBe(false);
+  });
+
   it("keeps a credit spread's on, saying it is the stop", () => {
     expect(valueEnabled(true, condor().spreads[0]!)).toBe(true);
     expect(valueHint(true, condor().spreads[0]!)).toBe("2× the Entry: the stop");

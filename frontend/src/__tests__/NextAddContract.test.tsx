@@ -378,3 +378,56 @@ describe("a refusal", () => {
     expect(writes()).toEqual([]);
   });
 });
+
+describe("switching Watch and Hold (#408)", () => {
+  const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value;
+  const toWatch = () => fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+  const toHold = () => fireEvent.click(screen.getByRole("button", { name: "I hold it" }));
+
+  it("loses nothing typed, either way, any number of times — and posts all of it", async () => {
+    const { onSaved } = open();
+    type("expiry", "2026-12-18");
+    fireEvent.click(screen.getByRole("button", { name: "CALL" }));
+    type("strike", "7700");
+    type("what it watches", "option_theta");
+    fireEvent.click(within(screen.getByRole("group", { name: "direction" })).getByRole("button", { name: "≤ at or below" }));
+    type("compare", "signed");
+    type("threshold", "-0.5");
+
+    toHold();
+    type("opened", "2026-11-09");
+    fireEvent.click(within(screen.getByRole("group", { name: "side" })).getByRole("button", { name: "long" }));
+    type("entry", "4.20");
+    type("contracts", "2");
+    type("name", "my call");
+
+    for (let i = 0; i < 3; i += 1) {
+      toWatch();
+      expect([value("expiry"), value("strike"), value("what it watches"), value("compare"), value("threshold")])
+        .toEqual(["2026-12-18", "7700", "option_theta", "signed", "-0.5"]);
+      expect(screen.getByRole("button", { name: "CALL" }).getAttribute("aria-pressed")).toBe("true");
+      expect(within(screen.getByRole("group", { name: "direction" })).getByRole("button", { name: "≤ at or below" })
+        .getAttribute("aria-pressed")).toBe("true");
+      expect(screen.queryByLabelText("entry")).toBeNull();
+      toHold();
+      expect([value("opened"), value("entry"), value("contracts"), value("name")])
+        .toEqual(["2026-11-09", "4.20", "2", "my call"]);
+      expect(within(screen.getByRole("group", { name: "side" })).getByRole("button", { name: "long" })
+        .getAttribute("aria-pressed")).toBe("true");
+      expect(value("threshold")).toBe("-0.5");
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 Monitor" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = posted()[0];
+    expect(SpreadsIn.safeParse(body).success).toBe(true);
+    expect(body).toEqual({
+      strike_date: "2026-12-18",
+      spreads: [{
+        name: "my call", held: true, legs: [{ side: "long", option_type: "CALL", strike: 7700 }],
+        entry: -4.2, contracts: 2, opened_at: "2026-11-09",
+        monitors: [{ option_type: "CALL", strike: 7700, field: "option_theta", threshold: -0.5, direction: "below", compare: "signed" }],
+      }],
+    });
+  });
+});

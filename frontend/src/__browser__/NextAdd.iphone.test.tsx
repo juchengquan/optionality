@@ -219,3 +219,29 @@ describe("combos of 3 to 6 legs on the phone (#334)", () => {
     expect(small).toEqual([]);
   });
 });
+
+describe("what each choice does, said on it (#408)", () => {
+  it("draws both consequences in full on the iPhone, 44pt, side by side, inside the sheet — in both forms", async () => {
+    await openPhone();
+    const sheet = await openSheet();
+    for (const form of ["a spread", "one contract"]) {
+      await userEvent.click(within(sheet).getByRole("button", { name: form }));
+      await settle();
+      const pair = within(sheet).getByRole("group", { name: "add as" });
+      expect(tooSmall(pair)).toEqual([]);
+      expect(pastTheEdge(pair)).toEqual([]);
+      const [hold, watch] = ["I hold it", "Watch it"].map((name) => within(pair).getByRole("button", { name }));
+      for (const b of [hold!, watch!]) {
+        expect(b.scrollWidth).toBeLessThanOrEqual(b.clientWidth + 0.5);
+        expect(b.scrollHeight).toBeLessThanOrEqual(b.clientHeight + 0.5);
+        expect(b.querySelector("small")!.getBoundingClientRect().height).toBeGreaterThan(0);
+      }
+      expect(hold!.querySelector("small")!.textContent).toBe("records a holding; its rules become a stop and risk");
+      expect(watch!.querySelector("small")!.textContent).toBe("rules only, as entry signals");
+      expect(Math.abs(hold!.getBoundingClientRect().top - watch!.getBoundingClientRect().top)).toBeLessThan(1);
+      expect(tooSmall(sheet)).toEqual([]);
+      expect(pastTheEdge(sheet)).toEqual([]);
+      expect(overflowsSideways()).toBe(false);
+    }
+  });
+});

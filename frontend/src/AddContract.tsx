@@ -21,6 +21,7 @@ import { fieldWords, ruleWords, shortRule } from "./needs";
 import { ShortWords } from "./RuleWords";
 import { DraftPreview } from "./Payoff";
 import { DirectionPair } from "./DirectionPair";
+import { HoldOrWatch } from "./HoldOrWatch";
 
 export function AddContract({
   privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving,
@@ -91,10 +92,7 @@ export function AddContract({
     <form className="nx-add nx-add-contract" aria-label="add one contract" onSubmit={(e) => void save(e)}
           data-poll="hold" noValidate>
       <div className="nx-add-row">
-        <div className="nx-seg" role="group" aria-label="add as">
-          <button type="button" aria-pressed={held} onClick={() => set({ held: true })}>I hold it</button>
-          <button type="button" aria-pressed={!held} onClick={() => set({ held: false })}>Watch it</button>
-        </div>
+        <HoldOrWatch held={held} onHeld={(h) => set({ held: h })} />
       </div>
       <div className="nx-add-row">
         <label className="nx-add-field">
