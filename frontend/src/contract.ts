@@ -74,6 +74,42 @@ export function newContract(today: string): ContractDraft {
 export const contractName = (expiry: string, type: OptionType, strike: number) =>
   derivedName(expiry, [{ option_type: type, strike: String(strike) }]);
 
+/** The Contract a single-leg rule watches, read back from its code as the service builds it
+ *  (`contractCode`), or null for a combo's name. */
+export function contractOfCode(code: string): { option_type: OptionType; strike: number } | null {
+  const m = /^US\.SPXW\d{6}([CP])(\d+)000$/.exec(code);
+  return m ? { option_type: m[1] === "C" ? "CALL" : "PUT", strike: Number(m[2]) } : null;
+}
+
+/** `name`, or the first of `name-2`, `name-3`… that no holding on record has: a holding's name is
+ *  unique across closed ones too, so a closed `1231_C8000` makes the next one `1231_C8000-2`. */
+export function uniqueName(name: string, taken: string[]): string {
+  const names = new Set(taken);
+  if (!names.has(name)) return name;
+  let n = 2;
+  while (names.has(`${name}-${n}`)) n += 1;
+  return `${name}-${n}`;
+}
+
+/** "Record as held" from a watched contract (#408, retiring #336's form in the rule's controls): the
+ *  one-contract form as "I hold it", with the contract, its derived name — apart from every holding's
+ *  on record, `taken` — and the watch rule AS SAVED, its field, direction, compare and threshold, so
+ *  the route replaces that rule with the holding's own (#322) and keeps its alarm (#336). Short until
+ *  changed; the owner types Opened (today's New York trading day until changed), the Entry and the
+ *  count. Null for a code that names no contract. */
+export function contractFromWatch(
+  r: { code: string; strike_date: string; field: string; direction: string; compare: string; threshold: number },
+  today: string, taken: string[],
+): ContractDraft | null {
+  const c = contractOfCode(r.code);
+  if (c === null) return null;
+  return {
+    ...newContract(today), held: true, expiry: r.strike_date, option_type: c.option_type, strike: String(c.strike),
+    field: r.field, direction: r.direction === "below" ? "below" : "above", compare: r.compare === "signed" ? "signed" : "abs",
+    threshold: String(r.threshold), name: uniqueName(contractName(r.strike_date, c.option_type, c.strike), taken),
+  };
+}
+
 /** A plain decimal only, as the Monitor editor reads one (`edit.ts`): Number() also reads "0x10" as
  *  16 and "1e-2" as 0.01, none of which is a figure anybody typed on purpose. */
 const PLAIN = /^[+-]?(\d+\.?\d*|\.\d+)$/;

@@ -5,11 +5,9 @@
  *  all — a draft that is not one has nothing to send — and the refusals the service words (a signed
  *  0, a combo on IV, a duplicate) are its own, filed beside the field they are about.
  */
-import type { Added, Entry, Holding, Monitor } from "./shared/api";
-import { contractCode, type OptionType, type Side, type SpreadsBody } from "./add";
-import { contractBody, contractName, type ContractSpot } from "./contract";
+import type { Entry, Holding, Monitor } from "./shared/api";
+import { contractOfCode } from "./contract";
 import { entryName, fieldWords, monitorName, ruleWords, shortRule } from "./needs";
-import { namesUnheldContract } from "./placement";
 
 /** A rule as the editor needs it, from either door: a row of `/quotes` (on, with figures) or of
  *  `/monitors` (any state, no figures). */
@@ -264,135 +262,14 @@ export function splitCounts(r: Rule, holdings: Holding[] | null, privacy: boolea
     + "and the service adds their Entries as they are, whatever the count.";
 }
 
-// ---- recording a holding of a watched contract (#336), through `POST /spreads`
+// ---- "Record as held" (#408): the add form, prefilled from a watched rule
 
-/** The Contract a single-leg rule watches, read back from its code as the service builds it
- *  (`contractCode`), or null for a combo's name. */
-export function contractOfCode(code: string): { option_type: OptionType; strike: number } | null {
-  const m = /^US\.SPXW\d{6}([CP])(\d+)000$/.exec(code);
-  return m ? { option_type: m[1] === "C" ? "CALL" : "PUT", strike: Number(m[2]) } : null;
-}
-
-/** Offered on a single contract nothing holds and that is on — the WATCH rule the owner has now
- *  bought or sold. A spread is #293's: added again as held, it replaces its watch rule. A contract
- *  already held is someone else's leg, and `/monitors` says nothing of holding, so a rule switched
- *  off is not offered it rather than guessed at. */
-export const holdOffered = (r: Rule) =>
-  !r.combo && r.enabled && r.held === false && contractOfCode(r.code) !== null;
-
-export interface HoldDraft {
-  side: Side;
-  /** as typed, unsigned: what was received (short) or paid (long), per contract */
-  entry: string;
-  contracts: string;
-  /** a New York trading day */
-  opened: string;
-  name: string;
-}
-
-/** A short, opened today, named as the add form names one contract (`contractName`). */
-export function holdDraft(r: Rule, today: string): HoldDraft {
-  const c = contractOfCode(r.code)!;
-  const name = contractName(r.strike_date, c.option_type, c.strike);
-  return { side: "short", entry: "", contracts: "1", opened: today, name };
-}
-
-/** The holding, as the add form's one-contract draft would post it (`contractBody`): a spread of
- *  one leg, held, carrying THIS rule as it is saved — its field, direction, compare and threshold —
- *  so the route replaces the watch rule with the holding's own, in one transaction, linked to the
- *  new holding alone (#322, #340). Its refusals are that form's, at the same boxes. */
-export function holdBody(
-  r: Rule, d: HoldDraft, today: string,
-): { body: SpreadsBody } | { error: string; at: ContractSpot } {
-  const c = contractOfCode(r.code)!;
-  return contractBody({
-    held: true, rule: true, expiry: r.strike_date, opened: d.opened, option_type: c.option_type,
-    strike: String(c.strike), field: r.field, direction: r.direction as "above" | "below",
-    compare: r.compare as "abs" | "signed", threshold: String(r.threshold), side: d.side, entry: d.entry,
-    contracts: d.contracts, name: d.name,
-  }, today);
-}
-
-
-/** `name`, or the first of `name-2`, `name-3`… that no holding on record has: a holding's name is
- *  unique across closed ones too, so a closed `1231_C8000` makes the next one `1231_C8000-2`. */
-export function uniqueName(name: string, taken: string[]): string {
-  const names = new Set(taken);
-  if (!names.has(name)) return name;
-  let n = 2;
-  while (names.has(`${name}-${n}`)) n += 1;
-  return `${name}-${n}`;
-}
-
-/** The Contracts a holding's legs are, as the service codes them. */
-const legCodes = (h: Pick<Holding, "strike_date" | "legs">) =>
-  h.legs.map((l) => contractCode(h.strike_date, l.option_type as OptionType, l.strike));
-
-/** The Contracts a rule watches (`monitorLegCodes`): its legs, or its one contract. */
-const ruleCodes = (m: Monitor) => m.legs
-  ? m.legs.map((l) => contractCode(m.strike_date, l.option_type as OptionType, l.strike)) : [m.code];
-
-interface HoldLinks {
-  /** the watch rules the save deletes and makes again as the holding's */
-  replaced: Monitor[];
-  /** every OTHER rule linked to no holding that the new holding takes, and as what: the whole of
-   *  it, or one leg of something larger — and whether the page will then draw it in the Watchlist,
-   *  as a combo naming a contract the holdings it is linked to do not hold (`namesUnheldContract`,
-   *  #346) */
-  linked: { monitor: Monitor; scope: "all" | "leg"; watchlist: boolean }[];
-  /** false where the holdings have not been read: which rules it takes depends on all of them */
-  known: boolean;
-}
-
-/** What recording the holding does to the rules besides its own, worked out as the service works
- *  it, so the form can say it before the save. `POST /spreads` replaces the watch rule on the same
- *  (contract, field), then ADOPTS every rule linked to no holding (`adoptOrphanMonitors`), each by
- *  `positionsHolding` against every open holding, the new one included: a rule whose Contracts any
- *  holding holds twice is linked to nothing; otherwise to every holding holding one of them, as
- *  covering the whole where it watches every leg of each. A watched spread containing the contract
- *  is therefore linked to a lone-contract holding as covering all of it (#336). Held to the backend
- *  by the door scenarios (`NextRuleWritesModel.test.ts`). */
-export function holdLinks(
-  r: Rule, monitors: Monitor[], holdings: Pick<Holding, "id" | "strike_date" | "legs">[] | null,
-): HoldLinks {
-  const replaced = monitors.filter((m) => m.code === r.code && m.field === r.field && m.positions.length === 0);
-  if (holdings === null) return { replaced, linked: [], known: false };
-  const NEW = "\u0000new";
-  const owners = new Map<string, string[]>();
-  for (const h of [...holdings, { id: NEW, strike_date: r.strike_date, legs: [] }]) {
-    const codes = h.id === NEW ? [r.code] : legCodes(h);
-    for (const c of codes) owners.set(c, [...(owners.get(c) ?? []), h.id]);
-  }
-  const gone = new Set(replaced.map((m) => m.id));
-  const linked: HoldLinks["linked"] = [];
-  for (const m of monitors) {
-    if (m.positions.length > 0 || gone.has(m.id)) continue;
-    const codes = ruleCodes(m);
-    if (codes.some((c) => (owners.get(c)?.length ?? 0) > 1)) continue;
-    const found = new Set(codes.flatMap((c) => owners.get(c) ?? []));
-    if (!found.has(NEW)) continue;
-    const watched = new Set(codes);
-    const covered = [...found].every((id) => id === NEW
-      ? watched.has(r.code) : legCodes(holdings.find((h) => h.id === id)!).every((c) => watched.has(c)));
-    // what each holding it is linked to holds, the new one as the contract the rule is on
-    const held = [...found].map((id) => id === NEW
-      ? { strike_date: r.strike_date, legs: contractOfCode(r.code) ? [contractOfCode(r.code)!] : [] }
-      : holdings.find((h) => h.id === id)!);
-    const watchlist = Boolean(m.legs) && namesUnheldContract({ strike_date: m.strike_date, legs: m.legs! }, held);
-    linked.push({ monitor: m, scope: covered ? "all" : "leg", watchlist });
-  }
-  return { replaced, linked, known: true };
-}
-
-/** What a recorded holding made, in the toast: the service's answer, and the rules linked to the new
- *  holding as `/monitors` reads AFTER the save — the service's word for what it adopted, never the
- *  preview's. Null for `after` where that read failed. */
-export function holdToast(added: Added, after: Monitor[] | null): string {
-  const r = added.replaced.length;
-  const made = new Set(added.monitors.map((m) => m.id));
-  const ids = new Set(added.positions.map((p) => p.id));
-  const linked = (after ?? []).filter((m) => !made.has(m.id) && m.positions.some((p) => ids.has(p.id)));
-  return `recorded ${added.positions.map((p) => p.name).join(", ")}`
-    + (r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : "")
-    + (linked.length ? `; also linked to it: ${linked.map((m) => ruleLabel(ruleOfMonitor(m))).join(", ")}` : "");
-}
+/** Offered on a WATCH rule — on, linked to no holding, and on nothing an open holding holds — of a
+ *  spread or of one contract: the owner has now sold or bought what it watched. It opens the add
+ *  form as "I hold it", prefilled (`add.ts`'s `heldFromWatch`, `contract.ts`'s `contractFromWatch`),
+ *  and saving goes through `POST /spreads`, which replaces the watch rule (#322, #336). It replaces
+ *  #336's "I hold this", which recorded a contract inside the rule's controls (owner, 2026-11-15).
+ *  A rule read from `/monitors` alone does not say whether anything holds its contracts, so it is
+ *  not offered there rather than guessed at. */
+export const recordOffered = (r: Rule) =>
+  r.enabled && r.holdings.length === 0 && r.held === false && (r.combo || contractOfCode(r.code) !== null);

@@ -1,5 +1,5 @@
-/** Renaming a combo, splitting a total entry and recording a holding of a watched contract from the
- *  desk's inspector (#336), in a real layout engine, against a service that writes
+/** Renaming a combo and splitting a total entry from the desk's inspector (#336), and "Record as
+ *  held" from a watch rule's (#408), in a real layout engine, against a service that writes
  *  (`testing/ruleEdits.ts`): each sent through its route, the service's answer drawn after the
  *  reload, and a refusal said VISIBLY beside the box it is about. The phone is
  *  `NextRuleWrites.iphone.test.tsx`; the behaviour in detail is the jsdom suite's
@@ -116,40 +116,32 @@ describe("splitting a total entry from a holding's inspector", () => {
   });
 });
 
-describe("recording a holding of a watched contract from the inspector", () => {
-  it("posts it through POST /spreads, and the holding takes the rule's place", async () => {
+describe("Record as held from the inspector (#408)", () => {
+  it("opens the add panel on screen, prefilled as held, the Entry focused; the save replaces the watch rules", async () => {
     const writes = await openDesk();
-    const panel = await inspect("261231 8000C");
-    await userEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C Δ" }));
-    const form = within(panel).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
-    expect(visible(within(form).getByTestId("hold-replaces"))).toBe(true);
-    await userEvent.fill(within(form).getByLabelText("entry, per contract"), "0.8");
-    await userEvent.click(within(form).getByRole("button", { name: "Record holding" }));
+    const panel = await inspect("1218_P7150");
+    const button = within(panel).getByRole("button", { name: "record 1218_P7150 value as held" });
+    expect(visible(button)).toBe(true);
+    await userEvent.click(button);
+    const add = await screen.findByRole("region", { name: "add a spread or contract" });
+    const form = within(add).getByRole("form", { name: "add a spread" });
+    const entry = within(form).getByLabelText("spread 1 entry");
+    await waitFor(() => expect(document.activeElement).toBe(entry));
+    expect(visible(entry)).toBe(true);
+    const replaces = within(form).getByText(/^Replaces the watch rules:/);
+    expect(replaces.textContent).toBe("Replaces the watch rules: 1218_P7150 |value| ≥ 6.00, 7150 put |Δ| ≥ 0.20");
+    expect(visible(replaces)).toBe(true);
+    for (const el of add.querySelectorAll<HTMLElement>("input, button")) {
+      expect(el.getBoundingClientRect().right, el.outerHTML.slice(0, 80)).toBeLessThanOrEqual(add.getBoundingClientRect().right + 0.5);
+    }
+    await userEvent.fill(entry, "2.40");
+    await userEvent.click(within(form).getByRole("button", { name: "Record holding + 2 Monitors" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
-    expect(writes[0]!.body).toEqual({
-      strike_date: "2026-12-31",
-      spreads: [{
-        name: "1231_C8000", held: true, legs: [{ side: "short", option_type: "CALL", strike: 8000 }],
-        entry: 0.8, contracts: 1, opened_at: "2026-11-10",
-        monitors: [{ option_type: "CALL", strike: 8000, field: "option_delta", threshold: 0.1,
-          direction: "above", compare: "abs" }],
-      }],
+    expect((writes[0]!.body as { spreads: { name: string; legs: unknown[] }[] }).spreads[0]).toMatchObject({
+      name: "1218_P7150", held: true, entry: 2.4,
+      legs: [{ side: "short", option_type: "PUT", strike: 7150 }, { side: "long", option_type: "PUT", strike: 7100 }],
     });
-    // the holding is in the book, and the focus is somewhere a keyboard can go on from
-    await screen.findByRole("button", { name: "1231_C8000" });
-    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
-  });
-
-  it("says a holding's name already taken beside the name, on screen and on top", async () => {
-    const refusal = "position '1231_C8000' already exists";
-    await openDesk({ spreads: () => [409, refusal] });
-    const panel = await inspect("261231 8000C");
-    await userEvent.click(within(panel).getByRole("button", { name: "I hold 261231 8000C Δ" }));
-    const form = within(panel).getByRole("form", { name: "record a holding of 261231 8000C Δ" });
-    await userEvent.click(within(form).getByRole("button", { name: "Record holding" }));
-    const alert = await within(form).findByRole("alert");
-    expect(alert.textContent).toBe(refusal);
-    expect(visible(alert)).toBe(true);
-    beside(within(form).getByLabelText("name"), alert);
+    await screen.findByText("added 1 holding and 2 Monitors, replacing 2 watch rules");
+    await waitFor(() => expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull());
   });
 });

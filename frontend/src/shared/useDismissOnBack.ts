@@ -10,37 +10,74 @@ import { useEffect, useRef } from "react";
  *  tapping outside — the entry is still on the stack, and the next press of back does
  *  nothing at all while appearing to be ignored. So closing has to consume it too, and
  *  the flag below is what stops that consumption from looping.
+ *
+ *  Panels STACK (#408): "Record as held" opens the Add sheet over the phone's detail sheet. Every
+ *  open panel listens for the same popstate, so with one hook per panel and nothing shared, one
+ *  Back closed both — and the entry a panel gave up by closing was taken by the other as a Back.
+ *  So the entries are kept in one list, in the order they were pushed, as the history holds them:
+ *  a popstate is first the answer to a panel's own closing (the newest such, consumed and nothing
+ *  more), and otherwise a Back, which closes the newest panel only.
  */
+interface Pushed {
+  /** closed by Escape, a button or a tap outside: its history.back() is on its way */
+  closing: boolean;
+  close: () => void;
+}
+
+/** Every panel holding a history entry, oldest first. */
+const pushed: Pushed[] = [];
+
+function onPop() {
+  // the answer to a panel's own closing: it gave its entry up, and nothing else is closed
+  for (let i = pushed.length - 1; i >= 0; i -= 1) {
+    if (pushed[i]!.closing) { pushed.splice(i, 1); return; }
+  }
+  // a Back: the newest panel closes, and only it
+  pushed.pop()?.close();
+}
+
+let listening = false;
+
 export function useDismissOnBack(open: boolean, close: () => void) {
-  const pushed = useRef(false);
-  const closing = useRef(false);
+  const mine = useRef<Pushed | null>(null);
+  /** every entry this panel pushed that is still listed, closing ones too */
+  const listed = useRef<Pushed[]>([]);
+  const closeNow = useRef(close);
+  closeNow.current = close;
 
   useEffect(() => {
-    if (open && !pushed.current) {
+    if (!listening) {
+      window.addEventListener("popstate", onPop);
+      listening = true;
+    }
+    // unmounted, its entries stay in the history, as they always did, but it is no longer a panel
+    // a Back could close, nor one whose closing is still to be answered: left in the list, the next
+    // Back would close nothing that is drawn
+    return () => {
+      for (const entry of listed.current) {
+        const at = pushed.indexOf(entry);
+        if (at >= 0) pushed.splice(at, 1);
+      }
+      listed.current = [];
+      mine.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open && mine.current === null) {
       window.history.pushState({ panel: true }, "");
-      pushed.current = true;
+      const entry: Pushed = { closing: false, close: () => { mine.current = null; closeNow.current(); } };
+      mine.current = entry;
+      pushed.push(entry);
+      listed.current = [...listed.current.filter((e) => pushed.includes(e)), entry];
       return;
     }
-    if (!open && pushed.current && !closing.current) {
-      // closed by Escape, the button, or a tap outside — take our entry back off the
-      // stack, or the next press of back silently does nothing
-      closing.current = true;
+    if (!open && mine.current !== null) {
+      // closed by Escape, the button, or a tap outside — take our entry back off the stack, or
+      // the next press of back silently does nothing
+      mine.current.closing = true;
+      mine.current = null;
       window.history.back();
     }
   }, [open]);
-
-  useEffect(() => {
-    const onPop = () => {
-      if (!pushed.current) return;
-      pushed.current = false;
-      if (closing.current) {
-        // this popstate is the one we asked for above; the panel is already shut
-        closing.current = false;
-        return;
-      }
-      close();
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [close]);
 }

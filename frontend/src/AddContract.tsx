@@ -24,7 +24,7 @@ import { DirectionPair } from "./DirectionPair";
 import { HoldOrWatch } from "./HoldOrWatch";
 
 export function AddContract({
-  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving,
+  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving, prefilled,
 }: {
   privacy: boolean;
   /** every rule, as `/monitors` gave them: what a held contract will replace is read from these */
@@ -34,6 +34,8 @@ export function AddContract({
   onSaved: (added: Added) => void;
   onCancel: () => void;
   autoFocus?: boolean;
+  /** opened from a watch rule (#408): the focus goes to the Entry, the contract being there already */
+  prefilled?: boolean;
   /** the New York trading day: an expiry before it has passed, and Opened may not be after it */
   today: string;
   /** kept by the caller, so switching to a spread and back loses nothing typed */
@@ -46,7 +48,11 @@ export function AddContract({
   const [error, setError] = useState<{ text: string; at: ContractSpot } | null>(null);
   const id = useId();
   const expiry = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (autoFocus) expiry.current?.focus(); }, [autoFocus]);
+  const entry = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) (prefilled && draft.held ? entry : expiry).current?.focus();
+    // on opening only
+  }, [autoFocus]);
   const set = (change: Partial<ContractDraft>) => { setDraft({ ...draft, ...change }); setError(null); };
 
   const save = async (e: React.FormEvent) => {
@@ -141,7 +147,7 @@ export function AddContract({
                   </div>
                   <label className="nx-add-field nx-add-entry">
                     <span>{`entry ${draft.side === "short" ? "received" : "paid"}, per contract`}</span>
-                    <input aria-label="entry" inputMode="decimal" value={draft.entry} autoComplete="off"
+                    <input ref={entry} aria-label="entry" inputMode="decimal" value={draft.entry} autoComplete="off"
                            placeholder={draft.side === "short" ? "received" : "paid"} {...tie("entry")}
                            onChange={(e) => set({ entry: e.target.value })} />
                   </label>

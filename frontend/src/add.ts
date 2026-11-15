@@ -63,6 +63,12 @@ export interface SpreadDraft {
   valueDirection: "above" | "below" | null;
   /** each short leg's |Δ|: at or above unless ≤ is chosen (#405) */
   deltaDirection: "above" | "below";
+  /** prefilled from a WATCHED spread by "Record as held" (#408): held as a debit, its value rule
+   *  then starts ON, at or below, its threshold empty for the owner to type the stop — so the watch
+   *  rule on that name is REPLACED by it rather than adopted by the new holding with its entry
+   *  signal's threshold (owner's decision, 2026-11-15). A fresh debit keeps #405's "off, ≤ when
+   *  switched on". */
+  fromWatch?: boolean;
 }
 
 export interface AddDraft {
@@ -138,6 +144,28 @@ function spread(preset: Preset): SpreadDraft {
 /** A put spread, held, opened `today` — a New York trading day, which the caller supplies. */
 export function newDraft(today: string): AddDraft {
   return { held: true, expiry: "", opened: today, spreads: [spread("put")] };
+}
+
+/** A watched spread's rule as `/monitors` serves it: its name, its expiry and its legs, each SIGNED —
+ *  minus is short (ADR 0013) — with its quantity where it is not 1 (#351). */
+export interface WatchedCombo {
+  code: string;
+  strike_date: string;
+  legs: readonly { sign: number; option_type: string; strike: number; qty?: number }[];
+}
+
+/** "Record as held" from a watched spread (#408): the add form as "I hold it", with that spread's
+ *  expiry, its legs — each sign a side, each quantity kept — and its name, which is the watch rule's
+ *  CODE: the held spread's value rule is made under it, so the route replaces the watch rule
+ *  (#322, #336). Opened is today's New York trading day; the owner types the Entry and the count,
+ *  and the rules are a holding's defaults — a credit's stop at 2× the Entry and its short legs'
+ *  |Δ| ≥ 0.30, a debit's value rule on at ≤ with no figure (`fromWatch`). */
+export function heldFromWatch(w: WatchedCombo, today: string): AddDraft {
+  const legs: LegDraft[] = w.legs.map((l) => ({
+    key: `l${++keys}`, side: l.sign < 0 ? "short" : "long", option_type: l.option_type === "CALL" ? "CALL" : "PUT",
+    strike: String(l.strike), qty: String(l.qty ?? 1),
+  }));
+  return { held: true, expiry: w.strike_date, opened: today, spreads: [{ ...spread("put"), legs, name: w.code, fromWatch: true }] };
 }
 
 export function addSpread(d: AddDraft, preset: Preset): AddDraft {
@@ -290,7 +318,7 @@ export function valueDefault(held: boolean, s: SpreadDraft): string {
  *  (#408). Its box is disabled while it is off, so a figure is only ever typed into a rule that was on;
  *  and a box emptied to be typed again stays on, rather than switching off under the owner's finger. */
 export function valueEnabled(held: boolean, s: SpreadDraft): boolean {
-  return s.valueOn ?? (!isDebit(held, s) || s.valueAt !== null);
+  return s.valueOn ?? (!isDebit(held, s) || s.valueAt !== null || s.fromWatch === true);
 }
 
 /** The words beside the value Monitor. */

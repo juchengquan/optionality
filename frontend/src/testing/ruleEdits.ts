@@ -1,7 +1,7 @@
 /** The owner's book with the three writes #336 adds to a rule's editor answered as the service
  *  answers them: a combo renamed (`PATCH /monitors/{id}` with a name), a total entry split across
- *  the holdings a rule covers (`POST /monitors/{id}/total-entry`), and a watched contract recorded
- *  as held (`POST /spreads`, one leg, which replaces the watch rule on it).
+ *  the holdings a rule covers (`POST /monitors/{id}/total-entry`), and a watched spread or contract
+ *  recorded as held (`POST /spreads`, which replaces the watch rules on what it makes, #408).
  *
  *  The book is `ownerBook`'s plus ONE rule, `CONDOR`: a combo over the condor held as two spreads on
  *  12-18, linked to both — and `r-calls` linked to the call spread alone, as `/quotes` already says,
@@ -133,17 +133,29 @@ export function serveRuleEdits(refuse: Refusals = {}, extra: Entry[] = []): Writ
       if (no) return no;
       const sent = body as unknown as {
         strike_date: string;
-        spreads: { name: string; legs: { side: string; option_type: string; strike: number }[];
+        spreads: { name: string; legs: { side: string; option_type: string; strike: number; qty?: number }[];
           entry: number | null; contracts: number; opened_at: string | null;
-          monitors: { option_type: string; strike: number; field: string; threshold: number;
-            direction: string; compare: string }[] }[];
+          monitors: { option_type?: string; strike?: number; field?: string; threshold: number;
+            direction?: string; compare?: string }[] }[];
       };
       const s = sent.spreads[0]!;
-      const leg = s.legs[0]!;
-      const code = `US.SPXW${sent.strike_date.slice(2).replaceAll("-", "")}${leg.option_type[0]}${leg.strike}000`;
-      // the watch rule on that (contract, field), owned by no holding, is replaced (#322)
+      const contract = (type: string, strike: number) =>
+        `US.SPXW${sent.strike_date.slice(2).replaceAll("-", "")}${type[0]}${strike}000`;
+      // each Monitor's (code, field) as the route keys it: a leg named watches that contract, on
+      // `option_delta` unless a field is given; none named watches the spread's value, under its name
+      // (#293) — and one leg alone is that contract, whatever is named
+      const keyed = s.monitors.map((n) => ({
+        n,
+        code: n.option_type !== undefined ? contract(n.option_type, n.strike!)
+          : s.legs.length === 1 ? contract(s.legs[0]!.option_type, s.legs[0]!.strike) : s.name,
+        field: n.field ?? (n.option_type !== undefined ? "option_delta" : "mid_price"),
+        legs: n.option_type === undefined && s.legs.length > 1
+          ? s.legs.map((l) => ({ sign: l.side === "short" ? -1 : 1, option_type: l.option_type, strike: l.strike,
+            ...(l.qty ? { qty: l.qty } : {}) })) : null,
+      }));
+      // the watch rule on each (code, field), owned by no holding, is replaced (#322)
       const replaced = monitors.filter((m) =>
-        s.monitors.some((n) => m.code === code && m.field === n.field) && m.positions.length === 0);
+        keyed.some((k) => m.code === k.code && m.field === k.field) && m.positions.length === 0);
       const gone = new Set(replaced.map((m) => m.id));
       const was = quotes.find((q) => gone.has(q.id));
       monitors = monitors.filter((m) => !gone.has(m.id));
@@ -153,19 +165,21 @@ export function serveRuleEdits(refuse: Refusals = {}, extra: Entry[] = []): Writ
         entry: s.entry, opened_at: s.opened_at, legs: s.legs, short_strikes: [], legs_delta: null,
       } as Holding;
       holdings.push(holding);
-      const made = s.monitors.map((n, i) => ({ id: `m-new-${i}`, code, field: n.field }));
-      for (const [i, n] of s.monitors.entries()) {
+      const made = keyed.map((k, i) => ({ id: `m-new-${i}`, code: k.code, field: k.field }));
+      for (const [i, k] of keyed.entries()) {
         const linked = [{ id: holding.id, name: holding.name }];
-        const row = { ...(was ?? quotes[0]!), id: `m-new-${i}`, code, field: n.field, threshold: n.threshold,
-          direction: n.direction, compare: n.compare, held: true, scope: "all", positions: linked } as Entry;
+        const row = { ...(was ?? quotes[0]!), id: `m-new-${i}`, code: k.code, field: k.field, threshold: k.n.threshold,
+          direction: k.n.direction ?? "above", compare: k.n.compare ?? "abs", legs: k.legs, strike_date: sent.strike_date,
+          held: true, scope: "all", positions: linked } as Entry;
         quotes.push(row);
         monitors = [...monitors, ...monitorsOf([row])];
       }
+      const codes = new Set(s.legs.map((l) => contract(l.option_type, l.strike)));
       // the adoption that follows (`adoptOrphanMonitors`), as this book needs it: a rule linked to
-      // nothing whose legs hold the contract is linked to the new holding
+      // nothing whose legs hold one of its contracts is linked to the new holding
       for (const m of monitors) {
         const legs = m.legs?.map((l) => `US.SPXW${m.strike_date.slice(2).replaceAll("-", "")}${l.option_type[0]}${l.strike}000`);
-        if (m.positions.length === 0 && legs?.includes(code)) {
+        if (m.positions.length === 0 && legs?.some((c) => codes.has(c))) {
           m.positions = [{ id: holding.id, name: holding.name }];
           m.scope = "all";
         }

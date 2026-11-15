@@ -8,6 +8,10 @@
  *
  *  The same place adds ONE contract (#331): a choice above the form, and `AddContract.tsx` in the
  *  spread form's stead. Each draft is kept here, so switching back and forth loses neither.
+ *
+ *  "Record as held" (#408) opens it with a draft already made from a watch rule (`initial`): the
+ *  spread or the contract as "I hold it", where the owner types Opened, the Entry and the count —
+ *  so the focus goes to the Entry rather than the expiry, which is already there.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
@@ -24,6 +28,9 @@ import {
 import { AddContract } from "./AddContract";
 import { HoldOrWatch } from "./HoldOrWatch";
 import { newContract, type ContractDraft } from "./contract";
+
+/** A draft the form opens with instead of a fresh one: "Record as held" from a watch rule (#408). */
+export type AddInitial = { kind: "spread"; draft: AddDraft } | { kind: "contract"; draft: ContractDraft };
 import { DraftPreview } from "./Payoff";
 import { DirectionPair, type Direction } from "./DirectionPair";
 import { fieldWords } from "./needs";
@@ -42,16 +49,21 @@ type Props = {
   autoFocus?: boolean;
   /** injected only by tests: Opened starts as the New York trading day on this clock */
   now?: Date;
+  /** a draft to open with, prefilled from a watch rule (#408) */
+  initial?: AddInitial;
 };
 
 /** What to add — a spread, or one contract — and the form for it. */
 export function AddSpread(props: Props) {
-  const [kind, setKind] = useState<"spread" | "contract">("spread");
+  const [kind, setKind] = useState<"spread" | "contract">(props.initial?.kind ?? "spread");
   // the focus goes into the form when it opens, and stays on the choice when the choice is changed
   const [chosen, setChosen] = useState(false);
   const choose = (k: "spread" | "contract") => { setKind(k); setChosen(true); };
-  const [spread, setSpreadDraft] = useState<AddDraft>(() => newDraft(marketDay(props.now)));
-  const [contract, setContract] = useState<ContractDraft>(() => newContract(marketDay(props.now)));
+  const [spread, setSpreadDraft] = useState<AddDraft>(
+    () => (props.initial?.kind === "spread" ? props.initial.draft : newDraft(marketDay(props.now))));
+  const [contract, setContract] = useState<ContractDraft>(
+    () => (props.initial?.kind === "contract" ? props.initial.draft : newContract(marketDay(props.now))));
+  const prefilled = props.initial !== undefined;
   // one save in flight for the whole place, not per form: switching form mid-save would otherwise
   // mount a fresh save button that sends the same thing again (review of #340)
   const [saving, setSaving] = useState(false);
@@ -63,24 +75,33 @@ export function AddSpread(props: Props) {
       </div>
       {kind === "spread"
         ? <SpreadForm {...props} autoFocus={props.autoFocus && !chosen} draft={spread} setDraft={setSpreadDraft}
-                      saving={saving} setSaving={setSaving} />
+                      saving={saving} setSaving={setSaving} prefilled={prefilled} />
         : <AddContract privacy={props.privacy} monitors={props.monitors} spx={props.spx} spxReason={props.spxReason}
                        onSaved={props.onSaved} onCancel={props.onCancel} today={marketDay(props.now)}
+                       autoFocus={props.autoFocus && !chosen} prefilled={prefilled}
                        draft={contract} setDraft={setContract} saving={saving} setSaving={setSaving} />}
     </div>
   );
 }
 
 function SpreadForm({
-  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, draft, setDraft, saving, setSaving,
+  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, draft, setDraft, saving, setSaving, prefilled,
 }: Props & {
   draft: AddDraft; setDraft: (d: AddDraft) => void; saving: boolean; setSaving: (s: boolean) => void;
+  /** opened from a watch rule: the focus goes to the Entry, the expiry being there already */
+  prefilled: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const id = useId();
   const change = (next: AddDraft) => { setDraft(next); setError(null); };
   const expiry = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (autoFocus) expiry.current?.focus(); }, [autoFocus]);
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!autoFocus) return;
+    if (prefilled) form.current?.querySelector<HTMLInputElement>('input[aria-label="spread 1 entry"]')?.focus();
+    else expiry.current?.focus();
+    // on opening only
+  }, [autoFocus]);
   const replacing = replaces(draft, monitors);
 
   const save = async (e: React.FormEvent) => {
@@ -100,7 +121,7 @@ function SpreadForm({
 
   const held = draft.held;
   return (
-    <form className="nx-add" aria-label="add a spread" onSubmit={(e) => void save(e)} data-poll="hold" noValidate>
+    <form ref={form} className="nx-add" aria-label="add a spread" onSubmit={(e) => void save(e)} data-poll="hold" noValidate>
       <div className="nx-add-row">
         <HoldOrWatch held={held} onHeld={(h) => change({ ...draft, held: h })} />
       </div>

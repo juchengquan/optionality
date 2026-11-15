@@ -1,14 +1,19 @@
-/** The three writes #336 adds to a rule's editor, as a model: renaming a combo, splitting a total
- *  entry across the holdings a rule covers, and recording a holding of a watched contract. Pure —
- *  what each sends and what it says before sending; `NextRuleWrites.test.tsx` draws them. */
+/** The writes that start from a rule's controls, as a model: renaming a combo and splitting a total
+ *  entry across the holdings a rule covers (#336), and "Record as held" (#408), which prefills the add
+ *  form from a watch rule — a spread or one contract — so its save replaces that rule. Pure — what
+ *  each sends and what it says before sending; `NextRuleWrites.test.tsx` draws them. */
 import { describe, expect, it } from "vitest";
 
 import { MonitorPatch, SpreadsIn, TotalEntryIn } from "backend/schemas";
 import type { Entry, Holding, Monitor } from "../shared/api";
-import { contractCode, ruleWords } from "../add";
 import {
-  contractOfCode, draftOf, holdBody, holdDraft, holdLinks, holdOffered, holdToast, patchOf,
-  renameNote, ruleOfEntry, ruleOfMonitor, splitOffered, splitPreview, splitCounts, spotOf, totalOf, uniqueName,
+  contractCode, deltaEnabled, heldFromWatch, replaces, ruleWords, setSpread, spreadsBody, valueDirectionShown,
+  valueEnabled, valueShown,
+} from "../add";
+import { contractBody, contractFromWatch, contractOfCode, contractReplaces, uniqueName } from "../contract";
+import {
+  draftOf, patchOf, recordOffered, renameNote, ruleOfEntry, ruleOfMonitor, splitOffered, splitPreview, splitCounts,
+  spotOf, totalOf,
 } from "../edit";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { CONDOR, splitBook } from "../testing/ruleEdits";
@@ -163,7 +168,7 @@ describe("splitting a total entry", () => {
   });
 });
 
-describe("recording a holding of a watched contract", () => {
+describe("Record as held (#408)", () => {
   const TODAY = "2026-11-10";
 
   it("reads a contract back from its code, as the service builds it", () => {
@@ -172,72 +177,149 @@ describe("recording a holding of a watched contract", () => {
     expect(contractOfCode("1218_P7150")).toBeNull();
   });
 
-  it("is offered on a single contract nothing holds, and on nothing else", () => {
-    expect(holdOffered(ruleOfEntry(LONE))).toBe(true);
-    // a spread is #293's: re-added as held, it replaces the watch rule
-    expect(holdOffered(ruleOfEntry(SPREAD))).toBe(false);
-    // already held, by a holding linked or not
-    expect(holdOffered(ruleOfEntry({ ...LONE, held: true }))).toBe(false);
-    // each condition alone: off, with nothing held; and on, with something held
-    expect(holdOffered({ ...ruleOfEntry(LONE), enabled: false })).toBe(false);
-    expect(holdOffered({ ...ruleOfEntry(LONE), held: true, enabled: true })).toBe(false);
-    // on, from `/monitors`, which does not say whether anything holds it: not guessed
-    expect(holdOffered(ruleOfMonitor(MONITORS.find((m) => m.id === LONE.id)!))).toBe(false);
-    // `/monitors` does not say whether a contract is held, so it is not guessed
-    expect(holdOffered(ruleOfMonitor(MONITORS.find((m) => m.id === "m-muted")!))).toBe(false);
+  it("is offered on a watch rule — a spread or one contract — that nothing holds, and on nothing else", () => {
+    expect(recordOffered(ruleOfEntry(LONE))).toBe(true);
+    expect(recordOffered(ruleOfEntry(SPREAD))).toBe(true);
+    // a rule on something held, linked to it or not
+    expect(recordOffered(ruleOfEntry(HELD))).toBe(false);
+    expect(recordOffered(ruleOfEntry({ ...LONE, held: true }))).toBe(false);
+    expect(recordOffered({ ...ruleOfEntry(SPREAD), holdings: [{ id: "h", name: "h" }] })).toBe(false);
+    // each condition alone: off, with nothing held
+    expect(recordOffered({ ...ruleOfEntry(LONE), enabled: false })).toBe(false);
+    expect(recordOffered({ ...ruleOfEntry(SPREAD), enabled: false })).toBe(false);
+    // from `/monitors`, which does not say whether anything holds it: not guessed
+    expect(recordOffered(ruleOfMonitor(MONITORS.find((m) => m.id === LONE.id)!))).toBe(false);
+    expect(recordOffered(ruleOfMonitor(MONITORS.find((m) => m.id === "m-muted")!))).toBe(false);
   });
 
-  it("starts on a short, opened today, named as the add form names one contract", () => {
-    expect(holdDraft(ruleOfEntry(LONE), TODAY))
-      .toEqual({ side: "short", entry: "", contracts: "1", opened: TODAY, name: "1231_C8000" });
-  });
-
-  it("posts a spread of one leg, held, carrying THIS rule as it is saved, so the route replaces it", () => {
-    const rule = ruleOfEntry(LONE);
-    const out = holdBody(rule, { ...holdDraft(rule, TODAY), side: "long", entry: "5.2", contracts: "2" }, TODAY);
-    expect(out).toEqual({
-      body: {
-        strike_date: "2026-12-31",
-        spreads: [{
-          name: "1231_C8000", held: true, legs: [{ side: "long", option_type: "CALL", strike: 8000 }],
-          // paid, so negative: the side signs what moved
-          entry: -5.2, contracts: 2, opened_at: TODAY,
-          monitors: [{ option_type: "CALL", strike: 8000, field: "option_delta", threshold: 0.1,
-            direction: "above", compare: "abs" }],
-        }],
-      },
-    });
-    expect(SpreadsIn.safeParse((out as { body: unknown }).body).success).toBe(true);
-  });
-
-  it("carries the rule's own direction and compare, whatever they are", () => {
-    const rule = { ...ruleOfEntry(LONE), direction: "below", compare: "signed", threshold: -0.05 };
-    const out = holdBody(rule, holdDraft(rule, TODAY), TODAY) as { body: { spreads: { monitors: object[] }[] } };
-    expect(out.body.spreads[0]!.monitors).toEqual([{ option_type: "CALL", strike: 8000, field: "option_delta",
-      threshold: -0.05, direction: "below", compare: "signed" }]);
-  });
-
-  it("names it apart from every holding on record, closed ones too", () => {
+  it("names a contract apart from every holding on record, closed ones too", () => {
     expect(uniqueName("1231_C8000", [])).toBe("1231_C8000");
     expect(uniqueName("1231_C8000", ["1231_C8000"])).toBe("1231_C8000-2");
     expect(uniqueName("1231_C8000", ["1231_C8000", "1231_C8000-2", "x"])).toBe("1231_C8000-3");
   });
 
-  it("refuses what the add form refuses, beside the box", () => {
-    const rule = ruleOfEntry(LONE);
-    const d = holdDraft(rule, TODAY);
-    expect(holdBody(rule, { ...d, entry: "-1" }, TODAY))
-      .toEqual({ error: "type the Entry as what was received: the side signs it", at: "entry" });
-    expect(holdBody(rule, { ...d, contracts: "0" }, TODAY))
-      .toEqual({ error: "contracts is a whole number, 1 or more", at: "contracts" });
-    expect(holdBody(rule, { ...d, opened: "2026-11-11" }, TODAY))
-      .toEqual({ error: "Opened is after today's New York trading day", at: "opened" });
+  describe("a watched contract", () => {
+    it("opens as held, short, with its contract, its derived name and the watch rule as saved", () => {
+      expect(contractFromWatch(ruleOfEntry(LONE), TODAY, ["1231_C8000"])).toEqual({
+        held: true, rule: true, expiry: "2026-12-31", opened: TODAY, option_type: "CALL", strike: "8000",
+        field: "option_delta", direction: "above", compare: "abs", threshold: "0.1", side: "short",
+        entry: "", contracts: "1", name: "1231_C8000-2",
+      });
+      expect(contractFromWatch(ruleOfEntry(SPREAD), TODAY, [])).toBeNull();
+    });
+
+    it("carries the rule's own field, direction and compare, whatever they are", () => {
+      const rule = { ...ruleOfEntry(LONE), field: "option_theta", direction: "below", compare: "signed", threshold: -0.05 };
+      const d = contractFromWatch(rule, TODAY, [])!;
+      expect([d.field, d.direction, d.compare, d.threshold]).toEqual(["option_theta", "below", "signed", "-0.05"]);
+    });
+
+    it("posts a spread of one leg, held, carrying THIS rule, which the form names as replaced — once the Entry is typed", () => {
+      const rule = ruleOfEntry(LONE);
+      const monitors: Monitor[] = MONITORS.map((m) => m.id === LONE.id
+        ? { ...m, code: LONE.code, option_type: "CALL", strike: 8000, field: LONE.field, threshold: LONE.threshold, positions: [] } : m);
+      const d = { ...contractFromWatch(rule, TODAY, [])!, side: "long" as const, entry: "5.2", contracts: "2" };
+      expect(contractReplaces(d, monitors)).toEqual(["8000 call |Δ| ≥ 0.10"]);
+      const out = contractBody(d, TODAY);
+      expect(out).toEqual({
+        body: {
+          strike_date: "2026-12-31",
+          spreads: [{
+            name: "1231_C8000", held: true, legs: [{ side: "long", option_type: "CALL", strike: 8000 }],
+            entry: -5.2, contracts: 2, opened_at: TODAY,
+            monitors: [{ option_type: "CALL", strike: 8000, field: "option_delta", threshold: 0.1,
+              direction: "above", compare: "abs" }],
+          }],
+        },
+      });
+      expect(SpreadsIn.safeParse((out as { body: unknown }).body).success).toBe(true);
+    });
+
+    it("posts what the door scenario's request posts, on the scenario's own world", () => {
+      const s = scenario("post-spreads-records-one-contract-held-replacing-the-watch-rule-on-it");
+      const book = bookOf(s);
+      const sent = s.request.body as {
+        strike_date: string;
+        spreads: { opened_at: string; entry: number; contracts: number; name: string; monitors: { threshold: number }[] }[];
+      };
+      const watch = book.monitors.find((m) => m.positions.length === 0 && m.legs === null)!;
+      const r = ruleOfMonitor(watch);
+      const one = sent.spreads[0]!;
+      const d = { ...contractFromWatch(r, one.opened_at, [])!, opened: one.opened_at, entry: String(Math.abs(one.entry)),
+        contracts: String(one.contracts), name: one.name, side: (one.entry < 0 ? "long" : "short") as "long" | "short",
+        // the one figure that scenario's owner changed: the watch rule's 0.15 held at 0.30
+        threshold: String(one.monitors[0]!.threshold) };
+      expect(watch.threshold).toBe(0.15);
+      expect(contractBody(d, one.opened_at)).toEqual({ body: sent });
+    });
   });
 
-  it("names the watch rule it replaces, in the add form's words", () => {
-    const monitors: Monitor[] = MONITORS.map((m) => m.id === LONE.id
-      ? { ...m, option_type: "CALL", strike: 8000, field: LONE.field, threshold: LONE.threshold } : m);
-    expect(holdLinks(ruleOfEntry(LONE), monitors, null).replaced.map(ruleWords)).toEqual(["8000 call |Δ| ≥ 0.10"]);
+  describe("a watched spread", () => {
+    /** The 6400/6350 put spread a door scenario watches, as `/monitors` serves it. */
+    const WATCHED = {
+      code: "dec-puts", strike_date: "2026-12-18",
+      legs: [{ sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 }],
+    };
+
+    it("opens as held, with its expiry, its legs — each sign a side, each quantity kept — and its name", () => {
+      const ratio = { ...WATCHED, legs: [...WATCHED.legs, { sign: -1, option_type: "CALL", strike: 7300, qty: 2 }] };
+      const d = heldFromWatch(ratio, TODAY);
+      expect([d.held, d.expiry, d.opened, d.spreads.length]).toEqual([true, "2026-12-18", TODAY, 1]);
+      const s = d.spreads[0]!;
+      expect(s.name).toBe("dec-puts");
+      expect(s.legs.map((l) => [l.side, l.option_type, l.strike, l.qty])).toEqual([
+        ["short", "PUT", "6400", "1"], ["long", "PUT", "6350", "1"], ["short", "CALL", "7300", "2"],
+      ]);
+      expect([s.entry, s.contracts]).toEqual(["", "1"]);
+    });
+
+    it("saves a credit with a holding's defaults, replacing both watch rules as the backend did on that world", () => {
+      const s = scenario("post-spreads-replaces-the-watch-rules-a-held-spread-clashes-with");
+      const book = bookOf(s);
+      const watch = book.monitors.find((m) => m.legs)!;
+      let d = heldFromWatch({ ...watch, legs: watch.legs! }, "2026-11-06");
+      d = setSpread(d, d.spreads[0]!.key, { entry: "2.25" });
+      const one = d.spreads[0]!;
+      expect([valueEnabled(true, one), valueShown(true, one), deltaEnabled(one)]).toEqual([true, "4.50", true]);
+      const out = spreadsBody(d) as { body: { strike_date: string; spreads: object[] } };
+      const sent = (s.request.body as { spreads: { legs: object[] }[] }).spreads[0]!;
+      expect(out.body.strike_date).toBe("2026-12-18");
+      expect(out.body.spreads).toEqual([{
+        name: "dec-puts", held: true, entry: 2.25, contracts: 1, opened_at: "2026-11-06", legs: sent.legs,
+        // the stop at 2× the Entry, posted signed (#343), and the short leg at 0.30
+        monitors: [{ threshold: -4.5, direction: "below", compare: "signed" }, { option_type: "PUT", strike: 6400, threshold: 0.3 }],
+      }]);
+      expect(SpreadsIn.safeParse(out.body).success).toBe(true);
+      // named as replaced, the rules the scenario's service deleted
+      const removed = s.expect.rows.monitors!.removed!.map((r) => r.id);
+      expect(replaces(d, book.monitors)[0]).toEqual(
+        book.monitors.filter((m) => removed.includes(m.id)).sort((a, b) => (a.legs ? 1 : 0) - (b.legs ? 1 : 0)).reverse().map(ruleWords));
+    });
+
+    it("starts a debit's value rule ON at ≤, empty, refused in words until the stop is typed — and then replaces the watch rule (owner, #408)", () => {
+      const s = scenario("post-spreads-replaces-the-watch-rules-a-held-spread-clashes-with");
+      const book = bookOf(s);
+      const debit = { ...WATCHED, legs: WATCHED.legs.map((l) => ({ ...l, sign: -l.sign })) };
+      const monitors = book.monitors.map((m) => (m.legs ? { ...m, legs: debit.legs } : m));
+      let d = heldFromWatch(debit, "2026-11-06");
+      d = setSpread(d, d.spreads[0]!.key, { entry: "-1.50" });
+      const one = d.spreads[0]!;
+      expect([valueEnabled(true, one), valueDirectionShown(true, one), valueShown(true, one)]).toEqual([true, "below", ""]);
+      expect(spreadsBody(d)).toEqual({ error: "spread 1: type the value its Monitor watches for" });
+      // named as replaced, not left to be adopted with its entry signal's threshold
+      expect(replaces(d, monitors)[0]).toEqual(["dec-puts |value| ≥ 2.50"]);
+      d = setSpread(d, one.key, { valueAt: "0.75" });
+      const out = spreadsBody(d) as { body: { spreads: { monitors: object[] }[] } };
+      expect(out.body.spreads[0]!.monitors).toEqual([
+        { threshold: 0.75, direction: "below" }, { option_type: "PUT", strike: 6350, threshold: 0.3 },
+      ]);
+    });
+
+    it("leaves a FRESH debit's value rule off, as #405 has it: only the prefill starts it on", () => {
+      const d = heldFromWatch(WATCHED, TODAY);
+      const fresh = { ...d.spreads[0]!, fromWatch: undefined, entry: "-1.50" };
+      expect(valueEnabled(true, fresh)).toBe(false);
+    });
   });
 
   it("names a replaced rule in the one vocabulary every rule is worded in (#404)", () => {
@@ -260,65 +342,4 @@ it("splitBook links the condor to both holdings and r-calls to one", () => {
   expect(monitors.find((m) => m.id === "r-calls")!.positions.map((p) => p.id)).toEqual(["h-calls"]);
   expect(holdings).toEqual(HOLDINGS);
   expect((CONDOR as Entry).scope).toBe("all");
-});
-
-describe("what recording a holding does to the other rules (#336)", () => {
-  const CS = "post-spreads-records-one-contract-held-and-a-watched-spread-holding-it-is-linked-to-it";
-
-  it("names what the service replaces and what it links, as the backend did on the same world", () => {
-    const s = scenario(CS);
-    const book = bookOf(s);
-    const rule = ruleOfMonitor(book.monitors.find((m) => m.id === "mon-c7300")!);
-    const links = holdLinks(rule, book.monitors, book.holdings);
-    const rows = s.expect.rows;
-    expect(links.replaced.map((m) => m.id)).toEqual(rows.monitors!.removed!.map((r) => r.id));
-    const made = new Set(rows.monitors!.added!.map((m) => m.id));
-    const linked = rows.monitor_positions!.added!.filter((l) => !made.has(l.monitor_id)).map((l) => l.monitor_id);
-    expect(links.linked.map((l) => l.monitor.id)).toEqual(linked);
-    // and how: the scope the backend wrote on each
-    expect(links.linked.map((l) => [l.monitor.id, l.scope]))
-      .toEqual(rows.monitors!.changed!.map((c) => [c.key.id, c.to.scope]));
-    expect(links.known).toBe(true);
-  });
-
-  it("says which of them the page will draw in the Watchlist: a combo not on exactly what is held (#346)", () => {
-    const s = scenario(CS);
-    const book = bookOf(s);
-    const rule = ruleOfMonitor(book.monitors.find((m) => m.id === "mon-c7300")!);
-    const links = holdLinks(rule, book.monitors, book.holdings);
-    expect(links.linked.length).toBeGreaterThan(0);
-    expect(links.linked.map((l) => [l.monitor.id, l.watchlist]))
-      .toEqual(links.linked.map((l) => [l.monitor.id, Boolean(l.monitor.legs)]));
-    // a combo on exactly the new holding's one contract cannot be: a combo has two legs or more
-    expect(links.linked.some((l) => l.watchlist)).toBe(true);
-  });
-
-  it("links nothing to it where another holding holds the contract too: the service calls that ambiguous", () => {
-    const book = bookOf(scenario(CS));
-    const rule = ruleOfMonitor(book.monitors.find((m) => m.id === "mon-c7300")!);
-    const other = { ...HOLDINGS[1]!, id: "h-other", strike_date: "2026-12-18",
-      legs: [{ side: "long", option_type: "CALL", strike: 7300 }, { side: "short", option_type: "CALL", strike: 7400 }] } as Holding;
-    expect(holdLinks(rule, book.monitors, [other]).linked).toEqual([]);
-  });
-
-  it("says it cannot know while the holdings are not read", () => {
-    const book = bookOf(scenario(CS));
-    const rule = ruleOfMonitor(book.monitors.find((m) => m.id === "mon-c7300")!);
-    const links = holdLinks(rule, book.monitors, null);
-    expect(links.known).toBe(false);
-    expect(links.replaced.map((m) => m.id)).toEqual(["mon-c7300"]);
-  });
-
-  it("says in the toast what was made, replaced and linked, from the service's answer and its rules after", () => {
-    const added = { positions: [{ id: "p1", name: "1218_C7300" }], monitors: [{ id: "m-new", code: "c", field: "option_delta" }],
-      replaced: [{ id: "mon-c7300", code: "c", field: "option_delta" }] };
-    const after = [
-      { ...MONITORS[0]!, id: "m-new", positions: [{ id: "p1", name: "1218_C7300" }] },
-      { ...MONITORS[0]!, id: "mon-cs", code: "cs", legs: [{ sign: -1, option_type: "CALL", strike: 7300 }],
-        field: "mid_price", positions: [{ id: "p1", name: "1218_C7300" }] },
-      { ...MONITORS[0]!, id: "other", positions: [] },
-    ] as Monitor[];
-    expect(holdToast(added, after)).toBe("recorded 1218_C7300, replacing 1 watch rule; also linked to it: cs value");
-    expect(holdToast(added, null)).toBe("recorded 1218_C7300, replacing 1 watch rule");
-  });
 });
