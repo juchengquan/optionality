@@ -3,10 +3,10 @@ import { ClipboardCopy, ImageDown, Plus, RefreshCw, Search, Settings2 } from "lu
 
 import "./next.css";
 import {
-  addReference, addSpreads, deleteMonitor, fetchHealth, fetchHoldings, fetchMonitors, fetchPositions, fetchQuotes,
-  fetchReferences,
+  addReference, addSpreads, deleteMonitor, fetchCloses, fetchHealth, fetchHoldings, fetchMonitors, fetchPositions,
+  fetchQuotes, fetchReferences,
   patchMonitor, removeReference, setTotalEntry,
-  type Added, type Entry, type Health, type Holding, type Monitor, type Reference,
+  type Added, type Closes, type Entry, type Health, type Holding, type Monitor, type Reference,
 } from "./shared/api";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -36,7 +36,7 @@ import { holdToast } from "./edit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
 import { inSession, servedWhen, sessionEdge, useSessionClock } from "./session";
-import { withLastKnown } from "./lastknown";
+import { withCloses, withLastKnown } from "./lastknown";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
@@ -196,7 +196,12 @@ export function Next() {
   const requests = useRef(0);
   // out of the session a price rule has no figure; its last known one, read in the session, is said
   // beside the dash (#380, lastknown.ts)
-  const quotes = useMemo(() => withLastKnown(book.quotes, book.monitors, session), [book.quotes, book.monitors, session]);
+  // and each row's last close (#402), which is its value wherever there is no live one: out of the
+  // session, and while /quotes is failing, whose rows are then the last ones read
+  const quotes = useMemo(
+    () => withLastKnown(withCloses(book.quotes, book.closes), book.monitors, session && !book.quotesFailed),
+    [book.quotes, book.closes, book.monitors, session, book.quotesFailed],
+  );
   const placed = useMemo(() => placeBook(quotes, holdings, book.monitors), [quotes, holdings, book.monitors]);
   const found = useMemo(() => findables(placed), [placed]);
   const selectedRow = useMemo(
@@ -546,6 +551,18 @@ function useBook(session: boolean, edge: number) {
   const [refresh, setRefresh] = useState(15);
   const [refreshing, setRefreshing] = useState(false);
   const [pollFrom, setPollFrom] = useState(0);
+  // each rule's last close (#402), and whether the last read of /quotes failed: out of the session,
+  // and through a Provider outage, a watched row's value is its last close, read apart from /quotes
+  // so it answers while /quotes cannot
+  const [closes, setCloses] = useState<Closes>([]);
+  const [quotesFailed, setQuotesFailed] = useState(false);
+  const inSessionNow = useRef(session);
+  inSessionNow.current = session;
+  // ONE read at a time, and a failed one keeps the closes there were: they are stored history
+  const [loadCloses] = useState(() => oneAtATime(
+    // an answer that is not the list is no closes, never a crash of the page that reads it
+    () => fetchCloses().then((c) => setCloses(Array.isArray(c) ? c : [])).catch(() => undefined),
+  ));
 
   // The line's answers land as the holdings' do (below): unless a NEWER one already has. A poll
   // asked before a save and answered after its reload put the saved-over rows back (#292).
@@ -557,6 +574,9 @@ function useBook(session: boolean, edge: number) {
     if (mine < lineLanded.current) return;
     lineLanded.current = mine;
     if (q.status === "fulfilled") setQuotes(q.value);
+    setQuotesFailed(q.status === "rejected");
+    // the closes at every hour the value cell says them: out of the session, and while /quotes fails
+    if (!inSessionNow.current || q.status === "rejected") void loadCloses();
     if (m.status === "fulfilled") setMonitors(m.value);
     if (h.status === "fulfilled") setHealth(h.value);
     const failed = [q, m, h].find((r) => r.status === "rejected");
@@ -570,7 +590,7 @@ function useBook(session: boolean, edge: number) {
       setPolledAt(clockTime(new Date()));
       setError(null);
     }
-  }, []);
+  }, [loadCloses]);
 
   // An answer lands unless a NEWER one already has. A valuation asked for by the session's last
   // poll can land after the close, which asks again, and that older answer — success or failure —
@@ -638,7 +658,9 @@ function useBook(session: boolean, edge: number) {
   // close is when the page values the book the last time it will without being asked, and an edge
   // slept through is one the page woke after (#371's review: keyed on `session` alone, a tab asleep
   // from one evening to the next read false at both ends and was never valued again)
-  useEffect(() => { void load(true); }, [load, edge]);
+  // ...and the closes then too (#402), so a spread watched on its delta has its payoff's close in the
+  // session, where the poll does not read them while /quotes answers
+  useEffect(() => { void load(true); void loadCloses(); }, [load, edge, loadCloses]);
 
   // the viewer's cadence if chosen, the service's sweep if not (prefs.readRefresh)
   useEffect(() => {
@@ -659,13 +681,13 @@ function useBook(session: boolean, edge: number) {
   const refreshNow = useCallback(async () => {
     setRefreshing(true);
     try {
-      await load(true);
+      await Promise.all([load(true), loadCloses()]);
     } finally {
       setRefreshing(false);
       // restarts the interval: a press just before a tick must displace it, not add a batch
       setPollFrom((n) => n + 1);
     }
-  }, [load]);
+  }, [load, loadCloses]);
 
   /** A change the service has to make, then the page as the service now tells it. */
   const act = useCallback(async (fn: () => Promise<void>) => {
@@ -688,6 +710,7 @@ function useBook(session: boolean, edge: number) {
 
   return {
     quotes, monitors, health, references, holdings, holdingsError, holdingsAt, holdingsServed, error, polledAt,
+    closes, quotesFailed,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
     referencesPending: referencesPending > 0, reload,
   };

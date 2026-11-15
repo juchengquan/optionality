@@ -22,7 +22,13 @@ type and the test does it.
 from typing import Literal, TypedDict
 
 type TableName = Literal[
-    "monitors", "positions", "position_samples", "monitor_positions", "reference_securities", "schema_migrations"
+    "monitors",
+    "positions",
+    "position_samples",
+    "watch_samples",
+    "monitor_positions",
+    "reference_securities",
+    "schema_migrations",
 ]
 
 #: Every column of every table, in the order schema.sql declares them.
@@ -41,6 +47,10 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
         "position_id", "observed_on", "dte", "cost_to_close",
         # appended, because ALTER TABLE adds at the end
         "legs_iv", "legs_vega", "legs_delta", "observed_at", "spx", "contract_size",
+    ),
+    "watch_samples": (
+        "contracts", "observed_on", "dte", "legs_mid", "legs_iv", "legs_vega", "legs_delta",
+        "observed_at", "spx", "contract_size",
     ),
     "monitor_positions": ("monitor_id", "position_id"),
     "reference_securities": ("id", "code", "label", "source", "created_at"),
@@ -66,6 +76,7 @@ NULLABLE: dict[TableName, tuple[str, ...]] = {
         "spx",
         "contract_size",
     ),
+    "watch_samples": ("legs_mid", "legs_iv", "legs_vega", "legs_delta", "spx", "contract_size"),
     "monitor_positions": (),
     "reference_securities": ("label",),
     "schema_migrations": (),
@@ -186,6 +197,31 @@ class PositionSampleRow(TypedDict):
     contract_size: float | None
 
 
+class WatchSampleRow(TypedDict):
+    """One watched set of contracts' day (#402, migration 0014): what the contracts an enabled rule
+    watches were worth at the close, keyed by the contracts rather than by any rule, so a history
+    survives its rule and is found again by a holding of the same contracts."""
+
+    #: the contract codes, sorted and joined by commas (`contract_set_key`) — no signs, no quantities
+    contracts: str
+    observed_on: str
+    dte: int
+    #: JSON text: contract code -> mid. None where a contract had no two-sided quote (#380): a value is
+    #: a sum over every leg, so half a map is no price. A rule's value and a holding's Cost to close are
+    #: worked out from it when read, under the rule's signs or the holding's sides.
+    legs_mid: str | None
+    #: JSON text, contract code -> IV, all or nothing, as `position_samples.legs_iv`
+    legs_iv: str | None
+    legs_vega: str | None
+    legs_delta: str | None
+    #: when the sweep that wrote it ran, UTC: every row has one
+    observed_at: str
+    #: SPX as the writing sweep's batch implied it (`derived_spx`, ADR 0024), or None
+    spx: float | None
+    #: the batch's contract size (`contract_size`), or None; never assumed
+    contract_size: float | None
+
+
 class MonitorPositionRow(TypedDict):
     monitor_id: str
     position_id: str
@@ -197,6 +233,7 @@ ROW_TYPES: dict[TableName, type] = {
     "monitors": MonitorRow,
     "positions": PositionRow,
     "position_samples": PositionSampleRow,
+    "watch_samples": WatchSampleRow,
     "monitor_positions": MonitorPositionRow,
     "reference_securities": ReferenceRow,
     "schema_migrations": SchemaMigrationRow,

@@ -13,6 +13,8 @@
  *  - **The crosshair is the history's, shared** (`Crosshair.tsx`, #395): a day pointed at in any
  *    panel is crossed here, and the readout says SPX that day and its distance to each short strike.
  *  - **Read from the burndown's answer**: it asks for nothing of its own.
+ *  - **Before entry** (#402): the days a holding's contracts were watched before it was entered are
+ *    drawn faint, a line of their own, and said as "before entry".
  *  - **Privacy** has nothing to hide here: prices and strikes, no $ figure and no count.
  *
  *  On visx (`@visx/scale`, `@visx/shape`) at its measured width, as the burndown and the IV chart are.
@@ -28,6 +30,7 @@ import { textWidth } from "./burndown";
 import { useWidth } from "./BurndownChart";
 import { CrossTip, dayScale, liveOf, pointedStop, usePanel, type Cross, type Gutters } from "./Crosshair";
 import { dayWords, MARK, nowDte, spxLines, spxWords } from "./historyDays";
+import { BEFORE_ENTRY_WORDS } from "./watchhistory";
 
 const H = 156, T = 10, B = 22;
 
@@ -47,8 +50,10 @@ const shortLeg = (k: { option_type: string; strike: number }) => ({ short: true,
 
 /** `span` is the burndown's DTE window and `gutters` the margins all three charts share, handed
  *  down so a day lands at the same x in each (#298); `cross` the crosshair they share (#395). */
-export function SpxPath({ served, holding, span, gutters, cross }: {
+export function SpxPath({ served, holding, span, gutters, cross, before = new Set<string>() }: {
   served: Samples; holding: Charted; span: number; gutters: Gutters; cross: Cross;
+  /** the days, by market day, that are before entry (#402) */
+  before?: ReadonlySet<string>;
 }) {
   const [box, W] = useWidth();
   const x = dayScale(span, W, gutters);
@@ -121,13 +126,15 @@ export function SpxPath({ served, holding, span, gutters, cross }: {
                       x={L - 6} y={labelAt.get(k.i)! + 4} textAnchor="end" />
             </g>
           ))}
-          {runs.map((run) => (
-            <LinePath key={run[0]!.on} data-spx-run="" className="nx-spxp-line" data={run}
-                      x={(d) => x(d.dte)} y={(d) => y(d.spx)} />
-          ))}
+          {/* the days watched before entry and the days held, each a line of its own (#402) */}
+          {[false, true].flatMap((watched) => spxRuns(served.samples.filter((s) => before.has(s.observed_on) === watched))
+            .map((run) => (
+              <LinePath key={run[0]!.on} data-spx-run={watched ? "before-entry" : ""} className="nx-spxp-line" data={run}
+                        x={(d) => x(d.dte)} y={(d) => y(d.spx)} />
+            )))}
           {runs.flat().map((d) => (
             <circle key={d.on} data-spx-day={d.on} className="nx-spxp-day" data-mark={MARK[timing.get(d.on)!]}
-                    cx={x(d.dte)} cy={y(d.spx)} r={2.5} />
+                    data-before-entry={before.has(d.on) ? "" : undefined} cx={x(d.dte)} cy={y(d.spx)} r={2.5} />
           ))}
           {now ? (
             <g data-spx-now="" className="nx-spxp-now">
@@ -158,11 +165,14 @@ export function SpxPath({ served, holding, span, gutters, cross }: {
               <div key={k.code} data-spx-strike=""><Leg leg={shortLeg(k)} form="name" />{` ${words}`}</div>
             ))}
             {read.why === null ? null : <div className="nx-bd-tip-why">{read.why}</div>}
+            {pointed.on !== null && before.has(pointed.on)
+              ? <div className="nx-bd-tip-why" data-before-entry="">{BEFORE_ENTRY_WORDS}</div> : null}
           </CrossTip>
         )}
       </div>
       <p className="nx-hist-said" role="status" aria-live={liveOf(cross, "spx")}>
-        {pointed !== null ? spxWords(pointed, holding, name) : (
+        {pointed !== null ? spxWords(pointed, holding, name)
+          + (pointed.on !== null && before.has(pointed.on) ? ` — ${BEFORE_ENTRY_WORDS}` : "") : (
           <>
             {`${said}${now ? ` · now ${now.spx.toFixed(2)}` : ""}`}
             {gapWords ? <><br />{gapWords}</> : null}

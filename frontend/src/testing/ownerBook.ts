@@ -9,7 +9,7 @@
  *  Plain data: a test that wants the page serves it (`serveBook` in `__browser__/nextBook.ts` for
  *  the layout suites), and the model's tests read it directly.
  */
-import type { Entry, Holding, Monitor, Payoff, Sample, Samples, Vol } from "../shared/api";
+import type { Entry, Holding, Monitor, Payoff, Sample, Samples, Vol, WatchSamples } from "../shared/api";
 
 /** SPX's price as the service derives it (ADR 0024), on every row of both responses. */
 const SPX = 6900.5;
@@ -202,6 +202,8 @@ function history(h: Holding, days: Day[]): Samples {
       };
     }),
     qty_corrected_at: null,
+    before_entry: [],
+    entry_close: null,
   };
 }
 
@@ -241,6 +243,50 @@ export const SAMPLES: Record<string, Samples> = {
     ["2026-11-03", 5, "close", [10.5, 10, 21, 22], null], ["2026-11-04", 4.85, "close", [10.5, 10, 20.5, 21.5], 6840.1],
   ]),
 };
+
+/** The watched put spread's daily closes (#402), `w-dec18` — short 7150, long 7100 — as
+ *  `/monitors/{id}/samples` serves them: each day's price under the rule's signs (negative, a credit
+ *  spread), a day out of hours with no price, its IV by leg and SPX against the short strike. */
+export const WATCH_SAMPLES: Record<string, WatchSamples> = {
+  "w-dec18": {
+    contracts: ["US.SPXW261218P7100000", "US.SPXW261218P7150000"],
+    price_rule: { id: "w-dec18", threshold: 6, direction: "above", compare: "abs" },
+    samples: ([
+      ["2026-11-05", 43, -2.05, "close", 7012.5], ["2026-11-06", 42, -2.2, "close", 6990.25],
+      ["2026-11-07", 41, null, "after-close", 6990.25], ["2026-11-08", 40, -2.2, "close", null],
+      ["2026-11-09", 39, -2.4, "close", 6955],
+    ] as const).map(([on, dte, price, timing, spx], i) => ({
+      observed_on: on, observed_at: `${on} ${timing === "close" ? "05:14:00" : "09:30:00"}+08:00`, timing, dte, price,
+      legs_iv: { "US.SPXW261218P7150000": 18 + i * 0.25, "US.SPXW261218P7100000": 19 + i * 0.25 },
+      legs_vega: null, legs_delta: null, spx,
+      short_strikes: [{
+        code: "US.SPXW261218P7150000", option_type: "PUT" as const, strike: 7150, delta: null,
+        points: spx === null ? null : Number((spx - 7150).toFixed(2)), sigma: null, one_sigma: null,
+      }],
+    })),
+  },
+};
+
+/** `/monitors/{id}/samples` as a test service answers it, or null for any other path. */
+export function watchSamplesAnswer(path: string): WatchSamples | null {
+  const m = /^\/monitors\/([^/]+)\/samples$/.exec(path);
+  return m ? WATCH_SAMPLES[decodeURIComponent(m[1]!)] ?? null : null;
+}
+
+/** The call spread's history with the four days it was watched before it was entered (#402), as
+ *  `/positions/{id}/samples` serves them in `before_entry`. */
+export function watchedFirst(served: Samples, days = 4): Samples {
+  const first = served.samples[0]!;
+  return {
+    ...served,
+    before_entry: Array.from({ length: days }, (_, i) => {
+      const back = days - i;
+      const on = new Date(Date.parse(`${first.observed_on}T00:00:00Z`) - back * 86_400_000).toISOString().slice(0, 10);
+      return { ...first, observed_on: on, dte: first.dte + back, on_pace: null, timing: "close" as const,
+        observed_at: `${on} 05:14:00+08:00`, cost_to_close: Number((first.cost_to_close! - back * 0.1).toFixed(2)) };
+    }),
+  };
+}
 
 /** `/positions/{id}/samples` as a test service answers it, or null for any other path. */
 export function samplesAnswer(path: string): Samples | null {

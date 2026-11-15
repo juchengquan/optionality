@@ -30,7 +30,8 @@ from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.exit import ExitPolicy
-from optionality.monitor import combo_field_error
+from optionality.monitor import Monitor, combo_field_error, monitor_leg_codes
+from optionality.position import Position, position_leg_codes
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from ....create_monitor import (
@@ -50,6 +51,7 @@ from ....db.queries import (
     find_monitor,
     find_monitor_by_code_field,
     list_monitors,
+    open_positions,
     positions_for_monitors,
     update_monitor_fields,
 )
@@ -57,6 +59,7 @@ from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored
 from ....db.values import from_sqlite_bool, from_sqlite_json, to_sqlite_bool
 from ....env import Settings
+from ....hydrate import to_monitor, to_position
 from ....monitors import apply_total_entry, edited_monitor, watchlist_quotes
 from ....schemas.monitor import (
     ComboMonitorIn,
@@ -69,6 +72,7 @@ from ....schemas.monitor import (
     patch_threshold_error,
     threshold_error,
 )
+from ....watch_history import contract_set_key, last_closes, rule_history, structure_key
 from ....watchlist import WatchlistEntry
 from ..deps import Deps
 from ..errors import http_error, not_found, provider_failed
@@ -132,6 +136,87 @@ def _exit_policy(settings: Settings) -> ExitPolicy:
         stop_multiple=settings.exit_stop_multiple,
         manage_by_dte=settings.exit_manage_by_dte,
     )
+
+
+#: The field a price rule watches: what a watched spread's history is drawn against (#402).
+PRICE_FIELD = "mid_price"
+
+
+class WatchDayOut(BaseModel):
+    """One stored day of the contracts a rule watches (#402): what its history charts draw. `price` is
+    the rule's PRICE that day, under its own signs and quantities, whatever field it watches; None where
+    a contract had no two-sided quote (#380). `short_strikes` are a combo's short legs (minus is short),
+    or a single contract's own strike, against THIS day's SPX."""
+
+    model_config = _AS_ZOD
+
+    observed_on: str
+    observed_at: str | None
+    timing: Literal["close", "before-open", "after-close", "unrecorded"]
+    dte: float
+    price: float | None
+    legs_iv: dict[str, float] | None
+    legs_vega: dict[str, float] | None
+    legs_delta: dict[str, float] | None
+    spx: float | None
+    short_strikes: list["StrikeDistanceOut"]
+
+
+class PriceRuleOut(BaseModel):
+    model_config = _AS_ZOD
+
+    id: str
+    threshold: float
+    direction: str
+    compare: str
+
+
+class WatchSamplesOut(BaseModel):
+    """A watched rule's history (#402): every day the sweep stored for the contracts it watches.
+    `price_rule` is the rule whose threshold the value is drawn against: this one where it watches the
+    price, else the price rule on the same spread (the same code), or None."""
+
+    model_config = _AS_ZOD
+
+    contracts: list[str]
+    price_rule: PriceRuleOut | None
+    samples: list[WatchDayOut]
+
+
+class LastCloseOut(BaseModel):
+    """A rule's PRICE at its latest close (#402): the latest day with a price taken in a session — never
+    today's while the session runs — else the latest with a price at all, said with what it is. Under
+    the rule's own signs, whatever field it watches. None where no day had one, for a rule that cannot
+    be read, and for a rule on contracts an open holding holds exactly (`last_closes`)."""
+
+    model_config = _AS_ZOD
+
+    price: float
+    observed_on: str
+    observed_at: str | None
+    timing: Literal["close", "before-open", "after-close", "weekend", "unrecorded"]
+
+
+class CloseOut(BaseModel):
+    """Each rule's last close: what the page says for a watched row's value and draws its payoff at where
+    there is no live price — out of the session, and while `/quotes` is failing (#402)."""
+
+    model_config = _AS_ZOD
+
+    id: str
+    last_close: LastCloseOut | None
+
+
+def _read_monitor(row: MonitorRow) -> Monitor | str:
+    """A rule's row read as a rule, contracts and all, or why it cannot be: a row the hydrator refuses,
+    or an expiry no contract can be built on. Both raise a `ValueError`, as the TypeScript's both throw
+    an `Error`, and only that is caught."""
+    try:
+        monitor = to_monitor(row)
+        monitor_leg_codes(monitor)
+        return monitor
+    except ValueError as err:
+        return str(err)
 
 
 def monitor_routes(deps: Deps) -> APIRouter:
@@ -288,6 +373,68 @@ def monitor_routes(deps: Deps) -> APIRouter:
             # sweeper's own quarantine and expiry notices are not overwritten by a manual toggle
             changes["disabled_reason"] = None if given.enabled else "manual"
         return one(update_monitor_fields(db, id_, edited_monitor(row, changes)))
+
+    @router.get(
+        "/closes",
+        summary="Each rule's last close, from the stored history, asking no Provider",
+        response_model=list[CloseOut],
+    )
+    async def closes() -> list[dict[str, Any]]:
+        """Each rule's last close (#402), from the stored history: a database read that asks no Provider,
+        so it answers while `/quotes` is failing. One bounded query per set of contracts."""
+        rules: list[tuple[str, Monitor | None]] = []
+        for row in list_monitors(db):
+            read = _read_monitor(row)
+            rules.append((row["id"], None if isinstance(read, str) else read))
+        holdings: list[Position] = []
+        for row in open_positions(db):
+            try:
+                position = to_position(row)
+                position_leg_codes(position)
+                holdings.append(position)
+            except ValueError:
+                continue
+        found = last_closes(db, rules, holdings, tz, deps.now())
+        return [{"id": id_, "last_close": found.get(id_)} for id_, _ in rules]
+
+    @router.get("/{id}/samples", summary="A watched rule's daily closes", response_model=WatchSamplesOut)
+    async def samples(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:
+        """A watched rule's daily closes (#402): what the sweep stored for the contracts it watches, valued
+        under its signs. Stored history, so no Provider call, and asked for once when a watched row's
+        history is drawn, never polled. Kept by the contracts, so it survives the rule being edited or
+        replaced."""
+        row = find_monitor(db, id_)
+        if row is None:
+            raise not_found("monitor")
+        # a rule whose row cannot be read has no contracts to look up: said, in the error shape every
+        # refusal has, rather than a 500
+        monitor = _read_monitor(row)
+        if isinstance(monitor, str):
+            raise http_error(422, monitor)
+        key = structure_key(monitor)
+
+        def same(other: MonitorRow) -> bool:
+            if other["field"] != PRICE_FIELD:
+                return False
+            read = _read_monitor(other)
+            return not isinstance(read, str) and structure_key(read) == key
+
+        price_row = row if row["field"] == PRICE_FIELD else next((m for m in list_monitors(db) if same(m)), None)
+        return {
+            "contracts": contract_set_key(monitor_leg_codes(monitor)).split(","),
+            "price_rule": None
+            if price_row is None
+            else {
+                "id": price_row["id"],
+                "threshold": price_row["threshold"],
+                "direction": price_row["direction"],
+                "compare": price_row["compare"],
+            },
+            "samples": [
+                {**{k: v for k, v in day.items() if k != "value"}, "price": day["value"]}
+                for day in rule_history(db, monitor, tz)
+            ],
+        }
 
     @router.post("/{id}/total-entry", summary="Spread a total entry across the holding", response_model=TotalEntryOut)
     async def total_entry(
@@ -450,6 +597,10 @@ class EntryOut(BaseModel):
     #: a combo's short legs placed against `spx` (#297); empty for a single contract
     short_strikes: list[StrikeDistanceOut]
 
+
+# a day's strikes are declared below the route that serves them
+WatchDayOut.model_rebuild()
+WatchSamplesOut.model_rebuild()
 
 _ENTRIES = TypeAdapter(list[EntryOut])
 

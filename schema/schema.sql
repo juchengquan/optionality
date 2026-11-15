@@ -81,6 +81,22 @@ CREATE TABLE position_samples (
 	FOREIGN KEY(position_id) REFERENCES positions (id)
 );
 
+-- One watched set of contracts' day, one row per market day (#402, migration 0014, which says why
+-- it is keyed by the contracts rather than a rule, and why nothing references it).
+CREATE TABLE watch_samples (
+	contracts VARCHAR(400) NOT NULL,
+	observed_on VARCHAR(10) NOT NULL,
+	dte INTEGER NOT NULL,
+	legs_mid TEXT,
+	legs_iv TEXT,
+	legs_vega TEXT,
+	legs_delta TEXT,
+	observed_at DATETIME NOT NULL,
+	spx FLOAT,
+	contract_size FLOAT,
+	PRIMARY KEY (contracts, observed_on)
+);
+
 -- The Securities kept on the page to read the market by (ADR 0018). Migration 0006 creates this
 -- same shape; see its header for why `scale` and `label` are nullable, and why the table is not
 -- called `references` (REFERENCES is a SQLite keyword).

@@ -51,6 +51,8 @@ import {
   labelRows, level, payoffWindow, pnlAt, pnlWords, priceStops, readout, shortWords, snapPrice, stepPrice,
   type PayoffUnit,
 } from "./payoffChart";
+import { newYorkWeekdayWhen } from "./session";
+import { closeWords, payoffAt } from "./watchhistory";
 import "./payoff.css";
 
 /** One spread nobody holds: one contract, in points, and no money to hide. */
@@ -116,14 +118,17 @@ export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy:
   );
 }
 
-/** A watched spread's payoff. It has no Entry, so it is drawn at its CURRENT value as the credit,
- *  and says so. Minus is short (ADR 0013) and a combo's value is the signed sum under its signs, so
- *  what it would be sold for now is the negative of its value. One spread, in points: nobody holds
- *  it, so there is no count and no size to make money of. */
-export function WatchedPayoff({ entry }: { entry: Entry }) {
-  const priced = PRICE_FIELDS.has(entry.field);
-  const value = entry.combo_value ?? null;
-  const draft: DraftPayoff | null = !priced || value === null || !entry.legs ? null : {
+/** A watched spread's payoff. It has no Entry, so it is drawn at a value of its own as the credit,
+ *  and says which: its CURRENT value in the session, and outside it — or where the rule watches no
+ *  price, a spread watched on its delta — its last close, said with its time (#402, `payoffAt`).
+ *  Minus is short (ADR 0013) and a combo's value is the signed sum under its signs, so what it would
+ *  be sold for is the negative of its value. One spread, in points: nobody holds it, so there is no
+ *  count and no size to make money of. */
+export function WatchedPayoff({ entry, session }: { entry: Entry; session: boolean }) {
+  // live in the session, at its last close outside it — or where the rule watches no price (#402)
+  const at = payoffAt(entry, session, PRICE_FIELDS.has(entry.field));
+  const value = at.value;
+  const draft: DraftPayoff | null = value === null || !entry.legs ? null : {
     legs: entry.legs.map((l) => ({
       side: l.sign < 0 ? "short" : "long", option_type: l.option_type as "CALL" | "PUT", strike: l.strike,
       // a quantity is drawn as the rule values it (#351): a butterfly's middle twice over
@@ -137,13 +142,17 @@ export function WatchedPayoff({ entry }: { entry: Entry }) {
   const state = usePayoff(entry.id, key, () => fetchDraftPayoff(draft!));
   // the label says the value the curve ON SCREEN was drawn at, which while updating is the last one
   const credit = state?.shown ? (JSON.parse(state.shown) as DraftPayoff).entry : draft?.entry ?? 0;
-  const blank = !priced
-    ? `watches the ${fieldWords(entry.field, true)}, which is no price to draw it at`
+  const blank = "blank" in at
+    ? (PRICE_FIELDS.has(entry.field) ? at.blank
+      : `watches the ${fieldWords(entry.field, true)}, which is no price to draw it at, and no close is recorded`)
     : draft === null ? "no current value to draw it at" : null;
+  const where = "close" in at
+    ? `${closeWords(at.close)}${(() => { const when = newYorkWeekdayWhen(at.close.observed_at); return when ? `, ${when}` : ""; })()}`
+    : "its current value";
   return (
     <PayoffFigure state={state} unit={POINTS} legs={shownLegs(state) ?? (entry.legs ?? []).map(signedLeg)}
                   spx={entry.spx} spxReason={entry.spx_reason} blank={blank}
-                  note={`no Entry: drawn at its current value, ${Math.abs(credit).toFixed(2)}, as the ${credit < 0 ? "debit" : "credit"}`} />
+                  note={`no Entry: drawn at ${where}, ${Math.abs(credit).toFixed(2)}, as the ${credit < 0 ? "debit" : "credit"}`} />
   );
 }
 

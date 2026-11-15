@@ -76,6 +76,7 @@ from ..db.open import atomic
 from ..db.queries import (
     clear_monitor_links,
     delete_monitor_row,
+    enabled_monitors,
     find_monitor,
     list_monitors,
     open_positions,
@@ -91,6 +92,7 @@ from ..ports import QuoteFetcher
 from ..schemas.monitor import DisabledReason
 from .health import SweepHealth, SweepHealthDeps
 from .positions import PositionSweepDeps, notice_manage_by, record_samples
+from .watching import record_watch_samples
 
 log = logging.getLogger(__name__)
 
@@ -292,6 +294,9 @@ class MonitorSweeper:
         still_open = {p["id"] for p in open_positions(db)}
         held_rows = [p for p in position_rows if p["id"] in still_open]
         record_samples(db, held_rows, by_code, at)
+        # ...and the close of what is WATCHED, from the same batch (#402): the rules as they stand now,
+        # so one switched off mid-fetch records nothing
+        record_watch_samples(db, enabled_monitors(db, True), held_rows, by_code, at)
         await notice_manage_by(
             PositionSweepDeps(db=db, settings=self._deps.settings, notify=self._notify), held_rows, by_code, at
         )

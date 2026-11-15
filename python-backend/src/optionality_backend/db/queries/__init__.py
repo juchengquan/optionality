@@ -61,6 +61,12 @@ from .samples import (
     record_position_sample,
 )
 from .sql import database_responds
+from .watch_samples import (
+    find_watch_sample,
+    list_watch_samples,
+    recent_priced_watch_samples,
+    record_watch_sample,
+)
 
 __all__ = [
     "clear_monitor_links",
@@ -81,6 +87,7 @@ __all__ = [
     "find_position_sample",
     "find_reference",
     "find_reference_by_code",
+    "find_watch_sample",
     "insert_monitor",
     "insert_position",
     "insert_reference",
@@ -89,12 +96,15 @@ __all__ = [
     "list_position_samples",
     "list_positions",
     "list_references",
+    "list_watch_samples",
     "monitors_watching",
     "open_positions",
     "orphan_monitors",
     "positions_for_monitor",
     "positions_for_monitors",
+    "recent_priced_watch_samples",
     "record_position_sample",
+    "record_watch_sample",
     "set_monitor_scope",
     "set_position_entry",
     "solely_watched_positions",

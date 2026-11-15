@@ -75,6 +75,7 @@
           "contract_size": null
         }
       ],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -127,6 +128,8 @@
             "before_correction": false
           }
         ],
+        "before_entry": [],
+        "entry_close": null,
         "qty_corrected_at": null
       }
     },

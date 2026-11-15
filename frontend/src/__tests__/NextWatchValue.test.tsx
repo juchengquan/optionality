@@ -189,3 +189,27 @@ describe("a last price's time", () => {
     expect(lastPriceWords(null)).toBe("—");
   });
 });
+
+describe("the last close the service stored (#402)", () => {
+  const close = { price: -3.85, observed_on: "2026-11-13", observed_at: FRIDAY_CLOSE, timing: "close" as const };
+  const priceRule = entry("w-p", { code: "1218_P7150", strike_date: "2026-12-18", legs: put(7150, 7100),
+    watched: null, combo_value: null, last_close: close });
+  const deltaRule = entry("w-d", { code: "1218_P7150", strike_date: "2026-12-18", legs: put(7150, 7100),
+    field: "option_delta", watched: -0.12, combo_value: -0.12, last_close: close });
+
+  it("is what the value cell says out of the session, before the sweep's last reading", () => {
+    const m = monitor("w-p", { last_value: -2.5, last_checked_at: FRIDAY_CLOSE });
+    const [p] = withLastKnown([priceRule], [m], false);
+    expect(lastPriceWords(p!.last_price!)).toBe("-3.85 (Fri 16:14)");
+  });
+
+  it("gives a spread watched only on its delta a price out of the session", () => {
+    const [d] = withLastKnown([deltaRule], [], false);
+    expect(lastPriceWords(d!.last_price!)).toBe("-3.85 (Fri 16:14)");
+  });
+
+  it("changes nothing in the session", () => {
+    const [p] = withLastKnown([priceRule], [], true);
+    expect(p!.last_price).toBeUndefined();
+  });
+});

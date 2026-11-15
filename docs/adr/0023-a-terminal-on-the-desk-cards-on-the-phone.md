@@ -17,7 +17,8 @@ the session the holdings are valued from their latest close, by the service, and
 line names that close. **Amended 2026-11-15 (#394):** the saved picture is one plain table, from
 the desk and the phone alike, and "Copy as text" puts the same table on the clipboard as Markdown
 (last section), with fewer, shorter columns and the watchlist's value as a price at every hour
-(#400, its last subsection). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+(#400, its last subsection). **Amended 2026-11-15 (#402):** a watched row has a history, and a
+holding's burndown carries the days it was watched (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -540,3 +541,28 @@ References' line.**
   session — the stored 0.0 of a Saturday night — is never shown. The same on the desk, the
   phone (a watch card adds a "value" line out of the session only) and the picture; in the session
   nothing changes. A rule on something held keeps its cost to close.
+
+## Amended 2026-11-15: the watchlist's history (#402)
+
+The owner's decisions of 2026-11-15, built on ADR 0011's watch samples:
+
+- **A watched row has a history**, in the desk's inspector and the phone's sheet, opened as a
+  holding's is (open outside the session, shut in it): its value each day against its price rule's
+  threshold, its legs' IV, and SPX against its strikes — the holding's three panels on #399's one
+  crosshair. The value is drawn as the price rule compares it (its size under `abs`, the figure
+  under `signed`); with no price rule, a spread watched only on its delta, its size and no threshold.
+  In points per contract: a watched row has no count and no money.
+- **One chart, more lines as more is known.** Recorded as held, the same contracts' watch days are
+  drawn in the holding's burndown, IV and SPX panels BEFORE its own, faint, with a rule where it was
+  entered, and every readout says "before entry". The plan, the Target and the Stop start at Opened.
+- **The payoff and the value cell fall back to the last close.** A watched spread's payoff is drawn
+  at its last close out of the session, always — never at a value quoted out of it — and in the
+  session where the rule watches no price; said "drawn at its close, Fri 16:14, 4.12, as the
+  credit", or the reading's own timing where it was not a close. The out-of-hours value cell (#400)
+  says the same last close where one is stored, and the sweep's last in-session reading otherwise.
+  The closes are read apart from `/quotes` (`GET /monitors/closes`), out of the session and whenever
+  `/quotes` fails, so a watched row keeps its last close through a Provider outage: while `/quotes`
+  is failing the value cell says the close, as out of the session (owner's decision, 2026-11-15).
+- **The entry day's watched close.** Where a holding recorded in New York's evening has no Cost to
+  close on the day it was entered, its burndown draws that day's watched close as the day's point,
+  saying "the close, watched before entry" (`entry_close`).

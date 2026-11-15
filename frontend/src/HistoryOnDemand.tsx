@@ -16,14 +16,19 @@
  *    once, as an opening by hand would. Read when the section is first drawn and never after, so a
  *    change of session never folds or unfolds one already open.
  *
+ *  - **A watched row has one too** (#402): its value against its price rule's threshold, its legs'
+ *    IV and SPX against its strikes (`WatchedHistory`), asked for, kept and opened the same way.
+ *
  *  Privacy is `HoldingHistory`'s. The saved image does not carry it: the still draws no history. */
 import { useId, useState } from "react";
 import { ChevronRight } from "lucide-react";
 
-import { HoldingHistory, type Charted } from "./History";
+import { HoldingHistory, WatchedHistory, type Charted } from "./History";
+import type { Entry } from "./shared/api";
 
-export function HistoryOnDemand({ holding, privacy, defaultOpen = false }: {
-  holding: Charted; privacy: boolean;
+export function HistoryOnDemand({ holding, watched, privacy, defaultOpen = false }: {
+  /** a holding's history, or a watched row's (`watched`): exactly one of the two */
+  holding?: Charted; watched?: Entry; privacy: boolean;
   /** drawn open, its samples read at once; read once, when first drawn, not on a later change */
   defaultOpen?: boolean;
 }) {
@@ -39,7 +44,8 @@ export function HistoryOnDemand({ holding, privacy, defaultOpen = false }: {
         history
       </button>
       <div id={body} className="nx-hist-od-body" hidden={!open}>
-        {opened ? <HoldingHistory holding={holding} privacy={privacy} /> : null}
+        {!opened ? null : holding ? <HoldingHistory holding={holding} privacy={privacy} />
+          : watched ? <WatchedHistory entry={watched} privacy={privacy} /> : null}
       </div>
     </section>
   );

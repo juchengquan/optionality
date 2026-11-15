@@ -36,13 +36,14 @@ Every scenario starts from one, written out in full:
   several — which lives in no table, so **they may not change a row**: `tables` is the database
   as the event finds it. Their calls and messages are not part of the expectation. `down`, when not
   null, is that sweep's Provider failing with that message; otherwise it answers from its table.
-- `tables` — every row of the five tables a door can see, every column, in primary-key order:
-  `positions`, `monitors`, `monitor_positions`, `position_samples`, `reference_securities`.
+- `tables` — every row of the six tables a door can see, every column, in primary-key order:
+  `positions`, `monitors`, `monitor_positions`, `position_samples`, `watch_samples`,
+  `reference_securities`.
   `schema_migrations` is not stated; build the database from `schema/schema.sql`.
 
 Rows hold what SQLite holds — booleans as `0`/`1`, instants as UTC text
 `YYYY-MM-DD HH:MM:SS.ffffff` — with one exception: the JSON columns (`monitors.legs`,
-`positions.legs`, `position_samples.legs_iv`, `position_samples.legs_vega`) are written as the
+`positions.legs`, the `legs_*` maps of `position_samples` and `watch_samples`) are written as the
 JSON they contain, and compared as values. Their stored bytes differ between languages by design
 (`8050` against `8050.0`) and nothing reads them but a JSON parser.
 

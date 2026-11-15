@@ -63,6 +63,7 @@
       ],
       "monitor_positions": [],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
@@ -89,6 +90,30 @@
               "last_checked_at": "2026-11-09 15:00:00.000000",
               "last_alarm_at": "2026-11-09 15:00:00.000000"
             }
+          }
+        ]
+      },
+      "watch_samples": {
+        "added": [
+          {
+            "contracts": "US.SPXW261218C7300000",
+            "observed_on": "2026-11-09",
+            "dte": 39,
+            "legs_mid": {
+              "US.SPXW261218C7300000": 2.75
+            },
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.27
+            },
+            "observed_at": "2026-11-09 15:00:00.000000",
+            "spx": null,
+            "contract_size": 100
           }
         ]
       }

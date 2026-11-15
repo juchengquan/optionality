@@ -565,7 +565,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history
   is drawn — the desk's inspector or a phone sheet opened outside the session (#372, #374),
   where it starts open, or a history section opened by hand (#353) — and never
-  polled, with a door scenario run with the Provider down. `/references` makes one bounded call per
+  polled, with a door scenario run with the Provider down; nor a watched rule's
+  (`GET /monitors/{id}/samples`, #402), nor each rule's last close (`GET /monitors/closes`, #402): a
+  database read the page makes out of the session and whenever `/quotes` fails, with a door scenario
+  run with the Provider down. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
   By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing
@@ -656,6 +659,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   call it missed, and `/vol`'s split skips it: taken at the last day with a cost, vol part included. A sweep that read nothing at all (a leg not returned) writes no row.
   And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
   it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
+  **What is watched is sampled the same way** (`watch_samples`, #402): a row per day for every set of
+  contracts an ENABLED rule watches, from the sweep's own batch, under the same rules — keyed by the
+  CONTRACTS (sorted codes, no signs, no quantities), not a rule, storing each contract's mid rather
+  than a value, so a rule's price (its signs) and a holding's Cost to close (by side) are worked out
+  when read. Contracts an open holding holds exactly are the holding's rows only. Never deleted, by
+  anything: a rule edited, replaced or deleted keeps its history. A holding reads the days before it
+  was entered apart (`before_entry`), so `position_samples` and its readers never see one.
   And the batch's contract size (`contract_size`, migration 0013, #380), so a close values a P&L with no
   Provider call; rows written before it were NOT backfilled (nothing stored says a size, and 100 is the
   assumption `contractSize` refuses), so a holding valued from one has its P&L dashed.

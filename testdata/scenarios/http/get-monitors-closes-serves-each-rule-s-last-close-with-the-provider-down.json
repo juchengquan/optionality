@@ -1,0 +1,247 @@
+{
+  "name": "GET /monitors/closes serves each rule's last close with the Provider down",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-calls",
+          "name": "dec-call-spread",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 2.5,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-2",
+          "code": "dec-calls",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "scope": "all",
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-3",
+          "code": "dec-puts",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "option_delta",
+          "threshold": 0.1,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "sign": 1,
+              "option_type": "PUT",
+              "strike": 6350,
+              "qty": 2
+            }
+          ],
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [
+        {
+          "monitor_id": "mon-2",
+          "position_id": "pos-calls"
+        }
+      ],
+      "position_samples": [],
+      "watch_samples": [
+        {
+          "contracts": "US.SPXW261218C7300000",
+          "observed_on": "2026-11-06",
+          "dte": 42,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 3
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-06 21:14:00.000000",
+          "spx": null,
+          "contract_size": null
+        },
+        {
+          "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000",
+          "observed_on": "2026-11-06",
+          "dte": 42,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 3,
+            "US.SPXW261218C7350000": 2
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-06 21:14:00.000000",
+          "spx": null,
+          "contract_size": null
+        },
+        {
+          "contracts": "US.SPXW261218P6350000,US.SPXW261218P6400000",
+          "observed_on": "2026-11-06",
+          "dte": 42,
+          "legs_mid": {
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 2
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-06 21:14:00.000000",
+          "spx": null,
+          "contract_size": null
+        },
+        {
+          "contracts": "US.SPXW261218P6350000,US.SPXW261218P6400000",
+          "observed_on": "2026-11-07",
+          "dte": 41,
+          "legs_mid": {
+            "US.SPXW261218P6400000": 4.75,
+            "US.SPXW261218P6350000": 2
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-08 01:00:00.000000",
+          "spx": null,
+          "contract_size": null
+        }
+      ],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/monitors/closes",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": [
+        {
+          "id": "mon-2",
+          "last_close": null
+        },
+        {
+          "id": "mon-3",
+          "last_close": {
+            "price": -0.5,
+            "observed_on": "2026-11-06",
+            "observed_at": "2026-11-07 05:14:00+08:00",
+            "timing": "close"
+          }
+        },
+        {
+          "id": "mon-1",
+          "last_close": {
+            "price": 3,
+            "observed_on": "2026-11-06",
+            "observed_at": "2026-11-07 05:14:00+08:00",
+            "timing": "close"
+          }
+        }
+      ]
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

@@ -9,7 +9,7 @@ import { buildSpxCode } from "optionality/domain/contract";
 import type { Row, World } from "../format.ts";
 import {
   BOOK, C7300, C7350, C7500, EXPIRED, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
-  sample, stored, world,
+  sample, stored, watchDay, world,
 } from "./fixtures.ts";
 
 export interface SweepInput {
@@ -220,7 +220,14 @@ export const SWEEP: readonly SweepInput[] = [
     name: "a figure that does not arrive is counted and nothing is said",
     outcomes: ["silence-counted"],
     world: world({
-      tables: { monitors: [monitor({ id: "mon-1" })] },
+      tables: {
+        monitors: [monitor({ id: "mon-1" })],
+        // the contract's close as the sweep before recorded it, so this tick has nothing to write
+        // (#402): its silence is counted in memory and nowhere else
+        watch_samples: [watchDay([C7300], {
+          observed_on: "2026-11-09", dte: 39, legs_mid: { [C7300]: 2.75 }, observed_at: stored(at(-15)),
+        })],
+      },
       provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75 } } },
     }),
   },
@@ -229,7 +236,13 @@ export const SWEEP: readonly SweepInput[] = [
     outcomes: ["quarantined-for-a-figure-that-never-arrives"],
     world: world({
       settings: { QUARANTINE_AFTER_SILENT_SWEEPS: "3" },
-      tables: { monitors: [monitor({ id: "mon-1" })] },
+      tables: {
+        monitors: [monitor({ id: "mon-1" })],
+        // what the first of the earlier sweeps recorded of the contract's close (#402)
+        watch_samples: [watchDay([C7300], {
+          observed_on: "2026-11-09", dte: 39, legs_mid: { [C7300]: 2.75 }, observed_at: stored(at(-30)),
+        })],
+      },
       provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75 } } },
       sweeps: earlier([null, null]),
     }),
@@ -380,6 +393,69 @@ export const SWEEP: readonly SweepInput[] = [
         ...earlier([DOWN, null, DOWN, null, DOWN, null, DOWN, null, DOWN], 60, 1800),
         ...earlier([DOWN, null, DOWN, null, DOWN, null, DOWN, null], 60),
       ],
+    }),
+  },
+
+  // --- the watchlist's daily close (#402) ----------------------------------------------------
+  {
+    // the close of what is watched, from the batch the rule already asked for: one call, and the
+    // day's row keyed by the contracts rather than the rule
+    name: "a watched spread's close is recorded from the sweep's own batch",
+    outcomes: ["watch-sample-recorded", "combo-is-a-signed-sum"],
+    world: world({ tables: { monitors: [combo({ id: "mon-2" })] }, provider: { quotes: BOOK } }),
+  },
+  {
+    // out of hours no contract has a book: the day is kept with its vol readings and NO price, never
+    // a 0.00 (#380)
+    name: "out of hours a watched spread's day is kept for its vol with no price",
+    outcomes: ["watch-sample-kept-without-a-price"],
+    world: world({ clock: EVENING, tables: { monitors: [combo({ id: "mon-2" })] }, provider: { quotes: NO_BOOK } }),
+  },
+  {
+    // every calendar day, as a holding's: Saturday's row carries Friday's close forward
+    name: "a watched spread's Saturday is recorded like any other day",
+    outcomes: ["watch-sample-on-a-weekend"],
+    world: world({
+      clock: "2026-11-14T15:00:00.000Z",
+      tables: { monitors: [combo({ id: "mon-2" })] }, provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // a settled close stays the close: a mark that moved after 16:15 does not reach the day's row
+    name: "after the close a watched spread's settled close is not rewritten",
+    outcomes: ["watch-close-left-alone-after-hours"],
+    world: world({
+      clock: EVENING,
+      tables: {
+        monitors: [combo({ id: "mon-2" })],
+        watch_samples: [watchDay([C7300, C7350], {
+          observed_on: "2026-11-09", legs_mid: { [C7300]: 3, [C7350]: 1.75 },
+          legs_iv: { [C7300]: 14.5, [C7350]: 14.5 }, legs_vega: { [C7300]: 4.25, [C7350]: 4.25 },
+          legs_delta: { [C7300]: 0.21, [C7350]: 0.15 }, observed_at: "2026-11-09 21:14:00.000000",
+          contract_size: 100,
+        })],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // the call spread held exactly as it is watched: its days are the holding's own samples, and no
+    // watch history is kept beside them
+    name: "the contracts a holding holds exactly are sampled as the holding only",
+    outcomes: ["watch-sample-left-to-the-holding", "sample-recorded"],
+    world: world({
+      tables: {
+        positions: [position({
+          id: "pos-calls", name: "dec-call-spread", entry: 2.5,
+          legs: [
+            { side: "short", option_type: "CALL", strike: 7300 },
+            { side: "long", option_type: "CALL", strike: 7350 },
+          ],
+        })],
+        monitors: [combo({ id: "mon-2", scope: "all" })],
+        monitor_positions: [link("mon-2", "pos-calls")],
+      },
+      provider: { quotes: BOOK },
     }),
   },
 

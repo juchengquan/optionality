@@ -136,7 +136,7 @@ function engineSources(): Record<string, string> {
 }
 
 /** What the engine decides with: every value it imports from `domain/`, and every function
- *  `positions.ts` exports for a sweep's batch. Read from the source rather than listed, so a new
+ *  `positions.ts` and `watching.ts` export for a sweep's batch. Read from the source rather than listed, so a new
  *  decision arrives here whether or not anybody remembers this file. */
 function engineDecisions(sources: Record<string, string>): string[] {
   const found = new Set<string>();
@@ -152,7 +152,9 @@ function engineDecisions(sources: Record<string, string>): string[] {
     }
   }
   const exported = /export\s+(?:async\s+)?function\s+(\w+)/g;
-  for (const [, name] of (sources["positions.ts"] ?? "").matchAll(exported)) found.add(name!);
+  for (const file of ["positions.ts", "watching.ts"]) {
+    for (const [, name] of (sources[file] ?? "").matchAll(exported)) found.add(name!);
+  }
   return [...found].sort();
 }
 

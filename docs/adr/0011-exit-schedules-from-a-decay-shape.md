@@ -12,6 +12,9 @@ the vol split is of the gap at the last sample, served whole by the route. Amend
 outside the session a holding is valued from its latest close, which each row now carries the
 contract size for (last two sections).
 
+**Amended 2026-11-15 (#402): what is WATCHED is sampled too** (last section): the close of every
+set of contracts an enabled rule watches, under exactly these rules, kept by the contracts.
+
 ## Context
 
 SPX structures go on at 45–60 DTE and the question is what Cost to close justifies getting out
@@ -328,3 +331,44 @@ this file's rows:
   holding entered its window with still no cost, the notice goes without its "now" line, stamped,
   rather than never.
 
+
+## Amended 2026-11-15: what is watched is sampled too (#402)
+
+Decided by the owner on 2026-11-15: the watchlist, where entries are timed, gets a history. Until
+now only holdings had one, so a watched spread's value went blank every evening, its payoff with it,
+and the days it was watched before it was entered were lost to its burndown.
+
+- **What is sampled.** The sweep records, beside each holding's row, a row per market day for every
+  set of contracts an ENABLED rule watches (`watch_samples`, migration 0014; `engine/watching.ts`):
+  each contract's mid (`legs_mid`), IV, vega and delta — each map all or nothing, gated on its own —
+  SPX (`derivedSpx`), the contract size, the DTE and `observed_at`. From the sweep's own batch, which
+  every enabled rule's contracts are already in: no market-data call of its own.
+- **Under exactly these rules.** `takesSample` decides, unchanged: written freely only in
+  09:30–16:15 New York, every calendar day, filled whatever the hour, provisional rows replaced or
+  restamped, settled ones only completed. A row has a price exactly when every contract has a mid,
+  and an empty one never replaces a stored one (#380): `takesSample` reads a Cost to close only for
+  whether there is one, so the contracts' mids stand in for it.
+- **Kept by the CONTRACTS, not by a rule.** The key is the set of contract codes, sorted, with no
+  sign and no quantity. So a rule edited, replaced by its holding's rule (`POST /spreads`, #293) or
+  deleted keeps its history; two rules on the same contracts share one; and a holding recorded on
+  them later finds it. No foreign key, and nothing deletes a row: like a holding's samples, a day not
+  recorded cannot be recorded later (owner's decision, retention: keep).
+- **Valued when read, never stored as one structure's value.** A rule's price is its signed sum
+  under its own signs and quantities (`monitorValue` on the mid), a holding's Cost to close is by
+  side (`costToClose`), both from the stored mids — so no sign convention is stored, and a holding's
+  "before entry" days are its own Cost to close, by the rule `costToCloseOf` gives for why.
+- **Not sampled twice.** The contracts an open holding holds EXACTLY are left to that holding's own
+  row; a candidate that only shares a contract with one is still sampled.
+- **The holding's own history is untouched.** The days before entry are served apart
+  (`GET /positions/{id}/samples`' `before_entry`: every watch day before Opened, or before the day it
+  was recorded where nobody said), so the vol chain, `/vol`'s split and the close a holding is valued
+  from never read a watch day. One exception, the owner's (2026-11-15): where the holding's own row
+  for the day it was entered has no Cost to close — recorded in New York's evening, priced by
+  nothing — the same day's watched close is served beside it (`entry_close`), and the page draws it
+  as that day's point, saying it is "the close, watched before entry"; the holding's row is not
+  changed. A watched rule's own days are `GET /monitors/{id}/samples`.
+- **Each rule's last close** is `GET /monitors/closes` (`closeSample`'s choice under the rule's
+  signs): a database read that asks no Provider, one bounded query per set of contracts (the latest
+  14 priced days), so it answers through an outage. Never today's row while the session runs, which
+  is no close yet; and none for contracts an open holding holds exactly, whose rows stop at its
+  entry. The page reads it out of the session, at each edge of it, and whenever `/quotes` fails.

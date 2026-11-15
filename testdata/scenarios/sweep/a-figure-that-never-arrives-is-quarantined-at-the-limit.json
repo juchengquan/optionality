@@ -64,6 +64,22 @@
       ],
       "monitor_positions": [],
       "position_samples": [],
+      "watch_samples": [
+        {
+          "contracts": "US.SPXW261218C7300000",
+          "observed_on": "2026-11-09",
+          "dte": 39,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 2.75
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-09 14:59:30.000000",
+          "spx": null,
+          "contract_size": null
+        }
+      ],
       "reference_securities": []
     }
   },

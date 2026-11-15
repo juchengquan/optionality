@@ -40,6 +40,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { SweepHealth } from "./health.ts";
 import { type NotifySender, type Notifier, notifier } from "../notify.ts";
 import { noticeManageBy, recordSamples } from "./positions.ts";
+import { recordWatchSamples } from "./watching.ts";
 import { alarmPolicy, alarmTransition } from "optionality/domain/alarm";
 import {
   expiryVerdict, holdsWithoutQuote, silenceVerdict, unknownContractVerdict, unreadableNotice,
@@ -48,7 +49,7 @@ import { monitorLegCodes, monitorValue } from "optionality/domain/monitor";
 import { positionLegCodes } from "optionality/domain/position";
 import { atomic } from "../db/open.ts";
 import {
-  clearMonitorLinks, deleteMonitorRow, findMonitor, listMonitors, openPositions,
+  clearMonitorLinks, deleteMonitorRow, enabledMonitors, findMonitor, listMonitors, openPositions,
   updateMonitorFields,
 } from "../db/queries/index.ts";
 import type { MonitorRow, PositionRow } from "../db/rows.ts";
@@ -243,6 +244,9 @@ export class MonitorSweeper {
     const stillOpen = new Set(openPositions(db).map((p) => p.id));
     const heldRows = positionRows.filter((p) => stillOpen.has(p.id));
     recordSamples(db, heldRows, byCode, at);
+    // ...and the close of what is WATCHED, from the same batch (#402): the rules as they stand now,
+    // so one switched off mid-fetch records nothing
+    recordWatchSamples(db, enabledMonitors(db, true), heldRows, byCode, at);
     await noticeManageBy(
       { db, settings: this.deps.settings, notify: (text) => this.notify(text) },
       heldRows, byCode, at,

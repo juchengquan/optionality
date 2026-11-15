@@ -171,6 +171,23 @@ describe("the schema file itself", () => {
        values ('nope', '2026-10-12', 39, 1.0)`).run()).toThrow(/FOREIGN KEY/);
     db.close();
   });
+
+  it("declares watch_samples one row per set of contracts per day, belonging to no rule (#402)", () => {
+    const db = createDatabase(join(dir, "watch.db"));
+    const put = (mid: string) => db.prepare(
+      `insert or replace into watch_samples (contracts, observed_on, dte, legs_mid, observed_at)
+       values ('US.SPXW261218P6750000,US.SPXW261218P6800000', '2026-11-13', 35, ?,
+               '2026-11-13 21:14:00.000000')`).run(mid);
+    put('{"US.SPXW261218P6750000":3.1,"US.SPXW261218P6800000":4.2}');
+    put('{"US.SPXW261218P6750000":3.0,"US.SPXW261218P6800000":4.1}');
+    const rows = db.prepare("select legs_mid from watch_samples").all() as { legs_mid: string }[];
+    expect(rows).toEqual([{ legs_mid: '{"US.SPXW261218P6750000":3.0,"US.SPXW261218P6800000":4.1}' }]);
+    // no foreign key: a history outlives the rule that watched it, and is found again by whatever
+    // next watches or holds the same contracts — no rule of that name need exist
+    expect(db.prepare("select count(*) n from pragma_foreign_key_list('watch_samples')").get())
+      .toEqual({ n: 0 });
+    db.close();
+  });
 });
 
 describe("0004: a Leg's Side is long or short (ADR 0013)", () => {

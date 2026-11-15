@@ -175,7 +175,8 @@ describe("a watched spread's payoff", () => {
     const onDelta = QUOTES.map((q) => (q.id === "w-dec18"
       ? { ...q, field: "option_delta", combo_value: -0.12 } : q) as Entry);
     const insp = await inspect("w-dec18", "1218_P7150", { quotes: onDelta });
-    expect(within(insp).getByText(/watches the spread delta, which is no price to draw it at/)).toBeTruthy();
+    expect(within(insp).getByText(/watches the spread delta, which is no price to draw it at, and no close is recorded/))
+      .toBeTruthy();
     expect(insp.querySelector(".nx-payoff svg")).toBeNull();
     expect(asked).toEqual([]);
   });

@@ -137,6 +137,8 @@ describe("the bearer token", () => {
       "GET /docs",
       "GET /health",
       "GET /monitors",
+      "GET /monitors/:id/samples",
+      "GET /monitors/closes",
       "GET /openapi.json",
       "GET /positions",
       "GET /positions/:id/payoff",
@@ -181,7 +183,7 @@ describe("the bearer token", () => {
         return [`${r.method} ${path}`, { method: r.method, path }] as const;
       })).entries()];
     // the real number of doors, which the route list above enumerates one by one
-    expect(doors.length).toBe(20);
+    expect(doors.length).toBe(22);
     for (const [door, { method, path }] of doors) {
       expect((await h.call(path, { anonymous: true, method })).status, door).toBe(401);
     }

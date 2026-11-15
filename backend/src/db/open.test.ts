@@ -44,7 +44,7 @@ describe("the schema", () => {
       .all().map((r) => (r as { name: string }).name);
     expect(names).toEqual([
       "monitor_positions", "monitors", "position_samples", "positions", "reference_securities",
-      "schema_migrations",
+      "schema_migrations", "watch_samples",
     ]);
   });
 

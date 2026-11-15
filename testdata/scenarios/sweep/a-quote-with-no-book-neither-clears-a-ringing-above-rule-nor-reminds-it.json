@@ -109,12 +109,39 @@
       ],
       "monitor_positions": [],
       "position_samples": [],
+      "watch_samples": [],
       "reference_securities": []
     }
   },
   "expect": {
     "messages": [],
-    "rows": {},
+    "rows": {
+      "watch_samples": {
+        "added": [
+          {
+            "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000",
+            "observed_on": "2026-11-09",
+            "dte": 39,
+            "legs_mid": null,
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5,
+              "US.SPXW261218C7350000": 14.5
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25,
+              "US.SPXW261218C7350000": 4.25
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.21,
+              "US.SPXW261218C7350000": 0.15
+            },
+            "observed_at": "2026-11-10 01:30:00.000000",
+            "spx": null,
+            "contract_size": 100
+          }
+        ]
+      }
+    },
     "calls": {
       "moomoo": [
         [

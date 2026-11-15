@@ -1,8 +1,9 @@
 /** A watched rule's last known figure, out of the session (#380, F8).
  *
  *  Out of hours moomoo quotes every option bid 0 / ask 0, which is no price (`midPrice`), so `/quotes`
- *  serves a price rule no figure and the page draws a dash. A watched spread has no daily sample to
- *  fall back on as a holding has, so the page says instead what the sweep last read for the rule —
+ *  serves a price rule no figure and the page draws a dash. The value cell says the row's last close
+ *  where the service stored one (`last_close`, #402); for the rest, and for the sentence, the page
+ *  says what the sweep last read for the rule —
  *  `/monitors`' `last_value` — and when (`last_checked_at`), beside the dash and never in its place:
  *  "no figure out of session; last 3.05 at Fri 13 Nov 16:14", on New York's clock as the
  *  market-closed line names the close. The bell and the fill bar are the service's
@@ -16,7 +17,7 @@
  *  have come from — is not presented at all. A real figure read out of hours is still on the row:
  *  a rule on a greek has one, since moomoo serves greeks out of hours, and needs nothing from here.
  */
-import type { Entry, Monitor } from "./shared/api";
+import type { Entry, LastClose, Monitor } from "./shared/api";
 import { DASH } from "./shared/format";
 import { inSession, newYorkWeekdayWhen, servedInstant } from "./session";
 
@@ -35,6 +36,13 @@ export function lastKnown(entry: Entry, monitor: Monitor | undefined, session: b
   const at = servedInstant(monitor.last_checked_at);
   if (at === null || !inSession(at)) return null;
   return { value, at: monitor.last_checked_at! };
+}
+
+/** The watchlist's rows with each one's last close joined (`/monitors/closes`, #402): null for a rule
+ *  the closes do not name, which has none. */
+export function withCloses(quotes: readonly Entry[], closes: readonly { id: string; last_close: LastClose | null }[]): Entry[] {
+  const byId = new Map(closes.map((c) => [c.id, c.last_close]));
+  return quotes.map((e) => ({ ...e, last_close: byId.get(e.id) ?? null }));
 }
 
 /** The watchlist's rows with each one's last known figure beside it (`lastKnown`), and the price
@@ -80,10 +88,15 @@ function priceIn(e: Entry, rows: readonly Entry[]): number | null {
   return twin ? ownPrice(twin) : null;
 }
 
-/** Out of the session, the last price read IN it (#400): the price rule's on these contracts — the
- *  row's own, or another rule's on the same contracts — as `lastKnown` keeps it, so a reading taken
- *  out of the session is never one. Null where no price rule has one. */
+/** Out of the session, the row's last close where the service has one (#402): the stored history of
+ *  the contracts it watches, its price under the rule's own signs (`last_close`) — the same close a
+ *  watched spread's payoff is drawn at, and a figure a delta rule's spread has as well as its price
+ *  rule's. Where none is stored, the last price read IN the session (#400): the price rule's on these
+ *  contracts — the row's own, or another rule's on the same contracts — as `lastKnown` keeps it, so a
+ *  reading taken out of the session is never one. Null where neither has one. */
 function lastPriceIn(e: Entry, rows: readonly Entry[]): LastKnown | null {
+  const close = e.last_close ?? null;
+  if (close !== null) return { value: close.price, at: close.observed_at ?? "" };
   const key = contractsKey(e);
   const own = e.field === "mid_price" ? e.last_reading ?? null : null;
   if (own) return own;

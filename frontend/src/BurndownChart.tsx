@@ -18,6 +18,10 @@
  *    to close, kept as they were. Their points and their stretch of the line are drawn faint and
  *    dashed, no gap to the plan is shaded over them, a rule marks the New York day it was corrected,
  *    and the tooltip and the status line say "summed before a leg's quantity was corrected".
+ *  - **Before entry** (#402): the days a holding's contracts were watched before it was entered are
+ *    drawn first, faint — their points and their own stretch of line — a rule marks where it was
+ *    entered, and the tooltip and the status line say "before entry". A watched row's own history
+ *    is drawn by this chart too, with no plan and its price rule's threshold across it.
  *  - **Privacy** keeps the shape and drops every $ figure and everything across the contracts held:
  *    the axis, the Levels and the readout say points per contract instead (the owner's call, #395),
  *    as the table's value column, the inspector's Entry, Target and Stop and the payoff do.
@@ -39,8 +43,10 @@ import {
 } from "./burndown";
 import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross, type Gutters } from "./Crosshair";
 import { MARK } from "./historyDays";
+import { BEFORE_ENTRY_WORDS, ENTRY_CLOSE_WORDS } from "./watchhistory";
 
 const H = 196, T = 16, B = 22;
+const NONE: ReadonlySet<string> = new Set();
 
 /** Points in runs of consecutive days: a day with no row at all — the service down for a whole New
  *  York day — breaks the line, as a day without a reading does, rather than being drawn across. */
@@ -87,9 +93,15 @@ export function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
  *  panel of the holding shares (#298), so a day is at the same x here as in the IV chart and SPX's
  *  path beneath. `cross` is the crosshair the three share (#395), and `closeDte` a closed
  *  holding's last day (#296). */
-export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }: {
+export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, before = NONE, threshold = null, entryDay = null }: {
   served: Samples; unit: Unit; axis: ReturnType<typeof valueAxis>; span: number;
   gutters: Gutters; closeDte: number | null; cross: Cross;
+  /** the days, by market day, that are before entry: watched, not yet held (#402) */
+  before?: ReadonlySet<string>;
+  /** a watched row's price rule's threshold, drawn across its value (#402) */
+  threshold?: number | null;
+  /** the day whose point is the entry day's WATCHED close (#402, `entry_close`), or null */
+  entryDay?: string | null;
 }) {
   const [box, W] = useWidth();
   const { L, R } = gutters;
@@ -99,6 +111,10 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
   // and still a stop of the shared crosshair, where this panel says it has no figure
   const { levels, plan, samples: rows } = served;
   const samples = rows.filter(hasCost);
+  const watched = samples.filter((s) => before.has(s.observed_on));
+  const held = samples.filter((s) => !before.has(s.observed_on));
+  // where the holding was entered, after the days it was watched: Opened, or its first own day
+  const enteredDte = watched.length === 0 ? null : levels?.dte_at_open ?? held[0]?.dte ?? null;
   const { now } = axis;
   const x = dayScale(span, W, gutters);
   const y = scaleLinear<number>({ domain: [axis.lo, axis.hi], range: [H - B, T] });
@@ -132,13 +148,19 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
   const atNow = onNow ? now : null;
   const tip = pointed === null ? null : (() => {
     const px = x(pointed.dte);
-    if (at) return { px, py: y(at.cost_to_close), lines: tipLines(at, unit) };
-    if (atNow) return { px, py: y(atNow.cost), lines: { ...nowLines(atNow, unit), pace: null, gap: null, why: null, corrected: null } };
+    if (at) {
+      return { px, py: y(at.cost_to_close), lines: tipLines(at, unit), entry: before.has(at.observed_on),
+        entryClose: at.observed_on === entryDay };
+    }
+    if (atNow) return { px, py: y(atNow.cost), lines: { ...nowLines(atNow, unit), pace: null, gap: null, why: null, corrected: null }, entry: false };
     const lines = bare ? noCostLines(bare) : { day: `valued now · ${pointed.dte} DTE`, cost: NO_COST_NOW, why: null };
-    return { px, py: (T + H - B) / 2, lines: { ...lines, pace: null, gap: null, corrected: null } };
+    return { px, py: (T + H - B) / 2, lines: { ...lines, pace: null, gap: null, corrected: null },
+      entry: bare !== null && before.has(bare.observed_on) };
   })();
   const offClose = samples.some((s) => s.timing !== "close");
   const anyBefore = samples.some((s) => s.before_correction);
+  const entryWords = (s: Sample) => (before.has(s.observed_on) ? ` — ${BEFORE_ENTRY_WORDS}`
+    : s.observed_on === entryDay ? ` — ${ENTRY_CLOSE_WORDS}` : "");
 
   return (
     <>
@@ -199,6 +221,20 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
               <text x={W - R} y={T - 4} textAnchor="end">{`▲ ${level("stop", stop.value)}`}</text>
             </g>
           )}
+          {threshold === null ? null : (
+            <g data-level="threshold" className="nx-hist-threshold">
+              <line x1={L} x2={W - R} y1={y(threshold)} y2={y(threshold)} />
+              <text x={W - R} y={y(threshold) - 4} textAnchor="end">{`threshold ${say(threshold, unit)}`}</text>
+            </g>
+          )}
+          {enteredDte === null || enteredDte < 0 || enteredDte > span ? null : (
+            <g data-entered="" className="nx-hist-entered">
+              <line x1={x(enteredDte)} x2={x(enteredDte)} y1={T} y2={H - B} />
+              {x(enteredDte) + 4 + textWidth("entered") > W - R
+                ? <text x={x(enteredDte) - 4} y={T + 10} textAnchor="end">entered</text>
+                : <text x={x(enteredDte) + 4} y={T + 10} textAnchor="start">entered</text>}
+            </g>
+          )}
           {manage === null ? null : (
             <g data-level="manage-by" className="nx-hist-manage">
               <line x1={x(manage)} x2={x(manage)} y1={T} y2={H - B} />
@@ -230,14 +266,21 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
             <LinePath data-plan="" className="nx-hist-plan" data={plan}
                       x={(p) => x(p.dte)} y={(p) => y(p.on_pace)} />
           ) : null}
-          {costRuns(samples).map(({ before, run }) => (
-            <LinePath key={`${run[0]!.dte}${before}`} data-costs={before ? "before-correction" : ""}
+          {/* the days watched before entry: a line of their own, faint, never joined to the holding's */}
+          {runsOf(watched).map((run) => (
+            <LinePath key={`w${run[0]!.dte}`} data-costs="before-entry" className="nx-hist-costs" data={run}
+                      x={(s) => x(s.dte)} y={(s) => y(s.cost_to_close)} />
+          ))}
+          {costRuns(held).map(({ before: corrected, run }) => (
+            <LinePath key={`${run[0]!.dte}${corrected}`} data-costs={corrected ? "before-correction" : ""}
                       className="nx-hist-costs" data={run}
                       x={(s) => x(s.dte)} y={(s) => y(s.cost_to_close)} />
           ))}
           {samples.map((s) => (
             <g key={s.observed_on} data-sample={s.observed_on} data-timing={s.timing}
                data-before-correction={s.before_correction ? "" : undefined}
+               data-before-entry={before.has(s.observed_on) ? "" : undefined}
+               data-entry-close={s.observed_on === entryDay ? "" : undefined}
                data-pointed={pointed?.on === s.observed_on ? "" : undefined} className="nx-hist-point">
               <circle data-mark={MARK[s.timing]} cx={x(s.dte)} cy={y(s.cost_to_close)} r={3.25} />
             </g>
@@ -298,15 +341,20 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross }:
             {tip.lines.why === null ? null : <div className="nx-bd-tip-why">{tip.lines.why}</div>}
             {tip.lines.corrected !== null
               ? <div className="nx-bd-tip-why" data-corrected="">{tip.lines.corrected}</div> : null}
+            {tip.entry ? <div className="nx-bd-tip-why" data-before-entry="">{BEFORE_ENTRY_WORDS}</div> : null}
+            {"entryClose" in tip && tip.entryClose
+              ? <div className="nx-bd-tip-why" data-entry-close="">{ENTRY_CLOSE_WORDS}</div> : null}
           </CrossTip>
         )}
       </div>
       <p className="nx-hist-said" role="status" aria-live={liveOf(cross, "burndown")}>
-        {at ? sampleWords(at, unit) : atNow ? nowWords(atNow, unit) : bare ? noCostWords(bare)
+        {at ? sampleWords(at, unit) + entryWords(at) : atNow ? nowWords(atNow, unit)
+          : bare ? noCostWords(bare) + entryWords(bare)
           : onNow ? `valued now, ${pointed!.dte} DTE: ${NO_COST_NOW}`
           : (offClose ? "● in hours · ○ not the close · point at a day to see why"
             : "● each day in hours · point at a day for its figures")
-            + (anyBefore ? ` · faint: ${CORRECTED_WORDS}` : "")}
+            + (anyBefore ? ` · faint: ${CORRECTED_WORDS}` : "")
+            + (watched.length > 0 ? " · faint: before entry, while watched" : "")}
       </p>
     </>
   );
