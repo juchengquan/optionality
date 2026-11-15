@@ -14,7 +14,7 @@ import { addSpreads, type Added, type Monitor } from "./shared/api";
 import { SideSign } from "./shared/Legs";
 import { Button } from "@/components/ui/button";
 import {
-  CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces,
+  CONTRACT_FIELDS, contractBody, contractName, contractNote, contractPreview, contractReplaces, contractTakesOver,
   contractSaveWords, refusalSpot, thresholdFault, type ContractDraft, type ContractSpot,
 } from "./contract";
 import { fieldWords, ruleWords, shortRule } from "./needs";
@@ -22,11 +22,15 @@ import { ShortWords } from "./RuleWords";
 import { DraftPreview } from "./Payoff";
 import { DirectionPair } from "./DirectionPair";
 import { HoldOrWatch } from "./HoldOrWatch";
+import { TakeOver } from "./TakeOver";
+import type { HeldLegs } from "./add";
 
 export function AddContract({
-  privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving, prefilled,
+  privacy, monitors, holdings, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving, prefilled,
 }: {
   privacy: boolean;
+  /** the open holdings, or null where they are not valued: what a held save takes over (#408) */
+  holdings: HeldLegs[] | null;
   /** every rule, as `/monitors` gave them: what a held contract will replace is read from these */
   monitors: Monitor[];
   spx: number | null;
@@ -213,9 +217,7 @@ export function AddContract({
               {said("field")}
               {error?.at === "threshold" ? said("threshold")
                 : fault && ruleOn ? <p id={`${id}-fault`} className="nx-add-warn" role="status">{fault}</p> : null}
-              {replacing.length > 0
-                ? <p className="nx-meta nx-add-replaces">{`Replaces the watch rules: ${replacing.join(", ")}`}</p>
-                : null}
+              <TakeOver held={held} replacing={replacing} taking={contractTakesOver(draft, monitors, holdings)} />
             </div>
           </div>
           {held ? (

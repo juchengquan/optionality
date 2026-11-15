@@ -49,7 +49,7 @@ const SGT_MORNING = new Date("2026-11-11T01:30:00Z");
 function open(over: { privacy?: boolean; monitors?: Monitor[] } = {}) {
   const onSaved = vi.fn();
   render(<AddSpread privacy={over.privacy ?? false} spx={null} spxReason="no batch yet" onSaved={onSaved}
-                    monitors={over.monitors ?? []} onCancel={() => undefined} now={SGT_MORNING} />);
+                    monitors={over.monitors ?? []} holdings={[]} onCancel={() => undefined} now={SGT_MORNING} />);
   fireEvent.click(screen.getByRole("button", { name: "one contract" }));
   return { form: screen.getByRole("form", { name: "add one contract" }), onSaved };
 }
@@ -77,7 +77,7 @@ const RULE = { option_type: "PUT", strike: 7150, field: "option_delta", threshol
 
 describe("choosing what to add", () => {
   it("starts on a spread, and one contract is one press away, in the same form's place", () => {
-    render(<AddSpread privacy={false} spx={null} spxReason={null} onSaved={vi.fn()} monitors={[]}
+    render(<AddSpread privacy={false} spx={null} spxReason={null} onSaved={vi.fn()} monitors={[]} holdings={[]}
                       onCancel={() => undefined} now={SGT_MORNING} />);
     expect(screen.getByRole("form", { name: "add a spread" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "a spread" }).getAttribute("aria-pressed")).toBe("true");
@@ -87,7 +87,7 @@ describe("choosing what to add", () => {
   });
 
   it("keeps each draft when switching back and forth", () => {
-    render(<AddSpread privacy={false} spx={null} spxReason={null} onSaved={vi.fn()} monitors={[]}
+    render(<AddSpread privacy={false} spx={null} spxReason={null} onSaved={vi.fn()} monitors={[]} holdings={[]}
                       onCancel={() => undefined} now={SGT_MORNING} />);
     type("spread 1, leg 1 strike", "7150");
     fireEvent.click(screen.getByRole("button", { name: "one contract" }));
@@ -124,7 +124,7 @@ describe("a save in flight", () => {
 
   it("is held in the spread form too", async () => {
     answer = new Promise(() => undefined);
-    render(<AddSpread privacy={false} spx={null} spxReason={null} onSaved={vi.fn()} monitors={[]}
+    render(<AddSpread privacy={false} spx={null} spxReason={null} onSaved={vi.fn()} monitors={[]} holdings={[]}
                       onCancel={() => undefined} now={SGT_MORNING} />);
     type("expiry", "2026-12-18");
     type("spread 1, leg 1 strike", "7150");

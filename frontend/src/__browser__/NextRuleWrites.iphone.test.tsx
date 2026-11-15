@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { serveRuleEdits, type Refusals } from "../testing/ruleEdits";
+import { QUOTES } from "../testing/ownerBook";
+import type { Entry } from "../shared/api";
 import { overflowsSideways, settle } from "./nextBook";
 
 beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
@@ -178,4 +180,25 @@ describe("Record as held from a watch rule's sheet (#408)", () => {
       await screen.findByText(/replacing \d watch rules?$/);
     });
   }
+
+  it("says what it replaces, what it takes over and a name already on record, all inside the screen", async () => {
+    const THETA = { ...QUOTES.find((q) => q.id === "w-dec18")!, id: "w-theta", field: "option_theta", threshold: 0.5 } as Entry;
+    serveRuleEdits({}, [THETA], { names: ["1218_P7150"] });
+    render(<Next />);
+    await settle();
+    await userEvent.click((await screen.findAllByRole("button", { name: "details of 1218_P7150" }))[0]!);
+    const detail = await screen.findByRole("dialog");
+    await animationsDone();
+    await userEvent.click(within(detail).getByRole("button", { name: "record 1218_P7150 value as held" }));
+    const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    await animationsDone();
+    const form = within(sheet).getByRole("form", { name: "add a spread" });
+    for (const said of [
+      within(form).getByText(/^Replaces the watch rules:/), within(form).getByText(/^Also links to this holding:/),
+      within(form).getByRole("status", { name: "spread 1's name" }),
+    ]) expect(visible(said)).toBe(true);
+    expect(tooSmall(sheet)).toEqual([]);
+    expect(pastTheEdge(sheet)).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+  });
 });

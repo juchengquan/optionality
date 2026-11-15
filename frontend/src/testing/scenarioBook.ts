@@ -5,7 +5,7 @@
  *  takes, which holding a total entry writes — can be held to those files rather than to a fake
  *  service written beside the prediction, which would only agree with itself.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import type { Holding, Monitor } from "../shared/api";
@@ -15,7 +15,17 @@ type Row = Record<string, unknown>;
 interface Scenario {
   world: { tables: Record<string, Row[] | undefined> };
   request: { body: unknown };
-  expect: { rows: Record<string, { added?: Row[]; removed?: Row[]; changed?: { key: Row; from: Row; to: Row }[] }> };
+  expect: {
+    response?: { status?: number };
+    rows: Record<string, { added?: Row[]; removed?: Row[]; changed?: { key: Row; from: Row; to: Row }[] }>;
+  };
+}
+
+/** Every HTTP door scenario's name that starts with `prefix`. */
+export function scenarioNames(prefix: string): string[] {
+  const here = dirname(decodeURIComponent(new URL(import.meta.url).pathname).replace(/^\/@fs/, ""));
+  return readdirSync(resolve(here, "../../../testdata/scenarios/http"))
+    .filter((f) => f.startsWith(prefix) && f.endsWith(".json")).map((f) => f.slice(0, -5)).sort();
 }
 
 export function scenario(name: string): Scenario {

@@ -68,8 +68,16 @@ export interface Refusals {
   spreads?: (body: unknown) => [number, string] | null;
 }
 
+/** How the reads are served, where a test needs them otherwise (#408). */
+export interface Reads {
+  /** `/monitors` fails: the page has the rows of `/quotes` and no rules from `/monitors` */
+  monitorsFail?: boolean;
+  /** every holding's name on record, closed ones too, as `GET /positions` lists them */
+  names?: string[];
+}
+
 /** @param extra rules served beside the book: `CS`, to see a holding take a watched spread */
-export function serveRuleEdits(refuse: Refusals = {}, extra: Entry[] = []): Write[] {
+export function serveRuleEdits(refuse: Refusals = {}, extra: Entry[] = [], reads: Reads = {}): Write[] {
   const writes: Write[] = [];
   const book = splitBook();
   let quotes = [...book.quotes, ...structuredClone(extra)];
@@ -192,12 +200,12 @@ export function serveRuleEdits(refuse: Refusals = {}, extra: Entry[] = []): Writ
 
     if (method === "GET") {
       if (path === "/quotes") return reply(200, quotes);
-      if (path === "/monitors") return reply(200, monitors);
+      if (path === "/monitors") return reads.monitorsFail ? reply(503, { detail: "monitors are not served" }) : reply(200, monitors);
       if (path === "/health") return reply(200, EDIT_HEALTH);
       if (path === "/positions/values") return reply(200, holdings);
       if (path === "/references") return reply(200, []);
       // the closed trades' fold (#296, #373): none here
-      if (path === "/positions") return reply(200, []);
+      if (path === "/positions") return reply(200, (reads.names ?? []).map((name, i) => ({ ...HOLDINGS[0]!, id: `closed-${i}`, name })));
     }
     return reply(404, { detail: `${method} ${path} is not served here` });
   }) as unknown as typeof fetch;

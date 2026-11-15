@@ -23,7 +23,7 @@ import { useDismissOnBack } from "./shared/useDismissOnBack";
 import { AddSpread, type AddInitial } from "./AddSpread";
 import { heldFromWatch } from "./add";
 import { contractFromWatch } from "./contract";
-import type { Rule } from "./edit";
+import { takenOverBy, type Rule } from "./edit";
 import { ClosedResult } from "./ClosedResult";
 import type { ClosedOutcome, HoldingWrites } from "./HoldingActions";
 import { arrangementFor, useViewportWidth } from "./arrangement";
@@ -130,22 +130,37 @@ export function Next() {
   const panelId = useId();
   const plusButton = useRef<HTMLButtonElement>(null);
   const closeAdding = useCallback(() => setAdding(false), [setAdding]);
-  // the desk's panel hands the focus back to "+" when it goes, by Escape or Cancel
-  const closePanel = useCallback(() => { setAdding(false); plusButton.current?.focus(); }, [setAdding]);
+  // the button that opened the panel: "+", or a rule's "Record as held" (#408)
+  const opener = useRef<HTMLElement | null>(null);
+  // the desk's panel hands the focus back to what opened it when it goes, by Escape or Cancel
+  const closePanel = useCallback(() => {
+    setAdding(false);
+    (opener.current?.isConnected ? opener.current : plusButton.current)?.focus();
+    opener.current = null;
+  }, [setAdding]);
   const { reload } = book;
   const saved = useCallback((added: Added) => {
     setAdding(false);
+    opener.current = null;
     // what was made, in rows; never a count of contracts, which privacy hides
     const made = [
       added.positions.length ? `${added.positions.length} holding${added.positions.length === 1 ? "" : "s"}` : null,
       `${added.monitors.length} Monitor${added.monitors.length === 1 ? "" : "s"}`,
     ].filter(Boolean).join(" and ");
     const r = added.replaced.length;
-    toast.add({
-      title: `added ${made}${r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : ""}`, type: "success",
-    });
+    const title = `added ${made}${r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : ""}`;
     plusButton.current?.focus();
-    void reload();
+    if (added.positions.length === 0) {
+      toast.add({ title, type: "success" });
+      void reload();
+      return;
+    }
+    // what the holdings took over besides, as the service now links it — read back, never the
+    // form's prediction (#408)
+    void reload().then(() => fetchMonitors()).then((after) => {
+      const taken = takenOverBy(added, after);
+      toast.add({ title: taken.length ? `${title}; also linked to ${added.positions.length === 1 ? "it" : "them"}: ${taken.join(", ")}` : title, type: "success" });
+    }, () => toast.add({ title, type: "success" }));
   }, [reload, setAdding]);
   // editing a Monitor in place (#292): each write then the page as the service now tells it, its
   // refusal thrown back to the form that sent it rather than toasted underneath it
@@ -157,23 +172,32 @@ export function Next() {
   monitorsNow.current = ruleMonitors;
   const holdingsNow = useRef(holdings);
   holdingsNow.current = holdings;
-  const recordAsHeld = useCallback((rule: Rule) => {
+  const recordAsHeld = useCallback((rule: Rule, served: Entry | null, from: HTMLElement | null) => {
     const open = (initial: AddInitial) => {
+      opener.current = from;
       setAddingNow(true);
       setPrefill((p) => ({ n: (p?.n ?? 0) + 1, initial }));
     };
     const today = marketDay();
-    // a spread's legs, signed and with their quantities, are `/monitors`' (#351)
-    const combo = monitorsNow.current.find((m) => m.id === rule.id && m.legs);
-    if (combo?.legs) { open({ kind: "spread", draft: heldFromWatch({ ...combo, legs: combo.legs }, today) }); return; }
-    // a contract's holding is named apart from every one on record, closed ones too; where that
-    // cannot be read, from the open ones the page has
-    const open1 = (names: string[]) => {
-      const draft = contractFromWatch(rule, today, names);
-      if (draft) open({ kind: "contract", draft });
-    };
-    fetchPositions().then((all) => open1(all.map((p) => p.name)))
-      .catch(() => open1((holdingsNow.current ?? []).map((h) => h.name)));
+    // a spread's legs, signed and with their quantities (#351): `/monitors`' where it has been read,
+    // or the row's own from `/quotes`, which carries them too
+    const legs = monitorsNow.current.find((m) => m.id === rule.id)?.legs ?? served?.legs ?? null;
+    if (rule.combo && !legs) {
+      toast.add({ title: `${rule.name}'s legs are not read yet: try again in a moment`, type: "error" });
+      return;
+    }
+    // every holding's name on record, closed ones too, which the new one's may not be; where that
+    // cannot be read, the open ones the page has
+    void fetchPositions().then((all) => all.map((p) => p.name))
+      .catch(() => (holdingsNow.current ?? []).map((h) => h.name))
+      .then((names) => {
+        if (rule.combo && legs) {
+          open({ kind: "spread", draft: heldFromWatch({ code: rule.code, strike_date: rule.strike_date, legs }, today), taken: names });
+          return;
+        }
+        const draft = contractFromWatch(rule, today, names);
+        if (draft) open({ kind: "contract", draft });
+      });
   }, []);
   const monitorActions = useMemo<MonitorActions>(() => ({
     patch: async (id, body) => { await patchMonitor(id, body as Record<string, unknown>); await reload(); },
@@ -188,7 +212,8 @@ export function Next() {
   const spx = priced?.spx ?? null;
   const spxReason = priced ? null : book.quotes[0]?.spx_reason ?? book.holdings?.[0]?.spx_reason ?? null;
   const addForm = (
-    <AddSpread key={prefill?.n ?? 0} initial={prefill?.initial} privacy={privacy} monitors={book.monitors} spx={spx}
+    <AddSpread key={prefill?.n ?? 0} initial={prefill?.initial} privacy={privacy} monitors={book.monitors}
+               holdings={holdings} spx={spx}
                spxReason={spxReason} onSaved={saved} onCancel={phone ? closeAdding : closePanel} autoFocus={!phone} />
   );
 

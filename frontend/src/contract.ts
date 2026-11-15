@@ -17,7 +17,8 @@
  */
 import type { DraftPayoff, Monitor } from "./shared/api";
 import {
-  contractCode, derivedName, ruleWords as replacedWords, type OptionType, type Side, type SpreadsBody,
+  contractCode, derivedName, replacedBy, ruleWords as replacedWords, takesOver, type HeldLegs, type OptionType, type Side,
+  type SpreadsBody,
 } from "./add";
 
 /** What `POST /monitors` lets one Contract watch, as the old page's form offered it. IV is offered here and
@@ -198,10 +199,23 @@ export function refusalSpot(text: string): ContractSpot {
  *  the (contract, field) a HELD contract's rule makes, owned by no holding (#322). A watched
  *  contract, or a holding with no rule, replaces nothing. Read from the `/monitors` the page has. */
 export function contractReplaces(d: ContractDraft, monitors: Monitor[]): string[] {
+  return replacedRules(d, monitors).map(replacedWords);
+}
+
+function replacedRules(d: ContractDraft, monitors: Monitor[]): Monitor[] {
   const strike = typed(d.strike);
   if (!d.held || !d.rule || strike === null || strike <= 0 || d.expiry.length < 10) return [];
-  const code = contractCode(d.expiry, d.option_type, strike);
-  return monitors.filter((m) => m.code === code && m.field === d.field && m.positions.length === 0).map(replacedWords);
+  return replacedBy([{ code: contractCode(d.expiry, d.option_type, strike), field: d.field }], monitors);
+}
+
+/** The rules a HELD contract's holding takes over besides its own (#408, `add.ts`'s `takesOver`): a
+ *  watched spread holding the contract, another rule on it, all as the service adopts them. Null
+ *  where the holdings are not read; none for a watched contract, or before the strike is typed. */
+export function contractTakesOver(d: ContractDraft, monitors: Monitor[], holdings: HeldLegs[] | null): Monitor[] | null {
+  const strike = typed(d.strike);
+  if (!d.held || strike === null || strike <= 0 || d.expiry.length < 10) return [];
+  const out = takesOver(d.expiry, [[{ option_type: d.option_type, strike }]], replacedRules(d, monitors), monitors, holdings);
+  return out === null ? null : out[0]!.map((r) => r.monitor);
 }
 
 /** What moved, signed as a Position's Entry: received positive, paid negative; never -0. */

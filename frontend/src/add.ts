@@ -51,8 +51,11 @@ export interface SpreadDraft {
   /** null follows the default: on, except for a HELD DEBIT spread, whose stop is a fall in value
    *  that a "2x the Entry, above" rule would get backwards (`valueEnabled`) */
   valueOn: boolean | null;
-  /** null follows the default: 2x the Entry when held, nothing when watched */
+  /** HELD, as typed; null follows the default, 2x a credit's Entry or nothing for a debit */
   valueAt: string | null;
+  /** WATCHED, as typed — an entry signal, kept apart from the held figure (owner, #408): switching to
+   *  "I hold it" shows the holding's default instead, and switching back shows this again */
+  watchAt: string | null;
   /** null follows the default: on when the spread has a short leg to watch, off when it has none */
   deltaOn: boolean | null;
   /** null follows the default: 0.30 when held, nothing when watched */
@@ -61,6 +64,8 @@ export interface SpreadDraft {
    *  stop is a fall in value, and at or above otherwise, as #293 set it (#405). A held credit's stop
    *  takes no choice (`valueChoosable`), and this is not read for it */
   valueDirection: "above" | "below" | null;
+  /** WATCHED, as pressed; null is at or above. Kept apart from the held one, as `watchAt` is */
+  watchDirection: "above" | "below" | null;
   /** each short leg's |Δ|: at or above unless ≤ is chosen (#405) */
   deltaDirection: "above" | "below";
   /** prefilled from a WATCHED spread by "Record as held" (#408): held as a debit, its value rule
@@ -137,7 +142,8 @@ const LEGS: Record<Preset, () => LegDraft[]> = {
 function spread(preset: Preset): SpreadDraft {
   return {
     key: nextKey(), legs: LEGS[preset](), name: "", entry: "", contracts: "1",
-    valueOn: null, valueAt: null, deltaOn: null, deltaAt: null, valueDirection: null, deltaDirection: "above",
+    valueOn: null, valueAt: null, watchAt: null, deltaOn: null, deltaAt: null, valueDirection: null, watchDirection: null,
+    deltaDirection: "above",
   };
 }
 
@@ -293,8 +299,16 @@ export const valueChoosable = (held: boolean, s: SpreadDraft) => !isCreditStop(h
  *  its stop is a fall in its value, so ≤ is the rule it wants (owner's decision on #405) — and at or
  *  above for anything else. ≥ stays pressable for a debit. */
 export function valueDirectionShown(held: boolean, s: SpreadDraft): "above" | "below" {
+  if (!held) return s.watchDirection ?? "above";
   return s.valueDirection ?? (isDebit(held, s) ? "below" : "above");
 }
+
+/** What pressing ≥ or ≤ on the value rule changes: the held direction, or the watched one (#408). */
+export const valueDirectionChange = (held: boolean, d: "above" | "below"): Partial<SpreadDraft> =>
+  (held ? { valueDirection: d } : { watchDirection: d });
+
+/** What typing in the value rule's box changes: the held figure, or the watched one (#408). */
+export const valueChange = (held: boolean, v: string): Partial<SpreadDraft> => (held ? { valueAt: v } : { watchAt: v });
 
 /** `direction` as posted: only where it is below, at or above being the route's default — so a rule
  *  at or above posts exactly what it did before #405. */
@@ -313,12 +327,14 @@ export function valueDefault(held: boolean, s: SpreadDraft): string {
  *  stop of a debit is a fall in value: switched on, it starts at or below (`valueDirectionShown`,
  *  #405), with no figure — this form does not invent one.
  *
- *  A figure the owner TYPED keeps it on: typed while watching, then switched to "I hold it" with a
- *  debit's Entry, the rule was silently dropped from the save while its box still showed the figure
- *  (#408). Its box is disabled while it is off, so a figure is only ever typed into a rule that was on;
- *  and a box emptied to be typed again stays on, rather than switching off under the owner's finger. */
+ *  A rule the owner had ON stays on (#408): a figure typed while watching, then "I hold it" with a
+ *  debit's Entry, was silently dropped from the save. Held, the watched figure gives way to the
+ *  holding's default — an empty ≤ for a debit, for the stop to be typed (owner, 2026-11-15) — and so
+ *  does a spread prefilled from a watch rule (`fromWatch`). A box is disabled while its rule is off,
+ *  so a figure is only ever typed into a rule that was on; and a box emptied to be typed again stays
+ *  on, rather than switching off under the owner's finger. Switched off by hand, it is off. */
 export function valueEnabled(held: boolean, s: SpreadDraft): boolean {
-  return s.valueOn ?? (!isDebit(held, s) || s.valueAt !== null || s.fromWatch === true);
+  return s.valueOn ?? (!isDebit(held, s) || s.valueAt !== null || s.watchAt !== null || s.fromWatch === true);
 }
 
 /** The words beside the value Monitor. */
@@ -393,8 +409,11 @@ function deltaDefault(held: boolean): string {
   return held ? HELD_DELTA : "";
 }
 
-/** What the value and delta boxes show: what was typed, or the default. */
-export const valueShown = (held: boolean, s: SpreadDraft) => s.valueAt ?? valueDefault(held, s);
+/** What the value and delta boxes show: what was typed, or the default. The value's figure is kept
+ *  per choice (#408): a watched spread's is an entry signal, a held one's its stop, so neither stands
+ *  in for the other — switching to "I hold it" shows the holding's default, and back shows what was
+ *  typed. The |Δ| figure means the same either way, and is one. */
+export const valueShown = (held: boolean, s: SpreadDraft) => (held ? s.valueAt : s.watchAt) ?? valueDefault(held, s);
 export const deltaShown = (held: boolean, s: SpreadDraft) => s.deltaAt ?? deltaDefault(held);
 
 const strikes = (s: SpreadDraft) => s.legs.map((l) => typed(l.strike));
@@ -515,11 +534,82 @@ export function ruleWords(m: Monitor): string {
  *  in its place. One another holding owns is refused instead, and a watched spread, or a default
  *  switched off, replaces nothing. Read from the `/monitors` the page already has. */
 export function replaces(d: AddDraft, monitors: Monitor[]): string[][] {
-  return d.spreads.map((s) => {
-    if (!d.held) return [];
-    return planned(d, s).flatMap(({ code, field }) => monitors
-      .filter((m) => m.code === code && m.field === field && m.positions.length === 0)
-      .map(ruleWords));
-  });
+  return replacedRules(d, monitors).map((rs) => rs.map(ruleWords));
+}
+
+/** `replaces`, as the rules themselves. */
+function replacedRules(d: AddDraft, monitors: Monitor[]): Monitor[][] {
+  return d.spreads.map((s) => (d.held ? replacedBy(planned(d, s), monitors) : []));
+}
+
+/** The watch rules on these (code, field)s that `POST /spreads` deletes and makes again (#322). */
+export const replacedBy = (keys: { code: string; field: string }[], monitors: Monitor[]): Monitor[] =>
+  keys.flatMap(({ code, field }) => monitors.filter((m) => m.code === code && m.field === field && m.positions.length === 0));
+
+/** A holding as the take-over reads one: its expiry and its legs, each with its quantity. */
+export interface HeldLegs {
+  id: string;
+  strike_date: string;
+  legs: readonly { option_type: string; strike: number; qty?: number }[];
+}
+
+/** The rules every new holding TAKES OVER, worked out as the service works it (#408), or null where
+ *  the holdings have not been read: which rules it takes depends on all of them.
+ *
+ *  After it writes the holdings and their own Monitors, `POST /spreads` ADOPTS every rule linked to
+ *  no holding (`adoptOrphanMonitors`) — on or off, a watched spread's value or its Θ, a long leg's
+ *  Δ — by `positionsHolding` against every OPEN holding, the new ones included: a rule naming a
+ *  contract two holdings hold is linked to nothing (a roll day); otherwise to every holding holding
+ *  one of its contracts, as covering the whole (`all`) where what they hold is exactly what it
+ *  watches, each leg as many times as its quantity, and as one leg of it (`leg`) otherwise. The rules
+ *  it REPLACES are deleted first and are not among them. Held to the backend by the door scenarios
+ *  (`NextAddModel.test.ts`). A rule taken over is kept as it is: its threshold, its direction and
+ *  its bell. */
+export function takesOver(
+  expiry: string, news: (readonly { option_type: string; strike: number; qty?: number }[] | null)[],
+  replaced: Monitor[], monitors: Monitor[], holdings: HeldLegs[] | null,
+): { monitor: Monitor; scope: "all" | "leg" }[][] | null {
+  if (holdings === null) return null;
+  const NEW = (i: number) => `\u0000new${i}`;
+  const all: HeldLegs[] = [
+    ...holdings,
+    ...news.flatMap((legs, i) => (legs === null ? [] : [{ id: NEW(i), strike_date: expiry, legs }])),
+  ];
+  const codeOf = (date: string, l: { option_type: string; strike: number }) =>
+    contractCode(date, l.option_type as OptionType, l.strike);
+  const owners = new Map<string, string[]>();
+  for (const h of all) {
+    for (const l of h.legs) owners.set(codeOf(h.strike_date, l), [...(owners.get(codeOf(h.strike_date, l)) ?? []), h.id]);
+  }
+  const gone = new Set(replaced.map((m) => m.id));
+  const out: { monitor: Monitor; scope: "all" | "leg" }[][] = news.map(() => []);
+  for (const m of monitors) {
+    if (m.positions.length > 0 || gone.has(m.id)) continue;
+    // `monitorContracts`: a combo's legs, each as many times as its quantity, or its one contract
+    const contracts = m.legs && m.legs.length > 0
+      ? m.legs.flatMap((l) => Array<string>(l.qty ?? 1).fill(codeOf(m.strike_date, l))) : [m.code];
+    if (contracts.some((c) => (owners.get(c)?.length ?? 0) > 1)) continue;
+    const found = new Set(contracts.flatMap((c) => owners.get(c) ?? []));
+    const mine = news.map((_, i) => found.has(NEW(i)));
+    if (!mine.some(Boolean)) continue;
+    const watched = new Map<string, number>();
+    for (const c of contracts) watched.set(c, (watched.get(c) ?? 0) + 1);
+    const held = new Map<string, number>();
+    for (const h of all.filter((x) => found.has(x.id))) {
+      for (const l of h.legs) held.set(codeOf(h.strike_date, l), (held.get(codeOf(h.strike_date, l)) ?? 0) + (l.qty ?? 1));
+    }
+    const scope = [...held].every(([c, n]) => watched.get(c) === n) ? "all" : "leg";
+    mine.forEach((yes, i) => { if (yes) out[i]!.push({ monitor: m, scope }); });
+  }
+  return out;
+}
+
+/** Per spread, the rules a HELD draft's holdings will take over (`takesOver`); null where the
+ *  holdings are not read. A watched draft takes nothing: it records no holding. */
+export function takenOver(d: AddDraft, monitors: Monitor[], holdings: HeldLegs[] | null): Monitor[][] | null {
+  if (!d.held) return d.spreads.map(() => []);
+  const news = d.spreads.map((s) => (d.expiry.length < 10 ? null : legsOf(s)));
+  const out = takesOver(d.expiry, news, replacedRules(d, monitors).flat(), monitors, holdings);
+  return out === null ? null : out.map((rs) => rs.map((r) => r.monitor));
 }
 

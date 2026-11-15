@@ -1820,6 +1820,32 @@ export const HTTP: readonly HttpInput[] = [
     }),
   },
   {
+    // "Record as held" from the watched call spread `dec-calls` (#408): its value rule and its short
+    // leg's Δ are REPLACED by the holding's own; its Θ and its long leg's Δ are on nothing the save
+    // makes, so the adoption that follows every POST /spreads takes them over AS THEY ARE — the Θ as
+    // covering all of it, the long leg's Δ as one leg of it. The dashboard names both before the save.
+    name: "POST /spreads takes over a watched spread's theta and its long leg's delta, kept as they are",
+    world: world({
+      tables: {
+        monitors: [
+          combo({ id: "mon-value" }),
+          combo({ id: "mon-theta", field: "option_theta", threshold: 0.5 }),
+          monitor({ id: "mon-c7300" }),
+          monitor({ id: "mon-c7350", strike: 7350, threshold: 0.1 }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{
+        name: "dec-calls", held: true, entry: 1, contracts: 1, opened_at: "2026-11-06",
+        legs: [{ side: "short", option_type: "CALL", strike: 7300 }, { side: "long", option_type: "CALL", strike: 7350 }],
+        monitors: [{ threshold: -2, direction: "below", compare: "signed" }, { option_type: "CALL", strike: 7300, threshold: 0.3 }],
+      }],
+    }),
+  },
+  {
     // the condor already holds the 6400 put: the lone holding's rule is linked to IT, never to the
     // condor, and the condor gains no rule nobody asked for
     name: "POST /spreads links one contract's rule to its own holding when another holding holds that strike",

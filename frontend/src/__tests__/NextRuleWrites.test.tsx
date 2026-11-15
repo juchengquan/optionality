@@ -476,6 +476,107 @@ describe("through the page, against a service that writes", () => {
     expect(writes).toEqual([]);
   });
 
+  it("names the rules a held spread takes over besides, before the save, and reads them back after (#408)", async () => {
+    NOW();
+    // a Θ rule on the watched spread: on nothing the save makes, so the new holding takes it over
+    const THETA = { ...SPREAD, id: "w-theta", field: "option_theta", threshold: 0.5 } as Entry;
+    const writes = serveRuleEdits({}, [THETA]);
+    render(<Next />);
+    // two cards share the name: the value rule's is the one before the Θ's
+    fireEvent.click((await screen.findAllByRole("button", { name: "details of 1218_P7150" }))[0]!);
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 1218_P7150 value as held" }));
+    const form = within(await addSheet()).getByRole("form", { name: "add a spread" });
+    expect(within(form).getByText("Replaces the watch rules: 1218_P7150 |value| ≥ 6.00, 7150 put |Δ| ≥ 0.20")).toBeTruthy();
+    expect(within(form).getByText(
+      "Also links to this holding: 1218_P7150 |Θ| ≥ 0.50 — kept as they are; edit or delete them after.")).toBeTruthy();
+    fireEvent.change(within(form).getByLabelText("spread 1 entry"), { target: { value: "2.40" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 2 Monitors" }));
+    await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
+    expect(await screen.findByText(
+      "added 1 holding and 2 Monitors, replacing 2 watch rules; also linked to it: 1218_P7150 |Θ| ≥ 0.50")).toBeTruthy();
+  });
+
+  it("names a watched spread holding the contract as taken over by a held contract, and reads it back", async () => {
+    NOW();
+    serveRuleEdits({}, [CS]);
+    render(<Next />);
+    fireEvent.click(await screen.findByRole("button", { name: "details of 261231 8000C" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 261231 8000C Δ as held" }));
+    const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
+    expect(within(form).getByText(/^Also links to this holding: cs \|value\| ≥ /)).toBeTruthy();
+    fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 Monitor" }));
+    expect(await screen.findByText(/^added 1 holding and 1 Monitor, replacing 1 watch rule; also linked to it: cs \|value\| ≥ /))
+      .toBeTruthy();
+  });
+
+  it("opens a watched spread from its row's own legs where /monitors has not been read", async () => {
+    NOW();
+    const writes = serveRuleEdits({}, [], { monitorsFail: true });
+    render(<Next />);
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 1218_P7150 value as held" }));
+    const form = within(await addSheet()).getByRole("form", { name: "add a spread" });
+    expect([value(form, "spread 1, leg 1 strike"), value(form, "spread 1, leg 2 strike"), value(form, "spread 1 name")])
+      .toEqual(["7150", "7100", "1218_P7150"]);
+    expect(within(form).getByRole("button", { name: "spread 1, leg 1 side: short — flip" })).toBeTruthy();
+    expect(writes).toEqual([]);
+  });
+
+  it("names a watched contract's holding apart from a closed one of the same name", async () => {
+    NOW();
+    const writes = serveRuleEdits({}, [], { names: ["1231_C8000"] });
+    render(<Next />);
+    fireEvent.click(await screen.findByRole("button", { name: "details of 261231 8000C" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 261231 8000C Δ as held" }));
+    const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
+    expect(value(form, "name")).toBe("1231_C8000-2");
+    fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 Monitor" }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect((writes[0]!.body as { spreads: { name: string }[] }).spreads[0]!.name).toBe("1231_C8000-2");
+  });
+
+  it("says before saving that a watched spread's name is a holding's already, and what renaming does", async () => {
+    NOW();
+    serveRuleEdits({}, [], { names: ["1218_P7150"] });
+    render(<Next />);
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 1218_P7150 value as held" }));
+    const form = within(await addSheet()).getByRole("form", { name: "add a spread" });
+    expect(within(form).getByRole("status", { name: "spread 1's name" }).textContent).toBe(
+      "A holding named 1218_P7150 is already on record, closed ones included, so saving under this name is refused. "
+      + "Rename it in the name box: the watch rule 1218_P7150 is then kept, linked to the new holding, rather than replaced.");
+    fireEvent.change(within(form).getByLabelText("spread 1 name"), { target: { value: "dec-put" } });
+    expect(within(form).queryByRole("status", { name: "spread 1's name" })).toBeNull();
+    // renamed, the value rule is no longer replaced: it is taken over, as it is
+    expect(within(form).getByText("Replaces the watch rules: 7150 put |Δ| ≥ 0.20")).toBeTruthy();
+    expect(within(form).getByText(
+      "Also links to this holding: 1218_P7150 |value| ≥ 6.00 — kept as they are; edit or delete them after.")).toBeTruthy();
+  });
+
+  it("hands the focus back to the desk's Record as held when the panel it opened is cancelled", async () => {
+    NOW();
+    document.cookie = "ui_arrangement=desk;path=/";
+    onTestFinished(() => { document.cookie = "ui_arrangement=;path=/;max-age=0"; });
+    serveRuleEdits();
+    render(<Next />);
+    fireEvent.click(await screen.findByRole("button", { name: "1218_P7150" }));
+    const record = within(screen.getByRole("complementary", { name: /^inspector/ }))
+      .getByRole("button", { name: "record 1218_P7150 value as held" });
+    fireEvent.click(record);
+    const add = await screen.findByRole("region", { name: "add a spread or contract" });
+    fireEvent.click(within(add).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull());
+    expect(document.activeElement).toBe(record);
+    // and by Escape
+    fireEvent.click(record);
+    const again = await screen.findByRole("region", { name: "add a spread or contract" });
+    fireEvent.keyDown(within(again).getByLabelText("spread 1 entry"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull());
+    expect(document.activeElement).toBe(record);
+  });
+
   it("splits a total entry and the holding's Entry is the service's afterwards", async () => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T15:00:00Z") });
     onTestFinished(() => { vi.useRealTimers(); });

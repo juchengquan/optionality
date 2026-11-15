@@ -5,7 +5,8 @@
  *  all — a draft that is not one has nothing to send — and the refusals the service words (a signed
  *  0, a combo on IV, a duplicate) are its own, filed beside the field they are about.
  */
-import type { Entry, Holding, Monitor } from "./shared/api";
+import type { Added, Entry, Holding, Monitor } from "./shared/api";
+import { ruleWords as monitorWords } from "./add";
 import { contractOfCode } from "./contract";
 import { entryName, fieldWords, monitorName, ruleWords, shortRule } from "./needs";
 
@@ -273,3 +274,12 @@ export function splitCounts(r: Rule, holdings: Holding[] | null, privacy: boolea
  *  not offered there rather than guessed at. */
 export const recordOffered = (r: Rule) =>
   r.enabled && r.holdings.length === 0 && r.held === false && (r.combo || contractOfCode(r.code) !== null);
+
+/** The rules a save's holdings took over besides their own (#408), in words, read from `/monitors`
+ *  AFTER the save — the service's word for what it adopted, never the form's preview: every rule
+ *  linked to a holding just made that the save did not make itself. */
+export function takenOverBy(added: Added, after: Monitor[]): string[] {
+  const made = new Set(added.monitors.map((m) => m.id));
+  const ids = new Set(added.positions.map((p) => p.id));
+  return after.filter((m) => !made.has(m.id) && m.positions.some((p) => ids.has(p.id))).map(monitorWords);
+}

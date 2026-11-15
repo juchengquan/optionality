@@ -45,7 +45,7 @@ export interface MonitorActions {
   /** a total entry split across a rule's holdings (#336); throws the service's refusal */
   totalEntry?: (id: string, entry: number) => Promise<void>;
   /** "Record as held" (#408): the add form opened as "I hold it", prefilled from this watch rule */
-  recordAsHeld?: (rule: Rule) => void;
+  recordAsHeld?: (rule: Rule, served: Entry | null, from: HTMLElement | null) => void;
   /** what the split reads: every rule as `/monitors` gave them, the valued holdings (null where the
    *  page has none), and whether the owner's privacy is on */
   book?: { monitors: Monitor[]; holdings: Holding[] | null; privacy: boolean };
@@ -170,7 +170,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         ) : null}
         {records ? (
           <button type="button" className="nx-mon-button" aria-label={`record ${label} as held`} disabled={busy}
-                  onClick={() => actions.recordAsHeld!(rule)}>
+                  onClick={(e) => actions.recordAsHeld!(rule, served, e.currentTarget)}>
             Record as held
           </button>
         ) : null}
