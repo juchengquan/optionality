@@ -631,7 +631,8 @@ between them is made light. Decided:
   their words, the line their description; two equal columns, wrapping on the phone.
 - **"Record as held"** is offered in the desk's inspector and the phone's sheet of a WATCH rule — on,
   linked to no holding, on nothing an open holding holds — of a spread or one contract. It opens the
-  add form as "I hold it": on the desk the panel above the table, the Entry focused; on the phone the
+  add form as "I hold it": on the desk the panel above the table *(superseded 2026-11-15: a side
+  sheet, like Settings — "Add as a side sheet on the desk", below)*, the Entry focused; on the phone the
   Add sheet OVER the rule's sheet, Back or Cancel closing only the Add sheet (the page's sheets now
   share one history list, so one Back closes one sheet). The owner types Opened (today's New York
   trading day until changed), the Entry and the count; the save is `POST /spreads`. Where `/monitors`
@@ -716,3 +717,25 @@ What this supersedes, marked where it stands above: the phone's three tabs (#374
 amendment's "The phone has three tabs") and its bar along the bottom; the market-closed line's own
 refresh button (#371). The saved picture is unchanged: its header was always its own, with nothing
 to press.
+
+## Amended 2026-11-15: Add as a side sheet on the desk
+
+The owner asked for the desk's Add to be what its Settings is. Decided:
+
+- **On the desk, the add form is a side sheet over the book**, drawn by the same component as the
+  desk's Settings (`DeskSheet`): it slides in from the right, the book stays drawn under it, and it
+  closes on Back, its Close button, Escape, a tap outside, and the form's Cancel or Save. It is
+  wider than Settings' (48rem against 24rem) so a spread's payoff still sits beside its fields
+  (the form's 44rem container query); at Settings' width it fell under them.
+- **Its Back entry is the page's**, as Settings' is, held for as long as Add is open on either
+  arrangement: the desk's side sheet and the phone's bottom sheet are one Add, so a switch of
+  arrangement with it open pushes no second entry (the race #410 found for Settings).
+- **The focus goes back to what opened it** — "+", or the inspector's "Record as held" — by
+  whatever way it closes, as the panel's did.
+- **"+" opens Add; it no longer toggles it**, as the settings button opens Settings: the sheet is
+  modal, so "+" cannot be pressed while it is open.
+- The desk's keys need no rule of their own for it: an open sheet is a dialog, and j and k already
+  stand still under one.
+
+What this supersedes, marked where it stands above: "on the desk the panel above the table" in
+#408's "Record as held", and with it the add panel's region above the table (#293).

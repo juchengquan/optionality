@@ -1,4 +1,4 @@
-/* The add form (#293): a panel above the desk's table, and the body of the phone's Add sheet. Each
+/* The add form (#293): the body of the desk's Add side sheet and of the phone's Add sheet. Each
    spread is its fields beside its payoff on a wide screen, and the payoff under them on a narrow
    one — decided by the room the form has, not by a breakpoint on the page. */
 .nx-add {
@@ -87,13 +87,6 @@
   border-left: 4px solid var(--warn); padding: 0.25rem 0.625rem; border-radius: var(--radius-md);
   background: color-mix(in oklch, var(--warn) 14%, var(--background)); font-size: 0.8125rem;
 }
-
-/* the desk's panel, above the table: its own region, closed with the form's Cancel */
-.nx-add-panel {
-  margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-lg);
-  background: var(--card, var(--background));
-}
-.nx-add-panel > h2 { font-size: 1rem; font-weight: 650; margin-bottom: 0.5rem; }
 
 /* on the phone every box is a 44pt target already (next.css); the legs' columns share the width
    rather than overflowing it, the strike taking what the toggles and the remove button leave */

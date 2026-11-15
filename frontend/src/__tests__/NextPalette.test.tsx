@@ -222,10 +222,10 @@ describe("finding by text", () => {
 });
 
 describe("its actions", () => {
-  it("adds a spread: the add panel opens with the focus in it", async () => {
+  it("adds a spread: the add sheet opens with the focus in it", async () => {
     const { user } = await open();
     await run(user, "add a spread");
-    const panel = await screen.findByRole("region", { name: "add a spread or contract" });
+    const panel = await screen.findByRole("dialog", { name: "Add a spread or contract" });
     await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
   });
 

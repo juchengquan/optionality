@@ -402,7 +402,7 @@ describe("the preview", () => {
   });
 });
 
-describe("the desk's panel", () => {
+describe("the desk's sheet", () => {
   beforeEach(() => {
     document.cookie = "ui_arrangement=desk;path=/";
     vi.stubGlobal("fetch", vi.fn((url: string) => {
@@ -419,12 +419,13 @@ describe("the desk's panel", () => {
     render(<Next />);
     const plus = screen.getByRole("button", { name: "add" });
     fireEvent.click(plus);
-    const panel = screen.getByRole("region", { name: "add a spread or contract" });
-    expect(plus.getAttribute("aria-controls")).toBe(panel.id);
-    expect(panel.id).not.toBe("");
+    const panel = screen.getByRole("dialog", { name: "Add a spread or contract" });
+    expect(plus.getAttribute("aria-haspopup")).toBe("dialog");
+    // a side sheet, as Settings is, where it was a panel above the table
+    expect(panel.getAttribute("data-side")).toBe("right");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("expiry")));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    expect(screen.queryByRole("region", { name: "add a spread or contract" })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     expect(document.activeElement).toBe(plus);
   });
 });

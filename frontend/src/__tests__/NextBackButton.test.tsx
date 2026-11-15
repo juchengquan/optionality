@@ -6,8 +6,8 @@
  *  ignoring you. jsdom's `history.length` never shrinks, so the pushes and the backs are counted.
  *
  *  Every sheet the page opens over itself: the phone's detail, Add and Settings sheets, and the
- *  desk's Settings. (The desk's add panel and inspector are not sheets: they sit in the page, and Back is
- *  not theirs.) The journal's trade sheet is `NextJournal`'s.
+ *  desk's Add and Settings. (The desk's inspector is not a sheet: it sits in the page, and Back is
+ *  not its.) The journal's trade sheet is `NextJournal`'s.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -48,6 +48,12 @@ const SHEETS = [
     name: "the phone's Settings sheet", arrangement: "phone",
     open: () => fireEvent.click(screen.getByRole("button", { name: "settings" })),
     find: () => screen.queryByRole("dialog", { name: "Settings" }),
+  },
+  {
+    // a side sheet like Settings', where it was a panel above the table
+    name: "the desk's Add sheet", arrangement: "desk",
+    open: () => fireEvent.click(screen.getByRole("button", { name: "add" })),
+    find: () => screen.queryByRole("dialog", { name: "Add a spread or contract" }),
   },
   {
     name: "the desk's Settings", arrangement: "desk",
