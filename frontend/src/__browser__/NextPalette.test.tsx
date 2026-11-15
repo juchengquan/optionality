@@ -74,7 +74,7 @@ describe("every action, from the keyboard", () => {
     await run("7150 delta");
     await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 261218 7150P"));
     await run("edit the selected");
-    const form = await screen.findByRole("form", { name: "editing 261218 7150P delta" });
+    const form = await screen.findByRole("form", { name: "editing 261218 7150P Δ" });
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
   });
 

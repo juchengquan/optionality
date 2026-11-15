@@ -794,7 +794,7 @@ class TestWhatKindOfContractARowIs:
 
 
 class TestWhatARowSSentenceReads:
-    """The redesigned page writes each rule as a sentence — "spread value ≥ 6.01 — now 2.00, 4.01
+    """The redesigned page writes each rule as a sentence — "value ≥ 6.01 — now 2.00, 4.01
     away" — and no figure in it is assembled in the browser (ADR 0005, ADR 0023). `watched` is the one
     reading the fill bar and the bell are drawn from and `distance` its room to the threshold, so the
     sentence, the bar and the bell are one figure said three ways and cannot disagree."""

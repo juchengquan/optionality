@@ -144,11 +144,23 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   "|val| ≥ 5.51   —  last 3.05 Fri 16:14" — on the desk's rule column, the phone's cards and sheet,
   the inspector and the editor, whose draft is the short rule as typed. The sentence above stays,
   as each one's hover title and what a screen reader hears. Fields are `val` (a spread's price),
-  `mid` (a contract's), `Δ Γ Θ ν` and `IV`; vega is `ν`, not `V`, which beside `val` reads as a
-  value. The arrow points the way the figure — its size, under `abs` — must move to reach the
-  threshold; `▲`/`▼` mark it at or past. The words are the domain's (`alarm.ts`'s `ruleShort`,
-  `figureShort`, `distanceShort`), which Telegram's messages use too, and the page's copy is held to
-  their golden cases.)*
+  `mid` (a contract's), `Δ Γ Θ ν` and `IV` — `value` for both prices since #404, below; vega is
+  `ν`, not `V`, which would read as a value. The arrow points the way the figure — its size, under
+  `abs` — must move to reach the threshold; `▲`/`▼` mark it at or past. The words are the
+  domain's (`alarm.ts`'s `ruleShort`, `figureShort`, `distanceShort`), which Telegram's messages
+  use too, and the page's copy is held to their golden cases.)*
+  *(Amended 2026-11-15, #404: ONE vocabulary. A price is `value`, a spread's and a single
+  contract's alike — `val` and `mid` are gone — in the short form, on screen and in Telegram
+  ("|value| ≥ 4.51   2.10  ↑2.41"), AND in the sentence, which now uses the short form's words:
+  the Greeks as `Δ Γ Θ ν`, the threshold to the short form's places, every minus the real one —
+  "|value| ≥ 5.51 — no figure", "|Δ| ≥ 0.20 — now −0.087, 0.113 away". A held credit's stop keeps
+  its own words, `close ≥` short and `cost to close ≥` in full. The sentence's field words
+  (`needs.ts`'s `fieldWords`) are held to the domain's golden cases with the short form's, and
+  where a quarantined rule's sentence is now its short line, the desk draws it once, with no title
+  repeating it. The inspector's figures are labelled in the same words — `value`, `Δ Γ Θ ν` — where
+  they were `spread value`, `γ`, `θ` and `vega`; a contract's `mid` beside its bid and ask stays,
+  being a quote's and no rule's. The palette still finds a rule by the field's spoken name,
+  "delta" or "price", and a spread's by "spread".)*
 - **Fired alerts:**
   - A fired ENTRY alert is good news and has its own "opportunity" style, never alarm red. A
     viewer setting can make it look the same as risk instead.
@@ -472,14 +484,16 @@ an image can miss. **This supersedes #300's "A's table from the desk, B's cards 
   close", "manage-by"), "fault: " and the rule's error, "quarantined: " and its reason, and the
   muted fold's reasons ("muted by you", "expired", "holding closed"). No state is new.
 - **Words and numbers only.** No chip, fill bar, bracket, sparkline, arrow or symbol shorthand, and
-  no colour: a leg is its letters and sign (`-C7300 +C7350`) without #391's type colour, the pace gap
+  no colour (the field's own symbols excepted since #404 — `Δ`, as the column headers write it): a
+  leg is its letters and sign (`-C7300 +C7350`) without #391's type colour, the pace gap
   its words ("behind by 0.40"), the strike strip the nearest short strike and its distance in words.
   Dark ink on a white ground in either colour scheme, in a monospace face with tabular figures, at
   13px; as wide as its widest row, so nothing is clipped or wrapped. The browser suite measures it,
   at the desk and under the iPhone 13 profile: one ground, one ink, no drawn element, no type under
   12px, nothing cut short, and the same table from both.
-- **Rules in full sentences** (`sentence`: "|delta| ≥ 0.2 — now -0.170, 0.030 away"). The screen
-  keeps the short form (#388).
+- **Rules in full sentences** (`sentence`: "|Δ| ≥ 0.20 — now −0.170, 0.030 away" since #404, in
+  the short form's words; it read "|delta| ≥ 0.2 — now -0.170, …" before). The screen keeps the
+  short form (#388).
 - **A header block says what the table is:** when it was taken, on New York's clock and on
   DISPLAY_TZ's (`/health`'s `display_tz`); the session, in the page's words ("in session", or the
   market-closed line's); how fresh the figures are (the Freshness line); any warning; the

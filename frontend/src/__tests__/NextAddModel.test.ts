@@ -439,7 +439,7 @@ describe("the watch rules a held spread will replace", () => {
     expect(contractCode("2026-12-18", "PUT", 7150)).toBe("US.SPXW261218P7150000");
     const d = condor();
     expect(replaces(d, [value, delta])).toEqual([
-      ["1218_P7150_P7100 value ≥ 1.80", "7150 put |Δ| ≥ 0.15"], [],
+      ["1218_P7150_P7100 |value| ≥ 1.80", "7150 put |Δ| ≥ 0.15"], [],
     ]);
   });
 
@@ -451,7 +451,7 @@ describe("the watch rules a held spread will replace", () => {
   it("are none for a rule another holding owns, a default switched off, or a watched spread", () => {
     const d = condor();
     expect(replaces(d, [{ ...value, positions: [{ id: "p", name: "other" }] }, delta])[0]).toEqual(["7150 put |Δ| ≥ 0.15"]);
-    expect(replaces({ ...d, spreads: [{ ...d.spreads[0]!, deltaOn: false }] }, [value, delta])[0]).toEqual(["1218_P7150_P7100 value ≥ 1.80"]);
+    expect(replaces({ ...d, spreads: [{ ...d.spreads[0]!, deltaOn: false }] }, [value, delta])[0]).toEqual(["1218_P7150_P7100 |value| ≥ 1.80"]);
     expect(replaces(condor(false), [value, delta])).toEqual([[], []]);
   });
 });

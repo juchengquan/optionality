@@ -707,7 +707,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   as served with a real minus, `↑0.113` / `▲ past 0.050` — by the domain's `ruleShort`,
   `figureShort` and `distanceShort` (`alarm.ts`), in every alarm, reminder, clear, quarantine and
   expiry message and in `/monitors` (contract, rule, last, state), and drawn so on the dashboard,
-  whose copy (`needs.ts`) is held to their golden cases.
+  whose copy (`needs.ts`) is held to their golden cases. ONE vocabulary (#404): a price is `value`,
+  a spread's and a contract's alike, and the Greeks are `Δ Γ Θ ν` — in the short form AND in the
+  page's full sentence (`needs.ts`'s `fieldWords`, held to the same cases), which also takes the
+  short form's places and its real minus; only a held credit's stop is said apart, `close ≥` short
+  and `cost to close ≥` in full. `|value|` made `/monitors`' widest row 43 (`TABLE_WIDTH`).
 - Timestamps: storage is UTC; display converts via `DISPLAY_TZ`. moomoo `update_time` arrives naive US-Eastern
   and means LAST TRADE, not freshness — `fetched_at` is freshness.
 - Config: behavior knobs live in `.env` (which mirrors `.env.example`'s structure — active lines are overrides,

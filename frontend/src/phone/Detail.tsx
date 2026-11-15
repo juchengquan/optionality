@@ -171,7 +171,7 @@ function RuleDetail({ entry, under, overlap = null, session, privacy }: {
         {/* a combo drawn in the watchlist apart from its holding is a watched spread here too (#346) */}
         {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} session={session} /> : null}
         <dl className="nxp-facts">
-          <div><dt>watches</dt><dd>{fieldWords(entry.field, Boolean(entry.legs))}</dd></div>
+          <div><dt>watches</dt><dd>{fieldWords(entry.field)}</dd></div>
           <div><dt>compare</dt><dd>{entry.compare === "abs" ? "its size" : "signed"}</dd></div>
           <div><dt>expiry</dt><dd>{entry.strike_date}</dd></div>
         </dl>

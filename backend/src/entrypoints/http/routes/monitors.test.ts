@@ -652,7 +652,7 @@ describe("/quotes", () => {
   it("carries the figures a rule's sentence reads, which the reply schema would strip", async () => {
     // `.parse()` drops whatever EntryOut does not list, so a figure computed in the service and
     // left out of the schema vanishes on the way out with nothing failing (ADR 0023's sentence:
-    // "spread value ≥ 6.01 — now 2.00, 4.01 away", and the spread a leg's rule sits under)
+    // "value ≥ 6.01 — now 2.00, 4.01 away", and the spread a leg's rule sits under)
     h = harness({
       fetchQuotes: (codes) => Promise.resolve(
         codes.map((code) => ({ code, option_delta: 0.45, mid_price: 2 })),

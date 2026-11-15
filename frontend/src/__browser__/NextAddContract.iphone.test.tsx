@@ -14,8 +14,8 @@ import { overflowsSideways, serveContract, settle } from "./nextBook";
 afterEach(cleanup);
 
 const FIELDS = [
-  ["option_delta", "delta"], ["mid_price", "mid"], ["option_implied_volatility", "IV"],
-  ["option_theta", "theta"], ["option_vega", "vega"], ["option_gamma", "gamma"],
+  ["option_delta", "Δ"], ["mid_price", "value"], ["option_implied_volatility", "IV"],
+  ["option_theta", "Θ"], ["option_vega", "ν"], ["option_gamma", "Γ"],
 ] as const;
 
 /** A dialog slides in, and a box measured mid-animation is not where it will be. */

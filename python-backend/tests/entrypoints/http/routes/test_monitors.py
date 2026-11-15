@@ -654,7 +654,7 @@ class TestQuotes:
     async def test_carries_the_figures_a_rule_s_sentence_reads_which_the_reply_schema_would_strip(self, start):
         # the response model drops whatever EntryOut does not list, so a figure computed in the service
         # and left out of the model vanishes on the way out with nothing failing (ADR 0023's sentence:
-        # "spread value ≥ 6.01 — now 2.00, 4.01 away", and the spread a leg's rule sits under)
+        # "value ≥ 6.01 — now 2.00, 4.01 away", and the spread a leg's rule sits under)
         async def figures(codes):
             return [{"code": c, "option_delta": 0.45, "mid_price": 2} for c in codes]
 

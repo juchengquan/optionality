@@ -76,9 +76,11 @@ export function escapeHtml(value: string): string {
     .replaceAll("'", "&#x27;");
 }
 
-/** The widest a table row may be (CLAUDE.md: about forty monospace characters). 42, not 40, because
- *  `/monitors` already writes 41 with a twelve-character contract, and that row is not to change. */
-export const TABLE_WIDTH = 42;
+/** The widest a table row may be (CLAUDE.md: about forty monospace characters). 43, not 40: a
+ *  `/monitors` row with a twelve-character contract, a price threshold and a figure of five
+ *  characters each (`|value| ≥ 30.00`, `26.41`) is 43 — 41 until #404 wrote `|value|` for `|mid|`. A wider threshold or figure
+ *  makes a wider row, and `FIT_FLOOR` lets it through rather than cut the name to nothing. */
+export const TABLE_WIDTH = 43;
 /** The narrowest a shortened name is made, whatever the other columns take: past this a name says
  *  nothing, and a row a little too wide is better than one that names nothing. */
 const FIT_FLOOR = 12;

@@ -679,7 +679,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_IC: |mid| crossed ≥ 5.00 — 6.50  ▲ past 1.50"
+        "notice": "⚠️ 1120_IC: |value| crossed ≥ 5.00 — 6.50  ▲ past 1.50"
       }
     },
     {
@@ -712,7 +712,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_IC: |mid| crossed ≥ 5.00 — −6.50  ▲ past 1.50"
+        "notice": "⚠️ 1120_IC: |value| crossed ≥ 5.00 — −6.50  ▲ past 1.50"
       }
     },
     {
@@ -996,7 +996,7 @@
     },
     {
       "fn": "ruleShort",
-      "name": "a spread's price is val",
+      "name": "a spread's price is value",
       "args": [
         {
           "field": "mid_price",
@@ -1006,11 +1006,25 @@
           "threshold": 4.51
         }
       ],
-      "expect": "|val| ≥ 4.51"
+      "expect": "|value| ≥ 4.51"
     },
     {
       "fn": "ruleShort",
-      "name": "a contract's price is mid",
+      "name": "a spread's delta is Δ, as a contract's",
+      "args": [
+        {
+          "field": "option_delta",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2
+        }
+      ],
+      "expect": "|Δ| ≥ 0.20"
+    },
+    {
+      "fn": "ruleShort",
+      "name": "a contract's price is value too",
       "args": [
         {
           "field": "mid_price",
@@ -1020,7 +1034,7 @@
           "threshold": 30
         }
       ],
-      "expect": "|mid| ≥ 30.00"
+      "expect": "|value| ≥ 30.00"
     },
     {
       "fn": "ruleShort",
@@ -1132,7 +1146,7 @@
           "threshold": 1.5
         }
       ],
-      "expect": "val ≤ 1.50"
+      "expect": "value ≤ 1.50"
     },
     {
       "fn": "ruleShort",
@@ -1478,7 +1492,7 @@
       ],
       "expect": {
         "triggered": true,
-        "notice": "⚠️ 1120_7100: |mid| crossed ≥ 4.505 — 4.506  ▲ past 0.001"
+        "notice": "⚠️ 1120_7100: |value| crossed ≥ 4.505 — 4.506  ▲ past 0.001"
       }
     },
     {

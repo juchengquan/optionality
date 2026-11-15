@@ -210,9 +210,9 @@ function monitor(id: string, over: Partial<Monitor>): Monitor {
 
 describe("what became of a closed holding's Monitors", () => {
   const watching: Watching[] = [
-    { id: "m-off", name: "18 Dec 7150P delta" },
-    { id: "m-rolled", name: "18 Dec 7150P mid" },
-    { id: "m-muted", name: "spread value" },
+    { id: "m-off", name: "18 Dec 7150P Δ" },
+    { id: "m-rolled", name: "18 Dec 7150P value" },
+    { id: "m-muted", name: "value" },
     { id: "m-loose", name: "loose" },
   ];
   const after = [
@@ -224,9 +224,9 @@ describe("what became of a closed holding's Monitors", () => {
 
   it("says each as the service now reports it", () => {
     expect(fates(watching, after, [{ id: "m-off", code: "x" }])).toEqual([
-      { id: "m-off", name: "18 Dec 7150P delta", fate: "switched off — holding closed" },
-      { id: "m-rolled", name: "18 Dec 7150P mid", fate: "handed to 1218_P7150_roll" },
-      { id: "m-muted", name: "spread value", fate: "linked to nothing; it was already off (Muted by you)" },
+      { id: "m-off", name: "18 Dec 7150P Δ", fate: "switched off — holding closed" },
+      { id: "m-rolled", name: "18 Dec 7150P value", fate: "handed to 1218_P7150_roll" },
+      { id: "m-muted", name: "value", fate: "linked to nothing; it was already off (Muted by you)" },
       { id: "m-loose", name: "loose", fate: "kept on, linked to no holding" },
     ]);
   });

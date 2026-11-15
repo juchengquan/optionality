@@ -53,9 +53,9 @@ describe("a quarantined rule is a fault", () => {
     ], health(), null);
     expect(items.map((n) => n.kind)).toEqual(["fault", "fault", "fault"]);
     expect(items.map((n) => n.text)).toEqual([
-      "261211 6800P delta quarantined — its figure never arrives",
-      "1211_8300 spread delta quarantined — the provider does not know its contract",
-      "261211 6800P delta quarantined — its stored row cannot be read",
+      "261211 6800P Δ quarantined — its figure never arrives",
+      "1211_8300 Δ quarantined — the provider does not know its contract",
+      "261211 6800P Δ quarantined — its stored row cannot be read",
     ]);
   });
 
@@ -65,8 +65,8 @@ describe("a quarantined rule is a fault", () => {
       monitor({ id: "b", field: "mid_price" }),
     ], health(), null);
     expect(items.map((n) => n.text)).toEqual([
-      "261211 6800P delta quarantined — its figure never arrives",
-      "261211 6800P mid quarantined — its figure never arrives",
+      "261211 6800P Δ quarantined — its figure never arrives",
+      "261211 6800P value quarantined — its figure never arrives",
     ]);
   });
 
@@ -186,7 +186,7 @@ describe("a combo drawn in the watchlist because it only partly overlaps a holdi
 
 describe("a rule said as a sentence", () => {
   it("says what it watches, against what, where it is now and how far it has to go", () => {
-    expect(sentence(entry({ compare: "signed" }))).toBe("spread value ≥ 6.01 — now 2.00, 4.01 away");
+    expect(sentence(entry({ compare: "signed" }))).toBe("value ≥ 6.01 — now 2.00, 4.01 away");
   });
 
   it("marks a rule that compares the size of its figure, and shows the figure as it is", () => {
@@ -194,41 +194,41 @@ describe("a rule said as a sentence", () => {
     // the bell, the bar and the distance all compare its size, which the bars say without the
     // page computing an absolute value of its own (ADR 0005)
     expect(sentence(entry({ watched: -2, distance: 4.01 })))
-      .toBe("|spread value| ≥ 6.01 — now -2.00, 4.01 away");
+      .toBe("|value| ≥ 6.01 — now −2.00, 4.01 away");
   });
 
   it("names a single leg's figure and keeps the digits a delta needs", () => {
     expect(sentence(entry({ legs: undefined, field: "option_delta", threshold: 0.2,
-      watched: -0.1684, distance: 0.0316 }))).toBe("|delta| ≥ 0.2 — now -0.168, 0.032 away");
+      watched: -0.1684, distance: 0.0316 }))).toBe("|Δ| ≥ 0.20 — now −0.168, 0.032 away");
   });
 
   it("writes a signed comparison without the bars", () => {
     expect(sentence(entry({ legs: undefined, field: "option_delta", threshold: -0.3,
       direction: "below", compare: "signed", watched: -0.25, distance: 0.05 })))
-      .toBe("delta ≤ -0.3 — now -0.250, 0.050 away");
+      .toBe("Δ ≤ −0.30 — now −0.250, 0.050 away");
   });
 
   it("says a held credit's signed stop as the cost to close it watches, not as a negative value", () => {
     // the add form's stop (review of #343): the value at or below -11, which is closing at 11 or more
     expect(sentence(entry({ threshold: -11, direction: "below", compare: "signed", watched: -2, distance: 9 })))
-      .toBe("cost to close ≥ 11 — now 2.00, 9.00 away");
+      .toBe("cost to close ≥ 11.00 — now 2.00, 9.00 away");
     expect(sentence(entry({ threshold: -11, direction: "below", compare: "signed", watched: -12.5, distance: -1.5 })))
-      .toBe("cost to close ≥ 11 — now 12.50, past it by 1.50");
+      .toBe("cost to close ≥ 11.00 — now 12.50, past it by 1.50");
     // a signed rule ABOVE, or on a leg, is said as it is
     expect(sentence(entry({ threshold: -11, direction: "above", compare: "signed", watched: -2, distance: 9 })))
-      .toBe("spread value ≥ -11 — now -2.00, 9.00 away");
+      .toBe("value ≥ −11.00 — now −2.00, 9.00 away");
   });
 
   it("says a breached rule is past its threshold, or at it", () => {
     expect(sentence(entry({ watched: 6.2, distance: -0.19 })))
-      .toBe("|spread value| ≥ 6.01 — now 6.20, past it by 0.19");
+      .toBe("|value| ≥ 6.01 — now 6.20, past it by 0.19");
     expect(sentence(entry({ watched: 6.01, distance: 0 })))
-      .toBe("|spread value| ≥ 6.01 — now 6.01, at the threshold");
+      .toBe("|value| ≥ 6.01 — now 6.01, at the threshold");
   });
 
   it("says when there is no figure rather than printing a stale one", () => {
     expect(sentence(entry({ watched: null, distance: null })))
-      .toBe("|spread value| ≥ 6.01 — no figure");
+      .toBe("|value| ≥ 6.01 — no figure");
   });
 });
 

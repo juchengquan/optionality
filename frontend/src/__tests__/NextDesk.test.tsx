@@ -95,7 +95,7 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
 
   it("gives every rule its fill bar, and its short form with its sentence to a pointer and a reader (#388)", () => {
     render(<DeskBook {...props()} />);
-    const full = "|delta| ≥ 0.2 — now -0.170, 0.030 away";
+    const full = "|Δ| ≥ 0.20 — now −0.170, 0.030 away";
     expect(cellText("w-dec18-delta", "alarm")).toBe("|Δ| ≥ 0.20   \u22120.170  ↑0.030");
     const drawn = cell("w-dec18-delta", "alarm")!.querySelector<HTMLElement>(".nxd-v")!;
     expect(drawn.title).toBe(full);
@@ -208,8 +208,9 @@ describe("how a rule looks in each state", () => {
     expect(row("q-unknown").dataset.state).toBe("fault");
     expect(row("q-unknown").querySelector(".nx-chip")!.getAttribute("data-attention")).toBe("fault");
     expect(cellText("q-unknown", "alarm")).toBe("|Δ| ≥ 0.10 — the provider does not know its contract");
-    expect(cell("q-unknown", "alarm")!.querySelector<HTMLElement>(".nxd-v")!.title)
-      .toBe("|delta| ≥ 0.1 — the provider does not know its contract");
+    // its sentence is its short form since #404 (one vocabulary), so it is drawn once, with no title
+    // repeating it to a pointer
+    expect(cell("q-unknown", "alarm")!.querySelector<HTMLElement>(".nxd-v")!.title).toBe("");
   });
 
   it("keeps muted and expired rules in a collapsed group, apart from the quarantined", () => {
@@ -265,7 +266,7 @@ describe("the inspector", () => {
       .toEqual(["short CALL 7300 short CALL", "long CALL 7350 long CALL"]);
     expect(within(insp).getByText("cost to close").nextElementSibling!.textContent).toBe("4.40");
     // its Monitors, each with its sentence
-    expect(insp.textContent).toContain("|spread value| ≥ 4 — now 4.40, past it by 0.40");
+    expect(insp.textContent).toContain("|value| ≥ 4.00 — now 4.40, past it by 0.40");
     // the condor's other spread is one step away
     fireEvent.click(within(insp).getByRole("button", { name: /condor with 1218_P6400/ }));
     expect(screen.getByRole("complementary", { name: "inspector: 1218_P6400" })).toBeTruthy();
@@ -278,7 +279,7 @@ describe("the inspector", () => {
     const insp = screen.getByRole("complementary", { name: "inspector: 1218_P7150" });
     expect(insp.getAttribute("aria-modal")).toBeNull();
     expect(insp.closest("[data-poll]")).toBeNull();
-    expect(insp.textContent).toContain("|delta| ≥ 0.2 — now -0.170, 0.030 away");
+    expect(insp.textContent).toContain("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     // another row is still one click away
     fireEvent.click(within(row("w-dec31")).getByRole("button", { name: "1231_C7600" }));
     expect(screen.getByRole("complementary", { name: "inspector: 1231_C7600" })).toBeTruthy();

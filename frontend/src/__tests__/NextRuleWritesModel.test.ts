@@ -239,6 +239,18 @@ describe("recording a holding of a watched contract", () => {
       ? { ...m, option_type: "CALL", strike: 8000, field: LONE.field, threshold: LONE.threshold } : m);
     expect(holdLinks(ruleOfEntry(LONE), monitors, null).replaced.map(ruleWords)).toEqual(["8000 call |Δ| ≥ 0.10"]);
   });
+
+  it("names a replaced rule in the one vocabulary every rule is worded in (#404)", () => {
+    const lone: Monitor = { ...MONITORS[0]!, legs: null, option_type: "PUT", strike: 7150 };
+    const spread: Monitor = { ...lone, legs: [{ sign: -1, option_type: "PUT", strike: 7150 }] };
+    const leg = (over: Partial<Monitor>) => ruleWords({ ...lone, ...over });
+    expect(leg({ field: "mid_price", threshold: 30, compare: "abs", direction: "above" })).toBe("7150 put |value| ≥ 30.00");
+    expect(leg({ field: "option_gamma", threshold: 0.0012, compare: "abs", direction: "above" })).toBe("7150 put |Γ| ≥ 0.0012");
+    expect(leg({ field: "option_delta", threshold: -0.1, compare: "signed", direction: "below" })).toBe("7150 put Δ ≤ −0.10");
+    const combo = (over: Partial<Monitor>) => ruleWords({ ...spread, code: "1218_P7150", ...over });
+    expect(combo({ field: "mid_price", threshold: 1.8, compare: "abs", direction: "above" })).toBe("1218_P7150 |value| ≥ 1.80");
+    expect(combo({ field: "mid_price", threshold: -4.5, compare: "signed", direction: "below" })).toBe("1218_P7150 cost to close ≥ 4.50");
+  });
 });
 
 // the fixture's own shape, checked once, so a test above cannot pass on a fixture that drifted
@@ -306,7 +318,7 @@ describe("what recording a holding does to the other rules (#336)", () => {
         field: "mid_price", positions: [{ id: "p1", name: "1218_C7300" }] },
       { ...MONITORS[0]!, id: "other", positions: [] },
     ] as Monitor[];
-    expect(holdToast(added, after)).toBe("recorded 1218_C7300, replacing 1 watch rule; also linked to it: cs spread value");
+    expect(holdToast(added, after)).toBe("recorded 1218_C7300, replacing 1 watch rule; also linked to it: cs value");
     expect(holdToast(added, null)).toBe("recorded 1218_C7300, replacing 1 watch rule");
   });
 });

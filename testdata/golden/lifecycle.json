@@ -930,7 +930,7 @@
           "US.SPXW261120P6500000"
         ],
         "quarantine": true,
-        "notice": "⚠️ monitor 1120_IC |val| ≥ 2.50 disabled: unknown contract US.SPXW261120P6500000 (delisted or never existed)"
+        "notice": "⚠️ monitor 1120_IC |value| ≥ 2.50 disabled: unknown contract US.SPXW261120P6500000 (delisted or never existed)"
       }
     },
     {
@@ -982,7 +982,7 @@
           "US.SPXW261120P6500000"
         ],
         "quarantine": true,
-        "notice": "⚠️ monitor 1120_IC |val| ≥ 2.50 disabled: unknown contract US.SPXW261120C7150000, US.SPXW261120P6500000 (delisted or never existed)"
+        "notice": "⚠️ monitor 1120_IC |value| ≥ 2.50 disabled: unknown contract US.SPXW261120C7150000, US.SPXW261120P6500000 (delisted or never existed)"
       }
     },
     {
@@ -1038,7 +1038,7 @@
           "US.SPXW261120P6500000"
         ],
         "quarantine": true,
-        "notice": "⚠️ monitor 1120_IC |val| ≥ 2.50 disabled: unknown contract US.SPXW261120C7100000, US.SPXW261120C7150000, US.SPXW261120P6450000, US.SPXW261120P6500000 (delisted or never existed)"
+        "notice": "⚠️ monitor 1120_IC |value| ≥ 2.50 disabled: unknown contract US.SPXW261120C7100000, US.SPXW261120C7150000, US.SPXW261120P6450000, US.SPXW261120P6500000 (delisted or never existed)"
       }
     },
     {

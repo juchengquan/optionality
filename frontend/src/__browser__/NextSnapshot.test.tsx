@@ -132,7 +132,7 @@ describe("saving the desk as an image", () => {
     const png = await decode(file);
     expect(png.at(2, 2)).toBe(PLAIN_GROUND);
     // and words are painted on it: a holding's name, a rule's sentence, the header block
-    const ringing = [...root.querySelectorAll("td")].find((td) => td.textContent!.startsWith("|spread value| ≥ 6 — now 6.20"))!;
+    const ringing = [...root.querySelectorAll("td")].find((td) => td.textContent!.startsWith("|value| ≥ 6.00 — now 6.20"))!;
     for (const el of [rowNamed(root, "1218_P6400").children[0]!, ringing, root.querySelector(".nx-still-lines dd")!]) {
       expect(inkIn(png, root, el), `no words painted where "${el.textContent}" is`).toBe(true);
     }
@@ -233,7 +233,7 @@ describe("saving the desk as an image", () => {
     expect(rowOnScreen("w-dec18-delta").querySelector('[data-col="alarm"]')!.textContent).toContain("|Δ| ≥ 0.20");
     const { root, release } = await take();
     const rule = [...root.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
-    expect(rowNamed(root, "261218 7150P").children[rule]!.textContent).toBe("|delta| ≥ 0.2 — now -0.170, 0.030 away");
+    expect(rowNamed(root, "261218 7150P").children[rule]!.textContent).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     // the Δ column's header is the one Δ (#400): no rule is said in symbols
     expect(root.querySelector("tbody")!.textContent).not.toMatch(/[↑↓▲▼Δ]/);
     release();

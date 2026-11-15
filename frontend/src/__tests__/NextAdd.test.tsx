@@ -150,7 +150,7 @@ describe("the add form", () => {
     const line = () => screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!.textContent;
     expect(line()).toMatch(/^on\s*cost to close ≥/);
     fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
-    expect(line()).toMatch(/^on\s*spread value ≥/);
+    expect(line()).toMatch(/^on\s*value ≥/);
   });
 
   it("starts a debit spread's stop switched off, and says why", () => {
@@ -213,7 +213,7 @@ describe("a watch rule saved under #293's name (#351)", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "1.50");
-    expect(screen.getByText(/^Replaces the watch rules: 1218_P7150_P7100 value ≥ 1\.80/)).toBeTruthy();
+    expect(screen.getByText(/^Replaces the watch rules: 1218_P7150_P7100 \|value\| ≥ 1\.80/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^Record/ }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: { name: string }[] }).spreads[0]!.name).toBe("1218_P7150_P7100");

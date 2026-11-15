@@ -47,6 +47,14 @@ describe("what it finds", () => {
     expect(find("delta 7150")).toEqual(["w-dec18-delta"]);
   });
 
+  it("finds a rule by what it watches as spoken, though the page writes it as a symbol (#404)", () => {
+    // a held spread's rules, which only "spread value" once named a spread; never a lone contract's
+    expect(find("spread")).toEqual(expect.arrayContaining(["r-calls", "r-ic"]));
+    expect(find("spread")).not.toContain("w-dec18-delta");
+    expect(find("price")).toEqual(expect.arrayContaining(["r-calls", "w-dec18"]));
+    expect(find("delta")).toContain("w-dec18-delta");
+  });
+
   it("matches the start of a whole word, never the middle of a code", () => {
     // moomoo writes a strike with three zeros after it (`…C7800000`), so a raw code in the text made
     // the muted 7800 call answer "8000", a 6700 put answer "7000" and a 7065 put answer "6500"

@@ -56,8 +56,8 @@ def _seconds_since(when: datetime | None, now: datetime) -> float:
 class RuleShape(BaseModel):
     """A rule as its short form needs it (#388): the five facts of a Monitor its words turn on.
 
-    `combo` rather than the legs, because the words need only whether it is one — a spread's price
-    is its `val`, a contract's its `mid` — and the expiry notice reads a row it has not hydrated.
+    `combo` rather than the legs, because the words need only whether it is one — only a spread's
+    price can be a cost to close — and the expiry notice reads a row it has not hydrated.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -79,9 +79,11 @@ def rule_shape(monitor: Monitor) -> RuleShape:
     )
 
 
-#: What a rule watches, as a symbol. Vega is `ν`, the Greek letter the other three are, and not
-#: `V`, which beside `val` would read as a value. An unknown field is written as it is stored.
+#: What a rule watches, as a symbol: a price is `value`, a spread's and a contract's alike (#404),
+#: and the Greeks are their letters. Vega is `ν`, the Greek letter the other three are, and not
+#: `V`, which would read as a value. An unknown field is written as it is stored.
 _SYMBOLS = {
+    "mid_price": "value",
     "option_delta": "Δ",
     "option_gamma": "Γ",
     "option_theta": "Θ",
@@ -101,12 +103,6 @@ def _fixed(value: float, places: int) -> str:
     """`value.toFixed(places)`, through JavaScript's rounding: 0.0625 is 0.063 here and 0.062 under
     `round`, and the cases carry that difference inside the sentence."""
     return f"{to_fixed(value, places):.{places}f}"
-
-
-def _symbol(field: str, combo: bool) -> str:
-    if field == "mid_price":
-        return "val" if combo else "mid"
-    return _SYMBOLS.get(field, field)
 
 
 def _is_cost_to_close(rule: RuleShape) -> bool:
@@ -129,7 +125,7 @@ def _says_above(rule: RuleShape) -> bool:
 def _subject(rule: RuleShape) -> str:
     if _is_cost_to_close(rule):
         return "close"
-    symbol = _symbol(rule.field, rule.combo)
+    symbol = _SYMBOLS.get(rule.field, rule.field)
     return f"|{symbol}|" if rule.compare == "abs" else symbol
 
 
@@ -165,7 +161,7 @@ def _size_text(size: float, places: int) -> str:
 
 
 def rule_short(rule: RuleShape) -> str:
-    """ "|Δ| ≥ 0.20", "close ≥ 9.44", "val ≤ −1.50": a rule in symbols, with no figure (#388)."""
+    """ "|Δ| ≥ 0.20", "close ≥ 9.44", "value ≤ −1.50": a rule in symbols, with no figure (#388)."""
     return f"{_subject(rule)} {'≥' if _says_above(rule) else '≤'} {_threshold_text(rule)}"
 
 

@@ -94,7 +94,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "Watching combo dec-calls (2 legs): alarm when |val| ≥ 4.00",
+      "text": "Watching combo dec-calls (2 legs): alarm when |value| ≥ 4.00",
       "parse_mode": null
     },
     "rows": {

@@ -54,7 +54,7 @@ function watchingOf(holding: Holding, monitors: Monitor[], rules: Entry[]): Watc
   const ids = new Set(rules.map((r) => r.id));
   return monitors
     .filter((m) => ids.has(m.id) || m.positions.some((p) => p.id === holding.id))
-    .map((m) => ({ id: m.id, name: `${monitorName(m)} · ${fieldWords(m.field, Boolean(m.legs))}` }));
+    .map((m) => ({ id: m.id, name: `${monitorName(m)} · ${fieldWords(m.field)}` }));
 }
 
 export function HoldingActions({ holding, monitors, rules, privacy, writes, now }: {

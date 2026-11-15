@@ -304,7 +304,7 @@ function levelLines(holdings: readonly Holding[], now: Date): string[] {
 
 // ---- the text
 
-/** A cell as Markdown writes it: a pipe would end the cell ("|delta| ≥ 0.20"), so it is escaped,
+/** A cell as Markdown writes it: a pipe would end the cell ("|Δ| ≥ 0.20"), so it is escaped,
  *  and so is the backslash that escapes it. */
 const cellText = (s: string) => inline(s).replaceAll("|", "\\|");
 

@@ -203,12 +203,13 @@ describe("the short form", () => {
   const r = (over: Partial<RuleShape> = {}): RuleShape =>
     ({ field: "option_delta", combo: false, compare: "abs", direction: "above", threshold: 0.2, ...over });
 
-  it("writes each field as its symbol, a spread's price as val and a contract's as mid", () => {
+  it("writes each field as its symbol, and a price as value, a spread's and a contract's alike (#404)", () => {
     const fields = ["mid_price", "option_delta", "option_gamma", "option_theta", "option_vega",
       "option_implied_volatility", "bid_price"];
     expect(fields.map((field) => ruleShort(r({ field, compare: "signed", threshold: 1 }))))
-      .toEqual(["mid ≥ 1.00", "Δ ≥ 1.00", "Γ ≥ 1.00", "Θ ≥ 1.00", "ν ≥ 1.00", "IV ≥ 1.00", "bid_price ≥ 1.00"]);
-    expect(ruleShort(r({ field: "mid_price", combo: true, threshold: 4.51 }))).toBe("|val| ≥ 4.51");
+      .toEqual(["value ≥ 1.00", "Δ ≥ 1.00", "Γ ≥ 1.00", "Θ ≥ 1.00", "ν ≥ 1.00", "IV ≥ 1.00", "bid_price ≥ 1.00"]);
+    expect(ruleShort(r({ field: "mid_price", combo: true, threshold: 4.51 }))).toBe("|value| ≥ 4.51");
+    expect(ruleShort(r({ field: "option_delta", combo: true }))).toBe("|Δ| ≥ 0.20");
   });
 
   it("bars a magnitude and not a signed figure, and points the sign the rule's way", () => {
@@ -220,7 +221,7 @@ describe("the short form", () => {
   it("writes the threshold to two places at least, and to every place it was typed with", () => {
     expect(ruleShort(r({ threshold: 0.125 }))).toBe("|Δ| ≥ 0.125");
     expect(ruleShort(r({ field: "option_gamma", threshold: 0.0012 }))).toBe("|Γ| ≥ 0.0012");
-    expect(ruleShort(r({ field: "mid_price", threshold: 5 }))).toBe("|mid| ≥ 5.00");
+    expect(ruleShort(r({ field: "mid_price", threshold: 5 }))).toBe("|value| ≥ 5.00");
   });
 
   it("writes a negative with the real minus", () => {
@@ -234,7 +235,7 @@ describe("the short form", () => {
     expect(figureShort(stop, -3.05)).toBe("3.05");
     expect(distanceShort(stop, 6.39)).toBe("↑6.39");
     // a below rule on a positive figure is a plain one, not a cost
-    expect(ruleShort({ ...stop, threshold: 1.5 })).toBe("val ≤ 1.50");
+    expect(ruleShort({ ...stop, threshold: 1.5 })).toBe("value ≤ 1.50");
   });
 
   it("prints the figure to its field's places", () => {

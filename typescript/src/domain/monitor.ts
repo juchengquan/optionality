@@ -163,7 +163,7 @@ export function isBreached(
 }
 
 /** How far the watched figure still has to move to breach, in the field's own units — what a
- *  rule's sentence says after "now": "spread value ≥ 6.01 — now 2.00, 4.01 away" (ADR 0023).
+ *  rule's sentence says after "now": "value ≥ 6.01 — now 2.00, 4.01 away" (ADR 0023).
  *
  *  `isBreached` said as a number, read exactly as it reads the figure: magnitude under abs, the
  *  raw value under signed, and anything not "below" taken as above. So the distance is at or below

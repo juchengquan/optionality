@@ -18,8 +18,8 @@ import { overflowsSideways, settle } from "./nextBook";
 beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-const SPREAD = "1218_P7150 spread value";
-const DELTA = "261218 7150P delta";
+const SPREAD = "1218_P7150 value";
+const DELTA = "261218 7150P Δ";
 
 async function show(refuse?: Parameters<typeof serveEditing>[0]) {
   const writes = serveEditing(refuse);
@@ -65,15 +65,15 @@ describe("editing a Monitor from the sheet", () => {
     const sheet = await openSheet();
     const form = await openEditor(sheet, SPREAD);
     await userEvent.fill(within(form).getByLabelText("threshold"), "3");
-    expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|val| ≥ 3");
-    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|spread value| ≥ 3");
+    expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|value| ≥ 3");
+    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|value| ≥ 3");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18", body: { threshold: 3 } }]));
     await waitFor(() => expect(within(sheet).queryByRole("form")).toBeNull());
     // the service's: 3 − |−2.4|, as it now serves the row
-    expect(within(sheet).getByText(/^\|spread value\| ≥ 3 — now 2\.40, 0\.60 away$/)).toBeTruthy();
+    expect(within(sheet).getByText(/^\|value\| ≥ 3\.00 — now 2\.40, 0\.60 away$/)).toBeTruthy();
     expect([...sheet.querySelectorAll(".nx-rule-short")].map((el) => el.textContent))
-      .toContain("|val| ≥ 3.00   2.40  ↑0.60");
+      .toContain("|value| ≥ 3.00   2.40  ↑0.60");
   });
 
   it("says a signed threshold of 0 in the sheet beside the threshold, on screen and on top", async () => {
@@ -147,8 +147,8 @@ describe("mute, unmute and delete on the phone", () => {
   it("switches a quarantined rule back on from the switched-off list, saying why first", async () => {
     const writes = await show();
     const off = await screen.findByRole("region", { name: "Switched off" });
-    await userEvent.click(within(off).getByRole("button", { name: "switch 261211 8000C delta back on" }));
-    const ask = within(off).getByRole("group", { name: "switch 261211 8000C delta back on?" });
+    await userEvent.click(within(off).getByRole("button", { name: "switch 261211 8000C Δ back on" }));
+    const ask = within(off).getByRole("group", { name: "switch 261211 8000C Δ back on?" });
     expect(ask.textContent).toMatch(/does not know its contract US\.SPXW261211C8300000/);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "switch it on" }));
