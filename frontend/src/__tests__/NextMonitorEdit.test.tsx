@@ -55,8 +55,19 @@ function controls(subject: { entry?: Entry; monitor?: Monitor }, over: Partial<M
   return a;
 }
 
-const choose = (form: HTMLElement, label: string, value: string) =>
-  fireEvent.change(within(form).getByLabelText(label), { target: { value } });
+/** The direction is a pair of buttons (#405), every other field a box. */
+const choose = (form: HTMLElement, label: string, value: string) => label === "direction"
+  ? fireEvent.click(within(within(form).getByRole("group", { name: "direction" }))
+    .getByRole("button", { name: value === "below" ? "≤ at or below" : "≥ at or above" }))
+  : fireEvent.change(within(form).getByLabelText(label), { target: { value } });
+
+/** Which of the pair is pressed, as the direction it posts. */
+const direction = (form: HTMLElement) => {
+  const pair = within(within(form).getByRole("group", { name: "direction" }));
+  const above = pair.getByRole("button", { name: "≥ at or above" }).getAttribute("aria-pressed") === "true";
+  const below = pair.getByRole("button", { name: "≤ at or below" }).getAttribute("aria-pressed") === "true";
+  return above === below ? "neither or both" : above ? "above" : "below";
+};
 
 async function openEditor(label: string) {
   fireEvent.click(screen.getByRole("button", { name: `edit ${label}` }));
@@ -145,6 +156,17 @@ describe("editing a rule in place", () => {
     await waitFor(() => expect(screen.queryByRole("form", { name: `editing ${label}` })).toBeNull());
   });
 
+  it("turns a rule at or below back to at or above with the pair, and sends only that (#405)", async () => {
+    const { sent } = controls({ entry: { ...DELTA, direction: "below" } });
+    const form = await openEditor("261218 7150P Δ");
+    expect(direction(form)).toBe("below");
+    choose(form, "direction", "above");
+    expect(direction(form)).toBe("above");
+    fireEvent.click(within(form).getByRole("button", { name: "save" }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toEqual({ what: "PATCH", id: DELTA.id, body: { direction: "above" } });
+  });
+
   it("follows the draft as it is typed, and keeps the distance the service's", async () => {
     controls({ entry: DELTA });
     const form = await openEditor("261218 7150P Δ");
@@ -175,9 +197,9 @@ describe("editing a rule in place", () => {
     choose(form, "threshold", "9");
     fireEvent.click(within(form).getByRole("button", { name: "cancel" }));
     form = await openEditor("261218 7150P Δ");
-    const values = ["what it watches", "direction", "compare", "threshold"]
+    const values = ["what it watches", "compare", "threshold"]
       .map((l) => (within(form).getByLabelText(l) as HTMLInputElement).value);
-    expect(values).toEqual(["option_delta", "above", "abs", "0.2"]);
+    expect([direction(form), ...values]).toEqual(["above", "option_delta", "abs", "0.2"]);
   });
 
   it("opens on the rule as a later poll served it, after it changed while the editor was shut", async () => {
@@ -194,7 +216,7 @@ describe("editing a rule in place", () => {
     rerender(ui({ ...DELTA, threshold: 0.35, direction: "below" }));
     form = await openEditor("261218 7150P Δ");
     expect((within(form).getByLabelText("threshold") as HTMLInputElement).value).toBe("0.35");
-    expect((within(form).getByLabelText("direction") as HTMLSelectElement).value).toBe("below");
+    expect(direction(form)).toBe("below");
   });
 
   it("offers a combo no IV, which does not add up across its legs", async () => {

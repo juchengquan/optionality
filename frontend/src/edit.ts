@@ -94,7 +94,7 @@ export interface PatchBody {
 }
 
 /** Where a refusal is said: beside the field it is about, or by the save button. */
-export type Spot = "name" | "field" | "direction" | "compare" | "threshold" | "form";
+export type Spot = "name" | "field" | "compare" | "threshold" | "form";
 
 const PLAIN = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 

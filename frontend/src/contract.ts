@@ -21,9 +21,11 @@ import {
 } from "./add";
 
 /** What `POST /monitors` lets one Contract watch, as the old page's form offered it. IV is offered here and
- *  not to a spread: a spread's figure is a sum and IV is not additive, but one contract's is its own. */
+ *  not to a spread: a spread's figure is a sum and IV is not additive, but one contract's is its own.
+ *  Its value FIRST (#405): the owner looked for it and did not find it among the Greeks. The draft
+ *  still starts on delta (`newContract`), the common case. */
 export const CONTRACT_FIELDS = [
-  "option_delta", "mid_price", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
+  "mid_price", "option_delta", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
 ] as const;
 
 type Direction = "above" | "below";

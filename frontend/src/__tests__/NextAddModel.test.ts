@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 import { SpreadsIn } from "backend/schemas";
 import {
   addLeg, addSpread, contractCode, deltaEnabled, derivedName, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
-  removeLeg, replaces, saveWords, setLeg, spreadsBody, stopWarning, valueDefault, valueEnabled, valueHint,
+  isCreditStop, removeLeg, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, valueChoosable, valueDefault, valueDirectionShown,
+  valueEnabled, valueHint,
   type AddDraft, type SpreadDraft,
 } from "../add";
 import type { Monitor, Payoff } from "../shared/api";
@@ -143,12 +144,12 @@ describe("the body a save posts", () => {
     expect(body.spreads[0]!.monitors[0]).toEqual({ threshold: -11, direction: "below", compare: "signed" });
   });
 
-  it("keeps a watched spread's value rule as the size typed, and a debit's typed by hand as given", () => {
+  it("keeps a watched spread's value rule as the size typed, and a debit's typed by hand, at or below (#405)", () => {
     expect(bodyOf({ ...condor(false), spreads: [{ ...condor(false).spreads[0]!, valueAt: "1.8", deltaOn: false }] })
       .spreads[0]!.monitors).toEqual([{ threshold: 1.8 }]);
     const d = condor();
     const debit = { ...d, spreads: [{ ...d.spreads[0]!, entry: "-1.50", valueOn: true, valueAt: "0.5", deltaOn: false }] };
-    expect(bodyOf(debit).spreads[0]!.monitors).toEqual([{ threshold: 0.5 }]);
+    expect(bodyOf(debit).spreads[0]!.monitors).toEqual([{ threshold: 0.5, direction: "below" }]);
   });
 
   it("names a spread by its expiry and strikes unless a name was typed", () => {
@@ -240,7 +241,7 @@ describe("a debit spread's stop", () => {
     const d = debit();
     expect(valueEnabled(true, d.spreads[0]!)).toBe(false);
     expect(valueDefault(true, d.spreads[0]!)).toBe("");
-    expect(valueHint(true, d.spreads[0]!)).toBe("a debit spread's stop is a fall in its value: set one by hand");
+    expect(valueHint(true, d.spreads[0]!)).toBe("a debit spread's stop is a fall in its value: at or below");
     expect(bodyOf(d).spreads[0]!.monitors).toEqual([{ option_type: "PUT", strike: 7100, threshold: 0.3 }]);
   });
 
@@ -569,5 +570,73 @@ describe("a quantity per leg (#351)", () => {
   it("names a strike and a quantity by the numbers they are, not as typed", () => {
     const typed = [{ ...fly(7350)[0]!, strike: "07300" }, { ...fly(7350)[1]!, qty: "02" }, { ...fly(7350)[2]!, strike: "7400.0" }];
     expect(derivedName("2026-12-18", typed)).toBe(derivedName("2026-12-18", fly(7350)));
+  });
+});
+
+describe("the direction of a spread's two rules (#405)", () => {
+  /** The put spread of `condor`, alone, watched or held. */
+  const one = (held: boolean, change: Partial<SpreadDraft> = {}): AddDraft => {
+    const d = condor(held);
+    const s = { ...d.spreads[0]!, valueAt: "1.80", deltaAt: "0.15", ...change };
+    return { ...d, spreads: [s] };
+  };
+
+  it("starts both at or above, as #293 set them", () => {
+    const d = newDraft("2026-11-11");
+    const s = d.spreads[0]!;
+    expect([valueDirectionShown(d.held, s), s.deltaDirection]).toEqual(["above", "above"]);
+    expect(valueDirectionShown(false, s)).toBe("above");
+    expect(bodyOf(one(false)).spreads[0]!.monitors).toEqual([
+      { threshold: 1.8 }, { option_type: "PUT", strike: 7150, threshold: 0.15 },
+    ]);
+  });
+
+  it("posts a watched spread's |value| ≤ and |Δ| ≤ as below", () => {
+    const body = bodyOf(one(false, { valueDirection: "below", deltaDirection: "below" }));
+    expect(SpreadsIn.safeParse(body).success).toBe(true);
+    expect(body.spreads[0]!.monitors).toEqual([
+      { threshold: 1.8, direction: "below" },
+      { option_type: "PUT", strike: 7150, threshold: 0.15, direction: "below" },
+    ]);
+  });
+
+  it("gives EVERY short leg's |Δ| the direction chosen", () => {
+    let d = addSpread({ ...newDraft("2026-11-11"), held: false, expiry: "2026-12-18" }, "condor");
+    d = { ...d, spreads: [d.spreads[1]!] };
+    const k = d.spreads[0]!.key;
+    ["7150", "7100", "7700", "7750"].forEach((x, i) => { d = setLeg(d, k, i, { strike: x }); });
+    d = setSpread(d, k, { valueOn: false, deltaAt: "0.2", deltaDirection: "below" });
+    expect(bodyOf(d).spreads[0]!.monitors).toEqual([
+      { option_type: "PUT", strike: 7150, threshold: 0.2, direction: "below" },
+      { option_type: "CALL", strike: 7700, threshold: 0.2, direction: "below" },
+    ]);
+  });
+
+  it("keeps a held credit's stop the cost to close at or above, whatever its value's choice says", () => {
+    const d = one(true, { valueAt: null, valueDirection: "below", deltaDirection: "below" });
+    expect(isCreditStop(d.held, d.spreads[0]!)).toBe(true);
+    expect(valueChoosable(d.held, d.spreads[0]!)).toBe(false);
+    expect(bodyOf(d).spreads[0]!.monitors).toEqual([
+      stop(3), { option_type: "PUT", strike: 7150, threshold: 0.15, direction: "below" },
+    ]);
+  });
+
+  it("starts a held debit's value at or below — its stop is a fall in value — and posts it below", () => {
+    const d = one(true, { entry: "-1.50", valueOn: true });
+    expect(valueChoosable(d.held, d.spreads[0]!)).toBe(true);
+    expect(valueDirectionShown(d.held, d.spreads[0]!)).toBe("below");
+    expect(bodyOf(d).spreads[0]!.monitors[0]).toEqual({ threshold: 1.8, direction: "below" });
+  });
+
+  it("keeps a held debit's ≥ when it is pressed, and starts the |Δ| at or above still", () => {
+    const d = one(true, { entry: "-1.50", valueOn: true, valueDirection: "above" });
+    expect(valueDirectionShown(d.held, d.spreads[0]!)).toBe("above");
+    expect(bodyOf(d).spreads[0]!.monitors).toEqual([
+      { threshold: 1.8 }, { option_type: "PUT", strike: 7150, threshold: 0.15 },
+    ]);
+  });
+
+  it("offers a watched spread's value the choice, and its delta's in every case", () => {
+    expect(valueChoosable(false, one(false).spreads[0]!)).toBe(true);
   });
 });

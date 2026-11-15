@@ -20,6 +20,7 @@ import {
 import { fieldWords, ruleWords, shortRule } from "./needs";
 import { ShortWords } from "./RuleWords";
 import { DraftPreview } from "./Payoff";
+import { DirectionPair } from "./DirectionPair";
 
 export function AddContract({
   privacy, monitors, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving,
@@ -185,14 +186,12 @@ export function AddContract({
                     {CONTRACT_FIELDS.map((f) => <option key={f} value={f}>{fieldWords(f)}</option>)}
                   </select>
                 </label>
-                <label className="nx-add-field">
-                  <span>direction</span>
-                  <select aria-label="direction" disabled={!ruleOn} value={draft.direction}
-                          onChange={(e) => set({ direction: e.target.value as ContractDraft["direction"] })}>
-                    <option value="above">≥ at or above</option>
-                    <option value="below">≤ at or below</option>
-                  </select>
-                </label>
+                {/* a pair, as the spread form's rules choose it (#405) */}
+                <div className="nx-add-field">
+                  <span aria-hidden="true">direction</span>
+                  <DirectionPair aria-label="direction" value={draft.direction} disabled={!ruleOn}
+                                 onChange={(d) => set({ direction: d })} />
+                </div>
                 <label className="nx-add-field">
                   <span>compare</span>
                   <select aria-label="compare" disabled={!ruleOn} value={draft.compare}

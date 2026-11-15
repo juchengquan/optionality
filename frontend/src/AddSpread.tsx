@@ -19,11 +19,13 @@ import { SideSign } from "./shared/Legs";
 import {
   addLeg, addSpread, deltaEnabled, isCreditStop, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
   removeLeg, removeSpread, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, valueEnabled,
-  valueHint, valueShown, type AddDraft, type Preset, type SpreadDraft,
+  valueChoosable, valueDirectionShown, valueHint, valueShown, type AddDraft, type Preset, type SpreadDraft,
 } from "./add";
 import { AddContract } from "./AddContract";
 import { newContract, type ContractDraft } from "./contract";
 import { DraftPreview } from "./Payoff";
+import { DirectionPair, type Direction } from "./DirectionPair";
+import { fieldWords } from "./needs";
 import "./add.css";
 
 type Props = {
@@ -237,14 +239,22 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
             </div>
           ) : null}
           <div className="nx-add-monitors" role="group" aria-label={`spread ${n}'s Monitors`}>
+            {/* a held credit's stop is the cost to close at or above its figure, and offers no
+                choice; anything else is its value's size, at or above or at or below (#405) */}
             <MonitorLine on={valueOn} onToggle={() => set({ valueOn: !valueOn })} label={`spread ${n} value Monitor`}
-                         words={isCreditStop(held, s) ? "cost to close ≥" : "value ≥"}
+                         words={isCreditStop(held, s) ? "cost to close ≥" : `|${fieldWords("mid_price")}|`}
+                         direction={valueChoosable(held, s)
+                           ? { value: valueDirectionShown(held, s), onChange: (d) => set({ valueDirection: d }), label: `spread ${n} value direction` }
+                           : null}
                          hint={valueHint(held, s)}
                          value={valueShown(held, s)} onValue={(v) => set({ valueAt: v })}
                          inputLabel={`spread ${n} value threshold`} />
             <MonitorLine on={deltaOn} onToggle={() => set({ deltaOn: !deltaOn })} label={`spread ${n} delta Monitor`}
-                         words={`short leg${shorts === 1 ? "'s" : "s'"} |Δ| ≥`}
-                         hint={shorts === 0 ? "no short leg to watch" : held ? "risk" : "an entry signal"}
+                         words={`short leg${shorts === 1 ? "'s" : "s'"} |Δ|`}
+                         direction={{ value: s.deltaDirection, onChange: (d) => set({ deltaDirection: d }), label: `spread ${n} delta direction` }}
+                         hint={shorts === 0 ? "no short leg to watch" : !held ? "an entry signal"
+                           // a held short leg's delta falling is the spread gone cheap to close, not a risk
+                           : s.deltaDirection === "below" ? "close-cheap signal" : "risk"}
                          value={deltaShown(held, s)} onValue={(v) => set({ deltaAt: v })}
                          inputLabel={`spread ${n} delta threshold`} />
           </div>
@@ -266,8 +276,11 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, spx, sp
   );
 }
 
-function MonitorLine({ on, onToggle, label, words, hint, value, onValue, inputLabel }: {
-  on: boolean; onToggle: () => void; label: string; words: string; hint: string;
+function MonitorLine({ on, onToggle, label, words, direction, hint, value, onValue, inputLabel }: {
+  on: boolean; onToggle: () => void; label: string; words: string;
+  /** the ≥ / ≤ pair beside the threshold, or null where the direction is fixed and in `words` */
+  direction: { value: Direction; onChange: (d: Direction) => void; label: string } | null;
+  hint: string;
   value: string; onValue: (v: string) => void; inputLabel: string;
 }) {
   return (
@@ -275,6 +288,8 @@ function MonitorLine({ on, onToggle, label, words, hint, value, onValue, inputLa
       <button type="button" role="switch" aria-checked={on} aria-label={label} className="nx-add-switch"
               onClick={onToggle}>{on ? "on" : "off"}</button>
       <span>{words}</span>
+      {direction ? <DirectionPair aria-label={direction.label} value={direction.value} disabled={!on}
+                                  onChange={direction.onChange} /> : null}
       <input aria-label={inputLabel} inputMode="decimal" value={value} disabled={!on}
              onChange={(e) => onValue(e.target.value)} />
       <small className="nx-meta">{hint}</small>

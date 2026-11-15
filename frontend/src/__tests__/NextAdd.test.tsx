@@ -8,6 +8,7 @@ import { SpreadsIn } from "backend/schemas";
 import { AddSpread } from "../AddSpread";
 import { Next } from "../Next";
 import type { Monitor } from "../shared/api";
+import { fieldWords } from "../needs";
 import { draftPayoff } from "../__browser__/nextBook";
 
 /** Every request, as `METHOD path` with its parsed body. */
@@ -150,7 +151,8 @@ describe("the add form", () => {
     const line = () => screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!.textContent;
     expect(line()).toMatch(/^on\s*cost to close ≥/);
     fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
-    expect(line()).toMatch(/^on\s*value ≥/);
+    expect(line()).toMatch(/^on\s*\|/);
+    expect(line()).toContain(`|${fieldWords("mid_price")}|`);
   });
 
   it("starts a debit spread's stop switched off, and says why", () => {
@@ -159,7 +161,7 @@ describe("the add form", () => {
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "-1.50");
     expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("false");
-    expect(screen.getByText("a debit spread's stop is a fall in its value: set one by hand")).toBeTruthy();
+    expect(screen.getByText("a debit spread's stop is a fall in its value: at or below")).toBeTruthy();
   });
 
   it("warns, and keeps it on, when a credit's stop can never fire — from the payoff served", async () => {
@@ -427,3 +429,117 @@ describe("the desk's panel", () => {
   });
 });
 
+
+describe("a spread's rules at or above, or at or below (#405)", () => {
+  const pair = (which: string) => screen.getByRole("group", { name: `spread 1 ${which} direction` });
+  const press = (which: string, words: string) =>
+    fireEvent.click(within(pair(which)).getByRole("button", { name: words }));
+  const pressed = (which: string) =>
+    within(pair(which)).getAllByRole("button").filter((b) => b.getAttribute("aria-pressed") === "true")
+      .map((b) => b.textContent);
+
+  it("saves a watched spread's |value| ≤ and |Δ| ≤, each posted below", async () => {
+    const { onSaved } = open();
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 value threshold", "0.40");
+    type("spread 1 delta threshold", "0.05");
+    expect([pressed("value"), pressed("delta")]).toEqual([["≥"], ["≥"]]);
+    press("value", "≤ at or below");
+    press("delta", "≤ at or below");
+    expect([pressed("value"), pressed("delta")]).toEqual([["≤"], ["≤"]]);
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 Monitors" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = posted()[0]!.body as { spreads: { monitors: unknown[] }[] };
+    expect(SpreadsIn.safeParse(body).success).toBe(true);
+    expect(body.spreads[0]!.monitors).toEqual([
+      { threshold: 0.4, direction: "below" },
+      { option_type: "PUT", strike: 7150, threshold: 0.05, direction: "below" },
+    ]);
+  });
+
+  it("words a watched spread's value as its size, and goes back to ≥ when asked", async () => {
+    const { onSaved } = open();
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    const line = screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!;
+    expect(line.textContent).toMatch(/^on\s*\|/);
+    expect(line.textContent).toContain(`|${fieldWords("mid_price")}|`);
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 value threshold", "1.8");
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 delta Monitor" }));
+    press("value", "≤ at or below");
+    press("value", "≥ at or above");
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([{ threshold: 1.8 }]);
+  });
+
+  it("keeps a held credit's stop the cost to close ≥, offering a choice for its delta only", async () => {
+    const { onSaved } = open();
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "1.50");
+    const line = screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!;
+    expect(line.textContent).toMatch(/^on\s*cost to close ≥/);
+    expect(screen.queryByRole("group", { name: "spread 1 value direction" })).toBeNull();
+    press("delta", "≤ at or below");
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 Monitors" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
+      { threshold: -3, direction: "below", compare: "signed" },
+      { option_type: "PUT", strike: 7150, threshold: 0.3, direction: "below" },
+    ]);
+  });
+
+  it("starts a held debit's value rule at ≤ when switched on, and posts it below (owner, #405)", async () => {
+    const { onSaved } = open();
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "-1.50");
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 value Monitor" }));
+    expect(pressed("value")).toEqual(["≤"]);
+    expect(pressed("delta")).toEqual(["≥"]);
+    type("spread 1 value threshold", "0.75");
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 Monitors" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors[0])
+      .toEqual({ threshold: 0.75, direction: "below" });
+  });
+
+  it("calls a held spread's |Δ| ≥ a risk, and its |Δ| ≤ a close-cheap signal", () => {
+    open();
+    const line = () => screen.getByRole("switch", { name: "spread 1 delta Monitor" }).parentElement!;
+    expect(line().querySelector("small")!.textContent).toBe("risk");
+    press("delta", "≤ at or below");
+    expect(line().querySelector("small")!.textContent).toBe("close-cheap signal");
+    press("delta", "≥ at or above");
+    expect(line().querySelector("small")!.textContent).toBe("risk");
+  });
+
+  it("lets a held debit's value rule be pressed back to ≥, posting no direction", async () => {
+    const { onSaved } = open();
+    type("expiry", "2026-12-18");
+    type("spread 1, leg 1 strike", "7150");
+    type("spread 1, leg 2 strike", "7100");
+    type("spread 1 entry", "-1.50");
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 value Monitor" }));
+    press("value", "≥ at or above");
+    expect(pressed("value")).toEqual(["≥"]);
+    type("spread 1 value threshold", "3");
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 Monitors" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors[0]).toEqual({ threshold: 3 });
+  });
+
+  it("switches a rule's pair off with its rule", () => {
+    open();
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 delta Monitor" }));
+    for (const b of within(pair("delta")).getAllByRole("button")) expect((b as HTMLButtonElement).disabled).toBe(true);
+  });
+});

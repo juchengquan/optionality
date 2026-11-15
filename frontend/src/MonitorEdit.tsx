@@ -37,6 +37,7 @@ import {
 } from "./edit";
 import { fieldWords } from "./needs";
 import { RuleWords, ShortWords } from "./RuleWords";
+import { DirectionPair } from "./DirectionPair";
 import "./monitor-edit.css";
 
 export interface MonitorActions {
@@ -342,13 +343,11 @@ function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, on
           {said("field")}
         </div>
         <div className="nx-mon-field">
-          <label htmlFor={`${id}-direction`}>direction</label>
-          <select id={`${id}-direction`} value={draft.direction} onChange={(e) => set({ direction: e.target.value })}
-                  {...tie("direction")}>
-            <option value="above">≥ at or above</option>
-            <option value="below">≤ at or below</option>
-          </select>
-          {said("direction")}
+          {/* a pair, as the add form chooses a rule's direction (#405) */}
+          {/* a span, not a label: it names the group, and labels no control of its own */}
+          <span id={`${id}-direction`}>direction</span>
+          <DirectionPair aria-labelledby={`${id}-direction`} value={draft.direction}
+                         onChange={(d) => set({ direction: d })} />
         </div>
         <div className="nx-mon-field">
           <label htmlFor={`${id}-compare`}>compare</label>

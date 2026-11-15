@@ -8,14 +8,17 @@ import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
+import { fieldWords } from "../needs";
 import { overflowsSideways, serveContract, settle } from "./nextBook";
 
 afterEach(cleanup);
 
-const FIELDS = [
-  ["option_delta", "Δ"], ["mid_price", "value"], ["option_implied_volatility", "IV"],
-  ["option_theta", "Θ"], ["option_vega", "ν"], ["option_gamma", "Γ"],
-] as const;
+/** In the order the box offers them, its value first (#405), in the words it uses. */
+const FIELDS: [field: string, words: string][] = [
+  "mid_price", "option_delta", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
+].map((f) => [f, fieldWords(f)]);
+
+const box = () => screen.getByLabelText("what it watches") as HTMLSelectElement;
 
 async function openDesk(width = 1440, spreads?: Parameters<typeof serveContract>[0]) {
   await page.viewport(width, 900);
@@ -57,6 +60,22 @@ describe("a single-contract Monitor on the desk", () => {
     }
     expect(writes.map((w) => w.what)).toEqual(FIELDS.map(() => "POST /spreads"));
     expect(await screen.findAllByText("added 1 Monitor")).not.toHaveLength(0);
+  });
+});
+
+describe("its field and direction on the desk (#405)", () => {
+  it("lists the value first, and posts it at or below from the ≥ / ≤ pair", async () => {
+    const writes = await openDesk();
+    await startContract("0.50");
+    expect([...box().options].map((o) => o.value)).toEqual(FIELDS.map(([f]) => f));
+    await userEvent.selectOptions(box(), fieldWords("mid_price"));
+    const pair = within(panel()).getByRole("group", { name: "direction" });
+    await userEvent.click(within(pair).getByRole("button", { name: "≤ at or below" }));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect((writes[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
+      { option_type: "PUT", strike: 7150, field: "mid_price", threshold: 0.5, direction: "below", compare: "abs" },
+    ]);
   });
 });
 

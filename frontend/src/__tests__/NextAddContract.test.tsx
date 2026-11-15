@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SpreadsIn } from "backend/schemas";
 import { AddSpread } from "../AddSpread";
 import type { Monitor } from "../shared/api";
+import { fieldWords } from "../needs";
 
 /** Every request, as `METHOD path` with its parsed body. */
 let asked: { what: string; body: unknown }[] = [];
@@ -157,7 +158,11 @@ describe("a watched contract", () => {
     enterPut();
     fireEvent.click(screen.getByRole("button", { name: "CALL" }));
     fireEvent.change(screen.getByLabelText("what it watches"), { target: { value: "option_vega" } });
-    fireEvent.change(screen.getByLabelText("direction"), { target: { value: "below" } });
+    const direction = screen.getByRole("group", { name: "direction" });
+    expect(within(direction).getByRole("button", { name: "≥ at or above" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(direction).getByRole("button", { name: "≤ at or below" }));
+    expect(within(direction).getByRole("button", { name: "≤ at or below" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(direction).getByRole("button", { name: "≥ at or above" }).getAttribute("aria-pressed")).toBe("false");
     fireEvent.change(screen.getByLabelText("compare"), { target: { value: "signed" } });
     type("threshold", "-0.5");
     fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
@@ -169,13 +174,37 @@ describe("a watched contract", () => {
     ]);
   });
 
-  it("offers each of the six fields in the box's own words", () => {
-    open();
-    const options = [...(screen.getByLabelText("what it watches") as HTMLSelectElement).options];
-    expect(options.map((o) => [o.value, o.textContent])).toEqual([
-      ["option_delta", "Δ"], ["mid_price", "value"], ["option_implied_volatility", "IV"],
-      ["option_theta", "Θ"], ["option_vega", "ν"], ["option_gamma", "Γ"],
+  it("posts a contract's value at or below, as the pair says, and says it so (#405)", async () => {
+    const { onSaved } = open();
+    enterPut();
+    fireEvent.change(screen.getByLabelText("what it watches"), { target: { value: "mid_price" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "direction" })).getByRole("button", { name: "≤ at or below" }));
+    type("threshold", "0.50");
+    expect(screen.getByTestId("contract-draft").querySelector(".sr-only")!.textContent).toMatch(/≤ 0\.50$/);
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect((posted()[0] as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
+      { option_type: "PUT", strike: 7150, field: "mid_price", threshold: 0.5, direction: "below", compare: "abs" },
     ]);
+  });
+
+  it("switches the direction pair off with a held contract's rule, and on again with it", () => {
+    hold();
+    const buttons = () => within(screen.getByRole("group", { name: "direction" })).getAllByRole("button") as HTMLButtonElement[];
+    expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
+    fireEvent.click(screen.getByRole("switch", { name: "its Monitor" }));
+    expect(buttons().map((b) => b.disabled)).toEqual([true, true]);
+    fireEvent.click(screen.getByRole("switch", { name: "its Monitor" }));
+    expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
+  });
+
+  it("offers each of the six fields in the box's own words, its value first and delta chosen (#405)", () => {
+    open();
+    const box = screen.getByLabelText("what it watches") as HTMLSelectElement;
+    expect(box.value).toBe("option_delta");
+    expect([...box.options].map((o) => [o.value, o.textContent])).toEqual([
+      "mid_price", "option_delta", "option_implied_volatility", "option_theta", "option_vega", "option_gamma",
+    ].map((f) => [f, fieldWords(f)]));
   });
 
   it("says the rule in words as it is typed", () => {

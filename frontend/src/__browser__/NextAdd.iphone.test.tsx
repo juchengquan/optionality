@@ -114,6 +114,32 @@ describe("the Add sheet", () => {
     expect(pastTheEdge(sheet)).toEqual([]);
   });
 
+  it("gives a watched spread's rules a ≥ / ≤ pair each, 44pt, inside the screen, and posts ≤ below (#405)", async () => {
+    const sent = await openPhone();
+    const sheet = await openSheet();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Watch it" }));
+    await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
+    await userEvent.fill(screen.getByLabelText("spread 1, leg 1 strike"), "7150");
+    await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7100");
+    await userEvent.fill(screen.getByLabelText("spread 1 value threshold"), "0.40");
+    await userEvent.fill(screen.getByLabelText("spread 1 delta threshold"), "0.05");
+    for (const which of ["value", "delta"]) {
+      const pair = within(sheet).getByRole("group", { name: `spread 1 ${which} direction` });
+      expect(tooSmall(pair)).toEqual([]);
+      await userEvent.click(within(pair).getByRole("button", { name: "≤ at or below" }));
+    }
+    await settle();
+    expect(tooSmall(sheet)).toEqual([]);
+    expect(pastTheEdge(sheet)).toEqual([]);
+    expect(overflowsSideways()).toBe(false);
+    await userEvent.click(within(sheet).getByRole("button", { name: "Watch it + 2 Monitors" }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect((sent[0] as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
+      { threshold: 0.4, direction: "below" },
+      { option_type: "PUT", strike: 7150, threshold: 0.05, direction: "below" },
+    ]);
+  });
+
   it("gives every control a 44pt target, and every box 16px text so iOS does not zoom", async () => {
     await openPhone();
     const sheet = await openSheet();

@@ -18,7 +18,9 @@ line names that close. **Amended 2026-11-15 (#394):** the saved picture is one p
 the desk and the phone alike, and "Copy as text" puts the same table on the clipboard as Markdown
 (last section), with fewer, shorter columns and the watchlist's value as a price at every hour
 (#400, its last subsection). **Amended 2026-11-15 (#402):** a watched row has a history, and a
-holding's burndown carries the days it was watched (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+holding's burndown carries the days it was watched (last section). **Amended 2026-11-15 (#405):** the add
+form's rules, and the Monitor editor's, choose their direction with a ≥ / ≤ pair, and a held debit
+spread's value rule starts at ≤ (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -580,3 +582,22 @@ The owner's decisions of 2026-11-15, built on ADR 0011's watch samples:
 - **The entry day's watched close.** Where a holding recorded in New York's evening has no Cost to
   close on the day it was entered, its burndown draws that day's watched close as the day's point,
   saying "the close, watched before entry" (`entry_close`).
+
+## Amended 2026-11-15: ≥ / ≤ on the add form (#405)
+
+The owner found no way to make a "≤" rule from the add form, and did not find a contract's value
+among the Greeks it watches. Decided:
+
+- **A spread's two rules each choose ≥ or ≤**, a two-button pair between the rule's words and its
+  threshold (`|value| [≥|≤] 0.40`, `short leg's |Δ| [≥|≤] 0.05`), the form's own segmented pair
+  rather than a dropdown. ≤ is posted as `direction: "below"`; ≥ posts no direction, the route's
+  default, so a rule at or above posts what it did before.
+- **A held credit's stop offers no choice.** It stays "cost to close ≥ 2× the Entry", posted signed
+  and below (#343), whatever was pressed while the draft was something else.
+- **A held debit's value rule starts at ≤** when it is switched on (owner's decision, 2026-11-15):
+  its stop is a fall in value, and the hint says so. It still starts switched off with no figure
+  (#322), and ≥ stays pressable. Watched spreads, credit stops and every |Δ| rule start at ≥, as
+  #293 set them.
+- **A held spread's |Δ| at ≤ is called a close-cheap signal**, and at ≥ a risk, as before.
+- **One contract** chooses its direction with the same pair, and lists its value first in what it
+  watches; it still starts on Δ. **The Monitor editor** chooses direction with the same pair.
